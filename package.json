@@ -32,9 +32,7 @@
     "db:studio": "nx db:studio api",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
-    "prepare": "[ -d .git ] && lefthook install || true",
-    "knip": "knip",
-    "knip:fix": "knip --fix"
+    "prepare": "[ -d .git ] && lefthook install || true"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",
@@ -135,7 +133,6 @@
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
     "jsdom": "^27.2.0",
-    "knip": "^5.80.2",
     "lefthook": "^2.0.13",
     "nx": "^22.3.3",
     "prettier": "^3.7.4",

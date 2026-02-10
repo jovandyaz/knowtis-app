@@ -104,7 +104,7 @@ export const notesApi = {
     userId: string
   ): Promise<{ success: boolean }> {
     return httpClient.delete<{ success: boolean }>(
-      `/notes/${noteId}/access/${userId}`
+      `/notes/${noteId}/share/${userId}`
     );
   },
 };

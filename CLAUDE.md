@@ -29,8 +29,6 @@ pnpm lint             # Lint all projects
 pnpm lint:fix         # Fix auto-fixable issues
 pnpm typecheck        # TypeScript type checking
 pnpm format           # Format with Prettier
-pnpm knip             # Detect dead code and unused exports
-pnpm knip:fix         # Auto-fix dead code issues
 
 # Database (requires Docker)
 pnpm docker:up        # Start PostgreSQL + Redis
