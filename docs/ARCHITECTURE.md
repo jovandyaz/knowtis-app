@@ -72,8 +72,8 @@ knowtis/
 │
 └── libs/                    # Shared libraries
     ├── api-client/          # HTTP/WebSocket client
+    ├── auth/                # Auth hooks, store & API
     ├── data-access/         # Domain logic & state
-    │   ├── auth/            # Auth hooks & store
     │   └── notes/           # Notes hooks & store
     ├── design-system/       # UI components & tokens
     └── shared/              # Common utilities
@@ -126,29 +126,32 @@ Shared (no internal workspace dependencies)
 
 ### Backend (API)
 
-| Technology    | Version | Purpose                   |
-| ------------- | ------- | ------------------------- |
-| NestJS        | 11      | Server framework          |
-| Drizzle ORM   | 0.45    | Type-safe database ORM    |
-| PostgreSQL    | 16      | Primary database          |
-| Redis         | 7       | Caching & sessions        |
-| Socket.io     | 4.8     | WebSocket transport       |
-| Passport      | 0.7     | Authentication middleware |
-| bcryptjs      | 3       | Password hashing          |
-| Zod           | 4       | Schema validation         |
-| Feature Flags | Custom  | Env-based toggling        |
+| Technology      | Version | Purpose                    |
+| --------------- | ------- | -------------------------- |
+| NestJS          | 11      | Server framework           |
+| Drizzle ORM     | 0.45    | Type-safe database ORM     |
+| PostgreSQL      | 16      | Primary database           |
+| Redis           | 7       | Caching & sessions         |
+| Socket.io       | 4.8     | WebSocket transport        |
+| Passport        | 0.7     | Authentication middleware  |
+| bcryptjs        | 3       | Password hashing           |
+| class-validator | 0.14    | Request validation (DTO)   |
+| neverthrow      | 8       | Result type error handling |
+| Helmet          | 8       | Security headers           |
+| Swagger/OpenAPI | 11      | API documentation          |
 
 ### Tooling
 
-| Tool       | Purpose                            |
-| ---------- | ---------------------------------- |
-| Nx         | Monorepo management & task running |
-| TypeScript | Type safety                        |
-| ESLint     | Code linting                       |
-| Prettier   | Code formatting                    |
-| Vitest     | Unit & integration testing         |
-| Husky      | Git hooks                          |
-| Storybook  | Component documentation            |
+| Tool             | Purpose                            |
+| ---------------- | ---------------------------------- |
+| Nx               | Monorepo management & task running |
+| TypeScript       | Type safety                        |
+| ESLint           | Code linting (flat config)         |
+| Prettier         | Code formatting                    |
+| Vitest           | Unit & integration testing         |
+| Lefthook         | Git hooks (lint, test, commit-msg) |
+| Storybook        | Component documentation            |
+| Style Dictionary | Design token generation            |
 
 ---
 
@@ -463,15 +466,20 @@ Strict mode is enabled for maximum type safety:
 - **Utilities & shared code**: 90%+
 - **UI components**: Snapshot + interaction tests
 
-### CI/CD Pipeline (Recommended)
+### CI/CD Pipeline
 
-```yaml
-# Suggested workflow
-- Lint & typecheck
-- Run affected tests
-- Build affected projects
-- Deploy (on main branch)
-```
+The project uses GitHub Actions (`.github/workflows/ci.yml`):
+
+| Stage     | Tool                   | Trigger                   |
+| --------- | ---------------------- | ------------------------- |
+| Lint      | ESLint                 | Push/PR to main, develop  |
+| Typecheck | TypeScript `--noEmit`  | Push/PR to main, develop  |
+| Test      | Vitest                 | Push/PR to main, develop  |
+| Build     | Nx (api + notes)       | After lint/typecheck/test |
+| Deploy    | Railway (`railway up`) | Push to main only         |
+
+**Frontend**: Vercel auto-deploys on push (no CI gate).
+**Backend**: Railway deploys via CI after all checks pass.
 
 ---
 
@@ -479,12 +487,13 @@ Strict mode is enabled for maximum type safety:
 
 - [Root README](../README.md) - Quick start & scripts
 - [API Documentation](../apps/api/README.md) - Backend details
+- [API Architecture](../apps/api/ARCHITECTURE.md) - DDD patterns
 - [Notes App Documentation](../apps/notes/README.md) - Frontend details
-- [API Client Library](../libs/api-client/README.md) - Client SDK
+- [Deployment Guide](./DEPLOYMENT.md) - Railway & Vercel deployment
 
 ---
 
 <p align="center">
-  <strong>Knowtis Architecture v1.0</strong><br/>
-  Last updated: January 2026
+  <strong>Knowtis Architecture v1.1</strong><br/>
+  Last updated: February 2026
 </p>

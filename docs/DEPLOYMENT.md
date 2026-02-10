@@ -1,8 +1,8 @@
 # Knowtis Deployment Guide
 
-This guide covers deploying Knowtis to production using Railway (backend) and Vercel (frontend).
+How Knowtis is deployed to production: Railway (backend) and Vercel (frontend).
 
-## Architecture Overview
+## Architecture
 
 ```
 ┌─────────────────┐     ┌─────────────────┐
@@ -19,266 +19,137 @@ This guide covers deploying Knowtis to production using Railway (backend) and Ve
                └──────────┘ └─────────┘ └──────────┘
 ```
 
-## Prerequisites
+---
 
-- [Railway account](https://railway.app)
-- [Vercel account](https://vercel.com) (already configured)
-- GitHub repository connected to both platforms
+## How Deployments Work
 
-## Step 1: Create Railway Project
+### Backend (Railway) — CI-driven
 
-1. Go to [Railway Dashboard](https://railway.app/dashboard)
-2. Click **"New Project"**
-3. Select **"Empty Project"**
-4. Name it: `knowtis` (or your preferred name)
+Deployments are triggered by the **CI pipeline**, not by Railway's GitHub integration.
 
-## Step 2: Add PostgreSQL Database
-
-1. In your Railway project, click **"+ New"**
-2. Select **"Database"** → **"PostgreSQL"**
-3. Wait for deployment (~30 seconds)
-4. Click on the PostgreSQL service
-5. Go to **"Variables"** tab
-6. Note the `DATABASE_URL` - Railway auto-generates this
-
-## Step 3: Add Redis Database
-
-1. Click **"+ New"** again
-2. Select **"Database"** → **"Redis"**
-3. Wait for deployment
-4. The `REDIS_URL` will be available as a variable
-
-## Step 4: Deploy Backend API
-
-1. Click **"+ New"** → **"GitHub Repo"**
-2. Select your `knowtis` repository
-3. Railway will detect `railway.toml` and configure automatically
-
-### If Railway doesn't detect config automatically:
-
-Go to **Settings** and configure:
-
-| Setting            | Value                                              |
-| ------------------ | -------------------------------------------------- |
-| **Root Directory** | `/` (leave empty)                                  |
-| **Build Command**  | `pnpm install --frozen-lockfile && pnpm build:api` |
-| **Start Command**  | `node dist/apps/api/main.js`                       |
-
-## Step 5: Configure Environment Variables
-
-In your API service, go to **"Variables"** tab and add:
-
-```bash
-# Database (Railway's reference variable syntax)
-# Uses internal network for faster, free connections between services
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-
-# Redis (Railway's reference variable syntax)
-REDIS_URL=${{Redis.REDIS_URL}}
-
-# JWT Secrets (generate with: openssl rand -hex 32)
-JWT_SECRET=<your-32-char-hex-secret>
-JWT_REFRESH_SECRET=<your-32-char-hex-secret>
-
-# JWT Expiration
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# CORS - Update with your Vercel frontend URL
-CORS_ORIGIN=https://your-app.vercel.app
-
-# Environment
-NODE_ENV=production
-# PORT is automatically provided by Railway, but you can set it explicitly
-PORT=3333
-
-# Feature Flags (optional)
-FF_REAL_TIME_COLLABORATION=true
-FF_NOTE_SHARING=true
+```
+Push to main → GitHub Actions CI → lint, typecheck, test, build → railway up
 ```
 
-### Generate JWT Secrets
+The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job executes `railway up` using the Railway CLI container.
 
-Run this command to generate secure secrets:
+**Config files:**
 
-```bash
-# Generate JWT_SECRET
-openssl rand -hex 32
+| File                       | Purpose                           |
+| -------------------------- | --------------------------------- |
+| `railway.toml`             | Build/start commands, healthcheck |
+| `.github/workflows/ci.yml` | CI pipeline with deploy step      |
 
-# Generate JWT_REFRESH_SECRET (run again)
-openssl rand -hex 32
+**Required GitHub secrets/variables:**
+
+| Name                 | Type     | Purpose                       |
+| -------------------- | -------- | ----------------------------- |
+| `RAILWAY_TOKEN`      | Secret   | Project token for Railway CLI |
+| `RAILWAY_SERVICE_ID` | Variable | Service ID for `railway up`   |
+
+### Frontend (Vercel) — Auto-deploy
+
+Vercel auto-deploys on every push to `main`. No CI gate.
+
+Config: `vercel.json` at repo root.
+
+---
+
+## Railway Configuration
+
+### railway.toml
+
+```toml
+[build]
+builder = "nixpacks"
+buildCommand = "pnpm install --frozen-lockfile && pnpm build:api"
+watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml"]
+
+[deploy]
+startCommand = "node dist/apps/api/main.js"
+healthcheckPath = "/api/v1/health/ping"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
 ```
 
-## Step 6: Generate Public Domain
-
-1. Click on your API service
-2. Go to **"Settings"** → **"Networking"** → **"Public Networking"**
-3. Click **"Generate Domain"**
-4. Note your URL: `https://knowtis-api-production-xxxx.railway.app`
-
-> **Note:** If you have a TCP Proxy assigned to your service, you won't see the "Generate Domain" option. Remove the TCP Proxy first by clicking the trashcan icon.
-
-## Step 7: Configure Vercel Frontend
-
-1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
-2. Select your `knowtis` project
-3. Go to **"Settings"** → **"Environment Variables"**
-4. Add or update:
-
-```bash
-VITE_API_URL=https://your-railway-domain.railway.app
-```
-
-5. **Redeploy** the frontend for changes to take effect
-
-## Step 8: Verify Deployment
-
-### Test API Health
-
-```bash
-# Health check
-curl https://your-api.railway.app/api/v1/health/ping
-
-# Expected response:
-# {"status":"ok","timestamp":"2026-01-13T..."}
-
-# Readiness check (includes feature flags)
-curl https://your-api.railway.app/api/v1/health/ready
-```
-
-### Test Frontend
-
-1. Open your Vercel frontend URL
-2. Try registering a new user
-3. Try logging in
-4. Create a new note
-5. Open the same note in two tabs to test real-time collaboration
-
-## Troubleshooting
-
-### Build Fails
-
-1. Check build logs in Railway
-2. Verify `pnpm-lock.yaml` is committed
-3. Ensure all dependencies are in `package.json`
-
-### Database Connection Error
-
-1. Verify `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax
-2. Check PostgreSQL service is running (green dot)
-3. Ensure database migrations ran successfully
-
-### CORS Errors
-
-1. Verify `CORS_ORIGIN` matches your Vercel URL exactly
-2. Include `https://` prefix
-3. No trailing slash
-
-### WebSocket Not Connecting
-
-1. Verify Redis is running
-2. Check `REDIS_URL` is configured
-3. Verify frontend `VITE_API_URL` is correct
-
-### Redis Connection Issues (IPv6)
-
-If using `ioredis` and experiencing connection issues, ensure dual-stack DNS is enabled:
-
-```typescript
-// In your Redis configuration
-const redis = new Redis({
-  host: 'redis.railway.internal',
-  port: 6379,
-  family: 0, // Enable IPv4 + IPv6 dual-stack
-});
-```
-
-## Railway Private Networking
-
-Railway automatically enables private networking between services in your project. Services can communicate using the `.railway.internal` domain:
-
-- **PostgreSQL**: `postgres.railway.internal:5432`
-- **Redis**: `redis.railway.internal:6379`
-
-When using reference variables like `${{Postgres.DATABASE_URL}}`, Railway automatically uses the private network, which is:
-
-- **Faster**: No public internet routing
-- **Free**: No network egress charges
-- **Secure**: Traffic stays within Railway's infrastructure
-
-## Environment Variables Reference
+### Environment Variables
 
 | Variable                 | Required | Description                              |
 | ------------------------ | -------- | ---------------------------------------- |
 | `DATABASE_URL`           | Yes      | PostgreSQL connection string             |
-| `REDIS_URL`              | Yes      | Redis connection for Socket.io           |
-| `JWT_SECRET`             | Yes      | Access token signing key                 |
-| `JWT_REFRESH_SECRET`     | Yes      | Refresh token signing key                |
-| `JWT_EXPIRES_IN`         | No       | Access token TTL (default: 15m)          |
-| `JWT_REFRESH_EXPIRES_IN` | No       | Refresh token TTL (default: 7d)          |
-| `CORS_ORIGIN`            | Yes      | Frontend URL for CORS                    |
-| `NODE_ENV`               | No       | Environment (default: production)        |
-| `PORT`                   | No       | Server port (Railway provides this auto) |
+| `REDIS_URL`              | No       | Redis connection (caching, sessions)     |
+| `JWT_SECRET`             | Yes      | Access token signing key (min 32 chars)  |
+| `JWT_REFRESH_SECRET`     | Yes      | Refresh token signing key (min 32 chars) |
+| `JWT_EXPIRES_IN`         | No       | Access token TTL (default: `15m`)        |
+| `JWT_REFRESH_EXPIRES_IN` | No       | Refresh token TTL (default: `7d`)        |
+| `FRONTEND_URL`           | Yes      | Frontend URL for CORS                    |
+| `NODE_ENV`               | No       | Set by railway.toml (`production`)       |
+| `PORT`                   | No       | Set by railway.toml (`3333`)             |
 
-## Monitoring
+Use Railway reference variables for internal networking (free, faster):
 
-### Railway Dashboard
+```bash
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+REDIS_URL=${{Redis.REDIS_URL}}
+```
 
-- **Logs**: Real-time application logs
-- **Metrics**: CPU, Memory, Network usage
-- **Deployments**: History and rollback options
+Generate JWT secrets with:
+
+```bash
+openssl rand -hex 32
+```
 
 ### Health Endpoints
 
 | Endpoint               | Purpose                                |
 | ---------------------- | -------------------------------------- |
-| `/api/v1/health/ping`  | Simple liveness check                  |
-| `/api/v1/health/ready` | Readiness with feature flags           |
+| `/api/v1/health/ping`  | Liveness check (used by Railway)       |
+| `/api/v1/health/ready` | Readiness check with feature flags     |
 | `/api/v1/health`       | Full health status with memory metrics |
 
-## Costs
+---
 
-### Railway (Backend)
+## Vercel Configuration
 
-- **Free tier**: $5 credits/month
-- **Estimated usage**: ~$5-15/month for small projects
-- PostgreSQL and Redis included in usage
-
-### Vercel (Frontend)
-
-- **Free tier**: Generous for personal projects
-- **Pro tier**: $20/month if needed
-
-## Updating
-
-### Backend Updates
-
-Railway auto-deploys on push to `main` branch.
-
-To manually redeploy:
-
-1. Railway Dashboard → Your service
-2. Click **"Deploy"** → **"Redeploy"**
-
-### Frontend Updates
-
-Vercel auto-deploys on push to `main` branch.
-
-### Database Migrations
-
-After schema changes, run migrations manually or add to build:
+Set in Vercel Dashboard → Settings → Environment Variables:
 
 ```bash
-# In Railway service settings, update build command:
-pnpm install --frozen-lockfile && pnpm db:push && pnpm build:api
+VITE_API_URL=https://your-railway-domain.railway.app/api/v1
+VITE_WS_URL=https://your-railway-domain.railway.app
+VITE_COLLABORATION_MODE=websocket
 ```
+
+---
+
+## Initial Setup (from scratch)
+
+1. Create a Railway project with PostgreSQL (and optionally Redis) services
+2. Add the API service via `railway up` or link GitHub repo
+3. Configure environment variables (see table above)
+4. Generate a public domain: Settings → Networking → Public Networking
+5. Set `FRONTEND_URL` in Railway to your Vercel URL
+6. Set Vercel's `VITE_API_URL` to the Railway domain + `/api/v1`
+7. Set up GitHub secrets (`RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID`) for CI deploys
+
+---
+
+## Troubleshooting
+
+| Problem                  | Check                                                                    |
+| ------------------------ | ------------------------------------------------------------------------ |
+| Build fails              | Build logs in Railway, verify `pnpm-lock.yaml` committed                 |
+| CORS errors              | `FRONTEND_URL` matches Vercel URL exactly (`https://`, no trailing `/`)  |
+| WebSocket not connecting | `REDIS_URL` configured, frontend `VITE_WS_URL` correct                   |
+| Database connection      | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                  |
+| Deploy not triggering    | Check `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` variable in GitHub |
 
 ---
 
 ## Quick Reference
 
 ```bash
-# Generate secrets
+# Generate JWT secrets
 openssl rand -hex 32
 
 # Test health
@@ -286,15 +157,14 @@ curl https://your-api.railway.app/api/v1/health/ping
 
 # View logs (Railway CLI)
 railway logs
+
+# Manual deploy (bypassing CI)
+railway up --service <SERVICE_ID>
 ```
 
-## Official Documentation
+## Official Docs
 
-- [Railway NestJS Guide](https://docs.railway.com/guides/nest)
-- [Railway PostgreSQL](https://docs.railway.com/guides/postgresql)
-- [Railway Redis](https://docs.railway.com/guides/redis)
-- [Railway Variables Reference](https://docs.railway.com/reference/variables)
-- [Railway Public Networking](https://docs.railway.com/guides/public-networking)
+- [Railway Config as Code](https://docs.railway.com/guides/config-as-code)
 - [Railway Private Networking](https://docs.railway.com/guides/private-networking)
+- [Railway Variables Reference](https://docs.railway.com/reference/variables)
 - [Vercel Vite Framework](https://vercel.com/docs/frameworks/frontend/vite)
-- [Vercel Environment Variables](https://vercel.com/docs/environment-variables)

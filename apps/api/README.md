@@ -37,6 +37,7 @@
 | ⚡ Redis Cache        | Session and cache management                 |
 | 🛡️ Input Validation   | class-validator for request validation       |
 | 📊 Structured Logging | Request logging and error tracking           |
+| 📖 API Docs           | Swagger/OpenAPI at `/api/docs` (dev)         |
 | 🚀 API Versioning     | URI Versioning (v1)                          |
 
 ---
@@ -47,8 +48,8 @@
 
 | Requirement | Version |
 | ----------- | ------- |
-| Node.js     | ≥ 18.x  |
-| pnpm        | ≥ 8.x   |
+| Node.js     | ≥ 22.x  |
+| pnpm        | ≥ 10.x  |
 | Docker      | ≥ 20.x  |
 
 ### 1. Start Infrastructure
@@ -95,8 +96,8 @@ The API will be available at:
 ### 5. Verify Installation
 
 ```bash
-curl http://localhost:3333/api/v1/health
-# Response: { "status": "ok", ... }
+curl http://localhost:3333/api/v1/health/ping
+# Response: {"status":"ok","timestamp":"..."}
 ```
 
 ---
@@ -108,65 +109,72 @@ apps/api/
 ├── src/
 │   ├── main.ts                  # Application entry point
 │   │
-│   ├── app/                     # App module
-│   │   ├── app.module.ts        # Root module
-│   │   ├── app.controller.ts    # Health check endpoint
+│   ├── app/                     # Root module
+│   │   ├── app.module.ts
+│   │   ├── app.controller.ts
 │   │   └── app.service.ts
 │   │
-│   ├── config/                  # Configuration
-│   │   ├── config.module.ts     # ConfigModule setup
-│   │   └── database.config.ts   # Database configuration
+│   ├── adapters/                # Platform adapters
+│   │   └── socket-io.adapter.ts # Socket.io WebSocket adapter
 │   │
-│   ├── core/                    # Core functionality
-│   │   ├── filters/             # Exception filters
-│   │   │   └── http-exception.filter.ts
-│   │   ├── interceptors/        # Request interceptors
-│   │   │   └── logging.interceptor.ts
-│   │   └── guards/              # Global guards
+│   ├── config/                  # Configuration
+│   │   └── env.config.ts        # Environment validation (Zod)
+│   │
+│   ├── core/                    # Shared infrastructure
+│   │   ├── domain/events/       # Domain event interfaces
+│   │   ├── exceptions/          # Custom domain exceptions
+│   │   ├── filters/             # HTTP exception filter
+│   │   ├── interceptors/        # Logging interceptor
+│   │   └── logging/             # Logger service (Pino)
 │   │
 │   ├── database/                # Database layer
-│   │   ├── database.module.ts   # Drizzle connection
-│   │   ├── schema/              # Table definitions
-│   │   │   ├── users.ts
-│   │   │   ├── notes.ts
-│   │   │   └── index.ts
-│   │   └── migrations/          # SQL migrations
+│   │   ├── database.module.ts   # Drizzle connection setup
+│   │   └── schema/              # Table definitions
+│   │       ├── users.schema.ts
+│   │       ├── notes.schema.ts
+│   │       ├── sessions.schema.ts
+│   │       └── index.ts
 │   │
-│   ├── modules/                 # Feature modules
-│   │   ├── auth/                # Authentication (DDD)
-│   │   │   ├── application/     # Use case handlers
-│   │   │   ├── domain/          # Entities, VOs, Ports
-│   │   │   ├── infrastructure/  # Adapters
-│   │   │   ├── strategies/      # Passport strategies
-│   │   │   ├── guards/          # Auth guards
-│   │   │   ├── decorators/      # Custom decorators
-│   │   │   └── dto/             # Data transfer objects
-│   │   │
-│   │   ├── users/               # User management
-│   │   │   ├── users.module.ts
-│   │   │   ├── users.service.ts
-│   │   │   └── users.repository.ts
-│   │   │
-│   │   ├── notes/               # Notes CRUD (DDD)
-│   │   │   ├── application/     # Command/Query handlers
-│   │   │   ├── domain/          # Entities, VOs, Ports
-│   │   │   ├── infrastructure/  # DrizzleNoteRepository
-│   │   │   ├── notes.controller.ts
-│   │   │   └── dto/
-│   │   │
-│   │   └── collaboration/       # Real-time WebSocket
-│   │       ├── collaboration.module.ts
-│   │       ├── collaboration.gateway.ts
-│   │       └── collaboration.service.ts
-│   │
-│   └── adapters/                # External integrations
-│       └── redis.adapter.ts
+│   └── modules/                 # Feature modules
+│       ├── auth/                # Authentication (DDD)
+│       │   ├── application/     # Command handlers
+│       │   ├── domain/          # Entities, VOs, Ports
+│       │   ├── infrastructure/  # Adapters (Drizzle, bcrypt, JWT)
+│       │   ├── strategies/      # Passport strategies (JWT, Local)
+│       │   ├── guards/          # JWT & Local auth guards
+│       │   ├── decorators/      # @CurrentUser, @Public
+│       │   └── dto/
+│       │
+│       ├── notes/               # Notes CRUD (DDD)
+│       │   ├── application/     # Command & Query handlers
+│       │   ├── domain/          # Note entity, VOs, Ports
+│       │   ├── infrastructure/  # DrizzleNoteRepository
+│       │   └── dto/
+│       │
+│       ├── collaboration/       # Real-time WebSocket
+│       │   ├── collaboration.gateway.ts
+│       │   ├── collaboration.service.ts
+│       │   ├── ws-auth.service.ts
+│       │   └── collaboration.types.ts
+│       │
+│       ├── users/               # User management
+│       │   ├── users.module.ts
+│       │   ├── users.service.ts
+│       │   └── users.repository.ts
+│       │
+│       ├── health/              # Health checks
+│       │   ├── health.controller.ts
+│       │   └── health.module.ts
+│       │
+│       └── feature-flags/       # Feature flag service
+│           ├── feature-flags.module.ts
+│           ├── feature-flags.service.ts
+│           └── feature-flag.guard.ts
 │
-├── drizzle.config.ts            # Drizzle Kit config
-├── ARCHITECTURE.md              # DDD Architecture guide
-├── webpack.config.cjs           # Build configuration
-├── tsconfig.json                # TypeScript config
-└── project.json                 # Nx project config
+├── drizzle.config.ts
+├── ARCHITECTURE.md              # DDD patterns guide
+├── webpack.config.cjs
+└── project.json
 ```
 
 ---
@@ -522,21 +530,34 @@ All errors follow this format:
 ├─────────────────┤     ├──────────────────┤
 │ id (PK)         │────<│ owner_id (FK)    │
 │ email           │     │ id (PK)          │
-│ password        │     │ title            │
-│ name            │     │ content          │
-│ avatar_url      │     │ created_at       │
+│ name            │     │ title            │
+│ password_hash   │     │ content          │
+│ avatar_url      │     │ yjs_state        │
+│ provider        │     │ is_public        │
+│ provider_id     │     │ created_at       │
 │ created_at      │     │ updated_at       │
 │ updated_at      │     └──────────────────┘
 └─────────────────┘             │
-                                │
-                    ┌───────────┴────────────┐
-                    │   note_collaborators   │
-                    ├────────────────────────┤
-                    │ note_id (FK)           │
-                    │ user_id (FK)           │
-                    │ permission             │
-                    │ created_at             │
-                    └────────────────────────┘
+        │               ┌──────┴───────────┐
+        │               │ note_permissions │
+        │               ├──────────────────┤
+        └──────────────<│ user_id (FK)     │
+                        │ note_id (FK)     │
+                        │ permission       │
+                        │ created_at       │
+                        └──────────────────┘
+
+┌─────────────────┐
+│    sessions     │
+├─────────────────┤
+│ id (PK)         │
+│ user_id (FK)    │
+│ refresh_token   │
+│ user_agent      │
+│ ip_address      │
+│ expires_at      │
+│ created_at      │
+└─────────────────┘
 ```
 
 ### Database Commands
@@ -655,7 +676,7 @@ node dist/apps/api/main.js
 ### Docker
 
 ```dockerfile
-FROM node:20-alpine
+FROM node:22-alpine
 
 WORKDIR /app
 
@@ -682,8 +703,8 @@ docker run -p 3333:3333 --env-file .env knowtis-api
 ### Health Check
 
 ```bash
-curl http://localhost:3333/api/v1/health
-# { "status": "ok", ... }
+curl http://localhost:3333/api/v1/health/ping
+# {"status":"ok","timestamp":"..."}
 ```
 
 ### Production Checklist
@@ -704,7 +725,8 @@ curl http://localhost:3333/api/v1/health
 - [Root README](../../README.md) - Workspace overview
 - [Notes App](../notes/README.md) - Frontend application
 - [Architecture Guide](../../docs/ARCHITECTURE.md) - System design
-- [API Client Library](../../libs/api-client/README.md) - Client SDK
+- [API Architecture](./ARCHITECTURE.md) - DDD patterns & module structure
+- [Deployment Guide](../../docs/DEPLOYMENT.md) - Railway & Vercel
 
 ---
 

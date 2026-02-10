@@ -56,14 +56,14 @@ apps/
 
 libs/
 ├── api-client/           # HTTP/WebSocket client for frontend
+├── auth/                 # Auth API client, Zustand store + hooks
 ├── data-access/
-│   ├── auth/             # Auth Zustand store + hooks
-│   └── notes/            # Notes React Query hooks
-├── design-system/        # Shared UI components + tokens
+│   └── notes/            # Notes React Query hooks + Zod schemas
+├── design-system/        # Shared UI components + design tokens (Storybook)
 └── shared/
-    ├── hooks/            # Generic React hooks
+    ├── hooks/            # Generic React hooks (useDebounce)
     ├── types/            # Shared TypeScript types
-    └── util/             # Utility functions
+    └── util/             # Utility functions (logger, ID generator)
 ```
 
 ### Dependency Flow
@@ -72,7 +72,7 @@ Apps → data-access → api-client → shared. Libraries in `shared/` have no i
 
 ### Path Aliases
 
-Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/data-access-auth`, `@knowtis/data-access-notes`, `@knowtis/design-system`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
+Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/auth`, `@knowtis/data-access-notes`, `@knowtis/design-system`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
 
 ## Nx Guidelines
 
@@ -112,7 +112,7 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 ### Git Hooks (Lefthook)
 
-- **pre-commit**: Runs ESLint + Prettier on staged files
+- **pre-commit**: Runs ESLint + Prettier on staged files, TypeScript type checking
 - **pre-push**: Runs affected tests
 - **commit-msg**: Validates Conventional Commits format
 
@@ -122,6 +122,10 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 - Prefer `interface` over `type` for object shapes
 - Use `const` by default, never `var`
 - Always use curly braces for control structures
+
+### NestJS DI Rule
+
+In the backend, **never use `import type`** for classes that are injected via NestJS DI. NestJS needs runtime metadata from these imports. See `.agent/workflows/nestjs-di-rules.md`.
 
 ## Real-time Collaboration
 
@@ -138,6 +142,19 @@ Presence/awareness handled through Yjs Awareness API.
 ## Authentication
 
 JWT-based with refresh tokens. The `@knowtis/api-client` handles token refresh automatically on 401 responses.
+
+## Backend Modules
+
+- **auth** - JWT authentication with DDD/Clean Architecture (Ports & Adapters, Value Objects, Result pattern via neverthrow)
+- **notes** - Notes CRUD with DDD/Clean Architecture, sharing/permissions
+- **collaboration** - WebSocket gateway (Socket.io) for Yjs real-time sync
+- **users** - User management (service-based)
+- **health** - Health check endpoints (`/api/v1/health/ping`, `/api/v1/health/ready`)
+- **feature-flags** - Env-based feature flag service with guard
+
+## API Documentation
+
+Swagger UI available in development at `/api/docs`
 
 ## Environment Setup
 

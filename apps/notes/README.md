@@ -17,7 +17,7 @@
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
-- [Architecture](#architecture)
+- [Frontend Architecture](#frontend-architecture)
 - [Components](#components)
 - [State Management](#state-management)
 - [Real-time Collaboration](#real-time-collaboration)
@@ -74,62 +74,70 @@ pnpm dev:all      # API + Notes app
 ```
 apps/notes/
 ├── src/
-│   ├── components/           # UI components
-│   │   ├── auth/            # Auth-related components
-│   │   │   └── ProtectedRoute.tsx
+│   ├── components/           # Feature components
+│   │   ├── auth/            # Route guards
+│   │   │   ├── ProtectedRoute.tsx
+│   │   │   └── PublicRoute.tsx
 │   │   ├── editor/          # Rich text editor
-│   │   │   ├── NoteEditor.tsx
+│   │   │   ├── CollaborativeEditor.tsx
 │   │   │   ├── EditorToolbar.tsx
-│   │   │   └── useEditorExtensions.ts
+│   │   │   └── cursors/     # Cursor rendering
 │   │   ├── layout/          # Layout components
-│   │   │   ├── Header.tsx
-│   │   │   └── Sidebar.tsx
-│   │   └── notes/           # Notes list & cards
+│   │   │   ├── Layout.tsx
+│   │   │   ├── Sidebar.tsx
+│   │   │   ├── NavigationLinks.tsx
+│   │   │   └── SidebarUserFooter.tsx
+│   │   └── notes/           # Notes list & management
 │   │       ├── NoteCard.tsx
-│   │       └── NoteList.tsx
+│   │       ├── NoteList.tsx
+│   │       ├── CreateDialog.tsx
+│   │       ├── DeleteDialog.tsx
+│   │       └── EmptyState.tsx
 │   │
 │   ├── pages/               # Page components
-│   │   ├── HomePage.tsx     # Notes dashboard
-│   │   ├── LoginPage.tsx    # Login form
-│   │   ├── RegisterPage.tsx # Registration form
-│   │   └── NoteEditorPage.tsx # Note editing
+│   │   ├── HomePage.tsx
+│   │   ├── LoginPage.tsx
+│   │   ├── RegisterPage.tsx
+│   │   └── NoteEditorPage.tsx
 │   │
 │   ├── routes/              # TanStack Router routes
-│   │   ├── __root.tsx       # Root layout
-│   │   ├── index.tsx        # Home route
-│   │   ├── login.tsx        # Login route
-│   │   ├── register.tsx     # Register route
-│   │   └── notes.$noteId.tsx # Note editor route
+│   │   ├── __root.tsx
+│   │   ├── index.tsx
+│   │   ├── login.tsx
+│   │   ├── register.tsx
+│   │   └── notes.$noteId.tsx
 │   │
 │   ├── providers/           # React context providers
-│   │   ├── AppProviders.tsx # Provider composition
-│   │   ├── AuthProvider.tsx # Authentication context
-│   │   ├── QueryProvider.tsx # React Query setup
-│   │   ├── ThemeProvider.tsx # Theme management
-│   │   └── YjsProvider.tsx  # Yjs collaboration
+│   │   ├── YjsProvider.tsx  # Yjs document management
+│   │   ├── YjsContext.ts    # Context definition
+│   │   ├── useYjs.ts        # Context hook
+│   │   └── ThemeProvider.tsx # Dark/light theme
 │   │
 │   ├── hooks/               # App-specific hooks
 │   │   ├── useActiveCollaborators.ts
-│   │   └── useAutoSave.ts
-│   │
-│   ├── stores/              # App-level Zustand stores
-│   │   └── ui.store.ts
+│   │   ├── useCollaborativeEditor.ts
+│   │   ├── useWebSocketCollaboration.ts
+│   │   └── usePresenceBroadcast.ts
 │   │
 │   ├── lib/                 # Utilities
-│   │   ├── date.ts          # Date formatting
-│   │   └── text.ts          # Text utilities
-│   │
-│   ├── config/              # App configuration
+│   │   ├── date.ts
+│   │   ├── text.ts
+│   │   ├── collaboration.ts
+│   │   ├── collaboration.constants.ts
 │   │   └── constants.ts
 │   │
-│   └── types/               # TypeScript types
-│       └── editor.ts
+│   ├── config/              # App configuration
+│   │   └── navigation.config.ts
+│   │
+│   ├── types/               # TypeScript types
+│   │   ├── editor.ts
+│   │   └── collaboration.ts
+│   │
+│   └── main.tsx
 │
-├── public/                  # Static assets
-├── index.html               # Entry HTML
-├── vite.config.ts           # Vite configuration
-├── vitest.config.ts         # Test configuration
-└── tsconfig.json            # TypeScript config
+├── vite.config.ts
+├── vitest.config.ts
+└── tsconfig.json
 ```
 
 ---
@@ -142,7 +150,7 @@ Create a `.env` file in `apps/notes/`:
 
 ```env
 # API Configuration
-VITE_API_URL=http://localhost:3333/api
+VITE_API_URL=http://localhost:3333/api/v1
 VITE_WS_URL=http://localhost:3333
 
 # Collaboration Mode
@@ -164,53 +172,18 @@ VITE_COLLABORATION_MODE=websocket
 
 ---
 
-## Architecture
-
-### Backend Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      NestJS Application                      │
-│                                                             │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                   Controllers                          │  │
-│  │  • AuthController (HTTP -> Command/Query)             │  │
-│  │  • NotesController (HTTP -> Command/Query)            │  │
-│  │  • CollaborationGateway (WebSocket)                   │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                 Application Layer                      │  │
-│  │  • Command Handlers (CreateNote, etc.)                │  │
-│  │  • Query Handlers (GetNote, etc.)                     │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │                   Domain Layer                         │  │
-│  │  • Entities (Note, User)                              │  │
-│  │  • Ports (start repositories)                         │  │
-│  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
-│  ┌───────────────────────────────────────────────────────┐  │
-│  │               Infrastructure Layer                     │  │
-│  │  • DrizzleNoteRepository                              │  │
-│  │  • Database (PostgreSQL)                              │  │
-│  └───────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
-```
+## Frontend Architecture
 
 ### Component Hierarchy
 
 ```
 <App>
-  └── <AppProviders>
-        ├── <QueryClientProvider>    # React Query
+  └── <Providers>
         ├── <ThemeProvider>          # Dark/light mode
-        ├── <AuthProvider>           # Auth state
-        └── <YjsProvider>            # Collaboration
+        └── <YjsProvider>           # Collaboration documents
               └── <RouterProvider>
                     └── <RootLayout>
-                          ├── <Header />
+                          ├── <Sidebar />
                           └── <Outlet />
                                 ├── <HomePage />
                                 ├── <LoginPage />
@@ -285,53 +258,11 @@ Formatting toolbar for the rich text editor.
 
 ## State Management
 
-### Zustand Stores
+### Server State (TanStack Query)
 
-We use [Zustand](https://github.com/pmndrs/zustand) for state management across the application.
-
-#### Notes Store (`@knowtis/data-access-notes`)
+Server data is managed via React Query hooks from `@knowtis/data-access-notes`:
 
 ```typescript
-interface NotesState {
-  notes: Note[];
-  searchQuery: string;
-}
-
-interface NotesActions {
-  createNote: (input: CreateNoteInput) => Note;
-  updateNote: (id: string, input: UpdateNoteInput) => boolean;
-  deleteNote: (id: string) => boolean;
-  getNote: (id: string) => Note | undefined;
-  setSearchQuery: (query: string) => void;
-  getFilteredNotes: () => Note[];
-}
-```
-
-#### Auth Store (`@knowtis/data-access-auth`)
-
-```typescript
-interface AuthState {
-  user: User | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-}
-
-interface AuthActions {
-  login: (credentials: LoginInput) => Promise<void>;
-  logout: () => void;
-  register: (input: RegisterInput) => Promise<void>;
-  refreshToken: () => Promise<void>;
-}
-```
-
-### React Query
-
-Server state is managed with [TanStack Query](https://tanstack.com/query):
-
-```typescript
-// Hooks provided by @knowtis/data-access-auth
-import { useLogin, useProfile, useRegister } from '@knowtis/data-access-auth';
-// Hooks provided by @knowtis/data-access-notes
 import {
   useCreateNote,
   useDeleteNote,
@@ -340,6 +271,18 @@ import {
   useUpdateNote,
 } from '@knowtis/data-access-notes';
 ```
+
+These hooks provide caching, optimistic updates, and automatic refetching.
+
+### Client State (Zustand)
+
+Authentication state is managed via Zustand from `@knowtis/auth`:
+
+```typescript
+import { useAuthStore } from '@knowtis/auth';
+```
+
+The auth store manages user session, tokens, and authentication status.
 
 ---
 
@@ -499,7 +442,7 @@ vercel
 Set these in your hosting provider:
 
 ```env
-VITE_API_URL=https://api.your-domain.com/api
+VITE_API_URL=https://api.your-domain.com/api/v1
 VITE_WS_URL=https://api.your-domain.com
 VITE_COLLABORATION_MODE=websocket
 ```
@@ -511,7 +454,7 @@ VITE_COLLABORATION_MODE=websocket
 - [Root README](../../README.md) - Workspace overview
 - [API Documentation](../api/README.md) - Backend API
 - [Architecture Guide](../../docs/ARCHITECTURE.md) - System design
-- [API Client](../../libs/api-client/README.md) - HTTP client library
+- [Deployment Guide](../../docs/DEPLOYMENT.md) - Railway & Vercel
 
 ---
 

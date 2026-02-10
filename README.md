@@ -48,14 +48,14 @@
 
 | Requirement | Version |
 | ----------- | ------- |
-| Node.js     | ≥ 18.x  |
-| pnpm        | ≥ 8.x   |
+| Node.js     | ≥ 22.x  |
+| pnpm        | ≥ 10.x  |
 | Docker      | ≥ 20.x  |
 
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/your-org/knowtis.git
+git clone git@github.com:jovandyaz/knowtis_app.git
 cd knowtis
 pnpm install
 ```
@@ -95,12 +95,12 @@ pnpm dev:api  # Backend only (http://localhost:3333)
 
 ### Access Points
 
-| Service   | URL                       |
-| --------- | ------------------------- |
-| Frontend  | http://localhost:4200     |
-| API       | http://localhost:3333/api |
-| WebSocket | ws://localhost:3333       |
-| DB Studio | Run `pnpm db:studio`      |
+| Service   | URL                          |
+| --------- | ---------------------------- |
+| Frontend  | http://localhost:4200        |
+| API       | http://localhost:3333/api/v1 |
+| WebSocket | ws://localhost:3333          |
+| DB Studio | Run `pnpm db:studio`         |
 
 ---
 
@@ -122,17 +122,18 @@ knowtis/
 │   │
 │   └── notes/                     # React frontend app
 │       ├── src/
-│       │   ├── components/        # UI components
+│       │   ├── components/        # Feature components
 │       │   ├── pages/             # Page components
-│       │   ├── providers/         # Context providers
+│       │   ├── routes/            # TanStack Router routes
+│       │   ├── providers/         # Context providers (Yjs, Theme)
 │       │   ├── hooks/             # App-specific hooks
-│       │   └── stores/            # App-level state
+│       │   └── lib/               # Utilities
 │       └── README.md              # Frontend documentation
 │
 ├── libs/                          # Shared libraries
 │   ├── api-client/                # HTTP/WebSocket client
+│   ├── auth/                      # Auth hooks, store & API client
 │   ├── data-access/               # Domain logic & state
-│   │   ├── auth/                  # Auth hooks & store
 │   │   └── notes/                 # Notes hooks & store
 │   ├── design-system/             # UI components & tokens
 │   └── shared/                    # Utilities & types
@@ -367,7 +368,7 @@ FRONTEND_URL=http://localhost:4200
 
 ```env
 # API Configuration
-VITE_API_URL=http://localhost:3333/api
+VITE_API_URL=http://localhost:3333/api/v1
 VITE_WS_URL=http://localhost:3333
 
 # Collaboration Mode: 'webrtc' | 'websocket' | 'hybrid'
@@ -380,10 +381,7 @@ This project uses:
 
 - **ESLint** - Code linting with modern flat config
 - **Prettier** - Code formatting
-- **Husky** - Git hooks
-- **lint-staged** - Pre-commit linting
-
-Pre-commit hooks automatically run linting and formatting on staged files.
+- **Lefthook** - Git hooks (pre-commit, pre-push, commit-msg)
 
 ### IDE Setup
 
@@ -403,7 +401,8 @@ Recommended VS Code extensions:
 | [API Documentation](./apps/api/README.md)         | Backend API setup, endpoints & deployment |
 | [Notes App Documentation](./apps/notes/README.md) | Frontend features & architecture          |
 | [Architecture Guide](./docs/ARCHITECTURE.md)      | System design & principles                |
-| [API Client Library](./libs/api-client/README.md) | HTTP/WebSocket client usage               |
+| [Deployment Guide](./docs/DEPLOYMENT.md)          | Railway & Vercel deployment               |
+| [API Architecture](./apps/api/ARCHITECTURE.md)    | Backend DDD patterns & module structure   |
 
 ---
 
@@ -432,7 +431,7 @@ chore: update dependencies
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
+This project is proprietary software. All rights reserved.
 
 ---
 
