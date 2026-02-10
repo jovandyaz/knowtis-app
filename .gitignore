@@ -47,3 +47,6 @@ libs/design-system/storybook-static
 vitest.config.*.timestamp*
 .vercel
 .env*.local
+
+# Lefthook auto-generated hooks (contain machine-specific absolute paths)
+.husky/_/
