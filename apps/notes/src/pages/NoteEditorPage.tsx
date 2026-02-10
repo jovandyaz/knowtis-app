@@ -3,9 +3,14 @@ import { useCallback, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { Button, Input } from '@knowtis/design-system';
+import {
+  Button,
+  ErrorState,
+  Input,
+  LoadingState,
+} from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
-import { AlertCircle, ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 
 import { CollaborativeEditor } from '@/components/editor';
 import { DEBOUNCE_DELAYS, formatNoteDateFull } from '@/lib';
@@ -123,32 +128,17 @@ export function NoteEditorPage() {
   const { data: note, isLoading, isError, error } = useNote(noteId);
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-(--primary)" />
-          <p className="text-sm text-(--muted-foreground)">Loading note...</p>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading note..." />;
   }
 
   if (isError) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-center">
-          <div className="flex justify-center mb-4">
-            <AlertCircle className="h-12 w-12 text-(--destructive)" />
-          </div>
-          <p className="text-(--destructive) font-medium">
-            Failed to load note
-          </p>
-          <p className="text-sm text-(--muted-foreground) mt-1 mb-4">
-            {error instanceof Error ? error.message : 'Note not found'}
-          </p>
-          <Button onClick={() => navigate({ to: '/' })}>Back to Notes</Button>
-        </div>
-      </div>
+      <ErrorState
+        title="Failed to load note"
+        message={error instanceof Error ? error.message : 'Note not found'}
+        onRetry={() => navigate({ to: '/' })}
+        retryLabel="Back to Notes"
+      />
     );
   }
 

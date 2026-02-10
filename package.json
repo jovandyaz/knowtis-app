@@ -85,11 +85,9 @@
     "socket.io-client": "^4.8.3",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
-    "tslib": "^2.3.0",
     "unique-names-generator": "^4.7.1",
     "y-indexeddb": "^9.0.12",
     "y-protocols": "^1.0.7",
-    "y-websocket": "^3.0.0",
     "yjs": "^13.6.27",
     "zod": "^4.1.13",
     "zustand": "^5.0.9"

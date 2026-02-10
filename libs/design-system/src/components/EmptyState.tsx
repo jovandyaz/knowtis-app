@@ -19,6 +19,8 @@ export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
   };
   /** Whether to take full viewport height */
   fullHeight?: boolean;
+  /** Custom content rendered after the action button */
+  children?: ReactNode;
 }
 
 /**
@@ -34,6 +36,7 @@ const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
       description = 'Get started by creating your first item.',
       action,
       fullHeight = true,
+      children,
       ...props
     },
     ref
@@ -60,6 +63,7 @@ const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
             {action.label}
           </Button>
         )}
+        {children}
       </div>
     </div>
   )

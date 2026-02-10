@@ -2,19 +2,12 @@ import type { KnipConfig } from 'knip';
 
 /**
  * Knip configuration for dead code detection
- *
- * Uses a flat configuration with path aliases from tsconfig.base.json.
- * For Nx monorepos, we analyze from the root with explicit entry points.
  */
 const config: KnipConfig = {
-  // Entry points for all apps and libs
   entry: [
-    // Backend API
     'apps/api/src/main.ts',
-    // Frontend App - routes are entry points for TanStack Router
     'apps/notes/src/main.tsx',
     'apps/notes/src/routes/**/*.tsx',
-    // Library exports
     'libs/*/src/index.ts',
     'libs/*/*/src/index.ts',
   ],
@@ -34,20 +27,39 @@ const config: KnipConfig = {
     '@knowtis/data-access-notes': ['libs/data-access/notes/src/index.ts'],
     '@knowtis/auth': ['libs/auth/src/index.ts'],
   },
+  // Dependencies used in config files, as peer deps, or via dynamic strings
+  // that knip cannot detect through static analysis
+  ignoreDependencies: [
+    '@tailwindcss/vite', // Used in vite.config.ts and .storybook/main.ts
+    'tailwindcss', // Imported in CSS via @import 'tailwindcss'
+    'lib0', // Peer dependency of yjs, y-protocols, y-indexeddb
+    'pino-pretty', // Referenced as string in pino logger config
+    '@nestjs/cli', // CLI tool for NestJS scaffolding
+    '@nestjs/schematics', // Peer dependency of @nestjs/cli
+    '@nestjs/testing', // Needed for API integration tests
+    '@nx/nest', // Nx plugin for NestJS project inference
+    '@nx/node', // Nx plugin for Node project inference
+    '@nx/react', // Nx plugin for React project inference
+    '@nx/web', // Nx plugin for web project inference
+    '@nx/workspace', // Nx workspace plugin
+    '@storybook/addon-docs', // Used in .storybook/main.ts
+    '@storybook/react-vite', // Used in .storybook/main.ts
+    '@swc/helpers', // Peer dependency of @swc/core
+    '@vitejs/plugin-react-swc', // Used in vite.config.ts files
+    '@testing-library/jest-dom', // Used in test setup.ts
+    '@testing-library/react', // Used in test files
+    '@testing-library/user-event', // Needed for component tests
+    '@types/ws', // Peer dependency of webpack-dev-server
+  ],
   ignore: [
-    // Test files
     '**/*.spec.{ts,tsx}',
     '**/*.test.{ts,tsx}',
-    // Generated files
     'apps/notes/src/routeTree.gen.ts',
-    // Type declarations
     '**/*.d.ts',
-    // Build artifacts
     '**/node_modules/**',
     '**/dist/**',
     '**/coverage/**',
     '**/.nx/**',
-    // Config files
     '**/vite.config.ts',
     '**/vitest.config.{ts,mts}',
     '**/vitest.workspace.ts',
@@ -56,18 +68,14 @@ const config: KnipConfig = {
     '**/webpack.config.cjs',
     '**/project.json',
     '**/.storybook/**',
-    // Feature flag guard is prepared for future use
     'apps/api/src/modules/feature-flags/feature-flag.guard.ts',
-    // Library barrel files (used via @knowtis/* path aliases - knip can't resolve these)
     'libs/*/src/index.ts',
     'libs/*/*/src/index.ts',
     'libs/auth/src/*/index.ts',
-    // Frontend barrel files and test setup
     'apps/notes/src/components/*/index.ts',
     'apps/notes/src/*/index.ts',
     'apps/notes/src/test/setup.ts',
   ],
-  // Domain exception classes and types are intentionally exported for DDD
   ignoreExportsUsedInFile: {
     interface: true,
     type: true,

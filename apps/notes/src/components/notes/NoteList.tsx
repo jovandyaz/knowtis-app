@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 
 import { useNotes } from '@knowtis/data-access-notes';
-import { Input } from '@knowtis/design-system';
+import { ErrorState, Input } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
-import { Loader2, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { DEBOUNCE_DELAYS } from '@/lib';
@@ -12,6 +12,7 @@ import { CreateNoteDialog } from './CreateNoteDialog';
 import { DeleteNoteDialog } from './DeleteNoteDialog';
 import { EmptyState } from './EmptyState';
 import { NoteCard } from './NoteCard';
+import { NoteCardSkeleton } from './NoteCardSkeleton';
 
 export function NoteList() {
   const [localSearch, setLocalSearch] = useState('');
@@ -34,27 +35,22 @@ export function NoteList() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-(--primary)" />
-          <p className="text-sm text-(--muted-foreground)">Loading notes...</p>
-        </div>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <NoteCardSkeleton key={i} />
+        ))}
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="text-center">
-          <p className="text-(--destructive) font-medium">
-            Error loading notes
-          </p>
-          <p className="text-sm text-(--muted-foreground) mt-1">
-            {error instanceof Error ? error.message : 'Please try again later'}
-          </p>
-        </div>
-      </div>
+      <ErrorState
+        title="Error loading notes"
+        message={
+          error instanceof Error ? error.message : 'Please try again later'
+        }
+      />
     );
   }
 

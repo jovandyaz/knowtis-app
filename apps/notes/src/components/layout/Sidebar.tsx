@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useAuthUser } from '@knowtis/auth';
+import { Button } from '@knowtis/design-system';
 import { Menu, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -19,9 +20,11 @@ export function Sidebar() {
   return (
     <>
       <div className="fixed left-4 top-4 z-50 md:hidden">
-        <button
+        <Button
+          variant="outline"
+          size="icon"
           onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="flex h-10 w-10 items-center justify-center rounded-full bg-background/80 shadow-sm backdrop-blur-md border border-border text-foreground transition-colors hover:bg-muted cursor-pointer"
+          className="h-10 w-10 rounded-full bg-(--background)/80 shadow-sm backdrop-blur-md"
           aria-label="Toggle menu"
         >
           {isMobileOpen ? (
@@ -29,7 +32,7 @@ export function Sidebar() {
           ) : (
             <Menu className="h-5 w-5" />
           )}
-        </button>
+        </Button>
       </div>
 
       <motion.aside

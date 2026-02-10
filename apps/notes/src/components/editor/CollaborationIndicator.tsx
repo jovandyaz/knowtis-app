@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { cn } from '@knowtis/design-system';
+import { Badge, cn } from '@knowtis/design-system';
 import { Users } from 'lucide-react';
 
 import type { CollaborativeUser } from '@/types';
@@ -31,9 +31,9 @@ export const CollaborationIndicator = memo(function CollaborationIndicator({
       )}
     >
       <Users className="h-4 w-4 text-(--primary)" />
-      <span className="text-sm text-(--primary)">
-        {users.length} other {users.length === 1 ? 'user' : 'users'} editing
-      </span>
+      <Badge variant="secondary" className="text-xs">
+        {users.length} {users.length === 1 ? 'user' : 'users'} editing
+      </Badge>
       <div className="flex -space-x-2">
         {users.slice(0, 5).map((user) => (
           <div
