@@ -30,7 +30,9 @@ export class WsAuthService {
         this.logger.debug(`Authenticated WebSocket user: ${payload.email}`);
         return authenticatedUser;
       } catch (error) {
-        this.logger.debug(`Invalid JWT token, treating as anonymous: ${error}`);
+        this.logger.warn(
+          `Invalid JWT token, treating as anonymous: ${error instanceof Error ? error.message : error}`
+        );
       }
     }
 

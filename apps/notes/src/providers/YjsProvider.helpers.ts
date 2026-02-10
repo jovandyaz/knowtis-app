@@ -8,6 +8,8 @@ import {
 import type { BroadcastMessage, CollaborativeUser } from '@/types';
 import * as Y from 'yjs';
 
+import { logger } from '@knowtis/shared-util';
+
 import type { DocumentResources } from './YjsProvider.types';
 
 /**
@@ -90,7 +92,10 @@ export function createMessageHandler(
         }
       }
     } catch (error) {
-      console.error('Error handling collaboration message:', error);
+      logger.error('Error handling collaboration message', {
+        error,
+        context: 'YjsProvider',
+      });
     }
   };
 }

@@ -4,6 +4,8 @@ import {
   uniqueNamesGenerator,
 } from 'unique-names-generator';
 
+import { logger } from '@knowtis/shared-util';
+
 import { COLLAB_CONFIG } from './collaboration.constants';
 
 const INSTANCE_ID = crypto.randomUUID();
@@ -20,7 +22,9 @@ export function getRandomCursorColor(): string {
 
 export function generateUserName(userId: string): string {
   if (!userId || userId.length === 0) {
-    console.warn('Empty userId provided, using fallback');
+    logger.warn('Empty userId provided, using fallback', {
+      context: 'collaboration',
+    });
     return 'Anonymous User';
   }
 
@@ -39,7 +43,9 @@ export function generateUserName(userId: string): string {
 
 export function clampPosition(position: number, maxSize: number): number {
   if (maxSize < 0) {
-    console.warn('maxSize is negative, returning 0');
+    logger.warn('maxSize is negative, returning 0', {
+      context: 'collaboration',
+    });
     return 0;
   }
 

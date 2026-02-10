@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import { cn } from '@knowtis/design-system';
+import { logger } from '@knowtis/shared-util';
 import { EditorContent, useEditor } from '@tiptap/react';
 
 import {
@@ -78,7 +79,10 @@ function InternalEditor({
         editor.commands.setContent(initialContent);
       }
     } catch (error) {
-      console.error('Error setting initial content:', error);
+      logger.error('Error setting initial content', {
+        error,
+        context: 'CollaborativeEditor',
+      });
     }
   }, [editor, yXmlFragment, initialContent]);
 

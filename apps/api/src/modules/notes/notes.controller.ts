@@ -28,6 +28,7 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { NoteErrorCodes, type NoteDomainError } from './domain';
 import type {
   CreateNoteDto,
   NotesQueryDto,
@@ -35,11 +36,27 @@ import type {
   UpdateNoteDto,
 } from './dto';
 
-function unwrapOrThrow<T, E>(result: Result<T, E>): T {
+const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
+  [NoteErrorCodes.INVALID_TITLE]: HttpStatus.BAD_REQUEST,
+  [NoteErrorCodes.INVALID_CONTENT]: HttpStatus.BAD_REQUEST,
+  [NoteErrorCodes.INVALID_PERMISSION]: HttpStatus.BAD_REQUEST,
+  [NoteErrorCodes.NOTE_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [NoteErrorCodes.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
+  [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
+};
+
+function unwrapOrThrow<T>(result: Result<T, NoteDomainError>): T {
   if (result.isErr()) {
-    const error = result.error as { message?: string };
-    const message = error?.message || 'Unknown error';
-    throw new HttpException(message, HttpStatus.BAD_REQUEST);
+    const status =
+      NOTE_ERROR_STATUS_MAP[result.error.code] ?? HttpStatus.BAD_REQUEST;
+    throw new HttpException(
+      {
+        statusCode: status,
+        error: result.error.code,
+        message: result.error.message,
+      },
+      status
+    );
   }
   return result.value;
 }

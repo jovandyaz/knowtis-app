@@ -4,6 +4,8 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
+import { logger } from '@knowtis/shared-util';
+
 import { COLLAB_CONFIG, isInvalidStateError } from '@/lib';
 import { BROADCAST_MESSAGE_TYPES } from '@/lib/collaboration.constants';
 import type {
@@ -93,7 +95,10 @@ export function YjsProvider({ children }: YjsProviderProps) {
           } satisfies BroadcastMessage);
         } catch (error) {
           if (!isInvalidStateError(error)) {
-            console.error('Failed to broadcast document update:', error);
+            logger.warn('Failed to broadcast document update', {
+              error,
+              context: 'YjsProvider',
+            });
           }
         }
       });
@@ -144,7 +149,10 @@ export function YjsProvider({ children }: YjsProviderProps) {
         } satisfies BroadcastMessage);
       } catch (error) {
         if (!isInvalidStateError(error)) {
-          console.error('Failed to broadcast presence:', error);
+          logger.warn('Failed to broadcast presence', {
+            error,
+            context: 'YjsProvider',
+          });
         }
       }
     },
@@ -161,7 +169,10 @@ export function YjsProvider({ children }: YjsProviderProps) {
         } satisfies BroadcastMessage);
       } catch (error) {
         if (!isInvalidStateError(error)) {
-          console.error('Failed to broadcast leave:', error);
+          logger.warn('Failed to broadcast leave', {
+            error,
+            context: 'YjsProvider',
+          });
         }
       }
     },
@@ -188,7 +199,10 @@ export function YjsProvider({ children }: YjsProviderProps) {
           } satisfies BroadcastMessage);
         } catch (error) {
           if (!isInvalidStateError(error)) {
-            console.error('Failed to broadcast leave event:', error);
+            logger.warn('Failed to broadcast leave event', {
+              error,
+              context: 'YjsProvider',
+            });
           }
         }
       });

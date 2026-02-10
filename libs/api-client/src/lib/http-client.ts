@@ -1,3 +1,5 @@
+import { logger } from '@knowtis/shared-util';
+
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
 import { tokenStorage } from './token-storage';
 
@@ -170,7 +172,8 @@ export class HttpClient {
     try {
       const newToken = await this.refreshPromise;
       return newToken;
-    } catch {
+    } catch (error) {
+      logger.error('Token refresh failed', { error, context: 'HttpClient' });
       return null;
     } finally {
       this.isRefreshing = false;

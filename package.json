@@ -81,6 +81,7 @@
     "rxjs": "^7.8.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
+    "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
     "tailwindcss": "^4.1.17",
     "unique-names-generator": "^4.7.1",

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -35,6 +35,8 @@ export class DrizzleNoteRepository
     NoteWriteRepository,
     PermissionRepository
 {
+  private readonly logger = new Logger(DrizzleNoteRepository.name);
+
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database
@@ -221,8 +223,12 @@ export class DrizzleNoteRepository
         return err(NoteErrors.noteNotFound(id));
       }
       return ok(this.mapToEntity(result[0]));
-    } catch {
-      return err(NoteErrors.noteNotFound(id));
+    } catch (error) {
+      this.logger.error(
+        `Failed to update Yjs state for note ${id}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('updateYjsState', id));
     }
   }
 
@@ -237,8 +243,12 @@ export class DrizzleNoteRepository
         return err(NoteErrors.noteNotFound(id));
       }
       return ok(true);
-    } catch {
-      return err(NoteErrors.noteNotFound(id));
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete note ${id}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('delete', id));
     }
   }
 
@@ -356,8 +366,12 @@ export class DrizzleNoteRepository
         userId: result[0].userId,
         permission: levelResult.value,
       });
-    } catch {
-      return err(NoteErrors.noteNotFound(data.noteId));
+    } catch (error) {
+      this.logger.error(
+        `Failed to create permission for note ${data.noteId}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('createPermission', data.noteId));
     }
   }
 
@@ -392,8 +406,12 @@ export class DrizzleNoteRepository
         userId: result[0].userId,
         permission: levelResult.value,
       });
-    } catch {
-      return err(NoteErrors.noteNotFound(noteId));
+    } catch (error) {
+      this.logger.error(
+        `Failed to update permission for note ${noteId}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('updatePermission', noteId));
     }
   }
 
@@ -416,8 +434,12 @@ export class DrizzleNoteRepository
         return err(NoteErrors.noteNotFound(noteId));
       }
       return ok(true);
-    } catch {
-      return err(NoteErrors.noteNotFound(noteId));
+    } catch (error) {
+      this.logger.error(
+        `Failed to delete permission for note ${noteId}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('deletePermission', noteId));
     }
   }
 

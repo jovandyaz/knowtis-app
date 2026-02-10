@@ -7,7 +7,9 @@ import { Outlet, createRootRoute } from '@tanstack/react-router';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { useAuthStore } from '@knowtis/auth';
+import { Toaster } from '@knowtis/design-system';
 
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { Layout } from '@/components/layout/Layout';
 import { ThemeProvider, YjsProvider } from '@/providers';
 
@@ -45,14 +47,17 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-        <YjsProvider>
-          <Layout>
-            <Outlet />
-          </Layout>
-        </YjsProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <AppErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <YjsProvider>
+            <Layout>
+              <Outlet />
+            </Layout>
+          </YjsProvider>
+          <Toaster />
+        </ThemeProvider>
+      </QueryClientProvider>
+    </AppErrorBoundary>
   );
 }

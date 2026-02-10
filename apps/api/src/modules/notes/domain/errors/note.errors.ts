@@ -9,6 +9,7 @@ export const NoteErrorCodes = {
   INVALID_PERMISSION: 'INVALID_PERMISSION',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
 export type NoteErrorCode =
@@ -42,4 +43,16 @@ export const NoteErrors = {
 
   permissionDenied: (message = 'Permission denied') =>
     createNoteError(NoteErrorCodes.PERMISSION_DENIED, message),
+
+  internalError: (message: string) =>
+    createNoteError(
+      NoteErrorCodes.INTERNAL_ERROR,
+      `Internal error: ${message}`
+    ),
+
+  persistenceError: (operation: string, id: string) =>
+    createNoteError(
+      NoteErrorCodes.INTERNAL_ERROR,
+      `Failed to ${operation} note ${id}`
+    ),
 } as const;

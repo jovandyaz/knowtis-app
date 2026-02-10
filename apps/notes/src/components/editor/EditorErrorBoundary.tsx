@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 
 import { Button, Card } from '@knowtis/design-system';
+import { logger } from '@knowtis/shared-util';
 import { AlertCircle } from 'lucide-react';
 
 interface EditorErrorBoundaryProps {
@@ -44,8 +45,11 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   );
 }
 
-function handleError(error: Error, info: React.ErrorInfo) {
-  console.error('Editor Error Boundary caught an error:', error, info);
+function handleError(error: Error, _info: React.ErrorInfo) {
+  logger.error('Editor Error Boundary caught an error', {
+    error,
+    context: 'EditorErrorBoundary',
+  });
 }
 
 export function EditorErrorBoundary({

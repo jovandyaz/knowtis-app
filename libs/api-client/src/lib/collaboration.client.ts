@@ -11,6 +11,7 @@ import {
   type UserJoinedPayload,
   type UserLeftPayload,
 } from '@knowtis/shared-types';
+import { logger } from '@knowtis/shared-util';
 
 import { tokenStorage } from './token-storage';
 
@@ -83,7 +84,9 @@ export class CollaborationClient {
 
   joinRoom(noteId: string, user: Omit<CollaborationUser, 'id'>): void {
     if (!this.socket?.connected) {
-      console.warn('Not connected to collaboration server');
+      logger.warn('Not connected to collaboration server', {
+        context: 'CollaborationClient',
+      });
       return;
     }
 
@@ -154,7 +157,10 @@ export class CollaborationClient {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('Collaboration connection error:', error);
+      logger.error('Collaboration connection error', {
+        error,
+        context: 'CollaborationClient',
+      });
       this.reconnectAttempts++;
 
       if (this.reconnectAttempts >= this.maxReconnectAttempts) {

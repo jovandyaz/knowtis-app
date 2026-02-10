@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
 import { UsersService } from '../../../users';
@@ -15,6 +15,8 @@ import {
 
 @Injectable()
 export class DrizzleUserRepository implements UserRepository {
+  private readonly logger = new Logger(DrizzleUserRepository.name);
+
   constructor(private readonly usersService: UsersService) {}
 
   async findByEmail(email: Email): Promise<UserEntity | null> {
@@ -30,7 +32,11 @@ export class DrizzleUserRepository implements UserRepository {
     try {
       const user = await this.usersService.findById(id.value);
       return this.mapToEntity(user);
-    } catch {
+    } catch (error) {
+      this.logger.error(
+        `Failed to find user by id ${id.value}`,
+        error instanceof Error ? error.stack : error
+      );
       return null;
     }
   }

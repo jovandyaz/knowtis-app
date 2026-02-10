@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { toast } from 'sonner';
 import * as Y from 'yjs';
 
 import { collaborationClient } from '@knowtis/api-client';
@@ -11,6 +12,7 @@ import type {
   UserJoinedPayload,
   UserLeftPayload,
 } from '@knowtis/shared-types';
+import { logger } from '@knowtis/shared-util';
 
 export type CollaborationMode = 'webrtc' | 'websocket' | 'hybrid';
 
@@ -102,7 +104,13 @@ export function useWebSocketCollaboration({
 
   const handleError = useCallback((err: CollaborationError) => {
     setError(err.message);
-    console.error('[WebSocket Collaboration]', err.code, err.message);
+    logger.error(`WebSocket collaboration error: ${err.code}`, {
+      error: err,
+      context: 'useWebSocketCollaboration',
+    });
+    toast.error('Collaboration connection issue', {
+      description: err.message,
+    });
   }, []);
 
   useEffect(() => {

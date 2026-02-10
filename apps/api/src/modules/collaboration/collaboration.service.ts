@@ -32,7 +32,7 @@ export class CollaborationService {
           this.logger.debug(`Loaded persisted state for note ${noteId}`);
         }
       } catch {
-        this.logger.debug(
+        this.logger.warn(
           `Could not load note ${noteId} from DB, creating transient room`
         );
       }

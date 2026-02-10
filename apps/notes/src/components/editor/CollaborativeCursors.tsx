@@ -3,6 +3,8 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, type Decoration } from '@tiptap/pm/view';
 import { Extension } from '@tiptap/react';
 
+import { logger } from '@knowtis/shared-util';
+
 import { getRemoteUserStates } from './awareness.utils';
 import { createUserDecorations } from './cursor-decorations.utils';
 
@@ -55,7 +57,9 @@ export const CollaborativeCursors =
                     ...createUserDecorations(userState, docSize)
                   );
                 } catch {
-                  console.error('Failed to create user decorations');
+                  logger.warn('Failed to create user decorations', {
+                    context: 'CollaborativeCursors',
+                  });
                 }
               }
 
@@ -93,7 +97,9 @@ export const CollaborativeCursors =
                   const tr = editor.state.tr.setMeta(META_KEY, true);
                   editor.view.dispatch(tr);
                 } catch {
-                  console.error('Failed to update editor state');
+                  logger.warn('Failed to update editor state', {
+                    context: 'CollaborativeCursors',
+                  });
                 } finally {
                   isUpdating = false;
                 }
