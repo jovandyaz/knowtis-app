@@ -106,3 +106,17 @@ jobs:
 
       - name: Build Notes App
         run: npx nx build notes --configuration=production
+
+  deploy:
+    name: Deploy API to Railway
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    container: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        run: railway up --service ${{ vars.RAILWAY_SERVICE_ID }}
