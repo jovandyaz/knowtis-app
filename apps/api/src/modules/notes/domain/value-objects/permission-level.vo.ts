@@ -24,4 +24,8 @@ export class PermissionLevel {
   isEditor(): boolean {
     return this.value === PERMISSION.EDITOR;
   }
+
+  toJSON(): PermissionType {
+    return this.value;
+  }
 }

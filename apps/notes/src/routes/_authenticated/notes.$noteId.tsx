@@ -2,24 +2,21 @@ import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { ProtectedRoute } from '@/components/auth';
 import { Loader2 } from 'lucide-react';
 
 const NoteEditorPage = lazy(() =>
   import('@/pages/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))
 );
 
-export const Route = createFileRoute('/notes/$noteId')({
+export const Route = createFileRoute('/_authenticated/notes/$noteId')({
   component: NoteEditorPageWrapper,
 });
 
 function NoteEditorPageWrapper() {
   return (
-    <ProtectedRoute>
-      <Suspense fallback={<LoadingFallback />}>
-        <NoteEditorPage />
-      </Suspense>
-    </ProtectedRoute>
+    <Suspense fallback={<LoadingFallback />}>
+      <NoteEditorPage />
+    </Suspense>
   );
 }
 

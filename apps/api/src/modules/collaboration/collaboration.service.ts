@@ -1,10 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 
-import { PERMISSION } from '@knowtis/shared-types';
+import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
 
 import { UserId } from '../auth/domain';
-import { NOTE_REPOSITORY, type NoteRepository } from '../notes/domain';
+import { NOTE_REPOSITORY, SHARE_LINK_REPOSITORY } from '../notes/domain';
+import type { NoteRepository, ShareLinkRepository } from '../notes/domain';
 import type {
   CollaborationRoom,
   CollaborationUser,
@@ -18,7 +19,9 @@ export class CollaborationService {
   private readonly ROOM_CLEANUP_TIMEOUT_MS = 60000;
 
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly notesRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly notesRepository: NoteRepository,
+    @Inject(SHARE_LINK_REPOSITORY)
+    private readonly shareLinkRepository: ShareLinkRepository
   ) {}
 
   async getOrCreateRoom(noteId: string): Promise<CollaborationRoom> {
@@ -138,6 +141,34 @@ export class CollaborationService {
       userIdResult.value,
       PERMISSION.EDITOR
     );
+  }
+
+  async validateShareToken(
+    token: string,
+    noteId: string
+  ): Promise<PermissionLevel | null> {
+    const shareLink = await this.shareLinkRepository.findByToken(token);
+
+    if (!shareLink) {
+      this.logger.debug(`Share token not found: ${token.substring(0, 8)}...`);
+      return null;
+    }
+
+    if (shareLink.noteId !== noteId) {
+      this.logger.debug(
+        `Share token note mismatch: expected ${noteId}, got ${shareLink.noteId}`
+      );
+      return null;
+    }
+
+    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
+      this.logger.debug(
+        `Share token expired at ${shareLink.expiresAt.toISOString()}`
+      );
+      return null;
+    }
+
+    return shareLink.permission.value;
   }
 
   private schedulePersistence(room: CollaborationRoom): void {

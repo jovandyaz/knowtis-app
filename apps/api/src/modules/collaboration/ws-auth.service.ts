@@ -5,7 +5,7 @@ import type { Socket } from 'socket.io';
 import type {
   AnonymousWsUser,
   AuthenticatedWsUser,
-  WsUser,
+  WsAuthResult,
 } from './collaboration.types';
 
 @Injectable()
@@ -14,8 +14,10 @@ export class WsAuthService {
 
   constructor(private readonly jwtService: JwtService) {}
 
-  extractUser(client: Socket): WsUser {
+  extractUser(client: Socket): WsAuthResult {
     const token = this.extractToken(client);
+    const shareToken = this.extractShareToken(client);
+    const tokenSpread = shareToken ? { shareToken } : {};
 
     if (token) {
       try {
@@ -28,7 +30,7 @@ export class WsAuthService {
           email: payload.email,
         };
         this.logger.debug(`Authenticated WebSocket user: ${payload.email}`);
-        return authenticatedUser;
+        return { user: authenticatedUser, ...tokenSpread };
       } catch (error) {
         this.logger.warn(
           `Invalid JWT token, treating as anonymous: ${error instanceof Error ? error.message : error}`
@@ -41,7 +43,7 @@ export class WsAuthService {
       odUserId: `anon-${client.id}`,
     };
     this.logger.debug(`Anonymous WebSocket user: ${anonymousUser.odUserId}`);
-    return anonymousUser;
+    return { user: anonymousUser, ...tokenSpread };
   }
 
   private extractToken(client: Socket): string | null {
@@ -56,5 +58,23 @@ export class WsAuthService {
     }
 
     return null;
+  }
+
+  private extractShareToken(client: Socket): string | undefined {
+    const authShareToken = client.handshake.auth?.['shareToken'] as
+      | string
+      | undefined;
+    if (authShareToken) {
+      return authShareToken;
+    }
+
+    const queryShareToken = client.handshake.query?.['shareToken'] as
+      | string
+      | undefined;
+    if (queryShareToken) {
+      return queryShareToken;
+    }
+
+    return undefined;
   }
 }

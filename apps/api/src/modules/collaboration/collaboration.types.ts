@@ -19,6 +19,11 @@ export interface AnonymousWsUser {
 
 export type WsUser = AuthenticatedWsUser | AnonymousWsUser;
 
+export interface WsAuthResult {
+  user: WsUser;
+  shareToken?: string;
+}
+
 export function getWsUserId(user: WsUser): string {
   return user.type === 'authenticated' ? user.userId : user.odUserId;
 }
@@ -47,6 +52,7 @@ export const COLLABORATION_EVENTS = {
   USER_JOINED: 'collaboration:user-joined',
   USER_LEFT: 'collaboration:user-left',
   AWARENESS_CHANGE: 'collaboration:awareness-change',
+  EDIT_DENIED: 'collaboration:edit-denied',
   ERROR: 'collaboration:error',
 } as const;
 
@@ -72,4 +78,5 @@ export interface InitialStateResponse {
   noteId: string;
   state: number[];
   users: CollaborationUser[];
+  readOnly: boolean;
 }

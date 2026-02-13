@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
 import type {
   CreateNoteInput,
+  CreateShareLinkInput,
   Note,
   UpdateNoteInput,
 } from '@knowtis/shared-types';
@@ -13,6 +14,10 @@ export const notesQueryKeys = {
   list: (search?: string) => [...notesQueryKeys.lists(), { search }] as const,
   details: () => [...notesQueryKeys.all, 'detail'] as const,
   detail: (id: string) => [...notesQueryKeys.details(), id] as const,
+  shareLinks: (noteId: string) =>
+    [...notesQueryKeys.all, 'share-links', noteId] as const,
+  sharedNote: (token: string) =>
+    [...notesQueryKeys.all, 'shared', token] as const,
 } as const;
 
 export function useNotes(search?: string) {
@@ -135,6 +140,56 @@ export function useDeleteNote() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+    },
+  });
+}
+
+export function useShareLinks(noteId: string) {
+  return useQuery({
+    queryKey: notesQueryKeys.shareLinks(noteId),
+    queryFn: () => notesApi.getShareLinks(noteId),
+    enabled: !!noteId,
+  });
+}
+
+export function useNoteByToken(token: string) {
+  return useQuery({
+    queryKey: notesQueryKeys.sharedNote(token),
+    queryFn: () => notesApi.getNoteByToken(token),
+    enabled: !!token,
+    retry: false,
+  });
+}
+
+export function useCreateShareLink() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      noteId,
+      input,
+    }: {
+      noteId: string;
+      input: CreateShareLinkInput;
+    }) => notesApi.createShareLink(noteId, input),
+    onSuccess: (_data, { noteId }) => {
+      queryClient.invalidateQueries({
+        queryKey: notesQueryKeys.shareLinks(noteId),
+      });
+    },
+  });
+}
+
+export function useRevokeShareLink() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ noteId, linkId }: { noteId: string; linkId: string }) =>
+      notesApi.revokeShareLink(noteId, linkId),
+    onSuccess: (_data, { noteId }) => {
+      queryClient.invalidateQueries({
+        queryKey: notesQueryKeys.shareLinks(noteId),
+      });
     },
   });
 }

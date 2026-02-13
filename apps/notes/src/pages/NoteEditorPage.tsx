@@ -3,23 +3,33 @@ import { useCallback, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
-import { DEBOUNCE_DELAYS, formatNoteDateFull } from '@/lib';
+import { ShareDialog } from '@/components/notes/ShareDialog';
+import {
+  ACCESS_BADGE_CONFIG,
+  canPerformNoteAction,
+  DEBOUNCE_DELAYS,
+  formatNoteDateFull,
+} from '@/lib';
 import { ArrowLeft, Check, Loader2 } from 'lucide-react';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
+  Badge,
   Button,
   ErrorState,
   Input,
   LoadingState,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
+import type { NoteAccessLevel } from '@knowtis/shared-types';
 
 interface NoteEditorProps {
   noteId: string;
   initialTitle: string;
   initialContent: string;
   updatedAt: Date;
+  accessLevel: NoteAccessLevel;
+  isPublic: boolean;
 }
 
 function NoteEditor({
@@ -27,7 +37,10 @@ function NoteEditor({
   initialTitle,
   initialContent,
   updatedAt,
+  accessLevel,
+  isPublic,
 }: NoteEditorProps) {
+  const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
@@ -58,6 +71,9 @@ function NoteEditor({
   );
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canEdit) {
+      return;
+    }
     const newTitle = e.target.value;
     setTitle(newTitle);
     debouncedUpdateNote({ title: newTitle });
@@ -65,36 +81,53 @@ function NoteEditor({
 
   const handleContentChange = useCallback(
     (newContent: string) => {
+      if (!canEdit) {
+        return;
+      }
       setContent(newContent);
       debouncedUpdateNote({ content: newContent });
     },
-    [debouncedUpdateNote]
+    [canEdit, debouncedUpdateNote]
   );
 
   const isSaving = updateNote.isPending || isPendingUpdate;
+  const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <div className="mb-6 flex items-center justify-between">
-        <Link to="/">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            Back to Notes
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link to="/">
+            <Button variant="ghost" size="sm" className="gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              Back to Notes
+            </Button>
+          </Link>
+
+          <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+        </div>
 
         <div className="flex items-center gap-2 text-sm text-(--muted-foreground)">
-          {isSaving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Saving...</span>
-            </>
-          ) : lastSaved ? (
-            <>
-              <Check className="h-4 w-4 text-emerald-500" />
-              <span>Saved</span>
-            </>
-          ) : null}
+          {canEdit &&
+            (isSaving ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Saving...</span>
+              </>
+            ) : lastSaved ? (
+              <>
+                <Check className="h-4 w-4 text-emerald-500" />
+                <span>Saved</span>
+              </>
+            ) : null)}
+
+          {canPerformNoteAction(accessLevel, 'share') && (
+            <ShareDialog
+              noteId={noteId}
+              noteTitle={title}
+              isPublic={isPublic}
+            />
+          )}
         </div>
       </div>
 
@@ -102,6 +135,7 @@ function NoteEditor({
         <Input
           value={title}
           onChange={handleTitleChange}
+          readOnly={!canEdit}
           placeholder="Note title..."
           className="border-0 bg-transparent px-0 text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0"
         />
@@ -116,13 +150,14 @@ function NoteEditor({
         initialContent={content}
         onUpdate={handleContentChange}
         placeholder="Start writing your note..."
+        editable={canEdit}
       />
     </div>
   );
 }
 
 export function NoteEditorPage() {
-  const { noteId } = useParams({ from: '/notes/$noteId' });
+  const { noteId } = useParams({ from: '/_authenticated/notes/$noteId' });
   const navigate = useNavigate();
 
   const { data: note, isLoading, isError, error } = useNote(noteId);
@@ -153,6 +188,8 @@ export function NoteEditorPage() {
       initialTitle={note.title}
       initialContent={note.content}
       updatedAt={note.updatedAt}
+      accessLevel={note.accessLevel}
+      isPublic={note.isPublic}
     />
   );
 }

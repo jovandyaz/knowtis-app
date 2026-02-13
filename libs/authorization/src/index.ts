@@ -1,4 +1,5 @@
 export { defineAbilityFor } from './lib/permissions';
+export { appRoleManager, ROLES, type Role } from './lib/roles';
 export {
   SUBJECTS,
   type Action,
@@ -7,5 +8,6 @@ export {
   type AppAbility,
   type AuthUser,
   type SharedNote,
+  type ShareLinkAccess,
   type PermissionContext,
 } from './lib/types';

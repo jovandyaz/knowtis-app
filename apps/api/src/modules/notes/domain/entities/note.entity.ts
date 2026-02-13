@@ -16,3 +16,13 @@ export interface NoteEntity {
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
+
+export interface NoteOwner {
+  readonly id: string;
+  readonly name: string;
+  readonly avatarUrl: string | null;
+}
+
+export interface NoteEntityWithOwner extends NoteEntity {
+  readonly owner: NoteOwner;
+}

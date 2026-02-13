@@ -24,6 +24,7 @@ import {
   type CreatePermissionData,
   type NoteDomainError,
   type NoteEntity,
+  type NoteEntityWithOwner,
   type NotePermissionEntity,
   type NoteReadRepository,
   type NoteRepository,
@@ -60,7 +61,7 @@ export class DrizzleNoteRepository
     return this.mapToEntity(result[0]);
   }
 
-  async findByIdWithOwner(id: string): Promise<NoteEntity | null> {
+  async findByIdWithOwner(id: string): Promise<NoteEntityWithOwner | null> {
     const result = await this.db
       .select({
         note: notes,
@@ -78,7 +79,7 @@ export class DrizzleNoteRepository
     if (!result[0]) {
       return null;
     }
-    return this.mapToEntity(result[0].note);
+    return { ...this.mapToEntity(result[0].note), owner: result[0].owner };
   }
 
   async findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]> {
@@ -110,8 +111,7 @@ export class DrizzleNoteRepository
   ): Promise<{ note: NoteEntity; permission?: string }[]> {
     const accessCondition = or(
       eq(notes.ownerId, userId.value),
-      eq(notePermissions.userId, userId.value),
-      eq(notes.isPublic, true)
+      eq(notePermissions.userId, userId.value)
     );
 
     const searchCondition = search

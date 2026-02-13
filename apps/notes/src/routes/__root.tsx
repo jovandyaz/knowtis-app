@@ -6,7 +6,6 @@ import {
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
-import { Layout } from '@/components/layout/Layout';
 import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -52,9 +51,11 @@ function RootComponent() {
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AbilityProvider>
             <YjsProvider>
-              <Layout>
-                <Outlet />
-              </Layout>
+              <div className="flex min-h-screen bg-(--background)">
+                <div className="w-full">
+                  <Outlet />
+                </div>
+              </div>
             </YjsProvider>
           </AbilityProvider>
           <Toaster />

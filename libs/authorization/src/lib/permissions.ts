@@ -17,6 +17,16 @@ export function defineAbilityFor(
 ): AppAbility {
   return definePermissions<AppAbility>(
     (allow) => {
+      // Link-based sharing (anonymous + authenticated)
+      for (const link of context.shareLinks ?? []) {
+        if (link.permission === PERMISSION.EDITOR) {
+          allow('read', Note, { id: link.noteId });
+          allow('update', Note, { id: link.noteId });
+        } else if (link.permission === PERMISSION.VIEWER) {
+          allow('read', Note, { id: link.noteId });
+        }
+      }
+
       if (!user) {
         allow('read', Note, { isPublic: true });
         return;

@@ -2,24 +2,21 @@ import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { ProtectedRoute } from '@/components/auth';
 import { Loader2 } from 'lucide-react';
 
 const HomePage = lazy(() =>
   import('@/pages/HomePage').then((m) => ({ default: m.HomePage }))
 );
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute('/_authenticated/')({
   component: HomePageWrapper,
 });
 
 function HomePageWrapper() {
   return (
-    <ProtectedRoute>
-      <Suspense fallback={<LoadingFallback />}>
-        <HomePage />
-      </Suspense>
-    </ProtectedRoute>
+    <Suspense fallback={<LoadingFallback />}>
+      <HomePage />
+    </Suspense>
   );
 }
 

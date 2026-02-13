@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsDateString,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -60,4 +61,16 @@ export class NotesQueryDto {
   @IsString()
   @IsOptional()
   search?: string;
+}
+
+export class CreateShareLinkDto {
+  @IsEnum(PERMISSION_LEVELS, {
+    message: 'Permission must be either viewer or editor',
+  })
+  @IsNotEmpty({ message: 'Permission is required' })
+  permission!: PermissionLevel;
+
+  @IsOptional()
+  @IsDateString()
+  expiresAt?: string;
 }

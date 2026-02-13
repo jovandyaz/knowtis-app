@@ -18,21 +18,26 @@ import type { Result } from 'neverthrow';
 import { SUBJECTS } from '@knowtis/authorization';
 import type { RequestUser } from '@knowtis/shared-types';
 
-import { CurrentUser, JwtAuthGuard } from '../auth';
+import { CurrentUser, JwtAuthGuard, Public } from '../auth';
 import { PoliciesGuard, RequirePermission } from '../authorization';
 import {
   CreateNoteHandler,
+  CreateShareLinkHandler,
   DeleteNoteHandler,
   GetCollaboratorsHandler,
+  GetNoteByTokenHandler,
   GetNoteHandler,
   GetNotesHandler,
+  GetShareLinksHandler,
   RevokeAccessHandler,
+  RevokeShareLinkHandler,
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
 import { NoteErrorCodes, type NoteDomainError } from './domain';
 import type {
   CreateNoteDto,
+  CreateShareLinkDto,
   NotesQueryDto,
   ShareNoteDto,
   UpdateNoteDto,
@@ -44,6 +49,9 @@ const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.INVALID_PERMISSION]: HttpStatus.BAD_REQUEST,
   [NoteErrorCodes.NOTE_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [NoteErrorCodes.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
+  [NoteErrorCodes.INVALID_SHARE_TOKEN]: HttpStatus.BAD_REQUEST,
+  [NoteErrorCodes.SHARE_LINK_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [NoteErrorCodes.SHARE_LINK_EXPIRED]: HttpStatus.GONE,
   [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
@@ -77,7 +85,11 @@ export class NotesController {
     private readonly deleteNoteHandler: DeleteNoteHandler,
     private readonly shareNoteHandler: ShareNoteHandler,
     private readonly revokeAccessHandler: RevokeAccessHandler,
-    private readonly getCollaboratorsHandler: GetCollaboratorsHandler
+    private readonly getCollaboratorsHandler: GetCollaboratorsHandler,
+    private readonly createShareLinkHandler: CreateShareLinkHandler,
+    private readonly getShareLinksHandler: GetShareLinksHandler,
+    private readonly revokeShareLinkHandler: RevokeShareLinkHandler,
+    private readonly getNoteByTokenHandler: GetNoteByTokenHandler
   ) {}
 
   @Get()
@@ -90,6 +102,13 @@ export class NotesController {
       userId: user.id,
       ...(query.search ? { search: query.search } : {}),
     });
+    return unwrapOrThrow(result);
+  }
+
+  @Get('shared/:token')
+  @Public()
+  async getNoteByToken(@Param('token') token: string) {
+    const result = await this.getNoteByTokenHandler.execute(token);
     return unwrapOrThrow(result);
   }
 
@@ -188,6 +207,53 @@ export class NotesController {
   ) {
     const result = await this.getCollaboratorsHandler.execute({
       noteId: id,
+      userId: user.id,
+    });
+    return unwrapOrThrow(result);
+  }
+
+  // ─── Share Link Endpoints ───────────────────────────────────
+
+  @Post(':id/links')
+  @RequirePermission('share', SUBJECTS.Note)
+  async createShareLink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser,
+    @Body() dto: CreateShareLinkDto
+  ) {
+    const result = await this.createShareLinkHandler.execute({
+      noteId: id,
+      userId: user.id,
+      permission: dto.permission,
+      ...(dto.expiresAt ? { expiresAt: new Date(dto.expiresAt) } : {}),
+    });
+    return unwrapOrThrow(result);
+  }
+
+  @Get(':id/links')
+  @RequirePermission('share', SUBJECTS.Note)
+  async getShareLinks(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.getShareLinksHandler.execute({
+      noteId: id,
+      userId: user.id,
+    });
+    return unwrapOrThrow(result);
+  }
+
+  @Delete(':id/links/:linkId')
+  @RequirePermission('share', SUBJECTS.Note)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeShareLink(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('linkId', ParseUUIDPipe) linkId: string,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.revokeShareLinkHandler.execute({
+      noteId: id,
+      linkId,
       userId: user.id,
     });
     return unwrapOrThrow(result);

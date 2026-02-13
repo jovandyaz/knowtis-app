@@ -2,11 +2,15 @@ import { Module } from '@nestjs/common';
 
 import {
   CreateNoteHandler,
+  CreateShareLinkHandler,
   DeleteNoteHandler,
   GetCollaboratorsHandler,
+  GetNoteByTokenHandler,
   GetNoteHandler,
   GetNotesHandler,
+  GetShareLinksHandler,
   RevokeAccessHandler,
+  RevokeShareLinkHandler,
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
@@ -15,8 +19,12 @@ import {
   NOTE_REPOSITORY,
   NOTE_WRITE_REPOSITORY,
   PERMISSION_REPOSITORY,
+  SHARE_LINK_REPOSITORY,
 } from './domain';
-import { DrizzleNoteRepository } from './infrastructure';
+import {
+  DrizzleNoteRepository,
+  DrizzleShareLinkRepository,
+} from './infrastructure';
 import { NotesController } from './notes.controller';
 
 @Module({
@@ -38,15 +46,28 @@ import { NotesController } from './notes.controller';
       provide: PERMISSION_REPOSITORY,
       useExisting: NOTE_REPOSITORY,
     },
+    {
+      provide: SHARE_LINK_REPOSITORY,
+      useClass: DrizzleShareLinkRepository,
+    },
     CreateNoteHandler,
+    CreateShareLinkHandler,
     UpdateNoteHandler,
     DeleteNoteHandler,
     GetNoteHandler,
+    GetNoteByTokenHandler,
     GetNotesHandler,
+    GetShareLinksHandler,
     ShareNoteHandler,
     RevokeAccessHandler,
+    RevokeShareLinkHandler,
     GetCollaboratorsHandler,
   ],
-  exports: [GetNoteHandler, NOTE_REPOSITORY],
+  exports: [
+    GetNoteHandler,
+    GetNoteByTokenHandler,
+    NOTE_REPOSITORY,
+    SHARE_LINK_REPOSITORY,
+  ],
 })
 export class NotesModule {}

@@ -136,6 +136,68 @@ describe('defineAbilityFor', () => {
     });
   });
 
+  describe('link-based sharing', () => {
+    const sharedNote: NoteSubject = {
+      __typename: 'Note',
+      id: 'note-link-1',
+      ownerId: 'other-user',
+      isPublic: false,
+    };
+
+    describe('anonymous user with viewer link', () => {
+      const ability = defineAbilityFor(null, {
+        shareLinks: [{ noteId: 'note-link-1', permission: 'viewer' }],
+      });
+
+      it('can read note via share link', () => {
+        expect(ability.can('read', sharedNote)).toBe(true);
+      });
+
+      it('cannot update note via viewer link', () => {
+        expect(ability.can('update', sharedNote)).toBe(false);
+      });
+
+      it('cannot delete note via viewer link', () => {
+        expect(ability.can('delete', sharedNote)).toBe(false);
+      });
+    });
+
+    describe('anonymous user with editor link', () => {
+      const ability = defineAbilityFor(null, {
+        shareLinks: [{ noteId: 'note-link-1', permission: 'editor' }],
+      });
+
+      it('can read and update via editor link', () => {
+        expect(ability.can('read', sharedNote)).toBe(true);
+        expect(ability.can('update', sharedNote)).toBe(true);
+      });
+
+      it('cannot delete or share via editor link', () => {
+        expect(ability.can('delete', sharedNote)).toBe(false);
+        expect(ability.can('share', sharedNote)).toBe(false);
+      });
+    });
+
+    describe('authenticated user with share link', () => {
+      const ability = defineAbilityFor(user, {
+        shareLinks: [{ noteId: 'note-link-1', permission: 'editor' }],
+      });
+
+      it('can read and update via link', () => {
+        expect(ability.can('read', sharedNote)).toBe(true);
+        expect(ability.can('update', sharedNote)).toBe(true);
+      });
+    });
+
+    describe('no link', () => {
+      const ability = defineAbilityFor(null, { shareLinks: [] });
+
+      it('cannot access private note', () => {
+        expect(ability.can('read', sharedNote)).toBe(false);
+      });
+    });
+  });
+
   describe('anonymous user', () => {
     const publicNote: NoteSubject = {
       __typename: 'Note',

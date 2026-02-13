@@ -34,6 +34,12 @@ export interface SharedNote {
   readonly permission: PermissionLevel;
 }
 
+export interface ShareLinkAccess {
+  readonly noteId: string;
+  readonly permission: PermissionLevel;
+}
+
 export interface PermissionContext {
   readonly sharedNotes?: readonly SharedNote[];
+  readonly shareLinks?: readonly ShareLinkAccess[];
 }

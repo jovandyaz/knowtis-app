@@ -19,6 +19,8 @@ export {
   type NoteAccessLevel,
   type NotePermission,
   type ShareNoteInput,
+  type NoteShareLink,
+  type CreateShareLinkInput,
 } from './lib/note.types';
 
 export type {

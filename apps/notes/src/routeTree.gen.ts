@@ -9,18 +9,19 @@ import { createFileRoute } from '@tanstack/react-router';
 // Import Routes
 
 import { Route as rootRoute } from './routes/__root';
-import { Route as IndexImport } from './routes/index';
+import { Route as AuthenticatedImport } from './routes/_authenticated';
 import { Route as LoginImport } from './routes/login';
 import { Route as RegisterImport } from './routes/register';
-import { Route as NotesNoteIdImport } from './routes/notes.$noteId';
+import { Route as STokenImport } from './routes/s.$token';
+import { Route as AuthenticatedIndexImport } from './routes/_authenticated/index';
+import { Route as AuthenticatedNotesNoteIdImport } from './routes/_authenticated/notes.$noteId';
 
 // Create Virtual Childrent
 
 // Create/Update Routes
 
-const IndexRoute = IndexImport.update({
-  id: '/',
-  path: '/',
+const AuthenticatedRoute = AuthenticatedImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRoute,
 } as any);
 
@@ -36,21 +37,33 @@ const RegisterRoute = RegisterImport.update({
   getParentRoute: () => rootRoute,
 } as any);
 
-const NotesNoteIdRoute = NotesNoteIdImport.update({
+const STokenRoute = STokenImport.update({
+  id: '/s/$token',
+  path: '/s/$token',
+  getParentRoute: () => rootRoute,
+} as any);
+
+const AuthenticatedIndexRoute = AuthenticatedIndexImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRoute,
+} as any);
+
+const AuthenticatedNotesNoteIdRoute = AuthenticatedNotesNoteIdImport.update({
   id: '/notes/$noteId',
   path: '/notes/$noteId',
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => AuthenticatedRoute,
 } as any);
 
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof IndexImport;
+    '/_authenticated': {
+      id: '/_authenticated';
+      path: '';
+      fullPath: '';
+      preLoaderRoute: typeof AuthenticatedImport;
       parentRoute: typeof rootRoute;
     };
     '/login': {
@@ -67,12 +80,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterImport;
       parentRoute: typeof rootRoute;
     };
-    '/notes/$noteId': {
-      id: '/notes/$noteId';
+    '/s/$token': {
+      id: '/s/$token';
+      path: '/s/$token';
+      fullPath: '/s/$token';
+      preLoaderRoute: typeof STokenImport;
+      parentRoute: typeof rootRoute;
+    };
+    '/_authenticated/': {
+      id: '/_authenticated/';
+      path: '/';
+      fullPath: '/';
+      preLoaderRoute: typeof AuthenticatedIndexImport;
+      parentRoute: typeof AuthenticatedImport;
+    };
+    '/_authenticated/notes/$noteId': {
+      id: '/_authenticated/notes/$noteId';
       path: '/notes/$noteId';
       fullPath: '/notes/$noteId';
-      preLoaderRoute: typeof NotesNoteIdImport;
-      parentRoute: typeof rootRoute;
+      preLoaderRoute: typeof AuthenticatedNotesNoteIdImport;
+      parentRoute: typeof AuthenticatedImport;
     };
   }
 }
@@ -80,48 +107,65 @@ declare module '@tanstack/react-router' {
 // Create and export the route tree
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute;
+  '': typeof AuthenticatedRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
-  '/notes/$noteId': typeof NotesNoteIdRoute;
+  '/s/$token': typeof STokenRoute;
+  '/': typeof AuthenticatedIndexRoute;
+  '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
-  '/notes/$noteId': typeof NotesNoteIdRoute;
+  '/s/$token': typeof STokenRoute;
+  '/': typeof AuthenticatedIndexRoute;
+  '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRoutesById {
   __root__: typeof rootRoute;
-  '/': typeof IndexRoute;
+  '/_authenticated': typeof AuthenticatedRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
-  '/notes/$noteId': typeof NotesNoteIdRoute;
+  '/s/$token': typeof STokenRoute;
+  '/_authenticated/': typeof AuthenticatedIndexRoute;
+  '/_authenticated/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '/' | '/login' | '/register' | '/notes/$noteId';
+  fullPaths: '' | '/login' | '/register' | '/s/$token' | '/' | '/notes/$noteId';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/' | '/login' | '/register' | '/notes/$noteId';
-  id: '__root__' | '/' | '/login' | '/register' | '/notes/$noteId';
+  to: '/login' | '/register' | '/s/$token' | '/' | '/notes/$noteId';
+  id: '__root__' | '/_authenticated' | '/login' | '/register' | '/s/$token' | '/_authenticated/' | '/_authenticated/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
+export interface AuthenticatedRouteChildren {
+  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
+  AuthenticatedNotesNoteIdRoute: typeof AuthenticatedNotesNoteIdRoute;
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedNotesNoteIdRoute: AuthenticatedNotesNoteIdRoute,
+};
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(AuthenticatedRouteChildren);
+
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
   LoginRoute: typeof LoginRoute;
   RegisterRoute: typeof RegisterRoute;
-  NotesNoteIdRoute: typeof NotesNoteIdRoute;
+  STokenRoute: typeof STokenRoute;
 }
 
 const rootRouteChildren: RootRouteChildren = {
-  IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
-  NotesNoteIdRoute: NotesNoteIdRoute,
+  STokenRoute: STokenRoute,
 };
 
 export const routeTree = rootRoute
@@ -134,14 +178,18 @@ export const routeTree = rootRoute
     "__root__": {
       "filePath": "__root.tsx",
       "children": [
-        "/",
+        "/_authenticated",
         "/login",
         "/register",
-        "/notes/$noteId"
+        "/s/$token"
       ]
     },
-    "/": {
-      "filePath": "index.tsx"
+    "/_authenticated": {
+      "filePath": "_authenticated.tsx",
+      "children": [
+        "/_authenticated/",
+        "/_authenticated/notes/$noteId"
+      ]
     },
     "/login": {
       "filePath": "login.tsx"
@@ -149,8 +197,16 @@ export const routeTree = rootRoute
     "/register": {
       "filePath": "register.tsx"
     },
-    "/notes/$noteId": {
-      "filePath": "notes.$noteId.tsx"
+    "/s/$token": {
+      "filePath": "s.$token.tsx"
+    },
+    "/_authenticated/": {
+      "filePath": "_authenticated/index.tsx",
+      "parent": "/_authenticated"
+    },
+    "/_authenticated/notes/$noteId": {
+      "filePath": "_authenticated/notes.$noteId.tsx",
+      "parent": "/_authenticated"
     }
   }
 }

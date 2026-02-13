@@ -71,3 +71,29 @@ export const notePermissions = pgTable(
 
 export type NotePermission = typeof notePermissions.$inferSelect;
 export type NewNotePermission = typeof notePermissions.$inferInsert;
+
+export const noteShareLinks = pgTable(
+  'note_share_links',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    noteId: uuid('note_id')
+      .notNull()
+      .references(() => notes.id, { onDelete: 'cascade' }),
+    token: text('token').notNull().unique(),
+    permission: permissionEnum('permission').notNull().default('viewer'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index('share_links_note_id_idx').on(table.noteId),
+    index('share_links_token_idx').on(table.token),
+  ]
+);
+
+export type NoteShareLink = typeof noteShareLinks.$inferSelect;
+export type NewNoteShareLink = typeof noteShareLinks.$inferInsert;

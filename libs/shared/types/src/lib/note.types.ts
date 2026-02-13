@@ -59,3 +59,17 @@ export interface ShareNoteInput {
   userId: string;
   permission: PermissionLevel;
 }
+
+export interface NoteShareLink {
+  id: string;
+  noteId: string;
+  token: string;
+  permission: PermissionLevel;
+  expiresAt: Date | null;
+  createdAt: Date;
+}
+
+export interface CreateShareLinkInput {
+  permission: PermissionLevel;
+  expiresAt?: Date;
+}

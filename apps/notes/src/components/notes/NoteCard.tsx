@@ -2,18 +2,25 @@ import { memo } from 'react';
 
 import { Link } from '@tanstack/react-router';
 
-import { canPerformNoteAction, createPreview, formatNoteDate } from '@/lib';
+import {
+  ACCESS_BADGE_CONFIG,
+  canPerformNoteAction,
+  createPreview,
+  formatNoteDate,
+} from '@/lib';
 import { Clock, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import type { NoteWithAccess } from '@knowtis/api-client';
 import {
+  Badge,
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@knowtis/design-system';
+import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
 
 /**
  * Note card props interface
@@ -45,9 +52,25 @@ export const NoteCard = memo(function NoteCard({
           className="flex h-full flex-col"
         >
           <CardHeader className="pb-2">
-            <CardTitle className="line-clamp-1 text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
-              {note.title}
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle className="line-clamp-1 text-lg font-semibold text-foreground group-hover:text-primary transition-colors">
+                {note.title}
+              </CardTitle>
+              {note.accessLevel !== ACCESS.OWNER && (
+                <Badge
+                  variant={
+                    ACCESS_BADGE_CONFIG[note.accessLevel as NoteAccessLevel]
+                      .variant
+                  }
+                  className="shrink-0 text-[10px] px-1.5 py-0"
+                >
+                  {
+                    ACCESS_BADGE_CONFIG[note.accessLevel as NoteAccessLevel]
+                      .label
+                  }
+                </Badge>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="flex flex-1 flex-col justify-between">
             <p className="line-clamp-3 text-sm text-muted-foreground leading-relaxed">

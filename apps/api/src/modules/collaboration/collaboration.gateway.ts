@@ -27,8 +27,10 @@ import { WsAuthService } from './ws-auth.service';
 interface AuthenticatedSocket extends Socket {
   data: {
     wsUser?: WsUser | undefined;
+    shareToken?: string | undefined;
     noteId?: string | undefined;
     user?: CollaborationUser | undefined;
+    readOnly?: boolean | undefined;
   };
 }
 
@@ -57,8 +59,9 @@ export class CollaborationGateway
   }
 
   handleConnection(client: AuthenticatedSocket): void {
-    const wsUser = this.wsAuthService.extractUser(client);
+    const { user: wsUser, shareToken } = this.wsAuthService.extractUser(client);
     client.data.wsUser = wsUser;
+    client.data.shareToken = shareToken;
 
     const userType =
       wsUser.type === 'authenticated'
@@ -107,8 +110,9 @@ export class CollaborationGateway
     }
 
     const userId = getWsUserId(wsUser);
+    const shareToken = client.data.shareToken;
 
-    const accessCheck = await this.verifyNoteAccess(wsUser, noteId);
+    const accessCheck = await this.verifyNoteAccess(wsUser, noteId, shareToken);
     if (!accessCheck.allowed) {
       client.emit(COLLABORATION_EVENTS.ERROR, {
         message: accessCheck.message,
@@ -128,6 +132,7 @@ export class CollaborationGateway
 
       client.data.noteId = noteId;
       client.data.user = collabUser;
+      client.data.readOnly = accessCheck.readOnly;
 
       this.collaborationService.addUserToRoom(room, client.id, collabUser);
 
@@ -140,6 +145,7 @@ export class CollaborationGateway
         noteId,
         state: Array.from(state),
         users,
+        readOnly: accessCheck.readOnly,
       });
 
       client.to(noteId).emit(COLLABORATION_EVENTS.USER_JOINED, collabUser);
@@ -159,12 +165,18 @@ export class CollaborationGateway
 
   private async verifyNoteAccess(
     wsUser: WsUser,
-    noteId: string
-  ): Promise<{ allowed: boolean; message: string; code: string }> {
+    noteId: string,
+    shareToken?: string
+  ): Promise<{
+    allowed: boolean;
+    readOnly: boolean;
+    message: string;
+    code: string;
+  }> {
     const noteExists = await this.collaborationService.noteExists(noteId);
 
     if (!noteExists) {
-      return { allowed: true, message: '', code: '' };
+      return { allowed: true, readOnly: false, message: '', code: '' };
     }
 
     if (isAuthenticatedWsUser(wsUser)) {
@@ -172,27 +184,53 @@ export class CollaborationGateway
         noteId,
         wsUser.userId
       );
-      if (!hasAccess) {
+      if (hasAccess) {
+        const canEdit = await this.collaborationService.canEdit(
+          noteId,
+          wsUser.userId
+        );
         return {
-          allowed: false,
-          message: 'You do not have access to this note',
-          code: 'ACCESS_DENIED',
+          allowed: true,
+          readOnly: !canEdit,
+          message: '',
+          code: '',
         };
       }
-      return { allowed: true, message: '', code: '' };
+    }
+
+    if (shareToken) {
+      const permission = await this.collaborationService.validateShareToken(
+        shareToken,
+        noteId
+      );
+      if (permission) {
+        return {
+          allowed: true,
+          readOnly: permission === 'viewer',
+          message: '',
+          code: '',
+        };
+      }
     }
 
     const isPublic = await this.collaborationService.isNotePublic(noteId);
-    if (!isPublic) {
-      return {
-        allowed: false,
-        message:
-          'Anonymous users can only access public notes. Please sign in to access this note.',
-        code: 'AUTH_REQUIRED',
-      };
+    if (isPublic) {
+      return { allowed: true, readOnly: true, message: '', code: '' };
     }
 
-    return { allowed: true, message: '', code: '' };
+    const errorMessage = isAuthenticatedWsUser(wsUser)
+      ? 'You do not have access to this note'
+      : 'Anonymous users can only access public notes. Please sign in to access this note.';
+    const errorCode = isAuthenticatedWsUser(wsUser)
+      ? 'ACCESS_DENIED'
+      : 'AUTH_REQUIRED';
+
+    return {
+      allowed: false,
+      readOnly: false,
+      message: errorMessage,
+      code: errorCode,
+    };
   }
 
   @SubscribeMessage(COLLABORATION_EVENTS.LEAVE_ROOM)
@@ -220,6 +258,7 @@ export class CollaborationGateway
     await client.leave(noteId);
     client.data.noteId = undefined;
     client.data.user = undefined;
+    client.data.readOnly = undefined;
 
     this.logger.debug(`User left room ${noteId}`);
   }
@@ -230,9 +269,8 @@ export class CollaborationGateway
     @MessageBody() payload: SyncUpdatePayload
   ): Promise<void> {
     const { noteId, update } = payload;
-    const wsUser = client.data.wsUser;
 
-    if (!wsUser) {
+    if (!client.data.wsUser) {
       client.emit(COLLABORATION_EVENTS.ERROR, {
         message: 'Authentication state not initialized',
         code: 'AUTH_ERROR',
@@ -240,11 +278,10 @@ export class CollaborationGateway
       return;
     }
 
-    const canEdit = await this.verifyEditPermission(wsUser, noteId);
-    if (!canEdit.allowed) {
-      client.emit(COLLABORATION_EVENTS.ERROR, {
-        message: canEdit.message,
-        code: canEdit.code,
+    if (client.data.readOnly) {
+      client.emit(COLLABORATION_EVENTS.EDIT_DENIED, {
+        message: 'You do not have permission to edit this note',
+        code: 'EDIT_DENIED',
       });
       return;
     }
@@ -265,43 +302,6 @@ export class CollaborationGateway
       noteId,
       update,
     });
-  }
-
-  private async verifyEditPermission(
-    wsUser: WsUser,
-    noteId: string
-  ): Promise<{ allowed: boolean; message: string; code: string }> {
-    const noteExists = await this.collaborationService.noteExists(noteId);
-
-    if (!noteExists) {
-      return { allowed: true, message: '', code: '' };
-    }
-
-    if (isAuthenticatedWsUser(wsUser)) {
-      const canEdit = await this.collaborationService.canEdit(
-        noteId,
-        wsUser.userId
-      );
-      if (!canEdit) {
-        return {
-          allowed: false,
-          message: 'You do not have permission to edit this note',
-          code: 'EDIT_DENIED',
-        };
-      }
-      return { allowed: true, message: '', code: '' };
-    }
-
-    const isPublic = await this.collaborationService.isNotePublic(noteId);
-    if (!isPublic) {
-      return {
-        allowed: false,
-        message: 'Anonymous users cannot edit private notes',
-        code: 'EDIT_DENIED',
-      };
-    }
-
-    return { allowed: true, message: '', code: '' };
   }
 
   @SubscribeMessage(COLLABORATION_EVENTS.AWARENESS_UPDATE)
