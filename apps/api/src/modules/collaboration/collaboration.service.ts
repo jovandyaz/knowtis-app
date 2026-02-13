@@ -1,11 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 
-import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
+import {
+  GENERAL_ACCESS,
+  PERMISSION,
+  type PermissionLevel,
+} from '@knowtis/shared-types';
 
 import { UserId } from '../auth/domain';
-import { NOTE_REPOSITORY, SHARE_LINK_REPOSITORY } from '../notes/domain';
-import type { NoteRepository, ShareLinkRepository } from '../notes/domain';
+import { NOTE_REPOSITORY } from '../notes/domain';
+import type { NoteRepository } from '../notes/domain';
 import type {
   CollaborationRoom,
   CollaborationUser,
@@ -19,9 +23,7 @@ export class CollaborationService {
   private readonly ROOM_CLEANUP_TIMEOUT_MS = 60000;
 
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly notesRepository: NoteRepository,
-    @Inject(SHARE_LINK_REPOSITORY)
-    private readonly shareLinkRepository: ShareLinkRepository
+    @Inject(NOTE_REPOSITORY) private readonly notesRepository: NoteRepository
   ) {}
 
   async getOrCreateRoom(noteId: string): Promise<CollaborationRoom> {
@@ -111,7 +113,7 @@ export class CollaborationService {
 
   async isNotePublic(noteId: string): Promise<boolean> {
     const note = await this.notesRepository.findById(noteId);
-    return note?.isPublic ?? false;
+    return note?.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
   }
 
   async hasAccess(noteId: string, userId: string): Promise<boolean> {
@@ -147,28 +149,21 @@ export class CollaborationService {
     token: string,
     noteId: string
   ): Promise<PermissionLevel | null> {
-    const shareLink = await this.shareLinkRepository.findByToken(token);
-
-    if (!shareLink) {
+    const note = await this.notesRepository.findById(noteId);
+    if (!note) {
       this.logger.debug(`Share token not found: ${token.substring(0, 8)}...`);
       return null;
     }
 
-    if (shareLink.noteId !== noteId) {
-      this.logger.debug(
-        `Share token note mismatch: expected ${noteId}, got ${shareLink.noteId}`
-      );
+    if (
+      note.generalAccess !== GENERAL_ACCESS.ANYONE_WITH_LINK ||
+      note.shareToken !== token
+    ) {
+      this.logger.debug(`Share token validation failed for note ${noteId}`);
       return null;
     }
 
-    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-      this.logger.debug(
-        `Share token expired at ${shareLink.expiresAt.toISOString()}`
-      );
-      return null;
-    }
-
-    return shareLink.permission.value;
+    return note.generalAccessPermission as PermissionLevel;
   }
 
   private schedulePersistence(room: CollaborationRoom): void {

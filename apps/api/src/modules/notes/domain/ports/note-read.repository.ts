@@ -9,6 +9,7 @@ export interface NoteReadRepository {
     userId: UserId,
     search?: string
   ): Promise<{ note: NoteEntity; permission?: string }[]>;
+  findByShareToken(token: string): Promise<NoteEntityWithOwner | null>;
 }
 
 export const NOTE_READ_REPOSITORY = Symbol('NOTE_READ_REPOSITORY');

@@ -18,7 +18,7 @@ export interface NoteSubject {
   readonly __typename: typeof SUBJECTS.Note;
   readonly id: string;
   readonly ownerId: string;
-  readonly isPublic: boolean;
+  readonly generalAccess: string;
 }
 
 export type Subject = NoteSubject | typeof SUBJECTS.Note;
@@ -34,12 +34,6 @@ export interface SharedNote {
   readonly permission: PermissionLevel;
 }
 
-export interface ShareLinkAccess {
-  readonly noteId: string;
-  readonly permission: PermissionLevel;
-}
-
 export interface PermissionContext {
   readonly sharedNotes?: readonly SharedNote[];
-  readonly shareLinks?: readonly ShareLinkAccess[];
 }

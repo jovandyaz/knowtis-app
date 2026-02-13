@@ -9,9 +9,7 @@ export const NoteErrorCodes = {
   INVALID_PERMISSION: 'INVALID_PERMISSION',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
-  INVALID_SHARE_TOKEN: 'INVALID_SHARE_TOKEN',
-  SHARE_LINK_NOT_FOUND: 'SHARE_LINK_NOT_FOUND',
-  SHARE_LINK_EXPIRED: 'SHARE_LINK_EXPIRED',
+  SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -59,22 +57,10 @@ export const NoteErrors = {
       `Only owner can ${action}`
     ),
 
-  invalidShareToken: (reason: string) =>
+  shareTokenNotFound: (token: string) =>
     createNoteError(
-      NoteErrorCodes.INVALID_SHARE_TOKEN,
-      `Invalid share token: ${reason}`
-    ),
-
-  shareLinkNotFound: (id: string) =>
-    createNoteError(
-      NoteErrorCodes.SHARE_LINK_NOT_FOUND,
-      `Share link not found: ${id}`
-    ),
-
-  shareLinkExpired: () =>
-    createNoteError(
-      NoteErrorCodes.SHARE_LINK_EXPIRED,
-      'Share link has expired'
+      NoteErrorCodes.SHARE_TOKEN_NOT_FOUND,
+      `Share token not found: ${token}`
     ),
 
   internalError: (message: string) =>

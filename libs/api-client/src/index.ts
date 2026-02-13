@@ -11,6 +11,7 @@ export {
 export {
   CollaborationClient,
   collaborationClient,
+  type CollaborationConnectOptions,
 } from './lib/collaboration.client';
 
 export {

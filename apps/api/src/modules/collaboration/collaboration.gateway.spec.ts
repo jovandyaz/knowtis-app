@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PERMISSION } from '@knowtis/shared-types';
+import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
-import { PermissionLevel } from '../notes/domain';
 import { CollaborationGateway } from './collaboration.gateway';
 import { CollaborationService } from './collaboration.service';
 import {
@@ -409,26 +408,21 @@ describe('CollaborationGateway', () => {
 
   describe('validateShareToken (via CollaborationService)', () => {
     it('valid token with matching noteId returns permission', async () => {
-      const viewerPermission = PermissionLevel.create('viewer')._unsafeUnwrap();
-      const mockShareLink = {
-        id: 'link-1',
-        noteId: 'note-1',
-        token: 'valid-token',
-        permission: viewerPermission,
-        expiresAt: null,
-        createdBy: 'user-1',
+      const mockNote = {
+        id: 'note-1',
+        title: 'Test Note',
+        content: '',
+        ownerId: 'owner-1',
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.VIEWER,
+        shareToken: 'valid-token',
+        editorsCanShare: false,
         createdAt: new Date(),
-      };
-
-      const mockShareLinkRepo = {
-        findByToken: vi.fn().mockResolvedValue(mockShareLink),
-        create: vi.fn(),
-        findByNoteId: vi.fn(),
-        delete: vi.fn(),
+        updatedAt: new Date(),
       };
 
       const mockNoteRepo = {
-        findById: vi.fn(),
+        findById: vi.fn().mockResolvedValue(mockNote),
         findByIdWithOwner: vi.fn(),
         findByOwner: vi.fn(),
         findAccessibleByUser: vi.fn(),
@@ -444,86 +438,66 @@ describe('CollaborationGateway', () => {
         hasAccess: vi.fn(),
       };
 
-      const service = new CollaborationService(
-        mockNoteRepo as never,
-        mockShareLinkRepo as never
-      );
+      const service = new CollaborationService(mockNoteRepo as never);
 
       const result = await service.validateShareToken('valid-token', 'note-1');
-      expect(result).toBe('viewer');
+      expect(result).toBe(PERMISSION.VIEWER);
     });
 
-    it('token for different note returns null', async () => {
-      const viewerPermission = PermissionLevel.create('viewer')._unsafeUnwrap();
-      const mockShareLink = {
-        id: 'link-1',
-        noteId: 'other-note',
-        token: 'valid-token',
-        permission: viewerPermission,
-        expiresAt: null,
-        createdBy: 'user-1',
+    it('token mismatch returns null', async () => {
+      const mockNote = {
+        id: 'note-1',
+        title: 'Test Note',
+        content: '',
+        ownerId: 'owner-1',
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.VIEWER,
+        shareToken: 'different-token',
+        editorsCanShare: false,
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      const mockShareLinkRepo = {
-        findByToken: vi.fn().mockResolvedValue(mockShareLink),
-        create: vi.fn(),
-        findByNoteId: vi.fn(),
-        delete: vi.fn(),
+      const mockNoteRepo = {
+        findById: vi.fn().mockResolvedValue(mockNote),
       };
 
-      const service = new CollaborationService(
-        {} as never,
-        mockShareLinkRepo as never
-      );
+      const service = new CollaborationService(mockNoteRepo as never);
 
       const result = await service.validateShareToken('valid-token', 'note-1');
       expect(result).toBeNull();
     });
 
-    it('expired token returns null', async () => {
-      const viewerPermission = PermissionLevel.create('viewer')._unsafeUnwrap();
-      const mockShareLink = {
-        id: 'link-1',
-        noteId: 'note-1',
-        token: 'expired-token',
-        permission: viewerPermission,
-        expiresAt: new Date('2020-01-01'),
-        createdBy: 'user-1',
+    it('restricted access returns null', async () => {
+      const mockNote = {
+        id: 'note-1',
+        title: 'Test Note',
+        content: '',
+        ownerId: 'owner-1',
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+        generalAccessPermission: PERMISSION.VIEWER,
+        shareToken: 'valid-token',
+        editorsCanShare: false,
         createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
-      const mockShareLinkRepo = {
-        findByToken: vi.fn().mockResolvedValue(mockShareLink),
-        create: vi.fn(),
-        findByNoteId: vi.fn(),
-        delete: vi.fn(),
+      const mockNoteRepo = {
+        findById: vi.fn().mockResolvedValue(mockNote),
       };
 
-      const service = new CollaborationService(
-        {} as never,
-        mockShareLinkRepo as never
-      );
+      const service = new CollaborationService(mockNoteRepo as never);
 
-      const result = await service.validateShareToken(
-        'expired-token',
-        'note-1'
-      );
+      const result = await service.validateShareToken('valid-token', 'note-1');
       expect(result).toBeNull();
     });
 
-    it('non-existent token returns null', async () => {
-      const mockShareLinkRepo = {
-        findByToken: vi.fn().mockResolvedValue(null),
-        create: vi.fn(),
-        findByNoteId: vi.fn(),
-        delete: vi.fn(),
+    it('non-existent note returns null', async () => {
+      const mockNoteRepo = {
+        findById: vi.fn().mockResolvedValue(null),
       };
 
-      const service = new CollaborationService(
-        {} as never,
-        mockShareLinkRepo as never
-      );
+      const service = new CollaborationService(mockNoteRepo as never);
 
       const result = await service.validateShareToken(
         'nonexistent-token',

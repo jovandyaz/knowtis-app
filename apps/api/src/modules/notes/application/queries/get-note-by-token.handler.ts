@@ -6,11 +6,9 @@ import type { NoteAccessLevel } from '@knowtis/shared-types';
 import {
   NOTE_READ_REPOSITORY,
   NoteErrors,
-  SHARE_LINK_REPOSITORY,
   type NoteDomainError,
   type NoteEntityWithOwner,
   type NoteReadRepository,
-  type ShareLinkRepository,
 } from '../../domain';
 
 export type NoteByTokenResult = NoteEntityWithOwner & {
@@ -21,31 +19,20 @@ export type NoteByTokenResult = NoteEntityWithOwner & {
 export class GetNoteByTokenHandler {
   constructor(
     @Inject(NOTE_READ_REPOSITORY)
-    private readonly noteReadRepo: NoteReadRepository,
-    @Inject(SHARE_LINK_REPOSITORY)
-    private readonly shareLinkRepo: ShareLinkRepository
+    private readonly noteReadRepo: NoteReadRepository
   ) {}
 
   async execute(
     token: string
   ): Promise<Result<NoteByTokenResult, NoteDomainError>> {
-    const shareLink = await this.shareLinkRepo.findByToken(token);
-    if (!shareLink) {
-      return err(NoteErrors.shareLinkNotFound(token));
-    }
-
-    if (shareLink.expiresAt && shareLink.expiresAt < new Date()) {
-      return err(NoteErrors.shareLinkExpired());
-    }
-
-    const note = await this.noteReadRepo.findByIdWithOwner(shareLink.noteId);
+    const note = await this.noteReadRepo.findByShareToken(token);
     if (!note) {
-      return err(NoteErrors.noteNotFound(shareLink.noteId));
+      return err(NoteErrors.shareTokenNotFound(token));
     }
 
     return ok({
       ...note,
-      accessLevel: shareLink.permission.value,
+      accessLevel: note.generalAccessPermission as NoteAccessLevel,
     });
   }
 }

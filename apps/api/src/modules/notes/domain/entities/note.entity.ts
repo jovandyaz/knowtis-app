@@ -11,7 +11,10 @@ export interface NoteEntity {
   readonly title: string;
   readonly content: string;
   readonly ownerId: string;
-  readonly isPublic: boolean;
+  readonly generalAccess: string;
+  readonly generalAccessPermission: string;
+  readonly shareToken: string | null;
+  readonly editorsCanShare: boolean;
   readonly yjsState: Buffer | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;

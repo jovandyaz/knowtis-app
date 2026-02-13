@@ -1,7 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
+import {
+  ACCESS,
+  GENERAL_ACCESS,
+  type NoteAccessLevel,
+} from '@knowtis/shared-types';
 
 import { UserId } from '../../../auth/domain';
 import {
@@ -49,7 +53,7 @@ export class GetNoteHandler {
       userIdResult.value
     );
 
-    if (note.isPublic || permission) {
+    if (note.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK || permission) {
       const accessLevel: NoteAccessLevel = permission
         ? permission.permission.value
         : ACCESS.VIEWER;

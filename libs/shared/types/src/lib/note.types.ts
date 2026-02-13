@@ -18,12 +18,26 @@ export type PermissionLevel = (typeof PERMISSION_LEVELS)[number];
 export const ACCESS_LEVELS = [ACCESS.OWNER, ...PERMISSION_LEVELS] as const;
 export type NoteAccessLevel = (typeof ACCESS_LEVELS)[number];
 
+export const GENERAL_ACCESS = {
+  RESTRICTED: 'restricted',
+  ANYONE_WITH_LINK: 'anyone_with_link',
+} as const;
+
+export const GENERAL_ACCESS_LEVELS = [
+  GENERAL_ACCESS.RESTRICTED,
+  GENERAL_ACCESS.ANYONE_WITH_LINK,
+] as const;
+export type GeneralAccessLevel = (typeof GENERAL_ACCESS_LEVELS)[number];
+
 export interface Note {
   id: string;
   title: string;
   content: string;
   ownerId: string;
-  isPublic: boolean;
+  generalAccess: GeneralAccessLevel;
+  generalAccessPermission: PermissionLevel;
+  shareToken: string | null;
+  editorsCanShare: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -44,7 +58,9 @@ export interface CreateNoteInput {
 export interface UpdateNoteInput {
   title?: string;
   content?: string;
-  isPublic?: boolean;
+  generalAccess?: GeneralAccessLevel;
+  generalAccessPermission?: PermissionLevel;
+  editorsCanShare?: boolean;
 }
 
 export interface NotePermission {
@@ -58,18 +74,4 @@ export interface NotePermission {
 export interface ShareNoteInput {
   userId: string;
   permission: PermissionLevel;
-}
-
-export interface NoteShareLink {
-  id: string;
-  noteId: string;
-  token: string;
-  permission: PermissionLevel;
-  expiresAt: Date | null;
-  createdAt: Date;
-}
-
-export interface CreateShareLinkInput {
-  permission: PermissionLevel;
-  expiresAt?: Date;
 }

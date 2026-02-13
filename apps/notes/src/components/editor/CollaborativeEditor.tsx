@@ -135,6 +135,8 @@ export function CollaborativeEditor({
   placeholder = 'Start writing your note...',
   className,
   editable = true,
+  shareToken,
+  onEditDenied,
 }: CollaborativeEditorProps) {
   const editorState = useCollaborativeEditor(noteId);
   const otherUsers = useActiveCollaborators(noteId);
@@ -149,6 +151,8 @@ export function CollaborativeEditor({
       color: editorState.currentUser.color,
     },
     enabled: wsEnabled,
+    shareToken,
+    onEditDenied,
   });
 
   const allUsers = wsEnabled ? [...otherUsers, ...remoteUsers] : otherUsers;

@@ -13,7 +13,10 @@ export interface CreateNoteData {
 export interface UpdateNoteData {
   readonly title?: string;
   readonly content?: string;
-  readonly isPublic?: boolean;
+  readonly generalAccess?: string;
+  readonly generalAccessPermission?: string;
+  readonly shareToken?: string | null;
+  readonly editorsCanShare?: boolean;
 }
 
 export interface NoteWriteRepository {

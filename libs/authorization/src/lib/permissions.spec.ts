@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
+
 import { defineAbilityFor } from './permissions';
 import type { AuthUser, NoteSubject } from './types';
 
@@ -11,7 +13,7 @@ describe('defineAbilityFor', () => {
       __typename: 'Note',
       id: 'note-1',
       ownerId: 'user-1',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
     const ability = defineAbilityFor(user);
 
@@ -37,10 +39,10 @@ describe('defineAbilityFor', () => {
       __typename: 'Note',
       id: 'note-2',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
     const ability = defineAbilityFor(user, {
-      sharedNotes: [{ noteId: 'note-2', permission: 'editor' }],
+      sharedNotes: [{ noteId: 'note-2', permission: PERMISSION.EDITOR }],
     });
 
     it('can read shared note as editor', () => {
@@ -65,10 +67,10 @@ describe('defineAbilityFor', () => {
       __typename: 'Note',
       id: 'note-3',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
     const ability = defineAbilityFor(user, {
-      sharedNotes: [{ noteId: 'note-3', permission: 'viewer' }],
+      sharedNotes: [{ noteId: 'note-3', permission: PERMISSION.VIEWER }],
     });
 
     it('can read shared note as viewer', () => {
@@ -87,7 +89,7 @@ describe('defineAbilityFor', () => {
         __typename: 'Note',
         id: 'note-1',
         ownerId: 'user-1',
-        isPublic: false,
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
       };
       expect(ability.can('create', ownedNote)).toBe(true);
     });
@@ -98,12 +100,12 @@ describe('defineAbilityFor', () => {
     });
   });
 
-  describe('public notes', () => {
+  describe('public notes (anyone with link)', () => {
     const publicNote: NoteSubject = {
       __typename: 'Note',
       id: 'note-4',
       ownerId: 'other-user',
-      isPublic: true,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
     };
 
     it('anyone can read public notes', () => {
@@ -122,7 +124,7 @@ describe('defineAbilityFor', () => {
       __typename: 'Note',
       id: 'note-5',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
 
     it('cannot read private note without permission', () => {
@@ -136,64 +138,70 @@ describe('defineAbilityFor', () => {
     });
   });
 
-  describe('link-based sharing', () => {
+  describe('general access sharing', () => {
     const sharedNote: NoteSubject = {
       __typename: 'Note',
       id: 'note-link-1',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
     };
 
-    describe('anonymous user with viewer link', () => {
-      const ability = defineAbilityFor(null, {
-        shareLinks: [{ noteId: 'note-link-1', permission: 'viewer' }],
-      });
+    describe('anonymous user with public access', () => {
+      const ability = defineAbilityFor(null);
 
-      it('can read note via share link', () => {
+      it('can read note with anyone_with_link access', () => {
         expect(ability.can('read', sharedNote)).toBe(true);
       });
 
-      it('cannot update note via viewer link', () => {
+      it('cannot update note without explicit permission', () => {
         expect(ability.can('update', sharedNote)).toBe(false);
       });
 
-      it('cannot delete note via viewer link', () => {
+      it('cannot delete note', () => {
         expect(ability.can('delete', sharedNote)).toBe(false);
       });
     });
 
-    describe('anonymous user with editor link', () => {
-      const ability = defineAbilityFor(null, {
-        shareLinks: [{ noteId: 'note-link-1', permission: 'editor' }],
+    describe('authenticated user with public access', () => {
+      const ability = defineAbilityFor(user);
+
+      it('can read note with anyone_with_link access', () => {
+        expect(ability.can('read', sharedNote)).toBe(true);
       });
 
-      it('can read and update via editor link', () => {
+      it('cannot update without explicit permission', () => {
+        expect(ability.can('update', sharedNote)).toBe(false);
+      });
+    });
+
+    describe('authenticated user with editor permission via sharedNotes', () => {
+      const ability = defineAbilityFor(user, {
+        sharedNotes: [{ noteId: 'note-link-1', permission: PERMISSION.EDITOR }],
+      });
+
+      it('can read and update', () => {
         expect(ability.can('read', sharedNote)).toBe(true);
         expect(ability.can('update', sharedNote)).toBe(true);
       });
 
-      it('cannot delete or share via editor link', () => {
+      it('cannot delete or share', () => {
         expect(ability.can('delete', sharedNote)).toBe(false);
         expect(ability.can('share', sharedNote)).toBe(false);
       });
     });
 
-    describe('authenticated user with share link', () => {
-      const ability = defineAbilityFor(user, {
-        shareLinks: [{ noteId: 'note-link-1', permission: 'editor' }],
-      });
+    describe('no access to restricted note', () => {
+      const restrictedNote: NoteSubject = {
+        __typename: 'Note',
+        id: 'note-restricted',
+        ownerId: 'other-user',
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+      };
 
-      it('can read and update via link', () => {
-        expect(ability.can('read', sharedNote)).toBe(true);
-        expect(ability.can('update', sharedNote)).toBe(true);
-      });
-    });
+      const ability = defineAbilityFor(null, { sharedNotes: [] });
 
-    describe('no link', () => {
-      const ability = defineAbilityFor(null, { shareLinks: [] });
-
-      it('cannot access private note', () => {
-        expect(ability.can('read', sharedNote)).toBe(false);
+      it('cannot access restricted note', () => {
+        expect(ability.can('read', restrictedNote)).toBe(false);
       });
     });
   });
@@ -203,14 +211,14 @@ describe('defineAbilityFor', () => {
       __typename: 'Note',
       id: 'note-6',
       ownerId: 'other-user',
-      isPublic: true,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
     };
 
     const privateNote: NoteSubject = {
       __typename: 'Note',
       id: 'note-7',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
 
     it('can read public notes', () => {

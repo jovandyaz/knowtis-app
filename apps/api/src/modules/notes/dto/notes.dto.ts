@@ -1,6 +1,5 @@
 import {
   IsBoolean,
-  IsDateString,
   IsEnum,
   IsNotEmpty,
   IsOptional,
@@ -10,8 +9,10 @@ import {
 } from 'class-validator';
 
 import {
+  GENERAL_ACCESS_LEVELS,
   NOTE_TITLE_MAX_LENGTH,
   PERMISSION_LEVELS,
+  type GeneralAccessLevel,
   type PermissionLevel,
 } from '@knowtis/shared-types';
 
@@ -40,9 +41,21 @@ export class UpdateNoteDto {
   @IsOptional()
   content?: string;
 
+  @IsEnum(GENERAL_ACCESS_LEVELS, {
+    message: 'General access must be either restricted or anyone_with_link',
+  })
+  @IsOptional()
+  generalAccess?: GeneralAccessLevel;
+
+  @IsEnum(PERMISSION_LEVELS, {
+    message: 'Permission must be either viewer or editor',
+  })
+  @IsOptional()
+  generalAccessPermission?: PermissionLevel;
+
   @IsBoolean()
   @IsOptional()
-  isPublic?: boolean;
+  editorsCanShare?: boolean;
 }
 
 export class ShareNoteDto {
@@ -61,16 +74,4 @@ export class NotesQueryDto {
   @IsString()
   @IsOptional()
   search?: string;
-}
-
-export class CreateShareLinkDto {
-  @IsEnum(PERMISSION_LEVELS, {
-    message: 'Permission must be either viewer or editor',
-  })
-  @IsNotEmpty({ message: 'Permission is required' })
-  permission!: PermissionLevel;
-
-  @IsOptional()
-  @IsDateString()
-  expiresAt?: string;
 }

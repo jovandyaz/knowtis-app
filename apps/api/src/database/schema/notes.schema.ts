@@ -17,6 +17,12 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
+export const permissionEnum = pgEnum('permission_level', ['viewer', 'editor']);
+export const generalAccessEnum = pgEnum('general_access', [
+  'restricted',
+  'anyone_with_link',
+]);
+
 export const notes = pgTable(
   'notes',
   {
@@ -27,7 +33,14 @@ export const notes = pgTable(
     ownerId: uuid('owner_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    isPublic: boolean('is_public').notNull().default(false),
+    generalAccess: generalAccessEnum('general_access')
+      .notNull()
+      .default('restricted'),
+    generalAccessPermission: permissionEnum('general_access_permission')
+      .notNull()
+      .default('viewer'),
+    shareToken: text('share_token').unique(),
+    editorsCanShare: boolean('editors_can_share').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -38,14 +51,13 @@ export const notes = pgTable(
   (table) => [
     index('notes_owner_id_idx').on(table.ownerId),
     index('notes_updated_at_idx').on(table.updatedAt),
-    index('notes_is_public_idx').on(table.isPublic),
+    index('notes_general_access_idx').on(table.generalAccess),
+    index('notes_share_token_idx').on(table.shareToken),
   ]
 );
 
 export type Note = typeof notes.$inferSelect;
 export type NewNote = typeof notes.$inferInsert;
-
-export const permissionEnum = pgEnum('permission_level', ['viewer', 'editor']);
 
 export const notePermissions = pgTable(
   'note_permissions',
@@ -71,29 +83,3 @@ export const notePermissions = pgTable(
 
 export type NotePermission = typeof notePermissions.$inferSelect;
 export type NewNotePermission = typeof notePermissions.$inferInsert;
-
-export const noteShareLinks = pgTable(
-  'note_share_links',
-  {
-    id: uuid('id').primaryKey().defaultRandom(),
-    noteId: uuid('note_id')
-      .notNull()
-      .references(() => notes.id, { onDelete: 'cascade' }),
-    token: text('token').notNull().unique(),
-    permission: permissionEnum('permission').notNull().default('viewer'),
-    expiresAt: timestamp('expires_at', { withTimezone: true }),
-    createdBy: uuid('created_by')
-      .notNull()
-      .references(() => users.id, { onDelete: 'cascade' }),
-    createdAt: timestamp('created_at', { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-  },
-  (table) => [
-    index('share_links_note_id_idx').on(table.noteId),
-    index('share_links_token_idx').on(table.token),
-  ]
-);
-
-export type NoteShareLink = typeof noteShareLinks.$inferSelect;
-export type NewNoteShareLink = typeof noteShareLinks.$inferInsert;

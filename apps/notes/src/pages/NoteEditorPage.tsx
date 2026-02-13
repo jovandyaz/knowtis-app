@@ -10,7 +10,7 @@ import {
   DEBOUNCE_DELAYS,
   formatNoteDateFull,
 } from '@/lib';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+import { ArrowLeft, Check, Loader2, Share2 } from 'lucide-react';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -21,7 +21,11 @@ import {
   LoadingState,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
-import type { NoteAccessLevel } from '@knowtis/shared-types';
+import type {
+  GeneralAccessLevel,
+  NoteAccessLevel,
+  PermissionLevel,
+} from '@knowtis/shared-types';
 
 interface NoteEditorProps {
   noteId: string;
@@ -29,7 +33,10 @@ interface NoteEditorProps {
   initialContent: string;
   updatedAt: Date;
   accessLevel: NoteAccessLevel;
-  isPublic: boolean;
+  generalAccess: GeneralAccessLevel;
+  generalAccessPermission: PermissionLevel;
+  shareToken: string | null;
+  editorsCanShare: boolean;
 }
 
 function NoteEditor({
@@ -38,7 +45,10 @@ function NoteEditor({
   initialContent,
   updatedAt,
   accessLevel,
-  isPublic,
+  generalAccess,
+  generalAccessPermission,
+  shareToken,
+  editorsCanShare,
 }: NoteEditorProps) {
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
@@ -46,6 +56,7 @@ function NoteEditor({
   const [content, setContent] = useState(initialContent);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
+  const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
 
   const debouncedUpdateNote = useDebouncedCallback(
@@ -122,11 +133,29 @@ function NoteEditor({
             ) : null)}
 
           {canPerformNoteAction(accessLevel, 'share') && (
-            <ShareDialog
-              noteId={noteId}
-              noteTitle={title}
-              isPublic={isPublic}
-            />
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => setIsShareDialogOpen(true)}
+              >
+                <Share2 className="h-4 w-4" />
+                Share
+              </Button>
+
+              <ShareDialog
+                open={isShareDialogOpen}
+                onOpenChange={setIsShareDialogOpen}
+                noteId={noteId}
+                noteTitle={title}
+                generalAccess={generalAccess}
+                generalAccessPermission={generalAccessPermission}
+                shareToken={shareToken}
+                editorsCanShare={editorsCanShare}
+                accessLevel={accessLevel}
+              />
+            </>
           )}
         </div>
       </div>
@@ -189,7 +218,10 @@ export function NoteEditorPage() {
       initialContent={note.content}
       updatedAt={note.updatedAt}
       accessLevel={note.accessLevel}
-      isPublic={note.isPublic}
+      generalAccess={note.generalAccess}
+      generalAccessPermission={note.generalAccessPermission}
+      shareToken={note.shareToken}
+      editorsCanShare={note.editorsCanShare}
     />
   );
 }

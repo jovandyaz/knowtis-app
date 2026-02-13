@@ -2,6 +2,8 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
+
 import {
   NoteEntity,
   NoteErrorCodes,
@@ -17,7 +19,10 @@ const mockNote: NoteEntity = {
   title: 'Original Title',
   content: 'Original Content',
   ownerId: 'owner-1',
-  isPublic: false,
+  generalAccess: GENERAL_ACCESS.RESTRICTED,
+  generalAccessPermission: PERMISSION.VIEWER,
+  shareToken: null,
+  editorsCanShare: false,
   yjsState: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -35,6 +40,7 @@ describe('UpdateNoteHandler', () => {
       findByIdWithOwner: vi.fn(),
       findByOwner: vi.fn(),
       findAccessibleByUser: vi.fn(),
+      findByShareToken: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
@@ -53,8 +59,8 @@ describe('UpdateNoteHandler', () => {
 
     handler = new UpdateNoteHandler(mockRepository, mockEventEmitter);
   });
-  // ...
-  it('should allow owner to update everything and emit event', async () => {
+
+  it('should allow owner to update all fields and emit event', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'update').mockResolvedValue(
       ok({ ...mockNote, title: 'New Title' })
@@ -64,37 +70,81 @@ describe('UpdateNoteHandler', () => {
       noteId: 'note-1',
       userId: 'owner-1',
       title: 'New Title',
-      isPublic: true,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.EDITOR,
     };
 
     const result = await handler.execute(input);
 
     expect(result.isOk()).toBe(true);
-    expect(mockRepository.update).toHaveBeenCalledWith('note-1', {
-      title: 'New Title',
-      isPublic: true,
-    });
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({
+        title: 'New Title',
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.EDITOR,
+      })
+    );
 
     expect(mockEventEmitter.emit).toHaveBeenCalledWith(
       NoteUpdatedEvent.EVENT_NAME,
       expect.any(NoteUpdatedEvent)
     );
-    expect(mockEventEmitter.emit).toHaveBeenCalledWith(
-      NoteUpdatedEvent.EVENT_NAME,
+  });
+
+  it('should generate share token when enabling anyone_with_link and no token exists', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
+
+    const input = {
+      noteId: 'note-1',
+      userId: 'owner-1',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    };
+
+    const result = await handler.execute(input);
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      'note-1',
       expect.objectContaining({
-        aggregateId: 'note-1',
-        performedBy: 'owner-1',
-        updates: expect.objectContaining({
-          title: 'New Title',
-          isPublic: true,
-        }),
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        shareToken: expect.stringMatching(/^[a-f0-9]{32}$/),
       })
     );
   });
 
-  it('should allow editor to update content', async () => {
+  it('should clear share token when changing to restricted', async () => {
+    const noteWithToken: NoteEntity = {
+      ...mockNote,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      shareToken: 'existing-token-abc123',
+    };
+
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(noteWithToken);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(noteWithToken));
+
+    const input = {
+      noteId: 'note-1',
+      userId: 'owner-1',
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
+    };
+
+    const result = await handler.execute(input);
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+        shareToken: null,
+      })
+    );
+  });
+
+  it('should allow editor to update content and title', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
-    vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true); // Is editor
+    vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
     vi.spyOn(mockRepository, 'update').mockResolvedValue(
       ok({ ...mockNote, content: 'New Content' })
     );
@@ -118,14 +168,14 @@ describe('UpdateNoteHandler', () => {
     });
   });
 
-  it('should deny editor from changing public status', async () => {
+  it('should deny editor from changing sharing settings', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
 
     const input = {
       noteId: 'note-1',
       userId: 'editor-1',
-      isPublic: true,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
     };
 
     const result = await handler.execute(input);
@@ -133,7 +183,7 @@ describe('UpdateNoteHandler', () => {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toEqual(
-        NoteErrors.ownerOnly('change public status')
+        NoteErrors.ownerOnly('change sharing settings')
       );
     }
     expect(mockRepository.update).not.toHaveBeenCalled();

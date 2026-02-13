@@ -18,6 +18,8 @@ export interface CollaborativeEditorProps {
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  shareToken?: string | undefined;
+  onEditDenied?: (() => void) | undefined;
 }
 
 /**

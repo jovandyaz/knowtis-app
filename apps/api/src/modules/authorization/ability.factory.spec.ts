@@ -2,6 +2,7 @@ import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { NoteSubject } from '@knowtis/authorization';
+import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
 import { AppAbilityFactory } from './ability.factory';
 
@@ -24,7 +25,7 @@ describe('AppAbilityFactory', () => {
       __typename: 'Note',
       id: 'note-1',
       ownerId: 'user-1',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
     expect(ability.can('update', ownedNote)).toBe(true);
   });
@@ -33,7 +34,7 @@ describe('AppAbilityFactory', () => {
     const ability = factory.createAbility({
       user,
       permissionContext: {
-        sharedNotes: [{ noteId: 'note-2', permission: 'editor' }],
+        sharedNotes: [{ noteId: 'note-2', permission: PERMISSION.EDITOR }],
       },
     });
 
@@ -41,7 +42,7 @@ describe('AppAbilityFactory', () => {
       __typename: 'Note',
       id: 'note-2',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
     expect(ability.can('update', sharedNote)).toBe(true);
   });
@@ -52,7 +53,7 @@ describe('AppAbilityFactory', () => {
       __typename: 'Note',
       id: 'note-1',
       ownerId: 'owner',
-      isPublic: true,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
     };
 
     expect(ability.can('read', publicNote)).toBe(true);
@@ -65,7 +66,7 @@ describe('AppAbilityFactory', () => {
       __typename: 'Note',
       id: 'note-1',
       ownerId: 'owner',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
 
     expect(ability.can('read', privateNote)).toBe(false);
@@ -77,7 +78,7 @@ describe('AppAbilityFactory', () => {
       __typename: 'Note',
       id: 'note-1',
       ownerId: 'other-user',
-      isPublic: false,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
     };
 
     expect(ability.can('read', otherNote)).toBe(false);

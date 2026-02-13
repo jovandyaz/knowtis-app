@@ -7,9 +7,6 @@ export {
   useCreateNote,
   useUpdateNote,
   useDeleteNote,
-  useShareLinks,
   useNoteByToken,
-  useCreateShareLink,
-  useRevokeShareLink,
   notesQueryKeys,
 } from './notes.hooks';

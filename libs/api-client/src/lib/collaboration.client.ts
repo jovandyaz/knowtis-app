@@ -21,9 +21,14 @@ interface CollaborationEventHandlers {
   onUserJoined?: (user: UserJoinedPayload) => void;
   onUserLeft?: (payload: UserLeftPayload) => void;
   onAwarenessChange?: (payload: AwarenessUpdatePayload) => void;
+  onEditDenied?: (error: CollaborationError) => void;
   onError?: (error: CollaborationError) => void;
   onConnect?: () => void;
   onDisconnect?: (reason: string) => void;
+}
+
+export interface CollaborationConnectOptions {
+  shareToken?: string | undefined;
 }
 
 export class CollaborationClient {
@@ -33,6 +38,7 @@ export class CollaborationClient {
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
   private readonly wsUrl: string | undefined;
+  private shareToken: string | undefined;
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
@@ -55,11 +61,12 @@ export class CollaborationClient {
     this.handlers = { ...this.handlers, ...handlers };
   }
 
-  connect(): void {
+  connect(options?: CollaborationConnectOptions): void {
     if (this.socket?.connected) {
       return;
     }
 
+    this.shareToken = options?.shareToken;
     const token = tokenStorage.getAccessToken();
 
     this.socket = io(this.getWsUrl(), {
@@ -67,6 +74,7 @@ export class CollaborationClient {
       autoConnect: true,
       auth: {
         userId: token ? undefined : `anon-${Date.now()}`,
+        shareToken: this.shareToken,
       },
       ...(token ? { extraHeaders: { Authorization: `Bearer ${token}` } } : {}),
     });
@@ -203,6 +211,13 @@ export class CollaborationClient {
       COLLABORATION_EVENTS.AWARENESS_CHANGE,
       (payload: AwarenessUpdatePayload) => {
         this.handlers.onAwarenessChange?.(payload);
+      }
+    );
+
+    this.socket.on(
+      COLLABORATION_EVENTS.EDIT_DENIED,
+      (error: CollaborationError) => {
+        this.handlers.onEditDenied?.(error);
       }
     );
 

@@ -30,6 +30,8 @@ export {
   type ErrorStateProps,
   EmptyState,
   type EmptyStateProps,
+  Switch,
+  type SwitchProps,
   Toaster,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';

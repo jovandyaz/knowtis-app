@@ -1,212 +1,144 @@
-import { useState } from 'react';
+import { Globe, Lock } from 'lucide-react';
 
-import { Check, Copy, Link2, Loader2, Share2, Trash2 } from 'lucide-react';
-
+import { useUpdateNote } from '@knowtis/data-access-notes';
 import {
-  useCreateShareLink,
-  useRevokeShareLink,
-  useShareLinks,
-  useUpdateNote,
-} from '@knowtis/data-access-notes';
-import {
-  Badge,
   Button,
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from '@knowtis/design-system';
-import type { NoteShareLink } from '@knowtis/shared-types';
+import {
+  ACCESS,
+  GENERAL_ACCESS,
+  PERMISSION,
+  type GeneralAccessLevel,
+  type NoteAccessLevel,
+  type PermissionLevel,
+} from '@knowtis/shared-types';
+
+import {
+  AccessInfoBanner,
+  AccessOptionCard,
+  EditorsCanShareToggle,
+  LinkAccessSection,
+} from './share';
 
 interface ShareDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   noteId: string;
   noteTitle: string;
-  isPublic: boolean;
+  generalAccess: GeneralAccessLevel;
+  generalAccessPermission: PermissionLevel;
+  shareToken: string | null;
+  editorsCanShare: boolean;
+  accessLevel: NoteAccessLevel;
 }
 
-export function ShareDialog({ noteId, noteTitle, isPublic }: ShareDialogProps) {
-  const [open, setOpen] = useState(false);
-  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
-
-  const { data: shareLinks = [], isLoading: isLoadingLinks } =
-    useShareLinks(noteId);
-  const createShareLink = useCreateShareLink();
-  const revokeShareLink = useRevokeShareLink();
+export function ShareDialog({
+  open,
+  onOpenChange,
+  noteId,
+  noteTitle,
+  generalAccess,
+  generalAccessPermission,
+  shareToken,
+  editorsCanShare,
+  accessLevel,
+}: ShareDialogProps) {
   const updateNote = useUpdateNote();
 
-  const handleTogglePublic = () => {
-    updateNote.mutate({ id: noteId, input: { isPublic: !isPublic } });
-  };
+  const isOwner = accessLevel === ACCESS.OWNER;
+  const isEditor = accessLevel === PERMISSION.EDITOR;
+  const canShare = isOwner || (isEditor && editorsCanShare);
+  const isPublicAccess = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
+  const shareUrl = shareToken
+    ? `${window.location.origin}/s/${shareToken}`
+    : null;
 
-  const handleCreateLink = (permission: 'viewer' | 'editor') => {
-    createShareLink.mutate({ noteId, input: { permission } });
-  };
-
-  const handleRevokeLink = (linkId: string) => {
-    revokeShareLink.mutate({ noteId, linkId });
-  };
-
-  const handleCopyLink = async (link: NoteShareLink) => {
-    const url = `${window.location.origin}/s/${link.token}`;
-    await navigator.clipboard.writeText(url);
-    setCopiedLinkId(link.id);
-    setTimeout(() => setCopiedLinkId(null), 2000);
+  const handleUpdate = (input: Record<string, unknown>) => {
+    updateNote.mutate({ id: noteId, input });
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="outline" size="sm" className="gap-2">
-          <Share2 className="h-4 w-4" />
-          Share
-        </Button>
-      </DialogTrigger>
-
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Share &quot;{noteTitle}&quot;</DialogTitle>
-          <DialogDescription>
-            Control who can access this note.
-          </DialogDescription>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[520px] p-0 gap-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 space-y-1">
+          <DialogTitle className="text-xl font-semibold">
+            Share "{noteTitle}"
+          </DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Manage who can access this note
+          </p>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Public/Private Toggle */}
-          <div className="flex items-center justify-between rounded-lg border border-(--border) p-4">
-            <div>
-              <p className="text-sm font-medium">
-                {isPublic ? 'Public' : 'Private'}
-              </p>
-              <p className="text-xs text-(--muted-foreground)">
-                {isPublic
-                  ? 'Anyone with the link can view'
-                  : 'Only you and shared users can access'}
-              </p>
+        <div className="border-t border-border mb-0" />
+
+        <div className="px-6 py-5 space-y-6 max-h-[500px] overflow-y-auto">
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Globe className="h-4 w-4 text-muted-foreground" />
+              <h3 className="text-sm font-medium">General access</h3>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTogglePublic}
+
+            <div className="space-y-2">
+              <AccessOptionCard
+                selected={!isPublicAccess}
+                disabled={!canShare || updateNote.isPending}
+                onClick={() =>
+                  handleUpdate({ generalAccess: GENERAL_ACCESS.RESTRICTED })
+                }
+                icon={Lock}
+                title="Restricted"
+                description="Only people with explicit access can open"
+              />
+              <AccessOptionCard
+                selected={isPublicAccess}
+                disabled={!canShare || updateNote.isPending}
+                onClick={() =>
+                  handleUpdate({
+                    generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+                  })
+                }
+                icon={Globe}
+                title="Anyone with the link"
+                description="Anyone on the internet with this link can access"
+              />
+            </div>
+          </div>
+
+          {isPublicAccess && shareUrl && (
+            <LinkAccessSection
+              shareUrl={shareUrl}
+              permission={generalAccessPermission}
+              disabled={!canShare || updateNote.isPending}
+              onPermissionChange={(permission: PermissionLevel) =>
+                handleUpdate({ generalAccessPermission: permission })
+              }
+            />
+          )}
+
+          {isOwner && (
+            <EditorsCanShareToggle
+              enabled={editorsCanShare}
               disabled={updateNote.isPending}
-            >
-              {updateNote.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : isPublic ? (
-                'Make Private'
-              ) : (
-                'Make Public'
-              )}
-            </Button>
-          </div>
+              onToggle={() =>
+                handleUpdate({ editorsCanShare: !editorsCanShare })
+              }
+            />
+          )}
 
-          {/* Create Share Link */}
-          <div>
-            <p className="mb-3 text-sm font-medium">Share via link</p>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => handleCreateLink('viewer')}
-                disabled={createShareLink.isPending}
-              >
-                <Link2 className="h-4 w-4" />
-                Viewer link
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => handleCreateLink('editor')}
-                disabled={createShareLink.isPending}
-              >
-                <Link2 className="h-4 w-4" />
-                Editor link
-              </Button>
-            </div>
-          </div>
+          {!isOwner && <AccessInfoBanner canShare={canShare} />}
+        </div>
 
-          {/* Active Share Links */}
-          {isLoadingLinks ? (
-            <div className="flex justify-center py-4">
-              <Loader2 className="h-5 w-5 animate-spin text-(--muted-foreground)" />
-            </div>
-          ) : shareLinks.length > 0 ? (
-            <div>
-              <p className="mb-3 text-sm font-medium">Active links</p>
-              <div className="space-y-2">
-                {shareLinks.map((link) => (
-                  <ShareLinkItem
-                    key={link.id}
-                    link={link}
-                    isCopied={copiedLinkId === link.id}
-                    onCopy={() => handleCopyLink(link)}
-                    onRevoke={() => handleRevokeLink(link.id)}
-                    isRevoking={revokeShareLink.isPending}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
+        <div className="border-t border-border mt-0" />
+        <div className="px-6 py-4 flex justify-end">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Done
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-interface ShareLinkItemProps {
-  link: NoteShareLink;
-  isCopied: boolean;
-  onCopy: () => void;
-  onRevoke: () => void;
-  isRevoking: boolean;
-}
-
-function ShareLinkItem({
-  link,
-  isCopied,
-  onCopy,
-  onRevoke,
-  isRevoking,
-}: ShareLinkItemProps) {
-  return (
-    <div className="flex items-center justify-between rounded-lg border border-(--border) p-3">
-      <div className="flex items-center gap-2">
-        <Link2 className="h-4 w-4 text-(--muted-foreground)" />
-        <Badge variant={link.permission === 'editor' ? 'default' : 'secondary'}>
-          {link.permission}
-        </Badge>
-        {link.expiresAt && (
-          <span className="text-xs text-(--muted-foreground)">
-            Expires {new Date(link.expiresAt).toLocaleDateString()}
-          </span>
-        )}
-      </div>
-      <div className="flex gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          onClick={onCopy}
-        >
-          {isCopied ? (
-            <Check className="h-4 w-4 text-emerald-500" />
-          ) : (
-            <Copy className="h-4 w-4" />
-          )}
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 text-(--muted-foreground) hover:text-(--destructive)"
-          onClick={onRevoke}
-          disabled={isRevoking}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </div>
-    </div>
   );
 }

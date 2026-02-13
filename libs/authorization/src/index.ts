@@ -8,6 +8,5 @@ export {
   type AppAbility,
   type AuthUser,
   type SharedNote,
-  type ShareLinkAccess,
   type PermissionContext,
 } from './lib/types';

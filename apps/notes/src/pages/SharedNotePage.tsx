@@ -1,5 +1,8 @@
+import { useCallback, useState } from 'react';
+
 import { useParams } from '@tanstack/react-router';
 
+import { CollaborativeEditor } from '@/components/editor';
 import { Eye, Pencil } from 'lucide-react';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -10,10 +13,25 @@ import {
   ErrorState,
   LoadingState,
 } from '@knowtis/design-system';
+import { PERMISSION } from '@knowtis/shared-types';
 
 export function SharedNotePage() {
   const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, error } = useNoteByToken(token);
+  const [isEditing, setIsEditing] = useState(false);
+  const [latestContent, setLatestContent] = useState<string | null>(null);
+
+  const handleEditDenied = useCallback(() => {
+    setIsEditing(false);
+  }, []);
+
+  const handleUpdate = useCallback((content: string) => {
+    setLatestContent(content);
+  }, []);
+
+  const handleStopEditing = useCallback(() => {
+    setIsEditing(false);
+  }, []);
 
   if (isLoading) {
     return (
@@ -24,8 +42,6 @@ export function SharedNotePage() {
   }
 
   if (isError) {
-    const isExpired =
-      ApiClientError.isApiClientError(error) && error.status === 410;
     const isNotFound =
       ApiClientError.isApiClientError(error) && error.status === 404;
 
@@ -33,19 +49,11 @@ export function SharedNotePage() {
       <div className="flex min-h-screen items-center justify-center">
         <ErrorState
           fullHeight={false}
-          title={
-            isExpired
-              ? 'Link Expired'
-              : isNotFound
-                ? 'Link Not Found'
-                : 'Something went wrong'
-          }
+          title={isNotFound ? 'Link Not Found' : 'Something went wrong'}
           message={
-            isExpired
-              ? 'This share link has expired and is no longer valid.'
-              : isNotFound
-                ? 'This share link does not exist or has been revoked.'
-                : 'Failed to load the shared note. Please try again.'
+            isNotFound
+              ? 'This share link does not exist or has been disabled by the owner.'
+              : 'Failed to load the shared note. Please try again.'
           }
         />
       </div>
@@ -56,6 +64,9 @@ export function SharedNotePage() {
     return null;
   }
 
+  const canEdit = data.accessLevel === PERMISSION.EDITOR;
+  const displayContent = latestContent ?? data.content;
+
   return (
     <div className="min-h-screen bg-(--background)">
       {/* Minimal header */}
@@ -65,10 +76,8 @@ export function SharedNotePage() {
             <span className="text-sm font-medium text-(--foreground)">
               Knowtis
             </span>
-            <Badge
-              variant={data.accessLevel === 'editor' ? 'default' : 'secondary'}
-            >
-              {data.accessLevel === 'editor' ? (
+            <Badge variant={canEdit ? 'default' : 'secondary'}>
+              {canEdit ? (
                 <span className="flex items-center gap-1">
                   <Pencil className="h-3 w-3" />
                   Editor
@@ -81,11 +90,29 @@ export function SharedNotePage() {
               )}
             </Badge>
           </div>
-          <a href="/login">
-            <Button variant="outline" size="sm">
-              Sign in
-            </Button>
-          </a>
+          <div className="flex items-center gap-2">
+            {canEdit && !isEditing && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setIsEditing(true)}
+              >
+                <Pencil className="mr-1 h-3 w-3" />
+                Edit
+              </Button>
+            )}
+            {isEditing && (
+              <Button variant="outline" size="sm" onClick={handleStopEditing}>
+                <Eye className="mr-1 h-3 w-3" />
+                View
+              </Button>
+            )}
+            <a href="/login">
+              <Button variant="outline" size="sm">
+                Sign in
+              </Button>
+            </a>
+          </div>
         </div>
       </header>
 
@@ -107,10 +134,21 @@ export function SharedNotePage() {
           </span>
         </div>
 
-        <div
-          className="prose prose-neutral dark:prose-invert max-w-none"
-          dangerouslySetInnerHTML={{ __html: data.content }}
-        />
+        {isEditing ? (
+          <CollaborativeEditor
+            noteId={data.id}
+            initialContent={data.content}
+            onUpdate={handleUpdate}
+            editable={true}
+            shareToken={token}
+            onEditDenied={handleEditDenied}
+          />
+        ) : (
+          <div
+            className="prose prose-neutral dark:prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: displayContent }}
+          />
+        )}
       </main>
     </div>
   );

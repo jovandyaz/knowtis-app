@@ -1,10 +1,8 @@
 import type {
   CreateNoteInput,
-  CreateShareLinkInput,
   Note,
   NoteAccessLevel,
   NotePermission,
-  NoteShareLink,
   NoteWithOwner,
   ShareNoteInput,
   UpdateNoteInput,
@@ -85,35 +83,6 @@ export const notesApi = {
   ): Promise<{ success: boolean }> {
     return httpClient.delete<{ success: boolean }>(
       `/notes/${noteId}/share/${userId}`
-    );
-  },
-
-  /**
-   * Create a share link for a note
-   */
-  async createShareLink(
-    noteId: string,
-    input: CreateShareLinkInput
-  ): Promise<NoteShareLink> {
-    return httpClient.post<NoteShareLink>(`/notes/${noteId}/links`, input);
-  },
-
-  /**
-   * Get all share links for a note
-   */
-  async getShareLinks(noteId: string): Promise<NoteShareLink[]> {
-    return httpClient.get<NoteShareLink[]>(`/notes/${noteId}/links`);
-  },
-
-  /**
-   * Revoke a share link
-   */
-  async revokeShareLink(
-    noteId: string,
-    linkId: string
-  ): Promise<{ success: boolean }> {
-    return httpClient.delete<{ success: boolean }>(
-      `/notes/${noteId}/links/${linkId}`
     );
   },
 

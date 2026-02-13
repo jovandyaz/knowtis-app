@@ -21,6 +21,8 @@ interface UseWebSocketCollaborationOptions {
   yDoc: Y.Doc | null;
   currentUser: { name: string; color: string };
   enabled?: boolean;
+  shareToken?: string | undefined;
+  onEditDenied?: (() => void) | undefined;
 }
 
 interface UseWebSocketCollaborationReturn {
@@ -34,6 +36,8 @@ export function useWebSocketCollaboration({
   yDoc,
   currentUser,
   enabled = true,
+  shareToken,
+  onEditDenied,
 }: UseWebSocketCollaborationOptions): UseWebSocketCollaborationReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [remoteUsers, setRemoteUsers] = useState<CollaborationUser[]>([]);
@@ -44,6 +48,7 @@ export function useWebSocketCollaboration({
   const yDocRef = useRef(yDoc);
   const currentUserRef = useRef(currentUser);
   const noteIdRef = useRef(noteId);
+  const onEditDeniedRef = useRef(onEditDenied);
 
   useEffect(() => {
     yDocRef.current = yDoc;
@@ -56,6 +61,10 @@ export function useWebSocketCollaboration({
   useEffect(() => {
     noteIdRef.current = noteId;
   }, [noteId]);
+
+  useEffect(() => {
+    onEditDeniedRef.current = onEditDenied;
+  }, [onEditDenied]);
 
   const handleConnect = useCallback(() => {
     setIsConnected(true);
@@ -102,6 +111,16 @@ export function useWebSocketCollaboration({
     setRemoteUsers((prev) => prev.filter((u) => u.id !== payload.userId));
   }, []);
 
+  const handleEditDenied = useCallback((err: CollaborationError) => {
+    logger.warn(`Edit denied: ${err.message}`, {
+      context: 'useWebSocketCollaboration',
+    });
+    toast.error('Edit access revoked', {
+      description: err.message,
+    });
+    onEditDeniedRef.current?.();
+  }, []);
+
   const handleError = useCallback((err: CollaborationError) => {
     setError(err.message);
     logger.error(`WebSocket collaboration error: ${err.code}`, {
@@ -125,22 +144,25 @@ export function useWebSocketCollaboration({
       onDocumentUpdate: handleDocumentUpdate,
       onUserJoined: handleUserJoined,
       onUserLeft: handleUserLeft,
+      onEditDenied: handleEditDenied,
       onError: handleError,
     });
 
-    collaborationClient.connect();
+    collaborationClient.connect({ shareToken });
 
     return () => {
       collaborationClient.disconnect();
     };
   }, [
     enabled,
+    shareToken,
     handleConnect,
     handleDisconnect,
     handleInitialState,
     handleDocumentUpdate,
     handleUserJoined,
     handleUserLeft,
+    handleEditDenied,
     handleError,
   ]);
 

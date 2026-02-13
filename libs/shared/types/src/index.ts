@@ -11,16 +11,17 @@ export {
   ACCESS,
   PERMISSION_LEVELS,
   ACCESS_LEVELS,
+  GENERAL_ACCESS,
+  GENERAL_ACCESS_LEVELS,
   type Note,
   type NoteWithOwner,
   type CreateNoteInput,
   type UpdateNoteInput,
   type PermissionLevel,
   type NoteAccessLevel,
+  type GeneralAccessLevel,
   type NotePermission,
   type ShareNoteInput,
-  type NoteShareLink,
-  type CreateShareLinkInput,
 } from './lib/note.types';
 
 export type {

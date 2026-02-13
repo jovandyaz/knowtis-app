@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, type Result } from 'neverthrow';
 
-import type { PermissionLevel } from '@knowtis/shared-types';
+import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
 
 import { UserId } from '../../../auth/domain';
 import {
@@ -14,7 +14,7 @@ import {
 
 export interface ShareNoteInput {
   readonly noteId: string;
-  readonly ownerId: string;
+  readonly userId: string;
   readonly targetUserId: string;
   readonly permission: PermissionLevel;
 }
@@ -33,13 +33,33 @@ export class ShareNoteHandler {
       return err(targetUserIdResult.error as NoteDomainError);
     }
 
+    const userIdResult = UserId.create(input.userId);
+    if (userIdResult.isErr()) {
+      return err(userIdResult.error as NoteDomainError);
+    }
+
     const note = await this.noteRepository.findById(input.noteId);
     if (!note) {
       return err(NoteErrors.noteNotFound(input.noteId));
     }
 
-    if (note.ownerId !== input.ownerId) {
-      return err(NoteErrors.ownerOnly('share note'));
+    const isOwner = note.ownerId === input.userId;
+    if (!isOwner) {
+      if (!note.editorsCanShare) {
+        return err(NoteErrors.ownerOnly('share note'));
+      }
+
+      const callerPermission = await this.noteRepository.findPermission(
+        input.noteId,
+        userIdResult.value
+      );
+
+      if (
+        !callerPermission ||
+        callerPermission.permission.value !== PERMISSION.EDITOR
+      ) {
+        return err(NoteErrors.permissionDenied());
+      }
     }
 
     const existing = await this.noteRepository.findPermission(

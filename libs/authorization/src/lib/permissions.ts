@@ -1,6 +1,6 @@
 import { definePermissions } from '@jovandyaz/permissions';
 
-import { PERMISSION } from '@knowtis/shared-types';
+import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
 import {
   SUBJECTS,
@@ -17,24 +17,14 @@ export function defineAbilityFor(
 ): AppAbility {
   return definePermissions<AppAbility>(
     (allow) => {
-      // Link-based sharing (anonymous + authenticated)
-      for (const link of context.shareLinks ?? []) {
-        if (link.permission === PERMISSION.EDITOR) {
-          allow('read', Note, { id: link.noteId });
-          allow('update', Note, { id: link.noteId });
-        } else if (link.permission === PERMISSION.VIEWER) {
-          allow('read', Note, { id: link.noteId });
-        }
-      }
-
       if (!user) {
-        allow('read', Note, { isPublic: true });
+        allow('read', Note, { generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK });
         return;
       }
 
       allow('manage', Note, { ownerId: user.id });
 
-      allow('read', Note, { isPublic: true });
+      allow('read', Note, { generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK });
 
       for (const shared of context.sharedNotes ?? []) {
         if (shared.permission === PERMISSION.EDITOR) {

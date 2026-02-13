@@ -15,6 +15,7 @@ export const COLLABORATION_EVENTS = {
   USER_JOINED: 'collaboration:user-joined',
   USER_LEFT: 'collaboration:user-left',
   AWARENESS_CHANGE: 'collaboration:awareness-change',
+  EDIT_DENIED: 'collaboration:edit-denied',
   ERROR: 'collaboration:error',
 } as const;
 
