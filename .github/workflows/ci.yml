@@ -11,13 +11,20 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint
+  ci:
+    name: CI
     runs-on: ubuntu-latest
+    outputs:
+      api_affected: ${{ steps.check-api.outputs.affected }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          filter: tree:0
+
+      - uses: nrwl/nx-set-shas@v4
+        with:
+          main-branch-name: main
 
       - uses: pnpm/action-setup@v3
         with:
@@ -31,87 +38,35 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run lint
-        run: pnpm lint
+      - name: Lint (affected)
+        run: npx nx affected -t lint
 
-  typecheck:
-    name: TypeCheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run typecheck
+      - name: Typecheck (global)
         run: pnpm typecheck
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Test (affected)
+        run: npx nx affected -t test -- --run
 
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 10
+      - name: Build (affected)
+        run: npx nx affected -t build --configuration=production
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run tests
-        run: pnpm test:run
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    needs: [lint, typecheck, test]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 10
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build API
-        run: npx nx build api --configuration=production
-
-      - name: Build Notes App
-        run: npx nx build notes --configuration=production
+      - name: Check if API is affected
+        id: check-api
+        run: |
+          if npx nx show projects --affected --type app | grep -q '^api$'; then
+            echo "affected=true" >> $GITHUB_OUTPUT
+          else
+            echo "affected=false" >> $GITHUB_OUTPUT
+          fi
 
   deploy:
     name: Deploy API to Railway
     runs-on: ubuntu-latest
-    needs: [build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [ci]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.ci.outputs.api_affected == 'true'
     container: ghcr.io/railwayapp/cli:latest
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}

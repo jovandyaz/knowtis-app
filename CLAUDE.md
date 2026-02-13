@@ -96,6 +96,33 @@ Scope constraints:
 - **scope:notes** - Can only depend on scope:shared or scope:notes
 - **scope:api** - Can only depend on scope:shared or scope:api
 
+## CI/CD Pipeline
+
+### GitHub Actions (`.github/workflows/ci.yml`)
+
+Pipeline uses **Nx affected** to optimize builds and deploys:
+
+1. **Single CI job**: `nx affected -t lint test build` — only impacted projects
+2. **Typecheck global**: `tsc --noEmit` on entire workspace
+3. **Conditional deploy**: Only deploys API to Railway if `api` is affected
+4. **SHA detection**: `nrwl/nx-set-shas@v4` auto-detects comparison commits
+
+### Vercel (Frontend)
+
+Auto-deploys on push to `main`, but uses `tools/vercel-ignore.sh notes` as Ignored Build Step to skip builds when `notes` is unaffected. Configured in Vercel Dashboard > Project Settings > Git > Ignored Build Step.
+
+### Railway (Backend)
+
+Deploy via `railway up` in CI, conditional on `api` being affected. The `watchPatterns` in `railway.toml` do NOT apply because the deploy is CI-driven, not via Railway's GitHub integration.
+
+### Testing affected locally
+
+```bash
+npx nx show projects --affected --base=main --head=HEAD        # See affected projects
+npx nx show projects --affected --type app --base=main --head=HEAD  # Apps only
+npx nx affected -t lint test build --base=main --head=HEAD      # Simulate CI
+```
+
 ## Code Conventions
 
 ### Naming
