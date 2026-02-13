@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
+
 import { UserId } from '../../../auth/domain';
 import {
   NOTE_REPOSITORY,
@@ -15,7 +17,7 @@ export interface GetNotesInput {
 }
 
 export type AccessibleNote = NoteEntity & {
-  accessLevel: 'owner' | 'editor' | 'viewer';
+  accessLevel: NoteAccessLevel;
 };
 
 @Injectable()
@@ -37,12 +39,14 @@ export class GetNotesHandler {
       input.search
     );
 
-    const accessibleNotes = results.map(({ note, permission }) => ({
-      ...note,
-      accessLevel: (note.ownerId === input.userId
-        ? 'owner'
-        : (permission ?? 'viewer')) as 'owner' | 'editor' | 'viewer',
-    }));
+    const accessibleNotes: AccessibleNote[] = results.map(
+      ({ note, permission }) => ({
+        ...note,
+        accessLevel: (note.ownerId === input.userId
+          ? ACCESS.OWNER
+          : (permission ?? ACCESS.VIEWER)) as NoteAccessLevel,
+      })
+    );
 
     return ok(accessibleNotes);
   }

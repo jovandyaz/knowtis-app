@@ -71,17 +71,11 @@ export class UpdateNoteHandler {
         'editor'
       );
       if (!canEdit) {
-        return err(
-          NoteErrors.permissionDenied(
-            'You do not have permission to edit this note'
-          )
-        );
+        return err(NoteErrors.editPermissionDenied());
       }
 
       if (input.isPublic !== undefined) {
-        return err(
-          NoteErrors.permissionDenied('Only owner can change public status')
-        );
+        return err(NoteErrors.ownerOnly('change public status'));
       }
 
       result = await this.noteRepository.update(input.noteId, {

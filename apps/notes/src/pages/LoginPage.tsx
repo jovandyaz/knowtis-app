@@ -2,6 +2,9 @@ import { useState } from 'react';
 
 import { Link, useNavigate } from '@tanstack/react-router';
 
+import { PublicRoute } from '@/components/auth';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+
 import { useLogin } from '@knowtis/auth';
 import {
   Button,
@@ -13,9 +16,6 @@ import {
   CardTitle,
   Input,
 } from '@knowtis/design-system';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
-
-import { PublicRoute } from '@/components/auth';
 
 export function LoginPage() {
   const login = useLogin();

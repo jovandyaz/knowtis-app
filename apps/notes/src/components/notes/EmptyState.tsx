@@ -1,6 +1,7 @@
-import { EmptyState as DSEmptyState } from '@knowtis/design-system';
 import { Search, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
+
+import { EmptyState as DSEmptyState } from '@knowtis/design-system';
 
 import { CreateNoteDialog } from './CreateNoteDialog';
 

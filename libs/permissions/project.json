@@ -1,0 +1,43 @@
+{
+  "name": "permissions",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/permissions/src",
+  "projectType": "library",
+  "release": {
+    "version": {
+      "manifestRootsToUpdate": ["dist/{projectRoot}"],
+      "currentVersionResolver": "git-tag",
+      "fallbackCurrentVersionResolver": "disk"
+    }
+  },
+  "tags": ["type:util", "scope:shared"],
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "outputPath": "dist/libs/permissions",
+        "main": "libs/permissions/src/index.ts",
+        "tsConfig": "libs/permissions/tsconfig.lib.json",
+        "assets": ["libs/permissions/*.md", "libs/permissions/LICENSE"],
+        "additionalEntryPoints": [
+          "libs/permissions/src/react.ts",
+          "libs/permissions/src/nestjs.ts"
+        ],
+        "generateExportsField": false
+      }
+    },
+    "nx-release-publish": {
+      "options": {
+        "packageRoot": "dist/{projectRoot}"
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "../../coverage/libs/permissions"
+      }
+    }
+  }
+}

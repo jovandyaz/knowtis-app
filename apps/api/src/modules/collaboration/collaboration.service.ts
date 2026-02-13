@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 
+import { PERMISSION } from '@knowtis/shared-types';
+
 import { UserId } from '../auth/domain';
 import { NOTE_REPOSITORY, type NoteRepository } from '../notes/domain';
 import type {
@@ -131,7 +133,11 @@ export class CollaborationService {
     if (userIdResult.isErr()) {
       return false;
     }
-    return this.notesRepository.hasAccess(noteId, userIdResult.value, 'editor');
+    return this.notesRepository.hasAccess(
+      noteId,
+      userIdResult.value,
+      PERMISSION.EDITOR
+    );
   }
 
   private schedulePersistence(room: CollaborationRoom): void {

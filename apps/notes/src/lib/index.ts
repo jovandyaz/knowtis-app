@@ -13,3 +13,5 @@ export {
 } from './collaboration.constants';
 export { COLLAB_CONFIG } from './collaboration.constants';
 export { stripHtmlTags, normalizeWhitespace, createPreview } from './text';
+export { canPerformNoteAction } from './note-permissions';
+export type { NoteAccessLevel, NoteAction } from './note-permissions';

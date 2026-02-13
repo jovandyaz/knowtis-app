@@ -1,0 +1,23 @@
+{
+  "name": "authorization",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/authorization/src",
+  "projectType": "library",
+  "tags": ["type:util", "scope:shared"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "libs/authorization",
+        "command": "eslint src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "libs/authorization",
+        "command": "vitest run"
+      }
+    }
+  }
+}

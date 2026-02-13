@@ -1,11 +1,11 @@
 import { useState } from 'react';
 
-import { useAuthUser } from '@knowtis/auth';
-import { Button } from '@knowtis/design-system';
+import { NAVIGATION_LINKS } from '@/config/navigation.config';
 import { Menu, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { NAVIGATION_LINKS } from '@/config/navigation.config';
+import { useAuthUser } from '@knowtis/auth';
+import { Button } from '@knowtis/design-system';
 
 import { NavigationLinks } from './NavigationLinks';
 import { SidebarBrand } from './SidebarBrand';

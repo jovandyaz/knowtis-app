@@ -1,8 +1,9 @@
 import { useNavigate } from '@tanstack/react-router';
 
+import { LogOut, User } from 'lucide-react';
+
 import { useLogout } from '@knowtis/auth';
 import { Button, ThemeToggle } from '@knowtis/design-system';
-import { LogOut, User } from 'lucide-react';
 
 /**
  * Sidebar user footer props interface

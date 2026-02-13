@@ -1,12 +1,12 @@
 import { useCallback, useState } from 'react';
 
-import { useNotes } from '@knowtis/data-access-notes';
-import { ErrorState, Input } from '@knowtis/design-system';
-import { useDebounce } from '@knowtis/shared-hooks';
+import { DEBOUNCE_DELAYS } from '@/lib';
 import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { DEBOUNCE_DELAYS } from '@/lib';
+import { useNotes } from '@knowtis/data-access-notes';
+import { ErrorState, Input } from '@knowtis/design-system';
+import { useDebounce } from '@knowtis/shared-hooks';
 
 import { CreateNoteDialog } from './CreateNoteDialog';
 import { DeleteNoteDialog } from './DeleteNoteDialog';

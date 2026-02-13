@@ -1,9 +1,9 @@
 import { memo } from 'react';
 
-import { Badge, cn } from '@knowtis/design-system';
+import type { CollaborativeUser } from '@/types';
 import { Users } from 'lucide-react';
 
-import type { CollaborativeUser } from '@/types';
+import { Badge, cn } from '@knowtis/design-system';
 
 /**
  * Props for the CollaborationIndicator component

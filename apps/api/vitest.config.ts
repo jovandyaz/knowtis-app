@@ -1,10 +1,11 @@
+import { nxViteTsPaths } from '@nx/vite/plugins/nx-tsconfig-paths.plugin';
 import swc from 'unplugin-swc';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  root: __dirname,
   test: {
     globals: true,
-    root: './',
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts'],
     coverage: {
@@ -21,9 +22,10 @@ export default defineConfig({
     passWithNoTests: true,
   },
   plugins: [
-    // SWC plugin for fast TypeScript compilation
+    nxViteTsPaths(),
     swc.vite({
       module: { type: 'es6' },
+      jsc: { target: 'es2022' },
     }),
   ],
 });

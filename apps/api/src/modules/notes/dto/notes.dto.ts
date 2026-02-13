@@ -8,10 +8,18 @@ import {
   MaxLength,
 } from 'class-validator';
 
+import {
+  NOTE_TITLE_MAX_LENGTH,
+  PERMISSION_LEVELS,
+  type PermissionLevel,
+} from '@knowtis/shared-types';
+
 export class CreateNoteDto {
   @IsString()
   @IsNotEmpty({ message: 'Title is required' })
-  @MaxLength(200, { message: 'Title must be at most 200 characters' })
+  @MaxLength(NOTE_TITLE_MAX_LENGTH, {
+    message: `Title must be at most ${NOTE_TITLE_MAX_LENGTH} characters`,
+  })
   title!: string;
 
   @IsString()
@@ -22,7 +30,9 @@ export class CreateNoteDto {
 export class UpdateNoteDto {
   @IsString()
   @IsOptional()
-  @MaxLength(200, { message: 'Title must be at most 200 characters' })
+  @MaxLength(NOTE_TITLE_MAX_LENGTH, {
+    message: `Title must be at most ${NOTE_TITLE_MAX_LENGTH} characters`,
+  })
   title?: string;
 
   @IsString()
@@ -39,11 +49,11 @@ export class ShareNoteDto {
   @IsNotEmpty({ message: 'User ID is required' })
   userId!: string;
 
-  @IsEnum(['viewer', 'editor'], {
+  @IsEnum(PERMISSION_LEVELS, {
     message: 'Permission must be either viewer or editor',
   })
   @IsNotEmpty({ message: 'Permission is required' })
-  permission!: 'viewer' | 'editor';
+  permission!: PermissionLevel;
 }
 
 export class NotesQueryDto {

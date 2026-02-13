@@ -15,9 +15,11 @@ import {
 } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 
+import { SUBJECTS } from '@knowtis/authorization';
 import type { RequestUser } from '@knowtis/shared-types';
 
 import { CurrentUser, JwtAuthGuard } from '../auth';
+import { PoliciesGuard, RequirePermission } from '../authorization';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -61,8 +63,11 @@ function unwrapOrThrow<T>(result: Result<T, NoteDomainError>): T {
   return result.value;
 }
 
+/**
+ * Notes REST API Controller
+ */
 @Controller('notes')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, PoliciesGuard)
 export class NotesController {
   constructor(
     private readonly createNoteHandler: CreateNoteHandler,
@@ -76,6 +81,7 @@ export class NotesController {
   ) {}
 
   @Get()
+  @RequirePermission('read', SUBJECTS.Note)
   async findAll(
     @CurrentUser() user: RequestUser,
     @Query() query: NotesQueryDto
@@ -88,6 +94,7 @@ export class NotesController {
   }
 
   @Get(':id')
+  @RequirePermission('read', SUBJECTS.Note)
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser
@@ -100,6 +107,7 @@ export class NotesController {
   }
 
   @Post()
+  @RequirePermission('create', SUBJECTS.Note)
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
     const result = await this.createNoteHandler.execute({
       title: dto.title,
@@ -110,6 +118,7 @@ export class NotesController {
   }
 
   @Patch(':id')
+  @RequirePermission('update', SUBJECTS.Note)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -126,6 +135,7 @@ export class NotesController {
   }
 
   @Delete(':id')
+  @RequirePermission('delete', SUBJECTS.Note)
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(
     @Param('id', ParseUUIDPipe) id: string,
@@ -139,6 +149,7 @@ export class NotesController {
   }
 
   @Post(':id/share')
+  @RequirePermission('share', SUBJECTS.Note)
   async share(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -154,6 +165,7 @@ export class NotesController {
   }
 
   @Delete(':id/share/:userId')
+  @RequirePermission('share', SUBJECTS.Note)
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeAccess(
     @Param('id', ParseUUIDPipe) id: string,
@@ -169,6 +181,7 @@ export class NotesController {
   }
 
   @Get(':id/collaborators')
+  @RequirePermission('read', SUBJECTS.Note)
   async getCollaborators(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser

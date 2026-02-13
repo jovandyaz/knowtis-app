@@ -7,6 +7,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { validateEnv } from '../config';
 import { DatabaseModule } from '../database';
 import { AuthModule } from '../modules/auth';
+import { AuthorizationModule } from '../modules/authorization';
 import { CollaborationModule } from '../modules/collaboration';
 import { FeatureFlagsModule } from '../modules/feature-flags';
 import { HealthModule } from '../modules/health';
@@ -31,6 +32,7 @@ import { AppService } from './app.service';
     DatabaseModule,
     FeatureFlagsModule,
     AuthModule,
+    AuthorizationModule,
     NotesModule,
     CollaborationModule,
     HealthModule,

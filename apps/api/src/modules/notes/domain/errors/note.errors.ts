@@ -44,6 +44,18 @@ export const NoteErrors = {
   permissionDenied: (message = 'Permission denied') =>
     createNoteError(NoteErrorCodes.PERMISSION_DENIED, message),
 
+  editPermissionDenied: () =>
+    createNoteError(
+      NoteErrorCodes.PERMISSION_DENIED,
+      'You do not have permission to edit this note'
+    ),
+
+  ownerOnly: (action: string) =>
+    createNoteError(
+      NoteErrorCodes.PERMISSION_DENIED,
+      `Only owner can ${action}`
+    ),
+
   internalError: (message: string) =>
     createNoteError(
       NoteErrorCodes.INTERNAL_ERROR,

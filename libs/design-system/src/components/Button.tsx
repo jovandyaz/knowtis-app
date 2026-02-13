@@ -1,6 +1,6 @@
-import { type ButtonHTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
-import { type VariantProps, cva } from 'class-variance-authority';
+import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../utils';
 

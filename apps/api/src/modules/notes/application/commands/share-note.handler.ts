@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, type Result } from 'neverthrow';
 
+import type { PermissionLevel } from '@knowtis/shared-types';
+
 import { UserId } from '../../../auth/domain';
 import {
   NOTE_REPOSITORY,
@@ -14,7 +16,7 @@ export interface ShareNoteInput {
   readonly noteId: string;
   readonly ownerId: string;
   readonly targetUserId: string;
-  readonly permission: 'viewer' | 'editor';
+  readonly permission: PermissionLevel;
 }
 
 @Injectable()
@@ -37,7 +39,7 @@ export class ShareNoteHandler {
     }
 
     if (note.ownerId !== input.ownerId) {
-      return err(NoteErrors.permissionDenied('Only owner can share note'));
+      return err(NoteErrors.ownerOnly('share note'));
     }
 
     const existing = await this.noteRepository.findPermission(

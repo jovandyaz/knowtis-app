@@ -12,7 +12,10 @@
       "@knowtis/shared-types": ["./libs/shared/types/src/index.ts"],
       "@knowtis/api-client": ["./libs/api-client/src/index.ts"],
       "@knowtis/data-access-notes": ["./libs/data-access/notes/src/index.ts"],
-      "@knowtis/auth": ["./libs/auth/src/index.ts"]
+      "@knowtis/auth": ["./libs/auth/src/index.ts"],
+      "@knowtis/authorization": ["./libs/authorization/src/index.ts"],
+      "@jovandyaz/permissions": ["./libs/permissions/src/index.ts"],
+      "@jovandyaz/permissions/react": ["./libs/permissions/src/react/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

@@ -1,15 +1,12 @@
-import { type HTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 
 import { Loader2 } from 'lucide-react';
 
 import { cn } from '../utils';
 
 export interface LoadingStateProps extends HTMLAttributes<HTMLDivElement> {
-  /** Loading message to display */
   message?: string;
-  /** Size of the spinner */
   size?: 'sm' | 'md' | 'lg';
-  /** Whether to take full viewport height */
   fullHeight?: boolean;
 }
 
@@ -19,10 +16,6 @@ const sizeClasses = {
   lg: 'h-12 w-12',
 } as const;
 
-/**
- * Loading state component with spinner and optional message
- * Provides consistent loading UI across the application
- */
 const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
   (
     {

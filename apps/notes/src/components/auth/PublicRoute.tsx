@@ -2,8 +2,9 @@ import type { ReactNode } from 'react';
 
 import { Navigate, useSearch } from '@tanstack/react-router';
 
-import { useAuthLoading, useIsAuthenticated } from '@knowtis/auth';
 import { Loader2 } from 'lucide-react';
+
+import { useAuthLoading, useIsAuthenticated } from '@knowtis/auth';
 
 interface PublicRouteProps {
   children: ReactNode;

@@ -1,13 +1,13 @@
 import { memo } from 'react';
 
-import { Button, cn } from '@knowtis/design-system';
-import type { Editor } from '@tiptap/react';
-import { motion } from 'motion/react';
-
 import {
   TOOLBAR_TOOLS,
   type ToolbarToolConfig,
 } from '@/components/editor/editor.config';
+import type { Editor } from '@tiptap/react';
+import { motion } from 'motion/react';
+
+import { Button, cn } from '@knowtis/design-system';
 
 /**
  * Props for the EditorToolbar component

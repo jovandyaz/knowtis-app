@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 
+import { AlertCircle } from 'lucide-react';
+
 import { Button } from '@knowtis/design-system';
 import { logger } from '@knowtis/shared-util';
-import { AlertCircle } from 'lucide-react';
 
 function AppErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (

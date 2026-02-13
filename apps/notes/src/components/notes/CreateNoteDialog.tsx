@@ -1,6 +1,8 @@
-import { type FormEvent, useState } from 'react';
+import { useState, type FormEvent } from 'react';
 
 import { useNavigate } from '@tanstack/react-router';
+
+import { Loader2, Plus } from 'lucide-react';
 
 import { useCreateNote } from '@knowtis/data-access-notes';
 import {
@@ -14,7 +16,6 @@ import {
   DialogTrigger,
   Input,
 } from '@knowtis/design-system';
-import { Loader2, Plus } from 'lucide-react';
 
 export function CreateNoteDialog() {
   const [open, setOpen] = useState<boolean>(false);

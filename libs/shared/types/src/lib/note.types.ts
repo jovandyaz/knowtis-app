@@ -1,6 +1,22 @@
-/**
- * Note entity types shared between frontend and backend
- */
+export const NOTE_TITLE_MAX_LENGTH = 200;
+
+export const PERMISSION = {
+  VIEWER: 'viewer',
+  EDITOR: 'editor',
+} as const;
+
+export const ACCESS = {
+  OWNER: 'owner',
+  ...PERMISSION,
+} as const;
+
+export const PERMISSION_LEVELS = [
+  PERMISSION.VIEWER,
+  PERMISSION.EDITOR,
+] as const;
+export type PermissionLevel = (typeof PERMISSION_LEVELS)[number];
+export const ACCESS_LEVELS = [ACCESS.OWNER, ...PERMISSION_LEVELS] as const;
+export type NoteAccessLevel = (typeof ACCESS_LEVELS)[number];
 
 export interface Note {
   id: string;
@@ -30,8 +46,6 @@ export interface UpdateNoteInput {
   content?: string;
   isPublic?: boolean;
 }
-
-export type PermissionLevel = 'viewer' | 'editor';
 
 export interface NotePermission {
   id: string;

@@ -2,7 +2,7 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NoteEntity, NoteWriteRepository } from '../../domain';
+import { NoteEntity, NoteErrorCodes, NoteWriteRepository } from '../../domain';
 import { NoteCreatedEvent } from '../../domain/events';
 import { CreateNoteHandler } from './create-note.handler';
 
@@ -55,7 +55,7 @@ describe('CreateNoteHandler', () => {
     expect(mockRepository.create).toHaveBeenCalledWith({
       title: input.title,
       content: input.content,
-      ownerId: input.ownerId,
+      ownerId: expect.objectContaining({ value: input.ownerId }),
     });
 
     expect(mockEventEmitter.emit).toHaveBeenCalledWith(
@@ -105,7 +105,10 @@ describe('CreateNoteHandler', () => {
       ownerId: 'user-123',
     };
 
-    const expectedError = { code: 'DB_ERROR', message: 'DB Error' };
+    const expectedError = {
+      code: NoteErrorCodes.INTERNAL_ERROR,
+      message: 'DB Error',
+    };
     vi.spyOn(mockRepository, 'create').mockResolvedValue(err(expectedError));
 
     const result = await handler.execute(input);

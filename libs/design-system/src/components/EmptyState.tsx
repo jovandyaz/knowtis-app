@@ -1,4 +1,4 @@
-import { type HTMLAttributes, type ReactNode, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import { FileText } from 'lucide-react';
 
@@ -6,27 +6,17 @@ import { cn } from '../utils';
 import { Button } from './Button';
 
 export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
-  /** Custom icon to display */
   icon?: ReactNode;
-  /** Empty state title */
   title?: string;
-  /** Empty state description */
   description?: string;
-  /** Primary action button */
   action?: {
     label: string;
     onClick: () => void;
   };
-  /** Whether to take full viewport height */
   fullHeight?: boolean;
-  /** Custom content rendered after the action button */
   children?: ReactNode;
 }
 
-/**
- * Empty state component for when no data is available
- * Provides consistent empty UI across the application
- */
 const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
   (
     {

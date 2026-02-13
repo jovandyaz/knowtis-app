@@ -2,7 +2,12 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NoteEntity, NoteRepository } from '../../domain';
+import {
+  NoteEntity,
+  NoteErrorCodes,
+  NoteErrors,
+  NoteRepository,
+} from '../../domain';
 import { NoteUpdatedEvent } from '../../domain/events';
 import { UpdateNoteHandler } from './update-note.handler';
 
@@ -105,7 +110,7 @@ describe('UpdateNoteHandler', () => {
     expect(result.isOk()).toBe(true);
     expect(mockRepository.hasAccess).toHaveBeenCalledWith(
       'note-1',
-      'editor-1',
+      expect.objectContaining({ value: 'editor-1' }),
       'editor'
     );
     expect(mockRepository.update).toHaveBeenCalledWith('note-1', {
@@ -127,7 +132,9 @@ describe('UpdateNoteHandler', () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.message).toBe('Only owner can change public status');
+      expect(result.error).toEqual(
+        NoteErrors.ownerOnly('change public status')
+      );
     }
     expect(mockRepository.update).not.toHaveBeenCalled();
   });
@@ -142,7 +149,7 @@ describe('UpdateNoteHandler', () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.code).toBe('NOTE_NOT_FOUND');
+      expect(result.error.code).toBe(NoteErrorCodes.NOTE_NOT_FOUND);
     }
   });
 
@@ -160,7 +167,7 @@ describe('UpdateNoteHandler', () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.code).toBe('PERMISSION_DENIED');
+      expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
     }
   });
 });

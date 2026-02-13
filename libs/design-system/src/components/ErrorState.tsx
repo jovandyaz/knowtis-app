@@ -1,4 +1,4 @@
-import { type HTMLAttributes, forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
@@ -6,22 +6,13 @@ import { cn } from '../utils';
 import { Button } from './Button';
 
 export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
-  /** Error title */
   title?: string;
-  /** Error message or description */
   message?: string;
-  /** Retry callback */
   onRetry?: () => void;
-  /** Retry button label */
   retryLabel?: string;
-  /** Whether to take full viewport height */
   fullHeight?: boolean;
 }
 
-/**
- * Error state component with icon, message, and optional retry action
- * Provides consistent error UI across the application
- */
 const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(
   (
     {

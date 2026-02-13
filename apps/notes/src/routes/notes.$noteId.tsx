@@ -1,10 +1,9 @@
-import { Suspense, lazy } from 'react';
+import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { Loader2 } from 'lucide-react';
-
 import { ProtectedRoute } from '@/components/auth';
+import { Loader2 } from 'lucide-react';
 
 const NoteEditorPage = lazy(() =>
   import('@/pages/NoteEditorPage').then((m) => ({ default: m.NoteEditorPage }))

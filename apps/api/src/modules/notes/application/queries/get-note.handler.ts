@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
+
 import { UserId } from '../../../auth/domain';
 import {
   NOTE_REPOSITORY,
@@ -16,7 +18,7 @@ export interface GetNoteInput {
 }
 
 export type NoteWithAccess = NoteEntity & {
-  accessLevel: 'owner' | 'editor' | 'viewer';
+  accessLevel: NoteAccessLevel;
 };
 
 @Injectable()
@@ -39,7 +41,7 @@ export class GetNoteHandler {
     }
 
     if (note.ownerId === input.userId) {
-      return ok({ ...note, accessLevel: 'owner' });
+      return ok({ ...note, accessLevel: ACCESS.OWNER });
     }
 
     const permission = await this.noteRepository.findPermission(
@@ -48,7 +50,9 @@ export class GetNoteHandler {
     );
 
     if (note.isPublic || permission) {
-      const accessLevel = permission ? permission.permission.value : 'viewer';
+      const accessLevel: NoteAccessLevel = permission
+        ? permission.permission.value
+        : ACCESS.VIEWER;
       return ok({ ...note, accessLevel });
     }
 

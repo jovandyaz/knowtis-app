@@ -3,9 +3,10 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { type NoteWithAccess, notesApi } from '@knowtis/api-client';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
 
 import { notesQueryKeys, useCreateNote, useNotes } from './notes.hooks';
 

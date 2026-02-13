@@ -1,9 +1,5 @@
 import { useEffect } from 'react';
 
-import { cn } from '@knowtis/design-system';
-import { logger } from '@knowtis/shared-util';
-import { EditorContent, useEditor } from '@tiptap/react';
-
 import {
   isWebSocketEnabled,
   useActiveCollaborators,
@@ -11,9 +7,15 @@ import {
   usePresenceBroadcast,
   useWebSocketCollaboration,
 } from '@/hooks';
+import { EditorContent, useEditor } from '@tiptap/react';
+
+import { cn } from '@knowtis/design-system';
+import { logger } from '@knowtis/shared-util';
 
 import { CollaborationIndicator } from './CollaborationIndicator';
+
 import './CollaborativeCursor.css';
+
 import type {
   CollaborativeEditorProps,
   InternalEditorProps,

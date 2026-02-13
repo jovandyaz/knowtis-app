@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 

@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { IndexeddbPersistence } from 'y-indexeddb';
-import { Awareness } from 'y-protocols/awareness';
-import * as Y from 'yjs';
-
-import { logger } from '@knowtis/shared-util';
-
 import { COLLAB_CONFIG, isInvalidStateError } from '@/lib';
 import { BROADCAST_MESSAGE_TYPES } from '@/lib/collaboration.constants';
 import type {
@@ -13,6 +7,11 @@ import type {
   CollaborativeUser,
   YjsContextValue,
 } from '@/types';
+import { IndexeddbPersistence } from 'y-indexeddb';
+import { Awareness } from 'y-protocols/awareness';
+import * as Y from 'yjs';
+
+import { logger } from '@knowtis/shared-util';
 
 import { YjsContext } from './YjsContext';
 import {

@@ -35,6 +35,8 @@
     "prepare": "[ -d .git ] && lefthook install || true"
   },
   "dependencies": {
+    "@casl/ability": "^6.8.0",
+    "@casl/react": "^5.0.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/config": "^4.0.2",
     "@nestjs/core": "^11.0.0",
@@ -142,7 +144,11 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "unplugin-swc": "^1.5.9",
+    "verdaccio": "^6.2.5",
     "vite": "^7.2.4",
     "vitest": "^4.0.15"
+  },
+  "nx": {
+    "includedScripts": []
   }
 }

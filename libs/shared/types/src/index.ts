@@ -5,14 +5,20 @@ export type {
   UpdateUserInput,
 } from './lib/user.types';
 
-export type {
-  Note,
-  NoteWithOwner,
-  CreateNoteInput,
-  UpdateNoteInput,
-  PermissionLevel,
-  NotePermission,
-  ShareNoteInput,
+export {
+  NOTE_TITLE_MAX_LENGTH,
+  PERMISSION,
+  ACCESS,
+  PERMISSION_LEVELS,
+  ACCESS_LEVELS,
+  type Note,
+  type NoteWithOwner,
+  type CreateNoteInput,
+  type UpdateNoteInput,
+  type PermissionLevel,
+  type NoteAccessLevel,
+  type NotePermission,
+  type ShareNoteInput,
 } from './lib/note.types';
 
 export type {

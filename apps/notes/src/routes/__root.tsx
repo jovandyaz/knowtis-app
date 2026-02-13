@@ -3,15 +3,15 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
-import { Outlet, createRootRoute } from '@tanstack/react-router';
+import { createRootRoute, Outlet } from '@tanstack/react-router';
+
+import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { Layout } from '@/components/layout/Layout';
+import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { useAuthStore } from '@knowtis/auth';
 import { Toaster } from '@knowtis/design-system';
-
-import { AppErrorBoundary } from '@/components/AppErrorBoundary';
-import { Layout } from '@/components/layout/Layout';
-import { ThemeProvider, YjsProvider } from '@/providers';
 
 function handleAuthFailure(): void {
   useAuthStore.getState().logout();
@@ -50,11 +50,13 @@ function RootComponent() {
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <YjsProvider>
-            <Layout>
-              <Outlet />
-            </Layout>
-          </YjsProvider>
+          <AbilityProvider>
+            <YjsProvider>
+              <Layout>
+                <Outlet />
+              </Layout>
+            </YjsProvider>
+          </AbilityProvider>
           <Toaster />
         </ThemeProvider>
       </QueryClientProvider>

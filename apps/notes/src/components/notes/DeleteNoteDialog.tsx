@@ -1,3 +1,5 @@
+import { AlertTriangle, Loader2 } from 'lucide-react';
+
 import { useDeleteNote } from '@knowtis/data-access-notes';
 import {
   Button,
@@ -8,7 +10,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@knowtis/design-system';
-import { AlertTriangle, Loader2 } from 'lucide-react';
 
 /**
  * Delete note dialog props interface

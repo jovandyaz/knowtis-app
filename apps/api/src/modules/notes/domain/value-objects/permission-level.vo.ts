@@ -1,14 +1,20 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import {
+  PERMISSION,
+  PERMISSION_LEVELS,
+  type PermissionLevel as PermissionType,
+} from '@knowtis/shared-types';
+
 import { NoteErrors, type NoteDomainError } from '../errors';
 
-export type PermissionType = 'viewer' | 'editor';
+export type { PermissionType };
 
 export class PermissionLevel {
   private constructor(public readonly value: PermissionType) {}
 
   static create(level: string): Result<PermissionLevel, NoteDomainError> {
-    if (level !== 'viewer' && level !== 'editor') {
+    if (!PERMISSION_LEVELS.includes(level as PermissionType)) {
       return err(NoteErrors.invalidPermission());
     }
 
@@ -16,6 +22,6 @@ export class PermissionLevel {
   }
 
   isEditor(): boolean {
-    return this.value === 'editor';
+    return this.value === PERMISSION.EDITOR;
   }
 }

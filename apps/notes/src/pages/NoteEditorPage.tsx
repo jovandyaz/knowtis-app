@@ -2,6 +2,10 @@ import { useCallback, useRef, useState } from 'react';
 
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
+import { CollaborativeEditor } from '@/components/editor';
+import { DEBOUNCE_DELAYS, formatNoteDateFull } from '@/lib';
+import { ArrowLeft, Check, Loader2 } from 'lucide-react';
+
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
   Button,
@@ -10,10 +14,6 @@ import {
   LoadingState,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
-import { ArrowLeft, Check, Loader2 } from 'lucide-react';
-
-import { CollaborativeEditor } from '@/components/editor';
-import { DEBOUNCE_DELAYS, formatNoteDateFull } from '@/lib';
 
 interface NoteEditorProps {
   noteId: string;

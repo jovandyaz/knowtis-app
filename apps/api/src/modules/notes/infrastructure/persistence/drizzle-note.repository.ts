@@ -3,6 +3,11 @@ import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
+  PERMISSION,
+  type PermissionLevel as PermissionLevelType,
+} from '@knowtis/shared-types';
+
+import {
   DATABASE_CONNECTION,
   notePermissions,
   notes,
@@ -349,7 +354,7 @@ export class DrizzleNoteRepository
       const newPerm: NewNotePermission = {
         noteId: data.noteId,
         userId: data.userId.value,
-        permission: data.permission as 'viewer' | 'editor',
+        permission: data.permission as PermissionLevelType,
       };
 
       const result = await this.db
@@ -388,7 +393,7 @@ export class DrizzleNoteRepository
 
       const result = await this.db
         .update(notePermissions)
-        .set({ permission: permission as 'viewer' | 'editor' })
+        .set({ permission: permission as PermissionLevelType })
         .where(
           and(
             eq(notePermissions.noteId, noteId),
@@ -446,7 +451,7 @@ export class DrizzleNoteRepository
   async hasAccess(
     noteId: string,
     userId: UserId,
-    requiredPermission?: 'viewer' | 'editor'
+    requiredPermission?: PermissionLevelType
   ): Promise<boolean> {
     const note = await this.findById(noteId);
     if (!note) {
@@ -466,7 +471,7 @@ export class DrizzleNoteRepository
       return false;
     }
 
-    if (requiredPermission === 'editor') {
+    if (requiredPermission === PERMISSION.EDITOR) {
       return permission.permission.isEditor();
     }
 
