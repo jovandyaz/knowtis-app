@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { Loader2 } from 'lucide-react';
+import { LoadingState } from '@knowtis/design-system';
 
 const RegisterPage = lazy(() =>
   import('@/pages/RegisterPage').then((m) => ({ default: m.RegisterPage }))
@@ -14,16 +14,8 @@ export const Route = createFileRoute('/register')({
 
 function RegisterPageWrapper() {
   return (
-    <Suspense fallback={<LoadingFallback />}>
+    <Suspense fallback={<LoadingState message="" className="min-h-screen" />}>
       <RegisterPage />
     </Suspense>
-  );
-}
-
-function LoadingFallback() {
-  return (
-    <div className="flex min-h-screen items-center justify-center">
-      <Loader2 className="h-8 w-8 animate-spin text-(--primary)" />
-    </div>
   );
 }

@@ -1,4 +1,9 @@
-import { Logger, ValidationPipe, VersioningType } from '@nestjs/common';
+import {
+  BadRequestException,
+  Logger,
+  ValidationPipe,
+  VersioningType,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -55,6 +60,16 @@ async function bootstrap() {
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
+      },
+      exceptionFactory: (errors) => {
+        const fieldErrors = errors.map((err) => ({
+          field: err.property,
+          message: Object.values(err.constraints ?? {}).join('. '),
+        }));
+        return new BadRequestException({
+          message: 'Validation failed',
+          errors: fieldErrors,
+        });
       },
     })
   );

@@ -1,8 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
+import { Request } from 'express';
 import { Strategy } from 'passport-local';
 
-import { LoginUserHandler } from '../application';
+import { LoginUserHandler } from '../application/handlers/login-user.handler';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
@@ -10,13 +11,16 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
     super({
       usernameField: 'email',
       passwordField: 'password',
+      passReqToCallback: true,
     });
   }
 
-  async validate(email: string, password: string) {
+  async validate(req: Request, email: string, password: string) {
     const result = await this.loginHandler.validateCredentials({
       email,
       password,
+      ipAddress: req.ip,
+      userAgent: req.headers['user-agent'],
     });
 
     if (result.isErr()) {

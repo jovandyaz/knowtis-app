@@ -25,3 +25,9 @@ export { ErrorState, type ErrorStateProps } from './ErrorState';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Switch, type SwitchProps } from './Switch';
 export { Toaster } from './Toaster';
+export { PasswordInput, type PasswordInputProps } from './PasswordInput';
+export {
+  PasswordStrength,
+  type PasswordStrengthProps,
+} from './PasswordStrength';
+export { RateLimitAlert, type RateLimitAlertProps } from './RateLimitAlert';

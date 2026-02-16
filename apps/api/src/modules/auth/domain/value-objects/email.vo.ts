@@ -1,6 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 
-import { AuthErrors, type AuthDomainError } from '../errors';
+import { AuthErrors, type AuthDomainError } from '../errors/auth.errors';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -12,7 +12,7 @@ export class Email {
       return err(AuthErrors.invalidEmail(email ?? ''));
     }
 
-    return ok(new Email(email.toLowerCase().trim()));
+    return ok(new Email(email.toLowerCase()));
   }
 
   static fromTrusted(email: string): Email {

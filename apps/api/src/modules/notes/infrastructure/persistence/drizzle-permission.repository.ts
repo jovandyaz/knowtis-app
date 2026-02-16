@@ -16,7 +16,7 @@ import {
   type Database,
   type NewNotePermission,
 } from '../../../../database';
-import type { UserId } from '../../../auth/domain';
+import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NoteErrors,
   PermissionLevel,

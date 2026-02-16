@@ -7,7 +7,7 @@ import {
   type NoteAccessLevel,
 } from '@knowtis/shared-types';
 
-import { UserId } from '../../../auth/domain';
+import { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NOTE_REPOSITORY,
   NoteErrors,

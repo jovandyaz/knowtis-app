@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { tokenStorage } from '@knowtis/api-client';
+import { toast } from 'sonner';
+
+import { ApiClientError } from '@knowtis/api-client';
 import type {
   AuthResponse,
   LoginInput,
@@ -17,40 +19,6 @@ export const authQueryKeys = {
   all: ['auth'] as const,
   profile: () => [...authQueryKeys.all, 'profile'] as const,
 } as const;
-
-export function useAuthInitialization() {
-  const setUser = useAuthStore((state) => state.setUser);
-  const setLoading = useAuthStore((state) => state.setLoading);
-  const logout = useAuthStore((state) => state.logout);
-
-  useEffect(() => {
-    const initializeAuth = async () => {
-      const { hasRefreshToken } = tokenStorage.initialize();
-
-      if (!hasRefreshToken) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        await authApi.refreshToken();
-
-        const user = await authApi.getProfile();
-
-        setUser({
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          avatarUrl: user.avatarUrl,
-        });
-      } catch {
-        logout();
-      }
-    };
-
-    initializeAuth();
-  }, [setUser, setLoading, logout]);
-}
 
 export function useProfile() {
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
@@ -83,6 +51,12 @@ export function useLogin() {
     onSuccess: (response: AuthResponse) => {
       handleAuthSuccess(response);
       queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
+      toast.success('Welcome back!');
+    },
+    onError: (error) => {
+      if (ApiClientError.isApiClientError(error) && error.status === 429) {
+        toast.error('Too many attempts. Please try again later.');
+      }
     },
   });
 }
@@ -96,6 +70,12 @@ export function useRegister() {
     onSuccess: (response: AuthResponse) => {
       handleAuthSuccess(response);
       queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
+      toast.success('Account created successfully!');
+    },
+    onError: (error) => {
+      if (ApiClientError.isApiClientError(error) && error.status === 429) {
+        toast.error('Too many attempts. Please try again later.');
+      }
     },
   });
 }
@@ -105,12 +85,84 @@ export function useLogout() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async () => {
-      authApi.logout();
-    },
+    mutationFn: () => authApi.logout(),
     onSuccess: () => {
       logout();
       queryClient.clear();
+      toast.success('Signed out successfully');
     },
   });
+}
+
+export function useForgotPassword() {
+  return useMutation({
+    mutationFn: (email: string) => authApi.forgotPassword(email),
+    onSuccess: () => {
+      toast.success('If the email exists, a reset link will be sent.');
+    },
+    onError: (error) => {
+      if (ApiClientError.isApiClientError(error) && error.status === 429) {
+        toast.error('Too many attempts. Please try again later.');
+      }
+    },
+  });
+}
+
+export function useResetPassword() {
+  return useMutation({
+    mutationFn: ({
+      token,
+      newPassword,
+    }: {
+      token: string;
+      newPassword: string;
+    }) => authApi.resetPassword(token, newPassword),
+    onSuccess: () => {
+      toast.success('Password has been reset successfully!');
+    },
+    onError: (error) => {
+      if (ApiClientError.isApiClientError(error) && error.status === 429) {
+        toast.error('Too many attempts. Please try again later.');
+      }
+    },
+  });
+}
+
+export function useVerifyEmail() {
+  return useMutation({
+    mutationFn: (token: string) => authApi.verifyEmail(token),
+    onSuccess: () => {
+      toast.success('Email verified successfully!');
+    },
+  });
+}
+
+export function useResendVerification() {
+  return useMutation({
+    mutationFn: () => authApi.resendVerification(),
+    onSuccess: () => {
+      toast.success('Verification email sent. Please check your inbox.');
+    },
+    onError: (error) => {
+      if (ApiClientError.isApiClientError(error) && error.status === 429) {
+        toast.error('Too many attempts. Please try again later.');
+      }
+    },
+  });
+}
+
+export function useRateLimitState() {
+  const [rateLimited, setRateLimited] = useState(false);
+
+  const checkRateLimit = (error: unknown): boolean => {
+    if (ApiClientError.isApiClientError(error) && error.status === 429) {
+      setRateLimited(true);
+      return true;
+    }
+    return false;
+  };
+
+  const resetRateLimit = () => setRateLimited(false);
+
+  return { rateLimited, checkRateLimit, resetRateLimit };
 }

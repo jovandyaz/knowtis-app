@@ -10,8 +10,11 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { Route as rootRoute } from './routes/__root';
 import { Route as AuthenticatedImport } from './routes/_authenticated';
+import { Route as ForgotPasswordImport } from './routes/forgot-password';
 import { Route as LoginImport } from './routes/login';
 import { Route as RegisterImport } from './routes/register';
+import { Route as ResetPasswordImport } from './routes/reset-password';
+import { Route as VerifyEmailImport } from './routes/verify-email';
 import { Route as STokenImport } from './routes/s.$token';
 import { Route as AuthenticatedIndexImport } from './routes/_authenticated/index';
 import { Route as AuthenticatedNotesNoteIdImport } from './routes/_authenticated/notes.$noteId';
@@ -25,6 +28,12 @@ const AuthenticatedRoute = AuthenticatedImport.update({
   getParentRoute: () => rootRoute,
 } as any);
 
+const ForgotPasswordRoute = ForgotPasswordImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRoute,
+} as any);
+
 const LoginRoute = LoginImport.update({
   id: '/login',
   path: '/login',
@@ -34,6 +43,18 @@ const LoginRoute = LoginImport.update({
 const RegisterRoute = RegisterImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRoute,
+} as any);
+
+const ResetPasswordRoute = ResetPasswordImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRoute,
+} as any);
+
+const VerifyEmailRoute = VerifyEmailImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
   getParentRoute: () => rootRoute,
 } as any);
 
@@ -66,6 +87,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedImport;
       parentRoute: typeof rootRoute;
     };
+    '/forgot-password': {
+      id: '/forgot-password';
+      path: '/forgot-password';
+      fullPath: '/forgot-password';
+      preLoaderRoute: typeof ForgotPasswordImport;
+      parentRoute: typeof rootRoute;
+    };
     '/login': {
       id: '/login';
       path: '/login';
@@ -78,6 +106,20 @@ declare module '@tanstack/react-router' {
       path: '/register';
       fullPath: '/register';
       preLoaderRoute: typeof RegisterImport;
+      parentRoute: typeof rootRoute;
+    };
+    '/reset-password': {
+      id: '/reset-password';
+      path: '/reset-password';
+      fullPath: '/reset-password';
+      preLoaderRoute: typeof ResetPasswordImport;
+      parentRoute: typeof rootRoute;
+    };
+    '/verify-email': {
+      id: '/verify-email';
+      path: '/verify-email';
+      fullPath: '/verify-email';
+      preLoaderRoute: typeof VerifyEmailImport;
       parentRoute: typeof rootRoute;
     };
     '/s/$token': {
@@ -108,16 +150,22 @@ declare module '@tanstack/react-router' {
 
 export interface FileRoutesByFullPath {
   '': typeof AuthenticatedRoute;
+  '/forgot-password': typeof ForgotPasswordRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
+  '/reset-password': typeof ResetPasswordRoute;
+  '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AuthenticatedIndexRoute;
   '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRoutesByTo {
+  '/forgot-password': typeof ForgotPasswordRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
+  '/reset-password': typeof ResetPasswordRoute;
+  '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AuthenticatedIndexRoute;
   '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
@@ -126,8 +174,11 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute;
   '/_authenticated': typeof AuthenticatedRoute;
+  '/forgot-password': typeof ForgotPasswordRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
+  '/reset-password': typeof ResetPasswordRoute;
+  '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/_authenticated/': typeof AuthenticatedIndexRoute;
   '/_authenticated/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
@@ -135,10 +186,10 @@ export interface FileRoutesById {
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '' | '/login' | '/register' | '/s/$token' | '/' | '/notes/$noteId';
+  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes/$noteId';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/login' | '/register' | '/s/$token' | '/' | '/notes/$noteId';
-  id: '__root__' | '/_authenticated' | '/login' | '/register' | '/s/$token' | '/_authenticated/' | '/_authenticated/notes/$noteId';
+  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes/$noteId';
+  id: '__root__' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_authenticated/' | '/_authenticated/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
@@ -156,15 +207,21 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(Authe
 
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
+  ForgotPasswordRoute: typeof ForgotPasswordRoute;
   LoginRoute: typeof LoginRoute;
   RegisterRoute: typeof RegisterRoute;
+  ResetPasswordRoute: typeof ResetPasswordRoute;
+  VerifyEmailRoute: typeof VerifyEmailRoute;
   STokenRoute: typeof STokenRoute;
 }
 
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   STokenRoute: STokenRoute,
 };
 
@@ -179,8 +236,11 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/_authenticated",
+        "/forgot-password",
         "/login",
         "/register",
+        "/reset-password",
+        "/verify-email",
         "/s/$token"
       ]
     },
@@ -191,11 +251,20 @@ export const routeTree = rootRoute
         "/_authenticated/notes/$noteId"
       ]
     },
+    "/forgot-password": {
+      "filePath": "forgot-password.tsx"
+    },
     "/login": {
       "filePath": "login.tsx"
     },
     "/register": {
       "filePath": "register.tsx"
+    },
+    "/reset-password": {
+      "filePath": "reset-password.tsx"
+    },
+    "/verify-email": {
+      "filePath": "verify-email.tsx"
     },
     "/s/$token": {
       "filePath": "s.$token.tsx"

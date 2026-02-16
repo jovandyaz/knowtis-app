@@ -4,14 +4,15 @@ import { err, ok, type Result } from 'neverthrow';
 import { UsersService } from '../../../users';
 import {
   AuthErrors,
-  USER_REPOSITORY,
   type AuthDomainError,
-  type CreateUserData,
-  type Email,
-  type UserEntity,
-  type UserId,
-  type UserRepository,
-} from '../../domain';
+} from '../../domain/errors/auth.errors';
+import type {
+  CreateUserData,
+  UserEntity,
+  UserRepository,
+} from '../../domain/ports/user.repository';
+import type { Email } from '../../domain/value-objects/email.vo';
+import type { UserId } from '../../domain/value-objects/user-id.vo';
 
 @Injectable()
 export class DrizzleUserRepository implements UserRepository {
@@ -58,6 +59,37 @@ export class DrizzleUserRepository implements UserRepository {
     }
   }
 
+  async updatePasswordHash(
+    userId: UserId,
+    passwordHash: string
+  ): Promise<Result<void, AuthDomainError>> {
+    try {
+      await this.usersService.updatePasswordHash(userId.value, passwordHash);
+      return ok(undefined);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to update password hash for user ${userId.value}: ${message}`
+      );
+      return err(AuthErrors.internalError(message));
+    }
+  }
+
+  async markEmailVerified(
+    userId: UserId
+  ): Promise<Result<void, AuthDomainError>> {
+    try {
+      await this.usersService.markEmailVerified(userId.value);
+      return ok(undefined);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to mark email verified for user ${userId.value}: ${message}`
+      );
+      return err(AuthErrors.internalError(message));
+    }
+  }
+
   async emailExists(email: Email): Promise<boolean> {
     const user = await this.usersService.findByEmail(email.value);
     return user !== null;
@@ -69,6 +101,7 @@ export class DrizzleUserRepository implements UserRepository {
     name: string;
     avatarUrl: string | null;
     passwordHash: string | null;
+    emailVerifiedAt: Date | null;
     createdAt: Date;
     updatedAt: Date;
   }): UserEntity {
@@ -77,11 +110,10 @@ export class DrizzleUserRepository implements UserRepository {
       email: user.email,
       name: user.name,
       avatarUrl: user.avatarUrl,
-      passwordHash: user.passwordHash ?? '',
+      passwordHash: user.passwordHash,
+      emailVerifiedAt: user.emailVerifiedAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
   }
 }
-
-export { USER_REPOSITORY };

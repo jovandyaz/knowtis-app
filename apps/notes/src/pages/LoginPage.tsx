@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { Loader2 } from 'lucide-react';
 
-import { useLogin } from '@knowtis/auth';
+import { ApiClientError } from '@knowtis/api-client';
+import type { LoginFormData } from '@knowtis/auth';
+import { loginSchema, useLogin, useRateLimitState } from '@knowtis/auth';
 import {
   Button,
   Card,
@@ -15,29 +18,55 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  PasswordInput,
+  RateLimitAlert,
 } from '@knowtis/design-system';
 
 export function LoginPage() {
   const login = useLogin();
   const navigate = useNavigate();
+  const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    setFocus,
+    formState: { errors },
+  } = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: '',
+      password: '',
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    login.mutate(
-      { email, password },
-      {
-        onSuccess: () => {
-          navigate({ to: '/' });
-        },
-      }
-    );
+  const onSubmit = (data: LoginFormData) => {
+    resetRateLimit();
+    login.mutate(data, {
+      onSuccess: () => {
+        navigate({ to: '/' });
+      },
+      onError: (error) => {
+        if (checkRateLimit(error)) {
+          return;
+        }
+
+        if (ApiClientError.isApiClientError(error) && error.errors?.length) {
+          const fields = error.errors.map(
+            (e) => e.field as keyof LoginFormData
+          );
+          for (const fieldError of error.errors) {
+            setError(fieldError.field as keyof LoginFormData, {
+              type: 'server',
+              message: fieldError.message,
+            });
+          }
+          setFocus(fields[0]);
+        }
+      },
+    });
   };
-
-  const isDisabled = login.isPending || !email || !password;
 
   return (
     <PublicRoute>
@@ -52,15 +81,26 @@ export function LoginPage() {
             </CardDescription>
           </CardHeader>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <CardContent className="space-y-4">
-              {login.isError && (
-                <div className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)">
-                  {login.error instanceof Error
-                    ? login.error.message
-                    : 'Invalid email or password'}
-                </div>
-              )}
+              <RateLimitAlert visible={rateLimited} />
+
+              {login.isError &&
+                !rateLimited &&
+                !(
+                  ApiClientError.isApiClientError(login.error) &&
+                  login.error.errors?.length
+                ) && (
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
+                  >
+                    {login.error instanceof Error
+                      ? login.error.message
+                      : 'Invalid email or password'}
+                  </div>
+                )}
 
               <div className="space-y-2">
                 <label
@@ -73,11 +113,20 @@ export function LoginPage() {
                   id="email"
                   type="email"
                   placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
-                  required
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'email-error' : undefined}
+                  {...register('email')}
                 />
+                {errors.email && (
+                  <p
+                    id="email-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
+                  >
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -87,40 +136,42 @@ export function LoginPage() {
                 >
                   Password
                 </label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="current-password"
-                    required
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 text-(--muted-foreground) hover:text-(--foreground)"
-                    tabIndex={-1}
-                    aria-label={
-                      showPassword ? 'Hide password' : 'Show password'
-                    }
+                <PasswordInput
+                  id="password"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={
+                    errors.password ? 'password-error' : undefined
+                  }
+                  {...register('password')}
+                />
+                {errors.password && (
+                  <p
+                    id="password-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
+                    {errors.password.message}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
+                >
+                  Forgot password?
+                </Link>
               </div>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isDisabled}>
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={login.isPending}
+              >
                 {login.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />

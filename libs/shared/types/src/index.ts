@@ -24,24 +24,17 @@ export {
   type ShareNoteInput,
 } from './lib/note.types';
 
-export type {
-  LoginInput,
-  RegisterInput,
-  AuthTokens,
-  AuthResponse,
-  RefreshTokenInput,
-  OAuthProvider,
-  JwtUserPayload,
-  RequestUser,
+export {
+  PASSWORD_REQUIREMENTS,
+  getPasswordChecks,
+  type LoginInput,
+  type RegisterInput,
+  type AuthTokens,
+  type AuthResponse,
+  type RequestUser,
+  type PasswordRequirements,
+  type PasswordCheck,
 } from './lib/auth.types';
-
-export type {
-  ApiError,
-  PaginationMeta,
-  PaginatedResponse,
-  PaginationQuery,
-  ApiSuccessResponse,
-} from './lib/api.types';
 
 export {
   COLLABORATION_EVENTS,

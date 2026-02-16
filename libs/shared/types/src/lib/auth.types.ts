@@ -28,27 +28,6 @@ export interface AuthResponse {
   tokens: AuthTokens;
 }
 
-export interface RefreshTokenInput {
-  refreshToken: string;
-}
-
-export type OAuthProvider = 'google' | 'github';
-
-/**
- * JWT payload structure for authenticated users
- * Used by both frontend and backend for type-safe token handling
- */
-export interface JwtUserPayload {
-  /** User ID (subject) */
-  sub: string;
-  /** User email */
-  email: string;
-  /** Token issued at timestamp */
-  iat?: number;
-  /** Token expiration timestamp */
-  exp?: number;
-}
-
 /**
  * User object attached to requests after JWT validation
  * Used by controllers to access the authenticated user's information
@@ -58,4 +37,61 @@ export interface RequestUser {
   email: string;
   name: string;
   avatarUrl?: string | null;
+}
+
+/**
+ * Password complexity requirements shared between frontend and backend.
+ * Frontend can use these to show validation hints before submission.
+ */
+export interface PasswordRequirements {
+  minLength: number;
+  requireUppercase: boolean;
+  requireNumber: boolean;
+  requireSpecialChar: boolean;
+}
+
+export const PASSWORD_REQUIREMENTS: PasswordRequirements = {
+  minLength: 8,
+  requireUppercase: true,
+  requireNumber: true,
+  requireSpecialChar: true,
+};
+
+export interface PasswordCheck {
+  readonly label: string;
+  readonly test: (password: string) => boolean;
+}
+
+const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
+
+export function getPasswordChecks(): PasswordCheck[] {
+  const checks: PasswordCheck[] = [
+    {
+      label: `At least ${PASSWORD_REQUIREMENTS.minLength} characters`,
+      test: (p) => p.length >= PASSWORD_REQUIREMENTS.minLength,
+    },
+  ];
+
+  if (PASSWORD_REQUIREMENTS.requireUppercase) {
+    checks.push({
+      label: 'Contains uppercase letter',
+      test: (p) => /[A-Z]/.test(p),
+    });
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireNumber) {
+    checks.push({
+      label: 'Contains number',
+      test: (p) => /[0-9]/.test(p),
+    });
+  }
+
+  if (PASSWORD_REQUIREMENTS.requireSpecialChar) {
+    checks.push({
+      label: 'Contains special character',
+      test: (p) => SPECIAL_CHAR_REGEX.test(p),
+    });
+  }
+
+  return checks;
 }

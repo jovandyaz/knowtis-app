@@ -1,6 +1,6 @@
 import type { Result } from 'neverthrow';
 
-import type { AuthDomainError } from '../errors';
+import type { AuthDomainError } from '../errors/auth.errors';
 
 export interface PasswordHasher {
   hash(password: string): Promise<Result<string, AuthDomainError>>;

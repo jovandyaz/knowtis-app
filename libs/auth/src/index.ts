@@ -1,3 +1,2 @@
+export * from './core';
 export * from './react';
-
-export { authApi } from './api';

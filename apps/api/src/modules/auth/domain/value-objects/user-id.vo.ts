@@ -1,6 +1,6 @@
 import { err, ok, type Result } from 'neverthrow';
 
-import { AuthErrors, type AuthDomainError } from '../errors';
+import { AuthErrors, type AuthDomainError } from '../errors/auth.errors';
 
 export class UserId {
   private constructor(public readonly value: string) {}

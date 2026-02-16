@@ -40,12 +40,10 @@ export class ApiClientError extends Error {
 }
 
 type TokenRefreshCallback = () => Promise<string | null>;
-type AuthFailureCallback = () => void;
 
 export class HttpClient {
   private config: ApiClientConfig;
   private refreshTokenCallback?: TokenRefreshCallback;
-  private authFailureCallback?: AuthFailureCallback;
   private isRefreshing = false;
   private refreshPromise: Promise<string | null> | null = null;
 
@@ -57,19 +55,8 @@ export class HttpClient {
     this.refreshTokenCallback = callback;
   }
 
-  setAuthFailureCallback(callback: AuthFailureCallback): void {
-    this.authFailureCallback = callback;
-  }
-
-  isAuthenticated(): boolean {
-    return tokenStorage.hasTokens();
-  }
-
   private handleAuthFailure(): void {
     tokenStorage.clearTokens();
-    if (this.authFailureCallback) {
-      this.authFailureCallback();
-    }
   }
 
   async request<T>(
@@ -127,11 +114,22 @@ export class HttpClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
+
+        const message = Array.isArray(errorData.message)
+          ? errorData.message.join('. ')
+          : errorData.message ||
+            `Request failed with status ${response.status}`;
+
+        const fieldErrors: FieldError[] | undefined =
+          Array.isArray(errorData.errors) && errorData.errors.length > 0
+            ? errorData.errors
+            : undefined;
+
         throw new ApiClientError(
-          errorData.message || `Request failed with status ${response.status}`,
+          message,
           response.status,
           errorData.code,
-          errorData.errors
+          fieldErrors
         );
       }
 

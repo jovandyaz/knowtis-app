@@ -8,10 +8,16 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
+interface FieldError {
+  field: string;
+  message: string;
+}
+
 interface ErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
+  errors?: FieldError[];
   timestamp: string;
   path: string;
 }
@@ -28,6 +34,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
+    let errors: FieldError[] | undefined;
 
     if (exception instanceof HttpException) {
       status = exception.getStatus();
@@ -38,6 +45,10 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = (responseObj['message'] as string | string[]) || message;
         error =
           (responseObj['error'] as string) || this.getDefaultErrorName(status);
+
+        if (Array.isArray(responseObj['errors'])) {
+          errors = responseObj['errors'] as FieldError[];
+        }
       } else {
         message = exceptionResponse as string;
         error = this.getDefaultErrorName(status);
@@ -58,6 +69,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
+      ...(errors && { errors }),
       timestamp: new Date().toISOString(),
       path: request.url,
     };

@@ -1,20 +1,51 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { randomBytes } from 'node:crypto';
+
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
+  SESSION_EXPIRY_MS,
+  VERIFICATION_TOKEN_EXPIRY_MS,
+  type SessionContext,
+} from '../../domain/auth.constants';
+import {
   AuthErrors,
-  Email,
-  Password,
-  PASSWORD_HASHER,
-  TOKEN_SERVICE,
-  USER_REPOSITORY,
-  UserId,
   type AuthDomainError,
-  type AuthTokens,
+} from '../../domain/errors/auth.errors';
+import {
+  AuthEventName,
+  UserRegisteredEvent,
+} from '../../domain/events/auth.events';
+import { hashToken } from '../../domain/hash-token';
+import {
+  EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+  type EmailVerificationTokenRepository,
+} from '../../domain/ports/email-verification-token.repository';
+import {
+  EMAIL_SERVICE,
+  type EmailService,
+} from '../../domain/ports/email.service';
+import {
+  PASSWORD_HASHER,
   type PasswordHasher,
+} from '../../domain/ports/password-hasher.port';
+import {
+  SESSION_REPOSITORY,
+  type SessionRepository,
+} from '../../domain/ports/session.repository';
+import {
+  TOKEN_SERVICE,
+  type AuthTokens,
   type TokenService,
+} from '../../domain/ports/token.service';
+import {
+  USER_REPOSITORY,
   type UserRepository,
-} from '../../domain';
+} from '../../domain/ports/user.repository';
+import { Email } from '../../domain/value-objects/email.vo';
+import { Password } from '../../domain/value-objects/password.vo';
+import { UserId } from '../../domain/value-objects/user-id.vo';
 
 export interface RegisterUserInput {
   readonly email: string;
@@ -32,16 +63,27 @@ export interface RegisterUserOutput {
   readonly tokens: AuthTokens;
 }
 
+export type RegisterSessionContext = SessionContext;
+
 @Injectable()
 export class RegisterUserHandler {
+  private readonly logger = new Logger(RegisterUserHandler.name);
+
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
-    @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService
+    @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessionRepository: SessionRepository,
+    @Inject(EMAIL_SERVICE) private readonly emailService: EmailService,
+    @Inject(EMAIL_VERIFICATION_TOKEN_REPOSITORY)
+    private readonly verificationTokenRepository: EmailVerificationTokenRepository,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
-    input: RegisterUserInput
+    input: RegisterUserInput,
+    context: RegisterSessionContext = {}
   ): Promise<Result<RegisterUserOutput, AuthDomainError>> {
     const emailResult = Email.create(input.email);
     if (emailResult.isErr()) {
@@ -82,6 +124,40 @@ export class RegisterUserHandler {
       return err(tokensResult.error);
     }
 
+    const tokens = tokensResult.value;
+
+    const sessionResult = await this.sessionRepository.create({
+      userId: user.id,
+      refreshTokenHash: hashToken(tokens.refreshToken),
+      userAgent: context.userAgent,
+      ipAddress: context.ipAddress,
+      expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),
+    });
+    if (sessionResult.isErr()) {
+      return err(sessionResult.error);
+    }
+
+    // Fire-and-forget: send verification email (don't fail registration)
+    this.sendVerificationEmail(user.id, user.email, user.name).catch(
+      (error) => {
+        this.logger.error(
+          'Unexpected error sending verification email',
+          error instanceof Error ? error.stack : error
+        );
+      }
+    );
+
+    this.eventEmitter.emit(
+      AuthEventName.REGISTER,
+      new UserRegisteredEvent(
+        user.id,
+        user.email,
+        context.ipAddress ?? '',
+        context.userAgent ?? '',
+        new Date()
+      )
+    );
+
     return ok({
       user: {
         id: user.id,
@@ -89,7 +165,35 @@ export class RegisterUserHandler {
         name: user.name,
         avatarUrl: user.avatarUrl,
       },
-      tokens: tokensResult.value,
+      tokens,
     });
+  }
+
+  private async sendVerificationEmail(
+    userId: string,
+    email: string,
+    name: string
+  ): Promise<void> {
+    const plainToken = randomBytes(32).toString('hex');
+    const tokenHash = hashToken(plainToken);
+
+    const createResult = await this.verificationTokenRepository.create({
+      userId,
+      tokenHash,
+      expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS),
+    });
+    if (createResult.isErr()) {
+      this.logger.error('Failed to create email verification token');
+      return;
+    }
+
+    const emailResult = await this.emailService.sendEmailVerification(
+      email,
+      plainToken,
+      name
+    );
+    if (emailResult.isErr()) {
+      this.logger.error('Failed to send verification email');
+    }
   }
 }

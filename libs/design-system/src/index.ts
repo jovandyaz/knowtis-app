@@ -33,6 +33,12 @@ export {
   Switch,
   type SwitchProps,
   Toaster,
+  PasswordInput,
+  type PasswordInputProps,
+  PasswordStrength,
+  type PasswordStrengthProps,
+  RateLimitAlert,
+  type RateLimitAlertProps,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 

@@ -7,7 +7,7 @@ import {
   type PermissionLevel,
 } from '@knowtis/shared-types';
 
-import { UserId } from '../auth/domain';
+import { UserId } from '../auth/domain/value-objects/user-id.vo';
 import { NOTE_REPOSITORY } from '../notes/domain';
 import type { NoteRepository } from '../notes/domain';
 import type {

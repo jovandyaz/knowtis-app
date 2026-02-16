@@ -1,21 +1,23 @@
 import { err, ok, type Result } from 'neverthrow';
 
-import { AuthErrors, type AuthDomainError } from '../errors';
+import { getPasswordChecks } from '@knowtis/shared-types';
 
-const MIN_PASSWORD_LENGTH = 8;
+import { AuthErrors, type AuthDomainError } from '../errors/auth.errors';
 
 export class Password {
-  private constructor(public readonly value: string) {}
+  private constructor() {}
 
-  static create(password: string): Result<Password, AuthDomainError> {
-    if (!password || password.length < MIN_PASSWORD_LENGTH) {
+  static create(password: string): Result<void, AuthDomainError> {
+    if (!password) {
       return err(AuthErrors.weakPassword());
     }
 
-    return ok(new Password(password));
-  }
+    for (const check of getPasswordChecks()) {
+      if (!check.test(password)) {
+        return err(AuthErrors.weakPasswordDetail(check.label));
+      }
+    }
 
-  static fromHashed(hashedPassword: string): Password {
-    return new Password(hashedPassword);
+    return ok(undefined);
   }
 }

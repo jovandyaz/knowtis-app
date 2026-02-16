@@ -4,19 +4,32 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import { UsersModule } from '../users';
-import {
-  LoginUserHandler,
-  RefreshTokensHandler,
-  RegisterUserHandler,
-} from './application';
+import { ForgotPasswordHandler } from './application/handlers/forgot-password.handler';
+import { LoginUserHandler } from './application/handlers/login-user.handler';
+import { LogoutUserHandler } from './application/handlers/logout-user.handler';
+import { RefreshTokensHandler } from './application/handlers/refresh-tokens.handler';
+import { RegisterUserHandler } from './application/handlers/register-user.handler';
+import { ResendVerificationHandler } from './application/handlers/resend-verification.handler';
+import { ResetPasswordHandler } from './application/handlers/reset-password.handler';
+import { VerifyEmailHandler } from './application/handlers/verify-email.handler';
 import { AuthController } from './auth.controller';
-import { PASSWORD_HASHER, TOKEN_SERVICE, USER_REPOSITORY } from './domain';
-import {
-  BcryptPasswordHasher,
-  DrizzleUserRepository,
-  JwtTokenService,
-} from './infrastructure';
-import { JwtStrategy, LocalStrategy } from './strategies';
+import { EMAIL_VERIFICATION_TOKEN_REPOSITORY } from './domain/ports/email-verification-token.repository';
+import { EMAIL_SERVICE } from './domain/ports/email.service';
+import { PASSWORD_HASHER } from './domain/ports/password-hasher.port';
+import { PASSWORD_RESET_TOKEN_REPOSITORY } from './domain/ports/password-reset-token.repository';
+import { SESSION_REPOSITORY } from './domain/ports/session.repository';
+import { TOKEN_SERVICE } from './domain/ports/token.service';
+import { USER_REPOSITORY } from './domain/ports/user.repository';
+import { ConsoleEmailService } from './infrastructure/email/console-email.service';
+import { AuthAuditListener } from './infrastructure/logging/auth-audit.listener';
+import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
+import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
+import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
+import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
+import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
+import { JwtTokenService } from './infrastructure/security/jwt-token.service';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { LocalStrategy } from './strategies/local.strategy';
 
 @Module({
   imports: [
@@ -36,9 +49,15 @@ import { JwtStrategy, LocalStrategy } from './strategies';
   providers: [
     LocalStrategy,
     JwtStrategy,
+    AuthAuditListener,
     RegisterUserHandler,
     LoginUserHandler,
     RefreshTokensHandler,
+    LogoutUserHandler,
+    ForgotPasswordHandler,
+    ResetPasswordHandler,
+    VerifyEmailHandler,
+    ResendVerificationHandler,
     {
       provide: PASSWORD_HASHER,
       useClass: BcryptPasswordHasher,
@@ -50,6 +69,22 @@ import { JwtStrategy, LocalStrategy } from './strategies';
     {
       provide: USER_REPOSITORY,
       useClass: DrizzleUserRepository,
+    },
+    {
+      provide: SESSION_REPOSITORY,
+      useClass: DrizzleSessionRepository,
+    },
+    {
+      provide: PASSWORD_RESET_TOKEN_REPOSITORY,
+      useClass: DrizzlePasswordResetTokenRepository,
+    },
+    {
+      provide: EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+      useClass: DrizzleEmailVerificationTokenRepository,
+    },
+    {
+      provide: EMAIL_SERVICE,
+      useClass: ConsoleEmailService,
     },
   ],
   exports: [LoginUserHandler],

@@ -17,5 +17,10 @@ export {
   useLogin,
   useRegister,
   useLogout,
+  useForgotPassword,
+  useResetPassword,
+  useVerifyEmail,
+  useResendVerification,
+  useRateLimitState,
   authQueryKeys,
 } from './auth.hooks';

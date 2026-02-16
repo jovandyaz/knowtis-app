@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import {
+  IsEmail,
+  IsHexadecimal,
+  IsNotEmpty,
+  IsString,
+  Length,
+  MinLength,
+} from 'class-validator';
 
 export class RegisterDto {
   @ApiProperty({
@@ -29,6 +36,50 @@ export class RegisterDto {
   @IsNotEmpty({ message: 'Password is required' })
   @MinLength(8, { message: 'Password must be at least 8 characters' })
   password!: string;
+}
+
+export class ForgotPasswordDto {
+  @ApiProperty({
+    description: 'Email address associated with the account',
+    example: 'user@example.com',
+  })
+  @IsEmail({}, { message: 'Invalid email format' })
+  @IsNotEmpty({ message: 'Email is required' })
+  email!: string;
+}
+
+export class ResetPasswordDto {
+  @ApiProperty({
+    description: 'Password reset token received via email',
+    example: 'a1b2c3d4e5f6...',
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Token is required' })
+  @IsHexadecimal({ message: 'Invalid token format' })
+  @Length(64, 64, { message: 'Invalid token format' })
+  token!: string;
+
+  @ApiProperty({
+    description: 'New password (min 8 characters)',
+    example: 'NewSecureP@ss1',
+    minLength: 8,
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'New password is required' })
+  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  newPassword!: string;
+}
+
+export class VerifyEmailDto {
+  @ApiProperty({
+    description: 'Email verification token received via email',
+    example: 'a1b2c3d4e5f6...',
+  })
+  @IsString()
+  @IsNotEmpty({ message: 'Token is required' })
+  @IsHexadecimal({ message: 'Invalid token format' })
+  @Length(64, 64, { message: 'Invalid token format' })
+  token!: string;
 }
 
 export class RefreshTokenDto {

@@ -7,7 +7,7 @@ import { err, type Result } from 'neverthrow';
 import { GENERAL_ACCESS } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
-import { UserId } from '../../../auth/domain';
+import { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NOTE_REPOSITORY,
   NoteContent,

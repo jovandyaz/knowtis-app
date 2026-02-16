@@ -4,7 +4,7 @@ import type { Result } from 'neverthrow';
 import type { PermissionLevel as PermissionLevelType } from '@knowtis/shared-types';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
-import type { UserId } from '../../../auth/domain';
+import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import type {
   CreateNoteData,
   CreatePermissionData,

@@ -1,13 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcryptjs';
 
 import { UsersRepository } from './users.repository';
 
 export interface CreateUserData {
   email: string;
   name: string;
-  password?: string;
-  passwordHash?: string;
+  passwordHash: string;
   provider?: string;
   providerId?: string;
   avatarUrl?: string;
@@ -15,8 +13,6 @@ export interface CreateUserData {
 
 @Injectable()
 export class UsersService {
-  private readonly SALT_ROUNDS = 12;
-
   constructor(private readonly usersRepository: UsersRepository) {}
 
   async findById(id: string) {
@@ -39,24 +35,14 @@ export class UsersService {
   }
 
   async create(data: CreateUserData) {
-    let passwordHash = data.passwordHash;
-
-    if (data.password && !passwordHash) {
-      passwordHash = await bcrypt.hash(data.password, this.SALT_ROUNDS);
-    }
-
     return this.usersRepository.create({
       email: data.email,
       name: data.name,
-      passwordHash,
+      passwordHash: data.passwordHash,
       provider: data.provider ?? 'local',
       providerId: data.providerId,
       avatarUrl: data.avatarUrl,
     });
-  }
-
-  async validatePassword(plainPassword: string, hashedPassword: string) {
-    return bcrypt.compare(plainPassword, hashedPassword);
   }
 
   async update(id: string, data: Partial<CreateUserData>) {
@@ -70,6 +56,28 @@ export class UsersService {
     }
 
     const user = await this.usersRepository.update(id, updateData);
+
+    if (!user) {
+      throw new NotFoundException(`User with id "${id}" not found`);
+    }
+
+    return user;
+  }
+
+  async updatePasswordHash(id: string, passwordHash: string) {
+    const user = await this.usersRepository.update(id, { passwordHash });
+
+    if (!user) {
+      throw new NotFoundException(`User with id "${id}" not found`);
+    }
+
+    return user;
+  }
+
+  async markEmailVerified(id: string) {
+    const user = await this.usersRepository.update(id, {
+      emailVerifiedAt: new Date(),
+    });
 
     if (!user) {
       throw new NotFoundException(`User with id "${id}" not found`);

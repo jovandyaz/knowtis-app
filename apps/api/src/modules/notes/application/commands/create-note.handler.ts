@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
-import { UserId } from '../../../auth/domain';
+import { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NOTE_WRITE_REPOSITORY,
   NoteContent,

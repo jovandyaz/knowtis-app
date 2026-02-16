@@ -1,23 +1,46 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
+  SESSION_EXPIRY_MS,
+  type SessionContext,
+} from '../../domain/auth.constants';
+import {
   AuthErrors,
-  Email,
-  PASSWORD_HASHER,
-  TOKEN_SERVICE,
-  USER_REPOSITORY,
-  UserId,
   type AuthDomainError,
-  type AuthTokens,
+} from '../../domain/errors/auth.errors';
+import {
+  AuthEventName,
+  LoginFailedEvent,
+  UserLoggedInEvent,
+} from '../../domain/events/auth.events';
+import { hashToken } from '../../domain/hash-token';
+import {
+  PASSWORD_HASHER,
   type PasswordHasher,
+} from '../../domain/ports/password-hasher.port';
+import {
+  SESSION_REPOSITORY,
+  type SessionRepository,
+} from '../../domain/ports/session.repository';
+import {
+  TOKEN_SERVICE,
+  type AuthTokens,
   type TokenService,
+} from '../../domain/ports/token.service';
+import {
+  USER_REPOSITORY,
   type UserRepository,
-} from '../../domain';
+} from '../../domain/ports/user.repository';
+import { Email } from '../../domain/value-objects/email.vo';
+import { UserId } from '../../domain/value-objects/user-id.vo';
 
 export interface ValidateUserInput {
   readonly email: string;
   readonly password: string;
+  readonly ipAddress?: string | undefined;
+  readonly userAgent?: string | undefined;
 }
 
 export interface ValidatedUser {
@@ -32,12 +55,17 @@ export interface LoginUserOutput {
   readonly tokens: AuthTokens;
 }
 
+export type LoginSessionContext = SessionContext;
+
 @Injectable()
 export class LoginUserHandler {
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
-    @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService
+    @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessionRepository: SessionRepository,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async validateCredentials(
@@ -45,12 +73,20 @@ export class LoginUserHandler {
   ): Promise<Result<ValidatedUser, AuthDomainError>> {
     const emailResult = Email.create(input.email);
     if (emailResult.isErr()) {
+      this.emitLoginFailed(input.email, {
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
       return err(AuthErrors.invalidCredentials());
     }
     const email = emailResult.value;
 
     const user = await this.userRepository.findByEmail(email);
     if (!user || !user.passwordHash) {
+      this.emitLoginFailed(input.email, {
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
       return err(AuthErrors.invalidCredentials());
     }
 
@@ -59,9 +95,17 @@ export class LoginUserHandler {
       user.passwordHash
     );
     if (verifyResult.isErr()) {
+      this.emitLoginFailed(input.email, {
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
       return err(AuthErrors.invalidCredentials());
     }
     if (!verifyResult.value) {
+      this.emitLoginFailed(input.email, {
+        ipAddress: input.ipAddress,
+        userAgent: input.userAgent,
+      });
       return err(AuthErrors.invalidCredentials());
     }
 
@@ -74,7 +118,8 @@ export class LoginUserHandler {
   }
 
   async login(
-    user: ValidatedUser
+    user: ValidatedUser,
+    context: LoginSessionContext = {}
   ): Promise<Result<LoginUserOutput, AuthDomainError>> {
     const tokensResult = await this.tokenService.generateTokens(
       UserId.fromTrusted(user.id),
@@ -84,9 +129,48 @@ export class LoginUserHandler {
       return err(tokensResult.error);
     }
 
+    const tokens = tokensResult.value;
+
+    const sessionResult = await this.sessionRepository.create({
+      userId: user.id,
+      refreshTokenHash: hashToken(tokens.refreshToken),
+      userAgent: context.userAgent,
+      ipAddress: context.ipAddress,
+      expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),
+    });
+    if (sessionResult.isErr()) {
+      return err(sessionResult.error);
+    }
+
+    this.eventEmitter.emit(
+      AuthEventName.LOGIN,
+      new UserLoggedInEvent(
+        user.id,
+        user.email,
+        context.ipAddress ?? '',
+        context.userAgent ?? '',
+        new Date()
+      )
+    );
+
     return ok({
       user,
-      tokens: tokensResult.value,
+      tokens,
     });
+  }
+
+  private emitLoginFailed(
+    email: string,
+    context?: { ipAddress?: string | undefined; userAgent?: string | undefined }
+  ): void {
+    this.eventEmitter.emit(
+      AuthEventName.LOGIN_FAILED,
+      new LoginFailedEvent(
+        email,
+        context?.ipAddress ?? '',
+        context?.userAgent ?? '',
+        new Date()
+      )
+    );
   }
 }

@@ -5,8 +5,8 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   AuthErrors,
   type AuthDomainError,
-  type PasswordHasher,
-} from '../../domain';
+} from '../../domain/errors/auth.errors';
+import type { PasswordHasher } from '../../domain/ports/password-hasher.port';
 
 const SALT_ROUNDS = 10;
 

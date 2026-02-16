@@ -6,11 +6,13 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   AuthErrors,
   type AuthDomainError,
-  type AuthTokens,
-  type JwtPayload,
-  type TokenService,
-  type UserId,
-} from '../../domain';
+} from '../../domain/errors/auth.errors';
+import type {
+  AuthTokens,
+  JwtPayload,
+  TokenService,
+} from '../../domain/ports/token.service';
+import type { UserId } from '../../domain/value-objects/user-id.vo';
 
 @Injectable()
 export class JwtTokenService implements TokenService {

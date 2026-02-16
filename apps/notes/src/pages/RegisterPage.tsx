@@ -1,11 +1,20 @@
 import { useState } from 'react';
+import { useForm } from 'react-hook-form';
 
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { ArrowLeft, CheckCircle, Loader2, Mail } from 'lucide-react';
 
-import { useRegister } from '@knowtis/auth';
+import { ApiClientError } from '@knowtis/api-client';
+import type { RegisterFormData } from '@knowtis/auth';
+import {
+  registerSchema,
+  useRateLimitState,
+  useRegister,
+  useResendVerification,
+} from '@knowtis/auth';
 import {
   Button,
   Card,
@@ -15,41 +24,161 @@ import {
   CardHeader,
   CardTitle,
   Input,
+  PasswordInput,
+  PasswordStrength,
+  RateLimitAlert,
 } from '@knowtis/design-system';
+import { getPasswordChecks } from '@knowtis/shared-types';
 
 export function RegisterPage() {
-  const register = useRegister();
-  const navigate = useNavigate();
+  const registerMutation = useRegister();
+  const resendVerification = useResendVerification();
+  const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
+  const [registeredEmail, setRegisteredEmail] = useState('');
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    setError,
+    setFocus,
+    watch,
+    formState: { errors },
+  } = useForm<RegisterFormData>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      name: '',
+      email: '',
+      password: '',
+      confirmPassword: '',
+    },
+  });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password !== confirmPassword) {
-      return;
-    }
+  const password = watch('password');
 
-    register.mutate(
-      { name, email, password },
+  const onSubmit = (data: RegisterFormData) => {
+    resetRateLimit();
+    registerMutation.mutate(
+      { name: data.name, email: data.email, password: data.password },
       {
         onSuccess: () => {
-          navigate({ to: '/' });
+          setRegisteredEmail(data.email);
+        },
+        onError: (error) => {
+          if (checkRateLimit(error)) {
+            return;
+          }
+
+          if (ApiClientError.isApiClientError(error)) {
+            if (error.status === 409) {
+              setError('email', {
+                type: 'server',
+                message: error.message,
+              });
+              setFocus('email');
+              return;
+            }
+
+            if (error.errors?.length) {
+              const fields = error.errors.map(
+                (e) => e.field as keyof RegisterFormData
+              );
+              for (const fieldError of error.errors) {
+                setError(fieldError.field as keyof RegisterFormData, {
+                  type: 'server',
+                  message: fieldError.message,
+                });
+              }
+              setFocus(fields[0]);
+            }
+          }
         },
       }
     );
   };
 
-  const isDisabled =
-    !name ||
-    !email ||
-    !password ||
-    !confirmPassword ||
-    password !== confirmPassword ||
-    register.isPending;
+  if (registeredEmail) {
+    return (
+      <PublicRoute>
+        <div className="flex min-h-screen items-center justify-center p-4">
+          <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
+            <CardHeader className="space-y-1 text-center">
+              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
+                <CheckCircle className="h-6 w-6 text-(--primary)" />
+              </div>
+              <CardTitle className="text-2xl font-bold tracking-tight">
+                Check your email
+              </CardTitle>
+              <CardDescription>
+                We sent a verification link to{' '}
+                <span className="font-medium text-(--foreground)">
+                  {registeredEmail}
+                </span>
+              </CardDescription>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              <p className="text-center text-sm text-(--muted-foreground)">
+                Please verify your email address to get started. Check your spam
+                folder if you don&apos;t see it.
+              </p>
+
+              {resendVerification.isSuccess && (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
+                >
+                  A new verification email has been sent.
+                </div>
+              )}
+
+              {resendVerification.isError && (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-md bg-(--destructive)/10 p-3 text-center text-sm text-(--destructive)"
+                >
+                  {ApiClientError.isApiClientError(resendVerification.error) &&
+                  resendVerification.error.status === 429
+                    ? 'Too many attempts. Please wait a moment.'
+                    : 'Failed to resend verification email. Please try again.'}
+                </div>
+              )}
+
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => resendVerification.mutate()}
+                disabled={resendVerification.isPending}
+              >
+                {resendVerification.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    <Mail className="mr-2 h-4 w-4" />
+                    Resend verification email
+                  </>
+                )}
+              </Button>
+            </CardContent>
+
+            <CardFooter>
+              <Link
+                to="/login"
+                className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Back to login
+              </Link>
+            </CardFooter>
+          </Card>
+        </div>
+      </PublicRoute>
+    );
+  }
 
   return (
     <PublicRoute>
@@ -64,15 +193,27 @@ export function RegisterPage() {
             </CardDescription>
           </CardHeader>
 
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
             <CardContent className="space-y-4">
-              {register.isError && (
-                <div className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)">
-                  {register.error instanceof Error
-                    ? register.error.message
-                    : 'Registration failed'}
-                </div>
-              )}
+              <RateLimitAlert visible={rateLimited} />
+
+              {registerMutation.isError &&
+                !rateLimited &&
+                !(
+                  ApiClientError.isApiClientError(registerMutation.error) &&
+                  (registerMutation.error.status === 409 ||
+                    registerMutation.error.errors?.length)
+                ) && (
+                  <div
+                    role="alert"
+                    aria-live="polite"
+                    className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
+                  >
+                    {registerMutation.error instanceof Error
+                      ? registerMutation.error.message
+                      : 'Registration failed'}
+                  </div>
+                )}
 
               <div className="space-y-2">
                 <label
@@ -84,11 +225,20 @@ export function RegisterPage() {
                 <Input
                   id="name"
                   placeholder="John Doe"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
                   autoComplete="name"
-                  required
+                  aria-invalid={!!errors.name}
+                  aria-describedby={errors.name ? 'name-error' : undefined}
+                  {...register('name')}
                 />
+                {errors.name && (
+                  <p
+                    id="name-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
+                  >
+                    {errors.name.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -102,11 +252,20 @@ export function RegisterPage() {
                   id="email"
                   type="email"
                   placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
-                  required
+                  aria-invalid={!!errors.email}
+                  aria-describedby={errors.email ? 'email-error' : undefined}
+                  {...register('email')}
                 />
+                {errors.email && (
+                  <p
+                    id="email-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
+                  >
+                    {errors.email.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -116,35 +275,29 @@ export function RegisterPage() {
                 >
                   Password
                 </label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    autoComplete="new-password"
-                    required
-                    className="pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 text-(--muted-foreground) hover:text-(--foreground)"
-                    tabIndex={-1}
-                    aria-label={
-                      showPassword ? 'Hide password' : 'Show password'
-                    }
+                <PasswordInput
+                  id="password"
+                  placeholder="••••••••"
+                  autoComplete="new-password"
+                  aria-invalid={!!errors.password}
+                  aria-describedby={
+                    errors.password ? 'password-error' : undefined
+                  }
+                  {...register('password')}
+                />
+                <PasswordStrength
+                  password={password}
+                  checks={getPasswordChecks()}
+                />
+                {errors.password && (
+                  <p
+                    id="password-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
                   >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
+                    {errors.password.message}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -154,21 +307,35 @@ export function RegisterPage() {
                 >
                   Confirm Password
                 </label>
-                <Input
+                <PasswordInput
                   id="confirmPassword"
-                  type="password"
                   placeholder="••••••••"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
                   autoComplete="new-password"
-                  required
+                  aria-invalid={!!errors.confirmPassword}
+                  aria-describedby={
+                    errors.confirmPassword ? 'confirmPassword-error' : undefined
+                  }
+                  {...register('confirmPassword')}
                 />
+                {errors.confirmPassword && (
+                  <p
+                    id="confirmPassword-error"
+                    role="alert"
+                    className="text-sm text-(--destructive)"
+                  >
+                    {errors.confirmPassword.message}
+                  </p>
+                )}
               </div>
             </CardContent>
 
             <CardFooter className="flex flex-col gap-4">
-              <Button type="submit" className="w-full" disabled={isDisabled}>
-                {register.isPending ? (
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={registerMutation.isPending}
+              >
+                {registerMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Creating account...
