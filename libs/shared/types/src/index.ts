@@ -48,3 +48,5 @@ export {
   type UserJoinedPayload,
   type UserLeftPayload,
 } from './lib/collaboration.types';
+
+export type { FeatureFlagDto } from './lib/feature-flags.types';

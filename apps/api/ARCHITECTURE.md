@@ -27,7 +27,7 @@ apps/api/src/
 └── modules/
     ├── auth/         # Authentication (DDD) ✅
     ├── collaboration/# Real-time collaboration
-    ├── feature-flags/# Unleash integration
+    ├── feature-flags/# DB-backed feature flags with cache
     ├── health/       # Health checks
     ├── notes/        # Notes CRUD (DDD) ✅
     └── users/        # User management (Service-based)

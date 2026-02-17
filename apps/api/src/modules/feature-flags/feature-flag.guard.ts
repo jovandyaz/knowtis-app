@@ -7,11 +7,11 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
-import { FeatureFlag, FeatureFlagsService } from './feature-flags.service';
+import { FeatureFlagsService } from './feature-flags.service';
 
 export const FEATURE_FLAG_KEY = 'feature_flag';
 
-export const RequireFeatureFlag = (flag: FeatureFlag) =>
+export const RequireFeatureFlag = (flag: string) =>
   SetMetadata(FEATURE_FLAG_KEY, flag);
 
 @Injectable()
@@ -21,8 +21,8 @@ export class FeatureFlagGuard implements CanActivate {
     private readonly featureFlags: FeatureFlagsService
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
-    const requiredFlag = this.reflector.getAllAndOverride<FeatureFlag>(
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const requiredFlag = this.reflector.getAllAndOverride<string>(
       FEATURE_FLAG_KEY,
       [context.getHandler(), context.getClass()]
     );
@@ -31,7 +31,9 @@ export class FeatureFlagGuard implements CanActivate {
       return true;
     }
 
-    if (!this.featureFlags.isEnabled(requiredFlag)) {
+    const enabled = await this.featureFlags.isEnabled(requiredFlag);
+
+    if (!enabled) {
       throw new ForbiddenException(`Feature '${requiredFlag}' is not enabled`);
     }
 

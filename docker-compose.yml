@@ -32,26 +32,6 @@ services:
       retries: 5
     command: redis-server --appendonly yes
 
-  # Unleash - Self-hosted Feature Flags
-  unleash:
-    image: unleashorg/unleash-server:latest
-    container_name: knowtis-unleash
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-knowtis}:${POSTGRES_PASSWORD:-knowtis_dev}@postgres:5432/unleash
-      DATABASE_SSL: 'false'
-      INIT_ADMIN_API_TOKENS: '*:*.unleash-insecure-api-token'
-    ports:
-      - '${UNLEASH_PORT:-4242}:4242'
-    healthcheck:
-      test: ['CMD', 'wget', '-q', '--spider', 'http://localhost:4242/health']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
 volumes:
   postgres_data:
   redis_data:

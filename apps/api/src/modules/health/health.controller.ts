@@ -30,11 +30,11 @@ export class HealthController {
   }
 
   @Get('ready')
-  ready() {
+  async ready() {
     return {
       status: 'ready',
       timestamp: new Date().toISOString(),
-      features: this.featureFlags.getAllFlags(),
+      features: await this.featureFlags.getAll(),
     };
   }
 }

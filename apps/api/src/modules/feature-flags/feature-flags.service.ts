@@ -1,49 +1,70 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
 
-export enum FeatureFlag {
-  REAL_TIME_COLLABORATION = 'real_time_collaboration',
-  PUBLIC_NOTES = 'public_notes',
-  NOTE_SHARING = 'note_sharing',
-  RICH_TEXT_EDITOR = 'rich_text_editor',
-}
+import {
+  FEATURE_FLAG_REPOSITORY,
+  type FeatureFlagEntity,
+  type FeatureFlagRepository,
+} from './domain/feature-flag.repository';
 
-export interface FeatureFlagConfig {
-  [FeatureFlag.REAL_TIME_COLLABORATION]: boolean;
-  [FeatureFlag.PUBLIC_NOTES]: boolean;
-  [FeatureFlag.NOTE_SHARING]: boolean;
-  [FeatureFlag.RICH_TEXT_EDITOR]: boolean;
-}
+const CACHE_PREFIX = 'ff:';
+const CACHE_TTL = 30000;
 
 @Injectable()
 export class FeatureFlagsService {
-  private readonly flags: FeatureFlagConfig;
+  private readonly logger = new Logger(FeatureFlagsService.name);
 
-  constructor(private readonly configService: ConfigService) {
-    this.flags = {
-      [FeatureFlag.REAL_TIME_COLLABORATION]: this.getFlag(
-        'FF_REAL_TIME_COLLABORATION',
-        true
-      ),
-      [FeatureFlag.PUBLIC_NOTES]: this.getFlag('FF_PUBLIC_NOTES', true),
-      [FeatureFlag.NOTE_SHARING]: this.getFlag('FF_NOTE_SHARING', true),
-      [FeatureFlag.RICH_TEXT_EDITOR]: this.getFlag('FF_RICH_TEXT_EDITOR', true),
-    };
-  }
+  constructor(
+    @Inject(FEATURE_FLAG_REPOSITORY)
+    private readonly repository: FeatureFlagRepository,
+    @Inject(CACHE_MANAGER)
+    private readonly cache: Cache
+  ) {}
 
-  private getFlag(envKey: string, defaultValue: boolean): boolean {
-    const value = this.configService.get<string>(envKey);
-    if (value === undefined) {
-      return defaultValue;
+  async isEnabled(key: string): Promise<boolean> {
+    const cacheKey = `${CACHE_PREFIX}${key}`;
+
+    const cached = await this.cache.get<boolean>(cacheKey);
+    if (cached !== undefined && cached !== null) {
+      return cached;
     }
-    return value.toLowerCase() === 'true';
+
+    const flag = await this.repository.findByKey(key);
+    const enabled = flag?.enabled ?? false;
+
+    await this.cache.set(cacheKey, enabled, CACHE_TTL);
+
+    return enabled;
   }
 
-  isEnabled(flag: FeatureFlag): boolean {
-    return this.flags[flag] ?? false;
+  async toggle(
+    key: string,
+    enabled: boolean,
+    description?: string
+  ): Promise<FeatureFlagEntity> {
+    const flag = await this.repository.upsert({
+      key,
+      enabled,
+      ...(description !== undefined && { description }),
+    });
+
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
+
+    this.logger.log(`Feature flag '${key}' set to ${enabled}`);
+
+    return flag;
   }
 
-  getAllFlags(): FeatureFlagConfig {
-    return { ...this.flags };
+  async getAll(): Promise<FeatureFlagEntity[]> {
+    return this.repository.findAll();
+  }
+
+  async remove(key: string): Promise<void> {
+    await this.repository.delete(key);
+
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
+
+    this.logger.log(`Feature flag '${key}' removed`);
   }
 }
