@@ -5,15 +5,16 @@ import {
 } from '@tanstack/react-query';
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 
+import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
+import { AuthProvider } from '@jovandyaz/auth-react';
 
 import { ApiClientError } from '@knowtis/api-client';
-import { useAuthStore } from '@knowtis/auth';
 import { Toaster } from '@knowtis/design-system';
 
 function handleAuthFailure(): void {
-  useAuthStore.getState().logout();
+  authStore.getState().logout();
   window.location.href = '/login';
 }
 
@@ -48,18 +49,24 @@ function RootComponent() {
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AbilityProvider>
-            <YjsProvider>
-              <div className="flex min-h-screen bg-(--background)">
-                <div className="w-full">
-                  <Outlet />
+        <AuthProvider
+          api={authApi}
+          tokenStorage={tokenStorage}
+          store={authStore}
+        >
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+            <AbilityProvider>
+              <YjsProvider>
+                <div className="flex min-h-screen bg-(--background)">
+                  <div className="w-full">
+                    <Outlet />
+                  </div>
                 </div>
-              </div>
-            </YjsProvider>
-          </AbilityProvider>
-          <Toaster />
-        </ThemeProvider>
+              </YjsProvider>
+            </AbilityProvider>
+            <Toaster />
+          </ThemeProvider>
+        </AuthProvider>
       </QueryClientProvider>
     </AppErrorBoundary>
   );
