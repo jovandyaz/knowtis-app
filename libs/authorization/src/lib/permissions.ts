@@ -1,4 +1,4 @@
-import { definePermissions } from '@jovandyaz/permissions';
+import { definePermissions } from '@jovandyaz/permissions-core';
 
 import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 

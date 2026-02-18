@@ -1,4 +1,4 @@
-import type { AbilityFactory } from '@jovandyaz/permissions/nestjs';
+import type { AbilityFactory } from '@jovandyaz/permissions-nestjs';
 import { Injectable } from '@nestjs/common';
 
 import { defineAbilityFor } from '@knowtis/authorization';

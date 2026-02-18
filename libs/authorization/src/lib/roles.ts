@@ -1,4 +1,4 @@
-import { RoleManager } from '@jovandyaz/permissions';
+import { RoleManager } from '@jovandyaz/permissions-core';
 
 import type { AppAbility } from './types';
 import { SUBJECTS } from './types';

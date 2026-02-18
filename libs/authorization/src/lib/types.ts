@@ -1,4 +1,4 @@
-import type { Ability } from '@jovandyaz/permissions';
+import type { Ability } from '@jovandyaz/permissions-core';
 
 import type { PermissionLevel } from '@knowtis/shared-types';
 

@@ -1,7 +1,7 @@
 import {
   ABILITY_FACTORY_KEY,
   PoliciesGuard,
-} from '@jovandyaz/permissions/nestjs';
+} from '@jovandyaz/permissions-nestjs';
 import { Global, Module } from '@nestjs/common';
 
 import { AppAbilityFactory } from './ability.factory';

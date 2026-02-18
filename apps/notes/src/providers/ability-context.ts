@@ -1,4 +1,4 @@
-import { createPermissionContext } from '@jovandyaz/permissions/react';
+import { createPermissionContext } from '@jovandyaz/permissions-react';
 
 import type { AppAbility } from '@knowtis/authorization';
 
