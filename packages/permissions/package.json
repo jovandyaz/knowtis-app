@@ -1,0 +1,15 @@
+{
+  "name": "@jovandyaz/permissions",
+  "version": "0.0.1",
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  },
+  "dependencies": {
+    "@casl/ability": "^6.8.0",
+    "tslib": "^2.3.0"
+  }
+}

@@ -35,7 +35,8 @@
       "@knowtis/authorization": ["libs/authorization/src/index.ts"],
       "@jovandyaz/permissions": ["libs/permissions/src/index.ts"],
       "@jovandyaz/permissions/react": ["libs/permissions/src/react/index.ts"],
-      "@jovandyaz/permissions/nestjs": ["libs/permissions/src/nestjs/index.ts"]
+      "@jovandyaz/permissions/nestjs": ["libs/permissions/src/nestjs/index.ts"],
+      "@jovandyaz/permissions-core": ["packages/permissions/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp", "dist"]
