@@ -28,6 +28,32 @@ export default defineConfig({
         __dirname,
         '../../libs/data-access/notes/src/index.ts'
       ),
+      '@knowtis/shared-types': resolve(
+        __dirname,
+        '../../libs/shared/types/src/index.ts'
+      ),
+      '@knowtis/api-client': resolve(
+        __dirname,
+        '../../libs/api-client/src/index.ts'
+      ),
+      '@knowtis/auth': resolve(__dirname, '../../libs/auth/src/index.ts'),
+      '@knowtis/authorization': resolve(
+        __dirname,
+        '../../libs/authorization/src/index.ts'
+      ),
+      '@jovandyaz/permissions-core': resolve(
+        __dirname,
+        '../../packages/permissions/src/index.ts'
+      ),
+      '@jovandyaz/permissions-react': resolve(
+        __dirname,
+        '../../packages/permissions-react/src/index.ts'
+      ),
+      '@jovandyaz/auth': resolve(__dirname, '../../packages/auth/src/index.ts'),
+      '@jovandyaz/auth-react': resolve(
+        __dirname,
+        '../../packages/auth-react/src/index.ts'
+      ),
     },
   },
 });
