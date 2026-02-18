@@ -1,7 +1,7 @@
 {
-  "name": "permissions-core",
+  "name": "permissions-react",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "packages/permissions/src",
+  "sourceRoot": "packages/permissions-react/src",
   "projectType": "library",
   "release": {
     "version": {
@@ -16,10 +16,10 @@
       "executor": "@nx/js:tsc",
       "outputs": ["{options.outputPath}"],
       "options": {
-        "outputPath": "dist/packages/permissions",
-        "main": "packages/permissions/src/index.ts",
-        "tsConfig": "packages/permissions/tsconfig.lib.json",
-        "assets": ["packages/permissions/*.md"]
+        "outputPath": "dist/packages/permissions-react",
+        "main": "packages/permissions-react/src/index.ts",
+        "tsConfig": "packages/permissions-react/tsconfig.lib.json",
+        "assets": ["packages/permissions-react/*.md"]
       }
     },
     "nx-release-publish": {
@@ -31,7 +31,7 @@
       "executor": "@nx/vitest:test",
       "outputs": ["{options.reportsDirectory}"],
       "options": {
-        "reportsDirectory": "../../coverage/packages/permissions"
+        "reportsDirectory": "../../coverage/packages/permissions-react"
       }
     }
   }
