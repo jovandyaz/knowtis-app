@@ -1,8 +1,9 @@
 import { useNavigate } from '@tanstack/react-router';
 
+import { useLogout } from '@jovandyaz/auth-react';
 import { LogOut, User } from 'lucide-react';
+import { toast } from 'sonner';
 
-import { useLogout } from '@knowtis/auth';
 import { Button, ThemeToggle } from '@knowtis/design-system';
 
 /**
@@ -22,6 +23,7 @@ export function SidebarUserFooter({
   const handleLogout = () => {
     logout(undefined, {
       onSuccess: () => {
+        toast.success('Signed out successfully');
         navigate({ to: '/login' });
       },
     });
