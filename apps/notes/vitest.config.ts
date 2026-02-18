@@ -36,7 +36,6 @@ export default defineConfig({
         __dirname,
         '../../libs/api-client/src/index.ts'
       ),
-      '@knowtis/auth': resolve(__dirname, '../../libs/auth/src/index.ts'),
       '@knowtis/authorization': resolve(
         __dirname,
         '../../libs/authorization/src/index.ts'

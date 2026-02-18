@@ -25,18 +25,6 @@ export {
 } from './lib/note.types';
 
 export {
-  PASSWORD_REQUIREMENTS,
-  getPasswordChecks,
-  type LoginInput,
-  type RegisterInput,
-  type AuthTokens,
-  type AuthResponse,
-  type RequestUser,
-  type PasswordRequirements,
-  type PasswordCheck,
-} from './lib/auth.types';
-
-export {
   COLLABORATION_EVENTS,
   type CollaborationEventType,
   type CollaborationUser,
