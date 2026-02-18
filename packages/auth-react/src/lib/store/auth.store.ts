@@ -1,4 +1,4 @@
-import type { AuthResponse } from '@jovandyaz/auth';
+import type { AuthResponse } from '@jovandyaz/auth/client';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 

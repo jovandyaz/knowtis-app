@@ -3,7 +3,7 @@ import type {
   AuthTokens,
   LoginInput,
   RegisterInput,
-} from '@jovandyaz/auth';
+} from '@jovandyaz/auth/client';
 
 /**
  * User profile returned by getProfile

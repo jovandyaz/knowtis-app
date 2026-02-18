@@ -48,6 +48,10 @@ export default defineConfig({
         __dirname,
         '../../packages/permissions-react/src/index.ts'
       ),
+      '@jovandyaz/auth/client': resolve(
+        __dirname,
+        '../../packages/auth/src/client.ts'
+      ),
       '@jovandyaz/auth': resolve(__dirname, '../../packages/auth/src/index.ts'),
       '@jovandyaz/auth-react': resolve(
         __dirname,

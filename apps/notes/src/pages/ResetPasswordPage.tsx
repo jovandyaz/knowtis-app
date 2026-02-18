@@ -5,13 +5,13 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { getPasswordChecks } from '@jovandyaz/auth';
 import type { ResetPasswordFormData } from '@jovandyaz/auth-react';
 import {
   resetPasswordSchema,
   useRateLimitState,
   useResetPassword,
 } from '@jovandyaz/auth-react';
+import { getPasswordChecks } from '@jovandyaz/auth/client';
 import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 

@@ -1,14 +1,14 @@
 import type {
-  AuthResponse,
-  AuthTokens,
-  LoginInput,
-  RegisterInput,
-} from '@jovandyaz/auth';
-import type {
   AuthApiAdapter,
   AuthUserProfile,
   TokenStorage,
 } from '@jovandyaz/auth-react';
+import type {
+  AuthResponse,
+  AuthTokens,
+  LoginInput,
+  RegisterInput,
+} from '@jovandyaz/auth/client';
 
 /**
  * Minimal HTTP client interface.

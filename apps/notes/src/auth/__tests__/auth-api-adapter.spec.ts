@@ -1,5 +1,5 @@
-import type { AuthResponse, AuthTokens } from '@jovandyaz/auth';
 import type { TokenStorage } from '@jovandyaz/auth-react';
+import type { AuthResponse, AuthTokens } from '@jovandyaz/auth/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createAuthApiAdapter, type HttpClient } from '../auth-api-adapter';

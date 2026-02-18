@@ -2,7 +2,11 @@ import { useState } from 'react';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { AuthResponse, LoginInput, RegisterInput } from '@jovandyaz/auth';
+import type {
+  AuthResponse,
+  LoginInput,
+  RegisterInput,
+} from '@jovandyaz/auth/client';
 
 import { useAuthApi, useAuthStore } from '../provider/auth-provider';
 import type { AuthUserProfile } from '../types';

@@ -1,4 +1,4 @@
-import type { AuthResponse } from '@jovandyaz/auth';
+import type { AuthResponse } from '@jovandyaz/auth/client';
 
 /**
  * Authenticated user state

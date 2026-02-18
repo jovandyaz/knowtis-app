@@ -18,6 +18,7 @@
         "./packages/permissions-react/src/index.ts"
       ],
       "@jovandyaz/auth": ["./packages/auth/src/index.ts"],
+      "@jovandyaz/auth/client": ["./packages/auth/src/client.ts"],
       "@jovandyaz/auth-react": ["./packages/auth-react/src/index.ts"]
     }
   },
