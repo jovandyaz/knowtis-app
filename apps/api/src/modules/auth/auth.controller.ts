@@ -1,3 +1,4 @@
+import type { RequestUser } from '@jovandyaz/auth';
 import {
   Body,
   Controller,
@@ -16,8 +17,6 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-
-import type { RequestUser } from '@knowtis/shared-types';
 
 import { ForgotPasswordHandler } from './application/handlers/forgot-password.handler';
 import { LoginUserHandler } from './application/handlers/login-user.handler';

@@ -1,6 +1,5 @@
+import { getPasswordChecks } from '@jovandyaz/auth';
 import { err, ok, type Result } from 'neverthrow';
-
-import { getPasswordChecks } from '@knowtis/shared-types';
 
 import { AuthErrors, type AuthDomainError } from '../errors/auth.errors';
 

@@ -1,3 +1,4 @@
+import type { RequestUser } from '@jovandyaz/auth';
 import {
   Body,
   Controller,
@@ -16,7 +17,6 @@ import {
 import type { Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
-import type { RequestUser } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { CurrentUser, JwtAuthGuard, Public } from '../auth';
