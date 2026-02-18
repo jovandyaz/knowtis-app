@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 
-import { useAuthStore } from '@knowtis/auth';
+import { useAuthStore } from '@jovandyaz/auth-react';
+
 import { defineAbilityFor } from '@knowtis/authorization';
 
 import { PermissionProvider } from './ability-context';
@@ -9,7 +10,8 @@ import { PermissionProvider } from './ability-context';
  * Provides ability for **app-level** permissions.
  */
 export function AbilityProvider({ children }: { children: React.ReactNode }) {
-  const userId = useAuthStore((s) => s.user?.id ?? null);
+  const store = useAuthStore();
+  const userId = store((s) => s.user?.id ?? null);
 
   const ability = useMemo(
     () => defineAbilityFor(userId ? { id: userId } : null),
