@@ -5,14 +5,15 @@ import { Link } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
-
-import type { ForgotPasswordFormData } from '@knowtis/auth';
+import type { ForgotPasswordFormData } from '@jovandyaz/auth-react';
 import {
   forgotPasswordSchema,
   useForgotPassword,
   useRateLimitState,
-} from '@knowtis/auth';
+} from '@jovandyaz/auth-react';
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
 import {
   Button,
   Card,
@@ -46,11 +47,14 @@ export function ForgotPasswordPage() {
     resetRateLimit();
     forgotPassword.mutate(data.email, {
       onSuccess: () => {
+        toast.success('If the email exists, a reset link will be sent.');
         setSubmittedEmail(data.email);
         setSubmitted(true);
       },
       onError: (error) => {
-        checkRateLimit(error);
+        if (checkRateLimit(error)) {
+          toast.error('Too many attempts. Please try again later.');
+        }
       },
     });
   };
@@ -59,7 +63,9 @@ export function ForgotPasswordPage() {
     resetRateLimit();
     forgotPassword.mutate(submittedEmail, {
       onError: (error) => {
-        checkRateLimit(error);
+        if (checkRateLimit(error)) {
+          toast.error('Too many attempts. Please try again later.');
+        }
       },
     });
   };

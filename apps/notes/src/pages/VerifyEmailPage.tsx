@@ -4,19 +4,20 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import {
+  useIsAuthenticated,
+  useResendVerification,
+  useVerifyEmail,
+} from '@jovandyaz/auth-react';
+import {
   AlertCircle,
   ArrowLeft,
   CheckCircle,
   Loader2,
   Mail,
 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
-import {
-  useIsAuthenticated,
-  useResendVerification,
-  useVerifyEmail,
-} from '@knowtis/auth';
 import {
   Button,
   Card,
@@ -37,7 +38,11 @@ export function VerifyEmailPage() {
   useEffect(() => {
     if (token && !hasAttempted.current) {
       hasAttempted.current = true;
-      verifyEmail.mutate(token);
+      verifyEmail.mutate(token, {
+        onSuccess: () => {
+          toast.success('Email verified successfully!');
+        },
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
@@ -151,7 +156,25 @@ export function VerifyEmailPage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => resendVerification.mutate()}
+                onClick={() =>
+                  resendVerification.mutate(undefined, {
+                    onSuccess: () => {
+                      toast.success(
+                        'Verification email sent. Please check your inbox.'
+                      );
+                    },
+                    onError: (error) => {
+                      if (
+                        ApiClientError.isApiClientError(error) &&
+                        error.status === 429
+                      ) {
+                        toast.error(
+                          'Too many attempts. Please try again later.'
+                        );
+                      }
+                    },
+                  })
+                }
                 disabled={resendVerification.isPending}
               >
                 {resendVerification.isPending ? (

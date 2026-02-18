@@ -4,11 +4,16 @@ import { Link, useNavigate } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
+import type { LoginFormData } from '@jovandyaz/auth-react';
+import {
+  loginSchema,
+  useLogin,
+  useRateLimitState,
+} from '@jovandyaz/auth-react';
 import { Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
-import type { LoginFormData } from '@knowtis/auth';
-import { loginSchema, useLogin, useRateLimitState } from '@knowtis/auth';
 import {
   Button,
   Card,
@@ -45,10 +50,12 @@ export function LoginPage() {
     resetRateLimit();
     login.mutate(data, {
       onSuccess: () => {
+        toast.success('Welcome back!');
         navigate({ to: '/' });
       },
       onError: (error) => {
         if (checkRateLimit(error)) {
+          toast.error('Too many attempts. Please try again later.');
           return;
         }
 

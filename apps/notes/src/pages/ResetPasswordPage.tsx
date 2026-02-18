@@ -5,15 +5,17 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
-
-import { ApiClientError } from '@knowtis/api-client';
-import type { ResetPasswordFormData } from '@knowtis/auth';
+import { getPasswordChecks } from '@jovandyaz/auth';
+import type { ResetPasswordFormData } from '@jovandyaz/auth-react';
 import {
   resetPasswordSchema,
   useRateLimitState,
   useResetPassword,
-} from '@knowtis/auth';
+} from '@jovandyaz/auth-react';
+import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { ApiClientError } from '@knowtis/api-client';
 import {
   Button,
   Card,
@@ -26,7 +28,6 @@ import {
   PasswordStrength,
   RateLimitAlert,
 } from '@knowtis/design-system';
-import { getPasswordChecks } from '@knowtis/shared-types';
 
 export function ResetPasswordPage() {
   const { token } = useSearch({ from: '/reset-password' });
@@ -61,10 +62,12 @@ export function ResetPasswordPage() {
       { token, newPassword: data.password },
       {
         onSuccess: () => {
+          toast.success('Password has been reset successfully!');
           setSuccess(true);
         },
         onError: (error) => {
           if (checkRateLimit(error)) {
+            toast.error('Too many attempts. Please try again later.');
             return;
           }
 
