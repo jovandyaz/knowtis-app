@@ -121,7 +121,7 @@ export default defineConfig([
   },
   // NestJS backend config - adjust rules for NestJS patterns
   {
-    files: ['apps/api/**/*.ts'],
+    files: ['apps/api/**/*.ts', 'packages/*-nestjs/**/*.ts'],
     rules: {
       // Allow empty functions for NestJS decorators
       '@typescript-eslint/no-empty-function': 'off',

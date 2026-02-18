@@ -414,12 +414,18 @@ importers:
       '@nestjs/testing':
         specifier: ^11.1.14
         version: 11.1.14(@nestjs/common@11.1.14(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.14)(@nestjs/platform-express@11.1.10)
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
       '@types/passport-local':
         specifier: ^1.0.38
         version: 1.0.38
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
       neverthrow:
         specifier: ^8.2.0
         version: 8.2.0
