@@ -1,0 +1,16 @@
+{
+  "name": "@jovandyaz/auth",
+  "version": "0.0.1",
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "neverthrow": "^8.2.0",
+    "tslib": "^2.3.0"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  }
+}

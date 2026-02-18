@@ -42,7 +42,8 @@
       ],
       "@jovandyaz/permissions-nestjs": [
         "packages/permissions-nestjs/src/index.ts"
-      ]
+      ],
+      "@jovandyaz/auth": ["packages/auth/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp", "dist"]
