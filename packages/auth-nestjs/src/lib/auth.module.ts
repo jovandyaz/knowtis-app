@@ -125,7 +125,6 @@ export class AuthNestjsModule {
         JwtModule.register({
           secret: options.tokenConfig.accessTokenSecret,
           signOptions: {
-             
             expiresIn: (options.tokenConfig.accessTokenExpiresIn ??
               '15m') as any,
           },
@@ -138,9 +137,13 @@ export class AuthNestjsModule {
         SESSION_REPOSITORY,
         TOKEN_SERVICE,
         PASSWORD_HASHER,
-        EMAIL_SERVICE,
-        EMAIL_VERIFICATION_TOKEN_REPOSITORY,
-        PASSWORD_RESET_TOKEN_REPOSITORY,
+        ...(options.emailService ? [EMAIL_SERVICE] : []),
+        ...(options.emailVerificationTokenRepository
+          ? [EMAIL_VERIFICATION_TOKEN_REPOSITORY]
+          : []),
+        ...(options.passwordResetTokenRepository
+          ? [PASSWORD_RESET_TOKEN_REPOSITORY]
+          : []),
         JwtAuthGuard,
         LocalAuthGuard,
         ...HANDLERS,

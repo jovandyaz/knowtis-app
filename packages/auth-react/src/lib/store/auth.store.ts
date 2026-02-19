@@ -3,12 +3,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import type { TokenStorage } from '../storage/token-storage';
-import type { AuthStore, AuthUser } from './auth.store.types';
+import type { AuthUserProfile } from '../types';
+import type { AuthStore } from './auth.store.types';
 
 export interface CreateAuthStoreOptions {
-  /** Storage key for persisted auth state */
   storageKey?: string;
-  /** Token storage instance */
   tokenStorage: TokenStorage;
 }
 
@@ -16,7 +15,6 @@ const DEFAULT_STORAGE_KEY = 'auth-store';
 
 /**
  * Creates a Zustand auth store with persist middleware.
- * Token storage is injected rather than imported as a singleton.
  */
 export function createAuthStore(options: CreateAuthStoreOptions) {
   const { tokenStorage, storageKey = DEFAULT_STORAGE_KEY } = options;
@@ -28,7 +26,7 @@ export function createAuthStore(options: CreateAuthStoreOptions) {
         isLoading: true,
         isAuthenticated: false,
 
-        setUser: (user: AuthUser | null) =>
+        setUser: (user: AuthUserProfile | null) =>
           set({
             user,
             isAuthenticated: user !== null,

@@ -49,16 +49,12 @@ export const AuthErrors = {
       `Invalid user ID: ${reason}`
     ),
 
-  weakPassword: () =>
+  weakPassword: (detail?: string) =>
     createAuthError(
       AuthErrorCodes.WEAK_PASSWORD,
-      'Password must be at least 8 characters'
-    ),
-
-  weakPasswordDetail: (detail: string) =>
-    createAuthError(
-      AuthErrorCodes.WEAK_PASSWORD,
-      `Password too weak: ${detail}`
+      detail
+        ? `Password too weak: ${detail}`
+        : 'Password does not meet requirements'
     ),
 
   emailAlreadyExists: (email: string) =>
@@ -87,6 +83,9 @@ export const AuthErrors = {
       AuthErrorCodes.TOKEN_REUSE_DETECTED,
       `Token reuse detected for user ${userId}. All sessions invalidated.`
     ),
+
+  sessionNotFound: () =>
+    createAuthError(AuthErrorCodes.SESSION_NOT_FOUND, 'Session not found'),
 
   sessionExpired: () =>
     createAuthError(AuthErrorCodes.SESSION_EXPIRED, 'Session has expired'),

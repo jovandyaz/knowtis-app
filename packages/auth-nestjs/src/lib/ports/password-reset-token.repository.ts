@@ -22,5 +22,3 @@ export interface PasswordResetTokenRepository {
   findByTokenHash(tokenHash: string): Promise<PasswordResetTokenEntity | null>;
   deleteAllByUserId(userId: string): Promise<void>;
 }
-
-export { PASSWORD_RESET_TOKEN_REPOSITORY } from '../constants';

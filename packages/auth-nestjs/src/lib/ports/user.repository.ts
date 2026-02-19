@@ -29,5 +29,3 @@ export interface UserRepository {
   ): Promise<Result<void, AuthDomainError>>;
   markEmailVerified(userId: UserId): Promise<Result<void, AuthDomainError>>;
 }
-
-export { USER_REPOSITORY } from '../constants';

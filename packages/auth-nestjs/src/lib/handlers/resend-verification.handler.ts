@@ -1,8 +1,5 @@
-import { randomBytes } from 'node:crypto';
-
 import {
   AuthErrors,
-  hashToken,
   UserId,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth';
@@ -18,6 +15,7 @@ import {
 import type { EmailVerificationTokenRepository } from '../ports/email-verification-token.repository';
 import type { EmailService } from '../ports/email.service';
 import type { UserRepository } from '../ports/user.repository';
+import { generateSecureToken } from './shared/generate-secure-token';
 
 export interface ResendVerificationInput {
   readonly userId: string;
@@ -44,17 +42,13 @@ export class ResendVerificationHandler {
       return err(AuthErrors.userNotFound(input.userId));
     }
 
-    // Check if email is already verified
     if (user.emailVerifiedAt) {
       return err(AuthErrors.emailAlreadyVerified());
     }
 
-    // Delete any existing verification tokens for this user
     await this.verificationTokenRepository.deleteAllByUserId(user.id);
 
-    // Generate a random token and hash it for storage
-    const plainToken = randomBytes(32).toString('hex');
-    const tokenHash = hashToken(plainToken);
+    const { plainToken, tokenHash } = generateSecureToken();
 
     const createResult = await this.verificationTokenRepository.create({
       userId: user.id,
@@ -66,7 +60,6 @@ export class ResendVerificationHandler {
       return err(createResult.error);
     }
 
-    // Send verification email
     const emailResult = await this.emailService.sendEmailVerification(
       user.email,
       plainToken,

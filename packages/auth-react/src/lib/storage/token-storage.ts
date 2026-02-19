@@ -65,13 +65,19 @@ export function createTokenStorage(
     },
 
     setTokens(accessTokenValue: string, refreshTokenValue: string): void {
-      this.setAccessToken(accessTokenValue);
-      this.setRefreshToken(refreshTokenValue);
+      accessToken = accessTokenValue;
+      notifyListeners();
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(refreshTokenKey, refreshTokenValue);
+      }
     },
 
     clearTokens(): void {
-      this.setAccessToken(null);
-      this.setRefreshToken(null);
+      accessToken = null;
+      notifyListeners();
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem(refreshTokenKey);
+      }
     },
 
     hasTokens(): boolean {
@@ -87,7 +93,10 @@ export function createTokenStorage(
 
     initialize(): { hasRefreshToken: boolean } {
       return {
-        hasRefreshToken: this.getRefreshToken() !== null,
+        hasRefreshToken:
+          typeof window !== 'undefined'
+            ? localStorage.getItem(refreshTokenKey) !== null
+            : false,
       };
     },
   };

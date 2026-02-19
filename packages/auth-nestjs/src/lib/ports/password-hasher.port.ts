@@ -8,5 +8,3 @@ export interface PasswordHasher {
     hash: string
   ): Promise<Result<boolean, AuthDomainError>>;
 }
-
-export { PASSWORD_HASHER } from '../constants';

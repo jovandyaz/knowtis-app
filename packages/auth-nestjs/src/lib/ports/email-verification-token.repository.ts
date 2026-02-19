@@ -24,5 +24,3 @@ export interface EmailVerificationTokenRepository {
   ): Promise<EmailVerificationTokenEntity | null>;
   deleteAllByUserId(userId: string): Promise<void>;
 }
-
-export { EMAIL_VERIFICATION_TOKEN_REPOSITORY } from '../constants';

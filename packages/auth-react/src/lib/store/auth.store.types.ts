@@ -1,24 +1,10 @@
 import type { AuthResponse } from '@jovandyaz/auth/client';
 
-/**
- * Authenticated user state
- */
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  avatarUrl: string | null;
-}
+import type { AuthUserProfile } from '../types';
 
-/**
- * Authentication state
- */
 export interface AuthState {
-  /** Current authenticated user or null */
-  user: AuthUser | null;
-  /** Whether auth state is being loaded */
+  user: AuthUserProfile | null;
   isLoading: boolean;
-  /** Whether user is authenticated */
   isAuthenticated: boolean;
 }
 
@@ -26,13 +12,9 @@ export interface AuthState {
  * Authentication actions
  */
 export interface AuthActions {
-  /** Set user from auth response */
-  setUser: (user: AuthUser | null) => void;
-  /** Handle successful auth response */
+  setUser: (user: AuthUserProfile | null) => void;
   handleAuthSuccess: (response: AuthResponse) => void;
-  /** Clear auth state (logout) */
   logout: () => void;
-  /** Set loading state */
   setLoading: (isLoading: boolean) => void;
 }
 

@@ -1,4 +1,9 @@
-export { ApiClientError, httpClient, type FieldError } from './lib/http-client';
+export {
+  ApiClientError,
+  httpClient,
+  type FieldError,
+  type TokenProvider,
+} from './lib/http-client';
 export { tokenStorage } from './lib/token-storage';
 
 export {

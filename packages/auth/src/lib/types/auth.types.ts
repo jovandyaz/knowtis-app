@@ -44,18 +44,18 @@ export interface RequestUser {
  * Frontend can use these to show validation hints before submission.
  */
 export interface PasswordRequirements {
-  minLength: number;
-  requireUppercase: boolean;
-  requireNumber: boolean;
-  requireSpecialChar: boolean;
+  readonly minLength: number;
+  readonly requireUppercase: boolean;
+  readonly requireNumber: boolean;
+  readonly requireSpecialChar: boolean;
 }
 
-export const PASSWORD_REQUIREMENTS: PasswordRequirements = {
+export const PASSWORD_REQUIREMENTS = {
   minLength: 8,
   requireUppercase: true,
   requireNumber: true,
   requireSpecialChar: true,
-};
+} as const satisfies PasswordRequirements;
 
 export interface PasswordCheck {
   readonly label: string;
@@ -64,29 +64,31 @@ export interface PasswordCheck {
 
 const SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/;
 
-export function getPasswordChecks(): PasswordCheck[] {
+export function getPasswordChecks(
+  requirements: PasswordRequirements = PASSWORD_REQUIREMENTS
+): PasswordCheck[] {
   const checks: PasswordCheck[] = [
     {
-      label: `At least ${PASSWORD_REQUIREMENTS.minLength} characters`,
-      test: (p) => p.length >= PASSWORD_REQUIREMENTS.minLength,
+      label: `At least ${requirements.minLength} characters`,
+      test: (p) => p.length >= requirements.minLength,
     },
   ];
 
-  if (PASSWORD_REQUIREMENTS.requireUppercase) {
+  if (requirements.requireUppercase) {
     checks.push({
       label: 'Contains uppercase letter',
       test: (p) => /[A-Z]/.test(p),
     });
   }
 
-  if (PASSWORD_REQUIREMENTS.requireNumber) {
+  if (requirements.requireNumber) {
     checks.push({
       label: 'Contains number',
       test: (p) => /[0-9]/.test(p),
     });
   }
 
-  if (PASSWORD_REQUIREMENTS.requireSpecialChar) {
+  if (requirements.requireSpecialChar) {
     checks.push({
       label: 'Contains special character',
       test: (p) => SPECIAL_CHAR_REGEX.test(p),

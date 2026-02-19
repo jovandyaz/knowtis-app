@@ -1,7 +1,7 @@
+import { AuthErrors } from '@jovandyaz/auth';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 
-import { AuthErrors } from '../../../../../auth/src/lib/errors/auth.errors';
 import { unwrapOrThrow } from '../result-to-response';
 
 describe('unwrapOrThrow', () => {

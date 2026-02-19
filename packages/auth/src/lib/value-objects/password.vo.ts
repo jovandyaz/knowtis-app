@@ -11,7 +11,7 @@ export const Password = {
 
     for (const check of getPasswordChecks()) {
       if (!check.test(password)) {
-        return err(AuthErrors.weakPasswordDetail(check.label));
+        return err(AuthErrors.weakPassword(check.label));
       }
     }
 

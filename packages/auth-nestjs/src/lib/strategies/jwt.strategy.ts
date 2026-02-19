@@ -5,14 +5,8 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 
 import type { AuthModuleOptions } from '../auth.module';
 import { AUTH_MODULE_OPTIONS, USER_REPOSITORY } from '../constants';
+import type { JwtPayload } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
-
-export interface JwtPayload {
-  sub: string;
-  email: string;
-  iat?: number;
-  exp?: number;
-}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

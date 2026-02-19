@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult,
+} from '@tanstack/react-query';
 
 import type {
   AuthResponse,
@@ -16,31 +22,30 @@ export const authQueryKeys = {
   profile: () => [...authQueryKeys.all, 'profile'] as const,
 } as const;
 
-export function useProfile() {
+export function useProfile(): UseQueryResult<AuthUserProfile> {
   const api = useAuthApi();
   const store = useAuthStore();
   const isAuthenticated = store((state) => state.isAuthenticated);
   const setUser = store((state) => state.setUser);
 
-  return useQuery({
+  const query = useQuery({
     queryKey: authQueryKeys.profile(),
-    queryFn: async (): Promise<AuthUserProfile> => {
-      const profile = await api.getProfile();
-      setUser({
-        id: profile.id,
-        email: profile.email,
-        name: profile.name,
-        avatarUrl: profile.avatarUrl,
-      });
-      return profile;
-    },
+    queryFn: (): Promise<AuthUserProfile> => api.getProfile(),
     enabled: isAuthenticated,
     staleTime: 5 * 60 * 1000,
     retry: false,
   });
+
+  useEffect(() => {
+    if (query.data) {
+      setUser(query.data);
+    }
+  }, [query.data, setUser]);
+
+  return query;
 }
 
-export function useLogin() {
+export function useLogin(): UseMutationResult<AuthResponse, Error, LoginInput> {
   const api = useAuthApi();
   const store = useAuthStore();
   const handleAuthSuccess = store((state) => state.handleAuthSuccess);
@@ -55,7 +60,11 @@ export function useLogin() {
   });
 }
 
-export function useRegister() {
+export function useRegister(): UseMutationResult<
+  AuthResponse,
+  Error,
+  RegisterInput
+> {
   const api = useAuthApi();
   const store = useAuthStore();
   const handleAuthSuccess = store((state) => state.handleAuthSuccess);
@@ -70,7 +79,7 @@ export function useRegister() {
   });
 }
 
-export function useLogout() {
+export function useLogout(): UseMutationResult<void, Error, void> {
   const api = useAuthApi();
   const store = useAuthStore();
   const logout = store((state) => state.logout);
@@ -85,7 +94,7 @@ export function useLogout() {
   });
 }
 
-export function useForgotPassword() {
+export function useForgotPassword(): UseMutationResult<void, Error, string> {
   const api = useAuthApi();
 
   return useMutation({
@@ -93,7 +102,11 @@ export function useForgotPassword() {
   });
 }
 
-export function useResetPassword() {
+export function useResetPassword(): UseMutationResult<
+  void,
+  Error,
+  { token: string; newPassword: string }
+> {
   const api = useAuthApi();
 
   return useMutation({
@@ -107,7 +120,7 @@ export function useResetPassword() {
   });
 }
 
-export function useVerifyEmail() {
+export function useVerifyEmail(): UseMutationResult<void, Error, string> {
   const api = useAuthApi();
 
   return useMutation({
@@ -115,7 +128,7 @@ export function useVerifyEmail() {
   });
 }
 
-export function useResendVerification() {
+export function useResendVerification(): UseMutationResult<void, Error, void> {
   const api = useAuthApi();
 
   return useMutation({

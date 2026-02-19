@@ -9,6 +9,8 @@ export interface AuthTokens {
 export interface JwtPayload {
   readonly sub: string;
   readonly email: string;
+  readonly iat?: number;
+  readonly exp?: number;
 }
 
 export interface TokenService {
@@ -21,5 +23,3 @@ export interface TokenService {
     token: string
   ): Promise<Result<JwtPayload, AuthDomainError>>;
 }
-
-export { TOKEN_SERVICE } from '../constants';

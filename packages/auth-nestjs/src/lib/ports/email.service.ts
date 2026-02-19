@@ -14,5 +14,3 @@ export interface EmailService {
     name: string
   ): Promise<Result<void, AuthDomainError>>;
 }
-
-export { EMAIL_SERVICE } from '../constants';

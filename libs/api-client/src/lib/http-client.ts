@@ -1,7 +1,7 @@
 import { logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
-import { tokenStorage } from './token-storage';
+import { tokenStorage as defaultTokenStorage } from './token-storage';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -41,9 +41,15 @@ export class ApiClientError extends Error {
 
 type TokenRefreshCallback = () => Promise<string | null>;
 
+export interface TokenProvider {
+  getAccessToken(): string | null;
+  clearTokens(): void;
+}
+
 export class HttpClient {
   private config: ApiClientConfig;
   private refreshTokenCallback?: TokenRefreshCallback;
+  private tokenProvider: TokenProvider = defaultTokenStorage;
   private isRefreshing = false;
   private refreshPromise: Promise<string | null> | null = null;
 
@@ -51,12 +57,16 @@ export class HttpClient {
     this.config = { ...DEFAULT_API_CONFIG, ...config };
   }
 
+  setTokenProvider(provider: TokenProvider): void {
+    this.tokenProvider = provider;
+  }
+
   setRefreshTokenCallback(callback: TokenRefreshCallback): void {
     this.refreshTokenCallback = callback;
   }
 
   private handleAuthFailure(): void {
-    tokenStorage.clearTokens();
+    this.tokenProvider.clearTokens();
   }
 
   async request<T>(
@@ -72,7 +82,7 @@ export class HttpClient {
     };
 
     if (!options.skipAuth) {
-      const token = tokenStorage.getAccessToken();
+      const token = this.tokenProvider.getAccessToken();
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       }

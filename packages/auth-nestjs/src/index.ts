@@ -90,5 +90,4 @@ export { AuthAuditListener } from './lib/logging/auth-audit.listener';
 
 // Strategies
 export { JwtStrategy } from './lib/strategies/jwt.strategy';
-export type { JwtPayload as JwtStrategyPayload } from './lib/strategies/jwt.strategy';
 export { LocalStrategy } from './lib/strategies/local.strategy';

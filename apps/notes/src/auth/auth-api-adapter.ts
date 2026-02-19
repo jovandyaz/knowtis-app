@@ -21,6 +21,10 @@ export interface HttpClient {
     data?: unknown,
     options?: { skipAuth?: boolean }
   ): Promise<T>;
+  setTokenProvider(provider: {
+    getAccessToken(): string | null;
+    clearTokens(): void;
+  }): void;
   setRefreshTokenCallback(callback: () => Promise<string | null>): void;
 }
 
@@ -29,13 +33,6 @@ interface CreateAuthApiAdapterDeps {
   tokenStorage: TokenStorage;
 }
 
-/**
- * Factory that creates an `AuthApiAdapter` bridging Knowtis' httpClient
- * to the `@jovandyaz/auth-react` interface.
- *
- * Side effect: registers a refresh-token callback on `httpClient` so that
- * 401 responses are retried automatically with a fresh access token.
- */
 export function createAuthApiAdapter(
   deps: CreateAuthApiAdapterDeps
 ): AuthApiAdapter {
@@ -131,7 +128,8 @@ export function createAuthApiAdapter(
     },
   };
 
-  // Register refresh callback so httpClient can retry on 401
+  httpClient.setTokenProvider(tokenStorage);
+
   httpClient.setRefreshTokenCallback(async () => {
     try {
       const tokens = await adapter.refreshToken();

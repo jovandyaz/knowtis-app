@@ -27,5 +27,3 @@ export interface SessionRepository {
   deleteById(id: string): Promise<void>;
   deleteAllByUserId(userId: string): Promise<void>;
 }
-
-export { SESSION_REPOSITORY } from '../constants';

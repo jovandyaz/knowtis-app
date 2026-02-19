@@ -2,10 +2,7 @@ import {
   AuthErrors,
   AuthEventName,
   Email,
-  hashToken,
   LoginFailedEvent,
-  SESSION_EXPIRY_MS,
-  UserId,
   UserLoggedInEvent,
 } from '@jovandyaz/auth';
 import type { AuthDomainError, SessionContext } from '@jovandyaz/auth';
@@ -23,6 +20,7 @@ import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
 import type { AuthTokens, TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { createSessionWithTokens } from './shared/create-session';
 
 export interface ValidateUserInput {
   readonly email: string;
@@ -109,26 +107,23 @@ export class LoginUserHandler {
     user: ValidatedUser,
     context: LoginSessionContext = {}
   ): Promise<Result<LoginUserOutput, AuthDomainError>> {
-    const tokensResult = await this.tokenService.generateTokens(
-      UserId.fromTrusted(user.id),
-      user.email
+    const tokensResult = await createSessionWithTokens(
+      {
+        tokenService: this.tokenService,
+        sessionRepository: this.sessionRepository,
+      },
+      {
+        userId: user.id,
+        email: user.email,
+        userAgent: context.userAgent,
+        ipAddress: context.ipAddress,
+      }
     );
     if (tokensResult.isErr()) {
       return err(tokensResult.error);
     }
 
     const tokens = tokensResult.value;
-
-    const sessionResult = await this.sessionRepository.create({
-      userId: user.id,
-      refreshTokenHash: hashToken(tokens.refreshToken),
-      userAgent: context.userAgent,
-      ipAddress: context.ipAddress,
-      expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),
-    });
-    if (sessionResult.isErr()) {
-      return err(sessionResult.error);
-    }
 
     this.eventEmitter.emit(
       AuthEventName.LOGIN,

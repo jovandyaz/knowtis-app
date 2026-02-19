@@ -2,7 +2,6 @@ import {
   AuthErrors,
   AuthEventName,
   hashToken,
-  SESSION_EXPIRY_MS,
   TokenRefreshedEvent,
   UserId,
 } from '@jovandyaz/auth';
@@ -19,6 +18,7 @@ import {
 import type { SessionRepository } from '../ports/session.repository';
 import type { AuthTokens, TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { createSessionWithTokens } from './shared/create-session';
 
 @Injectable()
 export class RefreshTokensHandler {
@@ -35,7 +35,6 @@ export class RefreshTokensHandler {
   async execute(
     refreshToken: string
   ): Promise<Result<AuthTokens, AuthDomainError>> {
-    // 1. Verify JWT signature
     const verifyResult =
       await this.tokenService.verifyRefreshToken(refreshToken);
     if (verifyResult.isErr()) {
@@ -44,15 +43,11 @@ export class RefreshTokensHandler {
     const payload = verifyResult.value;
     const userId = UserId.fromTrusted(payload.sub);
 
-    // 2. Hash the incoming token and look up the session
     const tokenHash = hashToken(refreshToken);
     const session =
       await this.sessionRepository.findByRefreshTokenHash(tokenHash);
 
     if (!session) {
-      // Token reuse detected: the token is valid (JWT signature OK) but
-      // not in the database. This means someone is replaying an old token.
-      // Invalidate ALL sessions for this user as a security measure.
       this.logger.warn(
         `Token reuse detected for user ${payload.sub}. Invalidating all sessions.`
       );
@@ -60,44 +55,36 @@ export class RefreshTokensHandler {
       return err(AuthErrors.tokenReuseDetected(payload.sub));
     }
 
-    // 3. Check if session is expired
     if (session.expiresAt < new Date()) {
       await this.sessionRepository.deleteById(session.id);
       return err(AuthErrors.sessionExpired());
     }
 
-    // 4. Verify user still exists
     const user = await this.userRepository.findById(userId);
     if (!user) {
       await this.sessionRepository.deleteById(session.id);
       return err(AuthErrors.userNotFound(payload.sub));
     }
 
-    // 5. Delete the old session (token rotation)
     await this.sessionRepository.deleteById(session.id);
 
-    // 6. Generate new token pair
-    const tokensResult = await this.tokenService.generateTokens(
-      userId,
-      payload.email
+    const tokensResult = await createSessionWithTokens(
+      {
+        tokenService: this.tokenService,
+        sessionRepository: this.sessionRepository,
+      },
+      {
+        userId: payload.sub,
+        email: payload.email,
+        userAgent: session.userAgent ?? undefined,
+        ipAddress: session.ipAddress ?? undefined,
+      }
     );
     if (tokensResult.isErr()) {
       return err(tokensResult.error);
     }
 
     const newTokens = tokensResult.value;
-
-    // 7. Create new session with the new hashed refresh token
-    const sessionResult = await this.sessionRepository.create({
-      userId: payload.sub,
-      refreshTokenHash: hashToken(newTokens.refreshToken),
-      userAgent: session.userAgent ?? undefined,
-      ipAddress: session.ipAddress ?? undefined,
-      expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),
-    });
-    if (sessionResult.isErr()) {
-      return err(sessionResult.error);
-    }
 
     this.eventEmitter.emit(
       AuthEventName.TOKEN_REFRESH,

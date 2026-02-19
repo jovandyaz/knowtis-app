@@ -14,8 +14,8 @@ describe('AuthErrors', () => {
     expect(error.code).toBe(AuthErrorCodes.WEAK_PASSWORD);
   });
 
-  it('weakPasswordDetail should include detail in message', () => {
-    const error = AuthErrors.weakPasswordDetail('too short');
+  it('weakPassword with detail should include detail in message', () => {
+    const error = AuthErrors.weakPassword('too short');
     expect(error.code).toBe(AuthErrorCodes.WEAK_PASSWORD);
     expect(error.message).toContain('too short');
   });

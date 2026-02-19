@@ -1,27 +1,22 @@
-// Storage
 export { createTokenStorage } from './lib/storage/token-storage';
 export type {
   TokenStorage,
   TokenStorageOptions,
 } from './lib/storage/token-storage';
 
-// Store
 export { createAuthStore } from './lib/store/auth.store';
 export type {
   CreateAuthStoreOptions,
   AuthStoreInstance,
 } from './lib/store/auth.store';
 export type {
-  AuthUser,
   AuthState,
   AuthActions,
   AuthStore,
 } from './lib/store/auth.store.types';
 
-// Provider
 export {
   AuthProvider,
-  useAuthContext,
   useAuthApi,
   useTokenStorage,
   useAuthStore,

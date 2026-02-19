@@ -1,13 +1,8 @@
-import { randomBytes } from 'node:crypto';
-
 import {
   AuthErrors,
   AuthEventName,
   Email,
-  hashToken,
   Password,
-  SESSION_EXPIRY_MS,
-  UserId,
   UserRegisteredEvent,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth';
@@ -30,6 +25,8 @@ import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
 import type { AuthTokens, TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { createSessionWithTokens } from './shared/create-session';
+import { generateSecureToken } from './shared/generate-secure-token';
 
 export interface RegisterUserInput {
   readonly email: string;
@@ -100,9 +97,17 @@ export class RegisterUserHandler {
     }
     const user = createResult.value;
 
-    const tokensResult = await this.tokenService.generateTokens(
-      UserId.fromTrusted(user.id),
-      user.email
+    const tokensResult = await createSessionWithTokens(
+      {
+        tokenService: this.tokenService,
+        sessionRepository: this.sessionRepository,
+      },
+      {
+        userId: user.id,
+        email: user.email,
+        userAgent: context.userAgent,
+        ipAddress: context.ipAddress,
+      }
     );
     if (tokensResult.isErr()) {
       return err(tokensResult.error);
@@ -110,18 +115,6 @@ export class RegisterUserHandler {
 
     const tokens = tokensResult.value;
 
-    const sessionResult = await this.sessionRepository.create({
-      userId: user.id,
-      refreshTokenHash: hashToken(tokens.refreshToken),
-      userAgent: context.userAgent,
-      ipAddress: context.ipAddress,
-      expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),
-    });
-    if (sessionResult.isErr()) {
-      return err(sessionResult.error);
-    }
-
-    // Fire-and-forget: send verification email (don't fail registration)
     this.sendVerificationEmail(user.id, user.email, user.name).catch(
       (error) => {
         this.logger.error(
@@ -158,8 +151,7 @@ export class RegisterUserHandler {
     email: string,
     name: string
   ): Promise<void> {
-    const plainToken = randomBytes(32).toString('hex');
-    const tokenHash = hashToken(plainToken);
+    const { plainToken, tokenHash } = generateSecureToken();
 
     const createResult = await this.verificationTokenRepository.create({
       userId,

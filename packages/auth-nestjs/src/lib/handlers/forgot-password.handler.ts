@@ -1,9 +1,6 @@
-import { randomBytes } from 'node:crypto';
-
 import {
   AuthEventName,
   Email,
-  hashToken,
   PasswordResetRequestedEvent,
   RESET_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth';
@@ -20,6 +17,7 @@ import {
 import type { EmailService } from '../ports/email.service';
 import type { PasswordResetTokenRepository } from '../ports/password-reset-token.repository';
 import type { UserRepository } from '../ports/user.repository';
+import { generateSecureToken } from './shared/generate-secure-token';
 
 export interface ForgotPasswordInput {
   readonly email: string;
@@ -40,7 +38,6 @@ export class ForgotPasswordHandler {
   async execute(
     input: ForgotPasswordInput
   ): Promise<Result<void, AuthDomainError>> {
-    // Always return success to prevent email enumeration
     const emailResult = Email.create(input.email);
     if (emailResult.isErr()) {
       return ok(undefined);
@@ -55,12 +52,9 @@ export class ForgotPasswordHandler {
       return ok(undefined);
     }
 
-    // Delete any existing reset tokens for this user
     await this.resetTokenRepository.deleteAllByUserId(user.id);
 
-    // Generate a random token and hash it for storage
-    const plainToken = randomBytes(32).toString('hex');
-    const tokenHash = hashToken(plainToken);
+    const { plainToken, tokenHash } = generateSecureToken();
 
     const createResult = await this.resetTokenRepository.create({
       userId: user.id,
@@ -72,7 +66,6 @@ export class ForgotPasswordHandler {
       return ok(undefined);
     }
 
-    // Send email (fire-and-forget for security — don't reveal failures)
     const sendResult = await this.emailService.sendPasswordReset(
       user.email,
       plainToken,
