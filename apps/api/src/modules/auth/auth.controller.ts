@@ -1,5 +1,20 @@
 import type { RequestUser } from '@jovandyaz/auth';
 import {
+  CurrentUser,
+  ForgotPasswordHandler,
+  JwtAuthGuard,
+  LocalAuthGuard,
+  LoginUserHandler,
+  LogoutUserHandler,
+  Public,
+  RefreshTokensHandler,
+  RegisterUserHandler,
+  ResendVerificationHandler,
+  ResetPasswordHandler,
+  unwrapOrThrow,
+  VerifyEmailHandler,
+} from '@jovandyaz/auth-nestjs';
+import {
   Body,
   Controller,
   Get,
@@ -18,16 +33,6 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { ForgotPasswordHandler } from './application/handlers/forgot-password.handler';
-import { LoginUserHandler } from './application/handlers/login-user.handler';
-import { LogoutUserHandler } from './application/handlers/logout-user.handler';
-import { RefreshTokensHandler } from './application/handlers/refresh-tokens.handler';
-import { RegisterUserHandler } from './application/handlers/register-user.handler';
-import { ResendVerificationHandler } from './application/handlers/resend-verification.handler';
-import { ResetPasswordHandler } from './application/handlers/reset-password.handler';
-import { VerifyEmailHandler } from './application/handlers/verify-email.handler';
-import { CurrentUser } from './decorators/current-user.decorator';
-import { Public } from './decorators/public.decorator';
 import type {
   ForgotPasswordDto,
   RefreshTokenDto,
@@ -35,9 +40,6 @@ import type {
   ResetPasswordDto,
   VerifyEmailDto,
 } from './dto/auth.dto';
-import { JwtAuthGuard } from './guards/jwt-auth.guard';
-import { LocalAuthGuard } from './guards/local-auth.guard';
-import { unwrapOrThrow } from './infrastructure/http/result-to-response';
 
 @ApiTags('Authentication')
 @Controller('auth')
