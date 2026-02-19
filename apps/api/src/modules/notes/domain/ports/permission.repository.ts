@@ -1,8 +1,8 @@
+import type { UserId } from '@jovandyaz/auth';
 import type { Result } from 'neverthrow';
 
 import type { PermissionLevel } from '@knowtis/shared-types';
 
-import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import type { NotePermissionEntity } from '../entities';
 import type { NoteDomainError } from '../errors';
 

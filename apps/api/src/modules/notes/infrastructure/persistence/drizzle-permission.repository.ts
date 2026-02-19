@@ -1,3 +1,4 @@
+import type { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -16,7 +17,6 @@ import {
   type Database,
   type NewNotePermission,
 } from '../../../../database';
-import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NoteErrors,
   PermissionLevel,

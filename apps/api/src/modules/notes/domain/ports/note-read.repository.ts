@@ -1,4 +1,5 @@
-import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
+import type { UserId } from '@jovandyaz/auth';
+
 import type { NoteEntity, NoteEntityWithOwner } from '../entities';
 
 export interface NoteReadRepository {

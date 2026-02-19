@@ -1,3 +1,4 @@
+import { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 
@@ -7,7 +8,6 @@ import {
   type PermissionLevel,
 } from '@knowtis/shared-types';
 
-import { UserId } from '../auth/domain/value-objects/user-id.vo';
 import { NOTE_REPOSITORY } from '../notes/domain';
 import type { NoteRepository } from '../notes/domain';
 import type {

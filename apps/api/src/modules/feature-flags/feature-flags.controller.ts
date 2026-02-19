@@ -1,3 +1,4 @@
+import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import {
   Body,
   Controller,
@@ -10,7 +11,6 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FeatureFlagKeyParam } from './dto/feature-flag-key.param';
 import { UpsertFeatureFlagDto } from './dto/feature-flags.dto';
 import { FeatureFlagsService } from './feature-flags.service';

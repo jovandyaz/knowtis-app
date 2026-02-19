@@ -1,9 +1,9 @@
+import { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
 import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
 
-import { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NOTE_REPOSITORY,
   type NoteDomainError,

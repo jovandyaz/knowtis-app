@@ -1,6 +1,5 @@
+import { hashToken } from '@jovandyaz/auth';
 import { describe, expect, it } from 'vitest';
-
-import { hashToken } from '../../../domain/hash-token';
 
 describe('hashToken', () => {
   it('should return a SHA-256 hex string', () => {

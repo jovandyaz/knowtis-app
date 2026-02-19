@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
+import { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
@@ -7,7 +8,6 @@ import { err, type Result } from 'neverthrow';
 import { GENERAL_ACCESS } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
-import { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import {
   NOTE_REPOSITORY,
   NoteContent,

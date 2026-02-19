@@ -1,3 +1,4 @@
+import type { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 
@@ -10,7 +11,6 @@ import {
   users,
   type Database,
 } from '../../../../database';
-import type { UserId } from '../../../auth/domain/value-objects/user-id.vo';
 import type {
   NoteEntity,
   NoteEntityWithOwner,
