@@ -20,6 +20,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   resolve: {
+    dedupe: ['react', 'react-dom'],
     alias: {
       // Local app alias
       '@': resolve(__dirname, './src'),

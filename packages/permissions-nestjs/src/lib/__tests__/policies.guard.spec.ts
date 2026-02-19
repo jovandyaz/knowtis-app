@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import type { Ability } from '../../../../permissions/src/lib/types';
+import type { Ability } from '@jovandyaz/permissions-core';
 import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

@@ -1,4 +1,4 @@
-import type { Ability } from '../../../permissions/src/lib/types';
+import type { Ability } from '@jovandyaz/permissions-core';
 import { SetMetadata } from '@nestjs/common';
 
 /** Function that evaluates whether the given ability satisfies a policy. */

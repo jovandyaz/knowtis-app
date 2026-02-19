@@ -5,7 +5,7 @@
   "main": "./src/index.js",
   "types": "./src/index.d.ts",
   "peerDependencies": {
-    "@jovandyaz/permissions": "workspace:*",
+    "@jovandyaz/permissions-core": "workspace:*",
     "react": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {

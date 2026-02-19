@@ -51,12 +51,8 @@ function wrapCaslRuleBuilder<TAction extends string, TSubject>(
 }
 
 function defaultDetectSubjectType(obj: Record<string, unknown>): string {
-  if (
-    typeof obj === 'object' &&
-    obj !== null &&
-    typeof obj['__typename'] === 'string'
-  ) {
+  if (typeof obj['__typename'] === 'string') {
     return obj['__typename'];
   }
-  return typeof obj;
+  return 'object';
 }

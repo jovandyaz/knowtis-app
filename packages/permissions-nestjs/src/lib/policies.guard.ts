@@ -1,4 +1,4 @@
-import type { Ability } from '../../../permissions/src/lib/types';
+import type { Ability } from '@jovandyaz/permissions-core';
 import {
   ForbiddenException,
   Inject,

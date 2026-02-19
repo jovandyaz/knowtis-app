@@ -1,6 +1,6 @@
 import 'reflect-metadata';
 
-import type { Ability } from '../../../../permissions/src/lib/types';
+import type { Ability } from '@jovandyaz/permissions-core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { REQUIRE_PERMISSION_KEY, RequirePermission } from '../../index';
