@@ -20,7 +20,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', '@tanstack/react-query'],
     alias: {
       // Local app alias
       '@': resolve(__dirname, './src'),
