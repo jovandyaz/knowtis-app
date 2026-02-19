@@ -1,17 +1,17 @@
 import { randomBytes } from 'node:crypto';
 
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
-import { ok, type Result } from 'neverthrow';
-
-import { RESET_TOKEN_EXPIRY_MS } from '../../../../auth/src/lib/constants';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
 import {
   AuthEventName,
+  Email,
+  hashToken,
   PasswordResetRequestedEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { Email } from '../../../../auth/src/lib/value-objects/email.vo';
+  RESET_TOKEN_EXPIRY_MS,
+} from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
+import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { ok, type Result } from 'neverthrow';
+
 import {
   EMAIL_SERVICE,
   PASSWORD_RESET_TOKEN_REPOSITORY,

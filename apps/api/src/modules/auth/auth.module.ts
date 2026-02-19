@@ -16,8 +16,8 @@ const configService = new ConfigService();
 
 @Module({
   imports: [
-    UsersModule,
     AuthNestjsModule.register({
+      imports: [UsersModule],
       tokenConfig: {
         accessTokenSecret: configService.getOrThrow('JWT_SECRET'),
         refreshTokenSecret: configService.getOrThrow('JWT_REFRESH_SECRET'),

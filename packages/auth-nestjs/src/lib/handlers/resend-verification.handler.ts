@@ -1,13 +1,15 @@
 import { randomBytes } from 'node:crypto';
 
+import {
+  AuthErrors,
+  hashToken,
+  UserId,
+  VERIFICATION_TOKEN_EXPIRY_MS,
+} from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import { VERIFICATION_TOKEN_EXPIRY_MS } from '../../../../auth/src/lib/constants';
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   EMAIL_SERVICE,
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,

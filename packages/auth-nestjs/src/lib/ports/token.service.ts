@@ -1,7 +1,5 @@
+import type { AuthDomainError, UserId } from '@jovandyaz/auth';
 import type { Result } from 'neverthrow';
-
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import type { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 
 export interface AuthTokens {
   readonly accessToken: string;

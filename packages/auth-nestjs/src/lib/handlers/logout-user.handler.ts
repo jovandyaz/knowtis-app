@@ -1,13 +1,9 @@
+import { AuthEventName, hashToken, UserLoggedOutEvent } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok, type Result } from 'neverthrow';
 
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import {
-  AuthEventName,
-  UserLoggedOutEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
 import { SESSION_REPOSITORY } from '../constants';
 import type { SessionRepository } from '../ports/session.repository';
 

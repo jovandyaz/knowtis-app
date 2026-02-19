@@ -1,10 +1,8 @@
+import { AuthErrors, hashToken, UserId } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
   USER_REPOSITORY,

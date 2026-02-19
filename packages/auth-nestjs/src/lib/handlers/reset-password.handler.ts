@@ -1,16 +1,16 @@
+import {
+  AuthErrors,
+  AuthEventName,
+  hashToken,
+  Password,
+  PasswordResetCompletedEvent,
+  UserId,
+} from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import {
-  AuthEventName,
-  PasswordResetCompletedEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { Password } from '../../../../auth/src/lib/value-objects/password.vo';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   PASSWORD_HASHER,
   PASSWORD_RESET_TOKEN_REPOSITORY,

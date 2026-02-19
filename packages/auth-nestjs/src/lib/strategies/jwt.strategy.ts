@@ -1,8 +1,8 @@
+import { UserId } from '@jovandyaz/auth';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import type { AuthModuleOptions } from '../auth.module';
 import { AUTH_MODULE_OPTIONS, USER_REPOSITORY } from '../constants';
 import type { UserRepository } from '../ports/user.repository';

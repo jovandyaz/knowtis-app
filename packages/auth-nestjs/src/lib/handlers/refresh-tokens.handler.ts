@@ -1,16 +1,16 @@
+import {
+  AuthErrors,
+  AuthEventName,
+  hashToken,
+  SESSION_EXPIRY_MS,
+  TokenRefreshedEvent,
+  UserId,
+} from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import { SESSION_EXPIRY_MS } from '../../../../auth/src/lib/constants';
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import {
-  AuthEventName,
-  TokenRefreshedEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   SESSION_REPOSITORY,
   TOKEN_SERVICE,

@@ -1,6 +1,5 @@
+import type { AuthDomainError } from '@jovandyaz/auth';
 import type { Result } from 'neverthrow';
-
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
 
 export interface EmailService {
   sendPasswordReset(

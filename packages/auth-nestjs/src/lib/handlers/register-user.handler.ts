@@ -1,24 +1,21 @@
 import { randomBytes } from 'node:crypto';
 
+import {
+  AuthErrors,
+  AuthEventName,
+  Email,
+  hashToken,
+  Password,
+  SESSION_EXPIRY_MS,
+  UserId,
+  UserRegisteredEvent,
+  VERIFICATION_TOKEN_EXPIRY_MS,
+} from '@jovandyaz/auth';
+import type { AuthDomainError, SessionContext } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import {
-  SESSION_EXPIRY_MS,
-  VERIFICATION_TOKEN_EXPIRY_MS,
-} from '../../../../auth/src/lib/constants';
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import {
-  AuthEventName,
-  UserRegisteredEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import type { SessionContext } from '../../../../auth/src/lib/session/session.types';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { Email } from '../../../../auth/src/lib/value-objects/email.vo';
-import { Password } from '../../../../auth/src/lib/value-objects/password.vo';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   EMAIL_SERVICE,
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,

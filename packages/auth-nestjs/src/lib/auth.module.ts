@@ -43,6 +43,7 @@ type InjectableClass = Type<any>;
 export interface AuthModuleOptions {
   readonly tokenConfig: TokenConfig;
   readonly passwordSaltRounds?: number;
+  readonly imports?: Array<Type<any> | DynamicModule>;
   readonly userRepository: InjectableClass;
   readonly sessionRepository: InjectableClass;
   readonly tokenService: InjectableClass;
@@ -120,10 +121,13 @@ export class AuthNestjsModule {
       module: AuthNestjsModule,
       imports: [
         PassportModule,
+        ...(options.imports ?? []),
         JwtModule.register({
           secret: options.tokenConfig.accessTokenSecret,
           signOptions: {
-            expiresIn: options.tokenConfig.accessTokenExpiresIn ?? '15m',
+             
+            expiresIn: (options.tokenConfig.accessTokenExpiresIn ??
+              '15m') as any,
           },
         }),
       ],

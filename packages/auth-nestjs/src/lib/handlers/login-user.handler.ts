@@ -1,19 +1,18 @@
+import {
+  AuthErrors,
+  AuthEventName,
+  Email,
+  hashToken,
+  LoginFailedEvent,
+  SESSION_EXPIRY_MS,
+  UserId,
+  UserLoggedInEvent,
+} from '@jovandyaz/auth';
+import type { AuthDomainError, SessionContext } from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
-import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import { SESSION_EXPIRY_MS } from '../../../../auth/src/lib/constants';
-import { AuthErrors } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import {
-  AuthEventName,
-  LoginFailedEvent,
-  UserLoggedInEvent,
-} from '../../../../auth/src/lib/events/auth.events';
-import type { SessionContext } from '../../../../auth/src/lib/session/session.types';
-import { hashToken } from '../../../../auth/src/lib/tokens/hash-token';
-import { Email } from '../../../../auth/src/lib/value-objects/email.vo';
-import { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 import {
   PASSWORD_HASHER,
   SESSION_REPOSITORY,

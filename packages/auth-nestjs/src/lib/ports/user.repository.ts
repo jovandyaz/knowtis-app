@@ -1,8 +1,5 @@
+import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth';
 import type { Result } from 'neverthrow';
-
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
-import type { Email } from '../../../../auth/src/lib/value-objects/email.vo';
-import type { UserId } from '../../../../auth/src/lib/value-objects/user-id.vo';
 
 export interface UserEntity {
   readonly id: string;

@@ -1,8 +1,7 @@
+import { AuthErrorCodes } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { Result } from 'neverthrow';
-
-import { AuthErrorCodes } from '../../../../auth/src/lib/errors/auth.errors';
-import type { AuthDomainError } from '../../../../auth/src/lib/errors/auth.errors';
 
 const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AuthErrorCodes.INVALID_EMAIL]: HttpStatus.BAD_REQUEST,
