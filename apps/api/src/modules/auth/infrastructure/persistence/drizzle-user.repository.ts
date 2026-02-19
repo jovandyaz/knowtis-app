@@ -1,18 +1,14 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { err, ok, type Result } from 'neverthrow';
-
-import { UsersService } from '../../../users';
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth';
 import type {
   CreateUserData,
   UserEntity,
   UserRepository,
-} from '../../domain/ports/user.repository';
-import type { Email } from '../../domain/value-objects/email.vo';
-import type { UserId } from '../../domain/value-objects/user-id.vo';
+} from '@jovandyaz/auth-nestjs';
+import { Injectable, Logger } from '@nestjs/common';
+import { err, ok, type Result } from 'neverthrow';
+
+import { UsersService } from '../../../users';
 
 @Injectable()
 export class DrizzleUserRepository implements UserRepository {

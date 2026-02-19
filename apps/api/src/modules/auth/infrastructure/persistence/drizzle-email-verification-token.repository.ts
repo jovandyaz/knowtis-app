@@ -1,3 +1,10 @@
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
+import type {
+  CreateEmailVerificationTokenData,
+  EmailVerificationTokenEntity,
+  EmailVerificationTokenRepository,
+} from '@jovandyaz/auth-nestjs';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -7,15 +14,6 @@ import {
   emailVerificationTokens,
   type Database,
 } from '../../../../database';
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
-import type {
-  CreateEmailVerificationTokenData,
-  EmailVerificationTokenEntity,
-  EmailVerificationTokenRepository,
-} from '../../domain/ports/email-verification-token.repository';
 
 @Injectable()
 export class DrizzleEmailVerificationTokenRepository implements EmailVerificationTokenRepository {

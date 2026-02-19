@@ -1,3 +1,10 @@
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
+import type {
+  CreatePasswordResetTokenData,
+  PasswordResetTokenEntity,
+  PasswordResetTokenRepository,
+} from '@jovandyaz/auth-nestjs';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -7,15 +14,6 @@ import {
   passwordResetTokens,
   type Database,
 } from '../../../../database';
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
-import type {
-  CreatePasswordResetTokenData,
-  PasswordResetTokenEntity,
-  PasswordResetTokenRepository,
-} from '../../domain/ports/password-reset-token.repository';
 
 @Injectable()
 export class DrizzlePasswordResetTokenRepository implements PasswordResetTokenRepository {

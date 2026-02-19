@@ -1,3 +1,10 @@
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
+import type {
+  CreateSessionData,
+  SessionEntity,
+  SessionRepository,
+} from '@jovandyaz/auth-nestjs';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -7,15 +14,6 @@ import {
   sessions,
   type Database,
 } from '../../../../database';
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
-import type {
-  CreateSessionData,
-  SessionEntity,
-  SessionRepository,
-} from '../../domain/ports/session.repository';
 
 @Injectable()
 export class DrizzleSessionRepository implements SessionRepository {
