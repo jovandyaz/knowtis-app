@@ -1,18 +1,14 @@
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
-import { err, ok, type Result } from 'neverthrow';
-
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError, UserId } from '@jovandyaz/auth';
 import type {
   AuthTokens,
   JwtPayload,
   TokenService,
-} from '../../domain/ports/token.service';
-import type { UserId } from '../../domain/value-objects/user-id.vo';
+} from '@jovandyaz/auth-nestjs';
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
+import { err, ok, type Result } from 'neverthrow';
 
 @Injectable()
 export class JwtTokenService implements TokenService {

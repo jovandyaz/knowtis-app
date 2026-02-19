@@ -1,12 +1,9 @@
+import { AuthErrors } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth';
+import type { PasswordHasher } from '@jovandyaz/auth-nestjs';
 import { Injectable } from '@nestjs/common';
 import { compare, hash } from 'bcryptjs';
 import { err, ok, type Result } from 'neverthrow';
-
-import {
-  AuthErrors,
-  type AuthDomainError,
-} from '../../domain/errors/auth.errors';
-import type { PasswordHasher } from '../../domain/ports/password-hasher.port';
 
 const SALT_ROUNDS = 10;
 
