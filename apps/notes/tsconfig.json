@@ -2,7 +2,25 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
-    "types": ["vite/client", "vitest/globals"]
+    "types": ["vite/client", "vitest/globals"],
+    "paths": {
+      "@/*": ["apps/notes/src/*"],
+      "@knowtis/design-system": ["libs/design-system/src/index.ts"],
+      "@knowtis/shared-hooks": ["libs/shared/hooks/src/index.ts"],
+      "@knowtis/shared-util": ["libs/shared/util/src/index.ts"],
+      "@knowtis/shared-types": ["libs/shared/types/src/index.ts"],
+      "@knowtis/api-client": ["libs/api-client/src/index.ts"],
+      "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
+      "@knowtis/data-access-users": ["libs/data-access/users/src/index.ts"],
+      "@knowtis/authorization": ["libs/authorization/src/index.ts"],
+      "@jovandyaz/permissions-core": ["packages/permissions/src/index.ts"],
+      "@jovandyaz/permissions-react": [
+        "packages/permissions-react/src/index.ts"
+      ],
+      "@jovandyaz/auth": ["packages/auth/src/index.ts"],
+      "@jovandyaz/auth/server": ["packages/auth/src/server.ts"],
+      "@jovandyaz/auth-react": ["packages/auth-react/src/index.ts"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

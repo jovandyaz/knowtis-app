@@ -2,7 +2,6 @@ import { useEffect, useRef } from 'react';
 
 import { Link, useSearch } from '@tanstack/react-router';
 
-import { PublicRoute } from '@/components/auth';
 import {
   useIsAuthenticated,
   useResendVerification,
@@ -20,13 +19,14 @@ import { toast } from 'sonner';
 import { ApiClientError } from '@knowtis/api-client';
 import {
   Button,
-  Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
 } from '@knowtis/design-system';
+
+import { AuthPageLayout } from './AuthPageLayout';
 
 export function VerifyEmailPage() {
   const { token } = useSearch({ from: '/verify-email' });
@@ -49,184 +49,168 @@ export function VerifyEmailPage() {
 
   if (!token) {
     return (
-      <PublicRoute>
-        <div className="flex min-h-screen items-center justify-center p-4">
-          <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
-            <CardHeader className="space-y-1 text-center">
-              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--destructive)/10">
-                <AlertCircle className="h-6 w-6 text-(--destructive)" />
-              </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">
-                Invalid verification link
-              </CardTitle>
-              <CardDescription>
-                This email verification link is invalid or missing. Please check
-                your email for the correct link.
-              </CardDescription>
-            </CardHeader>
+      <AuthPageLayout>
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--destructive)/10">
+            <AlertCircle className="h-6 w-6 text-(--destructive)" />
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            Invalid verification link
+          </CardTitle>
+          <CardDescription>
+            This email verification link is invalid or missing. Please check
+            your email for the correct link.
+          </CardDescription>
+        </CardHeader>
 
-            <CardFooter>
-              <Link
-                to="/login"
-                className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Back to login
-              </Link>
-            </CardFooter>
-          </Card>
-        </div>
-      </PublicRoute>
+        <CardFooter>
+          <Link
+            to="/login"
+            search={{ redirect: undefined }}
+            className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to login
+          </Link>
+        </CardFooter>
+      </AuthPageLayout>
     );
   }
 
   if (verifyEmail.isPending) {
     return (
-      <PublicRoute>
-        <div className="flex min-h-screen items-center justify-center p-4">
-          <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
-            <CardHeader className="space-y-1 text-center">
-              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
-                <Loader2 className="h-6 w-6 animate-spin text-(--primary)" />
-              </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">
-                Verifying your email
-              </CardTitle>
-              <CardDescription aria-live="polite">
-                Please wait while we verify your email address...
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-      </PublicRoute>
+      <AuthPageLayout>
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
+            <Loader2 className="h-6 w-6 animate-spin text-(--primary)" />
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            Verifying your email
+          </CardTitle>
+          <CardDescription aria-live="polite">
+            Please wait while we verify your email address...
+          </CardDescription>
+        </CardHeader>
+      </AuthPageLayout>
     );
   }
 
   if (verifyEmail.isSuccess) {
     return (
-      <PublicRoute>
-        <div className="flex min-h-screen items-center justify-center p-4">
-          <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
-            <CardHeader className="space-y-1 text-center">
-              <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
-                <CheckCircle className="h-6 w-6 text-(--primary)" />
-              </div>
-              <CardTitle className="text-2xl font-bold tracking-tight">
-                Email verified!
-              </CardTitle>
-              <CardDescription>
-                Your email has been verified successfully. You can now sign in
-                to your account.
-              </CardDescription>
-            </CardHeader>
+      <AuthPageLayout>
+        <CardHeader className="space-y-1 text-center">
+          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
+            <CheckCircle className="h-6 w-6 text-(--primary)" />
+          </div>
+          <CardTitle className="text-2xl font-bold tracking-tight">
+            Email verified!
+          </CardTitle>
+          <CardDescription>
+            Your email has been verified successfully. You can now sign in to
+            your account.
+          </CardDescription>
+        </CardHeader>
 
-            <CardFooter>
-              <Link to="/login" className="w-full">
-                <Button className="w-full">Sign in</Button>
-              </Link>
-            </CardFooter>
-          </Card>
-        </div>
-      </PublicRoute>
+        <CardFooter>
+          <Link to="/login" search={{ redirect: undefined }} className="w-full">
+            <Button className="w-full">Sign in</Button>
+          </Link>
+        </CardFooter>
+      </AuthPageLayout>
     );
   }
 
   const errorMessage = getErrorMessage(verifyEmail.error);
 
   return (
-    <PublicRoute>
-      <div className="flex min-h-screen items-center justify-center p-4">
-        <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
-          <CardHeader className="space-y-1 text-center">
-            <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--destructive)/10">
-              <AlertCircle className="h-6 w-6 text-(--destructive)" />
-            </div>
-            <CardTitle className="text-2xl font-bold tracking-tight">
-              Verification failed
-            </CardTitle>
-            <CardDescription>
-              <span role="alert" aria-live="polite">
-                {errorMessage}
-              </span>
-            </CardDescription>
-          </CardHeader>
+    <AuthPageLayout>
+      <CardHeader className="space-y-1 text-center">
+        <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--destructive)/10">
+          <AlertCircle className="h-6 w-6 text-(--destructive)" />
+        </div>
+        <CardTitle className="text-2xl font-bold tracking-tight">
+          Verification failed
+        </CardTitle>
+        <CardDescription>
+          <span role="alert" aria-live="polite">
+            {errorMessage}
+          </span>
+        </CardDescription>
+      </CardHeader>
 
-          <CardContent className="space-y-4">
-            {isAuthenticated && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() =>
-                  resendVerification.mutate(undefined, {
-                    onSuccess: () => {
-                      toast.success(
-                        'Verification email sent. Please check your inbox.'
-                      );
-                    },
-                    onError: (error) => {
-                      if (
-                        ApiClientError.isApiClientError(error) &&
-                        error.status === 429
-                      ) {
-                        toast.error(
-                          'Too many attempts. Please try again later.'
-                        );
-                      }
-                    },
-                  })
-                }
-                disabled={resendVerification.isPending}
-              >
-                {resendVerification.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Mail className="mr-2 h-4 w-4" />
-                    Resend verification email
-                  </>
-                )}
-              </Button>
+      <CardContent className="space-y-4">
+        {isAuthenticated && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() =>
+              resendVerification.mutate(undefined, {
+                onSuccess: () => {
+                  toast.success(
+                    'Verification email sent. Please check your inbox.'
+                  );
+                },
+                onError: (error) => {
+                  if (
+                    ApiClientError.isApiClientError(error) &&
+                    error.status === 429
+                  ) {
+                    toast.error('Too many attempts. Please try again later.');
+                  }
+                },
+              })
+            }
+            disabled={resendVerification.isPending}
+          >
+            {resendVerification.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail className="mr-2 h-4 w-4" />
+                Resend verification email
+              </>
             )}
+          </Button>
+        )}
 
-            {resendVerification.isSuccess && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
-              >
-                A new verification email has been sent. Please check your inbox.
-              </div>
-            )}
+        {resendVerification.isSuccess && (
+          <div
+            role="alert"
+            aria-live="polite"
+            className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
+          >
+            A new verification email has been sent. Please check your inbox.
+          </div>
+        )}
 
-            {resendVerification.isError && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-md bg-(--destructive)/10 p-3 text-center text-sm text-(--destructive)"
-              >
-                {ApiClientError.isApiClientError(resendVerification.error) &&
-                resendVerification.error.status === 429
-                  ? 'Too many attempts. Please wait a moment.'
-                  : 'Failed to resend verification email. Please try again.'}
-              </div>
-            )}
-          </CardContent>
+        {resendVerification.isError && (
+          <div
+            role="alert"
+            aria-live="polite"
+            className="rounded-md bg-(--destructive)/10 p-3 text-center text-sm text-(--destructive)"
+          >
+            {ApiClientError.isApiClientError(resendVerification.error) &&
+            resendVerification.error.status === 429
+              ? 'Too many attempts. Please wait a moment.'
+              : 'Failed to resend verification email. Please try again.'}
+          </div>
+        )}
+      </CardContent>
 
-          <CardFooter>
-            <Link
-              to="/login"
-              className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
-            >
-              <ArrowLeft className="h-4 w-4" />
-              Back to login
-            </Link>
-          </CardFooter>
-        </Card>
-      </div>
-    </PublicRoute>
+      <CardFooter>
+        <Link
+          to="/login"
+          search={{ redirect: undefined }}
+          className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to login
+        </Link>
+      </CardFooter>
+    </AuthPageLayout>
   );
 }
 

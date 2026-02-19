@@ -1,4 +1,4 @@
 export { Sidebar } from './Sidebar';
 export { SidebarBrand } from './SidebarBrand';
-export { SidebarUserFooter } from './SidebarUserFooter';
+export { SidebarUserMenu } from './SidebarUserMenu';
 export { NavigationLinks } from './NavigationLinks';

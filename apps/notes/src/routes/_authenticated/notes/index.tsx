@@ -4,18 +4,18 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { LoadingState } from '@knowtis/design-system';
 
-const WelcomePage = lazy(() =>
-  import('@/pages/WelcomePage').then((m) => ({ default: m.WelcomePage }))
+const HomePage = lazy(() =>
+  import('@/pages/HomePage').then((m) => ({ default: m.HomePage }))
 );
 
-export const Route = createFileRoute('/_authenticated/')({
-  component: WelcomePageWrapper,
+export const Route = createFileRoute('/_authenticated/notes/')({
+  component: NotesListWrapper,
 });
 
-function WelcomePageWrapper() {
+function NotesListWrapper() {
   return (
     <Suspense fallback={<LoadingState message="" />}>
-      <WelcomePage />
+      <HomePage />
     </Suspense>
   );
 }

@@ -1,6 +1,8 @@
 import { lazy, Suspense } from 'react';
 
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, redirect } from '@tanstack/react-router';
+
+import { authStore } from '@/auth';
 
 import { LoadingState } from '@knowtis/design-system';
 
@@ -11,6 +13,12 @@ const ForgotPasswordPage = lazy(() =>
 );
 
 export const Route = createFileRoute('/forgot-password')({
+  beforeLoad: () => {
+    const { isAuthenticated } = authStore.getState();
+    if (isAuthenticated) {
+      throw redirect({ to: '/' });
+    }
+  },
   component: ForgotPasswordPageWrapper,
 });
 

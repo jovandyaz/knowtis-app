@@ -24,6 +24,15 @@ export { LoadingState, type LoadingStateProps } from './LoadingState';
 export { ErrorState, type ErrorStateProps } from './ErrorState';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Switch, type SwitchProps } from './Switch';
+export {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+  DropdownMenuSwitchItem,
+} from './DropdownMenu';
 export { Toaster } from './Toaster';
 export { PasswordInput, type PasswordInputProps } from './PasswordInput';
 export {

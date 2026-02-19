@@ -14,3 +14,5 @@ export {
 } from './lib/notes.api';
 
 export { collaborationClient } from './lib/collaboration.client';
+
+export { usersApi, type UserProfile } from './lib/users.api';

@@ -1,0 +1,7 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../../../dist/libs/data-access/users"
+  },
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
+}

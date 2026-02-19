@@ -1,14 +1,17 @@
+import { useEffect } from 'react';
+
 import {
   QueryCache,
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
-import { createRootRoute, Outlet } from '@tanstack/react-router';
+import { createRootRoute, Navigate, Outlet } from '@tanstack/react-router';
 
 import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
 import { AuthProvider } from '@jovandyaz/auth-react';
+import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { Toaster } from '@knowtis/design-system';
@@ -43,7 +46,23 @@ const queryClient = new QueryClient({
 
 export const Route = createRootRoute({
   component: RootComponent,
+  notFoundComponent: NotFoundRedirect,
 });
+
+function NotFoundRedirect() {
+  const { isAuthenticated } = authStore.getState();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      toast.error('La página que buscabas no existe');
+    }
+  }, [isAuthenticated]);
+
+  if (isAuthenticated) {
+    return <Navigate to="/" />;
+  }
+  return <Navigate to="/login" search={{ redirect: undefined }} />;
+}
 
 function RootComponent() {
   return (
