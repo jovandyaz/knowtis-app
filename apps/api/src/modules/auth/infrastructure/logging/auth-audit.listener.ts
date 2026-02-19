@@ -1,6 +1,3 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { OnEvent } from '@nestjs/event-emitter';
-
 import {
   AuthEventName,
   LoginFailedEvent,
@@ -10,7 +7,9 @@ import {
   UserLoggedInEvent,
   UserLoggedOutEvent,
   UserRegisteredEvent,
-} from '../../domain/events/auth.events';
+} from '@jovandyaz/auth';
+import { Injectable, Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 
 @Injectable()
 export class AuthAuditListener {

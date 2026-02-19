@@ -1,9 +1,8 @@
+import type { AuthDomainError } from '@jovandyaz/auth';
+import type { EmailService } from '@jovandyaz/auth-nestjs';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ok, type Result } from 'neverthrow';
-
-import type { AuthDomainError } from '../../domain/errors/auth.errors';
-import type { EmailService } from '../../domain/ports/email.service';
 
 @Injectable()
 export class ConsoleEmailService implements EmailService {
