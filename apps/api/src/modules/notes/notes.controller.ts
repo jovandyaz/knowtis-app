@@ -1,4 +1,5 @@
 import type { RequestUser } from '@jovandyaz/auth';
+import { CurrentUser, JwtAuthGuard, Public } from '@jovandyaz/auth-nestjs';
 import {
   Body,
   Controller,
@@ -19,7 +20,6 @@ import type { Result } from 'neverthrow';
 import { SUBJECTS } from '@knowtis/authorization';
 import { pickDefined } from '@knowtis/shared-util';
 
-import { CurrentUser, JwtAuthGuard, Public } from '../auth';
 import { PoliciesGuard, RequirePermission } from '../authorization';
 import {
   CreateNoteHandler,
