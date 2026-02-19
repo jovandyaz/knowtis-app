@@ -134,18 +134,18 @@ Require `Authorization: Bearer <token>` header.
 - **Rate limiting:** All endpoints via `@nestjs/throttler` (per-IP). Exceeding → `429`.
 - **Email enumeration:** `forgot-password` always returns success regardless of email existence.
 - **Session management:** Password reset invalidates all sessions. Logout invalidates specific session. Metadata (user agent, IP) stored for audit.
-- **Email service gate:** `ConsoleEmailService` throws if `NODE_ENV=production`. Implement `EmailService` port for production.
+- **Email service:** `ConsoleEmailService` logs emails to console (warns in production). Replace with a real provider (Resend, SendGrid, etc.) by implementing the `EmailService` port.
 
 ### Environment variables
 
-| Variable                 | Required | Default                 | Description                          |
-| ------------------------ | -------- | ----------------------- | ------------------------------------ |
-| `JWT_SECRET`             | Yes      | —                       | Access token signing key             |
-| `JWT_REFRESH_SECRET`     | Yes      | —                       | Refresh token signing key            |
-| `JWT_EXPIRES_IN`         | No       | `15m`                   | Access token TTL                     |
-| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                    | Refresh token TTL                    |
-| `FRONTEND_URL`           | No       | `http://localhost:4200` | Base URL for email links             |
-| `NODE_ENV`               | No       | `development`           | Blocks `ConsoleEmailService` in prod |
+| Variable                 | Required | Default                 | Description                     |
+| ------------------------ | -------- | ----------------------- | ------------------------------- |
+| `JWT_SECRET`             | Yes      | —                       | Access token signing key        |
+| `JWT_REFRESH_SECRET`     | Yes      | —                       | Refresh token signing key       |
+| `JWT_EXPIRES_IN`         | No       | `15m`                   | Access token TTL                |
+| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                    | Refresh token TTL               |
+| `FRONTEND_URL`           | No       | `http://localhost:4200` | Base URL for email links        |
+| `NODE_ENV`               | No       | `development`           | Controls email service warnings |
 
 ---
 
@@ -162,6 +162,10 @@ All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_
 > After schema changes, run `pnpm db:push`.
 
 ---
+
+<!-- TODO: Replace ConsoleEmailService with a real provider (Resend, SendGrid, AWS SES).
+     Implement the EmailService interface (packages/auth-nestjs/src/lib/ports/email.service.ts)
+     and swap it in auth.module.ts (emailService property). -->
 
 ## Frontend Integration
 

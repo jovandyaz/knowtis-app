@@ -12,8 +12,9 @@ export class ConsoleEmailService implements EmailService {
   constructor(configService: ConfigService) {
     const nodeEnv = configService.get<string>('NODE_ENV', 'development');
     if (nodeEnv === 'production') {
-      throw new Error(
-        'ConsoleEmailService must not be used in production. Configure a real email service.'
+      this.logger.warn(
+        'ConsoleEmailService is active in production. Emails will only be logged, not sent. ' +
+          'Configure a real email service (e.g. Resend) for production use.'
       );
     }
 
