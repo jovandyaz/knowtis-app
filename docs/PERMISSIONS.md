@@ -2,6 +2,8 @@
 
 This document describes how note permissions, access control, and sharing work in Knowtis using the **General Access** model (similar to Google Docs).
 
+The permission system is built on a layered package architecture. For package internals, see [PERMISSIONS-PACKAGES.md](PERMISSIONS-PACKAGES.md).
+
 ---
 
 ## Table of Contents
@@ -387,12 +389,18 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 | `apps/api/src/modules/collaboration/collaboration.service.ts` | `hasAccess`, `canEdit`, `validateShareToken`, `isNotePublic` |
 | `apps/api/src/modules/collaboration/ws-auth.service.ts`       | JWT/share token extraction from handshake                    |
 
-### Authorization
+### Authorization & Permissions Packages
 
-| File                                        | Description                                |
-| ------------------------------------------- | ------------------------------------------ |
-| `libs/authorization/src/lib/types.ts`       | NoteSubject, PermissionContext definitions |
-| `libs/authorization/src/lib/permissions.ts` | `defineAbilityFor` - CASL ability factory  |
+| File                                        | Description                                               |
+| ------------------------------------------- | --------------------------------------------------------- |
+| `packages/permissions/`                     | Core: `Ability` types, `definePermissions`, `RoleManager` |
+| `packages/permissions-nestjs/`              | NestJS: `PoliciesGuard`, `@RequirePermission` decorator   |
+| `packages/permissions-react/`               | React: `createPermissionContext` (provider, hooks, `Can`) |
+| `libs/authorization/src/lib/types.ts`       | App types: `AppAbility`, `Action`, `Subject`, `AuthUser`  |
+| `libs/authorization/src/lib/permissions.ts` | `defineAbilityFor` — builds ability from user + context   |
+| `libs/authorization/src/lib/roles.ts`       | `appRoleManager` — pre-defined role templates             |
+
+> Package internals documented in [PERMISSIONS-PACKAGES.md](PERMISSIONS-PACKAGES.md).
 
 ### Frontend
 

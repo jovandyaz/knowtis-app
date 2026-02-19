@@ -19,8 +19,8 @@ export const REQUEST_EXTRACTOR_KEY = Symbol('REQUEST_EXTRACTOR');
 export type RequestExtractor = (context: ExecutionContext) => unknown;
 
 /** Interface for creating abilities from incoming requests. */
-export interface AbilityFactory<TAbility extends Ability> {
-  createAbility(request: unknown): TAbility | Promise<TAbility>;
+export interface AbilityFactory<TAbility extends Ability, TRequest = unknown> {
+  createAbility(request: TRequest): TAbility | Promise<TAbility>;
 }
 
 const defaultHttpExtractor: RequestExtractor = (context) =>
