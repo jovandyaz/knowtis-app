@@ -6,7 +6,7 @@ export function HomePage() {
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-(--foreground)">My Notes</h1>
         <p className="mt-2 text-(--muted-foreground)">
-          Create, edit, and collaborate on notes in real-time.
+          Create, edit, and collaborate on notes in real-time!
         </p>
       </div>
 
