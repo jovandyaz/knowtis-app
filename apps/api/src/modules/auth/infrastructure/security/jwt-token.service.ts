@@ -1,6 +1,10 @@
-import { AuthErrors } from '@jovandyaz/auth';
-import type { AuthDomainError, AuthTokens, UserId } from '@jovandyaz/auth';
 import type { JwtPayload, TokenService } from '@jovandyaz/auth-nestjs';
+import { AuthErrors } from '@jovandyaz/auth/server';
+import type {
+  AuthDomainError,
+  AuthTokens,
+  UserId,
+} from '@jovandyaz/auth/server';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';

@@ -1,5 +1,5 @@
-import type { RequestUser } from '@jovandyaz/auth';
 import { CurrentUser, JwtAuthGuard, Public } from '@jovandyaz/auth-nestjs';
+import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   Body,
   Controller,

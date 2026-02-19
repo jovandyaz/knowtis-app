@@ -4,8 +4,8 @@ import {
   hashToken,
   TokenRefreshedEvent,
   UserId,
-} from '@jovandyaz/auth';
-import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth';
+} from '@jovandyaz/auth/server';
+import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';

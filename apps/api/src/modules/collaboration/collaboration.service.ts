@@ -1,4 +1,4 @@
-import { UserId } from '@jovandyaz/auth';
+import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 

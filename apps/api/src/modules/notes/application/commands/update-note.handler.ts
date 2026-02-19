@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { UserId } from '@jovandyaz/auth';
+import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';

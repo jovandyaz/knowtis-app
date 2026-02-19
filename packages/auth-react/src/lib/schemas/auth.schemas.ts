@@ -1,4 +1,4 @@
-import { getPasswordChecks } from '@jovandyaz/auth/client';
+import { getPasswordChecks } from '@jovandyaz/auth';
 import { z } from 'zod';
 
 const passwordField = z

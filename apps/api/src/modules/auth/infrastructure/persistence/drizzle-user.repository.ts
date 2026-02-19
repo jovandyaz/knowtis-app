@@ -1,10 +1,10 @@
-import { AuthErrors } from '@jovandyaz/auth';
-import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth';
 import type {
   CreateUserData,
   UserEntity,
   UserRepository,
 } from '@jovandyaz/auth-nestjs';
+import { AuthErrors } from '@jovandyaz/auth/server';
+import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth/server';
 import { Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 

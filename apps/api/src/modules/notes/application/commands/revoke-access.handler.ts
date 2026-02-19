@@ -1,4 +1,4 @@
-import { UserId } from '@jovandyaz/auth';
+import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, type Result } from 'neverthrow';
 

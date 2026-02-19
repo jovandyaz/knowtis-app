@@ -1,4 +1,4 @@
-import type { UserId } from '@jovandyaz/auth';
+import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';

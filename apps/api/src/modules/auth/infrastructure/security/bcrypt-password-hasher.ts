@@ -1,6 +1,6 @@
-import { AuthErrors } from '@jovandyaz/auth';
-import type { AuthDomainError } from '@jovandyaz/auth';
 import type { PasswordHasher } from '@jovandyaz/auth-nestjs';
+import { AuthErrors } from '@jovandyaz/auth/server';
+import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Injectable } from '@nestjs/common';
 import { compare, hash } from 'bcryptjs';
 import { err, ok, type Result } from 'neverthrow';

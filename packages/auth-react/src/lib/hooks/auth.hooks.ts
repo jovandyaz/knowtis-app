@@ -8,11 +8,7 @@ import {
   type UseQueryResult,
 } from '@tanstack/react-query';
 
-import type {
-  AuthResponse,
-  LoginInput,
-  RegisterInput,
-} from '@jovandyaz/auth/client';
+import type { AuthResponse, LoginInput, RegisterInput } from '@jovandyaz/auth';
 
 import { useAuthApi, useAuthStore } from '../provider/auth-provider';
 import type { AuthUserProfile } from '../types';

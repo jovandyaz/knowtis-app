@@ -1,4 +1,4 @@
-import { UserId } from '@jovandyaz/auth';
+import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';

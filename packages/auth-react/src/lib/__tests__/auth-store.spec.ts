@@ -1,4 +1,4 @@
-import type { AuthResponse } from '@jovandyaz/auth/client';
+import type { AuthResponse } from '@jovandyaz/auth';
 
 import { createTokenStorage } from '../storage/token-storage';
 import { createAuthStore } from '../store/auth.store';

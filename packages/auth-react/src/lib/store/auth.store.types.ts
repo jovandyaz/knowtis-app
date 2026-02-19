@@ -1,4 +1,4 @@
-import type { AuthResponse } from '@jovandyaz/auth/client';
+import type { AuthResponse } from '@jovandyaz/auth';
 
 import type { AuthUserProfile } from '../types';
 

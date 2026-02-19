@@ -1,5 +1,5 @@
-import type { AuthDomainError } from '@jovandyaz/auth';
 import type { EmailService } from '@jovandyaz/auth-nestjs';
+import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ok, type Result } from 'neverthrow';

@@ -1,4 +1,4 @@
-import { hashToken } from '@jovandyaz/auth';
+import { hashToken } from '@jovandyaz/auth/server';
 import { describe, expect, it } from 'vitest';
 
 describe('hashToken', () => {

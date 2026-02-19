@@ -1,5 +1,5 @@
-import { AuthErrorCodes } from '@jovandyaz/auth';
-import type { AuthDomainError } from '@jovandyaz/auth';
+import { AuthErrorCodes } from '@jovandyaz/auth/server';
+import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 

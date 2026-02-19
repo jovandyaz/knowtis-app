@@ -7,7 +7,7 @@ import {
   type UserLoggedInEvent,
   type UserLoggedOutEvent,
   type UserRegisteredEvent,
-} from '@jovandyaz/auth';
+} from '@jovandyaz/auth/server';
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 

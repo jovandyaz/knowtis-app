@@ -4,12 +4,12 @@ import {
   Email,
   LoginFailedEvent,
   UserLoggedInEvent,
-} from '@jovandyaz/auth';
+} from '@jovandyaz/auth/server';
 import type {
   AuthDomainError,
   AuthTokens,
   SessionContext,
-} from '@jovandyaz/auth';
+} from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';

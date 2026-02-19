@@ -5,6 +5,7 @@ import { Link } from '@tanstack/react-router';
 
 import { PublicRoute } from '@/components/auth';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { getPasswordChecks } from '@jovandyaz/auth';
 import type { RegisterFormData } from '@jovandyaz/auth-react';
 import {
   registerSchema,
@@ -12,7 +13,6 @@ import {
   useRegister,
   useResendVerification,
 } from '@jovandyaz/auth-react';
-import { getPasswordChecks } from '@jovandyaz/auth/client';
 import { ArrowLeft, CheckCircle, Loader2, Mail } from 'lucide-react';
 import { toast } from 'sonner';
 

@@ -1,4 +1,4 @@
-import type { AuthDomainError } from '@jovandyaz/auth';
+import type { AuthDomainError } from '@jovandyaz/auth/server';
 import type { Result } from 'neverthrow';
 
 export interface PasswordHasher {

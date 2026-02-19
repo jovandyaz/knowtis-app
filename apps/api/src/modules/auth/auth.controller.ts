@@ -1,4 +1,3 @@
-import type { RequestUser } from '@jovandyaz/auth';
 import {
   CurrentUser,
   ForgotPasswordHandler,
@@ -14,6 +13,7 @@ import {
   unwrapOrThrow,
   VerifyEmailHandler,
 } from '@jovandyaz/auth-nestjs';
+import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   Body,
   Controller,

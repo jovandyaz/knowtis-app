@@ -1,4 +1,8 @@
-import type { AuthDomainError, AuthTokens, UserId } from '@jovandyaz/auth';
+import type {
+  AuthDomainError,
+  AuthTokens,
+  UserId,
+} from '@jovandyaz/auth/server';
 import type { Result } from 'neverthrow';
 
 export interface JwtPayload {

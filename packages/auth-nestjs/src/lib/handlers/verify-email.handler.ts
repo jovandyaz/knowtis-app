@@ -1,5 +1,5 @@
-import { AuthErrors, hashToken, UserId } from '@jovandyaz/auth';
-import type { AuthDomainError } from '@jovandyaz/auth';
+import { AuthErrors, hashToken, UserId } from '@jovandyaz/auth/server';
+import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 

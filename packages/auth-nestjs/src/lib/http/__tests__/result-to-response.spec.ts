@@ -1,4 +1,4 @@
-import { AuthErrors } from '@jovandyaz/auth';
+import { AuthErrors } from '@jovandyaz/auth/server';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 

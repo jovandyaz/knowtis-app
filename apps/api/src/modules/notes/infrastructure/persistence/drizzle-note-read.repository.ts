@@ -1,4 +1,4 @@
-import type { UserId } from '@jovandyaz/auth';
+import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 

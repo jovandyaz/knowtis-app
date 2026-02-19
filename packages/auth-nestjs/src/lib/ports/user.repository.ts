@@ -1,4 +1,4 @@
-import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth';
+import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth/server';
 import type { Result } from 'neverthrow';
 
 export interface UserEntity {

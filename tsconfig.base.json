@@ -40,7 +40,7 @@
         "packages/permissions-nestjs/src/index.ts"
       ],
       "@jovandyaz/auth": ["packages/auth/src/index.ts"],
-      "@jovandyaz/auth/client": ["packages/auth/src/client.ts"],
+      "@jovandyaz/auth/server": ["packages/auth/src/server.ts"],
       "@jovandyaz/auth-react": ["packages/auth-react/src/index.ts"],
       "@jovandyaz/auth-nestjs": ["packages/auth-nestjs/src/index.ts"]
     }

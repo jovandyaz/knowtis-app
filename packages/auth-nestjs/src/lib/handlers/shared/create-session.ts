@@ -1,5 +1,5 @@
-import { hashToken, SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth';
-import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth';
+import { hashToken, SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth/server';
+import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { SessionRepository } from '../../ports/session.repository';

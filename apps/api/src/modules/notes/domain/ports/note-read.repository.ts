@@ -1,4 +1,4 @@
-import type { UserId } from '@jovandyaz/auth';
+import type { UserId } from '@jovandyaz/auth/server';
 
 import type { NoteEntity, NoteEntityWithOwner } from '../entities';
 

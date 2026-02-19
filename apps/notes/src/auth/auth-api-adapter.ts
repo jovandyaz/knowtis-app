@@ -1,14 +1,14 @@
 import type {
-  AuthApiAdapter,
-  AuthUserProfile,
-  TokenStorage,
-} from '@jovandyaz/auth-react';
-import type {
   AuthResponse,
   AuthTokens,
   LoginInput,
   RegisterInput,
-} from '@jovandyaz/auth/client';
+} from '@jovandyaz/auth';
+import type {
+  AuthApiAdapter,
+  AuthUserProfile,
+  TokenStorage,
+} from '@jovandyaz/auth-react';
 
 import type { IHttpClient } from '@knowtis/api-client';
 

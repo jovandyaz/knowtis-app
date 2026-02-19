@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 
-import { hashToken } from '@jovandyaz/auth';
+import { hashToken } from '@jovandyaz/auth/server';
 
 export function generateSecureToken(): {
   plainToken: string;
