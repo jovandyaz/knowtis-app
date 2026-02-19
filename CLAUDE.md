@@ -9,6 +9,8 @@ Knowtis is a real-time collaborative notes platform built as an Nx monorepo with
 ## Important Rules
 
 - **Always use `pnpm`** instead of `npm` or `yarn` for package management
+- **No backwards-compatibility hacks** — no re-exports from barrel files, no legacy shims, no "old key" comments. If something is renamed or moved, update all consumers. Clean breaks over compat layers.
+- **No re-exports** — imports must come from their original source, never re-export from barrel files just for convenience
 
 ## Essential Commands
 

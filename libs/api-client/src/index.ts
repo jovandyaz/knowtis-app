@@ -1,10 +1,11 @@
 export {
   ApiClientError,
+  HttpClient,
   httpClient,
   type FieldError,
+  type IHttpClient,
   type TokenProvider,
 } from './lib/http-client';
-export { tokenStorage } from './lib/token-storage';
 
 export {
   notesApi,

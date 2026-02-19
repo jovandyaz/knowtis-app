@@ -7,7 +7,3 @@ export const DEFAULT_API_CONFIG: ApiClientConfig = {
   baseUrl: import.meta.env?.['VITE_API_URL'] || 'http://localhost:3333/api/v1',
   timeout: 30000,
 };
-
-export const STORAGE_KEYS = {
-  REFRESH_TOKEN: 'knowtis_refresh_token',
-} as const;

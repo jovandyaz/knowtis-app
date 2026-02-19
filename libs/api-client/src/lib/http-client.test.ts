@@ -1,29 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiClientError, HttpClient } from './http-client';
-import { tokenStorage } from './token-storage';
+import { ApiClientError, HttpClient, type TokenProvider } from './http-client';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
 global.fetch = mockFetch;
 
-// Mock tokenStorage
-vi.mock('./token-storage', () => ({
-  tokenStorage: {
-    getAccessToken: vi.fn(),
-    getRefreshToken: vi.fn(),
-    setTokens: vi.fn(),
+function createMockTokenProvider(): TokenProvider & {
+  getAccessToken: ReturnType<typeof vi.fn>;
+  clearTokens: ReturnType<typeof vi.fn>;
+} {
+  return {
+    getAccessToken: vi.fn().mockReturnValue(null),
     clearTokens: vi.fn(),
-    hasTokens: vi.fn(),
-    initialize: vi.fn(),
-  },
-}));
+  };
+}
 
 describe('HttpClient', () => {
   let client: HttpClient;
+  let tokenProvider: ReturnType<typeof createMockTokenProvider>;
 
   beforeEach(() => {
     client = new HttpClient({ baseUrl: 'http://api.test.com' });
+    tokenProvider = createMockTokenProvider();
+    client.setTokenProvider(tokenProvider);
     vi.clearAllMocks();
   });
 
@@ -33,7 +33,7 @@ describe('HttpClient', () => {
 
   describe('get', () => {
     it('should make GET request with auth header', async () => {
-      vi.mocked(tokenStorage.getAccessToken).mockReturnValue('test-token');
+      tokenProvider.getAccessToken.mockReturnValue('test-token');
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -55,7 +55,7 @@ describe('HttpClient', () => {
     });
 
     it('should skip auth header when skipAuth is true', async () => {
-      vi.mocked(tokenStorage.getAccessToken).mockReturnValue('test-token');
+      tokenProvider.getAccessToken.mockReturnValue('test-token');
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -77,7 +77,7 @@ describe('HttpClient', () => {
 
   describe('post', () => {
     it('should make POST request with body', async () => {
-      vi.mocked(tokenStorage.getAccessToken).mockReturnValue('test-token');
+      tokenProvider.getAccessToken.mockReturnValue('test-token');
       mockFetch.mockResolvedValue({
         ok: true,
         status: 201,
@@ -129,7 +129,7 @@ describe('HttpClient', () => {
     it('should attempt token refresh on 401', async () => {
       const refreshCallback = vi.fn().mockResolvedValue('new-token');
       client.setRefreshTokenCallback(refreshCallback);
-      vi.mocked(tokenStorage.getAccessToken).mockReturnValue('expired-token');
+      tokenProvider.getAccessToken.mockReturnValue('expired-token');
 
       // First call returns 401, second succeeds
       mockFetch

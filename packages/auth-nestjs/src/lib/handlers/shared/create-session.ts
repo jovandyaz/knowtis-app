@@ -1,9 +1,9 @@
 import { hashToken, SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth';
-import type { AuthDomainError } from '@jovandyaz/auth';
+import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { SessionRepository } from '../../ports/session.repository';
-import type { AuthTokens, TokenService } from '../../ports/token.service';
+import type { TokenService } from '../../ports/token.service';
 
 interface CreateSessionDeps {
   tokenService: TokenService;

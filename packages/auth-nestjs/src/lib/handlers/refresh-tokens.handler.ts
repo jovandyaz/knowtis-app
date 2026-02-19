@@ -5,7 +5,7 @@ import {
   TokenRefreshedEvent,
   UserId,
 } from '@jovandyaz/auth';
-import type { AuthDomainError } from '@jovandyaz/auth';
+import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
@@ -16,7 +16,7 @@ import {
   USER_REPOSITORY,
 } from '../constants';
 import type { SessionRepository } from '../ports/session.repository';
-import type { AuthTokens, TokenService } from '../ports/token.service';
+import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 import { createSessionWithTokens } from './shared/create-session';
 

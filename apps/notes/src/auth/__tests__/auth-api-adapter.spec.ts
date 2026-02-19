@@ -2,22 +2,26 @@ import type { TokenStorage } from '@jovandyaz/auth-react';
 import type { AuthResponse, AuthTokens } from '@jovandyaz/auth/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createAuthApiAdapter, type HttpClient } from '../auth-api-adapter';
+import type { IHttpClient } from '@knowtis/api-client';
+
+import { createAuthApiAdapter } from '../auth-api-adapter';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function createMockHttpClient(): HttpClient & {
-  get: ReturnType<typeof vi.fn>;
-  post: ReturnType<typeof vi.fn>;
-  setRefreshTokenCallback: ReturnType<typeof vi.fn>;
-} {
-  return {
+function createMockHttpClient() {
+  const mock = {
+    request: vi.fn(),
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+    setTokenProvider: vi.fn(),
     setRefreshTokenCallback: vi.fn(),
   };
+  return mock as IHttpClient & typeof mock;
 }
 
 function createMockTokenStorage(): TokenStorage {

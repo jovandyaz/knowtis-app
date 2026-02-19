@@ -6,7 +6,11 @@ import {
   UserRegisteredEvent,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth';
-import type { AuthDomainError, SessionContext } from '@jovandyaz/auth';
+import type {
+  AuthDomainError,
+  AuthTokens,
+  SessionContext,
+} from '@jovandyaz/auth';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
@@ -23,7 +27,7 @@ import type { EmailVerificationTokenRepository } from '../ports/email-verificati
 import type { EmailService } from '../ports/email.service';
 import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
-import type { AuthTokens, TokenService } from '../ports/token.service';
+import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 import { createSessionWithTokens } from './shared/create-session';
 import { generateSecureToken } from './shared/generate-secure-token';
@@ -44,8 +48,6 @@ export interface RegisterUserOutput {
   readonly tokens: AuthTokens;
 }
 
-export type RegisterSessionContext = SessionContext;
-
 @Injectable()
 export class RegisterUserHandler {
   private readonly logger = new Logger(RegisterUserHandler.name);
@@ -64,7 +66,7 @@ export class RegisterUserHandler {
 
   async execute(
     input: RegisterUserInput,
-    context: RegisterSessionContext = {}
+    context: SessionContext = {}
   ): Promise<Result<RegisterUserOutput, AuthDomainError>> {
     const emailResult = Email.create(input.email);
     if (emailResult.isErr()) {

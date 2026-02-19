@@ -1,7 +1,6 @@
 import { logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
-import { tokenStorage as defaultTokenStorage } from './token-storage';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -46,10 +45,41 @@ export interface TokenProvider {
   clearTokens(): void;
 }
 
-export class HttpClient {
+export interface IHttpClient {
+  setTokenProvider(provider: TokenProvider): void;
+  setRefreshTokenCallback(callback: TokenRefreshCallback): void;
+  request<T>(
+    method: RequestMethod,
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T>;
+  get<T>(endpoint: string, options?: RequestOptions): Promise<T>;
+  post<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T>;
+  put<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T>;
+  patch<T>(
+    endpoint: string,
+    data?: unknown,
+    options?: RequestOptions
+  ): Promise<T>;
+  delete<T>(endpoint: string, options?: RequestOptions): Promise<T>;
+}
+
+export class HttpClient implements IHttpClient {
   private config: ApiClientConfig;
   private refreshTokenCallback?: TokenRefreshCallback;
-  private tokenProvider: TokenProvider = defaultTokenStorage;
+  private tokenProvider: TokenProvider = {
+    getAccessToken: () => null,
+    clearTokens: () => {},
+  };
   private isRefreshing = false;
   private refreshPromise: Promise<string | null> | null = null;
 

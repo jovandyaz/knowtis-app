@@ -33,11 +33,7 @@ export type {
   SessionEntity,
   CreateSessionData,
 } from './lib/ports/session.repository';
-export type {
-  TokenService,
-  AuthTokens,
-  JwtPayload,
-} from './lib/ports/token.service';
+export type { TokenService, JwtPayload } from './lib/ports/token.service';
 export type { PasswordHasher } from './lib/ports/password-hasher.port';
 export type { EmailService } from './lib/ports/email.service';
 export type {
@@ -57,14 +53,12 @@ export type {
   ValidateUserInput,
   ValidatedUser,
   LoginUserOutput,
-  LoginSessionContext,
 } from './lib/handlers/login-user.handler';
 
 export { RegisterUserHandler } from './lib/handlers/register-user.handler';
 export type {
   RegisterUserInput,
   RegisterUserOutput,
-  RegisterSessionContext,
 } from './lib/handlers/register-user.handler';
 
 export { RefreshTokensHandler } from './lib/handlers/refresh-tokens.handler';

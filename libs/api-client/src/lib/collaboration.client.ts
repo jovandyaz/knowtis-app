@@ -13,7 +13,7 @@ import {
 } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
-import { tokenStorage } from './token-storage';
+import type { TokenProvider } from './http-client';
 
 interface CollaborationEventHandlers {
   onInitialState?: (response: InitialStateResponse) => void;
@@ -39,9 +39,17 @@ export class CollaborationClient {
   private readonly maxReconnectAttempts = 5;
   private readonly wsUrl: string | undefined;
   private shareToken: string | undefined;
+  private tokenProvider: TokenProvider = {
+    getAccessToken: () => null,
+    clearTokens: () => {},
+  };
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
+  }
+
+  setTokenProvider(provider: TokenProvider): void {
+    this.tokenProvider = provider;
   }
 
   private getWsUrl(): string {
@@ -67,7 +75,7 @@ export class CollaborationClient {
     }
 
     this.shareToken = options?.shareToken;
-    const token = tokenStorage.getAccessToken();
+    const token = this.tokenProvider.getAccessToken();
 
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],

@@ -39,10 +39,7 @@ export function AuthProvider({
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * Returns the auth context. Throws if used outside AuthProvider.
- */
-export function useAuthContext(): AuthContextValue {
+function useAuthContext(): AuthContextValue {
   const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuthContext must be used within an AuthProvider');

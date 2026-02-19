@@ -1,10 +1,5 @@
-import type { AuthDomainError, UserId } from '@jovandyaz/auth';
+import type { AuthDomainError, AuthTokens, UserId } from '@jovandyaz/auth';
 import type { Result } from 'neverthrow';
-
-export interface AuthTokens {
-  readonly accessToken: string;
-  readonly refreshToken: string;
-}
 
 export interface JwtPayload {
   readonly sub: string;

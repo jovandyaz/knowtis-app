@@ -5,7 +5,11 @@ import {
   LoginFailedEvent,
   UserLoggedInEvent,
 } from '@jovandyaz/auth';
-import type { AuthDomainError, SessionContext } from '@jovandyaz/auth';
+import type {
+  AuthDomainError,
+  AuthTokens,
+  SessionContext,
+} from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
@@ -18,7 +22,7 @@ import {
 } from '../constants';
 import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
-import type { AuthTokens, TokenService } from '../ports/token.service';
+import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 import { createSessionWithTokens } from './shared/create-session';
 
@@ -40,8 +44,6 @@ export interface LoginUserOutput {
   readonly user: ValidatedUser;
   readonly tokens: AuthTokens;
 }
-
-export type LoginSessionContext = SessionContext;
 
 @Injectable()
 export class LoginUserHandler {
@@ -105,7 +107,7 @@ export class LoginUserHandler {
 
   async login(
     user: ValidatedUser,
-    context: LoginSessionContext = {}
+    context: SessionContext = {}
   ): Promise<Result<LoginUserOutput, AuthDomainError>> {
     const tokensResult = await createSessionWithTokens(
       {

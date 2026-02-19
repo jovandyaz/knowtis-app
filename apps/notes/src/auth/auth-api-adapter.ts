@@ -10,26 +10,10 @@ import type {
   RegisterInput,
 } from '@jovandyaz/auth/client';
 
-/**
- * Minimal HTTP client interface.
- * Defined locally to keep the adapter loosely coupled from `@knowtis/api-client`.
- */
-export interface HttpClient {
-  get<T>(endpoint: string, options?: { skipAuth?: boolean }): Promise<T>;
-  post<T>(
-    endpoint: string,
-    data?: unknown,
-    options?: { skipAuth?: boolean }
-  ): Promise<T>;
-  setTokenProvider(provider: {
-    getAccessToken(): string | null;
-    clearTokens(): void;
-  }): void;
-  setRefreshTokenCallback(callback: () => Promise<string | null>): void;
-}
+import type { IHttpClient } from '@knowtis/api-client';
 
 interface CreateAuthApiAdapterDeps {
-  httpClient: HttpClient;
+  httpClient: IHttpClient;
   tokenStorage: TokenStorage;
 }
 
