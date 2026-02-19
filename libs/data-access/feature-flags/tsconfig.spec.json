@@ -4,7 +4,7 @@
     "outDir": "../../../dist/out-tsc",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": ["vitest/globals", "node"]
+    "types": ["vitest/globals", "vite/client", "node"]
   },
   "include": [
     "vite.config.ts",

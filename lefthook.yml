@@ -17,7 +17,7 @@ pre-commit:
       run: npx prettier --write {staged_files}
       stage_fixed: true
     typecheck:
-      run: npx tsc --noEmit
+      run: NX_DAEMON=false npx nx affected -t typecheck --base=origin/main --head=HEAD --output-style=stream
       skip:
         - merge
         - rebase

@@ -3,10 +3,5 @@
   "compilerOptions": {
     "outDir": "../../../dist/libs/shared/hooks"
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [
-    {
-      "path": "./tsconfig.lib.json"
-    }
-  ]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

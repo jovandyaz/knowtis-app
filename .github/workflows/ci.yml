@@ -41,8 +41,8 @@ jobs:
       - name: Lint (affected)
         run: npx nx affected -t lint
 
-      - name: Typecheck (global)
-        run: pnpm typecheck
+      - name: Typecheck (affected)
+        run: npx nx affected -t typecheck
 
       - name: Test (affected)
         run: npx nx affected -t test -- --run

@@ -5,5 +5,13 @@
   "projectType": "library",
   "tags": ["type:util", "scope:shared"],
   "// targets": "to see all targets run: nx show project shared-types --web",
-  "targets": {}
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash $(git rev-parse --show-toplevel)/tools/typecheck-project.sh",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
 }

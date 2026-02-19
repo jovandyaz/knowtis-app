@@ -1,7 +1,6 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.notes.tsbuildinfo",
     "outDir": "../../dist/out-tsc",
     "baseUrl": "../..",
     "paths": {

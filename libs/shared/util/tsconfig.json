@@ -3,10 +3,5 @@
   "compilerOptions": {
     "outDir": "../../../dist/libs/shared/util"
   },
-  "include": ["src/**/*.ts"],
-  "references": [
-    {
-      "path": "./tsconfig.lib.json"
-    }
-  ]
+  "include": ["src/**/*.ts"]
 }

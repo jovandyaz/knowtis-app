@@ -8,14 +8,14 @@ describe('appRoleManager', () => {
     __typename: 'Note',
     id: 'note-2',
     ownerId: 'other-user',
-    isPublic: true,
+    generalAccess: 'anyone_with_link',
   };
 
   const privateNote: NoteSubject = {
     __typename: 'Note',
     id: 'note-3',
     ownerId: 'other-user',
-    isPublic: false,
+    generalAccess: 'restricted',
   };
 
   describe('ROLES constants', () => {

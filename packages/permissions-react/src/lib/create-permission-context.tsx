@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
 
-import type { Ability, ActionOf, SubjectOf } from '../../../permissions/src/lib/types';
+import type { Ability, ActionOf, SubjectOf } from '@jovandyaz/permissions-core';
 
 /**
  * Factory that creates typed React permission primitives.

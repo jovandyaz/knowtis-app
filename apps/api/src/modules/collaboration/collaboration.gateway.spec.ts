@@ -104,7 +104,6 @@ describe('CollaborationGateway', () => {
     it('should handle connection without shareToken', () => {
       const authResult: WsAuthResult = {
         user: anonymousUser,
-        shareToken: undefined,
       };
       mockWsAuthService.extractUser.mockReturnValue(authResult);
 

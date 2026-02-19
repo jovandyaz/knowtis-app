@@ -19,11 +19,11 @@ export const appRoleManager = new RoleManager<AppAbility>({
   resolveSubject: (obj) => obj.__typename,
   roles: {
     [ROLES.ANONYMOUS]: (allow) => {
-      allow('read', Note, { isPublic: true });
+      allow('read', Note, { generalAccess: 'anyone_with_link' });
     },
     [ROLES.USER]: (allow) => {
       allow('create', Note);
-      allow('read', Note, { isPublic: true });
+      allow('read', Note, { generalAccess: 'anyone_with_link' });
     },
     [ROLES.NOTE_OWNER]: (allow) => {
       allow('manage', Note);

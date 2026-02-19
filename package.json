@@ -17,7 +17,7 @@
     "test:run": "nx run-many -t test -- --run",
     "test:coverage": "nx run-many -t test -- --coverage",
     "preview": "nx preview notes",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "nx run-many -t typecheck",
     "graph": "nx graph",
     "affected": "nx affected",
     "affected:test": "nx affected -t test",

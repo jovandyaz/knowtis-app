@@ -1,18 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiClientError, HttpClient, type TokenProvider } from './http-client';
+import { ApiClientError, HttpClient } from './http-client';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch as typeof fetch;
 
-function createMockTokenProvider(): TokenProvider & {
-  getAccessToken: ReturnType<typeof vi.fn>;
-  clearTokens: ReturnType<typeof vi.fn>;
-} {
+function createMockTokenProvider() {
   return {
-    getAccessToken: vi.fn().mockReturnValue(null),
-    clearTokens: vi.fn(),
+    getAccessToken: vi.fn<() => string | null>().mockReturnValue(null),
+    clearTokens: vi.fn<() => void>(),
   };
 }
 

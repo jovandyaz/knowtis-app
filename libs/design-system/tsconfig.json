@@ -4,7 +4,5 @@
     "outDir": "../../dist/out-tsc",
     "types": ["vite/client"]
   },
-  "files": [],
-  "include": [],
-  "references": [{ "path": "./tsconfig.lib.json" }]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

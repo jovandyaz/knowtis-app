@@ -19,6 +19,13 @@
         "reportsDirectory": "../../../coverage/libs/data-access/feature-flags",
         "passWithNoTests": true
       }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash $(git rev-parse --show-toplevel)/tools/typecheck-project.sh",
+        "cwd": "{projectRoot}"
+      }
     }
   }
 }

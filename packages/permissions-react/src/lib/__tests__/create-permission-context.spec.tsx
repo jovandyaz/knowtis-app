@@ -1,5 +1,5 @@
-import { definePermissions } from '../../../../permissions/src/lib/define-permissions';
-import type { Ability } from '../../../../permissions/src/lib/types';
+import { definePermissions } from '@jovandyaz/permissions-core';
+import type { Ability } from '@jovandyaz/permissions-core';
 import { render, screen } from '@testing-library/react';
 
 import { createPermissionContext } from '../create-permission-context';

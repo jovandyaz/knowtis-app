@@ -1,7 +1,8 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../../dist/libs/data-access/feature-flags"
+    "outDir": "../../../dist/libs/data-access/feature-flags",
+    "types": ["vite/client"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
