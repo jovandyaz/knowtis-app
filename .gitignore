@@ -23,11 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Nx
-.nx/cache
-.nx/workspace-data
-AGENTS.md
-
 # Coverage
 coverage
 
@@ -50,3 +45,17 @@ vitest.config.*.timestamp*
 
 # Lefthook auto-generated hooks (contain machine-specific absolute paths)
 .husky/_/
+
+# Nx
+.nx/cache
+.nx/workspace-data
+
+# Cursor
+.cursor
+
+# GitHub
+.github
+!.github/workflows/*
+
+# Agents
+AGENTS.md
