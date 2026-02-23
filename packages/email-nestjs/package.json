@@ -1,0 +1,34 @@
+{
+  "name": "@jovandyaz/email-nestjs",
+  "version": "0.0.1",
+  "type": "commonjs",
+  "main": "./src/index.js",
+  "types": "./src/index.d.ts",
+  "dependencies": {
+    "resend": "^4.0.0",
+    "tslib": "^2.3.0"
+  },
+  "peerDependencies": {
+    "@jovandyaz/auth-nestjs": "workspace:*",
+    "@jovandyaz/email": "workspace:*",
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/config": "^4.0.0",
+    "neverthrow": "^8.0.0"
+  },
+  "devDependencies": {
+    "@jovandyaz/auth-nestjs": "workspace:*",
+    "@jovandyaz/email": "workspace:*",
+    "@nestjs/common": "^11.1.14",
+    "@nestjs/core": "^11.1.14",
+    "@nestjs/config": "^4.0.0",
+    "@nestjs/testing": "^11.1.14",
+    "neverthrow": "^8.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "restricted"
+  }
+}

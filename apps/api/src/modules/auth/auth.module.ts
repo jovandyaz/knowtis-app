@@ -1,10 +1,10 @@
 import { AuthNestjsModule } from '@jovandyaz/auth-nestjs';
+import { AuthEmailService } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { UsersModule } from '../users';
 import { AuthController } from './auth.controller';
-import { ConsoleEmailService } from './infrastructure/email/console-email.service';
 import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
 import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
@@ -31,7 +31,8 @@ const configService = new ConfigService();
       sessionRepository: DrizzleSessionRepository,
       tokenService: JwtTokenService,
       passwordHasher: BcryptPasswordHasher,
-      emailService: ConsoleEmailService,
+      emailService: AuthEmailService,
+      useExistingEmailService: true,
       emailVerificationTokenRepository: DrizzleEmailVerificationTokenRepository,
       passwordResetTokenRepository: DrizzlePasswordResetTokenRepository,
     }),

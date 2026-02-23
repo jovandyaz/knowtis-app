@@ -43,7 +43,9 @@
       "@jovandyaz/auth": ["packages/auth/src/index.ts"],
       "@jovandyaz/auth/server": ["packages/auth/src/server.ts"],
       "@jovandyaz/auth-react": ["packages/auth-react/src/index.ts"],
-      "@jovandyaz/auth-nestjs": ["packages/auth-nestjs/src/index.ts"]
+      "@jovandyaz/auth-nestjs": ["packages/auth-nestjs/src/index.ts"],
+      "@jovandyaz/email": ["packages/email/src/index.ts"],
+      "@jovandyaz/email-nestjs": ["packages/email-nestjs/src/index.ts"]
     }
   },
   "exclude": ["node_modules", "tmp", "dist"]

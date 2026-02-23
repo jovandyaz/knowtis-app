@@ -1,6 +1,5 @@
 const { composePlugins, withNx } = require('@nx/webpack');
 
-// Nx plugins for webpack.
 module.exports = composePlugins(
   withNx({
     target: 'node',
@@ -14,8 +13,21 @@ module.exports = composePlugins(
       }),
     };
     config.devtool = 'source-map';
-    // Update the webpack config as needed here.
-    // e.g. `config.plugins.push(new MyPlugin())`
+
+    const path = require('path');
+    const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
+
+    config.plugins = config.plugins.filter(
+      (p) => !(p instanceof ForkTsCheckerWebpackPlugin)
+    );
+    config.plugins.push(
+      new ForkTsCheckerWebpackPlugin({
+        typescript: {
+          configFile: path.resolve(__dirname, 'tsconfig.app.json'),
+        },
+      })
+    );
+
     return config;
   }
 );

@@ -8,15 +8,16 @@ const passwordField = z
     for (const check of getPasswordChecks()) {
       if (!check.test(password)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: check.label,
+          input: password,
         });
       }
     }
   });
 
 export const loginSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+  email: z.email('Invalid email format').min(1, 'Email is required'),
   password: z.string().min(1, 'Password is required'),
 });
 
@@ -28,7 +29,7 @@ export const registerSchema = z
       .string()
       .min(2, 'Name must be at least 2 characters')
       .max(50, 'Name must be at most 50 characters'),
-    email: z.string().min(1, 'Email is required').email('Invalid email format'),
+    email: z.email('Invalid email format').min(1, 'Email is required'),
     password: passwordField,
     confirmPassword: z.string().min(1, 'Please confirm your password'),
   })
@@ -40,7 +41,7 @@ export const registerSchema = z
 export type RegisterFormData = z.infer<typeof registerSchema>;
 
 export const forgotPasswordSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Invalid email format'),
+  email: z.email('Invalid email format').min(1, 'Email is required'),
 });
 
 export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;

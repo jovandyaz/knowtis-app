@@ -1,10 +1,12 @@
+import { EmailModule } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { validateEnv } from '../config';
+import type { EnvConfig } from '../config/env.config';
 import { DatabaseModule } from '../database';
 import { AuthModule } from '../modules/auth';
 import { AuthorizationModule } from '../modules/authorization';
@@ -31,6 +33,14 @@ import { AppService } from './app.service';
     EventEmitterModule.forRoot(),
     DatabaseModule,
     FeatureFlagsModule,
+    EmailModule.forRootAsync({
+      useFactory: (configService: ConfigService<EnvConfig, true>) => ({
+        provider: configService.get('EMAIL_PROVIDER'),
+        resend: { apiKey: configService.get('RESEND_API_KEY') ?? '' },
+        defaults: { from: configService.get('EMAIL_FROM') },
+      }),
+      inject: [ConfigService],
+    }),
     AuthModule,
     AuthorizationModule,
     NotesModule,

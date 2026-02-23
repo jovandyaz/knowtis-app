@@ -1,0 +1,98 @@
+import type { TailwindConfig } from '@react-email/tailwind';
+
+import {
+  Background,
+  Border,
+  Destructive,
+  FontSans,
+  Foreground,
+  GradientEnd,
+  GradientStart,
+  LineHeight2xl,
+  LineHeightBase,
+  LineHeightSm,
+  LineHeightXl,
+  LineHeightXs,
+  Muted,
+  MutedForeground,
+  Neutral200,
+  Primary,
+  PrimaryForeground,
+  RadiusFull,
+  RadiusMd,
+  Size2xl,
+  SizeBase,
+  SizeSm,
+  SizeXl,
+  SizeXs,
+  Spacing0,
+  Spacing1,
+  Spacing2,
+  Spacing3,
+  Spacing4,
+  Spacing5,
+  Spacing6,
+  Spacing8,
+  Spacing10,
+  Spacing11,
+  Spacing12,
+  WeightBold,
+  WeightSemiBold,
+  White,
+} from './src/design-tokens';
+
+const config: TailwindConfig = {
+  theme: {
+    extend: {
+      colors: {
+        background: Background,
+        foreground: Foreground,
+        muted: Muted,
+        'muted-foreground': MutedForeground,
+        primary: Primary,
+        'primary-foreground': PrimaryForeground,
+        border: Border,
+        destructive: Destructive,
+        separator: Neutral200,
+        gradient: {
+          start: GradientStart,
+          end: GradientEnd,
+        },
+        white: White,
+      },
+      spacing: {
+        0: Spacing0,
+        1: Spacing1,
+        2: Spacing2,
+        3: Spacing3,
+        4: Spacing4,
+        5: Spacing5,
+        6: Spacing6,
+        8: Spacing8,
+        10: Spacing10,
+        11: Spacing11,
+        12: Spacing12,
+      },
+      borderRadius: {
+        md: RadiusMd,
+        full: RadiusFull,
+      },
+      fontFamily: {
+        sans: FontSans,
+      },
+      fontWeight: {
+        semibold: String(WeightSemiBold),
+        bold: String(WeightBold),
+      },
+      fontSize: {
+        xs: [SizeXs, { lineHeight: LineHeightXs }],
+        sm: [SizeSm, { lineHeight: LineHeightSm }],
+        base: [SizeBase, { lineHeight: LineHeightBase }],
+        xl: [SizeXl, { lineHeight: LineHeightXl }],
+        '2xl': [Size2xl, { lineHeight: LineHeight2xl }],
+      },
+    },
+  },
+};
+
+export default config;

@@ -95,60 +95,12 @@ pnpm dev:api  # Backend only (http://localhost:3333)
 
 ### Access Points
 
-| Service   | URL                          |
-| --------- | ---------------------------- |
-| Frontend  | http://localhost:4200        |
-| API       | http://localhost:3333/api/v1 |
-| WebSocket | ws://localhost:3333          |
-| DB Studio | Run `pnpm db:studio`         |
-
----
-
-## Project Structure
-
-```
-knowtis/
-├── apps/                          # Deployable applications
-│   ├── api/                       # NestJS backend API
-│   │   ├── src/
-│   │   │   ├── modules/           # Feature modules
-│   │   │   │   ├── auth/          # Authentication (JWT)
-│   │   │   │   ├── notes/         # Notes CRUD
-│   │   │   │   ├── users/         # User management
-│   │   │   │   └── collaboration/ # WebSocket + Yjs
-│   │   │   ├── database/          # Drizzle ORM + schemas
-│   │   │   └── core/              # Filters, interceptors
-│   │   └── README.md              # API documentation
-│   │
-│   └── notes/                     # React frontend app
-│       ├── src/
-│       │   ├── components/        # Feature components
-│       │   ├── pages/             # Page components
-│       │   ├── routes/            # TanStack Router routes
-│       │   ├── providers/         # Context providers (Yjs, Theme)
-│       │   ├── hooks/             # App-specific hooks
-│       │   └── lib/               # Utilities
-│       └── README.md              # Frontend documentation
-│
-├── libs/                          # Shared libraries
-│   ├── api-client/                # HTTP/WebSocket client
-│   ├── auth/                      # Auth hooks, store & API client
-│   ├── data-access/               # Domain logic & state
-│   │   └── notes/                 # Notes hooks & store
-│   ├── design-system/             # UI components & tokens
-│   └── shared/                    # Utilities & types
-│       ├── hooks/                 # Generic React hooks
-│       ├── types/                 # Shared TypeScript types
-│       └── util/                  # Utility functions
-│
-├── docs/                          # Additional documentation
-│   └── ARCHITECTURE.md            # Architecture deep-dive
-│
-├── docker-compose.yml             # Local infrastructure
-├── nx.json                        # Nx workspace config
-├── package.json                   # Root package.json
-└── pnpm-workspace.yaml            # pnpm workspaces config
-```
+| Service   | URL                            |
+| --------- | ------------------------------ |
+| Frontend  | <http://localhost:4200>        |
+| API       | <http://localhost:3333/api/v1> |
+| WebSocket | ws://localhost:3333            |
+| DB Studio | Run `pnpm db:studio`           |
 
 ---
 
@@ -300,6 +252,7 @@ Run `make help` to see all available targets with descriptions.
 | Backend   | NestJS 11, Drizzle ORM                |
 | Database  | PostgreSQL 16, Redis 7                |
 | Real-time | Socket.io, Yjs (CRDT)                 |
+| Email     | React Email, Resend                   |
 | Styling   | Tailwind CSS 4                        |
 | Testing   | Vitest, React Testing Library         |
 | Monorepo  | Nx 22.3                               |
@@ -329,6 +282,19 @@ graph TD
     DataAccess --> ApiClient
     DataAccess --> Shared
     DesignSystem --> Shared
+
+    subgraph Packages
+        Email[packages/email]
+        EmailNestjs[packages/email-nestjs]
+        Auth[packages/auth]
+        AuthNestjs[packages/auth-nestjs]
+    end
+
+    API --> EmailNestjs
+    API --> AuthNestjs
+    EmailNestjs --> Email
+    EmailNestjs --> AuthNestjs
+    AuthNestjs --> Auth
 ```
 
 ### Key Design Principles
@@ -403,6 +369,8 @@ Recommended VS Code extensions:
 | [Architecture Guide](./docs/ARCHITECTURE.md)      | System design & principles                |
 | [Deployment Guide](./docs/DEPLOYMENT.md)          | Railway & Vercel deployment               |
 | [API Architecture](./apps/api/ARCHITECTURE.md)    | Backend DDD patterns & module structure   |
+| [Email Templates](./packages/email/README.md)     | React Email templates & i18n              |
+| [Email NestJS](./packages/email-nestjs/README.md) | NestJS email module (Resend/Console)      |
 
 ---
 

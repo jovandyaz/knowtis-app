@@ -49,6 +49,7 @@ export interface AuthModuleOptions {
   readonly tokenService: InjectableClass;
   readonly passwordHasher: InjectableClass;
   readonly emailService?: InjectableClass;
+  readonly useExistingEmailService?: boolean;
   readonly emailVerificationTokenRepository?: InjectableClass;
   readonly passwordResetTokenRepository?: InjectableClass;
 }
@@ -97,10 +98,11 @@ export class AuthNestjsModule {
     ];
 
     if (options.emailService) {
-      providers.push({
-        provide: EMAIL_SERVICE,
-        useClass: options.emailService,
-      });
+      providers.push(
+        options.useExistingEmailService
+          ? { provide: EMAIL_SERVICE, useExisting: options.emailService }
+          : { provide: EMAIL_SERVICE, useClass: options.emailService }
+      );
     }
 
     if (options.emailVerificationTokenRepository) {
