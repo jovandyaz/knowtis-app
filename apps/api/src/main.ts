@@ -38,7 +38,7 @@ async function bootstrap() {
   const allowedOrigins = [
     frontendUrl,
     'http://localhost:4200',
-    'http://localhost:4201',
+    'http://localhost:4040',
   ];
   app.enableCors({
     origin: allowedOrigins,
