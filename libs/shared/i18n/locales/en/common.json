@@ -15,7 +15,6 @@
     "email": "Email",
     "password": "Password",
     "name": "Name",
-    "profile": "Profile",
     "home": "Home",
     "search": "Search",
     "notes": "Notes",
@@ -60,6 +59,25 @@
     "notesDescription": "Create, edit, and collaborate on notes in real-time.",
     "flashcardsTitle": "Flashcards",
     "flashcardsDescription": "Study with smart flashcards and spaced repetition."
+  },
+  "settings": {
+    "title": "Settings",
+    "sections": {
+      "profile": "Profile",
+      "appearance": "Appearance",
+      "language": "Language",
+      "editor": "Editor",
+      "notifications": "Notifications",
+      "account": "Account"
+    },
+    "descriptions": {
+      "profile": "Manage your account information",
+      "appearance": "Customize the look and feel",
+      "language": "Choose your preferred language",
+      "editor": "Configure your editor preferences",
+      "notifications": "Manage your notification settings",
+      "account": "Account security and settings"
+    }
   },
   "validation": {
     "required": "This field is required",

@@ -5,6 +5,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { authStore } from '@/auth';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 export const Route = createFileRoute('/_authenticated')({
@@ -36,6 +37,7 @@ function AuthenticatedLayout() {
   return (
     <div className="flex min-h-screen bg-(--background)">
       <Sidebar />
+      <SettingsModal />
 
       <main className="flex-1 flex flex-col min-w-0 transition-all duration-300 md:pl-56">
         <div className="h-16 md:hidden" />

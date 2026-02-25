@@ -15,7 +15,6 @@
     "email": "Correo electrónico",
     "password": "Contraseña",
     "name": "Nombre",
-    "profile": "Perfil",
     "home": "Inicio",
     "search": "Buscar",
     "notes": "Notas",
@@ -60,6 +59,25 @@
     "notesDescription": "Crea, edita y colabora en notas en tiempo real.",
     "flashcardsTitle": "Tarjetas de estudio",
     "flashcardsDescription": "Estudia con tarjetas inteligentes y repetición espaciada."
+  },
+  "settings": {
+    "title": "Configuración",
+    "sections": {
+      "profile": "Perfil",
+      "appearance": "Apariencia",
+      "language": "Idioma",
+      "editor": "Editor",
+      "notifications": "Notificaciones",
+      "account": "Cuenta"
+    },
+    "descriptions": {
+      "profile": "Administra la información de tu cuenta",
+      "appearance": "Personaliza el aspecto visual",
+      "language": "Elige tu idioma preferido",
+      "editor": "Configura tus preferencias del editor",
+      "notifications": "Administra tus notificaciones",
+      "account": "Seguridad y configuración de la cuenta"
+    }
   },
   "validation": {
     "required": "Este campo es obligatorio",
