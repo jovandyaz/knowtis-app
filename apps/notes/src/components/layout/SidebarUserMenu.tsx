@@ -1,18 +1,24 @@
+import { useTranslation } from 'react-i18next';
+
 import { useNavigate } from '@tanstack/react-router';
 
-import { useLogout } from '@jovandyaz/auth-react';
+import { useAuthStore, useAuthUser, useLogout } from '@jovandyaz/auth-react';
 import { ChevronUp, LogOut, User } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { toast } from 'sonner';
 
+import { useUpdateProfile } from '@knowtis/data-access-users';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from '@knowtis/design-system';
+import type { SupportedLocale } from '@knowtis/shared-i18n';
+import { SUPPORTED_LOCALES } from '@knowtis/shared-i18n';
 import { getInitials } from '@knowtis/shared-util';
 
 interface SidebarUserMenuProps {
@@ -23,11 +29,38 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
   const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const { theme, setTheme } = useTheme();
+  const { t, i18n } = useTranslation('common');
+  const user = useAuthUser();
+  const store = useAuthStore();
+  const setUser = store((state) => state.setUser);
+  const updateProfile = useUpdateProfile();
+
+  const handleLanguageChange = (locale: SupportedLocale) => {
+    const previousLocale = i18n.language as SupportedLocale;
+    const previousUser = user;
+
+    i18n.changeLanguage(locale);
+    if (user) {
+      setUser({ ...user, locale });
+    }
+
+    updateProfile.mutate(
+      { locale },
+      {
+        onError: () => {
+          i18n.changeLanguage(previousLocale);
+          if (previousUser) {
+            setUser({ ...previousUser, locale: previousLocale });
+          }
+        },
+      }
+    );
+  };
 
   const handleLogout = () => {
     logout(undefined, {
       onSuccess: () => {
-        toast.success('Signed out successfully');
+        toast.success(t('nav.signedOutSuccess'));
         navigate({ to: '/login', search: { redirect: undefined } });
       },
     });
@@ -60,7 +93,7 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
       >
         <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
           <User className="h-4 w-4" />
-          Profile
+          {t('labels.profile')}
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
@@ -71,8 +104,26 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
             setTheme(checked ? 'dark' : 'light')
           }
         >
-          Dark mode
+          {t('theme.darkMode')}
         </DropdownMenuSwitchItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuLabel className="text-xs text-muted-foreground px-2">
+          {t('language.label')}
+        </DropdownMenuLabel>
+        {SUPPORTED_LOCALES.map((locale) => (
+          <DropdownMenuSwitchItem
+            key={locale}
+            checked={
+              i18n.language === locale ||
+              i18n.language?.startsWith(`${locale}-`)
+            }
+            onCheckedChange={() => handleLanguageChange(locale)}
+          >
+            {t(`language.${locale}`)}
+          </DropdownMenuSwitchItem>
+        ))}
 
         <DropdownMenuSeparator />
 
@@ -81,7 +132,7 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
           className="text-(--destructive) focus:text-(--destructive)"
         >
           <LogOut className="h-4 w-4" />
-          Log out
+          {t('nav.logOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

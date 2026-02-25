@@ -1,59 +1,83 @@
 import { getPasswordChecks } from '@jovandyaz/auth';
 import { z } from 'zod';
 
-const passwordField = z
-  .string()
-  .min(1, 'Password is required')
-  .superRefine((password, ctx) => {
-    for (const check of getPasswordChecks()) {
-      if (!check.test(password)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: check.label,
-          input: password,
-        });
+type TFunction = (key: string, options?: Record<string, unknown>) => string;
+
+const createPasswordField = (t: TFunction) =>
+  z
+    .string()
+    .min(1, t('validation.passwordRequired'))
+    .superRefine((password, ctx) => {
+      for (const check of getPasswordChecks()) {
+        if (!check.test(password)) {
+          ctx.addIssue({
+            code: 'custom',
+            message: check.label,
+            input: password,
+          });
+        }
       }
-    }
-  });
+    });
 
-export const loginSchema = z.object({
-  email: z.email('Invalid email format').min(1, 'Email is required'),
-  password: z.string().min(1, 'Password is required'),
-});
-
-export type LoginFormData = z.infer<typeof loginSchema>;
-
-export const registerSchema = z
-  .object({
-    name: z
+export const createLoginSchema = (t: TFunction) =>
+  z.object({
+    email: z
       .string()
-      .min(2, 'Name must be at least 2 characters')
-      .max(50, 'Name must be at most 50 characters'),
-    email: z.email('Invalid email format').min(1, 'Email is required'),
-    password: passwordField,
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
+      .min(1, t('validation.emailRequired'))
+      .email(t('validation.emailInvalid')),
+    password: z.string().min(1, t('validation.passwordRequired')),
   });
 
-export type RegisterFormData = z.infer<typeof registerSchema>;
+export type LoginFormData = z.infer<ReturnType<typeof createLoginSchema>>;
 
-export const forgotPasswordSchema = z.object({
-  email: z.email('Invalid email format').min(1, 'Email is required'),
-});
+export const createRegisterSchema = (t: TFunction) =>
+  z
+    .object({
+      name: z
+        .string()
+        .min(2, t('validation.nameMin', { min: 2 }))
+        .max(50, t('validation.nameMax', { max: 50 })),
+      email: z
+        .string()
+        .min(1, t('validation.emailRequired'))
+        .email(t('validation.emailInvalid')),
+      password: createPasswordField(t),
+      confirmPassword: z
+        .string()
+        .min(1, t('validation.confirmPasswordRequired')),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('validation.passwordsMismatch'),
+      path: ['confirmPassword'],
+    });
 
-export type ForgotPasswordFormData = z.infer<typeof forgotPasswordSchema>;
+export type RegisterFormData = z.infer<ReturnType<typeof createRegisterSchema>>;
 
-export const resetPasswordSchema = z
-  .object({
-    password: passwordField,
-    confirmPassword: z.string().min(1, 'Please confirm your password'),
-  })
-  .refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords don't match",
-    path: ['confirmPassword'],
+export const createForgotPasswordSchema = (t: TFunction) =>
+  z.object({
+    email: z
+      .string()
+      .min(1, t('validation.emailRequired'))
+      .email(t('validation.emailInvalid')),
   });
 
-export type ResetPasswordFormData = z.infer<typeof resetPasswordSchema>;
+export type ForgotPasswordFormData = z.infer<
+  ReturnType<typeof createForgotPasswordSchema>
+>;
+
+export const createResetPasswordSchema = (t: TFunction) =>
+  z
+    .object({
+      password: createPasswordField(t),
+      confirmPassword: z
+        .string()
+        .min(1, t('validation.confirmPasswordRequired')),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: t('validation.passwordsMismatch'),
+      path: ['confirmPassword'],
+    });
+
+export type ResetPasswordFormData = z.infer<
+  ReturnType<typeof createResetPasswordSchema>
+>;

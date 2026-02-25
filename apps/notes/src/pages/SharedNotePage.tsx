@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
+import DOMPurify from 'dompurify';
 import { Eye, Pencil } from 'lucide-react';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -16,6 +18,8 @@ import {
 import { PERMISSION } from '@knowtis/shared-types';
 
 export function SharedNotePage() {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, error } = useNoteByToken(token);
   const [isEditing, setIsEditing] = useState(false);
@@ -36,7 +40,7 @@ export function SharedNotePage() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <LoadingState message="Loading shared note..." />
+        <LoadingState message={t('shared.loadingSharedNote')} />
       </div>
     );
   }
@@ -49,11 +53,15 @@ export function SharedNotePage() {
       <div className="flex min-h-screen items-center justify-center">
         <ErrorState
           fullHeight={false}
-          title={isNotFound ? 'Link Not Found' : 'Something went wrong'}
+          title={
+            isNotFound
+              ? t('shared.linkNotFound')
+              : tCommon('errors.somethingWentWrong')
+          }
           message={
             isNotFound
-              ? 'This share link does not exist or has been disabled by the owner.'
-              : 'Failed to load the shared note. Please try again.'
+              ? t('shared.linkNotFoundDesc')
+              : t('shared.failedToLoadShared')
           }
         />
       </div>
@@ -80,12 +88,12 @@ export function SharedNotePage() {
               {canEdit ? (
                 <span className="flex items-center gap-1">
                   <Pencil className="h-3 w-3" />
-                  Editor
+                  {t('shared.editorBadge')}
                 </span>
               ) : (
                 <span className="flex items-center gap-1">
                   <Eye className="h-3 w-3" />
-                  View only
+                  {t('shared.viewOnlyBadge')}
                 </span>
               )}
             </Badge>
@@ -98,18 +106,18 @@ export function SharedNotePage() {
                 onClick={() => setIsEditing(true)}
               >
                 <Pencil className="mr-1 h-3 w-3" />
-                Edit
+                {t('shared.editButton')}
               </Button>
             )}
             {isEditing && (
               <Button variant="outline" size="sm" onClick={handleStopEditing}>
                 <Eye className="mr-1 h-3 w-3" />
-                View
+                {t('shared.viewButton')}
               </Button>
             )}
             <a href="/login">
               <Button variant="outline" size="sm">
-                Sign in
+                {t('shared.signIn')}
               </Button>
             </a>
           </div>
@@ -123,7 +131,7 @@ export function SharedNotePage() {
         </h1>
 
         <div className="mb-8 flex items-center gap-2 text-sm text-(--muted-foreground)">
-          <span>By {data.owner.name}</span>
+          <span>{t('shared.byAuthor', { name: data.owner.name })}</span>
           <span>&middot;</span>
           <span>
             {new Date(data.updatedAt).toLocaleDateString(undefined, {
@@ -146,7 +154,9 @@ export function SharedNotePage() {
         ) : (
           <div
             className="prose prose-neutral dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{ __html: displayContent }}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(displayContent),
+            }}
           />
         )}
       </main>

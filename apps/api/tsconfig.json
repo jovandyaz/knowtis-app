@@ -10,6 +10,7 @@
     "emitDecoratorMetadata": true,
     "allowImportingTsExtensions": false,
     "esModuleInterop": true,
+    "resolveJsonModule": true,
     "noEmit": false,
     "types": ["node"]
   },

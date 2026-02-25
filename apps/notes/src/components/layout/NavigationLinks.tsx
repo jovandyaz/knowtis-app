@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Link } from '@tanstack/react-router';
 
 import type { NavigationLink } from '@/config/navigation.config';
@@ -13,25 +15,27 @@ interface NavigationLinksProps {
 }
 
 export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
+  const { t } = useTranslation('common');
+
   return (
     <nav className="py-2 px-4 flex flex-col gap-1">
       {links.map((link) => {
         if (link.disabled) {
           return (
             <span
-              key={link.label}
-              title={link.tooltip}
+              key={link.labelKey}
+              title={link.tooltipKey ? t(link.tooltipKey) : undefined}
               className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground/50 cursor-not-allowed"
             >
               <link.icon className="h-4 w-4" />
-              {link.label}
+              {t(link.labelKey)}
             </span>
           );
         }
 
         return (
           <Link
-            key={link.label}
+            key={link.labelKey}
             to={link.to}
             onClick={onLinkClick}
             activeProps={{
@@ -45,7 +49,7 @@ export function NavigationLinks({ links, onLinkClick }: NavigationLinksProps) {
             {...link.linkProps}
           >
             <link.icon className="h-4 w-4" />
-            {link.label}
+            {t(link.labelKey)}
           </Link>
         );
       })}

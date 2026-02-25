@@ -7,27 +7,59 @@ interface PasswordCheck {
   readonly test: (password: string) => boolean;
 }
 
+interface PasswordStrengthLabels {
+  weak?: string;
+  fair?: string;
+  good?: string;
+  strong?: string;
+}
+
 interface PasswordStrengthProps {
   password: string;
   checks: PasswordCheck[];
+  labels?: PasswordStrengthLabels;
 }
 
-function calculateStrength(password: string, checks: PasswordCheck[]) {
+const DEFAULT_LABELS: Required<PasswordStrengthLabels> = {
+  weak: 'Weak',
+  fair: 'Fair',
+  good: 'Good',
+  strong: 'Strong',
+};
+
+function calculateStrength(
+  password: string,
+  checks: PasswordCheck[],
+  labels: Required<PasswordStrengthLabels>
+) {
   const results = checks.map((check) => ({
     label: check.label,
     met: check.test(password),
   }));
   const score = results.filter((c) => c.met).length;
-  const labels = ['', 'Weak', 'Fair', 'Good', 'Strong'];
-  return { score, label: labels[score] || '', checks: results };
+  const strengthLabels = [
+    '',
+    labels.weak,
+    labels.fair,
+    labels.good,
+    labels.strong,
+  ];
+  return { score, label: strengthLabels[score] || '', checks: results };
 }
 
-function PasswordStrength({ password, checks }: PasswordStrengthProps) {
+function PasswordStrength({ password, checks, labels }: PasswordStrengthProps) {
+  const mergedLabels = useMemo(
+    () => ({ ...DEFAULT_LABELS, ...labels }),
+    [labels]
+  );
   const {
     score,
     label,
     checks: results,
-  } = useMemo(() => calculateStrength(password, checks), [password, checks]);
+  } = useMemo(
+    () => calculateStrength(password, checks, mergedLabels),
+    [password, checks, mergedLabels]
+  );
 
   if (!password) {
     return null;
@@ -72,4 +104,8 @@ function PasswordStrength({ password, checks }: PasswordStrengthProps) {
   );
 }
 
-export { PasswordStrength, type PasswordStrengthProps };
+export {
+  PasswordStrength,
+  type PasswordStrengthProps,
+  type PasswordStrengthLabels,
+};

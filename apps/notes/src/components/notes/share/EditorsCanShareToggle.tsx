@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Mail } from 'lucide-react';
 
 import { Switch } from '@knowtis/design-system';
@@ -13,6 +15,8 @@ export function EditorsCanShareToggle({
   disabled,
   onToggle,
 }: EditorsCanShareToggleProps) {
+  const { t } = useTranslation('notes');
+
   return (
     <>
       <div className="border-t border-border" />
@@ -21,10 +25,12 @@ export function EditorsCanShareToggle({
           <div className="space-y-1">
             <div className="flex items-center gap-2">
               <Mail className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium">Editors can share</h3>
+              <h3 className="text-sm font-medium">
+                {t('share.editorsCanShare')}
+              </h3>
             </div>
             <p className="text-xs text-muted-foreground">
-              Allow editors to invite others and manage access
+              {t('share.editorsCanShareToggleDesc')}
             </p>
           </div>
 
@@ -34,8 +40,8 @@ export function EditorsCanShareToggle({
             disabled={disabled}
             title={
               enabled
-                ? 'Editors can share this note'
-                : 'Only you can share this note'
+                ? t('share.editorsCanShareTitle')
+                : t('share.onlyYouCanShare')
             }
           />
         </div>

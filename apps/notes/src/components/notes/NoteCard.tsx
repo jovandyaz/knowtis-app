@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
@@ -34,6 +35,7 @@ export const NoteCard = memo(function NoteCard({
   note,
   onDelete,
 }: NoteCardProps) {
+  const { t } = useTranslation('notes');
   const contentPreview = createPreview(note.content);
 
   return (
@@ -74,7 +76,7 @@ export const NoteCard = memo(function NoteCard({
           </CardHeader>
           <CardContent className="flex flex-1 flex-col justify-between">
             <p className="line-clamp-3 text-sm text-muted-foreground leading-relaxed">
-              {contentPreview || 'No content yet...'}
+              {contentPreview || t('list.noContentYet')}
             </p>
 
             <div className="mt-4 flex items-center justify-between border-t border-border/50 pt-4">

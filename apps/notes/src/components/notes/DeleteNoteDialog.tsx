@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { AlertTriangle, Loader2 } from 'lucide-react';
 
 import { useDeleteNote } from '@knowtis/data-access-notes';
@@ -27,6 +29,7 @@ export function DeleteNoteDialog({
   noteId,
   noteTitle,
 }: DeleteNoteDialogProps) {
+  const { t } = useTranslation(['notes', 'common']);
   const deleteNote = useDeleteNote();
 
   const handleDelete = () => {
@@ -49,14 +52,14 @@ export function DeleteNoteDialog({
             <div className="flex h-10 w-10 items-center justify-center rounded-full bg-(--destructive)/10">
               <AlertTriangle className="h-5 w-5 text-(--destructive)" />
             </div>
-            <DialogTitle>Delete Note</DialogTitle>
+            <DialogTitle>{t('delete.title')}</DialogTitle>
           </div>
           <DialogDescription className="pt-2">
-            Are you sure you want to delete{' '}
+            {t('delete.confirmMessage')}{' '}
             <span className="font-medium text-(--foreground)">
               &quot;{noteTitle}&quot;
             </span>
-            ? This action cannot be undone.
+            ? {t('delete.warning')}
           </DialogDescription>
         </DialogHeader>
 
@@ -66,7 +69,7 @@ export function DeleteNoteDialog({
             onClick={() => onOpenChange(false)}
             disabled={deleteNote.isPending}
           >
-            Cancel
+            {t('common:buttons.cancel')}
           </Button>
           <Button
             variant="destructive"
@@ -76,10 +79,10 @@ export function DeleteNoteDialog({
             {deleteNote.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Deleting...
+                {t('delete.buttonLoading')}
               </>
             ) : (
-              'Delete'
+              t('delete.button')
             )}
           </Button>
         </DialogFooter>

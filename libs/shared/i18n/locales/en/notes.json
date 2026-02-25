@@ -1,0 +1,98 @@
+{
+  "list": {
+    "searchPlaceholder": "Search notes...",
+    "errorLoading": "Error loading notes",
+    "noNotesFound": "No notes found",
+    "startCollection": "Start your collection",
+    "noSearchResults": "We couldn't find any notes matching your search. Try a different term.",
+    "createFirst": "Create your first note to get started capturing your ideas.",
+    "noContentYet": "No content yet..."
+  },
+  "editor": {
+    "backToNotes": "Back to Notes",
+    "share": "Share",
+    "titlePlaceholder": "Note title...",
+    "lastUpdated": "Last updated:",
+    "editorPlaceholder": "Start writing your note...",
+    "loadingNote": "Loading note...",
+    "failedToLoad": "Failed to load note",
+    "notFound": "Note not found",
+    "loadingEditor": "Loading editor...",
+    "connected": "Connected to server",
+    "connecting": "Connecting...",
+    "editorError": "Editor Error",
+    "editorErrorDesc": "Something went wrong with the collaborative editor. This could be due to a synchronization issue or a temporary problem.",
+    "errorDetails": "Error Details"
+  },
+  "create": {
+    "newNote": "New Note",
+    "title": "Create New Note",
+    "description": "Give your note a title. You can edit the content after creation.",
+    "placeholder": "Enter note title...",
+    "titleRequired": "Title is required",
+    "titleTooLong": "Title must be less than 200 characters",
+    "failedToCreate": "Failed to create note",
+    "button": "Create Note",
+    "buttonLoading": "Creating..."
+  },
+  "delete": {
+    "title": "Delete Note",
+    "confirmMessage": "Are you sure you want to delete",
+    "warning": "This action cannot be undone.",
+    "button": "Delete",
+    "buttonLoading": "Deleting..."
+  },
+  "share": {
+    "title": "Share \"{{noteTitle}}\"",
+    "description": "Manage who can access this note",
+    "generalAccess": "General access",
+    "restricted": "Restricted",
+    "restrictedDesc": "Only people with explicit access can open",
+    "anyoneWithLink": "Anyone with the link",
+    "anyoneWithLinkDesc": "Anyone on the internet with this link can access",
+    "linkAccess": "Link access",
+    "viewer": "Viewer",
+    "editor": "Editor",
+    "owner": "Owner",
+    "viewerHelp": "People with this link can view the note but cannot edit.",
+    "editorHelp": "People with this link can view and edit the note.",
+    "canShare": "You can share this note",
+    "limitedAccess": "Limited access",
+    "editorsCanShareDesc": "The owner has allowed editors to share this note.",
+    "onlyOwnerCanShare": "Only the owner can change sharing settings for this note.",
+    "editorsCanShare": "Editors can share",
+    "editorsCanShareToggleDesc": "Allow editors to invite others and manage access",
+    "editorsCanShareTitle": "Editors can share this note",
+    "onlyYouCanShare": "Only you can share this note"
+  },
+  "shared": {
+    "loadingSharedNote": "Loading shared note...",
+    "linkNotFound": "Link Not Found",
+    "linkNotFoundDesc": "This share link does not exist or has been disabled by the owner.",
+    "failedToLoadShared": "Failed to load the shared note. Please try again.",
+    "editorBadge": "Editor",
+    "viewOnlyBadge": "View only",
+    "editButton": "Edit",
+    "viewButton": "View",
+    "signIn": "Sign in",
+    "byAuthor": "By {{name}}"
+  },
+  "sidebar": {
+    "myNotes": "My Notes",
+    "newNote": "New note",
+    "noNotesYet": "No notes yet",
+    "untitled": "Untitled",
+    "flashcardsComingSoon": "Flashcards are coming soon. Stay tuned!"
+  },
+  "profile": {
+    "title": "Profile",
+    "description": "Manage your account information",
+    "namePlaceholder": "Your name",
+    "nameLabel": "Name",
+    "emailLabel": "Email",
+    "saveChanges": "Save changes",
+    "saving": "Saving...",
+    "updatedToast": "Profile updated",
+    "failedToast": "Failed to update profile"
+  }
+}

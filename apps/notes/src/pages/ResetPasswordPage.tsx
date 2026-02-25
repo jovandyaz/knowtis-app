@@ -1,18 +1,20 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import { Link, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors } from '@/auth';
+import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
 import type { ResetPasswordFormData } from '@jovandyaz/auth-react';
 import {
-  resetPasswordSchema,
+  createResetPasswordSchema,
   useRateLimitState,
   useResetPassword,
 } from '@jovandyaz/auth-react';
-import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -23,6 +25,9 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  FormField,
+  LoadingButton,
+  MutationErrorAlert,
   PasswordInput,
   PasswordStrength,
   RateLimitAlert,
@@ -31,10 +36,12 @@ import {
 import { AuthPageLayout } from './AuthPageLayout';
 
 export function ResetPasswordPage() {
+  const { t } = useTranslation('auth');
   const { token } = useSearch({ from: '/reset-password' });
   const resetPassword = useResetPassword();
   const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
   const [success, setSuccess] = useState(false);
+  const resetPasswordSchema = useTranslatedSchema(createResetPasswordSchema);
 
   const {
     register,
@@ -53,6 +60,13 @@ export function ResetPasswordPage() {
 
   const password = watch('password');
 
+  const strengthLabels = {
+    weak: t('passwordStrength.weak'),
+    fair: t('passwordStrength.fair'),
+    good: t('passwordStrength.good'),
+    strong: t('passwordStrength.strong'),
+  };
+
   const onSubmit = (data: ResetPasswordFormData) => {
     if (!token) {
       return;
@@ -63,12 +77,12 @@ export function ResetPasswordPage() {
       { token, newPassword: data.password },
       {
         onSuccess: () => {
-          toast.success('Password has been reset successfully!');
+          toast.success(t('resetPassword.successToast'));
           setSuccess(true);
         },
         onError: (error) => {
           if (checkRateLimit(error)) {
-            toast.error('Too many attempts. Please try again later.');
+            toast.error(t('errors.tooManyAttempts', { ns: 'common' }));
             return;
           }
 
@@ -87,11 +101,10 @@ export function ResetPasswordPage() {
       <AuthPageLayout>
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Invalid reset link
+            {t('resetPassword.invalidLink')}
           </CardTitle>
           <CardDescription>
-            This password reset link is invalid or has expired. Please request a
-            new one.
+            {t('resetPassword.invalidLinkDesc')}
           </CardDescription>
         </CardHeader>
 
@@ -100,7 +113,7 @@ export function ResetPasswordPage() {
             to="/forgot-password"
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--primary) hover:underline"
           >
-            Request a new reset link
+            {t('resetPassword.requestNewLink')}
           </Link>
         </CardFooter>
       </AuthPageLayout>
@@ -115,63 +128,56 @@ export function ResetPasswordPage() {
             <CheckCircle className="h-6 w-6 text-(--primary)" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Password reset successful
+            {t('resetPassword.successTitle')}
           </CardTitle>
-          <CardDescription>
-            Your password has been updated. You can now sign in with your new
-            password.
-          </CardDescription>
+          <CardDescription>{t('resetPassword.successDesc')}</CardDescription>
         </CardHeader>
 
         <CardFooter>
           <Link to="/login" search={{ redirect: undefined }} className="w-full">
-            <Button className="w-full">Sign in</Button>
+            <Button className="w-full">{t('login.button')}</Button>
           </Link>
         </CardFooter>
       </AuthPageLayout>
     );
   }
 
+  const hasFieldErrors =
+    ApiClientError.isApiClientError(resetPassword.error) &&
+    !!resetPassword.error.errors?.length;
+
   return (
     <AuthPageLayout>
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Reset your password
+          {t('resetPassword.title')}
         </CardTitle>
-        <CardDescription>Enter your new password below</CardDescription>
+        <CardDescription>{t('resetPassword.description')}</CardDescription>
       </CardHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <CardContent className="space-y-4">
-          <RateLimitAlert visible={rateLimited} />
+          <RateLimitAlert
+            visible={rateLimited}
+            message={t('rateLimitAlert', { ns: 'errors' })}
+          />
 
-          {resetPassword.isError &&
-            !rateLimited &&
-            !(
-              ApiClientError.isApiClientError(resetPassword.error) &&
-              resetPassword.error.errors?.length
-            ) && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
-              >
-                {resetPassword.error instanceof Error
-                  ? resetPassword.error.message
-                  : 'Failed to reset password. The link may have expired.'}
-              </div>
-            )}
+          <MutationErrorAlert
+            error={resetPassword.error}
+            isError={resetPassword.isError}
+            rateLimited={rateLimited}
+            hasFieldErrors={hasFieldErrors}
+            fallbackMessage={t('resetPassword.failedError')}
+          />
 
-          <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-(--foreground)"
-            >
-              New Password
-            </label>
+          <FormField
+            id="password"
+            label={t('resetPassword.newPassword')}
+            error={errors.password?.message}
+          >
             <PasswordInput
               id="password"
-              placeholder="••••••••"
+              placeholder={t('register.passwordPlaceholder')}
               autoComplete="new-password"
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? 'password-error' : undefined}
@@ -180,28 +186,18 @@ export function ResetPasswordPage() {
             <PasswordStrength
               password={password}
               checks={getPasswordChecks()}
+              labels={strengthLabels}
             />
-            {errors.password && (
-              <p
-                id="password-error"
-                role="alert"
-                className="text-sm text-(--destructive)"
-              >
-                {errors.password.message}
-              </p>
-            )}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="confirmPassword"
-              className="text-sm font-medium text-(--foreground)"
-            >
-              Confirm Password
-            </label>
+          <FormField
+            id="confirmPassword"
+            label={t('register.confirmPassword')}
+            error={errors.confirmPassword?.message}
+          >
             <PasswordInput
               id="confirmPassword"
-              placeholder="••••••••"
+              placeholder={t('register.passwordPlaceholder')}
               autoComplete="new-password"
               aria-invalid={!!errors.confirmPassword}
               aria-describedby={
@@ -209,33 +205,18 @@ export function ResetPasswordPage() {
               }
               {...register('confirmPassword')}
             />
-            {errors.confirmPassword && (
-              <p
-                id="confirmPassword-error"
-                role="alert"
-                className="text-sm text-(--destructive)"
-              >
-                {errors.confirmPassword.message}
-              </p>
-            )}
-          </div>
+          </FormField>
         </CardContent>
 
         <CardFooter className="flex flex-col gap-4">
-          <Button
+          <LoadingButton
             type="submit"
             className="w-full"
-            disabled={resetPassword.isPending}
+            loading={resetPassword.isPending}
+            loadingText={t('resetPassword.buttonLoading')}
           >
-            {resetPassword.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Resetting password...
-              </>
-            ) : (
-              'Reset password'
-            )}
-          </Button>
+            {t('resetPassword.button')}
+          </LoadingButton>
 
           <Link
             to="/login"
@@ -243,7 +224,7 @@ export function ResetPasswordPage() {
             className="flex items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to login
+            {t('verifyEmail.backToLogin')}
           </Link>
         </CardFooter>
       </form>

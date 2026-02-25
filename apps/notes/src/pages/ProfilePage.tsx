@@ -1,11 +1,12 @@
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuthStore, useAuthUser } from '@jovandyaz/auth-react';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import type { z } from 'zod';
 
-import type { UpdateProfileInput } from '@knowtis/data-access-users';
 import {
   UpdateProfileSchema,
   useUpdateProfile,
@@ -21,6 +22,8 @@ import {
 } from '@knowtis/design-system';
 import { getInitials } from '@knowtis/shared-util';
 
+type ProfileFormData = z.infer<typeof UpdateProfileSchema>;
+
 function UserAvatar({ name }: { name: string }) {
   const initials = getInitials(name);
 
@@ -32,6 +35,7 @@ function UserAvatar({ name }: { name: string }) {
 }
 
 export function ProfilePage() {
+  const { t } = useTranslation('notes');
   const user = useAuthUser();
   const store = useAuthStore();
   const setUser = store((state) => state.setUser);
@@ -42,23 +46,23 @@ export function ProfilePage() {
     handleSubmit,
     reset,
     formState: { errors, isDirty },
-  } = useForm<UpdateProfileInput>({
+  } = useForm<ProfileFormData>({
     resolver: zodResolver(UpdateProfileSchema),
     defaultValues: {
       name: user?.name ?? '',
     },
   });
 
-  const onSubmit = (data: UpdateProfileInput) => {
+  const onSubmit = (data: ProfileFormData) => {
     updateProfile.mutate(data, {
       onSuccess: (response) => {
         setUser(response.user);
-        toast.success('Profile updated');
+        toast.success(t('profile.updatedToast'));
         reset(data);
       },
       onError: (error: Error) => {
         toast.error(
-          error instanceof Error ? error.message : 'Failed to update profile'
+          error instanceof Error ? error.message : t('profile.failedToast')
         );
       },
     });
@@ -71,9 +75,9 @@ export function ProfilePage() {
           <UserAvatar name={user?.name ?? ''} />
           <div className="space-y-1">
             <CardTitle className="text-2xl font-bold tracking-tight">
-              Profile
+              {t('profile.title')}
             </CardTitle>
-            <CardDescription>Manage your account information</CardDescription>
+            <CardDescription>{t('profile.description')}</CardDescription>
           </div>
         </CardHeader>
 
@@ -84,12 +88,12 @@ export function ProfilePage() {
                 htmlFor="name"
                 className="text-sm font-medium text-(--foreground)"
               >
-                Name
+                {t('profile.nameLabel')}
               </label>
               <Input
                 id="name"
                 type="text"
-                placeholder="Your name"
+                placeholder={t('profile.namePlaceholder')}
                 autoComplete="name"
                 aria-invalid={!!errors.name}
                 aria-describedby={errors.name ? 'name-error' : undefined}
@@ -111,7 +115,7 @@ export function ProfilePage() {
                 htmlFor="email"
                 className="text-sm font-medium text-(--foreground)"
               >
-                Email
+                {t('profile.emailLabel')}
               </label>
               <Input
                 id="email"
@@ -131,10 +135,10 @@ export function ProfilePage() {
               {updateProfile.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
+                  {t('profile.saving')}
                 </>
               ) : (
-                'Save changes'
+                t('profile.saveChanges')
               )}
             </Button>
           </CardContent>

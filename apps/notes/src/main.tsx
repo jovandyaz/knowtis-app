@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 
+import './lib/i18n';
 import './index.css';
 
 import { routeTree } from './routeTree.gen';

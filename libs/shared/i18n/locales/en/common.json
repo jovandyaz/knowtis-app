@@ -1,0 +1,74 @@
+{
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "create": "Create",
+    "done": "Done",
+    "tryAgain": "Try again",
+    "reloadPage": "Reload Page",
+    "back": "Back",
+    "copyLink": "Copy link",
+    "copied": "Copied"
+  },
+  "labels": {
+    "email": "Email",
+    "password": "Password",
+    "name": "Name",
+    "profile": "Profile",
+    "home": "Home",
+    "search": "Search",
+    "notes": "Notes",
+    "flashcards": "Flashcards",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "toggleMenu": "Toggle menu"
+  },
+  "states": {
+    "loading": "Loading...",
+    "saving": "Saving...",
+    "saved": "Saved",
+    "comingSoon": "Coming soon"
+  },
+  "errors": {
+    "somethingWentWrong": "Something went wrong",
+    "unexpectedError": "An unexpected error occurred. Please try again.",
+    "tooManyAttempts": "Too many attempts. Please wait a moment.",
+    "errorLoadingData": "Error loading data",
+    "tryAgainLater": "Please try again later"
+  },
+  "empty": {
+    "noItemsFound": "No items found",
+    "getStarted": "Get started by creating your first item."
+  },
+  "language": {
+    "label": "Language",
+    "en": "English",
+    "es": "Español"
+  },
+  "theme": {
+    "darkMode": "Dark mode"
+  },
+  "nav": {
+    "logOut": "Log out",
+    "signedOutSuccess": "Signed out successfully"
+  },
+  "welcome": {
+    "greeting": "Welcome back",
+    "subtitle": "What would you like to work on today?",
+    "notesTitle": "Notes",
+    "notesDescription": "Create, edit, and collaborate on notes in real-time.",
+    "flashcardsTitle": "Flashcards",
+    "flashcardsDescription": "Study with smart flashcards and spaced repetition."
+  },
+  "validation": {
+    "required": "This field is required",
+    "emailRequired": "Email is required",
+    "emailInvalid": "Invalid email format",
+    "passwordRequired": "Password is required",
+    "nameMin": "Name must be at least {{min}} characters",
+    "nameMax": "Name must be at most {{max}} characters",
+    "confirmPasswordRequired": "Please confirm your password",
+    "passwordsMismatch": "Passwords don't match"
+  }
+}

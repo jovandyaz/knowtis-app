@@ -1,0 +1,74 @@
+{
+  "buttons": {
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "create": "Crear",
+    "done": "Listo",
+    "tryAgain": "Intentar de nuevo",
+    "reloadPage": "Recargar página",
+    "back": "Volver",
+    "copyLink": "Copiar enlace",
+    "copied": "Copiado"
+  },
+  "labels": {
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "name": "Nombre",
+    "profile": "Perfil",
+    "home": "Inicio",
+    "search": "Buscar",
+    "notes": "Notas",
+    "flashcards": "Flashcards",
+    "expand": "Expandir",
+    "collapse": "Contraer",
+    "toggleMenu": "Alternar menú"
+  },
+  "states": {
+    "loading": "Cargando...",
+    "saving": "Guardando...",
+    "saved": "Guardado",
+    "comingSoon": "Próximamente"
+  },
+  "errors": {
+    "somethingWentWrong": "Algo salió mal",
+    "unexpectedError": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo.",
+    "tooManyAttempts": "Demasiados intentos. Espera un momento.",
+    "errorLoadingData": "Error al cargar datos",
+    "tryAgainLater": "Por favor, inténtalo más tarde"
+  },
+  "empty": {
+    "noItemsFound": "No se encontraron elementos",
+    "getStarted": "Comienza creando tu primer elemento."
+  },
+  "language": {
+    "label": "Idioma",
+    "en": "English",
+    "es": "Español"
+  },
+  "theme": {
+    "darkMode": "Modo oscuro"
+  },
+  "nav": {
+    "logOut": "Cerrar sesión",
+    "signedOutSuccess": "Sesión cerrada exitosamente"
+  },
+  "welcome": {
+    "greeting": "Bienvenido de nuevo",
+    "subtitle": "¿En qué te gustaría trabajar hoy?",
+    "notesTitle": "Notas",
+    "notesDescription": "Crea, edita y colabora en notas en tiempo real.",
+    "flashcardsTitle": "Tarjetas de estudio",
+    "flashcardsDescription": "Estudia con tarjetas inteligentes y repetición espaciada."
+  },
+  "validation": {
+    "required": "Este campo es obligatorio",
+    "emailRequired": "El correo electrónico es obligatorio",
+    "emailInvalid": "Formato de correo inválido",
+    "passwordRequired": "La contraseña es obligatoria",
+    "nameMin": "El nombre debe tener al menos {{min}} caracteres",
+    "nameMax": "El nombre debe tener como máximo {{max}} caracteres",
+    "confirmPasswordRequired": "Por favor confirma tu contraseña",
+    "passwordsMismatch": "Las contraseñas no coinciden"
+  }
+}

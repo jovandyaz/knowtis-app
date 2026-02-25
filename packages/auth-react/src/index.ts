@@ -40,10 +40,10 @@ export {
 
 // Schemas
 export {
-  loginSchema,
-  registerSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
+  createLoginSchema,
+  createRegisterSchema,
+  createForgotPasswordSchema,
+  createResetPasswordSchema,
 } from './lib/schemas/auth.schemas';
 export type {
   LoginFormData,

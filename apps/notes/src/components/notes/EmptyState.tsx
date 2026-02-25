@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Search, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -10,6 +12,8 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ hasSearch }: EmptyStateProps) {
+  const { t } = useTranslation('notes');
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -24,11 +28,9 @@ export function EmptyState({ hasSearch }: EmptyStateProps) {
             <Sparkles className="h-8 w-8 text-(--primary)/50" />
           )
         }
-        title={hasSearch ? 'No notes found' : 'Start your collection'}
+        title={hasSearch ? t('list.noNotesFound') : t('list.startCollection')}
         description={
-          hasSearch
-            ? "We couldn't find any notes matching your search. Try a different term."
-            : 'Create your first note to get started capturing your ideas.'
+          hasSearch ? t('list.noSearchResults') : t('list.createFirst')
         }
         fullHeight={false}
         className="rounded-2xl border border-dashed border-(--border) bg-(--card)/30 py-12"

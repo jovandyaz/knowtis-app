@@ -1,9 +1,19 @@
+import * as path from 'path';
+
 import { EmailModule } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import {
+  AcceptLanguageResolver,
+  HeaderResolver,
+  I18nModule,
+  QueryResolver,
+} from 'nestjs-i18n';
+
+import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
 
 import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';
@@ -31,6 +41,18 @@ import { AppService } from './app.service';
       },
     ]),
     EventEmitterModule.forRoot(),
+    I18nModule.forRoot({
+      fallbackLanguage: DEFAULT_LOCALE,
+      loaderOptions: {
+        path: path.join(__dirname, '/i18n/'),
+        watch: true,
+      },
+      resolvers: [
+        { use: QueryResolver, options: ['lang'] },
+        new HeaderResolver(['x-lang']),
+        AcceptLanguageResolver,
+      ],
+    }),
     DatabaseModule,
     FeatureFlagsModule,
     EmailModule.forRootAsync({

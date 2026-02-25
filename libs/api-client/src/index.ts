@@ -15,4 +15,8 @@ export {
 
 export { collaborationClient } from './lib/collaboration.client';
 
-export { usersApi, type UserProfile } from './lib/users.api';
+export {
+  usersApi,
+  type UserProfile,
+  type UpdateProfileInput,
+} from './lib/users.api';

@@ -1,9 +1,16 @@
 import {
-  forgotPasswordSchema,
-  loginSchema,
-  registerSchema,
-  resetPasswordSchema,
+  createForgotPasswordSchema,
+  createLoginSchema,
+  createRegisterSchema,
+  createResetPasswordSchema,
 } from '../schemas/auth.schemas';
+
+const t = (key: string) => key;
+
+const loginSchema = createLoginSchema(t);
+const registerSchema = createRegisterSchema(t);
+const forgotPasswordSchema = createForgotPasswordSchema(t);
+const resetPasswordSchema = createResetPasswordSchema(t);
 
 describe('loginSchema', () => {
   it('should validate a correct login input', () => {
