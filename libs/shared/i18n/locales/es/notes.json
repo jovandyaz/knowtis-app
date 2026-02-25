@@ -1,0 +1,98 @@
+{
+  "list": {
+    "searchPlaceholder": "Buscar notas...",
+    "errorLoading": "Error al cargar las notas",
+    "noNotesFound": "No se encontraron notas",
+    "startCollection": "Inicia tu colección",
+    "noSearchResults": "No pudimos encontrar notas que coincidan con tu búsqueda. Prueba con otro término.",
+    "createFirst": "Crea tu primera nota para empezar a capturar tus ideas.",
+    "noContentYet": "Sin contenido aún..."
+  },
+  "editor": {
+    "backToNotes": "Volver a Notas",
+    "share": "Compartir",
+    "titlePlaceholder": "Título de la nota...",
+    "lastUpdated": "Última actualización:",
+    "editorPlaceholder": "Empieza a escribir tu nota...",
+    "loadingNote": "Cargando nota...",
+    "failedToLoad": "Error al cargar la nota",
+    "notFound": "Nota no encontrada",
+    "loadingEditor": "Cargando editor...",
+    "connected": "Conectado al servidor",
+    "connecting": "Conectando...",
+    "editorError": "Error del Editor",
+    "editorErrorDesc": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
+    "errorDetails": "Detalles del Error"
+  },
+  "create": {
+    "newNote": "Nueva nota",
+    "title": "Crear nueva nota",
+    "description": "Dale un título a tu nota. Puedes editar el contenido después.",
+    "placeholder": "Ingresa el título de la nota...",
+    "titleRequired": "El título es obligatorio",
+    "titleTooLong": "El título debe tener menos de 200 caracteres",
+    "failedToCreate": "Error al crear la nota",
+    "button": "Crear nota",
+    "buttonLoading": "Creando..."
+  },
+  "delete": {
+    "title": "Eliminar nota",
+    "confirmMessage": "¿Estás seguro de que deseas eliminar",
+    "warning": "Esta acción no se puede deshacer.",
+    "button": "Eliminar",
+    "buttonLoading": "Eliminando..."
+  },
+  "share": {
+    "title": "Compartir \"{{noteTitle}}\"",
+    "description": "Administra quién puede acceder a esta nota",
+    "generalAccess": "Acceso general",
+    "restricted": "Restringido",
+    "restrictedDesc": "Solo personas con acceso explícito pueden abrir",
+    "anyoneWithLink": "Cualquiera con el enlace",
+    "anyoneWithLinkDesc": "Cualquier persona en internet con este enlace puede acceder",
+    "linkAccess": "Acceso por enlace",
+    "viewer": "Lector",
+    "editor": "Editor",
+    "owner": "Propietario",
+    "viewerHelp": "Las personas con este enlace pueden ver la nota pero no editarla.",
+    "editorHelp": "Las personas con este enlace pueden ver y editar la nota.",
+    "canShare": "Puedes compartir esta nota",
+    "limitedAccess": "Acceso limitado",
+    "editorsCanShareDesc": "El propietario ha permitido que los editores compartan esta nota.",
+    "onlyOwnerCanShare": "Solo el propietario puede cambiar la configuración de compartir esta nota.",
+    "editorsCanShare": "Los editores pueden compartir",
+    "editorsCanShareToggleDesc": "Permitir que los editores inviten a otros y administren el acceso",
+    "editorsCanShareTitle": "Los editores pueden compartir esta nota",
+    "onlyYouCanShare": "Solo tú puedes compartir esta nota"
+  },
+  "shared": {
+    "loadingSharedNote": "Cargando nota compartida...",
+    "linkNotFound": "Enlace no encontrado",
+    "linkNotFoundDesc": "Este enlace de compartir no existe o ha sido deshabilitado por el propietario.",
+    "failedToLoadShared": "Error al cargar la nota compartida. Inténtalo de nuevo.",
+    "editorBadge": "Editor",
+    "viewOnlyBadge": "Solo lectura",
+    "editButton": "Editar",
+    "viewButton": "Ver",
+    "signIn": "Iniciar sesión",
+    "byAuthor": "Por {{name}}"
+  },
+  "sidebar": {
+    "myNotes": "Mis notas",
+    "newNote": "Nueva nota",
+    "noNotesYet": "Aún no hay notas",
+    "untitled": "Sin título",
+    "flashcardsComingSoon": "Las flashcards estarán disponibles pronto. ¡Mantente atento!"
+  },
+  "profile": {
+    "title": "Perfil",
+    "description": "Administra la información de tu cuenta",
+    "namePlaceholder": "Tu nombre",
+    "nameLabel": "Nombre",
+    "emailLabel": "Correo electrónico",
+    "saveChanges": "Guardar cambios",
+    "saving": "Guardando...",
+    "updatedToast": "Perfil actualizado",
+    "failedToast": "Error al actualizar el perfil"
+  }
+}

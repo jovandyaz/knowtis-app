@@ -64,7 +64,8 @@
       "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
       "options": {
         "reportsDirectory": "../../coverage/apps/notes",
-        "passWithNoTests": true
+        "passWithNoTests": true,
+        "configFile": "apps/notes/vitest.config.ts"
       }
     },
     "typecheck": {

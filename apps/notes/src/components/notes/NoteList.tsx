@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DEBOUNCE_DELAYS } from '@/lib';
 import { Search } from 'lucide-react';
@@ -15,6 +16,8 @@ import { NoteCard } from './NoteCard';
 import { NoteCardSkeleton } from './NoteCardSkeleton';
 
 export function NoteList() {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const [localSearch, setLocalSearch] = useState('');
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
 
@@ -46,9 +49,11 @@ export function NoteList() {
   if (isError) {
     return (
       <ErrorState
-        title="Error loading notes"
+        title={t('list.errorLoading')}
         message={
-          error instanceof Error ? error.message : 'Please try again later'
+          error instanceof Error
+            ? error.message
+            : tCommon('errors.tryAgainLater')
         }
       />
     );
@@ -61,7 +66,7 @@ export function NoteList() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground group-focus-within:text-primary transition-colors" />
           <Input
             type="search"
-            placeholder="Search notes..."
+            placeholder={t('list.searchPlaceholder')}
             className="pl-10 h-11 bg-card/50 backdrop-blur-sm border-border/50 focus-visible:ring-primary/30 transition-all"
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}

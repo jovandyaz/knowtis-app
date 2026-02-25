@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { NAVIGATION_LINKS } from '@/config/navigation.config';
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -15,6 +16,7 @@ import { SidebarUserMenu } from './SidebarUserMenu';
 
 export function Sidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { t } = useTranslation('common');
   const user = useAuthUser();
 
   const closeMobileMenu = () => setIsMobileOpen(false);
@@ -27,7 +29,7 @@ export function Sidebar() {
           size="icon"
           onClick={() => setIsMobileOpen(!isMobileOpen)}
           className="h-10 w-10 rounded-full bg-(--background)/80 shadow-sm backdrop-blur-md"
-          aria-label="Toggle menu"
+          aria-label={t('labels.toggleMenu')}
         >
           {isMobileOpen ? (
             <X className="h-5 w-5" />

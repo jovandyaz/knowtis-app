@@ -1,3 +1,4 @@
+import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
 import { logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
@@ -106,8 +107,12 @@ export class HttpClient implements IHttpClient {
     options: RequestOptions = {}
   ): Promise<T> {
     const url = `${this.config.baseUrl}${endpoint}`;
+    const locale = this.config.localeProvider
+      ? this.config.localeProvider()
+      : DEFAULT_LOCALE;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
+      'Accept-Language': locale,
       ...options.headers,
     };
 

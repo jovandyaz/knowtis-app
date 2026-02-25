@@ -1,0 +1,13 @@
+{
+  "boundary": {
+    "title": "Algo salió mal",
+    "description": "Ocurrió un error inesperado. Por favor, inténtalo de nuevo o recarga la página.",
+    "editorTitle": "Error del Editor",
+    "editorDescription": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
+    "errorDetails": "Detalles del Error",
+    "tryAgain": "Intentar de nuevo",
+    "reloadPage": "Recargar página"
+  },
+  "notFound": "La página que buscabas no existe",
+  "rateLimitAlert": "Demasiados intentos. Espera un momento."
+}

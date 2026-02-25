@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Check, Copy, Users } from 'lucide-react';
 
@@ -12,18 +13,20 @@ interface LinkAccessSectionProps {
   onPermissionChange: (permission: PermissionLevel) => void;
 }
 
-const PERMISSION_OPTIONS = [
-  { value: PERMISSION.VIEWER, label: 'Viewer' },
-  { value: PERMISSION.EDITOR, label: 'Editor' },
-] as const;
-
 export function LinkAccessSection({
   shareUrl,
   permission,
   disabled,
   onPermissionChange,
 }: LinkAccessSectionProps) {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const permissionOptions = [
+    { value: PERMISSION.VIEWER, label: t('share.viewer') },
+    { value: PERMISSION.EDITOR, label: t('share.editor') },
+  ] as const;
 
   const handleCopyLink = async () => {
     try {
@@ -40,11 +43,11 @@ export function LinkAccessSection({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="h-4 w-4 text-muted-foreground" />
-          <h3 className="text-sm font-medium">Link access</h3>
+          <h3 className="text-sm font-medium">{t('share.linkAccess')}</h3>
         </div>
 
         <div className="flex items-center gap-1 p-0.5 bg-muted rounded-md">
-          {PERMISSION_OPTIONS.map((option) => (
+          {permissionOptions.map((option) => (
             <button
               key={option.value}
               onClick={() => onPermissionChange(option.value)}
@@ -78,12 +81,12 @@ export function LinkAccessSection({
           {copiedLink ? (
             <>
               <Check className="h-4 w-4 text-emerald-500" />
-              <span>Copied</span>
+              <span>{tCommon('buttons.copied')}</span>
             </>
           ) : (
             <>
               <Copy className="h-4 w-4" />
-              <span>Copy link</span>
+              <span>{tCommon('buttons.copyLink')}</span>
             </>
           )}
         </Button>
@@ -91,8 +94,8 @@ export function LinkAccessSection({
 
       <p className="text-xs text-muted-foreground">
         {permission === PERMISSION.VIEWER
-          ? 'People with this link can view the note but cannot edit.'
-          : 'People with this link can view and edit the note.'}
+          ? t('share.viewerHelp')
+          : t('share.editorHelp')}
       </p>
     </div>
   );

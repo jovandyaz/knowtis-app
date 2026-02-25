@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
 import { STORAGE_KEYS } from '@/config';
@@ -11,6 +13,8 @@ interface SidebarNotesSectionProps {
 }
 
 export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const { isCollapsed, toggle: toggleCollapsed } = useCollapsible(
     STORAGE_KEYS.SIDEBAR_NOTES_COLLAPSED
   );
@@ -21,7 +25,9 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
   const activeNoteId = params.noteId;
 
   const handleCreateNote = async () => {
-    const newNote = await createNote.mutateAsync({ title: 'Untitled' });
+    const newNote = await createNote.mutateAsync({
+      title: t('sidebar.untitled'),
+    });
     await navigate({ to: '/notes/$noteId', params: { noteId: newNote.id } });
     onNoteClick?.();
   };
@@ -31,7 +37,7 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
   return (
     <div className="flex flex-col gap-1">
       <span className="px-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">
-        Notes
+        {tCommon('labels.notes')}
       </span>
 
       <div className="flex items-center justify-between">
@@ -40,7 +46,11 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
             type="button"
             onClick={toggleCollapsed}
             className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-            title={isCollapsed ? 'Expand' : 'Collapse'}
+            title={
+              isCollapsed
+                ? tCommon('labels.expand')
+                : tCommon('labels.collapse')
+            }
           >
             <ChevronIcon className="h-3.5 w-3.5" />
           </button>
@@ -49,7 +59,7 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
             onClick={onNoteClick}
             className="flex-1 truncate rounded-md px-1.5 py-1 text-sm font-medium text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
           >
-            My Notes
+            {t('sidebar.myNotes')}
           </Link>
         </div>
 
@@ -58,7 +68,7 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
           onClick={handleCreateNote}
           disabled={createNote.isPending}
           className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          title="New note"
+          title={t('sidebar.newNote')}
         >
           <Plus className="h-3.5 w-3.5" />
         </button>
@@ -79,13 +89,15 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
               }`}
             >
               <FileText className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{note.title || 'Untitled'}</span>
+              <span className="truncate">
+                {note.title || t('sidebar.untitled')}
+              </span>
             </Link>
           ))}
 
           {notes?.length === 0 && (
             <span className="px-2 py-1 text-xs text-muted-foreground/60">
-              No notes yet
+              {t('sidebar.noNotesYet')}
             </span>
           )}
         </div>

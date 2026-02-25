@@ -1,27 +1,30 @@
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors, resolvePostLoginRedirect } from '@/auth';
+import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { LoginFormData } from '@jovandyaz/auth-react';
 import {
-  loginSchema,
+  createLoginSchema,
   useLogin,
   useRateLimitState,
 } from '@jovandyaz/auth-react';
-import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import {
-  Button,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
+  FormField,
   Input,
+  LoadingButton,
+  MutationErrorAlert,
   PasswordInput,
   RateLimitAlert,
 } from '@knowtis/design-system';
@@ -29,10 +32,12 @@ import {
 import { AuthPageLayout } from './AuthPageLayout';
 
 export function LoginPage() {
+  const { t } = useTranslation('auth');
   const login = useLogin();
   const navigate = useNavigate();
   const search = useSearch({ from: '/login' });
   const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
+  const loginSchema = useTranslatedSchema(createLoginSchema);
 
   const {
     register,
@@ -52,12 +57,12 @@ export function LoginPage() {
     resetRateLimit();
     login.mutate(data, {
       onSuccess: () => {
-        toast.success('Welcome back!');
+        toast.success(t('login.successToast'));
         navigate({ to: resolvePostLoginRedirect(search.redirect) });
       },
       onError: (error) => {
         if (checkRateLimit(error)) {
-          toast.error('Too many attempts. Please try again later.');
+          toast.error(t('login.rateLimitToast'));
           return;
         }
 
@@ -66,117 +71,92 @@ export function LoginPage() {
     });
   };
 
+  const hasFieldErrors =
+    ApiClientError.isApiClientError(login.error) &&
+    !!login.error.errors?.length;
+
   return (
     <AuthPageLayout>
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Welcome back
+          {t('login.title')}
         </CardTitle>
-        <CardDescription>Sign in to your account to continue</CardDescription>
+        <CardDescription>{t('login.description')}</CardDescription>
       </CardHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <CardContent className="space-y-4">
-          <RateLimitAlert visible={rateLimited} />
+          <RateLimitAlert
+            visible={rateLimited}
+            message={t('rateLimitAlert', { ns: 'errors' })}
+          />
 
-          {login.isError &&
-            !rateLimited &&
-            !(
-              ApiClientError.isApiClientError(login.error) &&
-              login.error.errors?.length
-            ) && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
-              >
-                {login.error instanceof Error
-                  ? login.error.message
-                  : 'Invalid email or password'}
-              </div>
-            )}
+          <MutationErrorAlert
+            error={login.error}
+            isError={login.isError}
+            rateLimited={rateLimited}
+            hasFieldErrors={hasFieldErrors}
+            fallbackMessage={t('login.invalidCredentials')}
+          />
 
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-(--foreground)"
-            >
-              Email
-            </label>
+          <FormField
+            id="email"
+            label={t('labels.email', { ns: 'common' })}
+            error={errors.email?.message}
+          >
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t('register.emailPlaceholder')}
               autoComplete="email"
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
-            {errors.email && (
-              <p
-                id="email-error"
-                role="alert"
-                className="text-sm text-(--destructive)"
-              >
-                {errors.email.message}
-              </p>
-            )}
-          </div>
+          </FormField>
 
-          <div className="space-y-2">
-            <label
-              htmlFor="password"
-              className="text-sm font-medium text-(--foreground)"
-            >
-              Password
-            </label>
+          <FormField
+            id="password"
+            label={t('labels.password', { ns: 'common' })}
+            error={errors.password?.message}
+          >
             <PasswordInput
               id="password"
-              placeholder="••••••••"
+              placeholder={t('register.passwordPlaceholder')}
               autoComplete="current-password"
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? 'password-error' : undefined}
               {...register('password')}
             />
-            {errors.password && (
-              <p
-                id="password-error"
-                role="alert"
-                className="text-sm text-(--destructive)"
-              >
-                {errors.password.message}
-              </p>
-            )}
-          </div>
+          </FormField>
+
           <div className="flex justify-end">
             <Link
               to="/forgot-password"
               className="text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
             >
-              Forgot password?
+              {t('login.forgotPassword')}
             </Link>
           </div>
         </CardContent>
 
         <CardFooter className="flex flex-col gap-4">
-          <Button type="submit" className="w-full" disabled={login.isPending}>
-            {login.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Signing in...
-              </>
-            ) : (
-              'Sign in'
-            )}
-          </Button>
+          <LoadingButton
+            type="submit"
+            className="w-full"
+            loading={login.isPending}
+            loadingText={t('login.buttonLoading')}
+          >
+            {t('login.button')}
+          </LoadingButton>
 
           <p className="text-center text-sm text-(--muted-foreground)">
-            Don&apos;t have an account?{' '}
+            {t('login.noAccount')}{' '}
             <Link
               to="/register"
               className="font-medium text-(--foreground) hover:underline"
             >
-              Create one
+              {t('login.createOne')}
             </Link>
           </p>
         </CardFooter>

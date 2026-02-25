@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
+import { useTranslation } from 'react-i18next';
 
 import { AlertCircle } from 'lucide-react';
 
@@ -12,6 +13,8 @@ interface EditorErrorBoundaryProps {
 }
 
 function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
+  const { t } = useTranslation('errors');
+
   return (
     <Card className="p-8 text-center space-y-4">
       <div className="flex justify-center">
@@ -19,16 +22,15 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       </div>
       <div>
         <h2 className="text-lg font-semibold text-foreground mb-2">
-          Editor Error
+          {t('boundary.editorTitle')}
         </h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Something went wrong with the collaborative editor. This could be due
-          to a synchronization issue or a temporary problem.
+          {t('boundary.editorDescription')}
         </p>
         {error && (
           <details className="text-xs text-left bg-muted/50 p-3 rounded">
             <summary className="cursor-pointer font-medium mb-2">
-              Error Details
+              {t('boundary.errorDetails')}
             </summary>
             <code className="text-destructive break-all">{error.message}</code>
           </details>
@@ -36,10 +38,10 @@ function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
       </div>
       <div className="flex gap-2 justify-center">
         <Button onClick={resetErrorBoundary} variant="default">
-          Try Again
+          {t('boundary.tryAgain')}
         </Button>
         <Button onClick={() => window.location.reload()} variant="outline">
-          Reload Page
+          {t('boundary.reloadPage')}
         </Button>
       </div>
     </Card>

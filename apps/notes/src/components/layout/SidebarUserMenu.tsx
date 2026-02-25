@@ -1,8 +1,10 @@
+import { useTranslation } from 'react-i18next';
+
 import { useNavigate } from '@tanstack/react-router';
 
+import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
-import { ChevronUp, LogOut, User } from 'lucide-react';
-import { useTheme } from 'next-themes';
+import { ChevronUp, LogOut, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -10,7 +12,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSwitchItem,
   DropdownMenuTrigger,
 } from '@knowtis/design-system';
 import { getInitials } from '@knowtis/shared-util';
@@ -22,12 +23,13 @@ interface SidebarUserMenuProps {
 export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
   const navigate = useNavigate();
   const { mutate: logout } = useLogout();
-  const { theme, setTheme } = useTheme();
+  const { t } = useTranslation('common');
+  const openSettings = useSettingsStore((state) => state.open);
 
   const handleLogout = () => {
     logout(undefined, {
       onSuccess: () => {
-        toast.success('Signed out successfully');
+        toast.success(t('nav.signedOutSuccess'));
         navigate({ to: '/login', search: { redirect: undefined } });
       },
     });
@@ -58,21 +60,10 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
         sideOffset={8}
         className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
       >
-        <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
-          <User className="h-4 w-4" />
-          Profile
+        <DropdownMenuItem onClick={() => openSettings()}>
+          <Settings className="h-4 w-4" />
+          {t('settings.title')}
         </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuSwitchItem
-          checked={theme === 'dark'}
-          onCheckedChange={(checked: boolean) =>
-            setTheme(checked ? 'dark' : 'light')
-          }
-        >
-          Dark mode
-        </DropdownMenuSwitchItem>
 
         <DropdownMenuSeparator />
 
@@ -81,7 +72,7 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
           className="text-(--destructive) focus:text-(--destructive)"
         >
           <LogOut className="h-4 w-4" />
-          Log out
+          {t('nav.logOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
@@ -50,6 +51,8 @@ function NoteEditor({
   shareToken,
   editorsCanShare,
 }: NoteEditorProps) {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [title, setTitle] = useState(initialTitle);
@@ -111,7 +114,7 @@ function NoteEditor({
           <Link to="/notes">
             <Button variant="ghost" size="sm" className="gap-2">
               <ArrowLeft className="h-4 w-4" />
-              Back to Notes
+              {t('editor.backToNotes')}
             </Button>
           </Link>
 
@@ -123,12 +126,12 @@ function NoteEditor({
             (isSaving ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
-                <span>Saving...</span>
+                <span>{tCommon('states.saving')}</span>
               </>
             ) : lastSaved ? (
               <>
                 <Check className="h-4 w-4 text-emerald-500" />
-                <span>Saved</span>
+                <span>{tCommon('states.saved')}</span>
               </>
             ) : null)}
 
@@ -141,7 +144,7 @@ function NoteEditor({
                 onClick={() => setIsShareDialogOpen(true)}
               >
                 <Share2 className="h-4 w-4" />
-                Share
+                {t('editor.share')}
               </Button>
 
               <ShareDialog
@@ -165,20 +168,20 @@ function NoteEditor({
           value={title}
           onChange={handleTitleChange}
           readOnly={!canEdit}
-          placeholder="Note title..."
+          placeholder={t('editor.titlePlaceholder')}
           className="border-0 bg-transparent px-0 text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0"
         />
       </div>
 
       <div className="mb-6 text-sm text-(--muted-foreground)">
-        Last updated: {formatNoteDateFull(updatedAt)}
+        {t('editor.lastUpdated')} {formatNoteDateFull(updatedAt)}
       </div>
 
       <CollaborativeEditor
         noteId={noteId}
         initialContent={content}
         onUpdate={handleContentChange}
-        placeholder="Start writing your note..."
+        placeholder={t('editor.editorPlaceholder')}
         editable={canEdit}
       />
     </div>
@@ -188,20 +191,21 @@ function NoteEditor({
 export function NoteEditorPage() {
   const { noteId } = useParams({ from: '/_authenticated/notes/$noteId' });
   const navigate = useNavigate();
+  const { t } = useTranslation('notes');
 
   const { data: note, isLoading, isError, error } = useNote(noteId);
 
   if (isLoading) {
-    return <LoadingState message="Loading note..." />;
+    return <LoadingState message={t('editor.loadingNote')} />;
   }
 
   if (isError) {
     return (
       <ErrorState
-        title="Failed to load note"
-        message={error instanceof Error ? error.message : 'Note not found'}
+        title={t('editor.failedToLoad')}
+        message={error instanceof Error ? error.message : t('editor.notFound')}
         onRetry={() => navigate({ to: '/' })}
-        retryLabel="Back to Notes"
+        retryLabel={t('editor.backToNotes')}
       />
     );
   }

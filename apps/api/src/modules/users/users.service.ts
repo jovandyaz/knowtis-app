@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { I18nService } from 'nestjs-i18n';
 
 import { UsersRepository } from './users.repository';
 
@@ -11,14 +12,23 @@ export interface CreateUserData {
   avatarUrl?: string;
 }
 
+export interface UpdateUserData {
+  name?: string;
+  avatarUrl?: string;
+  locale?: string;
+}
+
 @Injectable()
 export class UsersService {
-  constructor(private readonly usersRepository: UsersRepository) {}
+  constructor(
+    private readonly usersRepository: UsersRepository,
+    private readonly i18n: I18nService
+  ) {}
 
   async findById(id: string) {
     const user = await this.usersRepository.findById(id);
     if (!user) {
-      throw new NotFoundException(`User with id "${id}" not found`);
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
     return user;
   }
@@ -45,20 +55,11 @@ export class UsersService {
     });
   }
 
-  async update(id: string, data: Partial<CreateUserData>) {
-    const updateData: Record<string, string> = {};
-
-    if (data.name !== undefined) {
-      updateData.name = data.name;
-    }
-    if (data.avatarUrl !== undefined) {
-      updateData.avatarUrl = data.avatarUrl;
-    }
-
-    const user = await this.usersRepository.update(id, updateData);
+  async update(id: string, data: UpdateUserData) {
+    const user = await this.usersRepository.update(id, data);
 
     if (!user) {
-      throw new NotFoundException(`User with id "${id}" not found`);
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
 
     return user;
@@ -68,7 +69,7 @@ export class UsersService {
     const user = await this.usersRepository.update(id, { passwordHash });
 
     if (!user) {
-      throw new NotFoundException(`User with id "${id}" not found`);
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
 
     return user;
@@ -80,7 +81,7 @@ export class UsersService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with id "${id}" not found`);
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
 
     return user;

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
@@ -18,6 +19,7 @@ import {
 } from '@knowtis/design-system';
 
 export function CreateNoteDialog() {
+  const { t } = useTranslation(['notes', 'common']);
   const [open, setOpen] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -30,12 +32,12 @@ export function CreateNoteDialog() {
 
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      setError('Title is required');
+      setError(t('create.titleRequired'));
       return;
     }
 
     if (trimmedTitle.length > 200) {
-      setError('Title must be less than 200 characters');
+      setError(t('create.titleTooLong'));
       return;
     }
 
@@ -50,7 +52,7 @@ export function CreateNoteDialog() {
         },
         onError: (err) => {
           setError(
-            err instanceof Error ? err.message : 'Failed to create note'
+            err instanceof Error ? err.message : t('create.failedToCreate')
           );
         },
       }
@@ -70,22 +72,20 @@ export function CreateNoteDialog() {
       <DialogTrigger asChild>
         <Button className="gap-2">
           <Plus className="h-4 w-4" />
-          New Note
+          {t('create.newNote')}
         </Button>
       </DialogTrigger>
 
       <DialogContent>
         <form onSubmit={handleSubmit}>
           <DialogHeader>
-            <DialogTitle>Create New Note</DialogTitle>
-            <DialogDescription>
-              Give your note a title. You can edit the content after creation.
-            </DialogDescription>
+            <DialogTitle>{t('create.title')}</DialogTitle>
+            <DialogDescription>{t('create.description')}</DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
             <Input
-              placeholder="Enter note title..."
+              placeholder={t('create.placeholder')}
               value={title}
               onChange={(e) => {
                 setTitle(e.target.value);
@@ -107,16 +107,16 @@ export function CreateNoteDialog() {
               onClick={() => handleOpenChange(false)}
               disabled={createNote.isPending}
             >
-              Cancel
+              {t('common:buttons.cancel')}
             </Button>
             <Button type="submit" disabled={createNote.isPending}>
               {createNote.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating...
+                  {t('create.buttonLoading')}
                 </>
               ) : (
-                'Create Note'
+                t('create.button')
               )}
             </Button>
           </DialogFooter>

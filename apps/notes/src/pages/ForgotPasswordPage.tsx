@@ -1,36 +1,42 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
+import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ForgotPasswordFormData } from '@jovandyaz/auth-react';
 import {
-  forgotPasswordSchema,
+  createForgotPasswordSchema,
   useForgotPassword,
   useRateLimitState,
 } from '@jovandyaz/auth-react';
-import { ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
-  Button,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
+  FormField,
   Input,
+  LoadingButton,
+  MutationErrorAlert,
   RateLimitAlert,
 } from '@knowtis/design-system';
 
 import { AuthPageLayout } from './AuthPageLayout';
 
 export function ForgotPasswordPage() {
+  const { t } = useTranslation('auth');
   const forgotPassword = useForgotPassword();
   const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
   const [submitted, setSubmitted] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
+  const forgotPasswordSchema = useTranslatedSchema(createForgotPasswordSchema);
 
   const {
     register,
@@ -47,13 +53,13 @@ export function ForgotPasswordPage() {
     resetRateLimit();
     forgotPassword.mutate(data.email, {
       onSuccess: () => {
-        toast.success('If the email exists, a reset link will be sent.');
+        toast.success(t('forgotPassword.successToast'));
         setSubmittedEmail(data.email);
         setSubmitted(true);
       },
       onError: (error) => {
         if (checkRateLimit(error)) {
-          toast.error('Too many attempts. Please try again later.');
+          toast.error(t('errors.tooManyAttempts', { ns: 'common' }));
         }
       },
     });
@@ -64,7 +70,7 @@ export function ForgotPasswordPage() {
     forgotPassword.mutate(submittedEmail, {
       onError: (error) => {
         if (checkRateLimit(error)) {
-          toast.error('Too many attempts. Please try again later.');
+          toast.error(t('errors.tooManyAttempts', { ns: 'common' }));
         }
       },
     });
@@ -78,10 +84,10 @@ export function ForgotPasswordPage() {
             <CheckCircle className="h-6 w-6 text-(--primary)" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Check your email
+            {t('forgotPassword.checkEmail')}
           </CardTitle>
           <CardDescription>
-            We sent a password reset link to{' '}
+            {t('forgotPassword.sentResetLinkTo')}{' '}
             <span className="font-medium text-(--foreground)">
               {submittedEmail}
             </span>
@@ -89,27 +95,24 @@ export function ForgotPasswordPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <RateLimitAlert visible={rateLimited} />
+          <RateLimitAlert
+            visible={rateLimited}
+            message={t('rateLimitAlert', { ns: 'errors' })}
+          />
 
           <p className="text-center text-sm text-(--muted-foreground)">
-            Didn&apos;t receive the email? Check your spam folder or try again.
+            {t('forgotPassword.checkSpam')}
           </p>
 
-          <Button
+          <LoadingButton
             variant="outline"
             className="w-full"
             onClick={handleResend}
-            disabled={forgotPassword.isPending}
+            loading={forgotPassword.isPending}
+            loadingText={t('forgotPassword.buttonLoading')}
           >
-            {forgotPassword.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              'Resend email'
-            )}
-          </Button>
+            {t('forgotPassword.resendButton')}
+          </LoadingButton>
         </CardContent>
 
         <CardFooter>
@@ -119,7 +122,7 @@ export function ForgotPasswordPage() {
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to login
+            {t('verifyEmail.backToLogin')}
           </Link>
         </CardFooter>
       </AuthPageLayout>
@@ -130,72 +133,51 @@ export function ForgotPasswordPage() {
     <AuthPageLayout>
       <CardHeader className="space-y-1 text-center">
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Forgot your password?
+          {t('forgotPassword.title')}
         </CardTitle>
-        <CardDescription>
-          Enter your email and we&apos;ll send you a reset link
-        </CardDescription>
+        <CardDescription>{t('forgotPassword.description')}</CardDescription>
       </CardHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <CardContent className="space-y-4">
-          <RateLimitAlert visible={rateLimited} />
+          <RateLimitAlert
+            visible={rateLimited}
+            message={t('rateLimitAlert', { ns: 'errors' })}
+          />
 
-          {forgotPassword.isError && !rateLimited && (
-            <div
-              role="alert"
-              aria-live="polite"
-              className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
-            >
-              {forgotPassword.error instanceof Error
-                ? forgotPassword.error.message
-                : 'Something went wrong. Please try again.'}
-            </div>
-          )}
+          <MutationErrorAlert
+            error={forgotPassword.error}
+            isError={forgotPassword.isError}
+            rateLimited={rateLimited}
+            fallbackMessage={t('forgotPassword.genericError')}
+          />
 
-          <div className="space-y-2">
-            <label
-              htmlFor="email"
-              className="text-sm font-medium text-(--foreground)"
-            >
-              Email
-            </label>
+          <FormField
+            id="email"
+            label={t('labels.email', { ns: 'common' })}
+            error={errors.email?.message}
+          >
             <Input
               id="email"
               type="email"
-              placeholder="you@example.com"
+              placeholder={t('register.emailPlaceholder')}
               autoComplete="email"
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
-            {errors.email && (
-              <p
-                id="email-error"
-                role="alert"
-                className="text-sm text-(--destructive)"
-              >
-                {errors.email.message}
-              </p>
-            )}
-          </div>
+          </FormField>
         </CardContent>
 
         <CardFooter className="flex flex-col gap-4">
-          <Button
+          <LoadingButton
             type="submit"
             className="w-full"
-            disabled={forgotPassword.isPending}
+            loading={forgotPassword.isPending}
+            loadingText={t('forgotPassword.buttonLoading')}
           >
-            {forgotPassword.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              'Send reset link'
-            )}
-          </Button>
+            {t('forgotPassword.button')}
+          </LoadingButton>
 
           <Link
             to="/login"
@@ -203,7 +185,7 @@ export function ForgotPasswordPage() {
             className="flex items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to login
+            {t('verifyEmail.backToLogin')}
           </Link>
         </CardFooter>
       </form>

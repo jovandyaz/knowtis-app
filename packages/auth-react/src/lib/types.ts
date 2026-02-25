@@ -13,6 +13,8 @@ export interface AuthUserProfile {
   email: string;
   name: string;
   avatarUrl: string | null;
+  isEmailVerified?: boolean;
+  locale?: string;
 }
 
 /**

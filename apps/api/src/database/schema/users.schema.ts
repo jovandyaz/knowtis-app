@@ -7,6 +7,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
+
 export const users = pgTable(
   'users',
   {
@@ -17,6 +19,7 @@ export const users = pgTable(
     provider: text('provider').notNull().default('local'),
     providerId: text('provider_id'),
     passwordHash: text('password_hash'),
+    locale: text('locale').default(DEFAULT_LOCALE),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),

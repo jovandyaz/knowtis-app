@@ -17,7 +17,6 @@ import { Route as ResetPasswordImport } from './routes/reset-password';
 import { Route as VerifyEmailImport } from './routes/verify-email';
 import { Route as STokenImport } from './routes/s.$token';
 import { Route as AuthenticatedIndexImport } from './routes/_authenticated/index';
-import { Route as AuthenticatedProfileImport } from './routes/_authenticated/profile';
 import { Route as AuthenticatedNotesIndexImport } from './routes/_authenticated/notes/index';
 import { Route as AuthenticatedNotesNoteIdImport } from './routes/_authenticated/notes/$noteId';
 
@@ -69,12 +68,6 @@ const STokenRoute = STokenImport.update({
 const AuthenticatedIndexRoute = AuthenticatedIndexImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-
-const AuthenticatedProfileRoute = AuthenticatedProfileImport.update({
-  id: '/profile',
-  path: '/profile',
   getParentRoute: () => AuthenticatedRoute,
 } as any);
 
@@ -150,13 +143,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedIndexImport;
       parentRoute: typeof AuthenticatedImport;
     };
-    '/_authenticated/profile': {
-      id: '/_authenticated/profile';
-      path: '/profile';
-      fullPath: '/profile';
-      preLoaderRoute: typeof AuthenticatedProfileImport;
-      parentRoute: typeof AuthenticatedImport;
-    };
     '/_authenticated/notes/': {
       id: '/_authenticated/notes/';
       path: '/notes';
@@ -185,7 +171,6 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AuthenticatedIndexRoute;
-  '/profile': typeof AuthenticatedProfileRoute;
   '/notes': typeof AuthenticatedNotesIndexRoute;
   '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
@@ -198,7 +183,6 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AuthenticatedIndexRoute;
-  '/profile': typeof AuthenticatedProfileRoute;
   '/notes': typeof AuthenticatedNotesIndexRoute;
   '/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
@@ -213,30 +197,27 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/_authenticated/': typeof AuthenticatedIndexRoute;
-  '/_authenticated/profile': typeof AuthenticatedProfileRoute;
   '/_authenticated/notes/': typeof AuthenticatedNotesIndexRoute;
   '/_authenticated/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/profile' | '/notes' | '/notes/$noteId';
+  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes' | '/notes/$noteId';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/profile' | '/notes' | '/notes/$noteId';
-  id: '__root__' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_authenticated/' | '/_authenticated/profile' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
+  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes' | '/notes/$noteId';
+  id: '__root__' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
 export interface AuthenticatedRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
-  AuthenticatedProfileRoute: typeof AuthenticatedProfileRoute;
   AuthenticatedNotesIndexRoute: typeof AuthenticatedNotesIndexRoute;
   AuthenticatedNotesNoteIdRoute: typeof AuthenticatedNotesNoteIdRoute;
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedProfileRoute: AuthenticatedProfileRoute,
   AuthenticatedNotesIndexRoute: AuthenticatedNotesIndexRoute,
   AuthenticatedNotesNoteIdRoute: AuthenticatedNotesNoteIdRoute,
 };
@@ -286,7 +267,6 @@ export const routeTree = rootRoute
       "filePath": "_authenticated.tsx",
       "children": [
         "/_authenticated/",
-        "/_authenticated/profile",
         "/_authenticated/notes/",
         "/_authenticated/notes/$noteId"
       ]
@@ -311,10 +291,6 @@ export const routeTree = rootRoute
     },
     "/_authenticated/": {
       "filePath": "_authenticated/index.tsx",
-      "parent": "/_authenticated"
-    },
-    "/_authenticated/profile": {
-      "filePath": "_authenticated/profile.tsx",
       "parent": "/_authenticated"
     },
     "/_authenticated/notes/": {
