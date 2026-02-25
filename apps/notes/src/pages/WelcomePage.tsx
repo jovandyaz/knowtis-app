@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Link } from '@tanstack/react-router';
 
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -13,6 +15,7 @@ import {
 } from '@knowtis/design-system';
 
 export function WelcomePage() {
+  const { t } = useTranslation('common');
   const user = useAuthUser();
   const firstName = user?.name?.split(' ')[0] ?? '';
 
@@ -20,10 +23,11 @@ export function WelcomePage() {
     <div className="mx-auto max-w-3xl px-4 py-12">
       <div className="mb-10">
         <h1 className="text-3xl font-bold text-(--foreground)">
-          Welcome back{firstName ? `, ${firstName}` : ''}
+          {t('welcome.greeting')}
+          {firstName ? `, ${firstName}` : ''}
         </h1>
         <p className="mt-2 text-(--muted-foreground)">
-          What would you like to work on today?
+          {t('welcome.subtitle')}
         </p>
       </div>
 
@@ -35,13 +39,13 @@ export function WelcomePage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-(--primary)/10">
                   <FileText className="h-5 w-5 text-(--primary)" />
                 </div>
-                <CardTitle className="text-lg">Notes</CardTitle>
+                <CardTitle className="text-lg">
+                  {t('welcome.notesTitle')}
+                </CardTitle>
               </div>
             </CardHeader>
             <CardContent>
-              <CardDescription>
-                Create, edit, and collaborate on notes in real-time.
-              </CardDescription>
+              <CardDescription>{t('welcome.notesDescription')}</CardDescription>
             </CardContent>
           </Card>
         </Link>
@@ -53,13 +57,15 @@ export function WelcomePage() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-(--muted)">
                   <Layers className="h-5 w-5 text-(--muted-foreground)" />
                 </div>
-                <CardTitle className="text-lg">Flashcards</CardTitle>
-                <Badge variant="secondary">Coming soon</Badge>
+                <CardTitle className="text-lg">
+                  {t('welcome.flashcardsTitle')}
+                </CardTitle>
+                <Badge variant="secondary">{t('states.comingSoon')}</Badge>
               </div>
             </CardHeader>
             <CardContent>
               <CardDescription>
-                Study with smart flashcards and spaced repetition.
+                {t('welcome.flashcardsDescription')}
               </CardDescription>
             </CardContent>
           </Card>

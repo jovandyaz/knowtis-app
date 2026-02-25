@@ -1,7 +1,12 @@
+import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
+
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { authStore } from '@/auth';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { SettingsModal } from '@/components/settings/SettingsModal';
+import { useAuthUser } from '@jovandyaz/auth-react';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ location }) => {
@@ -20,9 +25,19 @@ export const Route = createFileRoute('/_authenticated')({
 });
 
 function AuthenticatedLayout() {
+  const user = useAuthUser();
+  const { i18n } = useTranslation();
+
+  useEffect(() => {
+    if (user?.locale && user.locale !== i18n.language) {
+      i18n.changeLanguage(user.locale);
+    }
+  }, [user?.locale, i18n]);
+
   return (
     <div className="flex min-h-screen bg-(--background)">
       <Sidebar />
+      <SettingsModal />
 
       <main className="flex-1 flex flex-col min-w-0 transition-all duration-300 md:pl-56">
         <div className="h-16 md:hidden" />

@@ -8,14 +8,15 @@ import {
   Length,
   MinLength,
 } from 'class-validator';
+import { i18nValidationMessage } from 'nestjs-i18n';
 
 export class RegisterDto {
   @ApiProperty({
     description: 'User email address',
     example: 'newuser@example.com',
   })
-  @IsEmail({}, { message: 'Invalid email format' })
-  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: i18nValidationMessage('validation.INVALID_EMAIL') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
   email!: string;
 
   @ApiProperty({
@@ -23,9 +24,9 @@ export class RegisterDto {
     example: 'John Doe',
     minLength: 2,
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Name is required' })
-  @MinLength(2, { message: 'Name must be at least 2 characters' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @MinLength(2, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   name!: string;
 
   @ApiProperty({
@@ -33,9 +34,9 @@ export class RegisterDto {
     example: 'SecurePassword123!',
     minLength: 8,
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Password is required' })
-  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @MinLength(8, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   password!: string;
 }
 
@@ -44,8 +45,8 @@ export class ForgotPasswordDto {
     description: 'Email address associated with the account',
     example: 'user@example.com',
   })
-  @IsEmail({}, { message: 'Invalid email format' })
-  @IsNotEmpty({ message: 'Email is required' })
+  @IsEmail({}, { message: i18nValidationMessage('validation.INVALID_EMAIL') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
   email!: string;
 }
 
@@ -54,10 +55,12 @@ export class ResetPasswordDto {
     description: 'Password reset token received via email',
     example: 'a1b2c3d4e5f6...',
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Token is required' })
-  @IsHexadecimal({ message: 'Invalid token format' })
-  @Length(64, 64, { message: 'Invalid token format' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @IsHexadecimal({ message: i18nValidationMessage('validation.INVALID_HEX') })
+  @Length(64, 64, {
+    message: i18nValidationMessage('validation.INVALID_LENGTH'),
+  })
   token!: string;
 
   @ApiProperty({
@@ -65,9 +68,9 @@ export class ResetPasswordDto {
     example: 'NewSecureP@ss1',
     minLength: 8,
   })
-  @IsString()
-  @IsNotEmpty({ message: 'New password is required' })
-  @MinLength(8, { message: 'Password must be at least 8 characters' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @MinLength(8, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   newPassword!: string;
 }
 
@@ -76,10 +79,12 @@ export class VerifyEmailDto {
     description: 'Email verification token received via email',
     example: 'a1b2c3d4e5f6...',
   })
-  @IsString()
-  @IsNotEmpty({ message: 'Token is required' })
-  @IsHexadecimal({ message: 'Invalid token format' })
-  @Length(64, 64, { message: 'Invalid token format' })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  @IsHexadecimal({ message: i18nValidationMessage('validation.INVALID_HEX') })
+  @Length(64, 64, {
+    message: i18nValidationMessage('validation.INVALID_LENGTH'),
+  })
   token!: string;
 }
 
@@ -90,6 +95,6 @@ export class RefreshTokenDto {
     required: false,
   })
   @IsOptional()
-  @IsString()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   refreshToken?: string;
 }

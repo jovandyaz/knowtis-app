@@ -1,8 +1,12 @@
 interface RateLimitAlertProps {
   visible: boolean;
+  message?: string;
 }
 
-function RateLimitAlert({ visible }: RateLimitAlertProps) {
+function RateLimitAlert({
+  visible,
+  message = 'Too many attempts. Please wait a moment.',
+}: RateLimitAlertProps) {
   if (!visible) {
     return null;
   }
@@ -13,7 +17,7 @@ function RateLimitAlert({ visible }: RateLimitAlertProps) {
       aria-live="polite"
       className="rounded-md bg-(--destructive)/10 p-3 text-sm text-(--destructive)"
     >
-      Too many attempts. Please wait a moment.
+      {message}
     </div>
   );
 }

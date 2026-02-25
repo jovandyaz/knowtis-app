@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Link, useSearch } from '@tanstack/react-router';
 
@@ -29,6 +30,7 @@ import {
 import { AuthPageLayout } from './AuthPageLayout';
 
 export function VerifyEmailPage() {
+  const { t } = useTranslation('auth');
   const { token } = useSearch({ from: '/verify-email' });
   const verifyEmail = useVerifyEmail();
   const resendVerification = useResendVerification();
@@ -40,7 +42,7 @@ export function VerifyEmailPage() {
       hasAttempted.current = true;
       verifyEmail.mutate(token, {
         onSuccess: () => {
-          toast.success('Email verified successfully!');
+          toast.success(t('verifyEmail.verifiedToast'));
         },
       });
     }
@@ -55,12 +57,9 @@ export function VerifyEmailPage() {
             <AlertCircle className="h-6 w-6 text-(--destructive)" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Invalid verification link
+            {t('verifyEmail.invalidLink')}
           </CardTitle>
-          <CardDescription>
-            This email verification link is invalid or missing. Please check
-            your email for the correct link.
-          </CardDescription>
+          <CardDescription>{t('verifyEmail.invalidLinkDesc')}</CardDescription>
         </CardHeader>
 
         <CardFooter>
@@ -70,7 +69,7 @@ export function VerifyEmailPage() {
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
             <ArrowLeft className="h-4 w-4" />
-            Back to login
+            {t('verifyEmail.backToLogin')}
           </Link>
         </CardFooter>
       </AuthPageLayout>
@@ -85,10 +84,10 @@ export function VerifyEmailPage() {
             <Loader2 className="h-6 w-6 animate-spin text-(--primary)" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Verifying your email
+            {t('verifyEmail.verifyingTitle')}
           </CardTitle>
           <CardDescription aria-live="polite">
-            Please wait while we verify your email address...
+            {t('verifyEmail.verifyingDesc')}
           </CardDescription>
         </CardHeader>
       </AuthPageLayout>
@@ -103,24 +102,21 @@ export function VerifyEmailPage() {
             <CheckCircle className="h-6 w-6 text-(--primary)" />
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">
-            Email verified!
+            {t('verifyEmail.verifiedTitle')}
           </CardTitle>
-          <CardDescription>
-            Your email has been verified successfully. You can now sign in to
-            your account.
-          </CardDescription>
+          <CardDescription>{t('verifyEmail.verifiedDesc')}</CardDescription>
         </CardHeader>
 
         <CardFooter>
           <Link to="/login" search={{ redirect: undefined }} className="w-full">
-            <Button className="w-full">Sign in</Button>
+            <Button className="w-full">{t('login.button')}</Button>
           </Link>
         </CardFooter>
       </AuthPageLayout>
     );
   }
 
-  const errorMessage = getErrorMessage(verifyEmail.error);
+  const errorMessage = getVerifyErrorMessage(verifyEmail.error);
 
   return (
     <AuthPageLayout>
@@ -129,11 +125,11 @@ export function VerifyEmailPage() {
           <AlertCircle className="h-6 w-6 text-(--destructive)" />
         </div>
         <CardTitle className="text-2xl font-bold tracking-tight">
-          Verification failed
+          {t('verifyEmail.failedTitle')}
         </CardTitle>
         <CardDescription>
           <span role="alert" aria-live="polite">
-            {errorMessage}
+            {t(errorMessage)}
           </span>
         </CardDescription>
       </CardHeader>
@@ -146,16 +142,14 @@ export function VerifyEmailPage() {
             onClick={() =>
               resendVerification.mutate(undefined, {
                 onSuccess: () => {
-                  toast.success(
-                    'Verification email sent. Please check your inbox.'
-                  );
+                  toast.success(t('verifyEmail.emailSentToast'));
                 },
                 onError: (error) => {
                   if (
                     ApiClientError.isApiClientError(error) &&
                     error.status === 429
                   ) {
-                    toast.error('Too many attempts. Please try again later.');
+                    toast.error(t('verifyEmail.rateLimitToast'));
                   }
                 },
               })
@@ -165,12 +159,12 @@ export function VerifyEmailPage() {
             {resendVerification.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Sending...
+                {t('verifyEmail.sendingButton')}
               </>
             ) : (
               <>
                 <Mail className="mr-2 h-4 w-4" />
-                Resend verification email
+                {t('verifyEmail.resendButton')}
               </>
             )}
           </Button>
@@ -182,7 +176,7 @@ export function VerifyEmailPage() {
             aria-live="polite"
             className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
           >
-            A new verification email has been sent. Please check your inbox.
+            {t('verifyEmail.resentSuccessCheckInbox')}
           </div>
         )}
 
@@ -194,8 +188,8 @@ export function VerifyEmailPage() {
           >
             {ApiClientError.isApiClientError(resendVerification.error) &&
             resendVerification.error.status === 429
-              ? 'Too many attempts. Please wait a moment.'
-              : 'Failed to resend verification email. Please try again.'}
+              ? t('verifyEmail.rateLimitToast')
+              : t('verifyEmail.resentFailed')}
           </div>
         )}
       </CardContent>
@@ -207,26 +201,31 @@ export function VerifyEmailPage() {
           className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
         >
           <ArrowLeft className="h-4 w-4" />
-          Back to login
+          {t('verifyEmail.backToLogin')}
         </Link>
       </CardFooter>
     </AuthPageLayout>
   );
 }
 
-function getErrorMessage(error: Error | null): string {
+function getVerifyErrorMessage(
+  error: Error | null
+):
+  | 'verifyEmail.genericError'
+  | 'verifyEmail.invalidOrExpired'
+  | 'verifyEmail.alreadyVerified' {
   if (!error) {
-    return 'Something went wrong. Please try again.';
+    return 'verifyEmail.genericError';
   }
 
   if (ApiClientError.isApiClientError(error)) {
     if (error.status === 400 || error.status === 404) {
-      return 'This verification link is invalid or has expired. Please request a new one.';
+      return 'verifyEmail.invalidOrExpired';
     }
     if (error.status === 409) {
-      return 'This email has already been verified.';
+      return 'verifyEmail.alreadyVerified';
     }
   }
 
-  return error.message || 'Something went wrong. Please try again.';
+  return 'verifyEmail.genericError';
 }

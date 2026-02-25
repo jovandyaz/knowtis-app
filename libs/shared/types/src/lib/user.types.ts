@@ -17,6 +17,7 @@ export interface UserProfile {
   email: string;
   name: string;
   avatarUrl: string | null;
+  locale?: string;
 }
 
 export interface CreateUserInput {
@@ -30,4 +31,5 @@ export interface CreateUserInput {
 export interface UpdateUserInput {
   name?: string;
   avatarUrl?: string | null;
+  locale?: string;
 }

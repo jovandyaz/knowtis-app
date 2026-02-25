@@ -1,0 +1,13 @@
+{
+  "boundary": {
+    "title": "Something went wrong",
+    "description": "An unexpected error occurred. Please try again or reload the page.",
+    "editorTitle": "Editor Error",
+    "editorDescription": "Something went wrong with the collaborative editor. This could be due to a synchronization issue or a temporary problem.",
+    "errorDetails": "Error Details",
+    "tryAgain": "Try Again",
+    "reloadPage": "Reload Page"
+  },
+  "notFound": "The page you were looking for does not exist",
+  "rateLimitAlert": "Too many attempts. Please wait a moment."
+}

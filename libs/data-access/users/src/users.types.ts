@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { SUPPORTED_LOCALES } from '@knowtis/shared-i18n';
+
 export const UpdateProfileSchema = z.object({
   name: z
     .string()
@@ -7,6 +9,5 @@ export const UpdateProfileSchema = z.object({
     .max(100, 'Name is too long')
     .optional(),
   avatarUrl: z.string().max(500).optional(),
+  locale: z.enum(SUPPORTED_LOCALES).optional(),
 });
-
-export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;

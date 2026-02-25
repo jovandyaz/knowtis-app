@@ -1,0 +1,14 @@
+{
+  "NOT_EMPTY": "{property} es obligatorio",
+  "INVALID_EMAIL": "Formato de correo electrónico inválido",
+  "MIN_LENGTH": "{property} debe tener al menos {constraints.0} caracteres",
+  "MAX_LENGTH": "{property} debe tener como máximo {constraints.0} caracteres",
+  "INVALID_BOOLEAN": "{property} debe ser un valor booleano",
+  "MIN": "{property} debe ser al menos {constraints.0}",
+  "MAX": "{property} debe ser como máximo {constraints.0}",
+  "IS_STRING": "{property} debe ser una cadena de texto",
+  "INVALID_HEX": "Formato de token inválido",
+  "INVALID_LENGTH": "Formato de token inválido",
+  "IS_IN": "{property} debe ser uno de: {constraints.0}",
+  "USER_NOT_FOUND": "Usuario no encontrado"
+}

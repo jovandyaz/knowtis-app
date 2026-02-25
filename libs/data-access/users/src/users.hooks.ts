@@ -1,8 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { usersApi } from '@knowtis/api-client';
-
-import type { UpdateProfileInput } from './users.types';
+import { usersApi, type UpdateProfileInput } from '@knowtis/api-client';
 
 export const usersQueryKeys = {
   all: ['users'] as const,

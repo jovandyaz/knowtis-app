@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   QueryCache,
@@ -51,12 +52,13 @@ export const Route = createRootRoute({
 
 function NotFoundRedirect() {
   const { isAuthenticated } = authStore.getState();
+  const { t } = useTranslation('errors');
 
   useEffect(() => {
     if (isAuthenticated) {
-      toast.error('La página que buscabas no existe');
+      toast.error(t('notFound'));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, t]);
 
   if (isAuthenticated) {
     return <Navigate to="/" />;

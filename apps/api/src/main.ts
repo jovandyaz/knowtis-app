@@ -1,14 +1,10 @@
-import {
-  BadRequestException,
-  Logger,
-  ValidationPipe,
-  VersioningType,
-} from '@nestjs/common';
+import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
+import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
@@ -50,29 +46,24 @@ async function bootstrap() {
 
   app.useWebSocketAdapter(new SocketIoAdapter(app, allowedOrigins[0]));
 
-  app.useGlobalFilters(new GlobalExceptionFilter());
+  app.useGlobalFilters(
+    new GlobalExceptionFilter(),
+    new I18nValidationExceptionFilter({
+      detailedErrors: false,
+    })
+  );
 
   if (isDevelopment) {
     app.useGlobalInterceptors(new LoggingInterceptor());
   }
 
   app.useGlobalPipes(
-    new ValidationPipe({
+    new I18nValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
       transformOptions: {
         enableImplicitConversion: true,
-      },
-      exceptionFactory: (errors) => {
-        const fieldErrors = errors.map((err) => ({
-          field: err.property,
-          message: Object.values(err.constraints ?? {}).join('. '),
-        }));
-        return new BadRequestException({
-          message: 'Validation failed',
-          errors: fieldErrors,
-        });
       },
     })
   );

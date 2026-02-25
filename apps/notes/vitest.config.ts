@@ -53,6 +53,10 @@ export default defineConfig({
         __dirname,
         '../../packages/auth-react/src/index.ts'
       ),
+      '@knowtis/shared-i18n': resolve(
+        __dirname,
+        '../../libs/shared/i18n/src/index.ts'
+      ),
     },
   },
 });

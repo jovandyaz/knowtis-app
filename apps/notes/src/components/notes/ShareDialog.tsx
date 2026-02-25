@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { Globe, Lock } from 'lucide-react';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
@@ -47,6 +49,7 @@ export function ShareDialog({
   editorsCanShare,
   accessLevel,
 }: ShareDialogProps) {
+  const { t } = useTranslation(['notes', 'common']);
   const updateNote = useUpdateNote();
 
   const isOwner = accessLevel === ACCESS.OWNER;
@@ -66,10 +69,10 @@ export function ShareDialog({
       <DialogContent className="max-w-[520px] p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-6 pt-6 pb-4 space-y-1">
           <DialogTitle className="text-xl font-semibold">
-            Share "{noteTitle}"
+            {t('share.title', { noteTitle })}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Manage who can access this note
+            {t('share.description')}
           </p>
         </DialogHeader>
 
@@ -79,7 +82,9 @@ export function ShareDialog({
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <Globe className="h-4 w-4 text-muted-foreground" />
-              <h3 className="text-sm font-medium">General access</h3>
+              <h3 className="text-sm font-medium">
+                {t('share.generalAccess')}
+              </h3>
             </div>
 
             <div className="space-y-2">
@@ -90,8 +95,8 @@ export function ShareDialog({
                   handleUpdate({ generalAccess: GENERAL_ACCESS.RESTRICTED })
                 }
                 icon={Lock}
-                title="Restricted"
-                description="Only people with explicit access can open"
+                title={t('share.restricted')}
+                description={t('share.restrictedDesc')}
               />
               <AccessOptionCard
                 selected={isPublicAccess}
@@ -102,8 +107,8 @@ export function ShareDialog({
                   })
                 }
                 icon={Globe}
-                title="Anyone with the link"
-                description="Anyone on the internet with this link can access"
+                title={t('share.anyoneWithLink')}
+                description={t('share.anyoneWithLinkDesc')}
               />
             </div>
           </div>
@@ -135,7 +140,7 @@ export function ShareDialog({
         <div className="border-t border-border mt-0" />
         <div className="px-6 py-4 flex justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Done
+            {t('common:buttons.done')}
           </Button>
         </div>
       </DialogContent>
