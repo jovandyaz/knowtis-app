@@ -228,7 +228,7 @@ export function getCollaborationMode(): CollaborationMode {
   const mode = import.meta.env.VITE_COLLABORATION_MODE as
     | CollaborationMode
     | undefined;
-  return mode || 'webrtc';
+  return mode || 'websocket';
 }
 
 export function isWebSocketEnabled(): boolean {

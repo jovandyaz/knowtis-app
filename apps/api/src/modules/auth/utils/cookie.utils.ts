@@ -12,7 +12,7 @@ export function setRefreshTokenCookie(
   res.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict',
+    sameSite: isProduction ? 'none' : 'strict',
     path: '/api/v1/auth',
     maxAge: REFRESH_TOKEN_MAX_AGE_MS,
   });
