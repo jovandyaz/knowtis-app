@@ -143,9 +143,10 @@ export function CollaborativeEditor({
   usePresenceBroadcast(noteId);
 
   const wsEnabled = isWebSocketEnabled();
-  const { isConnected, remoteUsers } = useWebSocketCollaboration({
+  const { isConnected, isSynced, remoteUsers } = useWebSocketCollaboration({
     noteId,
     yDoc: editorState.yDoc,
+    awareness: editorState.awareness,
     currentUser: {
       name: editorState.currentUser.name,
       color: editorState.currentUser.color,
@@ -192,7 +193,7 @@ export function CollaborativeEditor({
           yXmlFragment={editorState.yXmlFragment}
           awareness={editorState.awareness}
           currentUser={editorState.currentUser}
-          initialContent={initialContent}
+          initialContent={!wsEnabled || isSynced ? initialContent : ''}
           onUpdate={onUpdate}
           placeholder={placeholder}
           editable={editable}

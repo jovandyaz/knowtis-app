@@ -5,9 +5,7 @@ import { createAuthStore } from '../store/auth.store';
 
 describe('createAuthStore', () => {
   function setup() {
-    const tokenStorage = createTokenStorage({
-      refreshTokenKey: 'test_store_refresh',
-    });
+    const tokenStorage = createTokenStorage();
     const store = createAuthStore({
       tokenStorage,
       storageKey: `test-auth-${Date.now()}`,
@@ -89,7 +87,6 @@ describe('createAuthStore', () => {
     expect(state.isLoading).toBe(false);
 
     expect(tokenStorage.getAccessToken()).toBe('access-token-123');
-    expect(tokenStorage.getRefreshToken()).toBe('refresh-token-456');
   });
 
   it('should logout and clear tokens', () => {
@@ -117,7 +114,6 @@ describe('createAuthStore', () => {
     expect(state.isLoading).toBe(false);
 
     expect(tokenStorage.getAccessToken()).toBeNull();
-    expect(tokenStorage.getRefreshToken()).toBeNull();
   });
 
   it('should set loading state', () => {

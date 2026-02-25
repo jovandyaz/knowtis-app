@@ -5,14 +5,14 @@ import {
   MemoryHealthIndicator,
 } from '@nestjs/terminus';
 
-import { FeatureFlagsService } from '../feature-flags';
+import { DbHealthIndicator } from './db-health.indicator';
 
 @Controller('health')
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly memory: MemoryHealthIndicator,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly db: DbHealthIndicator
   ) {}
 
   @Get()
@@ -30,11 +30,8 @@ export class HealthController {
   }
 
   @Get('ready')
-  async ready() {
-    return {
-      status: 'ready',
-      timestamp: new Date().toISOString(),
-      features: await this.featureFlags.getAll(),
-    };
+  @HealthCheck()
+  ready() {
+    return this.health.check([() => this.db.isHealthy('database')]);
   }
 }

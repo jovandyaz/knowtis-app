@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 
 import { SocketIoAdapter } from './adapters';
@@ -32,6 +33,8 @@ async function bootstrap() {
   } else {
     app.use(helmet());
   }
+
+  app.use(cookieParser());
 
   const frontendUrl =
     configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';

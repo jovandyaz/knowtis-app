@@ -80,11 +80,11 @@ export class CollaborationClient {
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],
       autoConnect: true,
+      withCredentials: true,
       auth: {
-        userId: token ? undefined : `anon-${Date.now()}`,
-        shareToken: this.shareToken,
+        ...(token ? { token } : { userId: `anon-${Date.now()}` }),
+        ...(this.shareToken ? { shareToken: this.shareToken } : {}),
       },
-      ...(token ? { extraHeaders: { Authorization: `Bearer ${token}` } } : {}),
     });
 
     this.setupEventListeners();

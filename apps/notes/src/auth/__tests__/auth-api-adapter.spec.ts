@@ -28,13 +28,9 @@ function createMockTokenStorage(): TokenStorage {
   return {
     setAccessToken: vi.fn(),
     getAccessToken: vi.fn().mockReturnValue(null),
-    setRefreshToken: vi.fn(),
-    getRefreshToken: vi.fn().mockReturnValue('stored-refresh-token'),
-    setTokens: vi.fn(),
     clearTokens: vi.fn(),
     hasTokens: vi.fn().mockReturnValue(false),
     subscribe: vi.fn().mockReturnValue(() => {}),
-    initialize: vi.fn().mockReturnValue({ hasRefreshToken: false }),
   };
 }
 
@@ -74,7 +70,7 @@ describe('createAuthApiAdapter', () => {
   // ---- login ----
 
   describe('login', () => {
-    it('calls POST /auth/login with skipAuth and stores tokens', async () => {
+    it('calls POST /auth/login with skipAuth and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
 
@@ -88,7 +84,7 @@ describe('createAuthApiAdapter', () => {
         { email: 'a@b.com', password: 'pass' },
         { skipAuth: true }
       );
-      expect(tokenStorage.setTokens).toHaveBeenCalledWith('at', 'rt');
+      expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('at');
       expect(result).toBe(AUTH_RESPONSE);
     });
   });
@@ -96,7 +92,7 @@ describe('createAuthApiAdapter', () => {
   // ---- register ----
 
   describe('register', () => {
-    it('calls POST /auth/register with skipAuth and stores tokens', async () => {
+    it('calls POST /auth/register with skipAuth and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
 
@@ -111,7 +107,7 @@ describe('createAuthApiAdapter', () => {
         { email: 'a@b.com', name: 'Test', password: 'pass' },
         { skipAuth: true }
       );
-      expect(tokenStorage.setTokens).toHaveBeenCalledWith('at', 'rt');
+      expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('at');
       expect(result).toBe(AUTH_RESPONSE);
     });
   });
@@ -119,15 +115,13 @@ describe('createAuthApiAdapter', () => {
   // ---- logout ----
 
   describe('logout', () => {
-    it('sends refresh token to /auth/logout then clears tokens', async () => {
+    it('sends empty body to /auth/logout then clears tokens', async () => {
       httpClient.post.mockResolvedValue(undefined);
       const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
 
       await adapter.logout();
 
-      expect(httpClient.post).toHaveBeenCalledWith('/auth/logout', {
-        refreshToken: 'stored-refresh-token',
-      });
+      expect(httpClient.post).toHaveBeenCalledWith('/auth/logout', {});
       expect(tokenStorage.clearTokens).toHaveBeenCalledOnce();
     });
 
@@ -139,24 +133,12 @@ describe('createAuthApiAdapter', () => {
 
       expect(tokenStorage.clearTokens).toHaveBeenCalledOnce();
     });
-
-    it('skips server call when no refresh token exists', async () => {
-      (
-        tokenStorage.getRefreshToken as ReturnType<typeof vi.fn>
-      ).mockReturnValue(null);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
-
-      await adapter.logout();
-
-      expect(httpClient.post).not.toHaveBeenCalled();
-      expect(tokenStorage.clearTokens).toHaveBeenCalledOnce();
-    });
   });
 
   // ---- refreshToken ----
 
   describe('refreshToken', () => {
-    it('calls POST /auth/refresh with skipAuth and stores tokens', async () => {
+    it('calls POST /auth/refresh with empty body and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
       const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
 
@@ -164,22 +146,11 @@ describe('createAuthApiAdapter', () => {
 
       expect(httpClient.post).toHaveBeenCalledWith(
         '/auth/refresh',
-        { refreshToken: 'stored-refresh-token' },
+        {},
         { skipAuth: true }
       );
-      expect(tokenStorage.setTokens).toHaveBeenCalledWith('new-at', 'new-rt');
+      expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('new-at');
       expect(result).toBe(AUTH_TOKENS);
-    });
-
-    it('throws when no refresh token is available', async () => {
-      (
-        tokenStorage.getRefreshToken as ReturnType<typeof vi.fn>
-      ).mockReturnValue(null);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
-
-      await expect(adapter.refreshToken()).rejects.toThrow(
-        'No refresh token available'
-      );
     });
   });
 

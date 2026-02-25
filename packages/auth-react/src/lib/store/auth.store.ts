@@ -34,10 +34,7 @@ export function createAuthStore(options: CreateAuthStoreOptions) {
           }),
 
         handleAuthSuccess: (response: AuthResponse) => {
-          tokenStorage.setTokens(
-            response.tokens.accessToken,
-            response.tokens.refreshToken
-          );
+          tokenStorage.setAccessToken(response.tokens.accessToken);
 
           set({
             user: {
@@ -70,12 +67,7 @@ export function createAuthStore(options: CreateAuthStoreOptions) {
         }),
         onRehydrateStorage: () => (state) => {
           if (state?.isAuthenticated) {
-            const { hasRefreshToken } = tokenStorage.initialize();
-
-            if (!hasRefreshToken) {
-              state.logout();
-              return;
-            }
+            return;
           }
           state?.setLoading(false);
         },

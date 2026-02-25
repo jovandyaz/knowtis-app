@@ -67,13 +67,13 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 ### Token Refresh
 
-`POST /auth/refresh` → hash incoming token → find session → check expiry → delete old session → generate new tokens → create new session → `200 { tokens }`
+`POST /auth/refresh` → read refresh token from HttpOnly cookie (`rid`) → hash token → find session → check expiry → delete old session → generate new tokens → create new session → set new cookie → `200 { accessToken }`
 
 **Rotation:** Each refresh invalidates the previous token. Token reuse (replay attack) → **all user sessions invalidated**.
 
 ### Logout
 
-`POST /auth/logout` → hash refresh token → delete session → `204`. Best-effort (returns 204 even if session not found).
+`POST /auth/logout` → read refresh token from HttpOnly cookie (`rid`) → hash token → delete session → clear cookie → `204`. Best-effort (returns 204 even if cookie/session not found).
 
 ### Email Verification
 
@@ -91,45 +91,12 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in development.
 
-### Public endpoints
-
-| Endpoint                     | Body                        | Rate limit | Response                            | Errors                                                                               |
-| ---------------------------- | --------------------------- | ---------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
-| `POST /auth/login`           | `email`, `password`         | 5/15min    | `200 { user, tokens }`              | `INVALID_CREDENTIALS`                                                                |
-| `POST /auth/register`        | `email`, `name`, `password` | 3/15min    | `201 { user, tokens }`              | `INVALID_EMAIL`, `WEAK_PASSWORD`, `EMAIL_ALREADY_EXISTS`                             |
-| `POST /auth/refresh`         | `refreshToken`              | 10/1min    | `200 { accessToken, refreshToken }` | `INVALID_REFRESH_TOKEN`, `TOKEN_REUSE_DETECTED`, `SESSION_EXPIRED`                   |
-| `POST /auth/forgot-password` | `email`                     | 3/15min    | `200 { message }`                   | —                                                                                    |
-| `POST /auth/reset-password`  | `token`, `newPassword`      | 5/15min    | `200 { message }`                   | `INVALID_RESET_TOKEN`, `RESET_TOKEN_EXPIRED`, `WEAK_PASSWORD`                        |
-| `POST /auth/verify-email`    | `token`                     | 5/15min    | `200 { message }`                   | `INVALID_VERIFICATION_TOKEN`, `VERIFICATION_TOKEN_EXPIRED`, `EMAIL_ALREADY_VERIFIED` |
-| `POST /auth/logout`          | `refreshToken`              | —          | `204`                               | —                                                                                    |
-
-### Authenticated endpoints
-
-Require `Authorization: Bearer <token>` header.
-
-| Endpoint                         | Response          | Errors                   |
-| -------------------------------- | ----------------- | ------------------------ |
-| `GET /auth/me`                   | `200 { user }`    | `401`                    |
-| `POST /auth/resend-verification` | `200 { message }` | `EMAIL_ALREADY_VERIFIED` |
-
-### Error shape
-
-```json
-{
-  "statusCode": 400,
-  "error": "WEAK_PASSWORD",
-  "message": "...",
-  "timestamp": "...",
-  "path": "..."
-}
-```
-
 ---
 
 ## Security
 
 - **Passwords:** bcrypt (10 rounds). Min 8 chars, uppercase, number, special char. Rules shared between frontend and backend via `getPasswordChecks()` from `@jovandyaz/auth`.
-- **Token storage:** Refresh tokens and email/reset tokens stored as **SHA-256 hashes** (never plaintext). Generated with `crypto.randomBytes(32)`.
+- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, SameSite=Strict, Secure in production) and as **SHA-256 hashes** in the database (never plaintext). Email/reset tokens also stored as hashes. All generated with `crypto.randomBytes(32)`.
 - **Refresh token rotation:** Each refresh invalidates previous token. Reuse → all sessions invalidated.
 - **Rate limiting:** All endpoints via `@nestjs/throttler` (per-IP). Exceeding → `429`.
 - **Email enumeration:** `forgot-password` always returns success regardless of email existence.
@@ -175,9 +142,9 @@ All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_
 
 `@jovandyaz/auth-react` is decoupled from any HTTP client via the `AuthApiAdapter` interface. The adapter is implemented in `apps/notes/src/auth/auth-api-adapter.ts`.
 
-Token storage: access token **in-memory only**, refresh token in **localStorage**. On rehydration, missing refresh token triggers auto-logout.
+Token storage: access token **in-memory only**, refresh token in **HttpOnly cookie** (set by the backend, not accessible from JS). On rehydration, the store triggers a silent refresh to check if the cookie is still valid.
 
-Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 401 → refresh callback → retry request. Wired via `httpClient.setRefreshTokenCallback()` in the adapter.
+Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 401 → refresh callback (sends cookie via `credentials: 'include'`) → retry request. Wired via `httpClient.setRefreshTokenCallback()` in the adapter.
 
 > Package details in [AUTH-PACKAGES.md](AUTH-PACKAGES.md).
 

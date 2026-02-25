@@ -30,10 +30,7 @@ export function createAuthApiAdapter(
         { skipAuth: true }
       );
 
-      tokenStorage.setTokens(
-        response.tokens.accessToken,
-        response.tokens.refreshToken
-      );
+      tokenStorage.setAccessToken(response.tokens.accessToken);
 
       return response;
     },
@@ -45,36 +42,24 @@ export function createAuthApiAdapter(
         { skipAuth: true }
       );
 
-      tokenStorage.setTokens(
-        response.tokens.accessToken,
-        response.tokens.refreshToken
-      );
+      tokenStorage.setAccessToken(response.tokens.accessToken);
 
       return response;
     },
 
     async logout(): Promise<void> {
-      const refreshToken = tokenStorage.getRefreshToken();
-      if (refreshToken) {
-        await httpClient.post('/auth/logout', { refreshToken }).catch(() => {});
-      }
+      await httpClient.post('/auth/logout', {}).catch(() => {});
       tokenStorage.clearTokens();
     },
 
     async refreshToken(): Promise<AuthTokens> {
-      const refreshToken = tokenStorage.getRefreshToken();
-
-      if (!refreshToken) {
-        throw new Error('No refresh token available');
-      }
-
       const response = await httpClient.post<AuthTokens>(
         '/auth/refresh',
-        { refreshToken },
+        {},
         { skipAuth: true }
       );
 
-      tokenStorage.setTokens(response.accessToken, response.refreshToken);
+      tokenStorage.setAccessToken(response.accessToken);
 
       return response;
     },

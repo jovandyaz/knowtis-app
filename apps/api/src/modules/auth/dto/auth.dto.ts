@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsHexadecimal,
   IsNotEmpty,
+  IsOptional,
   IsString,
   Length,
   MinLength,
@@ -84,10 +85,11 @@ export class VerifyEmailDto {
 
 export class RefreshTokenDto {
   @ApiProperty({
-    description: 'JWT refresh token',
+    description: 'JWT refresh token (optional when sent via HttpOnly cookie)',
     example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    required: false,
   })
+  @IsOptional()
   @IsString()
-  @IsNotEmpty({ message: 'Refresh token is required' })
-  refreshToken!: string;
+  refreshToken?: string;
 }

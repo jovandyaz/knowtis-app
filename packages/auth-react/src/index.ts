@@ -1,8 +1,5 @@
 export { createTokenStorage } from './lib/storage/token-storage';
-export type {
-  TokenStorage,
-  TokenStorageOptions,
-} from './lib/storage/token-storage';
+export type { TokenStorage } from './lib/storage/token-storage';
 
 export { createAuthStore } from './lib/store/auth.store';
 export type {

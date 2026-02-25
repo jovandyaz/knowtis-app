@@ -122,6 +122,7 @@ export class HttpClient implements IHttpClient {
       method,
       headers,
       signal: options.signal ?? null,
+      credentials: 'include',
     };
 
     if (data && method !== 'GET') {

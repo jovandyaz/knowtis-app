@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { toast } from 'sonner';
+import type { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import { collaborationClient } from '@knowtis/api-client';
+import { useLatestRef } from '@knowtis/shared-hooks';
 import type {
   CollaborationError,
   CollaborationUser,
@@ -14,11 +16,14 @@ import type {
 } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
+import { useAwarenessSync } from './useAwarenessSync';
+
 export type CollaborationMode = 'webrtc' | 'websocket' | 'hybrid';
 
 interface UseWebSocketCollaborationOptions {
   noteId: string | null;
   yDoc: Y.Doc | null;
+  awareness?: Awareness | null;
   currentUser: { name: string; color: string };
   enabled?: boolean;
   shareToken?: string | undefined;
@@ -27,6 +32,7 @@ interface UseWebSocketCollaborationOptions {
 
 interface UseWebSocketCollaborationReturn {
   isConnected: boolean;
+  isSynced: boolean;
   remoteUsers: CollaborationUser[];
   error: string | null;
 }
@@ -34,37 +40,28 @@ interface UseWebSocketCollaborationReturn {
 export function useWebSocketCollaboration({
   noteId,
   yDoc,
+  awareness,
   currentUser,
   enabled = true,
   shareToken,
   onEditDenied,
 }: UseWebSocketCollaborationOptions): UseWebSocketCollaborationReturn {
   const [isConnected, setIsConnected] = useState(false);
+  const [isSynced, setIsSynced] = useState(false);
   const [remoteUsers, setRemoteUsers] = useState<CollaborationUser[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Use refs for values that shouldn't trigger re-renders
   const isJoinedRef = useRef(false);
-  const yDocRef = useRef(yDoc);
-  const currentUserRef = useRef(currentUser);
-  const noteIdRef = useRef(noteId);
-  const onEditDeniedRef = useRef(onEditDenied);
+  const yDocRef = useLatestRef(yDoc);
+  const currentUserRef = useLatestRef(currentUser);
+  const onEditDeniedRef = useLatestRef(onEditDenied);
 
-  useEffect(() => {
-    yDocRef.current = yDoc;
-  }, [yDoc]);
-
-  useEffect(() => {
-    currentUserRef.current = currentUser;
-  }, [currentUser]);
-
-  useEffect(() => {
-    noteIdRef.current = noteId;
-  }, [noteId]);
-
-  useEffect(() => {
-    onEditDeniedRef.current = onEditDenied;
-  }, [onEditDenied]);
+  const { handleRemoteAwarenessUpdate } = useAwarenessSync({
+    awareness,
+    noteId,
+    enabled,
+    isConnected,
+  });
 
   const handleConnect = useCallback(() => {
     setIsConnected(true);
@@ -73,53 +70,66 @@ export function useWebSocketCollaboration({
 
   const handleDisconnect = useCallback(() => {
     setIsConnected(false);
-    // Don't call setRemoteUsers here to avoid re-render loops
   }, []);
 
-  const handleInitialState = useCallback((response: InitialStateResponse) => {
-    const doc = yDocRef.current;
-    if (!doc) {
-      return;
-    }
+  const handleInitialState = useCallback(
+    (response: InitialStateResponse) => {
+      const doc = yDocRef.current;
+      if (!doc) {
+        return;
+      }
 
-    const state = new Uint8Array(response.state);
-    Y.applyUpdate(doc, state, 'server-initial');
-    setRemoteUsers(
-      response.users.filter(
-        (u: CollaborationUser) => u.name !== currentUserRef.current.name
-      )
-    );
-  }, []);
+      const state = new Uint8Array(response.state);
+      Y.applyUpdate(doc, state, 'server-initial');
+      setIsSynced(true);
+      setRemoteUsers(
+        response.users.filter(
+          (u: CollaborationUser) => u.name !== currentUserRef.current.name
+        )
+      );
+    },
+    [yDocRef, currentUserRef]
+  );
 
-  const handleDocumentUpdate = useCallback((payload: SyncUpdatePayload) => {
-    const doc = yDocRef.current;
-    if (!doc) {
-      return;
-    }
+  const handleDocumentUpdate = useCallback(
+    (payload: SyncUpdatePayload) => {
+      const doc = yDocRef.current;
+      if (!doc) {
+        return;
+      }
 
-    const update = new Uint8Array(payload.update);
-    Y.applyUpdate(doc, update, 'server-remote');
-  }, []);
+      const update = new Uint8Array(payload.update);
+      Y.applyUpdate(doc, update, 'server-remote');
+    },
+    [yDocRef]
+  );
 
-  const handleUserJoined = useCallback((user: UserJoinedPayload) => {
-    if (user.name !== currentUserRef.current.name) {
-      setRemoteUsers((prev) => [...prev.filter((u) => u.id !== user.id), user]);
-    }
-  }, []);
+  const handleUserJoined = useCallback(
+    (user: UserJoinedPayload) => {
+      if (user.name !== currentUserRef.current.name) {
+        setRemoteUsers((prev) => [
+          ...prev.filter((u) => u.id !== user.id),
+          user,
+        ]);
+      }
+    },
+    [currentUserRef]
+  );
 
   const handleUserLeft = useCallback((payload: UserLeftPayload) => {
     setRemoteUsers((prev) => prev.filter((u) => u.id !== payload.userId));
   }, []);
 
-  const handleEditDenied = useCallback((err: CollaborationError) => {
-    logger.warn(`Edit denied: ${err.message}`, {
-      context: 'useWebSocketCollaboration',
-    });
-    toast.error('Edit access revoked', {
-      description: err.message,
-    });
-    onEditDeniedRef.current?.();
-  }, []);
+  const handleEditDenied = useCallback(
+    (err: CollaborationError) => {
+      logger.warn(`Edit denied: ${err.message}`, {
+        context: 'useWebSocketCollaboration',
+      });
+      toast.error('Edit access revoked', { description: err.message });
+      onEditDeniedRef.current?.();
+    },
+    [onEditDeniedRef]
+  );
 
   const handleError = useCallback((err: CollaborationError) => {
     setError(err.message);
@@ -144,6 +154,7 @@ export function useWebSocketCollaboration({
       onDocumentUpdate: handleDocumentUpdate,
       onUserJoined: handleUserJoined,
       onUserLeft: handleUserLeft,
+      onAwarenessChange: handleRemoteAwarenessUpdate,
       onEditDenied: handleEditDenied,
       onError: handleError,
     });
@@ -162,6 +173,7 @@ export function useWebSocketCollaboration({
     handleDocumentUpdate,
     handleUserJoined,
     handleUserLeft,
+    handleRemoteAwarenessUpdate,
     handleEditDenied,
     handleError,
   ]);
@@ -181,10 +193,9 @@ export function useWebSocketCollaboration({
       if (isJoinedRef.current) {
         collaborationClient.leaveRoom();
         isJoinedRef.current = false;
-        // Don't call setRemoteUsers in cleanup - causes infinite loop
       }
     };
-  }, [enabled, noteId, isConnected]);
+  }, [enabled, noteId, isConnected, currentUserRef]);
 
   useEffect(() => {
     if (!enabled || !yDoc || !noteId || !isConnected) {
@@ -195,7 +206,6 @@ export function useWebSocketCollaboration({
       if (origin === 'server-initial' || origin === 'server-remote') {
         return;
       }
-
       collaborationClient.sendUpdate(update);
     };
 
@@ -208,6 +218,7 @@ export function useWebSocketCollaboration({
 
   return {
     isConnected,
+    isSynced,
     remoteUsers,
     error,
   };
@@ -223,9 +234,4 @@ export function getCollaborationMode(): CollaborationMode {
 export function isWebSocketEnabled(): boolean {
   const mode = getCollaborationMode();
   return mode === 'websocket' || mode === 'hybrid';
-}
-
-export function isWebRTCEnabled(): boolean {
-  const mode = getCollaborationMode();
-  return mode === 'webrtc' || mode === 'hybrid';
 }

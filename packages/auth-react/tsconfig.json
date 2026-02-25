@@ -9,5 +9,9 @@
     "noFallthroughCasesInSwitch": true,
     "noPropertyAccessFromIndexSignature": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": [],
+  "references": [
+    { "path": "./tsconfig.lib.json" },
+    { "path": "./tsconfig.spec.json" }
+  ]
 }

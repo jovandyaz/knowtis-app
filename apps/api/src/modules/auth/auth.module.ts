@@ -4,7 +4,8 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import { UsersModule } from '../users';
-import { AuthController } from './auth.controller';
+import { AuthAccountController } from './auth-account.controller';
+import { AuthSessionController } from './auth-session.controller';
 import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
 import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
@@ -37,6 +38,6 @@ const configService = new ConfigService();
       passwordResetTokenRepository: DrizzlePasswordResetTokenRepository,
     }),
   ],
-  controllers: [AuthController],
+  controllers: [AuthSessionController, AuthAccountController],
 })
 export class AuthModule {}

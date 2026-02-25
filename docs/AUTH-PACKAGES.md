@@ -46,8 +46,8 @@ auth-react      auth-nestjs + apps/api
 
 **Exports:**
 
-- **Token storage:** `createTokenStorage()` — access token in-memory, refresh token in localStorage
-- **Store:** `createAuthStore()` — Zustand with `user`, `isAuthenticated`, `isLoading`. Persisted via `zustand/persist`, auto-logout on missing refresh token
+- **Token storage:** `createTokenStorage()` — access token in-memory, refresh token managed by backend HttpOnly cookie (not accessible from JS)
+- **Store:** `createAuthStore()` — Zustand with `user`, `isAuthenticated`, `isLoading`. Persisted via `zustand/persist`, triggers silent refresh on rehydration if previously authenticated
 - **Provider:** `<AuthProvider api={adapter} tokenStorage={...} store={...}>`
 - **Query hooks:** `useLogin()`, `useRegister()`, `useLogout()`, `useProfile()`, `useForgotPassword()`, `useResetPassword()`, `useVerifyEmail()`, `useResendVerification()`
 - **Selector hooks:** `useAuth()`, `useAuthUser()`, `useIsAuthenticated()`, `useAuthLoading()`
@@ -102,6 +102,7 @@ HttpClient handles 401 → refresh callback → retry (transparent)
 - **`auth/server` subpath** — server-only exports are explicit; main entry is always browser-safe
 - **`AuthApiAdapter` interface** — decouples React hooks from HTTP implementation
 - **In-memory access tokens** — reduces XSS attack surface
+- **HttpOnly cookie for refresh tokens** — not accessible from JS, mitigates XSS token theft. Cookie: `rid`, path `/api/v1/auth`, SameSite=Strict, Secure in production
 - **`AuthTokens` in `@jovandyaz/auth`** — single source of truth for both packages
 - **Port interfaces in `auth-nestjs`** — implementations live in the consuming app, not the package
 - **`PasswordHasher` differs per package** — `auth` returns `Promise<string>` (utility), `auth-nestjs` returns `Result<string, AuthDomainError>` (DDD). Intentionally different contracts

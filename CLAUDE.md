@@ -167,11 +167,20 @@ The collaboration system uses Yjs (CRDT) for conflict-free sync:
 4. Server broadcasts to room members
 5. Clients apply update, Tiptap re-renders
 
-Presence/awareness handled through Yjs Awareness API.
+Presence/awareness is synced over WebSocket via the Yjs Awareness API:
+
+- `useAwarenessSync` hook encodes local awareness updates and sends them via `collaborationClient.sendAwarenessUpdate()`
+- Incoming awareness changes are applied with `applyAwarenessUpdate()` from `y-protocols/awareness`
+- `useActiveCollaborators` reads awareness state to render remote cursors and "X users editing" indicator
 
 ## Authentication
 
-JWT-based with refresh tokens. The `@knowtis/api-client` handles token refresh automatically on 401 responses.
+JWT-based with HttpOnly cookie refresh tokens:
+
+- Access token: stored in memory (Zustand), sent via `Authorization` header
+- Refresh token: stored in HttpOnly cookie (`rid`, path `/api/v1/auth`, SameSite=Strict), set/cleared by the backend
+- `@knowtis/api-client` sends `credentials: 'include'` and handles silent refresh on 401 responses
+- WebSocket auth: JWT sent via Socket.IO `auth.token` (not `extraHeaders`)
 
 ## Backend Modules
 
@@ -179,7 +188,7 @@ JWT-based with refresh tokens. The `@knowtis/api-client` handles token refresh a
 - **notes** - Notes CRUD with DDD/Clean Architecture, sharing/permissions
 - **collaboration** - WebSocket gateway (Socket.io) for Yjs real-time sync
 - **users** - User management (service-based)
-- **health** - Health check endpoints (`/api/v1/health/ping`, `/api/v1/health/ready`)
+- **health** - Health check endpoints (`/api/v1/health/ping` returns 200, `/api/v1/health/ready` checks DB connectivity via `DbHealthIndicator`, returns 503 when DB is down)
 - **feature-flags** - Env-based feature flag service with guard
 
 ## API Documentation
