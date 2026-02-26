@@ -22,7 +22,9 @@
     "connecting": "Conectando...",
     "editorError": "Error del Editor",
     "editorErrorDesc": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
-    "errorDetails": "Detalles del Error"
+    "errorDetails": "Detalles del Error",
+    "usersEditing_one": "{{count}} usuario editando",
+    "usersEditing_other": "{{count}} usuarios editando"
   },
   "create": {
     "newNote": "Nueva nota",
@@ -40,7 +42,8 @@
     "confirmMessage": "¿Estás seguro de que deseas eliminar",
     "warning": "Esta acción no se puede deshacer.",
     "button": "Eliminar",
-    "buttonLoading": "Eliminando..."
+    "buttonLoading": "Eliminando...",
+    "ariaLabel": "Eliminar {{title}}"
   },
   "share": {
     "title": "Compartir \"{{noteTitle}}\"",

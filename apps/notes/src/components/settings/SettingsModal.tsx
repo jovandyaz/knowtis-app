@@ -47,7 +47,7 @@ export function SettingsModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="flex h-[80vh] max-w-3xl flex-col gap-0 overflow-hidden p-0">
+      <DialogContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 sm:h-[80vh] sm:max-w-3xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-(--border) px-6 py-4">
           <Settings className="h-4 w-4 text-(--muted-foreground)" />
           <h2 className="text-sm font-semibold text-(--foreground)">
@@ -55,9 +55,9 @@ export function SettingsModal() {
           </h2>
         </div>
 
-        <div className="flex min-h-0 flex-1">
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
           <SettingsNav activeSection={activeSection} onSectionChange={open} />
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 overscroll-y-contain">
             <SectionComponent />
           </div>
         </div>
