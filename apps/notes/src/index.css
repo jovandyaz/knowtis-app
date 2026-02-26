@@ -40,9 +40,26 @@
   }
 }
 
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  html {
+    overscroll-behavior: none;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 5px;
   height: 5px;
+}
+
+@media (pointer: coarse) {
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 }
 
 ::-webkit-scrollbar-track {

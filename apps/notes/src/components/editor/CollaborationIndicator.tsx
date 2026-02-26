@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { CollaborativeUser } from '@/types';
 import { Users } from 'lucide-react';
@@ -19,6 +20,8 @@ export const CollaborationIndicator = memo(function CollaborationIndicator({
   users,
   className,
 }: CollaborationIndicatorProps) {
+  const { t } = useTranslation('notes');
+
   if (users.length === 0) {
     return null;
   }
@@ -32,7 +35,7 @@ export const CollaborationIndicator = memo(function CollaborationIndicator({
     >
       <Users className="h-4 w-4 text-(--primary)" />
       <Badge variant="secondary" className="text-xs">
-        {users.length} {users.length === 1 ? 'user' : 'users'} editing
+        {t('editor.usersEditing', { count: users.length })}
       </Badge>
       <div className="flex -space-x-2">
         {users.slice(0, 5).map((user) => (

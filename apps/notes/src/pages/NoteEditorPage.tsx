@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
+import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
+import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import {
   ACCESS_BADGE_CONFIG,
@@ -11,7 +13,7 @@ import {
   DEBOUNCE_DELAYS,
   formatNoteDateFull,
 } from '@/lib';
-import { ArrowLeft, Check, Loader2, Share2 } from 'lucide-react';
+import { ArrowLeft, Share2 } from 'lucide-react';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -40,6 +42,103 @@ interface NoteEditorProps {
   editorsCanShare: boolean;
 }
 
+interface MobileEditorHeaderProps {
+  accessLevel: NoteAccessLevel;
+  onShareClick: () => void;
+}
+
+function MobileEditorHeader({
+  accessLevel,
+  onShareClick,
+}: MobileEditorHeaderProps) {
+  return (
+    <>
+      <Link to="/notes">
+        <FloatingActionButton
+          icon={ArrowLeft}
+          position="left"
+          aria-label="Back to notes"
+        />
+      </Link>
+
+      {canPerformNoteAction(accessLevel, 'share') && (
+        <FloatingActionButton
+          icon={Share2}
+          position="right"
+          onClick={onShareClick}
+          aria-label="Share note"
+        />
+      )}
+
+      {/* Spacer for floating buttons */}
+      <div className="h-14 md:hidden" />
+    </>
+  );
+}
+
+interface DesktopEditorHeaderProps {
+  accessLevel: NoteAccessLevel;
+  canEdit: boolean;
+  isSaving: boolean;
+  hasSaved: boolean;
+  onShareClick: () => void;
+}
+
+function DesktopEditorHeader({
+  accessLevel,
+  canEdit,
+  isSaving,
+  hasSaved,
+  onShareClick,
+}: DesktopEditorHeaderProps) {
+  const { t } = useTranslation('notes');
+  const { t: tCommon } = useTranslation('common');
+  const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
+
+  return (
+    <div className="mb-6 hidden md:flex items-center justify-between">
+      <div className="flex items-center gap-2">
+        <Link to="/notes">
+          <Button variant="ghost" size="sm" className="gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            {t('editor.backToNotes')}
+          </Button>
+        </Link>
+        <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+      </div>
+
+      <div className="flex items-center gap-2 text-sm text-(--muted-foreground)">
+        {canEdit &&
+          (isSaving ? (
+            <SaveStatusIndicator
+              status="saving"
+              label={tCommon('states.saving')}
+              className="text-sm"
+            />
+          ) : hasSaved ? (
+            <SaveStatusIndicator
+              status="saved"
+              label={tCommon('states.saved')}
+              className="text-sm"
+            />
+          ) : null)}
+
+        {canPerformNoteAction(accessLevel, 'share') && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={onShareClick}
+          >
+            <Share2 className="h-4 w-4" />
+            {t('editor.share')}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function NoteEditor({
   noteId,
   initialTitle,
@@ -52,7 +151,6 @@ function NoteEditor({
   editorsCanShare,
 }: NoteEditorProps) {
   const { t } = useTranslation('notes');
-  const { t: tCommon } = useTranslation('common');
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [title, setTitle] = useState(initialTitle);
@@ -105,63 +203,22 @@ function NoteEditor({
   );
 
   const isSaving = updateNote.isPending || isPendingUpdate;
-  const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
+  const openShareDialog = () => setIsShareDialogOpen(true);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Link to="/notes">
-            <Button variant="ghost" size="sm" className="gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              {t('editor.backToNotes')}
-            </Button>
-          </Link>
+    <div className="mx-auto max-w-4xl py-4 md:py-6">
+      <MobileEditorHeader
+        accessLevel={accessLevel}
+        onShareClick={openShareDialog}
+      />
 
-          <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
-        </div>
-
-        <div className="flex items-center gap-2 text-sm text-(--muted-foreground)">
-          {canEdit &&
-            (isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span>{tCommon('states.saving')}</span>
-              </>
-            ) : lastSaved ? (
-              <>
-                <Check className="h-4 w-4 text-emerald-500" />
-                <span>{tCommon('states.saved')}</span>
-              </>
-            ) : null)}
-
-          {canPerformNoteAction(accessLevel, 'share') && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                onClick={() => setIsShareDialogOpen(true)}
-              >
-                <Share2 className="h-4 w-4" />
-                {t('editor.share')}
-              </Button>
-
-              <ShareDialog
-                open={isShareDialogOpen}
-                onOpenChange={setIsShareDialogOpen}
-                noteId={noteId}
-                noteTitle={title}
-                generalAccess={generalAccess}
-                generalAccessPermission={generalAccessPermission}
-                shareToken={shareToken}
-                editorsCanShare={editorsCanShare}
-                accessLevel={accessLevel}
-              />
-            </>
-          )}
-        </div>
-      </div>
+      <DesktopEditorHeader
+        accessLevel={accessLevel}
+        canEdit={canEdit}
+        isSaving={isSaving}
+        hasSaved={!!lastSaved}
+        onShareClick={openShareDialog}
+      />
 
       <div className="mb-4">
         <Input
@@ -183,7 +240,22 @@ function NoteEditor({
         onUpdate={handleContentChange}
         placeholder={t('editor.editorPlaceholder')}
         editable={canEdit}
+        saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
       />
+
+      {canPerformNoteAction(accessLevel, 'share') && (
+        <ShareDialog
+          open={isShareDialogOpen}
+          onOpenChange={setIsShareDialogOpen}
+          noteId={noteId}
+          noteTitle={title}
+          generalAccess={generalAccess}
+          generalAccessPermission={generalAccessPermission}
+          shareToken={shareToken}
+          editorsCanShare={editorsCanShare}
+          accessLevel={accessLevel}
+        />
+      )}
     </div>
   );
 }
