@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   isWebSocketEnabled,
@@ -39,6 +40,7 @@ function InternalEditor({
   onUpdate,
   placeholder,
   editable,
+  saveStatus,
 }: InternalEditorProps) {
   const extensions = useEditorExtensions(
     yDoc,
@@ -54,7 +56,7 @@ function InternalEditor({
       attributes: {
         class: cn(
           'prose prose-sm sm:prose-base max-w-none',
-          'min-h-[300px] p-6',
+          'min-h-[300px] p-4 md:p-6',
           'focus:outline-none',
           'prose-headings:text-foreground font-bold',
           'prose-p:text-foreground leading-relaxed',
@@ -96,7 +98,7 @@ function InternalEditor({
 
   return (
     <>
-      <EditorToolbar editor={editor} />
+      <EditorToolbar editor={editor} saveStatus={saveStatus} />
       <div className={EDITOR_CONTAINER_CLASSES}>
         <EditorContent
           editor={editor}
@@ -111,11 +113,15 @@ function InternalEditor({
           data-placeholder={placeholder}
         />
       </div>
+
+      <div className="h-16 md:hidden" />
     </>
   );
 }
 
 function EditorLoadingState() {
+  const { t } = useTranslation('notes');
+
   return (
     <div
       className={cn(
@@ -123,7 +129,7 @@ function EditorLoadingState() {
         'min-h-[350px] flex items-center justify-center'
       )}
     >
-      <div className="text-muted-foreground">Loading editor...</div>
+      <div className="text-muted-foreground">{t('editor.loadingEditor')}</div>
     </div>
   );
 }
@@ -132,15 +138,19 @@ export function CollaborativeEditor({
   noteId,
   initialContent,
   onUpdate,
-  placeholder = 'Start writing your note...',
+  placeholder,
   className,
   editable = true,
   shareToken,
   onEditDenied,
+  saveStatus,
 }: CollaborativeEditorProps) {
+  const { t } = useTranslation('notes');
   const editorState = useCollaborativeEditor(noteId);
   const otherUsers = useActiveCollaborators(noteId);
   usePresenceBroadcast(noteId);
+  const resolvedPlaceholder: string =
+    placeholder ?? t('editor.editorPlaceholder');
 
   const wsEnabled = isWebSocketEnabled();
   const { isConnected, isSynced, remoteUsers } = useWebSocketCollaboration({
@@ -179,7 +189,9 @@ export function CollaborativeEditor({
                 'w-2 h-2 rounded-full',
                 isConnected ? 'bg-emerald-500' : 'bg-amber-500'
               )}
-              title={isConnected ? 'Connected to server' : 'Connecting...'}
+              title={
+                isConnected ? t('editor.connected') : t('editor.connecting')
+              }
             />
           </div>
         )}
@@ -195,8 +207,9 @@ export function CollaborativeEditor({
           currentUser={editorState.currentUser}
           initialContent={!wsEnabled || isSynced ? initialContent : ''}
           onUpdate={onUpdate}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           editable={editable}
+          saveStatus={saveStatus}
         />
       </div>
     </EditorErrorBoundary>

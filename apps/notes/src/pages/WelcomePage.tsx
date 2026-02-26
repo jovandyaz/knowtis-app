@@ -20,9 +20,9 @@ export function WelcomePage() {
   const firstName = user?.name?.split(' ')[0] ?? '';
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12">
+    <div className="mx-auto max-w-3xl py-6 md:py-12">
       <div className="mb-10">
-        <h1 className="text-3xl font-bold text-(--foreground)">
+        <h1 className="text-2xl md:text-3xl font-bold text-(--foreground)">
           {t('welcome.greeting')}
           {firstName ? `, ${firstName}` : ''}
         </h1>

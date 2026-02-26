@@ -9,12 +9,16 @@ import { motion } from 'motion/react';
 
 import { Button, cn } from '@knowtis/design-system';
 
+import type { SaveStatus } from './SaveStatusIndicator';
+import { SaveStatusIndicator } from './SaveStatusIndicator';
+
 /**
  * Props for the EditorToolbar component
  * @param editor - The TipTap editor instance
  */
 interface EditorToolbarProps {
   editor: Editor | null;
+  saveStatus?: SaveStatus | undefined;
 }
 
 /**
@@ -72,6 +76,7 @@ function ToolbarSeparator() {
  */
 export const EditorToolbar = memo(function EditorToolbar({
   editor,
+  saveStatus,
 }: EditorToolbarProps) {
   if (!editor) {
     return null;
@@ -81,9 +86,18 @@ export const EditorToolbar = memo(function EditorToolbar({
     <motion.div
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="sticky top-4 z-10 mx-auto mb-4 w-fit"
+      className={cn(
+        'z-10 mx-auto w-fit',
+        'sticky top-4 mb-4',
+        'max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
+      )}
     >
-      <div className="flex items-center gap-1 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30">
+      <div
+        className={cn(
+          'flex items-center gap-1 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30',
+          'max-md:mx-auto max-md:w-fit max-md:rounded-2xl'
+        )}
+      >
         {TOOLBAR_TOOLS.map((item, index) => {
           if ('type' in item && item.type === 'separator') {
             return <ToolbarSeparator key={`sep-${index}`} />;
@@ -92,6 +106,12 @@ export const EditorToolbar = memo(function EditorToolbar({
           const tool = item as ToolbarToolConfig;
           return <ToolbarButton key={tool.label} editor={editor} tool={tool} />;
         })}
+        {saveStatus && (
+          <SaveStatusIndicator
+            status={saveStatus}
+            className="hidden max-md:flex ml-2 text-xs text-(--muted-foreground)"
+          />
+        )}
       </div>
     </motion.div>
   );
