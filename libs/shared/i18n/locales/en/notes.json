@@ -22,7 +22,9 @@
     "connecting": "Connecting...",
     "editorError": "Editor Error",
     "editorErrorDesc": "Something went wrong with the collaborative editor. This could be due to a synchronization issue or a temporary problem.",
-    "errorDetails": "Error Details"
+    "errorDetails": "Error Details",
+    "usersEditing_one": "{{count}} user editing",
+    "usersEditing_other": "{{count}} users editing"
   },
   "create": {
     "newNote": "New Note",
@@ -40,7 +42,8 @@
     "confirmMessage": "Are you sure you want to delete",
     "warning": "This action cannot be undone.",
     "button": "Delete",
-    "buttonLoading": "Deleting..."
+    "buttonLoading": "Deleting...",
+    "ariaLabel": "Delete {{title}}"
   },
   "share": {
     "title": "Share \"{{noteTitle}}\"",

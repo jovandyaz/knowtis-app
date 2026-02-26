@@ -89,17 +89,17 @@ export const NoteCard = memo(function NoteCard({
         </Link>
 
         {canPerformNoteAction(note.accessLevel, 'delete') && (
-          <div className="absolute right-2 top-2 flex gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+          <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 transition-opacity duration-200 md:group-hover:opacity-100">
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              className="h-11 w-11 md:h-8 md:w-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
               onClick={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 onDelete(note.id);
               }}
-              aria-label={`Delete ${note.title}`}
+              aria-label={t('delete.ariaLabel', { title: note.title })}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

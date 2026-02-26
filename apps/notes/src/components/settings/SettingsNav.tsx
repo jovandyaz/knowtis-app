@@ -27,21 +27,29 @@ export function SettingsNav({
   const { t } = useTranslation('common');
 
   return (
-    <nav className="w-44 shrink-0 border-r border-(--border) py-2">
+    <nav
+      className={cn(
+        'shrink-0',
+        'flex overflow-x-auto border-b border-(--border) px-2 sm:w-44 sm:flex-col sm:overflow-x-visible sm:border-b-0 sm:border-r sm:px-0 sm:py-2'
+      )}
+    >
       {NAV_ITEMS.map(({ section, icon: Icon }) => (
         <button
           key={section}
           type="button"
           onClick={() => onSectionChange(section)}
           className={cn(
-            'flex w-full items-center gap-2.5 px-4 py-2 text-sm transition-colors',
+            'flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm transition-colors',
+            'sm:w-full',
             activeSection === section
-              ? 'bg-(--muted) font-medium text-(--foreground)'
-              : 'text-(--muted-foreground) hover:bg-(--muted)/50 hover:text-(--foreground)'
+              ? 'border-b-2 border-(--primary) font-medium text-(--foreground) sm:border-b-0 sm:bg-(--muted)'
+              : 'text-(--muted-foreground) hover:text-(--foreground) sm:hover:bg-(--muted)/50'
           )}
         >
           <Icon className="h-4 w-4 shrink-0" />
-          {t(`settings.sections.${section}`)}
+          <span className="hidden sm:inline">
+            {t(`settings.sections.${section}`)}
+          </span>
         </button>
       ))}
     </nav>

@@ -20,6 +20,7 @@ export interface CollaborativeEditorProps {
   editable?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
+  saveStatus?: 'saving' | 'saved' | undefined;
 }
 
 /**
@@ -42,4 +43,5 @@ export interface InternalEditorProps {
   onUpdate: (content: string) => void;
   placeholder: string;
   editable: boolean;
+  saveStatus?: 'saving' | 'saved' | undefined;
 }
