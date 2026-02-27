@@ -8,6 +8,7 @@ import { Settings } from 'lucide-react';
 import { Dialog, DialogContent } from '@knowtis/design-system';
 
 import { SectionHeader } from './SectionHeader';
+import { AccountSection } from './sections/AccountSection';
 import { AppearanceSection } from './sections/AppearanceSection';
 import { LanguageSection } from './sections/LanguageSection';
 import { ProfileSection } from './sections/ProfileSection';
@@ -36,7 +37,7 @@ const SECTION_COMPONENTS: Record<SettingsSection, ComponentType> = {
   language: LanguageSection,
   editor: () => <PlaceholderSection section="editor" />,
   notifications: () => <PlaceholderSection section="notifications" />,
-  account: () => <PlaceholderSection section="account" />,
+  account: AccountSection,
 };
 
 export function SettingsModal() {

@@ -1,3 +1,5 @@
+import type { ComponentPropsWithoutRef } from 'react';
+
 import type { LucideIcon } from 'lucide-react';
 
 import { Button, cn } from '@knowtis/design-system';
@@ -22,7 +24,7 @@ export function FloatingActionButton({
   ...rest
 }: FloatingActionButtonProps &
   Omit<
-    React.ComponentProps<'button'>,
+    ComponentPropsWithoutRef<'button'>,
     keyof FloatingActionButtonProps | 'className' | 'type'
   >) {
   return (
@@ -30,6 +32,7 @@ export function FloatingActionButton({
       className={cn('fixed top-4 z-50 md:hidden', POSITION_CLASSES[position])}
     >
       <Button
+        type="button"
         variant="outline"
         size="icon"
         className="h-10 w-10 rounded-full bg-(--background)/80 shadow-sm backdrop-blur-md"

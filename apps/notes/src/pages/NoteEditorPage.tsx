@@ -51,22 +51,24 @@ function MobileEditorHeader({
   accessLevel,
   onShareClick,
 }: MobileEditorHeaderProps) {
+  const { t } = useTranslation('notes');
+  const navigate = useNavigate();
+
   return (
     <>
-      <Link to="/notes">
-        <FloatingActionButton
-          icon={ArrowLeft}
-          position="left"
-          aria-label="Back to notes"
-        />
-      </Link>
+      <FloatingActionButton
+        icon={ArrowLeft}
+        position="left"
+        aria-label={t('editor.backToNotes')}
+        onClick={() => navigate({ to: '/notes' })}
+      />
 
       {canPerformNoteAction(accessLevel, 'share') && (
         <FloatingActionButton
           icon={Share2}
           position="right"
           onClick={onShareClick}
-          aria-label="Share note"
+          aria-label={t('editor.share')}
         />
       )}
 
