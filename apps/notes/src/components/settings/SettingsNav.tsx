@@ -38,6 +38,7 @@ export function SettingsNav({
           key={section}
           type="button"
           onClick={() => onSectionChange(section)}
+          aria-label={t(`settings.sections.${section}`)}
           className={cn(
             'flex items-center gap-2 whitespace-nowrap px-4 py-2 text-sm transition-colors',
             'sm:w-full',

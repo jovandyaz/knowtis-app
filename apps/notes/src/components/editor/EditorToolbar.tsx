@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   TOOLBAR_TOOLS,
@@ -78,6 +79,8 @@ export const EditorToolbar = memo(function EditorToolbar({
   editor,
   saveStatus,
 }: EditorToolbarProps) {
+  const { t } = useTranslation('common');
+
   if (!editor) {
     return null;
   }
@@ -109,6 +112,9 @@ export const EditorToolbar = memo(function EditorToolbar({
         {saveStatus && (
           <SaveStatusIndicator
             status={saveStatus}
+            label={
+              saveStatus === 'saving' ? t('states.saving') : t('states.saved')
+            }
             className="hidden max-md:flex ml-2 text-xs text-(--muted-foreground)"
           />
         )}
