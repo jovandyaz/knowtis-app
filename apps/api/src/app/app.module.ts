@@ -18,6 +18,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
 import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';
 import { DatabaseModule } from '../database';
+import { AIModule } from '../modules/ai';
 import { AuthModule } from '../modules/auth';
 import { AuthorizationModule } from '../modules/authorization';
 import { CollaborationModule } from '../modules/collaboration';
@@ -63,6 +64,7 @@ import { AppService } from './app.service';
       }),
       inject: [ConfigService],
     }),
+    AIModule,
     AuthModule,
     AuthorizationModule,
     NotesModule,
