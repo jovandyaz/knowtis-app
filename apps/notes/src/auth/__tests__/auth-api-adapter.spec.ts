@@ -28,6 +28,7 @@ function createMockTokenStorage(): TokenStorage {
   return {
     setAccessToken: vi.fn(),
     getAccessToken: vi.fn().mockReturnValue(null),
+    getExpiresAt: vi.fn().mockReturnValue(null),
     clearTokens: vi.fn(),
     hasTokens: vi.fn().mockReturnValue(false),
     subscribe: vi.fn().mockReturnValue(() => {}),

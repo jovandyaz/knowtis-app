@@ -20,7 +20,6 @@ export {
 } from './lib/provider/auth-provider';
 export type { AuthProviderProps } from './lib/provider/auth-provider';
 
-// Hooks
 export {
   authQueryKeys,
   useProfile,
@@ -38,7 +37,12 @@ export {
   useAuthLoading,
 } from './lib/hooks/auth.hooks';
 
-// Schemas
+export { useSessionManager } from './lib/hooks/use-session-manager';
+
+export { createCrossTabSync } from './lib/sync/cross-tab-sync';
+
+export { parseTokenExpiry } from './lib/utils/token-expiry';
+
 export {
   createLoginSchema,
   createRegisterSchema,
@@ -52,5 +56,4 @@ export type {
   ResetPasswordFormData,
 } from './lib/schemas/auth.schemas';
 
-// Types
 export type { AuthApiAdapter, AuthUserProfile } from './lib/types';
