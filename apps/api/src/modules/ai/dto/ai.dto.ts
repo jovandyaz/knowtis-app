@@ -1,7 +1,13 @@
-import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 
-import { SUPPORTED_LANGUAGES } from '../domain/constants/supported-languages';
-import { SUPPORTED_TONES } from '../domain/constants/supported-tones';
+import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
+
 import { SUPPORTED_AI_ACTIONS } from '../domain/value-objects/ai-action.vo';
 
 export class AICompleteDto {
@@ -10,6 +16,7 @@ export class AICompleteDto {
   action!: string;
 
   @IsString()
+  @MinLength(1)
   @MaxLength(50000)
   content!: string;
 
@@ -20,11 +27,11 @@ export class AICompleteDto {
 
   @IsOptional()
   @IsString()
-  @IsIn([...SUPPORTED_LANGUAGES])
+  @IsIn([...AI_LANGUAGES])
   targetLanguage?: string;
 
   @IsOptional()
   @IsString()
-  @IsIn([...SUPPORTED_TONES])
+  @IsIn([...AI_TONES])
   targetTone?: string;
 }
