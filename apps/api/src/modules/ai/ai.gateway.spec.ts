@@ -1,12 +1,11 @@
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EnvConfig } from '../../config/env.config';
+import { AI_ACTION } from '@knowtis/shared-types';
+
 import { AIGateway } from './ai.gateway';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
-
-type TypedConfigService = ConfigService<EnvConfig, true>;
+import { createMockConfig } from './testing/create-mock-config';
 
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
   return {
@@ -23,7 +22,7 @@ describe('AIGateway', () => {
   let gateway: AIGateway;
   let mockStreamHandler: StreamTextHandler;
   let mockJwtService: JwtService;
-  let mockConfig: TypedConfigService;
+  let mockConfig: ReturnType<typeof createMockConfig>;
 
   beforeEach(() => {
     mockStreamHandler = {
@@ -34,15 +33,7 @@ describe('AIGateway', () => {
       verify: vi.fn().mockReturnValue({ sub: 'user-123' }),
     } as unknown as JwtService;
 
-    mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, unknown> = {
-          AI_ENABLED: 'true',
-          FRONTEND_URL: 'http://localhost:4200',
-        };
-        return config[key];
-      }),
-    } as unknown as TypedConfigService;
+    mockConfig = createMockConfig();
 
     gateway = new AIGateway(mockStreamHandler, mockJwtService, mockConfig);
   });
@@ -118,14 +109,14 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
         content: 'Some note content to summarize',
       });
 
       expect(mockStreamHandler.execute).toHaveBeenCalledWith(
         expect.objectContaining({
           userId: 'user-123',
-          action: 'summarize',
+          action: AI_ACTION.SUMMARIZE,
           content: 'Some note content to summarize',
         }),
         expect.objectContaining({
@@ -157,7 +148,7 @@ describe('AIGateway', () => {
       const client = createMockAISocket();
 
       await gateway.handleComplete(client, {
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
 
@@ -172,7 +163,7 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
       });
 
       expect(client.emit).toHaveBeenCalledWith(
@@ -186,14 +177,14 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'translate',
+        action: AI_ACTION.TRANSLATE,
         content: 'Hello world',
         targetLanguage: 'Spanish',
       });
 
       expect(mockStreamHandler.execute).toHaveBeenCalledWith(
         expect.objectContaining({
-          action: 'translate',
+          action: AI_ACTION.TRANSLATE,
           targetLanguage: 'Spanish',
         }),
         expect.any(Object),
@@ -206,7 +197,7 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'translate',
+        action: AI_ACTION.TRANSLATE,
         content: 'Hello world',
         targetLanguage: 'Klingon',
       });
@@ -224,7 +215,7 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
 
@@ -245,7 +236,7 @@ describe('AIGateway', () => {
       client.data.userId = 'user-123';
 
       await gateway.handleComplete(client, {
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
 

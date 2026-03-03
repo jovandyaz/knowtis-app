@@ -14,10 +14,10 @@ import {
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 
+import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../config/env.config';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
-import { SUPPORTED_LANGUAGES } from './domain/constants/supported-languages';
-import { SUPPORTED_TONES } from './domain/constants/supported-tones';
 import { AIErrors } from './domain/errors/ai.errors';
 import { SUPPORTED_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
 
@@ -25,8 +25,9 @@ const aiCompletePayloadSchema = z.object({
   action: z.enum(SUPPORTED_AI_ACTIONS),
   content: z.string().min(1).max(50000),
   selection: z.string().max(10000).optional(),
-  targetLanguage: z.enum(SUPPORTED_LANGUAGES).optional(),
-  targetTone: z.enum(SUPPORTED_TONES).optional(),
+  suffix: z.string().max(10000).optional(),
+  targetLanguage: z.enum(AI_LANGUAGES).optional(),
+  targetTone: z.enum(AI_TONES).optional(),
 });
 
 interface AuthenticatedAISocket extends Socket {
@@ -134,7 +135,7 @@ export class AIGateway
       return;
     }
 
-    const { action, content, selection, targetLanguage, targetTone } =
+    const { action, content, selection, suffix, targetLanguage, targetTone } =
       parsed.data;
 
     const controller = new AbortController();
@@ -146,6 +147,7 @@ export class AIGateway
         action,
         content,
         ...(selection !== undefined && { selection }),
+        ...(suffix !== undefined && { suffix }),
         ...(targetLanguage !== undefined && { targetLanguage }),
         ...(targetTone !== undefined && { targetTone }),
       },
