@@ -38,3 +38,13 @@ export {
 } from './lib/collaboration.types';
 
 export type { FeatureFlagDto } from './lib/feature-flags.types';
+
+export {
+  AI_ACTION,
+  AI_ACTIONS,
+  AI_LANGUAGES,
+  AI_TONES,
+  type AIAction,
+  type AILanguage,
+  type AITone,
+} from './lib/ai.types';
