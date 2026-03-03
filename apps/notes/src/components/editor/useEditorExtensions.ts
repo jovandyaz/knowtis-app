@@ -3,7 +3,6 @@ import { useMemo } from 'react';
 import { useAIStore } from '@/stores/ai.store';
 import type { CollaborativeUser } from '@/types';
 import Collaboration from '@tiptap/extension-collaboration';
-import Underline from '@tiptap/extension-underline';
 import type { AnyExtension } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import type { Awareness } from 'y-protocols/awareness';
@@ -37,8 +36,13 @@ export function useEditorExtensions(
         listItem: {
           HTMLAttributes: { class: 'leading-normal' },
         },
+        blockquote: {
+          HTMLAttributes: {
+            class:
+              'border-l-2 border-muted-foreground/40 pl-4 italic text-muted-foreground',
+          },
+        },
       }),
-      Underline,
       Collaboration.configure({
         document: yDoc,
         fragment: yXmlFragment,
@@ -47,7 +51,7 @@ export function useEditorExtensions(
         suggestion: slashCommandsSuggestion,
       }),
       GhostText.configure({
-        debounceMs: 1500,
+        debounceMs: 750,
         minContentLength: 20,
         enabled: true,
         isAIBusy: () => {

@@ -1,7 +1,14 @@
 import { useTranslation } from 'react-i18next';
 
 import { useAIStore } from '@/stores/ai.store';
-import { Check, ChevronDown, Loader2, RefreshCw, X } from 'lucide-react';
+import {
+  Check,
+  ChevronDown,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+  X,
+} from 'lucide-react';
 
 import { Button, cn } from '@knowtis/design-system';
 
@@ -100,8 +107,8 @@ export function AIStreamingPreview({
               className="h-7 gap-1 px-2.5 text-xs"
               onClick={retry}
             >
-              <RefreshCw className="h-3.5 w-3.5" />
-              {t('ai.preview.tryAgain')}
+              <RotateCcw className="h-3.5 w-3.5" />
+              {t('ai.preview.regenerate')}
             </Button>
             <div className="ml-auto">
               <Button
@@ -126,7 +133,7 @@ export function AIStreamingPreview({
               onClick={retry}
             >
               <RefreshCw className="h-3.5 w-3.5" />
-              {t('ai.preview.tryAgain')}
+              {t('ai.preview.retry')}
             </Button>
             <Button
               variant="ghost"

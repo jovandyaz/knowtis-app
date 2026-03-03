@@ -128,7 +128,8 @@
       "insertBelow": "Insertar debajo",
       "discard": "Descartar",
       "dismiss": "Cerrar",
-      "tryAgain": "Reintentar"
+      "regenerate": "Regenerar",
+      "retry": "Reintentar"
     },
     "errors": {
       "generic": "Algo salió mal. Inténtalo de nuevo."

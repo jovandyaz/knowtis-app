@@ -128,7 +128,8 @@
       "insertBelow": "Insert below",
       "discard": "Discard",
       "dismiss": "Dismiss",
-      "tryAgain": "Try again"
+      "regenerate": "Regenerate",
+      "retry": "Retry"
     },
     "errors": {
       "generic": "Something went wrong. Please try again."
