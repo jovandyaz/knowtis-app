@@ -3,15 +3,17 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { AI_ACTION } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import type { AICache, CachedResult } from '../../domain/ports/ai-cache.port';
-import { AI_REDIS, type AIRedisProvider } from './ai-redis.provider';
+import { AI_REDIS, AIRedisProvider } from './ai-redis.provider';
 
-const CACHEABLE_ACTIONS = new Set([
-  'summarize',
-  'translate',
-  'outline',
-  'action-items',
+const CACHEABLE_ACTIONS: Set<string> = new Set([
+  AI_ACTION.SUMMARIZE,
+  AI_ACTION.TRANSLATE,
+  AI_ACTION.OUTLINE,
+  AI_ACTION.ACTION_ITEMS,
 ]);
 
 @Injectable()
@@ -39,12 +41,16 @@ export class SemanticCacheService implements AICache {
     model: string,
     prompt: string
   ): Promise<CachedResult | null> {
-    if (!this.isEnabled()) {return null;}
+    if (!this.isEnabled()) {
+      return null;
+    }
 
     try {
       const key = this.buildKey(action, model, prompt);
       const cached = await this.redis.client.get(key);
-      if (!cached) {return null;}
+      if (!cached) {
+        return null;
+      }
 
       this.logger.debug({ event: 'ai.cache.hit', action, model });
       return JSON.parse(cached) as CachedResult;
@@ -60,7 +66,9 @@ export class SemanticCacheService implements AICache {
     prompt: string,
     result: CachedResult
   ): Promise<void> {
-    if (!this.isEnabled()) {return;}
+    if (!this.isEnabled()) {
+      return;
+    }
 
     try {
       const key = this.buildKey(action, model, prompt);

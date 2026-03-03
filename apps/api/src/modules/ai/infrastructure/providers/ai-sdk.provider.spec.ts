@@ -1,7 +1,6 @@
-import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EnvConfig } from '../../../../config/env.config';
+import { createMockConfig } from '../../testing/create-mock-config';
 import { AISDKProvider } from './ai-sdk.provider';
 
 vi.mock('ai', () => ({
@@ -33,20 +32,11 @@ vi.mock('@ai-sdk/openai', () => ({
   createOpenAI: vi.fn().mockReturnValue('mock-openai'),
 }));
 
-type TypedConfigService = ConfigService<EnvConfig, true>;
-
 describe('AISDKProvider', () => {
   let provider: AISDKProvider;
 
   beforeEach(() => {
-    const mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, string> = {
-          OPENAI_API_KEY: '',
-        };
-        return config[key] ?? '';
-      }),
-    } as unknown as TypedConfigService;
+    const mockConfig = createMockConfig();
 
     provider = new AISDKProvider(mockConfig);
     provider.onModuleInit();
@@ -54,7 +44,7 @@ describe('AISDKProvider', () => {
 
   it('should generate a completion via registry', async () => {
     const result = await provider.generateCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-5-20250929',
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
     expect(result.text).toBe('Generated text');
     expect(result.inputTokens).toBe(100);
@@ -71,21 +61,15 @@ describe('AISDKProvider', () => {
         usage: { inputTokens: 50, outputTokens: 20 },
       } as Awaited<ReturnType<typeof generateText>>);
 
-    const mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, string> = {
-          OPENAI_API_KEY: '',
-          AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-        };
-        return config[key] ?? '';
-      }),
-    } as unknown as TypedConfigService;
+    const fallbackConfig = createMockConfig({
+      AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+    });
 
-    const fallbackProvider = new AISDKProvider(mockConfig);
+    const fallbackProvider = new AISDKProvider(fallbackConfig);
     fallbackProvider.onModuleInit();
 
     const result = await fallbackProvider.generateCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-5-20250929',
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
     expect(result.text).toBe('Fallback text');
     expect(result.model).toBe('anthropic:claude-haiku-4-5-20251001');
@@ -96,29 +80,23 @@ describe('AISDKProvider', () => {
     const mockedGenerateText = vi.mocked(generateText);
     mockedGenerateText.mockRejectedValueOnce(new Error('Model unavailable'));
 
-    const mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, string> = {
-          OPENAI_API_KEY: '',
-          AI_FALLBACK_MODEL: 'anthropic:claude-sonnet-4-5-20250929',
-        };
-        return config[key] ?? '';
-      }),
-    } as unknown as TypedConfigService;
+    const sameModelConfig = createMockConfig({
+      AI_FALLBACK_MODEL: 'anthropic:claude-sonnet-4-20250514',
+    });
 
-    const sameModelProvider = new AISDKProvider(mockConfig);
+    const sameModelProvider = new AISDKProvider(sameModelConfig);
     sameModelProvider.onModuleInit();
 
     await expect(
       sameModelProvider.generateCompletion('test prompt', {
-        model: 'anthropic:claude-sonnet-4-5-20250929',
+        model: 'anthropic:claude-sonnet-4-20250514',
       })
     ).rejects.toThrow('Model unavailable');
   });
 
   it('should stream a completion via registry', async () => {
     const streamResult = provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-5-20250929',
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
     const chunks: string[] = [];
     for await (const chunk of streamResult.textStream) {
