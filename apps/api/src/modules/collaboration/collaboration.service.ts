@@ -1,5 +1,10 @@
 import { UserId } from '@jovandyaz/auth/server';
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+} from '@nestjs/common';
 import * as Y from 'yjs';
 
 import {
@@ -16,9 +21,13 @@ import type {
 } from './collaboration.types';
 
 @Injectable()
-export class CollaborationService {
+export class CollaborationService implements OnModuleDestroy {
   private readonly logger = new Logger(CollaborationService.name);
   private readonly rooms = new Map<string, CollaborationRoom>();
+  private readonly roomCreationPromises = new Map<
+    string,
+    Promise<CollaborationRoom>
+  >();
   private readonly PERSISTENCE_DEBOUNCE_MS = 2000;
   private readonly ROOM_CLEANUP_TIMEOUT_MS = 60000;
 
@@ -27,36 +36,23 @@ export class CollaborationService {
   ) {}
 
   async getOrCreateRoom(noteId: string): Promise<CollaborationRoom> {
-    let room = this.rooms.get(noteId);
-
-    if (!room) {
-      const yjsDoc = new Y.Doc();
-
-      try {
-        const note = await this.notesRepository.findById(noteId);
-        if (note?.yjsState) {
-          Y.applyUpdate(yjsDoc, new Uint8Array(note.yjsState));
-          this.logger.debug(`Loaded persisted state for note ${noteId}`);
-        }
-      } catch {
-        this.logger.warn(
-          `Could not load note ${noteId} from DB, creating transient room`
-        );
-      }
-
-      room = {
-        noteId,
-        yjsDoc,
-        users: new Map(),
-        lastActivity: new Date(),
-      };
-
-      this.rooms.set(noteId, room);
-      this.logger.log(`Created collaboration room for note ${noteId}`);
+    const existingRoom = this.rooms.get(noteId);
+    if (existingRoom) {
+      existingRoom.lastActivity = new Date();
+      return existingRoom;
     }
 
-    room.lastActivity = new Date();
-    return room;
+    const pendingCreation = this.roomCreationPromises.get(noteId);
+    if (pendingCreation) {
+      return pendingCreation;
+    }
+
+    const creationPromise = this.buildRoom(noteId).finally(() => {
+      this.roomCreationPromises.delete(noteId);
+    });
+
+    this.roomCreationPromises.set(noteId, creationPromise);
+    return creationPromise;
   }
 
   addUserToRoom(
@@ -166,13 +162,66 @@ export class CollaborationService {
     return note.generalAccessPermission as PermissionLevel;
   }
 
+  async onModuleDestroy(): Promise<void> {
+    this.logger.log(
+      'Shutting down collaboration service, persisting all rooms...'
+    );
+
+    const persistPromises = Array.from(this.rooms.values()).map(
+      async (room) => {
+        if (room.persistenceTimeout) {
+          clearTimeout(room.persistenceTimeout);
+        }
+        await this.persistDocument(room);
+        room.yjsDoc.destroy();
+      }
+    );
+
+    await Promise.all(persistPromises);
+    this.rooms.clear();
+    this.logger.log('Collaboration service shutdown complete');
+  }
+
+  private async buildRoom(noteId: string): Promise<CollaborationRoom> {
+    const yjsDoc = new Y.Doc();
+
+    try {
+      const note = await this.notesRepository.findById(noteId);
+      if (note?.yjsState) {
+        Y.applyUpdate(yjsDoc, new Uint8Array(note.yjsState));
+        this.logger.debug(`Loaded persisted state for note ${noteId}`);
+      }
+    } catch {
+      this.logger.warn(
+        `Could not load note ${noteId} from DB, creating transient room`
+      );
+    }
+
+    const room: CollaborationRoom = {
+      noteId,
+      yjsDoc,
+      users: new Map(),
+      lastActivity: new Date(),
+    };
+
+    this.rooms.set(noteId, room);
+    this.logger.log(`Created collaboration room for note ${noteId}`);
+
+    return room;
+  }
+
   private schedulePersistence(room: CollaborationRoom): void {
     if (room.persistenceTimeout) {
       clearTimeout(room.persistenceTimeout);
     }
 
-    room.persistenceTimeout = setTimeout(async () => {
-      await this.persistDocument(room);
+    room.persistenceTimeout = setTimeout(() => {
+      this.persistDocument(room).catch((error) => {
+        this.logger.error(
+          `Debounced persistence failed for note ${room.noteId}`,
+          error
+        );
+      });
     }, this.PERSISTENCE_DEBOUNCE_MS);
   }
 
@@ -193,39 +242,29 @@ export class CollaborationService {
   }
 
   private scheduleRoomCleanup(noteId: string): void {
-    setTimeout(async () => {
+    setTimeout(() => {
       const room = this.rooms.get(noteId);
 
       if (room && room.users.size === 0) {
         if (room.persistenceTimeout) {
           clearTimeout(room.persistenceTimeout);
         }
-        await this.persistDocument(room);
 
-        room.yjsDoc.destroy();
-        this.rooms.delete(noteId);
-        this.logger.log(`Cleaned up collaboration room for note ${noteId}`);
+        this.persistDocument(room)
+          .then(() => {
+            room.yjsDoc.destroy();
+            this.rooms.delete(noteId);
+            this.logger.log(`Cleaned up collaboration room for note ${noteId}`);
+          })
+          .catch((error) => {
+            this.logger.error(
+              `Cleanup persistence failed for note ${noteId}`,
+              error
+            );
+            room.yjsDoc.destroy();
+            this.rooms.delete(noteId);
+          });
       }
     }, this.ROOM_CLEANUP_TIMEOUT_MS);
-  }
-
-  async onModuleDestroy(): Promise<void> {
-    this.logger.log(
-      'Shutting down collaboration service, persisting all rooms...'
-    );
-
-    const persistPromises = Array.from(this.rooms.values()).map(
-      async (room) => {
-        if (room.persistenceTimeout) {
-          clearTimeout(room.persistenceTimeout);
-        }
-        await this.persistDocument(room);
-        room.yjsDoc.destroy();
-      }
-    );
-
-    await Promise.all(persistPromises);
-    this.rooms.clear();
-    this.logger.log('Collaboration service shutdown complete');
   }
 }

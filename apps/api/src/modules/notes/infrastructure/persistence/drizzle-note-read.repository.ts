@@ -18,6 +18,10 @@ import type {
 } from '../../domain';
 import { mapToNoteEntity } from './note-entity.mapper';
 
+function escapeLike(str: string): string {
+  return str.replace(/[%_\\]/g, '\\$&');
+}
+
 @Injectable()
 export class DrizzleNoteReadRepository implements NoteReadRepository {
   constructor(
@@ -64,8 +68,8 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
 
     if (search) {
       const searchCondition = or(
-        ilike(notes.title, `%${search}%`),
-        ilike(notes.content, `%${search}%`)
+        ilike(notes.title, `%${escapeLike(search)}%`),
+        ilike(notes.content, `%${escapeLike(search)}%`)
       );
 
       if (searchCondition) {
@@ -93,8 +97,8 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
 
     const searchCondition = search
       ? or(
-          ilike(notes.title, `%${search}%`),
-          ilike(notes.content, `%${search}%`)
+          ilike(notes.title, `%${escapeLike(search)}%`),
+          ilike(notes.content, `%${escapeLike(search)}%`)
         )
       : undefined;
 

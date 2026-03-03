@@ -1,11 +1,12 @@
-import { Global, Module } from '@nestjs/common';
+import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import postgres from 'postgres';
+import postgres, { type Sql } from 'postgres';
 
 import * as schema from './schema';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
+const DATABASE_CLIENT = 'DATABASE_CLIENT';
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
@@ -13,21 +14,30 @@ export type Database = PostgresJsDatabase<typeof schema>;
 @Module({
   providers: [
     {
-      provide: DATABASE_CONNECTION,
-      useFactory: (configService: ConfigService): Database => {
-        const databaseUrl = configService.getOrThrow<string>('DATABASE_URL');
-
-        const client = postgres(databaseUrl, {
+      provide: DATABASE_CLIENT,
+      useFactory: (configService: ConfigService): Sql => {
+        return postgres(configService.getOrThrow<string>('DATABASE_URL'), {
           max: 10,
           idle_timeout: 20,
           connect_timeout: 10,
         });
-
-        return drizzle(client, { schema });
       },
       inject: [ConfigService],
+    },
+    {
+      provide: DATABASE_CONNECTION,
+      useFactory: (client: Sql): Database => {
+        return drizzle(client, { schema });
+      },
+      inject: [DATABASE_CLIENT],
     },
   ],
   exports: [DATABASE_CONNECTION],
 })
-export class DatabaseModule {}
+export class DatabaseModule implements OnModuleDestroy {
+  constructor(@Inject(DATABASE_CLIENT) private readonly client: Sql) {}
+
+  async onModuleDestroy() {
+    await this.client.end();
+  }
+}

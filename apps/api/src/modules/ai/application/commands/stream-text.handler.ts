@@ -150,7 +150,7 @@ export class StreamTextHandler {
             userId: input.userId,
             latencyMs: Date.now() - startTime,
           });
-          break;
+          return;
         }
         const decoded = decoder.write(Buffer.from(chunk, 'utf8'));
         if (decoded) {
