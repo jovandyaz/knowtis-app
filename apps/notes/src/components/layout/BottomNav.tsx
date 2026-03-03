@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { useRouter } from '@tanstack/react-router';
+import { useLocation, useRouter } from '@tanstack/react-router';
 
 import { useSettingsStore } from '@/stores/settings.store';
 import { FileText, Home, Settings } from 'lucide-react';
@@ -19,7 +19,8 @@ interface BottomNavTab {
 export function BottomNav() {
   const { t } = useTranslation('common');
   const router = useRouter();
-  const currentPath = router.state.location.pathname;
+  const location = useLocation();
+  const currentPath = location.pathname;
   const openSettings = useSettingsStore((s) => s.open);
 
   if (NOTE_EDITOR_PATTERN.test(currentPath)) {
