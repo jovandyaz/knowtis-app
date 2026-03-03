@@ -105,7 +105,6 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       totalInputTokens: Number(row?.totalInputTokens ?? 0),
       totalOutputTokens: Number(row?.totalOutputTokens ?? 0),
       totalCostUsd: Number(row?.totalCostUsd ?? 0),
-      avgLatencyMs: null,
       byAction,
     };
   }

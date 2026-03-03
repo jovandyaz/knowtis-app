@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AI_ACTION } from '@knowtis/shared-types';
+
 import type { Database } from '../../../../database';
 import { DrizzleAIUsageRepository } from './drizzle-ai-usage.repository';
 
@@ -32,8 +34,8 @@ describe('DrizzleAIUsageRepository', () => {
     it('should insert usage record with correctly formatted cost', async () => {
       await repo.recordUsage({
         userId: 'user-123',
-        action: 'summarize',
-        model: 'anthropic:claude-sonnet-4-5-20250929',
+        action: AI_ACTION.SUMMARIZE,
+        model: 'anthropic:claude-sonnet-4-20250514',
         inputTokens: 100,
         outputTokens: 50,
         costUsd: 0.00105,
@@ -45,8 +47,8 @@ describe('DrizzleAIUsageRepository', () => {
       };
       expect(insertChain.values).toHaveBeenCalledWith({
         userId: 'user-123',
-        action: 'summarize',
-        model: 'anthropic:claude-sonnet-4-5-20250929',
+        action: AI_ACTION.SUMMARIZE,
+        model: 'anthropic:claude-sonnet-4-20250514',
         inputTokens: 100,
         outputTokens: 50,
         costUsd: '0.001050',

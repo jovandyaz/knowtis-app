@@ -16,7 +16,10 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AIRedisProvider.name);
   readonly client: Redis;
 
+  private readonly aiEnabled: boolean;
+
   constructor(configService: ConfigService<EnvConfig, true>) {
+    this.aiEnabled = configService.get('AI_ENABLED') === 'true';
     this.client = new Redis(configService.get('REDIS_URL'), {
       maxRetriesPerRequest: 3,
       lazyConnect: true,
@@ -28,6 +31,11 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
+    if (!this.aiEnabled) {
+      this.logger.log('AI disabled — skipping Redis connection');
+      return;
+    }
+
     try {
       await this.client.connect();
     } catch (err) {

@@ -2,14 +2,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { AI_REDIS, type AIRedisProvider } from './ai-redis.provider';
-
-interface RateLimitCheckResult {
-  readonly allowed: boolean;
-  readonly reason?: string;
-  readonly currentTokens: number;
-  readonly currentCostUsd: number;
-}
+import type {
+  RateLimitCheckResult,
+  RateLimitProvider,
+} from '../../domain/ports/rate-limit.port';
+import { AI_REDIS, AIRedisProvider } from './ai-redis.provider';
 
 const SLIDING_WINDOW_LUA = `
 local token_key = KEYS[1]
@@ -63,7 +60,7 @@ return {tonumber(redis.call('GET', token_key)), new_cost}
 const KEY_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
-export class RedisRateLimitService {
+export class RedisRateLimitService implements RateLimitProvider {
   private readonly logger = new Logger(RedisRateLimitService.name);
 
   constructor(
