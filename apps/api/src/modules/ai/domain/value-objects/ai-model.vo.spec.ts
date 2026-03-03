@@ -4,10 +4,10 @@ import { AIModel } from './ai-model.vo';
 
 describe('AIModel', () => {
   it('should create a valid default model', () => {
-    const result = AIModel.create('anthropic:claude-sonnet-4-5-20250929');
+    const result = AIModel.create('anthropic:claude-sonnet-4-20250514');
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.value).toBe('anthropic:claude-sonnet-4-5-20250929');
+      expect(result.value.value).toBe('anthropic:claude-sonnet-4-20250514');
       expect(result.value.isFast).toBe(false);
     }
   });

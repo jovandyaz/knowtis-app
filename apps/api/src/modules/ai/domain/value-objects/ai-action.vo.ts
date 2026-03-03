@@ -1,19 +1,14 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import {
+  AI_ACTIONS,
+  type AIAction as AIActionType,
+} from '@knowtis/shared-types';
+
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';
 
-export const SUPPORTED_AI_ACTIONS = [
-  'summarize',
-  'expand',
-  'translate',
-  'tone',
-  'outline',
-  'action-items',
-  'ghost-text',
-  'chat',
-] as const;
-
-export type SupportedAIAction = (typeof SUPPORTED_AI_ACTIONS)[number];
+export const SUPPORTED_AI_ACTIONS = AI_ACTIONS;
+export type SupportedAIAction = AIActionType;
 
 export class AIAction {
   private constructor(public readonly value: SupportedAIAction) {}
