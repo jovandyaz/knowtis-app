@@ -10,6 +10,14 @@ export function useDebouncedCallback<
     callbackRef.current = callback;
   }, [callback]);
 
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   return useCallback(
     (...args: Parameters<T>) => {
       if (timeoutRef.current) {

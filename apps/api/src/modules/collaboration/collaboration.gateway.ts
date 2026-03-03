@@ -176,7 +176,12 @@ export class CollaborationGateway
     const noteExists = await this.collaborationService.noteExists(noteId);
 
     if (!noteExists) {
-      return { allowed: true, readOnly: false, message: '', code: '' };
+      return {
+        allowed: false,
+        readOnly: false,
+        message: 'Note not found',
+        code: 'NOT_FOUND',
+      };
     }
 
     if (isAuthenticatedWsUser(wsUser)) {
@@ -278,6 +283,14 @@ export class CollaborationGateway
       return;
     }
 
+    if (client.data.noteId !== noteId) {
+      client.emit(COLLABORATION_EVENTS.ERROR, {
+        message: 'Not a member of this room',
+        code: 'NOT_IN_ROOM',
+      });
+      return;
+    }
+
     if (client.data.readOnly) {
       client.emit(COLLABORATION_EVENTS.EDIT_DENIED, {
         message: 'You do not have permission to edit this note',
@@ -310,6 +323,10 @@ export class CollaborationGateway
     @MessageBody() payload: AwarenessUpdatePayload
   ): void {
     const { noteId, update } = payload;
+
+    if (client.data.noteId !== noteId) {
+      return;
+    }
 
     client.to(noteId).emit(COLLABORATION_EVENTS.AWARENESS_CHANGE, {
       noteId,

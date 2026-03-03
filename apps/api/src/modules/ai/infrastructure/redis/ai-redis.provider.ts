@@ -44,6 +44,14 @@ export class AIRedisProvider implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleDestroy() {
-    await this.client.quit();
+    if (
+      this.client.status === 'ready' ||
+      this.client.status === 'connecting' ||
+      this.client.status === 'connect'
+    ) {
+      await this.client.quit();
+    } else {
+      this.client.disconnect();
+    }
   }
 }

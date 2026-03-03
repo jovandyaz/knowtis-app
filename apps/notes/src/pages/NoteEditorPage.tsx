@@ -44,11 +44,13 @@ interface NoteEditorProps {
 
 interface MobileEditorHeaderProps {
   accessLevel: NoteAccessLevel;
+  editorsCanShare: boolean;
   onShareClick: () => void;
 }
 
 function MobileEditorHeader({
   accessLevel,
+  editorsCanShare,
   onShareClick,
 }: MobileEditorHeaderProps) {
   const { t } = useTranslation('notes');
@@ -63,7 +65,7 @@ function MobileEditorHeader({
         onClick={() => navigate({ to: '/notes' })}
       />
 
-      {canPerformNoteAction(accessLevel, 'share') && (
+      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
         <FloatingActionButton
           icon={Share2}
           position="right"
@@ -80,6 +82,7 @@ function MobileEditorHeader({
 
 interface DesktopEditorHeaderProps {
   accessLevel: NoteAccessLevel;
+  editorsCanShare: boolean;
   canEdit: boolean;
   isSaving: boolean;
   hasSaved: boolean;
@@ -88,6 +91,7 @@ interface DesktopEditorHeaderProps {
 
 function DesktopEditorHeader({
   accessLevel,
+  editorsCanShare,
   canEdit,
   isSaving,
   hasSaved,
@@ -125,7 +129,7 @@ function DesktopEditorHeader({
             />
           ) : null)}
 
-        {canPerformNoteAction(accessLevel, 'share') && (
+        {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
           <Button
             variant="outline"
             size="sm"
@@ -211,11 +215,13 @@ function NoteEditor({
     <div className="mx-auto max-w-4xl py-4 md:py-6">
       <MobileEditorHeader
         accessLevel={accessLevel}
+        editorsCanShare={editorsCanShare}
         onShareClick={openShareDialog}
       />
 
       <DesktopEditorHeader
         accessLevel={accessLevel}
+        editorsCanShare={editorsCanShare}
         canEdit={canEdit}
         isSaving={isSaving}
         hasSaved={!!lastSaved}
@@ -245,7 +251,7 @@ function NoteEditor({
         saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
       />
 
-      {canPerformNoteAction(accessLevel, 'share') && (
+      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
         <ShareDialog
           open={isShareDialogOpen}
           onOpenChange={setIsShareDialogOpen}

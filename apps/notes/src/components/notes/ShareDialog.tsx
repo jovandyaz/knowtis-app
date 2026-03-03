@@ -13,7 +13,6 @@ import {
 import {
   ACCESS,
   GENERAL_ACCESS,
-  PERMISSION,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type PermissionLevel,
@@ -53,7 +52,7 @@ export function ShareDialog({
   const updateNote = useUpdateNote();
 
   const isOwner = accessLevel === ACCESS.OWNER;
-  const isEditor = accessLevel === PERMISSION.EDITOR;
+  const isEditor = accessLevel === ACCESS.EDITOR;
   const canShare = isOwner || (isEditor && editorsCanShare);
   const isPublicAccess = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
   const shareUrl = shareToken
