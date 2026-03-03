@@ -191,6 +191,28 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('should preserve multi-byte UTF-8 characters when streamed', async () => {
+    const spanishChunks = ['La inform', 'ación sobre', ' el niño'];
+
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: createAsyncStream(spanishChunks),
+      usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+    });
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    const fullText = collectedChunks.join('');
+    expect(fullText).not.toContain('\uFFFD');
+    expect(fullText).toBe('La información sobre el niño');
+  });
+
   it('should build tone prompt correctly', async () => {
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
       textStream: createAsyncStream(['Rewritten']),

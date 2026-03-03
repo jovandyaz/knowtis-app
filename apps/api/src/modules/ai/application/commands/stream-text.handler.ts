@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { StringDecoder } from 'node:string_decoder';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -138,6 +139,7 @@ export class StreamTextHandler {
         },
       });
 
+      const decoder = new StringDecoder('utf8');
       const collectedChunks: string[] = [];
 
       for await (const chunk of streamResult.textStream) {
@@ -150,8 +152,17 @@ export class StreamTextHandler {
           });
           break;
         }
-        collectedChunks.push(chunk);
-        callbacks.onChunk(chunk);
+        const decoded = decoder.write(Buffer.from(chunk, 'utf8'));
+        if (decoded) {
+          collectedChunks.push(decoded);
+          callbacks.onChunk(decoded);
+        }
+      }
+
+      const finalChunk = decoder.end();
+      if (finalChunk) {
+        collectedChunks.push(finalChunk);
+        callbacks.onChunk(finalChunk);
       }
 
       const actualUsage = await streamResult.usage;
