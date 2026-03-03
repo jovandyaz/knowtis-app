@@ -1,4 +1,4 @@
-import { Column, Row, Section, Text } from '@react-email/components';
+import { Column, Img, Row, Section } from '@react-email/components';
 
 import { GradientEnd, GradientStart } from '../design-tokens/colors';
 
@@ -10,11 +10,16 @@ export const Header = () => {
           className="h-[70px] text-center"
           style={{
             background: `linear-gradient(to right, ${GradientStart}, ${GradientEnd})`,
+            verticalAlign: 'middle',
           }}
         >
-          <Text className="text-white text-2xl font-bold m-0 tracking-wide">
-            Knowtis
-          </Text>
+          <Img
+            src="https://knowtis.vercel.app/email/knowtis-logo-white.png"
+            alt="Knowtis"
+            width="140"
+            height="53"
+            style={{ margin: '0 auto' }}
+          />
         </Column>
       </Row>
     </Section>
