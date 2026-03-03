@@ -66,12 +66,16 @@ export class AIRateLimitService {
     await this.usageRepository.recordUsage(params);
 
     if (this.rateLimitProvider) {
-      await this.rateLimitProvider.correctUsage(
-        params.userId,
-        params.estimatedTokens,
-        params.inputTokens + params.outputTokens,
-        params.costUsd
-      );
+      try {
+        await this.rateLimitProvider.correctUsage(
+          params.userId,
+          params.estimatedTokens,
+          params.inputTokens + params.outputTokens,
+          params.costUsd
+        );
+      } catch (error) {
+        this.logger.warn('Redis usage correction failed', error);
+      }
     }
   }
 

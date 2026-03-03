@@ -324,7 +324,7 @@ describe('CollaborationGateway', () => {
       );
     });
 
-    it('transient note (not in DB) — allowed, readOnly=false', async () => {
+    it('transient note (not in DB) — denied with NOT_FOUND', async () => {
       const client = createMockSocket();
       client.data.wsUser = anonymousUser;
 
@@ -332,10 +332,9 @@ describe('CollaborationGateway', () => {
 
       await gateway.handleJoinRoom(client, joinPayload);
 
-      expect(client.data.readOnly).toBe(false);
       expect(client.emit).toHaveBeenCalledWith(
-        COLLABORATION_EVENTS.INITIAL_STATE,
-        expect.objectContaining({ readOnly: false })
+        COLLABORATION_EVENTS.ERROR,
+        expect.objectContaining({ code: 'NOT_FOUND' })
       );
     });
   });
@@ -349,6 +348,7 @@ describe('CollaborationGateway', () => {
     it('viewer sends SYNC_UPDATE — rejected with EDIT_DENIED', async () => {
       const client = createMockSocket();
       client.data.wsUser = anonymousUser;
+      client.data.noteId = 'note-1';
       client.data.readOnly = true;
 
       await gateway.handleSyncUpdate(client, syncPayload);
@@ -366,6 +366,7 @@ describe('CollaborationGateway', () => {
     it('editor sends SYNC_UPDATE — accepted', async () => {
       const client = createMockSocket();
       client.data.wsUser = ownerUser;
+      client.data.noteId = 'note-1';
       client.data.readOnly = false;
 
       await gateway.handleSyncUpdate(client, syncPayload);
@@ -392,6 +393,7 @@ describe('CollaborationGateway', () => {
     it('should reject when room not found', async () => {
       const client = createMockSocket();
       client.data.wsUser = ownerUser;
+      client.data.noteId = 'note-1';
       client.data.readOnly = false;
 
       mockService.getRoom.mockReturnValue(undefined);

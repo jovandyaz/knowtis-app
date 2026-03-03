@@ -25,11 +25,11 @@ export const CollaborativeCursors =
     },
 
     onCreate() {
-      this.options.awareness.setLocalStateField('user', this.options.user);
+      this.options.awareness?.setLocalStateField('user', this.options.user);
     },
 
     onDestroy() {
-      this.options.awareness.setLocalStateField('cursor', null);
+      this.options.awareness?.setLocalStateField('cursor', null);
     },
 
     addProseMirrorPlugins() {
