@@ -7,7 +7,7 @@ import { authStore } from '@/auth';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
-import { useAuthUser } from '@jovandyaz/auth-react';
+import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: ({ location }) => {
@@ -27,6 +27,7 @@ export const Route = createFileRoute('/_authenticated')({
 
 function AuthenticatedLayout() {
   const user = useAuthUser();
+  const isLoading = useAuthLoading();
   const { i18n } = useTranslation();
 
   useEffect(() => {
@@ -34,6 +35,14 @@ function AuthenticatedLayout() {
       i18n.changeLanguage(user.locale);
     }
   }, [user?.locale, i18n]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-(--background)">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-(--muted) border-t-(--primary)" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-(--background)">

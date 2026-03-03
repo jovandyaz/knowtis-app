@@ -11,7 +11,7 @@ import { createRootRoute, Navigate, Outlet } from '@tanstack/react-router';
 import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
-import { AuthProvider } from '@jovandyaz/auth-react';
+import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -66,6 +66,11 @@ function NotFoundRedirect() {
   return <Navigate to="/login" search={{ redirect: undefined }} />;
 }
 
+function SessionManager() {
+  useSessionManager({ refreshMarginMs: 60_000 });
+  return null;
+}
+
 function RootComponent() {
   return (
     <AppErrorBoundary>
@@ -75,6 +80,7 @@ function RootComponent() {
           tokenStorage={tokenStorage}
           store={authStore}
         >
+          <SessionManager />
           <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
             <AbilityProvider>
               <YjsProvider>
