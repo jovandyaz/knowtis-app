@@ -1,14 +1,13 @@
-import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EnvConfig } from '../../../../config/env.config';
+import { AI_ACTION } from '@knowtis/shared-types';
+
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
+import { createMockConfig } from '../../testing/create-mock-config';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../services/ai-rate-limit.service';
 import { CompleteTextHandler } from './complete-text.handler';
-
-type TypedConfigService = ConfigService<EnvConfig, true>;
 
 describe('CompleteTextHandler', () => {
   let handler: CompleteTextHandler;
@@ -21,7 +20,7 @@ describe('CompleteTextHandler', () => {
         text: 'AI generated summary',
         inputTokens: 100,
         outputTokens: 50,
-        model: 'anthropic:claude-sonnet-4-5-20250929',
+        model: 'anthropic:claude-sonnet-4-20250514',
       }),
       streamCompletion: vi.fn(),
     };
@@ -36,20 +35,7 @@ describe('CompleteTextHandler', () => {
       getMetricsSummary: vi.fn(),
     };
 
-    const mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, unknown> = {
-          AI_DEFAULT_MODEL: 'anthropic:claude-sonnet-4-5-20250929',
-          AI_FAST_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-          AI_DAILY_TOKEN_LIMIT: 100000,
-          AI_DAILY_COST_LIMIT_USD: 1.0,
-          AI_MAX_RETRIES: 3,
-          AI_TIMEOUT_MS: 30000,
-          AI_STREAM_CHUNK_TIMEOUT_MS: 10000,
-        };
-        return config[key];
-      }),
-    } as unknown as TypedConfigService;
+    const mockConfig = createMockConfig();
 
     const orchestrator = new AIOrchestrator(mockConfig);
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
@@ -64,7 +50,7 @@ describe('CompleteTextHandler', () => {
   it('should generate a completion and record usage', async () => {
     const result = await handler.execute({
       userId: 'user-123',
-      action: 'summarize',
+      action: AI_ACTION.SUMMARIZE,
       content: 'Some long note content...',
     });
     expect(result.isOk()).toBe(true);
@@ -74,7 +60,7 @@ describe('CompleteTextHandler', () => {
     expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user-123',
-        action: 'summarize',
+        action: AI_ACTION.SUMMARIZE,
         inputTokens: 100,
         outputTokens: 50,
       })
@@ -89,7 +75,7 @@ describe('CompleteTextHandler', () => {
     });
     const result = await handler.execute({
       userId: 'user-123',
-      action: 'summarize',
+      action: AI_ACTION.SUMMARIZE,
       content: 'Some content',
     });
     expect(result.isErr()).toBe(true);
