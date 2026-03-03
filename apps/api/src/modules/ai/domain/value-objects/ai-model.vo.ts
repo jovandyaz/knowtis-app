@@ -2,8 +2,8 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';
 
-const SUPPORTED_MODELS = [
-  'anthropic:claude-sonnet-4-5-20250929',
+export const SUPPORTED_MODELS = [
+  'anthropic:claude-sonnet-4-20250514',
   'anthropic:claude-haiku-4-5-20251001',
 ] as const;
 

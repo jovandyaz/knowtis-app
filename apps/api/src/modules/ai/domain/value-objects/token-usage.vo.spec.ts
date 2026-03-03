@@ -7,7 +7,7 @@ describe('TokenUsage', () => {
     const usage = TokenUsage.create({
       inputTokens: 1000,
       outputTokens: 500,
-      model: 'anthropic:claude-sonnet-4-5-20250929',
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
     expect(usage.costUsd).toBeCloseTo(0.0105, 4);
     expect(usage.totalTokens).toBe(1500);
@@ -27,7 +27,7 @@ describe('TokenUsage', () => {
     const usage = TokenUsage.create({
       inputTokens: 0,
       outputTokens: 0,
-      model: 'anthropic:claude-sonnet-4-5-20250929',
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
     expect(usage.costUsd).toBe(0);
     expect(usage.totalTokens).toBe(0);

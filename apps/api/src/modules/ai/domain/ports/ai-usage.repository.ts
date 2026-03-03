@@ -18,7 +18,6 @@ export interface MetricsSummary {
   readonly totalInputTokens: number;
   readonly totalOutputTokens: number;
   readonly totalCostUsd: number;
-  readonly avgLatencyMs: number | null;
   readonly byAction: Record<
     string,
     { requests: number; tokens: number; costUsd: number }
