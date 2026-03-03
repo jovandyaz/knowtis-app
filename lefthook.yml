@@ -21,6 +21,18 @@ pre-commit:
       skip:
         - merge
         - rebase
+    check-migrations:
+      glob: 'apps/api/src/database/schema/**/*.ts'
+      run: |
+        npx nx db:generate api 2>/dev/null
+        if ! git diff --exit-code -- apps/api/drizzle/ > /dev/null 2>&1; then
+          echo "Error: Schema changes detected without a corresponding migration."
+          echo "Run 'pnpm nx db:generate api' and stage the generated files."
+          exit 1
+        fi
+      skip:
+        - merge
+        - rebase
 
 pre-push:
   commands:

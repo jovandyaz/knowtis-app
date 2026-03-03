@@ -48,6 +48,15 @@ jobs:
       - name: Test (affected)
         run: npx nx affected -t test -- --run
 
+      - name: Check for missing DB migrations
+        run: |
+          npx nx db:generate api
+          if ! git diff --exit-code -- apps/api/drizzle/; then
+            echo "::error::Schema changes detected without a corresponding migration file."
+            echo "::error::Run 'pnpm nx db:generate api' locally and commit the generated files."
+            exit 1
+          fi
+
       - name: Build (affected)
         run: npx nx affected -t build --configuration=production
 
