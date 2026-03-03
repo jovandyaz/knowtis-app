@@ -22,6 +22,7 @@ export interface StreamTextInput {
   readonly action: string;
   readonly content: string;
   readonly selection?: string;
+  readonly suffix?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
 }

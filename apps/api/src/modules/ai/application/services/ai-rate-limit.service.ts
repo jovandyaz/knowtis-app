@@ -6,14 +6,15 @@ import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
 } from '../../domain/ports/ai-usage.repository';
-import type { RedisRateLimitService } from '../../infrastructure/redis/redis-rate-limit.service';
+import {
+  RATE_LIMIT_PROVIDER,
+  type RateLimitProvider,
+} from '../../domain/ports/rate-limit.port';
 
 interface RateLimitResult {
   readonly allowed: boolean;
   readonly reason?: string;
 }
-
-export const REDIS_RATE_LIMIT_SERVICE = Symbol('REDIS_RATE_LIMIT_SERVICE');
 
 @Injectable()
 export class AIRateLimitService {
@@ -24,17 +25,17 @@ export class AIRateLimitService {
     private readonly usageRepository: AIUsageRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
     @Optional()
-    @Inject(REDIS_RATE_LIMIT_SERVICE)
-    private readonly redisRateLimit?: RedisRateLimitService
+    @Inject(RATE_LIMIT_PROVIDER)
+    private readonly rateLimitProvider?: RateLimitProvider
   ) {}
 
   async checkLimit(
     userId: string,
     estimatedTokens: number
   ): Promise<RateLimitResult> {
-    if (this.redisRateLimit) {
+    if (this.rateLimitProvider) {
       try {
-        const result = await this.redisRateLimit.checkAndIncrement(
+        const result = await this.rateLimitProvider.checkAndIncrement(
           userId,
           estimatedTokens
         );
@@ -64,8 +65,8 @@ export class AIRateLimitService {
   }): Promise<void> {
     await this.usageRepository.recordUsage(params);
 
-    if (this.redisRateLimit) {
-      await this.redisRateLimit.correctUsage(
+    if (this.rateLimitProvider) {
+      await this.rateLimitProvider.correctUsage(
         params.userId,
         params.estimatedTokens,
         params.inputTokens + params.outputTokens,

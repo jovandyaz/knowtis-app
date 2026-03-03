@@ -1,11 +1,8 @@
-import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EnvConfig } from '../../../../config/env.config';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
+import { createMockConfig } from '../../testing/create-mock-config';
 import { AIRateLimitService } from './ai-rate-limit.service';
-
-type TypedConfigService = ConfigService<EnvConfig, true>;
 
 describe('AIRateLimitService', () => {
   let service: AIRateLimitService;
@@ -17,15 +14,7 @@ describe('AIRateLimitService', () => {
       recordUsage: vi.fn(),
       getMetricsSummary: vi.fn(),
     };
-    const mockConfig = {
-      get: vi.fn((key: string) => {
-        const config: Record<string, number> = {
-          AI_DAILY_TOKEN_LIMIT: 100000,
-          AI_DAILY_COST_LIMIT_USD: 1.0,
-        };
-        return config[key];
-      }),
-    } as unknown as TypedConfigService;
+    const mockConfig = createMockConfig();
     service = new AIRateLimitService(mockUsageRepo, mockConfig);
   });
 
