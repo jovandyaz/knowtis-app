@@ -87,6 +87,82 @@
     "untitled": "Untitled",
     "flashcardsComingSoon": "Flashcards are coming soon. Stay tuned!"
   },
+  "ai": {
+    "bubbleMenu": {
+      "askAI": "Ask AI",
+      "back": "Back"
+    },
+    "actions": {
+      "improveWriting": "Improve writing",
+      "fixSpelling": "Fix spelling & grammar",
+      "makeShorter": "Make shorter",
+      "makeLonger": "Make longer",
+      "summarize": "Summarize",
+      "actionItems": "Extract action items",
+      "translate": "Translate",
+      "changeTone": "Change tone"
+    },
+    "languages": {
+      "english": "English",
+      "spanish": "Spanish",
+      "french": "French",
+      "german": "German",
+      "portuguese": "Portuguese",
+      "italian": "Italian",
+      "chinese": "Chinese",
+      "japanese": "Japanese",
+      "korean": "Korean"
+    },
+    "tones": {
+      "formal": "Formal",
+      "casual": "Casual",
+      "professional": "Professional",
+      "friendly": "Friendly",
+      "academic": "Academic",
+      "concise": "Concise",
+      "creative": "Creative"
+    },
+    "preview": {
+      "cancel": "Cancel",
+      "replace": "Replace",
+      "insertBelow": "Insert below",
+      "discard": "Discard",
+      "dismiss": "Dismiss",
+      "regenerate": "Regenerate",
+      "retry": "Retry"
+    },
+    "errors": {
+      "generic": "Something went wrong. Please try again."
+    },
+    "groups": {
+      "ai": "AI",
+      "formatting": "Formatting"
+    },
+    "slash": {
+      "summarize": "Summarize",
+      "summarizeDesc": "Create a summary of the note",
+      "outline": "Create outline",
+      "outlineDesc": "Generate a structured outline",
+      "improve": "Improve writing",
+      "improveDesc": "Enhance clarity and style",
+      "chat": "Ask AI",
+      "chatDesc": "Ask a question about the note",
+      "continue": "Continue writing",
+      "continueDesc": "Let AI continue from cursor",
+      "heading1": "Heading 1",
+      "heading1Desc": "Large section heading",
+      "heading2": "Heading 2",
+      "heading2Desc": "Medium section heading",
+      "heading3": "Heading 3",
+      "heading3Desc": "Small section heading",
+      "bulletList": "Bullet list",
+      "bulletListDesc": "Create a bullet list",
+      "numberedList": "Numbered list",
+      "numberedListDesc": "Create a numbered list",
+      "blockquote": "Quote",
+      "blockquoteDesc": "Insert a blockquote"
+    }
+  },
   "profile": {
     "title": "Profile",
     "description": "Manage your account information",

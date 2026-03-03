@@ -184,6 +184,7 @@ JWT-based with HttpOnly cookie refresh tokens:
 
 ## Backend Modules
 
+- **ai** - AI text assistant with WebSocket streaming (`/ai` namespace), rate limiting, response caching, and usage tracking. Gated by `AI_ENABLED` feature flag. Uses DDD/Clean Architecture. See [docs/AI.md](docs/AI.md).
 - **auth** - JWT authentication with DDD/Clean Architecture (Ports & Adapters, Value Objects, Result pattern via neverthrow)
 - **notes** - Notes CRUD with DDD/Clean Architecture, sharing/permissions
 - **collaboration** - WebSocket gateway (Socket.io) for Yjs real-time sync
@@ -203,6 +204,8 @@ cp apps/notes/.env.example apps/notes/.env
 pnpm docker:up
 pnpm db:push
 ```
+
+> AI features require `AI_ENABLED=true` and `ANTHROPIC_API_KEY` in `apps/api/.env`. See [docs/AI.md](docs/AI.md).
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->

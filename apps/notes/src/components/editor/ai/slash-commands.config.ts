@@ -1,0 +1,182 @@
+import { useAIStore } from '@/stores/ai.store';
+import type { Editor, Range } from '@tiptap/react';
+import {
+  FileText,
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  ListOrdered,
+  MessageSquare,
+  PenLine,
+  Quote,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+
+import { AI_ACTION, type AIAction } from '@knowtis/shared-types';
+
+type SlashCommandGroup = 'ai' | 'formatting';
+
+function createAISlashAction(
+  action: AIAction
+): (editor: Editor, range: Range) => void {
+  return (editor, range) => {
+    editor.chain().focus().deleteRange(range).run();
+    const pos = editor.state.selection.to;
+    const store = useAIStore.getState();
+    store.setSelectionRange({ from: pos, to: pos });
+    store.startStream({
+      action,
+      content: editor.state.doc.textContent,
+    });
+  };
+}
+
+export interface SlashCommandItem {
+  id: string;
+  icon: LucideIcon;
+  labelKey: string;
+  descriptionKey: string;
+  group: SlashCommandGroup;
+  keywords: string[];
+  action: (editor: Editor, range: Range) => void;
+}
+
+export const SLASH_COMMANDS: SlashCommandItem[] = [
+  // AI commands
+  {
+    id: 'ai-summarize',
+    icon: FileText,
+    labelKey: 'ai.slash.summarize',
+    descriptionKey: 'ai.slash.summarizeDesc',
+    group: 'ai',
+    keywords: ['summarize', 'summary', 'tldr', 'resumir'],
+    action: createAISlashAction(AI_ACTION.SUMMARIZE),
+  },
+  {
+    id: 'ai-outline',
+    icon: ListOrdered,
+    labelKey: 'ai.slash.outline',
+    descriptionKey: 'ai.slash.outlineDesc',
+    group: 'ai',
+    keywords: ['outline', 'structure', 'esquema'],
+    action: createAISlashAction(AI_ACTION.OUTLINE),
+  },
+  {
+    id: 'ai-chat',
+    icon: MessageSquare,
+    labelKey: 'ai.slash.chat',
+    descriptionKey: 'ai.slash.chatDesc',
+    group: 'ai',
+    keywords: ['chat', 'ask', 'question', 'preguntar'],
+    action: createAISlashAction(AI_ACTION.CHAT),
+  },
+  {
+    id: 'ai-continue',
+    icon: PenLine,
+    labelKey: 'ai.slash.continue',
+    descriptionKey: 'ai.slash.continueDesc',
+    group: 'ai',
+    keywords: ['continue', 'write', 'extend', 'continuar'],
+    action: createAISlashAction(AI_ACTION.GHOST_TEXT),
+  },
+
+  // Formatting commands
+  {
+    id: 'heading-1',
+    icon: Heading1,
+    labelKey: 'ai.slash.heading1',
+    descriptionKey: 'ai.slash.heading1Desc',
+    group: 'formatting',
+    keywords: ['heading', 'h1', 'title', 'titulo'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .toggleHeading({ level: 1 })
+        .run();
+    },
+  },
+  {
+    id: 'heading-2',
+    icon: Heading2,
+    labelKey: 'ai.slash.heading2',
+    descriptionKey: 'ai.slash.heading2Desc',
+    group: 'formatting',
+    keywords: ['heading', 'h2', 'subtitle', 'subtitulo'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .toggleHeading({ level: 2 })
+        .run();
+    },
+  },
+  {
+    id: 'heading-3',
+    icon: Heading3,
+    labelKey: 'ai.slash.heading3',
+    descriptionKey: 'ai.slash.heading3Desc',
+    group: 'formatting',
+    keywords: ['heading', 'h3', 'section', 'seccion'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .toggleHeading({ level: 3 })
+        .run();
+    },
+  },
+  {
+    id: 'bullet-list',
+    icon: List,
+    labelKey: 'ai.slash.bulletList',
+    descriptionKey: 'ai.slash.bulletListDesc',
+    group: 'formatting',
+    keywords: ['bullet', 'list', 'unordered', 'lista'],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleBulletList().run();
+    },
+  },
+  {
+    id: 'numbered-list',
+    icon: ListOrdered,
+    labelKey: 'ai.slash.numberedList',
+    descriptionKey: 'ai.slash.numberedListDesc',
+    group: 'formatting',
+    keywords: ['numbered', 'ordered', 'list', 'numerada'],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleOrderedList().run();
+    },
+  },
+  {
+    id: 'blockquote',
+    icon: Quote,
+    labelKey: 'ai.slash.blockquote',
+    descriptionKey: 'ai.slash.blockquoteDesc',
+    group: 'formatting',
+    keywords: ['quote', 'blockquote', 'cita'],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleBlockquote().run();
+    },
+  },
+];
+
+export function filterSlashCommands(query: string): SlashCommandItem[] {
+  if (!query) {
+    return SLASH_COMMANDS;
+  }
+
+  const normalizedQuery = query.toLowerCase();
+
+  return SLASH_COMMANDS.filter((item) => {
+    const matchesId = item.id.toLowerCase().includes(normalizedQuery);
+    const matchesKeywords = item.keywords.some((keyword) =>
+      keyword.toLowerCase().includes(normalizedQuery)
+    );
+    return matchesId || matchesKeywords;
+  });
+}

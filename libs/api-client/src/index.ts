@@ -15,6 +15,13 @@ export {
 
 export { collaborationClient } from './lib/collaboration.client';
 
+export { aiClient } from './lib/ai.client';
+export type {
+  AICompletePayload,
+  AIErrorPayload,
+  AIStreamHandle,
+} from './lib/ai.client';
+
 export {
   usersApi,
   type UserProfile,
