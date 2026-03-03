@@ -13,8 +13,8 @@ export const Neutral500 = '#787774';
 export const Neutral600 = '#37352f';
 
 // Purple — brand primary
-export const Purple400 = '#9076f3';
-export const Purple500 = '#5937af';
+export const Purple400 = '#8B5CF6';
+export const Purple500 = '#7C3AED';
 
 // Destructive
 export const Red500 = '#d74745';
