@@ -10,9 +10,12 @@ import {
 } from '@/hooks';
 import { EditorContent, useEditor } from '@tiptap/react';
 
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { cn } from '@knowtis/design-system';
 import { logger } from '@knowtis/shared-util';
 
+import { AIBubbleMenu } from './ai/AIBubbleMenu';
+import { AIResultPanel } from './ai/AIResultPanel';
 import { CollaborationIndicator } from './CollaborationIndicator';
 
 import './CollaborativeCursor.css';
@@ -42,11 +45,13 @@ function InternalEditor({
   editable,
   saveStatus,
 }: InternalEditorProps) {
+  const aiEnabled = useFeatureFlag('ai_enabled');
   const extensions = useEditorExtensions(
     yDoc,
     yXmlFragment,
     awareness,
-    currentUser
+    currentUser,
+    aiEnabled
   );
 
   const editor = useEditor({
@@ -58,10 +63,10 @@ function InternalEditor({
           'prose prose-sm sm:prose-base max-w-none',
           'min-h-[300px] p-4 md:p-6',
           'focus:outline-none',
-          'prose-headings:text-foreground font-bold',
+          'prose-headings:text-foreground prose-headings:font-bold',
           'prose-p:text-foreground leading-relaxed',
           'prose-strong:text-foreground font-semibold',
-          'prose-em:text-foreground italic',
+          'prose-em:text-foreground',
           'prose-ul:text-foreground',
           'prose-ol:text-foreground',
           'prose-li:text-foreground marker:text-muted-foreground'
@@ -100,6 +105,12 @@ function InternalEditor({
     <>
       <EditorToolbar editor={editor} saveStatus={saveStatus} />
       <div className={EDITOR_CONTAINER_CLASSES}>
+        {editor && aiEnabled && (
+          <>
+            <AIBubbleMenu editor={editor} />
+            <AIResultPanel editor={editor} />
+          </>
+        )}
         <EditorContent
           editor={editor}
           className={cn(

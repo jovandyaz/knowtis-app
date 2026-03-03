@@ -1,0 +1,6 @@
+.ghost-text-suggestion {
+  color: var(--muted-foreground);
+  opacity: 0.4;
+  pointer-events: none;
+  user-select: none;
+}

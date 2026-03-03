@@ -87,6 +87,82 @@
     "untitled": "Sin título",
     "flashcardsComingSoon": "Las flashcards estarán disponibles pronto. ¡Mantente atento!"
   },
+  "ai": {
+    "bubbleMenu": {
+      "askAI": "Preguntar a IA",
+      "back": "Volver"
+    },
+    "actions": {
+      "improveWriting": "Mejorar redacción",
+      "fixSpelling": "Corregir ortografía y gramática",
+      "makeShorter": "Hacer más corto",
+      "makeLonger": "Hacer más largo",
+      "summarize": "Resumir",
+      "actionItems": "Extraer tareas",
+      "translate": "Traducir",
+      "changeTone": "Cambiar tono"
+    },
+    "languages": {
+      "english": "Inglés",
+      "spanish": "Español",
+      "french": "Francés",
+      "german": "Alemán",
+      "portuguese": "Portugués",
+      "italian": "Italiano",
+      "chinese": "Chino",
+      "japanese": "Japonés",
+      "korean": "Coreano"
+    },
+    "tones": {
+      "formal": "Formal",
+      "casual": "Casual",
+      "professional": "Profesional",
+      "friendly": "Amigable",
+      "academic": "Académico",
+      "concise": "Conciso",
+      "creative": "Creativo"
+    },
+    "preview": {
+      "cancel": "Cancelar",
+      "replace": "Reemplazar",
+      "insertBelow": "Insertar debajo",
+      "discard": "Descartar",
+      "dismiss": "Cerrar",
+      "regenerate": "Regenerar",
+      "retry": "Reintentar"
+    },
+    "errors": {
+      "generic": "Algo salió mal. Inténtalo de nuevo."
+    },
+    "groups": {
+      "ai": "IA",
+      "formatting": "Formato"
+    },
+    "slash": {
+      "summarize": "Resumir",
+      "summarizeDesc": "Crear un resumen de la nota",
+      "outline": "Crear esquema",
+      "outlineDesc": "Generar un esquema estructurado",
+      "improve": "Mejorar redacción",
+      "improveDesc": "Mejorar claridad y estilo",
+      "chat": "Preguntar a IA",
+      "chatDesc": "Hacer una pregunta sobre la nota",
+      "continue": "Continuar escribiendo",
+      "continueDesc": "Dejar que la IA continúe desde el cursor",
+      "heading1": "Encabezado 1",
+      "heading1Desc": "Encabezado de sección grande",
+      "heading2": "Encabezado 2",
+      "heading2Desc": "Encabezado de sección mediano",
+      "heading3": "Encabezado 3",
+      "heading3Desc": "Encabezado de sección pequeño",
+      "bulletList": "Lista con viñetas",
+      "bulletListDesc": "Crear una lista con viñetas",
+      "numberedList": "Lista numerada",
+      "numberedListDesc": "Crear una lista numerada",
+      "blockquote": "Cita",
+      "blockquoteDesc": "Insertar una cita"
+    }
+  },
   "profile": {
     "title": "Perfil",
     "description": "Administra la información de tu cuenta",

@@ -13,6 +13,9 @@
       "@knowtis/api-client": ["libs/api-client/src/index.ts"],
       "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
       "@knowtis/data-access-users": ["libs/data-access/users/src/index.ts"],
+      "@knowtis/data-access-feature-flags": [
+        "libs/data-access/feature-flags/src/index.ts"
+      ],
       "@knowtis/authorization": ["libs/authorization/src/index.ts"],
       "@jovandyaz/permissions-core": ["packages/permissions/src/index.ts"],
       "@jovandyaz/permissions-react": [

@@ -1,20 +1,27 @@
 import { useMemo } from 'react';
 
+import { useAIStore } from '@/stores/ai.store';
 import type { CollaborativeUser } from '@/types';
 import Collaboration from '@tiptap/extension-collaboration';
-import Underline from '@tiptap/extension-underline';
 import type { AnyExtension } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
+import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
 import { CollaborativeCursors } from './CollaborativeCursors';
+import { GhostText } from './extensions/GhostText';
+
+import './extensions/GhostText.css';
+
+import { SlashCommands } from './extensions/SlashCommands';
 
 export function useEditorExtensions(
   yDoc: Y.Doc,
   yXmlFragment: Y.XmlFragment,
   awareness: Awareness | null,
-  currentUser: CollaborativeUser
+  currentUser: CollaborativeUser,
+  aiEnabled: boolean
 ): AnyExtension[] {
   return useMemo(() => {
     const extensions: AnyExtension[] = [
@@ -29,11 +36,27 @@ export function useEditorExtensions(
         listItem: {
           HTMLAttributes: { class: 'leading-normal' },
         },
+        blockquote: {
+          HTMLAttributes: {
+            class:
+              'border-l-2 border-muted-foreground/40 pl-4 italic text-muted-foreground',
+          },
+        },
       }),
-      Underline,
       Collaboration.configure({
         document: yDoc,
         fragment: yXmlFragment,
+      }),
+      SlashCommands.configure({
+        suggestion: slashCommandsSuggestion,
+      }),
+      GhostText.configure({
+        debounceMs: 750,
+        minContentLength: 20,
+        enabled: true,
+        isAIBusy: () => {
+          return !aiEnabled || useAIStore.getState().status !== 'idle';
+        },
       }),
     ];
 
@@ -50,5 +73,12 @@ export function useEditorExtensions(
     }
 
     return extensions;
-  }, [yDoc, yXmlFragment, awareness, currentUser.name, currentUser.color]);
+  }, [
+    yDoc,
+    yXmlFragment,
+    awareness,
+    currentUser.name,
+    currentUser.color,
+    aiEnabled,
+  ]);
 }
