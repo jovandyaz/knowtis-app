@@ -1,6 +1,6 @@
 import { createAuthStore, createTokenStorage } from '@jovandyaz/auth-react';
 
-import { collaborationClient, httpClient } from '@knowtis/api-client';
+import { aiClient, collaborationClient, httpClient } from '@knowtis/api-client';
 
 import { createAuthApiAdapter } from './auth-api-adapter';
 
@@ -13,6 +13,7 @@ export const authStore = createAuthStore({
 });
 
 collaborationClient.setTokenProvider(tokenStorage);
+aiClient.setTokenProvider(tokenStorage);
 
 export const authApi = createAuthApiAdapter({
   httpClient,
