@@ -308,6 +308,9 @@ describe('createAuthApiAdapter', () => {
   describe('refresh token callback', () => {
     it('returns new access token on successful refresh', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
+      authStore.getState().user = { isAnonymous: false } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
       createAuthApiAdapter({ httpClient, tokenStorage, authStore });
 
       const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
@@ -318,6 +321,9 @@ describe('createAuthApiAdapter', () => {
 
     it('calls logout and returns null on refresh failure', async () => {
       httpClient.post.mockRejectedValue(new Error('expired'));
+      authStore.getState().user = { isAnonymous: false } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
       createAuthApiAdapter({ httpClient, tokenStorage, authStore });
 
       const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
