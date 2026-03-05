@@ -26,6 +26,7 @@ export interface StreamTextInput {
   readonly suffix?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
+  readonly isAnonymous?: boolean;
 }
 
 export interface StreamTextCallbacks {
@@ -72,7 +73,8 @@ export class StreamTextHandler {
     const estimatedTokens = estimateTokenCount(input.content);
     const rateCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens
+      estimatedTokens,
+      input.isAnonymous
     );
     if (!rateCheck.allowed) {
       this.logger.warn({

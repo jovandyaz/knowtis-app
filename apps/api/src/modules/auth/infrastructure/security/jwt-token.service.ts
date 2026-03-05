@@ -19,10 +19,15 @@ export class JwtTokenService implements TokenService {
 
   async generateTokens(
     userId: UserId,
-    email: string
+    email: string,
+    options?: { isAnonymous?: boolean }
   ): Promise<Result<AuthTokens, AuthDomainError>> {
     try {
-      const payload: JwtPayload = { sub: userId.value, email };
+      const payload: JwtPayload = {
+        sub: userId.value,
+        email,
+        ...(options?.isAnonymous && { isAnonymous: true }),
+      };
 
       const [accessToken, refreshToken] = await Promise.all([
         this.jwtService.signAsync(payload, {
@@ -49,7 +54,11 @@ export class JwtTokenService implements TokenService {
         secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
       });
 
-      return ok({ sub: payload.sub, email: payload.email });
+      return ok({
+        sub: payload.sub,
+        email: payload.email,
+        ...(payload.isAnonymous && { isAnonymous: true }),
+      });
     } catch {
       return err(AuthErrors.invalidRefreshToken());
     }

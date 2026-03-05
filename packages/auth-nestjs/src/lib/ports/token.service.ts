@@ -8,6 +8,7 @@ import type { Result } from 'neverthrow';
 export interface JwtPayload {
   readonly sub: string;
   readonly email: string;
+  readonly isAnonymous?: boolean;
   readonly iat?: number;
   readonly exp?: number;
 }
@@ -15,7 +16,8 @@ export interface JwtPayload {
 export interface TokenService {
   generateTokens(
     userId: UserId,
-    email: string
+    email: string,
+    options?: { isAnonymous?: boolean }
   ): Promise<Result<AuthTokens, AuthDomainError>>;
 
   verifyRefreshToken(

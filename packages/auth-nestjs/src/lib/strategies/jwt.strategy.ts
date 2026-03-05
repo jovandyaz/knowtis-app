@@ -35,6 +35,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: user.email,
         name: user.name,
         avatarUrl: user.avatarUrl,
+        ...(payload.isAnonymous && { isAnonymous: true }),
       };
     } catch {
       throw new UnauthorizedException('Invalid token');

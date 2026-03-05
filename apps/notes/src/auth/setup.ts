@@ -6,6 +6,7 @@ import {
 
 import { aiClient, collaborationClient, httpClient } from '@knowtis/api-client';
 
+import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
 
 const AUTH_STORAGE_KEY = 'knowtis-auth';
@@ -24,14 +25,29 @@ aiClient.setTokenProvider(tokenStorage);
 export const authApi = createAuthApiAdapter({
   httpClient,
   tokenStorage,
+  authStore,
 });
 
 /** Cross-tab logout sync — detects logout in other tabs. */
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
   onLogoutDetected: () => {
+    const wasAnonymous = authStore.getState().user?.isAnonymous;
     tokenStorage.clearTokens();
     authStore.getState().logout();
-    window.location.href = '/login';
+
+    if (!wasAnonymous) {
+      window.location.href = '/login';
+    }
+    // Anonymous users: no redirect — initAnonymousSession will create
+    // a new session on the next navigation/route load.
   },
 });
+
+/**
+ * Initialize auth — creates anonymous session if no auth exists.
+ * Called during app/route initialization.
+ */
+export async function initAuth(): Promise<void> {
+  await initAnonymousSession(tokenStorage, authStore);
+}

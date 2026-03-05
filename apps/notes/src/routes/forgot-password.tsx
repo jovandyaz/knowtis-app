@@ -14,8 +14,8 @@ const ForgotPasswordPage = lazy(() =>
 
 export const Route = createFileRoute('/forgot-password')({
   beforeLoad: () => {
-    const { isAuthenticated } = authStore.getState();
-    if (isAuthenticated) {
+    const { isAuthenticated, user } = authStore.getState();
+    if (isAuthenticated && !user?.isAnonymous) {
       throw redirect({ to: '/' });
     }
   },

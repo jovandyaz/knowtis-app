@@ -14,21 +14,27 @@ import {
   BadRequestException,
   Body,
   Controller,
+  ForbiddenException,
   Headers,
   HttpCode,
   HttpStatus,
   Ip,
+  Logger,
   Post,
   Req,
   Res,
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
-import type { RefreshTokenDto, RegisterDto } from './dto/auth.dto';
+import { AnonymousAuthService } from './application/services/anonymous-auth.service';
+import { LoginDto, RegisterDto } from './dto/auth.dto';
+import type { RefreshTokenDto } from './dto/auth.dto';
+import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import {
   clearRefreshTokenCookie,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -39,6 +45,7 @@ import {
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
 export class AuthSessionController {
+  private readonly logger = new Logger(AuthSessionController.name);
   private readonly isProduction: boolean;
 
   constructor(
@@ -46,9 +53,22 @@ export class AuthSessionController {
     private readonly loginHandler: LoginUserHandler,
     private readonly refreshHandler: RefreshTokensHandler,
     private readonly logoutHandler: LogoutUserHandler,
-    configService: ConfigService
+    private readonly anonymousAuthService: AnonymousAuthService,
+    private readonly anonymousDataMigration: DrizzleAnonymousDataMigrationRepository,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService
   ) {
     this.isProduction = configService.get('NODE_ENV') === 'production';
+  }
+
+  @ApiOperation({ summary: 'Create an anonymous session' })
+  @ApiResponse({ status: 201, description: 'Anonymous session created' })
+  @Public()
+  @Throttle({ default: { limit: 3, ttl: 60000 } })
+  @Post('anonymous')
+  @HttpCode(HttpStatus.CREATED)
+  async createAnonymousSession() {
+    return this.anonymousAuthService.createAnonymousSession();
   }
 
   @ApiOperation({ summary: 'Login with email and password' })
@@ -61,6 +81,7 @@ export class AuthSessionController {
   @HttpCode(HttpStatus.OK)
   async login(
     @CurrentUser() user: RequestUser,
+    @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
     @Headers('user-agent') userAgent?: string,
     @Ip() ipAddress?: string
@@ -75,7 +96,23 @@ export class AuthSessionController {
       { userAgent, ipAddress }
     );
 
-    return this.respondWithTokens(res, unwrapOrThrow(result));
+    const data = unwrapOrThrow(result);
+
+    const { anonymousUserId, anonymousToken } = dto;
+
+    if (anonymousUserId && anonymousToken) {
+      try {
+        await this.verifyAndMigrateAnonymousData(
+          anonymousUserId,
+          anonymousToken,
+          data.user.id as string
+        );
+      } catch (error) {
+        this.logger.warn('Anonymous data migration failed during login', error);
+      }
+    }
+
+    return this.respondWithTokens(res, data);
   }
 
   @ApiOperation({ summary: 'Register a new user account' })
@@ -94,8 +131,24 @@ export class AuthSessionController {
       userAgent,
       ipAddress,
     });
+    const data = unwrapOrThrow(result);
 
-    return this.respondWithTokens(res, unwrapOrThrow(result));
+    if (dto.anonymousUserId && dto.anonymousToken) {
+      try {
+        await this.verifyAndMigrateAnonymousData(
+          dto.anonymousUserId,
+          dto.anonymousToken,
+          data.user.id
+        );
+      } catch (error) {
+        this.logger.warn(
+          'Anonymous data migration failed during registration',
+          error
+        );
+      }
+    }
+
+    return this.respondWithTokens(res, data);
   }
 
   @ApiOperation({ summary: 'Refresh access token' })
@@ -149,6 +202,29 @@ export class AuthSessionController {
     dto: RefreshTokenDto
   ): string | undefined {
     return req.cookies?.[REFRESH_TOKEN_COOKIE_NAME] ?? dto.refreshToken;
+  }
+
+  private async verifyAndMigrateAnonymousData(
+    anonymousUserId: string,
+    anonymousToken: string,
+    registeredUserId: string
+  ): Promise<void> {
+    const payload = await this.jwtService
+      .verifyAsync<{ sub: string; isAnonymous?: boolean }>(anonymousToken, {
+        secret: this.configService.getOrThrow('JWT_SECRET'),
+      })
+      .catch(() => null);
+
+    if (!payload || payload.sub !== anonymousUserId || !payload.isAnonymous) {
+      throw new ForbiddenException(
+        'Invalid anonymous token: cannot verify ownership of anonymous session'
+      );
+    }
+
+    await this.anonymousDataMigration.migrateAnonymousData(
+      anonymousUserId,
+      registeredUserId
+    );
   }
 
   private respondWithTokens(

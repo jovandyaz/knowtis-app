@@ -50,7 +50,9 @@
   },
   "nav": {
     "logOut": "Cerrar sesión",
-    "signedOutSuccess": "Sesión cerrada exitosamente"
+    "signedOutSuccess": "Sesión cerrada exitosamente",
+    "createAccount": "Crear cuenta",
+    "signIn": "Iniciar sesión"
   },
   "welcome": {
     "greeting": "Bienvenido de nuevo",
@@ -77,6 +79,20 @@
       "editor": "Configura tus preferencias del editor",
       "notifications": "Administra tus notificaciones",
       "account": "Seguridad y configuración de la cuenta"
+    }
+  },
+  "anonymous": {
+    "banner": {
+      "usingAsGuest": "Estás usando Knowtis como invitado.",
+      "upgradeMessage": "Regístrate para desbloquear notas ilimitadas, colaboración y sincronización en múltiples dispositivos."
+    },
+    "limit": {
+      "notesTitle": "Has alcanzado el límite de notas para invitados",
+      "notesDescription": "Crea una cuenta gratuita para guardar notas ilimitadas y acceder a ellas desde cualquier dispositivo. Las cuentas de invitado están limitadas a {{maxNotes}} notas.",
+      "aiTitle": "Límite de solicitudes de IA alcanzado por hoy",
+      "aiDescription": "Regístrate para obtener más completaciones de IA por día. Las cuentas de invitado están limitadas a {{maxAiRequests}} solicitudes de IA por día.",
+      "maybeLater": "Quizás después",
+      "createFreeAccount": "Crear cuenta gratis"
     }
   },
   "validation": {

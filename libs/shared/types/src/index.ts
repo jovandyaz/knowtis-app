@@ -39,6 +39,8 @@ export {
 
 export type { FeatureFlagDto } from './lib/feature-flags.types';
 
+export { ANONYMOUS_LIMITS, type AnonymousLimits } from './lib/anonymous.types';
+
 export {
   AI_ACTION,
   AI_ACTIONS,

@@ -57,6 +57,7 @@ describe('StreamTextHandler', () => {
         totalInputTokens: 0,
         totalOutputTokens: 0,
         totalCostUsd: 0,
+        requestCount: 0,
       }),
       recordUsage: vi.fn(),
       getMetricsSummary: vi.fn(),
@@ -114,6 +115,7 @@ describe('StreamTextHandler', () => {
       totalInputTokens: 99999,
       totalOutputTokens: 99999,
       totalCostUsd: 2.0,
+      requestCount: 50,
     });
 
     await handler.execute(

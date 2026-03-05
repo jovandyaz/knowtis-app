@@ -51,7 +51,7 @@ export function useLogin(): UseMutationResult<AuthResponse, Error, LoginInput> {
     mutationFn: (input: LoginInput) => api.login(input),
     onSuccess: (response: AuthResponse) => {
       handleAuthSuccess(response);
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
+      queryClient.clear();
     },
   });
 }
@@ -70,7 +70,7 @@ export function useRegister(): UseMutationResult<
     mutationFn: (input: RegisterInput) => api.register(input),
     onSuccess: (response: AuthResponse) => {
       handleAuthSuccess(response);
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.all });
+      queryClient.clear();
     },
   });
 }
