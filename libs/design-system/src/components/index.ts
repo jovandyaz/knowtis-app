@@ -47,3 +47,13 @@ export {
   type MutationErrorAlertProps,
 } from './MutationErrorAlert';
 export { LoadingButton, type LoadingButtonProps } from './LoadingButton';
+export {
+  CommandMenuContent,
+  CommandMenuGroup,
+  CommandMenuItem,
+  CommandMenuBack,
+  type CommandMenuContentProps,
+  type CommandMenuGroupProps,
+  type CommandMenuItemProps,
+  type CommandMenuBackProps,
+} from './CommandMenu';
