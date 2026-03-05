@@ -71,7 +71,11 @@ export async function initAnonymousSession(
         }
         return;
       }
-    } catch {
+    } catch (error) {
+      console.warn(
+        '[AnonymousSession] Failed to parse stored session, removing',
+        error
+      );
       localStorage.removeItem(ANON_STORAGE_KEY);
     }
   }
@@ -130,7 +134,8 @@ export function getAnonymousSession(): StoredAnonymousSession | null {
   }
   try {
     return JSON.parse(stored) as StoredAnonymousSession;
-  } catch {
+  } catch (error) {
+    console.warn('[AnonymousSession] Failed to parse stored session', error);
     return null;
   }
 }
