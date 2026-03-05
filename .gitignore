@@ -67,3 +67,6 @@ AGENTS.md
 
 # Claude Code (personal config, symlinks)
 .claude/skills/
+
+# Worktrees
+.worktrees/
