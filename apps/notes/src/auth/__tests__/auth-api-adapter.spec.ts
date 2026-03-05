@@ -1,5 +1,5 @@
 import type { AuthResponse, AuthTokens } from '@jovandyaz/auth';
-import type { TokenStorage } from '@jovandyaz/auth-react';
+import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IHttpClient } from '@knowtis/api-client';
@@ -35,6 +35,25 @@ function createMockTokenStorage(): TokenStorage {
   };
 }
 
+function createMockAuthStore(): AuthStoreInstance {
+  const state = {
+    user: null as { isAnonymous?: boolean } | null,
+    isAuthenticated: false,
+    isLoading: false,
+    setUser: vi.fn(),
+    handleAuthSuccess: vi.fn(),
+    logout: vi.fn(),
+    setLoading: vi.fn(),
+  };
+  const store = (() => state) as unknown as AuthStoreInstance;
+  store.getState = () => state as ReturnType<AuthStoreInstance['getState']>;
+  store.setState = vi.fn() as AuthStoreInstance['setState'];
+  store.subscribe = vi
+    .fn()
+    .mockReturnValue(() => {}) as AuthStoreInstance['subscribe'];
+  return store;
+}
+
 const AUTH_RESPONSE: AuthResponse = {
   user: { id: '1', email: 'a@b.com', name: 'Test', avatarUrl: null },
   tokens: { accessToken: 'at', refreshToken: 'rt' },
@@ -52,16 +71,18 @@ const AUTH_TOKENS: AuthTokens = {
 describe('createAuthApiAdapter', () => {
   let httpClient: ReturnType<typeof createMockHttpClient>;
   let tokenStorage: ReturnType<typeof createMockTokenStorage>;
+  let authStore: ReturnType<typeof createMockAuthStore>;
 
   beforeEach(() => {
     httpClient = createMockHttpClient();
     tokenStorage = createMockTokenStorage();
+    authStore = createMockAuthStore();
   });
 
   // ---- Side effect: refresh callback registration ----
 
   it('registers a refresh token callback on creation', () => {
-    createAuthApiAdapter({ httpClient, tokenStorage });
+    createAuthApiAdapter({ httpClient, tokenStorage, authStore });
     expect(httpClient.setRefreshTokenCallback).toHaveBeenCalledOnce();
     expect(httpClient.setRefreshTokenCallback).toHaveBeenCalledWith(
       expect.any(Function)
@@ -73,7 +94,11 @@ describe('createAuthApiAdapter', () => {
   describe('login', () => {
     it('calls POST /auth/login with skipAuth and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       const result = await adapter.login({
         email: 'a@b.com',
@@ -95,7 +120,11 @@ describe('createAuthApiAdapter', () => {
   describe('register', () => {
     it('calls POST /auth/register with skipAuth and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       const result = await adapter.register({
         email: 'a@b.com',
@@ -118,7 +147,11 @@ describe('createAuthApiAdapter', () => {
   describe('logout', () => {
     it('sends empty body to /auth/logout then clears tokens', async () => {
       httpClient.post.mockResolvedValue(undefined);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.logout();
 
@@ -128,7 +161,11 @@ describe('createAuthApiAdapter', () => {
 
     it('clears tokens even if the server call fails', async () => {
       httpClient.post.mockRejectedValue(new Error('network'));
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.logout();
 
@@ -141,7 +178,11 @@ describe('createAuthApiAdapter', () => {
   describe('refreshToken', () => {
     it('calls POST /auth/refresh with empty body and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       const result = await adapter.refreshToken();
 
@@ -166,7 +207,11 @@ describe('createAuthApiAdapter', () => {
         avatarUrl: null,
       };
       httpClient.get.mockResolvedValue(profile);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       const result = await adapter.getProfile();
 
@@ -180,7 +225,11 @@ describe('createAuthApiAdapter', () => {
   describe('forgotPassword', () => {
     it('calls POST /auth/forgot-password with skipAuth', async () => {
       httpClient.post.mockResolvedValue(undefined);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.forgotPassword('a@b.com');
 
@@ -197,7 +246,11 @@ describe('createAuthApiAdapter', () => {
   describe('resetPassword', () => {
     it('calls POST /auth/reset-password with skipAuth', async () => {
       httpClient.post.mockResolvedValue(undefined);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.resetPassword('tok', 'newpass');
 
@@ -214,7 +267,11 @@ describe('createAuthApiAdapter', () => {
   describe('verifyEmail', () => {
     it('calls POST /auth/verify-email with skipAuth', async () => {
       httpClient.post.mockResolvedValue(undefined);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.verifyEmail('tok');
 
@@ -231,7 +288,11 @@ describe('createAuthApiAdapter', () => {
   describe('resendVerification', () => {
     it('calls POST /auth/resend-verification (authenticated)', async () => {
       httpClient.post.mockResolvedValue(undefined);
-      const adapter = createAuthApiAdapter({ httpClient, tokenStorage });
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
 
       await adapter.resendVerification();
 
@@ -247,7 +308,10 @@ describe('createAuthApiAdapter', () => {
   describe('refresh token callback', () => {
     it('returns new access token on successful refresh', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
-      createAuthApiAdapter({ httpClient, tokenStorage });
+      authStore.getState().user = { isAnonymous: false } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
+      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
 
       const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
       const result = await callback();
@@ -257,7 +321,10 @@ describe('createAuthApiAdapter', () => {
 
     it('calls logout and returns null on refresh failure', async () => {
       httpClient.post.mockRejectedValue(new Error('expired'));
-      createAuthApiAdapter({ httpClient, tokenStorage });
+      authStore.getState().user = { isAnonymous: false } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
+      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
 
       const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
       const result = await callback();

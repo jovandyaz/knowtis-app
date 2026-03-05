@@ -34,6 +34,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
         totalInputTokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int`,
         totalOutputTokens: sql<number>`coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
         totalCostUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+        requestCount: count(),
       })
       .from(aiUsage)
       .where(
@@ -48,6 +49,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       totalInputTokens: Number(row?.totalInputTokens ?? 0),
       totalOutputTokens: Number(row?.totalOutputTokens ?? 0),
       totalCostUsd: Number(row?.totalCostUsd ?? 0),
+      requestCount: row?.requestCount ?? 0,
     };
   }
 

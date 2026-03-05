@@ -21,6 +21,7 @@ describe('DrizzleAIUsageRepository', () => {
               totalInputTokens: 500,
               totalOutputTokens: 200,
               totalCostUsd: '0.003450',
+              requestCount: 3,
             },
           ]),
         }),
@@ -64,6 +65,7 @@ describe('DrizzleAIUsageRepository', () => {
         totalInputTokens: 500,
         totalOutputTokens: 200,
         totalCostUsd: 0.00345,
+        requestCount: 3,
       });
     });
 
@@ -80,6 +82,7 @@ describe('DrizzleAIUsageRepository', () => {
         totalInputTokens: 0,
         totalOutputTokens: 0,
         totalCostUsd: 0,
+        requestCount: 0,
       });
     });
 
@@ -91,6 +94,7 @@ describe('DrizzleAIUsageRepository', () => {
               totalInputTokens: null,
               totalOutputTokens: null,
               totalCostUsd: null,
+              requestCount: null,
             },
           ]),
         }),
@@ -102,6 +106,7 @@ describe('DrizzleAIUsageRepository', () => {
         totalInputTokens: 0,
         totalOutputTokens: 0,
         totalCostUsd: 0,
+        requestCount: 0,
       });
     });
   });

@@ -27,6 +27,7 @@ export type AppAbility = Ability<Action, Subject>;
 
 export interface AuthUser {
   readonly id: string;
+  readonly isAnonymous?: boolean;
 }
 
 export interface SharedNote {

@@ -24,8 +24,8 @@ export const Route = createFileRoute('/verify-email')({
     return {};
   },
   beforeLoad: () => {
-    const { isAuthenticated } = authStore.getState();
-    if (isAuthenticated) {
+    const { isAuthenticated, user } = authStore.getState();
+    if (isAuthenticated && !user?.isAnonymous) {
       throw redirect({ to: '/' });
     }
   },

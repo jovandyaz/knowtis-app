@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   pgTable,
   text,
@@ -20,6 +21,7 @@ export const users = pgTable(
     providerId: text('provider_id'),
     passwordHash: text('password_hash'),
     locale: text('locale').default(DEFAULT_LOCALE),
+    isAnonymous: boolean('is_anonymous').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
