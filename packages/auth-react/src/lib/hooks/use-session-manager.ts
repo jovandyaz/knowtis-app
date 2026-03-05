@@ -38,10 +38,17 @@ export function useSessionManager(
 
   // --- Bootstrap validation ---
   // On mount, if store says authenticated but no in-memory token, try silent refresh.
+  // Anonymous users skip refresh (they use long-lived access tokens, no refresh tokens).
   useEffect(() => {
-    const { isAuthenticated, setLoading, logout } = storeRef.current.getState();
+    const { isAuthenticated, user, setLoading, logout } =
+      storeRef.current.getState();
 
     if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
+    if (user?.isAnonymous) {
       setLoading(false);
       return;
     }
@@ -72,7 +79,12 @@ export function useSessionManager(
   }, []);
 
   // --- Proactive refresh timer ---
+  // Anonymous users use long-lived access tokens with no refresh tokens, so skip.
   useEffect(() => {
+    if (store.getState().user?.isAnonymous) {
+      return;
+    }
+
     function scheduleRefresh(): ReturnType<typeof setTimeout> | null {
       const expiresAt = tokenStorage.getExpiresAt();
       if (!expiresAt) {
@@ -109,7 +121,12 @@ export function useSessionManager(
   }, [api, tokenStorage, store]);
 
   // --- Visibility change handler ---
+  // Anonymous users use long-lived access tokens with no refresh tokens, so skip.
   useEffect(() => {
+    if (store.getState().user?.isAnonymous) {
+      return;
+    }
+
     function handleVisibilityChange(): void {
       if (document.visibilityState !== 'visible') {
         return;
