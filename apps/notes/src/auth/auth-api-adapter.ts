@@ -73,7 +73,12 @@ export function createAuthApiAdapter(
     },
 
     async logout(): Promise<void> {
-      await httpClient.post('/auth/logout', {}).catch(() => {});
+      await httpClient.post('/auth/logout', {}).catch((error) => {
+        console.warn(
+          '[AuthApiAdapter] Server logout call failed (ignored):',
+          error
+        );
+      });
       tokenStorage.clearTokens();
     },
 
@@ -148,7 +153,8 @@ export function createAuthApiAdapter(
         });
         persistAnonymousSession(response);
         return response.accessToken;
-      } catch {
+      } catch (error) {
+        console.warn('[AuthApiAdapter] Anonymous token refresh failed:', error);
         return null;
       }
     }
@@ -156,7 +162,11 @@ export function createAuthApiAdapter(
     try {
       const tokens = await adapter.refreshToken();
       return tokens.accessToken;
-    } catch {
+    } catch (error) {
+      console.warn(
+        '[AuthApiAdapter] Token refresh failed, logging out:',
+        error
+      );
       void adapter.logout();
       return null;
     }
