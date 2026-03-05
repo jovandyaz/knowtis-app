@@ -2,21 +2,27 @@ import { AuthNestjsModule } from '@jovandyaz/auth-nestjs';
 import { AuthEmailService } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 
 import { UsersModule } from '../users';
+import { AnonymousAuthService } from './application/services/anonymous-auth.service';
 import { AuthAccountController } from './auth-account.controller';
 import { AuthSessionController } from './auth-session.controller';
+import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
 import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
 import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
 import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
+import { CleanupAnonymousTask } from './tasks/cleanup-anonymous.task';
 
 const configService = new ConfigService();
 
 @Module({
   imports: [
+    UsersModule,
+    JwtModule.register({}),
     AuthNestjsModule.register({
       imports: [UsersModule],
       tokenConfig: {
@@ -39,5 +45,11 @@ const configService = new ConfigService();
     }),
   ],
   controllers: [AuthSessionController, AuthAccountController],
+  providers: [
+    AnonymousAuthService,
+    DrizzleAnonymousDataMigrationRepository,
+    CleanupAnonymousTask,
+  ],
+  exports: [AnonymousAuthService],
 })
 export class AuthModule {}
