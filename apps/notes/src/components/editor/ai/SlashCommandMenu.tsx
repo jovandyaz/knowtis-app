@@ -13,7 +13,11 @@ import type { SuggestionOptions, SuggestionProps } from '@tiptap/suggestion';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
-import { cn } from '@knowtis/design-system';
+import {
+  CommandMenuContent,
+  CommandMenuGroup,
+  CommandMenuItem,
+} from '@knowtis/design-system';
 
 import { filterSlashCommands } from './slash-commands.config';
 import type { SlashCommandItem } from './slash-commands.config';
@@ -97,66 +101,40 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
     let globalIndex = 0;
 
     return (
-      <div
-        className={cn(
-          'z-50 w-64 overflow-hidden rounded-xl border border-border',
-          'bg-card shadow-lg backdrop-blur-md',
-          'animate-in fade-in slide-in-from-top-2 duration-200'
-        )}
-      >
-        <div className="max-h-72 overflow-y-auto p-1.5">
-          {groups.map((group, groupIdx) => (
-            <div key={group.group}>
-              {groupIdx > 0 && (
-                <div className="mx-2 my-1.5 border-t border-border" />
-              )}
-              <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                {t(GROUP_LABELS[group.group] as never)}
-              </div>
+      <CommandMenuContent width="lg">
+        {groups.map((group, groupIdx) => {
+          const isAI = group.group === 'ai';
+
+          return (
+            <CommandMenuGroup
+              key={group.group}
+              label={t(GROUP_LABELS[group.group] as never)}
+              showSeparator={groupIdx > 0}
+            >
               {group.items.map((item) => {
                 const currentIndex = globalIndex++;
                 const Icon = item.icon;
-                const isSelected = currentIndex === selectedIndex;
 
                 return (
-                  <button
+                  <CommandMenuItem
                     key={item.id}
-                    type="button"
-                    className={cn(
-                      'flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left',
-                      'transition-colors duration-100',
-                      isSelected
-                        ? 'bg-primary/10 text-foreground'
-                        : 'text-foreground hover:bg-muted'
-                    )}
+                    icon={
+                      <Icon
+                        className={`h-4 w-4 ${isAI ? 'text-primary/70' : 'text-muted-foreground'}`}
+                      />
+                    }
+                    label={t(item.labelKey as never)}
+                    description={t(item.descriptionKey as never)}
+                    selected={currentIndex === selectedIndex}
                     onClick={() => selectItem(currentIndex)}
                     onMouseEnter={() => setSelectedIndex(currentIndex)}
-                  >
-                    <div
-                      className={cn(
-                        'flex h-7 w-7 shrink-0 items-center justify-center rounded-md',
-                        isSelected
-                          ? 'bg-primary/20 text-primary'
-                          : 'bg-muted text-muted-foreground'
-                      )}
-                    >
-                      <Icon className="h-3.5 w-3.5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-xs font-medium">
-                        {t(item.labelKey as never)}
-                      </div>
-                      <div className="truncate text-[10px] text-muted-foreground">
-                        {t(item.descriptionKey as never)}
-                      </div>
-                    </div>
-                  </button>
+                  />
                 );
               })}
-            </div>
-          ))}
-        </div>
-      </div>
+            </CommandMenuGroup>
+          );
+        })}
+      </CommandMenuContent>
     );
   }
 );
@@ -197,6 +175,7 @@ export const slashCommandsSuggestion: Omit<
           interactive: true,
           trigger: 'manual',
           placement: 'bottom-start',
+          zIndex: 50,
         });
       },
 
