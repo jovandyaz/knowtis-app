@@ -1,36 +1,24 @@
 import { useTranslation } from 'react-i18next';
 
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 
 import { STORAGE_KEYS } from '@/config';
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react';
 
-import { useCreateNote, useNotes } from '@knowtis/data-access-notes';
+import { useNotes } from '@knowtis/data-access-notes';
 import { useCollapsible } from '@knowtis/shared-hooks';
 
-interface SidebarNotesSectionProps {
-  onNoteClick?: () => void;
-}
+import { CreateNoteDialog } from '../notes/CreateNoteDialog';
 
-export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
+export function SidebarNotesSection() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const { isCollapsed, toggle: toggleCollapsed } = useCollapsible(
     STORAGE_KEYS.SIDEBAR_NOTES_COLLAPSED
   );
   const { data: notes } = useNotes();
-  const createNote = useCreateNote();
-  const navigate = useNavigate();
   const params = useParams({ strict: false }) as { noteId?: string };
   const activeNoteId = params.noteId;
-
-  const handleCreateNote = async () => {
-    const newNote = await createNote.mutateAsync({
-      title: t('sidebar.untitled'),
-    });
-    await navigate({ to: '/notes/$noteId', params: { noteId: newNote.id } });
-    onNoteClick?.();
-  };
 
   const ChevronIcon = isCollapsed ? ChevronRight : ChevronDown;
 
@@ -56,22 +44,23 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
           </button>
           <Link
             to="/notes"
-            onClick={onNoteClick}
             className="flex-1 truncate rounded-md px-1.5 py-1 text-sm font-medium text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
           >
             {t('sidebar.myNotes')}
           </Link>
         </div>
 
-        <button
-          type="button"
-          onClick={handleCreateNote}
-          disabled={createNote.isPending}
-          className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          title={t('sidebar.newNote')}
-        >
-          <Plus className="h-3.5 w-3.5" />
-        </button>
+        <CreateNoteDialog
+          trigger={
+            <button
+              type="button"
+              className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
+              title={t('sidebar.newNote')}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </button>
+          }
+        />
       </div>
 
       {!isCollapsed && (
@@ -81,7 +70,6 @@ export function SidebarNotesSection({ onNoteClick }: SidebarNotesSectionProps) {
               key={note.id}
               to="/notes/$noteId"
               params={{ noteId: note.id }}
-              onClick={onNoteClick}
               className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer truncate ${
                 activeNoteId === note.id
                   ? 'bg-muted text-foreground font-medium'
