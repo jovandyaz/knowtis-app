@@ -5,6 +5,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   MinLength,
 } from 'class-validator';
@@ -38,6 +39,62 @@ export class RegisterDto {
   @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
   @MinLength(8, { message: i18nValidationMessage('validation.MIN_LENGTH') })
   password!: string;
+
+  @ApiProperty({
+    description:
+      'Anonymous user ID to migrate data from (notes, AI usage) on registration',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID('4', { message: i18nValidationMessage('validation.IS_UUID') })
+  anonymousUserId?: string;
+
+  @ApiProperty({
+    description:
+      'Anonymous session JWT token for ownership verification during data migration',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  anonymousToken?: string;
+}
+
+export class LoginDto {
+  @ApiProperty({
+    description: 'User email address',
+    example: 'user@example.com',
+  })
+  @IsEmail({}, { message: i18nValidationMessage('validation.INVALID_EMAIL') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  email!: string;
+
+  @ApiProperty({
+    description: 'User password',
+    example: 'SecurePassword123!',
+  })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @IsNotEmpty({ message: i18nValidationMessage('validation.NOT_EMPTY') })
+  password!: string;
+
+  @ApiProperty({
+    description:
+      'Anonymous user ID to migrate data from (notes, AI usage) on login',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID('4', { message: i18nValidationMessage('validation.IS_UUID') })
+  anonymousUserId?: string;
+
+  @ApiProperty({
+    description:
+      'Anonymous session JWT token for ownership verification during data migration',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  anonymousToken?: string;
 }
 
 export class ForgotPasswordDto {
