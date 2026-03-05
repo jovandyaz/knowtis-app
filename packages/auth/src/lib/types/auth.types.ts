@@ -37,6 +37,7 @@ export interface RequestUser {
   email: string;
   name: string;
   avatarUrl?: string | null;
+  isAnonymous?: boolean;
 }
 
 /**

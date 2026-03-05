@@ -15,6 +15,7 @@ export interface AuthUserProfile {
   avatarUrl: string | null;
   isEmailVerified?: boolean;
   locale?: string;
+  isAnonymous?: boolean;
 }
 
 /**
