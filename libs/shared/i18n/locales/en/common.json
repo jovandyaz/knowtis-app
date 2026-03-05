@@ -81,6 +81,20 @@
       "account": "Account security and settings"
     }
   },
+  "anonymous": {
+    "banner": {
+      "usingAsGuest": "You're using Knowtis as a guest.",
+      "upgradeMessage": "Sign up to unlock unlimited notes, collaboration, and multi-device sync."
+    },
+    "limit": {
+      "notesTitle": "You've reached the guest note limit",
+      "notesDescription": "Create a free account to save unlimited notes and access them from any device. Guest accounts are limited to {{maxNotes}} notes.",
+      "aiTitle": "AI requests limit reached for today",
+      "aiDescription": "Sign up for a free account to get more AI completions daily. Guest accounts are limited to {{maxAiRequests}} AI requests per day.",
+      "maybeLater": "Maybe later",
+      "createFreeAccount": "Create free account"
+    }
+  },
   "validation": {
     "required": "This field is required",
     "emailRequired": "Email is required",

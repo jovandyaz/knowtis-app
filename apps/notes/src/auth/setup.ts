@@ -32,9 +32,15 @@ export const authApi = createAuthApiAdapter({
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
   onLogoutDetected: () => {
+    const wasAnonymous = authStore.getState().user?.isAnonymous;
     tokenStorage.clearTokens();
     authStore.getState().logout();
-    window.location.href = '/login';
+
+    if (!wasAnonymous) {
+      window.location.href = '/login';
+    }
+    // Anonymous users: no redirect — initAnonymousSession will create
+    // a new session on the next navigation/route load.
   },
 });
 
