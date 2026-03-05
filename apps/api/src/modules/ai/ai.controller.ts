@@ -73,6 +73,7 @@ export class AIController {
         targetLanguage: dto.targetLanguage,
       }),
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
+      ...(user.isAnonymous && { isAnonymous: true }),
     });
     return unwrapOrThrow(result);
   }

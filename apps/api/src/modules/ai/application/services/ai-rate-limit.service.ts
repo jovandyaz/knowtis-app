@@ -1,6 +1,8 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { ANONYMOUS_LIMITS } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import {
   AI_USAGE_REPOSITORY,
@@ -31,8 +33,19 @@ export class AIRateLimitService {
 
   async checkLimit(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    isAnonymous = false
   ): Promise<RateLimitResult> {
+    if (isAnonymous) {
+      const dailyUsage = await this.usageRepository.getDailyUsage(userId);
+      if (dailyUsage.requestCount >= ANONYMOUS_LIMITS.maxAiRequestsPerDay) {
+        return {
+          allowed: false,
+          reason: `Anonymous users are limited to ${ANONYMOUS_LIMITS.maxAiRequestsPerDay} AI requests per day. Sign up for more.`,
+        };
+      }
+    }
+
     if (this.rateLimitProvider) {
       try {
         const result = await this.rateLimitProvider.checkAndIncrement(
@@ -91,16 +104,22 @@ export class AIRateLimitService {
       usage.totalInputTokens + usage.totalOutputTokens + estimatedTokens;
 
     if (totalTokens > tokenLimit) {
+      this.logger.warn(
+        `Daily token limit exceeded for user ${userId} (${totalTokens}/${tokenLimit})`
+      );
       return {
         allowed: false,
-        reason: `Daily token limit exceeded (${totalTokens}/${tokenLimit})`,
+        reason: 'Daily usage limit exceeded. Please try again tomorrow.',
       };
     }
 
     if (usage.totalCostUsd >= costLimit) {
+      this.logger.warn(
+        `Daily cost limit exceeded for user ${userId} ($${usage.totalCostUsd.toFixed(2)}/$${costLimit.toFixed(2)})`
+      );
       return {
         allowed: false,
-        reason: `Daily cost limit exceeded ($${usage.totalCostUsd.toFixed(2)}/$${costLimit.toFixed(2)})`,
+        reason: 'Daily usage limit exceeded. Please try again tomorrow.',
       };
     }
 
