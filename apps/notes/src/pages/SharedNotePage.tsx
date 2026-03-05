@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
+import { format } from 'date-fns';
 import DOMPurify from 'dompurify';
 import { Eye, Pencil } from 'lucide-react';
 
@@ -78,7 +79,7 @@ export function SharedNotePage() {
   return (
     <div className="min-h-screen bg-(--background)">
       {/* Minimal header */}
-      <header className="border-b border-(--border) bg-(--card)/50 backdrop-blur-sm">
+      <header className="border-b border-border/30 bg-(--card)/50 backdrop-blur-sm">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="text-sm font-medium text-(--foreground)">
@@ -126,20 +127,14 @@ export function SharedNotePage() {
 
       {/* Note content */}
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="mb-2 text-3xl font-bold text-(--foreground)">
+        <h1 className="mb-2 text-[28px] md:text-3xl font-bold tracking-tight text-(--foreground)">
           {data.title}
         </h1>
 
-        <div className="mb-8 flex items-center gap-2 text-sm text-(--muted-foreground)">
+        <div className="mb-8 flex items-center gap-2 text-xs text-muted-foreground/50">
           <span>{t('shared.byAuthor', { name: data.owner.name })}</span>
           <span>&middot;</span>
-          <span>
-            {new Date(data.updatedAt).toLocaleDateString(undefined, {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </span>
+          <span>{format(new Date(data.updatedAt), 'MMMM d, yyyy')}</span>
         </div>
 
         {isEditing ? (
