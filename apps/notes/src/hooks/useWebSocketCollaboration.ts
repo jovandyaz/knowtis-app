@@ -206,6 +206,9 @@ export function useWebSocketCollaboration({
       if (origin === 'server-initial' || origin === 'server-remote') {
         return;
       }
+      if (!isJoinedRef.current) {
+        return;
+      }
       collaborationClient.sendUpdate(update);
     };
 
