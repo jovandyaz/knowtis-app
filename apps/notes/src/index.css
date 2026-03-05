@@ -26,13 +26,46 @@
   }
 }
 
+@theme {
+  --animate-blink: blink 1s ease-in-out infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+}
+
+/*
+ * Z-Index Scale
+ * ─────────────────────────────────────────
+ *  z-10     sticky content  (editor toolbar, inline indicators)
+ *  z-40     navigation      (sidebar, bottom nav)
+ *  z-50     overlays        (dropdowns, popovers, command menus, dialogs)
+ *  z-[9999] ai features    (bubble menu — always floats above everything)
+ * ─────────────────────────────────────────
+ * Rule: overlays (z-50) > navigation (z-40). Tippy instances must
+ * explicitly set zIndex: 50 since they don't inherit from inner classes.
+ */
 @layer utilities {
+  .animate-blink {
+    animation: var(--animate-blink);
+  }
+  .animate-shimmer {
+    animation: var(--animate-shimmer);
+    background-size: 200% 100%;
+  }
+
   .glass {
-    @apply bg-white/80 dark:bg-black/30 backdrop-blur-md border border-white/40 dark:border-white/5 shadow-sm;
+    @apply bg-white/80 dark:bg-black/30 backdrop-blur-md border border-white/20 dark:border-white/5 shadow-sm;
   }
 
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border/40 shadow-sm hover:shadow-md transition-all duration-300;
+    @apply bg-card/80 backdrop-blur-sm border border-border/30 shadow-sm hover:shadow-md transition-all duration-300;
   }
 
   .text-balance {
