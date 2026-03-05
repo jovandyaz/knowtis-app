@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import {
   QueryCache,
   QueryClient,
@@ -60,6 +62,14 @@ function SessionManager() {
 }
 
 function RootComponent() {
+  useEffect(() => {
+    return authStore.subscribe((state, prevState) => {
+      if (prevState.isAuthenticated && !state.isAuthenticated) {
+        queueMicrotask(() => queryClient.clear());
+      }
+    });
+  }, []);
+
   return (
     <AppErrorBoundary>
       <QueryClientProvider client={queryClient}>
