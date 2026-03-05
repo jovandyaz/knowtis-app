@@ -5,7 +5,6 @@ import { useNavigate } from '@tanstack/react-router';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
 import { LogOut } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { Button } from '@knowtis/design-system';
 
@@ -18,10 +17,9 @@ export function AccountSection() {
   const close = useSettingsStore((s) => s.close);
 
   const handleLogout = () => {
-    close();
     logout(undefined, {
       onSuccess: () => {
-        toast.success(t('nav.signedOutSuccess'));
+        close();
         navigate({ to: '/login', search: { redirect: undefined } });
       },
     });
