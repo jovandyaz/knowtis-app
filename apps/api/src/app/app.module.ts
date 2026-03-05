@@ -5,6 +5,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import {
   AcceptLanguageResolver,
@@ -42,6 +43,7 @@ import { AppService } from './app.service';
       },
     ]),
     EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
     I18nModule.forRoot({
       fallbackLanguage: DEFAULT_LOCALE,
       loaderOptions: {

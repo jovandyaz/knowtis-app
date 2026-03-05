@@ -15,6 +15,13 @@
       "when": 1772558439205,
       "tag": "0001_true_vengeance",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1772683327321,
+      "tag": "0002_amused_speed",
+      "breakpoints": true
     }
   ]
 }

@@ -59,3 +59,14 @@ vitest.config.*.timestamp*
 
 # Agents
 AGENTS.md
+
+# Agent skills (symlinks for non-Claude agents)
+.agent/
+.trae/
+.windsurf/
+
+# Claude Code (personal config, symlinks)
+.claude/skills/
+
+# Worktrees
+.worktrees/
