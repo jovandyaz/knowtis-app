@@ -25,6 +25,7 @@ interface CompleteTextInput {
   readonly selection?: string;
   readonly targetLanguage?: string;
   readonly targetTone?: string;
+  readonly isAnonymous?: boolean;
 }
 
 export interface CompleteTextOutput {
@@ -64,7 +65,8 @@ export class CompleteTextHandler {
     const estimatedTokens = estimateTokenCount(input.content);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens
+      estimatedTokens,
+      input.isAnonymous
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({

@@ -2,6 +2,7 @@ export interface DailyUsageSummary {
   readonly totalInputTokens: number;
   readonly totalOutputTokens: number;
   readonly totalCostUsd: number;
+  readonly requestCount: number;
 }
 
 export interface RecordUsageInput {
