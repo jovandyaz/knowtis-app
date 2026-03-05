@@ -93,7 +93,8 @@ export async function initAnonymousSession(
     });
 
     persistAnonymousSession(response);
-  } catch {
+  } catch (error) {
+    console.warn('[AnonymousSession] Failed to create session:', error);
     authStore.getState().setLoading(false);
   }
 }
