@@ -15,8 +15,8 @@ export const Route = createFileRoute('/login')({
     redirect: typeof search.redirect === 'string' ? search.redirect : undefined,
   }),
   beforeLoad: ({ search }) => {
-    const { isAuthenticated } = authStore.getState();
-    if (isAuthenticated) {
+    const { isAuthenticated, user } = authStore.getState();
+    if (isAuthenticated && !user?.isAnonymous) {
       throw redirect({ to: resolvePostLoginRedirect(search.redirect) });
     }
   },

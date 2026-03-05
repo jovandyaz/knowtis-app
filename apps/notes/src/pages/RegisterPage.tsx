@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 
 import { applyServerFieldErrors } from '@/auth';
+import { getAnonymousUserId } from '@/auth/anonymous-session';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
@@ -193,6 +194,11 @@ export function RegisterPage() {
           {t('register.title')}
         </CardTitle>
         <CardDescription>{t('register.description')}</CardDescription>
+        {getAnonymousUserId() && (
+          <p className="text-sm text-(--muted-foreground) text-center">
+            {t('register.anonymousMigration')}
+          </p>
+        )}
       </CardHeader>
 
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
