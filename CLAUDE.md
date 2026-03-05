@@ -153,6 +153,11 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 - Use `const` by default, never `var`
 - Always use curly braces for control structures
 
+### Error Handling
+
+- **Never use empty `catch` blocks** — always log the error with context (`this.logger.warn(...)` in NestJS, `console.error(...)` in frontend). Silent failures hide bugs and make debugging impossible.
+- When a non-critical operation fails (e.g., data migration during login), log a warning and continue — but never silently swallow the error.
+
 ### NestJS DI Rule
 
 In the backend, **never use `import type`** for classes that are injected via NestJS DI. NestJS needs runtime metadata from these imports. See `.agent/workflows/nestjs-di-rules.md`.

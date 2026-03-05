@@ -50,7 +50,9 @@
   },
   "nav": {
     "logOut": "Log out",
-    "signedOutSuccess": "Signed out successfully"
+    "signedOutSuccess": "Signed out successfully",
+    "createAccount": "Create account",
+    "signIn": "Sign in"
   },
   "welcome": {
     "greeting": "Welcome back",
