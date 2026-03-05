@@ -1,6 +1,3 @@
-import { useEffect } from 'react';
-import { useTranslation } from 'react-i18next';
-
 import {
   QueryCache,
   QueryClient,
@@ -12,14 +9,17 @@ import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { AbilityProvider, ThemeProvider, YjsProvider } from '@/providers';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
-import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { Toaster } from '@knowtis/design-system';
 
 function handleAuthFailure(): void {
-  authStore.getState().logout();
-  window.location.href = '/login';
+  const user = authStore.getState().user;
+  // Only force redirect to login for registered users
+  if (user && !user.isAnonymous) {
+    authStore.getState().logout();
+    window.location.href = '/login';
+  }
 }
 
 const queryCache = new QueryCache({
@@ -51,19 +51,7 @@ export const Route = createRootRoute({
 });
 
 function NotFoundRedirect() {
-  const { isAuthenticated } = authStore.getState();
-  const { t } = useTranslation('errors');
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      toast.error(t('notFound'));
-    }
-  }, [isAuthenticated, t]);
-
-  if (isAuthenticated) {
-    return <Navigate to="/" />;
-  }
-  return <Navigate to="/login" search={{ redirect: undefined }} />;
+  return <Navigate to="/" />;
 }
 
 function SessionManager() {

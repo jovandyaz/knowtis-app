@@ -12,8 +12,8 @@ const RegisterPage = lazy(() =>
 
 export const Route = createFileRoute('/register')({
   beforeLoad: () => {
-    const { isAuthenticated } = authStore.getState();
-    if (isAuthenticated) {
+    const { isAuthenticated, user } = authStore.getState();
+    if (isAuthenticated && !user?.isAnonymous) {
       throw redirect({ to: '/' });
     }
   },
