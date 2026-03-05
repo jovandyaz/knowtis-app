@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -46,6 +46,12 @@ function InternalEditor({
   saveStatus,
 }: InternalEditorProps) {
   const aiEnabled = useFeatureFlag('ai_enabled');
+  const onUpdateRef = useRef(onUpdate);
+
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
+
   const extensions = useEditorExtensions(
     yDoc,
     yXmlFragment,
@@ -74,7 +80,8 @@ function InternalEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      onUpdate(editor.getHTML());
+      const html = editor.getHTML();
+      queueMicrotask(() => onUpdateRef.current(html));
     },
   });
 
