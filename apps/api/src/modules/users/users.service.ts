@@ -10,6 +10,7 @@ export interface CreateUserData {
   provider?: string;
   providerId?: string;
   avatarUrl?: string;
+  isAnonymous?: boolean;
 }
 
 export interface UpdateUserData {
@@ -52,6 +53,7 @@ export class UsersService {
       provider: data.provider ?? 'local',
       providerId: data.providerId,
       avatarUrl: data.avatarUrl,
+      ...(data.isAnonymous && { isAnonymous: true }),
     });
   }
 
