@@ -55,12 +55,14 @@
     "signIn": "Sign in"
   },
   "welcome": {
-    "greeting": "Welcome back",
-    "subtitle": "What would you like to work on today?",
-    "notesTitle": "Notes",
-    "notesDescription": "Create, edit, and collaborate on notes in real-time.",
-    "flashcardsTitle": "Flashcards",
-    "flashcardsDescription": "Study with smart flashcards and spaced repetition."
+    "goodMorning": "Good morning",
+    "goodAfternoon": "Good afternoon",
+    "goodEvening": "Good evening",
+    "newNote": "New note",
+    "continue": "Continue: {{title}}",
+    "recent": "Recent",
+    "noRecentNotes": "No notes yet. Create your first one!",
+    "notesDescription": "Create, edit, and collaborate on notes in real-time."
   },
   "settings": {
     "title": "Settings",
