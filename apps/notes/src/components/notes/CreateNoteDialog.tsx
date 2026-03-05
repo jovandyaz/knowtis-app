@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
@@ -21,7 +21,11 @@ import {
 
 import { AnonymousLimitModal } from '../anonymous/AnonymousLimitModal';
 
-export function CreateNoteDialog() {
+interface CreateNoteDialogProps {
+  trigger?: ReactNode;
+}
+
+export function CreateNoteDialog({ trigger }: CreateNoteDialogProps) {
   const { t } = useTranslation(['notes', 'common']);
   const [open, setOpen] = useState<boolean>(false);
   const [title, setTitle] = useState<string>('');
@@ -79,15 +83,17 @@ export function CreateNoteDialog() {
     }
   };
 
+  const defaultTrigger = (
+    <Button className="gap-2">
+      <Plus className="h-4 w-4" />
+      {t('create.newNote')}
+    </Button>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogTrigger asChild>
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            {t('create.newNote')}
-          </Button>
-        </DialogTrigger>
+        <DialogTrigger asChild>{trigger ?? defaultTrigger}</DialogTrigger>
 
         <DialogContent>
           <form onSubmit={handleSubmit}>
