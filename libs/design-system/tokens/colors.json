@@ -4,7 +4,7 @@
       "white": { "value": "oklch(1 0 0)", "type": "color" },
       "black": { "value": "oklch(0 0 0)", "type": "color" },
       "neutral": {
-        "50": { "value": "oklch(0.99 0 0)", "type": "color" },
+        "50": { "value": "oklch(0.985 0.002 90)", "type": "color" },
         "100": { "value": "oklch(0.973 0.004 91.4)", "type": "color" },
         "200": { "value": "oklch(0.955 0.004 91.4)", "type": "color" },
         "300": { "value": "oklch(0.933 0.003 106.5)", "type": "color" },
@@ -29,17 +29,20 @@
     },
     "semantic": {
       "light": {
-        "background": { "value": "{color.primitive.white}", "type": "color" },
+        "background": {
+          "value": "{color.primitive.neutral.50}",
+          "type": "color"
+        },
         "foreground": {
           "value": "{color.primitive.neutral.600}",
           "type": "color"
         },
-        "card": { "value": "{color.primitive.white}", "type": "color" },
+        "card": { "value": "{color.primitive.neutral.50}", "type": "color" },
         "card-foreground": {
           "value": "{color.primitive.neutral.600}",
           "type": "color"
         },
-        "popover": { "value": "{color.primitive.white}", "type": "color" },
+        "popover": { "value": "{color.primitive.neutral.50}", "type": "color" },
         "popover-foreground": {
           "value": "{color.primitive.neutral.600}",
           "type": "color"
@@ -75,8 +78,8 @@
           "value": "{color.primitive.red.50}",
           "type": "color"
         },
-        "border": { "value": "{color.primitive.neutral.300}", "type": "color" },
-        "input": { "value": "{color.primitive.neutral.300}", "type": "color" },
+        "border": { "value": "{color.primitive.neutral.200}", "type": "color" },
+        "input": { "value": "{color.primitive.neutral.200}", "type": "color" },
         "ring": { "value": "{color.primitive.purple.500}", "type": "color" }
       },
       "dark": {
