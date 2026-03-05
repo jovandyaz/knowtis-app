@@ -33,6 +33,7 @@ const aiCompletePayloadSchema = z.object({
 interface AuthenticatedAISocket extends Socket {
   data: {
     userId?: string;
+    isAnonymous?: boolean;
   };
 }
 
@@ -80,8 +81,14 @@ export class AIGateway
     }
 
     try {
-      const payload = this.jwtService.verify<{ sub: string }>(token);
+      const payload = this.jwtService.verify<{
+        sub: string;
+        isAnonymous?: boolean;
+      }>(token);
       client.data.userId = payload.sub;
+      if (payload.isAnonymous) {
+        client.data.isAnonymous = true;
+      }
       this.logger.log({
         event: 'ai.client.connected',
         clientId: client.id,
@@ -150,6 +157,7 @@ export class AIGateway
         ...(suffix !== undefined && { suffix }),
         ...(targetLanguage !== undefined && { targetLanguage }),
         ...(targetTone !== undefined && { targetTone }),
+        ...(client.data.isAnonymous && { isAnonymous: true }),
       },
       {
         onChunk: (text) => client.emit('ai:chunk', { text }),

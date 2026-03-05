@@ -23,6 +23,7 @@ describe('AIRateLimitService', () => {
       totalInputTokens: 1000,
       totalOutputTokens: 500,
       totalCostUsd: 0.01,
+      requestCount: 1,
     });
     const result = await service.checkLimit('user-123', 1000);
     expect(result.allowed).toBe(true);
@@ -33,10 +34,15 @@ describe('AIRateLimitService', () => {
       totalInputTokens: 99000,
       totalOutputTokens: 500,
       totalCostUsd: 0.5,
+      requestCount: 5,
     });
     const result = await service.checkLimit('user-123', 2000);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('token');
+    expect(result.reason).toBe(
+      'Daily usage limit exceeded. Please try again tomorrow.'
+    );
+    expect(result.reason).not.toMatch(/\d+\/\d+/);
+    expect(result.reason).not.toMatch(/\$/);
   });
 
   it('should deny request when cost limit exceeded', async () => {
@@ -44,9 +50,14 @@ describe('AIRateLimitService', () => {
       totalInputTokens: 10000,
       totalOutputTokens: 5000,
       totalCostUsd: 1.01,
+      requestCount: 10,
     });
     const result = await service.checkLimit('user-123', 100);
     expect(result.allowed).toBe(false);
-    expect(result.reason).toContain('cost');
+    expect(result.reason).toBe(
+      'Daily usage limit exceeded. Please try again tomorrow.'
+    );
+    expect(result.reason).not.toMatch(/\d+\/\d+/);
+    expect(result.reason).not.toMatch(/\$/);
   });
 });

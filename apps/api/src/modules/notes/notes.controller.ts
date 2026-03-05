@@ -39,6 +39,7 @@ import type {
   ShareNoteDto,
   UpdateNoteDto,
 } from './dto';
+import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 
 const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.INVALID_TITLE]: HttpStatus.BAD_REQUEST,
@@ -118,6 +119,7 @@ export class NotesController {
   }
 
   @Post()
+  @UseGuards(AnonymousNoteLimitGuard)
   @RequirePermission('create', SUBJECTS.Note)
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
     const result = await this.createNoteHandler.execute({
