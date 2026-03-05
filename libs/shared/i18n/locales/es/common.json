@@ -55,12 +55,14 @@
     "signIn": "Iniciar sesión"
   },
   "welcome": {
-    "greeting": "Bienvenido de nuevo",
-    "subtitle": "¿En qué te gustaría trabajar hoy?",
-    "notesTitle": "Notas",
-    "notesDescription": "Crea, edita y colabora en notas en tiempo real.",
-    "flashcardsTitle": "Tarjetas de estudio",
-    "flashcardsDescription": "Estudia con tarjetas inteligentes y repetición espaciada."
+    "goodMorning": "Buenos días",
+    "goodAfternoon": "Buenas tardes",
+    "goodEvening": "Buenas noches",
+    "newNote": "Nueva nota",
+    "continue": "Continuar: {{title}}",
+    "recent": "Recientes",
+    "noRecentNotes": "Aún no tienes notas. ¡Crea tu primera!",
+    "notesDescription": "Crea, edita y colabora en notas en tiempo real."
   },
   "settings": {
     "title": "Configuración",
