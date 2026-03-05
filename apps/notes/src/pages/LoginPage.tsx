@@ -57,7 +57,6 @@ export function LoginPage() {
     resetRateLimit();
     login.mutate(data, {
       onSuccess: () => {
-        toast.success(t('login.successToast'));
         navigate({ to: resolvePostLoginRedirect(search.redirect) });
       },
       onError: (error) => {
