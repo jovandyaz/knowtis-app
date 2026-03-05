@@ -65,7 +65,8 @@ function RootComponent() {
   useEffect(() => {
     return authStore.subscribe((state, prevState) => {
       if (prevState.isAuthenticated && !state.isAuthenticated) {
-        queueMicrotask(() => queryClient.clear());
+        queryClient.cancelQueries();
+        queryClient.clear();
       }
     });
   }, []);

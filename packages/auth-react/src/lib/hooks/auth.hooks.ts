@@ -84,6 +84,7 @@ export function useLogout(): UseMutationResult<void, Error, void> {
   return useMutation({
     mutationFn: () => api.logout(),
     onSuccess: () => {
+      queryClient.cancelQueries();
       logout();
       queryClient.clear();
     },
