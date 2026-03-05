@@ -1,7 +1,7 @@
 import type { LinkProps } from '@tanstack/react-router';
 
 import type { LucideIcon } from 'lucide-react';
-import { Home, Search } from 'lucide-react';
+import { Home } from 'lucide-react';
 
 import type { enCommon } from '@knowtis/shared-i18n';
 
@@ -45,12 +45,5 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
     icon: Home,
     labelKey: 'labels.home',
     to: '/',
-  },
-  {
-    icon: Search,
-    labelKey: 'labels.search',
-    to: '/',
-    disabled: true,
-    tooltipKey: 'states.comingSoon',
   },
 ] as const satisfies NavigationLink[];
