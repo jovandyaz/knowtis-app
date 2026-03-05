@@ -7,7 +7,7 @@ import { NAVIGATION_LINKS } from '@/config/navigation.config';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { PanelLeft, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { NavigationLinks } from './NavigationLinks';
@@ -23,7 +23,6 @@ export function Sidebar() {
   const user = useAuthUser();
   const { t } = useTranslation('common');
   const collapsed = useSidebarStore((s) => s.collapsed);
-  const toggle = useSidebarStore((s) => s.toggle);
   const { requestFocus } = useNotesSearchStore();
   const navigate = useNavigate();
 
@@ -54,16 +53,8 @@ export function Sidebar() {
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
             className="hidden md:flex w-56 flex-col fixed inset-y-0 left-0 z-40 border-r border-border/40 bg-background/40 backdrop-blur-xl"
           >
-            <div className="flex items-center justify-between pr-3">
+            <div className="flex items-center">
               <SidebarBrand />
-              <button
-                type="button"
-                onClick={toggle}
-                className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
-                aria-label="Collapse sidebar"
-              >
-                <PanelLeft className="h-3.5 w-3.5" />
-              </button>
             </div>
             <NavigationLinks links={NAVIGATION_LINKS} />
             <div className="px-3 mb-3">
@@ -92,20 +83,6 @@ export function Sidebar() {
           </motion.aside>
         )}
       </AnimatePresence>
-
-      {/* Collapsed toggle button */}
-      {collapsed && (
-        <motion.button
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          type="button"
-          onClick={toggle}
-          className="hidden md:flex fixed top-4 left-4 z-40 p-2 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
-          aria-label="Expand sidebar"
-        >
-          <PanelLeft className="h-4 w-4" />
-        </motion.button>
-      )}
     </>
   );
 }
