@@ -269,7 +269,7 @@ function NoteEditor({
 }
 
 export function NoteEditorPage() {
-  const { noteId } = useParams({ from: '/_authenticated/notes/$noteId' });
+  const { noteId } = useParams({ from: '/_app/notes/$noteId' });
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
