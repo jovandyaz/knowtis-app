@@ -53,6 +53,14 @@ export {
   type MutationErrorAlertProps,
   LoadingButton,
   type LoadingButtonProps,
+  CommandMenuContent,
+  CommandMenuGroup,
+  CommandMenuItem,
+  CommandMenuBack,
+  type CommandMenuContentProps,
+  type CommandMenuGroupProps,
+  type CommandMenuItemProps,
+  type CommandMenuBackProps,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 
