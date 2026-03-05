@@ -39,15 +39,24 @@ createCrossTabSync({
     if (!wasAnonymous) {
       window.location.href = '/login';
     }
-    // Anonymous users: no redirect — initAnonymousSession will create
-    // a new session on the next navigation/route load.
   },
 });
 
 /**
- * Initialize auth — creates anonymous session if no auth exists.
- * Called during app/route initialization.
+ * Initialize auth — restores authenticated session or creates anonymous session.
  */
 export async function initAuth(): Promise<void> {
+  const { isAuthenticated, user } = authStore.getState();
+  if (isAuthenticated && !user?.isAnonymous && !tokenStorage.hasTokens()) {
+    try {
+      await authApi.refreshToken();
+    } catch (error) {
+      console.error('[initAuth] Silent refresh failed, logging out', error);
+      // logout() is synchronous — it mutates the store immediately, so
+      // initAnonymousSession reads the cleared state below.
+      authStore.getState().logout();
+    }
+  }
+
   await initAnonymousSession(tokenStorage, authStore);
 }
