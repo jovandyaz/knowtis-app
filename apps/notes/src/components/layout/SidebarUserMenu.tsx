@@ -4,7 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
-import { ChevronUp, LogOut, Settings } from 'lucide-react';
+import { ChevronUp, LogIn, LogOut, Settings, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -18,9 +18,13 @@ import { getInitials } from '@knowtis/shared-util';
 
 interface SidebarUserMenuProps {
   username: string;
+  isAnonymous?: boolean;
 }
 
-export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
+export function SidebarUserMenu({
+  username,
+  isAnonymous = false,
+}: SidebarUserMenuProps) {
   const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const { t } = useTranslation('common');
@@ -60,20 +64,45 @@ export function SidebarUserMenu({ username }: SidebarUserMenuProps) {
         sideOffset={8}
         className="min-w-[var(--radix-dropdown-menu-trigger-width)]"
       >
-        <DropdownMenuItem onClick={() => openSettings()}>
-          <Settings className="h-4 w-4" />
-          {t('settings.title')}
-        </DropdownMenuItem>
+        {isAnonymous ? (
+          <>
+            <DropdownMenuItem
+              onClick={() => navigate({ to: '/register' })}
+              className="text-(--primary) focus:text-(--primary)"
+            >
+              <UserPlus className="h-4 w-4" />
+              {t('nav.createAccount')}
+            </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
+            <DropdownMenuSeparator />
 
-        <DropdownMenuItem
-          onClick={handleLogout}
-          className="text-(--destructive) focus:text-(--destructive)"
-        >
-          <LogOut className="h-4 w-4" />
-          {t('nav.logOut')}
-        </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                navigate({ to: '/login', search: { redirect: undefined } })
+              }
+            >
+              <LogIn className="h-4 w-4" />
+              {t('nav.signIn')}
+            </DropdownMenuItem>
+          </>
+        ) : (
+          <>
+            <DropdownMenuItem onClick={() => openSettings()}>
+              <Settings className="h-4 w-4" />
+              {t('settings.title')}
+            </DropdownMenuItem>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuItem
+              onClick={handleLogout}
+              className="text-(--destructive) focus:text-(--destructive)"
+            >
+              <LogOut className="h-4 w-4" />
+              {t('nav.logOut')}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
