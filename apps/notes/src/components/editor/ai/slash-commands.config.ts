@@ -7,9 +7,9 @@ import {
   Heading3,
   List,
   ListOrdered,
-  MessageSquare,
   PenLine,
   Quote,
+  Wand2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -63,13 +63,13 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     action: createAISlashAction(AI_ACTION.OUTLINE),
   },
   {
-    id: 'ai-chat',
-    icon: MessageSquare,
-    labelKey: 'ai.slash.chat',
-    descriptionKey: 'ai.slash.chatDesc',
+    id: 'ai-improve',
+    icon: Wand2,
+    labelKey: 'ai.slash.improve',
+    descriptionKey: 'ai.slash.improveDesc',
     group: 'ai',
-    keywords: ['chat', 'ask', 'question', 'preguntar'],
-    action: createAISlashAction(AI_ACTION.CHAT),
+    keywords: ['improve', 'enhance', 'mejorar', 'writing'],
+    action: createAISlashAction(AI_ACTION.IMPROVE_WRITING),
   },
   {
     id: 'ai-continue',
@@ -81,7 +81,6 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     action: createAISlashAction(AI_ACTION.GHOST_TEXT),
   },
 
-  // Formatting commands
   {
     id: 'heading-1',
     icon: Heading1,
