@@ -27,6 +27,9 @@
       "@knowtis/shared-util": ["libs/shared/util/src/index.ts"],
       "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
       "@knowtis/data-access-users": ["libs/data-access/users/src/index.ts"],
+      "@knowtis/data-access-mcp-keys": [
+        "libs/data-access/mcp-keys/src/index.ts"
+      ],
       "@knowtis/data-access-feature-flags": [
         "libs/data-access/feature-flags/src/index.ts"
       ],
