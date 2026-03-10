@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from '@knowtis/design-system';
 import { SectionHeader } from './SectionHeader';
 import { AccountSection } from './sections/AccountSection';
 import { AppearanceSection } from './sections/AppearanceSection';
+import { IntegrationsSection } from './sections/IntegrationsSection';
 import { LanguageSection } from './sections/LanguageSection';
 import { ProfileSection } from './sections/ProfileSection';
 import { SettingsNav } from './SettingsNav';
@@ -37,6 +38,7 @@ const SECTION_COMPONENTS: Record<SettingsSection, ComponentType> = {
   language: LanguageSection,
   editor: () => <PlaceholderSection section="editor" />,
   notifications: () => <PlaceholderSection section="notifications" />,
+  integrations: IntegrationsSection,
   account: AccountSection,
 };
 

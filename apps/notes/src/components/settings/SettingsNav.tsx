@@ -2,7 +2,15 @@ import type { ElementType } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { SettingsSection } from '@/stores/settings.store';
-import { Bell, FileEdit, Globe, Palette, Shield, User } from 'lucide-react';
+import {
+  Bell,
+  FileEdit,
+  Globe,
+  Palette,
+  Puzzle,
+  Shield,
+  User,
+} from 'lucide-react';
 
 import { cn } from '@knowtis/design-system';
 
@@ -12,6 +20,7 @@ const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
   { section: 'language', icon: Globe },
   { section: 'editor', icon: FileEdit },
   { section: 'notifications', icon: Bell },
+  { section: 'integrations', icon: Puzzle },
   { section: 'account', icon: Shield },
 ];
 
