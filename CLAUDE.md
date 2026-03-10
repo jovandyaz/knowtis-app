@@ -55,12 +55,14 @@ nx run <project> <target>  # Run specific task
 ```
 apps/
 ├── api/           # NestJS backend (modules: auth, notes, users, collaboration)
+├── mcp/           # MCP server for AI assistants (Hono, standalone)
 └── notes/         # React frontend (Vite, TanStack Router)
 
 libs/
 ├── api-client/           # HTTP/WebSocket client for frontend
 ├── auth/                 # Auth API client, Zustand store + hooks
 ├── data-access/
+│   ├── mcp-keys/         # MCP API keys React Query hooks + Zod schemas
 │   └── notes/            # Notes React Query hooks + Zod schemas
 ├── design-system/        # Shared UI components + design tokens (Storybook)
 └── shared/
@@ -75,7 +77,7 @@ Apps → data-access → api-client → shared. Libraries in `shared/` have no i
 
 ### Path Aliases
 
-Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/auth`, `@knowtis/data-access-notes`, `@knowtis/design-system`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
+Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/auth`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/design-system`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
 
 ## Nx Guidelines
 
@@ -107,7 +109,7 @@ Pipeline uses **Nx affected** to optimize builds and deploys:
 
 1. **Single CI job**: `nx affected -t lint test build` — only impacted projects
 2. **Typecheck global**: `tsc --noEmit` on entire workspace
-3. **Conditional deploy**: Only deploys API to Railway if `api` is affected
+3. **Conditional deploy**: Deploys API and/or MCP to Railway if affected
 4. **SHA detection**: `nrwl/nx-set-shas@v4` auto-detects comparison commits
 
 ### Vercel (Frontend)
@@ -196,6 +198,7 @@ JWT-based with HttpOnly cookie refresh tokens:
 - **users** - User management (service-based)
 - **health** - Health check endpoints (`/api/v1/health/ping` returns 200, `/api/v1/health/ready` checks DB connectivity via `DbHealthIndicator`, returns 503 when DB is down)
 - **feature-flags** - Env-based feature flag service with guard
+- **mcp** - MCP server for AI assistant integration (Claude, Cursor, VS Code). Standalone Hono app with 7 tools for notes CRUD and sharing. See [docs/MCP.md](docs/MCP.md).
 
 ## API Documentation
 
