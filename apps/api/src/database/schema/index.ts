@@ -5,3 +5,4 @@ export * from './password-reset-tokens.schema';
 export * from './email-verification-tokens.schema';
 export * from './feature-flags.schema';
 export * from './ai-usage.schema';
+export * from './mcp-api-keys.schema';
