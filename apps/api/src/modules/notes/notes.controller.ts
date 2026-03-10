@@ -21,6 +21,8 @@ import { SUBJECTS } from '@knowtis/authorization';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { PoliciesGuard, RequirePermission } from '../authorization';
+import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
+import { McpScopeGuard } from '../mcp/guards/mcp-scope.guard';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -71,7 +73,7 @@ function unwrapOrThrow<T>(result: Result<T, NoteDomainError>): T {
  * Notes REST API Controller
  */
 @Controller('notes')
-@UseGuards(JwtAuthGuard, PoliciesGuard)
+@UseGuards(JwtAuthGuard, PoliciesGuard, McpScopeGuard)
 export class NotesController {
   constructor(
     private readonly createNoteHandler: CreateNoteHandler,
@@ -87,6 +89,7 @@ export class NotesController {
 
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope('read')
   async findAll(
     @CurrentUser() user: RequestUser,
     @Query() query: NotesQueryDto
@@ -107,6 +110,7 @@ export class NotesController {
 
   @Get(':id')
   @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope('read')
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser
@@ -121,6 +125,7 @@ export class NotesController {
   @Post()
   @UseGuards(AnonymousNoteLimitGuard)
   @RequirePermission('create', SUBJECTS.Note)
+  @RequireMcpScope('write')
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
     const result = await this.createNoteHandler.execute({
       title: dto.title,
@@ -132,6 +137,7 @@ export class NotesController {
 
   @Patch(':id')
   @RequirePermission('update', SUBJECTS.Note)
+  @RequireMcpScope('write')
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -153,6 +159,7 @@ export class NotesController {
 
   @Delete(':id')
   @RequirePermission('delete', SUBJECTS.Note)
+  @RequireMcpScope('write')
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(
     @Param('id', ParseUUIDPipe) id: string,
@@ -167,6 +174,7 @@ export class NotesController {
 
   @Post(':id/share')
   @RequirePermission('share', SUBJECTS.Note)
+  @RequireMcpScope('share')
   async share(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -183,6 +191,7 @@ export class NotesController {
 
   @Delete(':id/share/:userId')
   @RequirePermission('share', SUBJECTS.Note)
+  @RequireMcpScope('share')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeAccess(
     @Param('id', ParseUUIDPipe) id: string,
@@ -199,6 +208,7 @@ export class NotesController {
 
   @Get(':id/collaborators')
   @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope('read')
   async getCollaborators(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser

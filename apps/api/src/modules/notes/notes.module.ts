@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
 
+import { McpScopeGuard } from '../mcp/guards/mcp-scope.guard';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -21,8 +23,10 @@ import { DrizzleNoteRepository } from './infrastructure';
 import { NotesController } from './notes.controller';
 
 @Module({
+  imports: [JwtModule.register({})],
   controllers: [NotesController],
   providers: [
+    McpScopeGuard,
     {
       provide: NOTE_REPOSITORY,
       useClass: DrizzleNoteRepository,
