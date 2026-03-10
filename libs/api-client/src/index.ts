@@ -27,3 +27,10 @@ export {
   type UserProfile,
   type UpdateProfileInput,
 } from './lib/users.api';
+
+export {
+  mcpKeysApi,
+  type McpApiKey,
+  type CreateMcpKeyInput,
+  type CreateMcpKeyResponse,
+} from './lib/mcp-keys.api';
