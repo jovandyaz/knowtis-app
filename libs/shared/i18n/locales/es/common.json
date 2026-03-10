@@ -72,7 +72,8 @@
       "language": "Idioma",
       "editor": "Editor",
       "notifications": "Notificaciones",
-      "account": "Cuenta"
+      "account": "Cuenta",
+      "integrations": "Integraciones"
     },
     "descriptions": {
       "profile": "Administra la información de tu cuenta",
@@ -80,8 +81,36 @@
       "language": "Elige tu idioma preferido",
       "editor": "Configura tus preferencias del editor",
       "notifications": "Administra tus notificaciones",
-      "account": "Seguridad y configuración de la cuenta"
+      "account": "Seguridad y configuración de la cuenta",
+      "integrations": "Gestiona API keys para integraciones externas"
     }
+  },
+  "integrations": {
+    "title": "Integraciones",
+    "description": "Conecta asistentes de IA como Claude, Cursor o VS Code a tus notas de Knowtis.",
+    "createKey": "Crear API Key",
+    "keyName": "Nombre de la key",
+    "keyNamePlaceholder": "ej., Mi Claude Desktop",
+    "scopes": "Permisos",
+    "scopeOptions": {
+      "read": "Solo lectura",
+      "readWrite": "Lectura y escritura",
+      "readWriteShare": "Lectura, escritura y compartir"
+    },
+    "createdAt": "Creada",
+    "lastUsed": "Último uso",
+    "never": "Nunca",
+    "revoke": "Revocar",
+    "revokeTitle": "Revocar API Key",
+    "revokeConfirm": "¿Estás seguro de revocar \"{{name}}\"? Esta acción no se puede deshacer.",
+    "revokeSuccess": "API key revocada",
+    "keyCreated": "API key creada",
+    "keyCreatedWarning": "Copia esta key ahora. No se volverá a mostrar.",
+    "emptyTitle": "Sin API keys",
+    "emptyDescription": "Crea una API key para conectar asistentes de IA a tus notas.",
+    "copyKey": "Copiar",
+    "keyCopied": "Key copiada al portapapeles",
+    "done": "Listo"
   },
   "anonymous": {
     "banner": {
