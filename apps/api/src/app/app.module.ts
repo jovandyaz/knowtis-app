@@ -25,6 +25,7 @@ import { AuthorizationModule } from '../modules/authorization';
 import { CollaborationModule } from '../modules/collaboration';
 import { FeatureFlagsModule } from '../modules/feature-flags';
 import { HealthModule } from '../modules/health';
+import { McpModule } from '../modules/mcp/mcp.module';
 import { NotesModule } from '../modules/notes';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -69,6 +70,7 @@ import { AppService } from './app.service';
     AIModule,
     AuthModule,
     AuthorizationModule,
+    McpModule,
     NotesModule,
     CollaborationModule,
     HealthModule,
