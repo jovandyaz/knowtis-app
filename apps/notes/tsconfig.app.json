@@ -21,6 +21,9 @@
       "@jovandyaz/permissions-react": [
         "./packages/permissions-react/src/index.ts"
       ],
+      "@knowtis/data-access-mcp-keys": [
+        "./libs/data-access/mcp-keys/src/index.ts"
+      ],
       "@jovandyaz/auth": ["./packages/auth/src/index.ts"],
       "@jovandyaz/auth/server": ["./packages/auth/src/server.ts"],
       "@jovandyaz/auth-react": ["./packages/auth-react/src/index.ts"]

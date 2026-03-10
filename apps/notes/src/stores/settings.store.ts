@@ -6,6 +6,7 @@ export type SettingsSection =
   | 'language'
   | 'editor'
   | 'notifications'
+  | 'integrations'
   | 'account';
 
 interface SettingsStore {
