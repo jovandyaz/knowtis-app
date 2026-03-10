@@ -17,6 +17,7 @@ jobs:
     outputs:
       api_affected: ${{ steps.check-api.outputs.affected }}
       notes_affected: ${{ steps.check-notes.outputs.affected }}
+      mcp_affected: ${{ steps.check-mcp.outputs.affected }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -73,6 +74,15 @@ jobs:
         id: check-notes
         run: |
           if npx nx show projects --affected --type app | grep -q '^notes$'; then
+            echo "affected=true" >> $GITHUB_OUTPUT
+          else
+            echo "affected=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if MCP is affected
+        id: check-mcp
+        run: |
+          if npx nx show projects --affected --type app | grep -q '^mcp$'; then
             echo "affected=true" >> $GITHUB_OUTPUT
           else
             echo "affected=false" >> $GITHUB_OUTPUT
@@ -157,3 +167,20 @@ jobs:
 
       - name: Deploy to Railway
         run: railway up --service ${{ vars.RAILWAY_SERVICE_ID }}
+
+  deploy-mcp:
+    name: Deploy MCP to Railway
+    runs-on: ubuntu-latest
+    needs: [ci]
+    if: |
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.ci.outputs.mcp_affected == 'true'
+    container: ghcr.io/railwayapp/cli:latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        run: railway up --service ${{ vars.RAILWAY_MCP_SERVICE_ID }}
