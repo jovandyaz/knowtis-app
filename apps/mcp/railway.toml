@@ -1,0 +1,24 @@
+# Railway Configuration for Knowtis MCP Server
+# https://docs.railway.com/guides/config-as-code
+
+[build]
+# Build command for MCP server in Nx monorepo
+builder = "nixpacks"
+buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp"
+# Note: watchPatterns do NOT apply for CI-driven deploys via `railway up`.
+# Conditional deploys are handled in .github/workflows/ci.yml using nx affected.
+watchPatterns = ["apps/mcp/**", "libs/**", "package.json", "pnpm-lock.yaml"]
+
+[deploy]
+startCommand = "node dist/apps/mcp/index.js"
+healthcheckPath = "/health"
+healthcheckTimeout = 60
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
+
+[service]
+internalPort = 3334
+
+[env]
+NODE_ENV = "production"
+PORT = "3334"
