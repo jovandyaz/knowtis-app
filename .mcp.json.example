@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "knowtis": {
+      "command": "npx",
+      "args": ["tsx", "apps/mcp/src/stdio.ts"],
+      "env": {
+        "API_INTERNAL_URL": "http://localhost:3333",
+        "KNOWTIS_API_KEY": "<your-api-key-here>"
+      }
+    }
+  }
+}

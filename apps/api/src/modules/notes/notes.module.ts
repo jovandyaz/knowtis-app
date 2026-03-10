@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { McpModule } from '../mcp/mcp.module';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -21,6 +22,7 @@ import { DrizzleNoteRepository } from './infrastructure';
 import { NotesController } from './notes.controller';
 
 @Module({
+  imports: [McpModule],
   controllers: [NotesController],
   providers: [
     {
