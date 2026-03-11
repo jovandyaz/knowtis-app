@@ -28,6 +28,27 @@ module.exports = composePlugins(
       })
     );
 
+    // Bundle @tiptap/html and happy-dom instead of externalizing them.
+    // happy-dom is ESM-only and can't be require()'d at runtime.
+    if (Array.isArray(config.externals)) {
+      config.externals = config.externals.map((ext) => {
+        if (typeof ext !== 'function') {
+          return ext;
+        }
+        return (ctx, callback) => {
+          const request = ctx.request;
+          if (
+            request &&
+            (request.startsWith('@tiptap/html') ||
+              request.startsWith('happy-dom'))
+          ) {
+            return callback();
+          }
+          return ext(ctx, callback);
+        };
+      });
+    }
+
     return config;
   }
 );
