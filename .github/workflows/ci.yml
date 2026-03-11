@@ -175,7 +175,8 @@ jobs:
     if: |
       github.ref == 'refs/heads/main' &&
       github.event_name == 'push' &&
-      needs.ci.outputs.mcp_affected == 'true'
+      needs.ci.outputs.mcp_affected == 'true' &&
+      vars.RAILWAY_MCP_SERVICE_ID != ''
     container: ghcr.io/railwayapp/cli:latest
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
