@@ -6,7 +6,10 @@ import { createMcpServer } from './server.js';
 import { createApp } from './transport.js';
 
 const config = parseConfig(process.env as Record<string, string | undefined>);
-const app = createApp(() => createMcpServer({ config }), config);
+const app = createApp(
+  (apiKey) => createMcpServer({ config, defaultApiKey: apiKey }),
+  config
+);
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
   log({

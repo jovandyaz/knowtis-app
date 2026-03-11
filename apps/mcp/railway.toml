@@ -1,4 +1,4 @@
-# Railway Configuration for Knowtis MCP Server
+# Railway Configuration for Knowtis MCP Server (knowtis-mcp service)
 # https://docs.railway.com/guides/config-as-code
 
 [build]

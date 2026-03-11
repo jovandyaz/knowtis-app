@@ -10,6 +10,6 @@ import { TokenExchangeController } from './token-exchange.controller';
   imports: [JwtModule.register({})],
   controllers: [McpKeysController, TokenExchangeController],
   providers: [McpKeysService, McpScopeGuard],
-  exports: [McpKeysService, McpScopeGuard],
+  exports: [McpKeysService, McpScopeGuard, JwtModule],
 })
 export class McpModule {}

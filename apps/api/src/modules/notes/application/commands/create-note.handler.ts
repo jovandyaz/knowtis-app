@@ -1,5 +1,5 @@
 import { UserId } from '@jovandyaz/auth/server';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
@@ -12,14 +12,18 @@ import {
   type NoteWriteRepository,
 } from '../../domain';
 import { NoteCreatedEvent } from '../../domain/events';
+import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
 
 export interface CreateNoteInput {
   readonly title: string;
   readonly content?: string;
   readonly ownerId: string;
 }
+
 @Injectable()
 export class CreateNoteHandler {
+  private readonly logger = new Logger(CreateNoteHandler.name);
+
   constructor(
     @Inject(NOTE_WRITE_REPOSITORY)
     private readonly noteRepository: NoteWriteRepository,
@@ -52,6 +56,18 @@ export class CreateNoteHandler {
 
     if (result.isOk()) {
       const note = result.value;
+
+      if (input.content) {
+        try {
+          const yjsState = htmlToYjsState(input.content);
+          await this.noteRepository.updateYjsState(note.id, yjsState);
+        } catch (error) {
+          this.logger.warn(
+            `Failed to generate yjsState for note ${note.id}: ${error}`
+          );
+        }
+      }
+
       this.eventEmitter.emit(
         NoteCreatedEvent.EVENT_NAME,
         new NoteCreatedEvent(note.id, note.title, note.ownerId)
