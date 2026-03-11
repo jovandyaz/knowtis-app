@@ -6,7 +6,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import type { AppConfig } from './config.js';
 
 export function createApp(
-  serverFactory: () => McpServer,
+  serverFactory: (apiKey?: string) => McpServer,
   config: AppConfig
 ): Hono {
   const app = new Hono();
@@ -18,11 +18,20 @@ export function createApp(
   );
 
   app.all('/mcp', async (c) => {
-    const server = serverFactory();
+    const apiKey = extractBearerToken(c.req.raw.headers);
+    const server = serverFactory(apiKey);
     const transport = new WebStandardStreamableHTTPServerTransport({});
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
   });
 
   return app;
+}
+
+function extractBearerToken(headers: Headers): string | undefined {
+  const auth = headers.get('authorization');
+  if (!auth?.startsWith('Bearer ')) {
+    return undefined;
+  }
+  return auth.slice(7);
 }
