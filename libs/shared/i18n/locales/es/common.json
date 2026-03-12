@@ -113,10 +113,7 @@
     "done": "Listo"
   },
   "anonymous": {
-    "banner": {
-      "usingAsGuest": "Estás usando Knowtis como invitado.",
-      "upgradeMessage": "Regístrate para desbloquear notas ilimitadas, colaboración y sincronización en múltiples dispositivos."
-    },
+    "guest": "Invitado",
     "limit": {
       "notesTitle": "Has alcanzado el límite de notas para invitados",
       "notesDescription": "Crea una cuenta gratuita para guardar notas ilimitadas y acceder a ellas desde cualquier dispositivo. Las cuentas de invitado están limitadas a {{maxNotes}} notas.",

@@ -8,9 +8,9 @@ import {
   usePresenceBroadcast,
   useWebSocketCollaboration,
 } from '@/hooks';
+import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor } from '@tiptap/react';
 
-import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { cn } from '@knowtis/design-system';
 import { logger } from '@knowtis/shared-util';
 
@@ -44,8 +44,10 @@ function InternalEditor({
   placeholder,
   editable,
   saveStatus,
+  autoFocus,
 }: InternalEditorProps) {
-  const aiEnabled = useFeatureFlag('ai_enabled');
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
+
   const onUpdateRef = useRef(onUpdate);
 
   useEffect(() => {
@@ -56,8 +58,7 @@ function InternalEditor({
     yDoc,
     yXmlFragment,
     awareness,
-    currentUser,
-    aiEnabled
+    currentUser
   );
 
   const editor = useEditor({
@@ -107,6 +108,12 @@ function InternalEditor({
       editor.setEditable(editable);
     }
   }, [editor, editable]);
+
+  useEffect(() => {
+    if (autoFocus && editor && !editor.isDestroyed) {
+      editor.commands.focus('end');
+    }
+  }, [autoFocus, editor]);
 
   return (
     <>
@@ -162,6 +169,7 @@ export function CollaborativeEditor({
   shareToken,
   onEditDenied,
   saveStatus,
+  autoFocus,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const editorState = useCollaborativeEditor(noteId);
@@ -228,6 +236,7 @@ export function CollaborativeEditor({
           placeholder={resolvedPlaceholder}
           editable={editable}
           saveStatus={saveStatus}
+          autoFocus={autoFocus}
         />
       </div>
     </EditorErrorBoundary>

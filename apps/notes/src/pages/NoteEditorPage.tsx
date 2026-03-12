@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
 import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
@@ -11,9 +11,8 @@ import {
   ACCESS_BADGE_CONFIG,
   canPerformNoteAction,
   DEBOUNCE_DELAYS,
-  formatNoteDateFull,
 } from '@/lib';
-import { ArrowLeft, Share2 } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -34,12 +33,13 @@ interface NoteEditorProps {
   noteId: string;
   initialTitle: string;
   initialContent: string;
-  updatedAt: Date;
   accessLevel: NoteAccessLevel;
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
   editorsCanShare: boolean;
+  autoFocusTitle?: boolean | undefined;
+  autoFocusContent?: boolean | undefined;
 }
 
 interface MobileEditorHeaderProps {
@@ -54,27 +54,20 @@ function MobileEditorHeader({
   onShareClick,
 }: MobileEditorHeaderProps) {
   const { t } = useTranslation('notes');
-  const navigate = useNavigate();
+
+  if (!canPerformNoteAction(accessLevel, 'share', { editorsCanShare })) {
+    return null;
+  }
 
   return (
     <>
       <FloatingActionButton
-        icon={ArrowLeft}
-        position="left"
-        aria-label={t('editor.backToNotes')}
-        onClick={() => navigate({ to: '/notes' })}
+        icon={Share2}
+        position="right"
+        onClick={onShareClick}
+        aria-label={t('editor.share')}
       />
-
-      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
-        <FloatingActionButton
-          icon={Share2}
-          position="right"
-          onClick={onShareClick}
-          aria-label={t('editor.share')}
-        />
-      )}
-
-      {/* Spacer for floating buttons */}
+      {/* Spacer for floating button */}
       <div className="h-14 md:hidden" />
     </>
   );
@@ -100,17 +93,14 @@ function DesktopEditorHeader({
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
+  const showBadge = accessLevel !== 'owner';
 
   return (
     <div className="mb-6 hidden md:flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <Link to="/notes">
-          <Button variant="ghost" size="sm" className="gap-2">
-            <ArrowLeft className="h-4 w-4" />
-            {t('editor.backToNotes')}
-          </Button>
-        </Link>
-        <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+        {showBadge && (
+          <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+        )}
       </div>
 
       <div className="flex items-center gap-2 text-sm text-(--muted-foreground)">
@@ -149,12 +139,13 @@ function NoteEditor({
   noteId,
   initialTitle,
   initialContent,
-  updatedAt,
   accessLevel,
   generalAccess,
   generalAccessPermission,
   shareToken,
   editorsCanShare,
+  autoFocusTitle,
+  autoFocusContent,
 }: NoteEditorProps) {
   const { t } = useTranslation('notes');
   const canEdit = canPerformNoteAction(accessLevel, 'update');
@@ -165,6 +156,22 @@ function NoteEditor({
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (autoFocusTitle && titleInputRef.current) {
+      titleInputRef.current.focus();
+      titleInputRef.current.select();
+    }
+  }, [autoFocusTitle]);
+
+  useEffect(() => {
+    const originalTitle = document.title;
+    document.title = `${title} · Knowtis`;
+    return () => {
+      document.title = originalTitle;
+    };
+  }, [title]);
 
   const debouncedUpdateNote = useDebouncedCallback(
     (updates: { title?: string; content?: string }) => {
@@ -230,16 +237,13 @@ function NoteEditor({
 
       <div className="mb-4">
         <Input
+          ref={titleInputRef}
           value={title}
           onChange={handleTitleChange}
           readOnly={!canEdit}
           placeholder={t('editor.titlePlaceholder')}
           className="border-0 bg-transparent px-0 text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0"
         />
-      </div>
-
-      <div className="mb-6 text-sm text-(--muted-foreground)">
-        {t('editor.lastUpdated')} {formatNoteDateFull(updatedAt)}
       </div>
 
       <CollaborativeEditor
@@ -249,6 +253,7 @@ function NoteEditor({
         placeholder={t('editor.editorPlaceholder')}
         editable={canEdit}
         saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
+        autoFocus={autoFocusContent}
       />
 
       {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
@@ -270,6 +275,7 @@ function NoteEditor({
 
 export function NoteEditorPage() {
   const { noteId } = useParams({ from: '/_app/notes/$noteId' });
+  const { focus } = useSearch({ from: '/_app/notes/$noteId' });
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
@@ -300,12 +306,13 @@ export function NoteEditorPage() {
       noteId={note.id}
       initialTitle={note.title}
       initialContent={note.content}
-      updatedAt={note.updatedAt}
       accessLevel={note.accessLevel}
       generalAccess={note.generalAccess}
       generalAccessPermission={note.generalAccessPermission}
       shareToken={note.shareToken}
       editorsCanShare={note.editorsCanShare}
+      autoFocusTitle={focus === 'title'}
+      autoFocusContent={focus === 'content'}
     />
   );
 }
