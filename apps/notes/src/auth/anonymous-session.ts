@@ -35,7 +35,7 @@ function getJwtExpiry(token: string): number | null {
  * SECURITY NOTE: The anonymous JWT is stored in localStorage (not HttpOnly cookies).
  * This is an accepted risk because:
  * 1. Anonymous accounts are ephemeral (30-day TTL, auto-cleaned by cron)
- * 2. Anonymous data is limited (max 5 notes, 3 AI requests/day)
+ * 2. Anonymous data is limited (max 5 notes)
  * 3. No sensitive personal data (no email, no password)
  * 4. Moving to HttpOnly cookies would require significant backend changes
  *    (cookie-based auth flow for anonymous sessions) with minimal security benefit

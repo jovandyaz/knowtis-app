@@ -1,8 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { ANONYMOUS_LIMITS } from '@knowtis/shared-types';
-
 import type { EnvConfig } from '../../../../config/env.config';
 import {
   AI_USAGE_REPOSITORY,
@@ -33,19 +31,8 @@ export class AIRateLimitService {
 
   async checkLimit(
     userId: string,
-    estimatedTokens: number,
-    isAnonymous = false
+    estimatedTokens: number
   ): Promise<RateLimitResult> {
-    if (isAnonymous) {
-      const dailyUsage = await this.usageRepository.getDailyUsage(userId);
-      if (dailyUsage.requestCount >= ANONYMOUS_LIMITS.maxAiRequestsPerDay) {
-        return {
-          allowed: false,
-          reason: `Anonymous users are limited to ${ANONYMOUS_LIMITS.maxAiRequestsPerDay} AI requests per day. Sign up for more.`,
-        };
-      }
-    }
-
     if (this.rateLimitProvider) {
       try {
         const result = await this.rateLimitProvider.checkAndIncrement(

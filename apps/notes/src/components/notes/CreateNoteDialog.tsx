@@ -144,7 +144,6 @@ export function CreateNoteDialog({ trigger }: CreateNoteDialogProps) {
       </Dialog>
 
       <AnonymousLimitModal
-        type="notes"
         open={showLimitModal}
         onClose={() => setShowLimitModal(false)}
       />

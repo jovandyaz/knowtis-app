@@ -65,8 +65,7 @@ export class CompleteTextHandler {
     const estimatedTokens = estimateTokenCount(input.content);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens,
-      input.isAnonymous
+      estimatedTokens
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -74,7 +73,7 @@ export class CompleteTextHandler {
         requestId,
         userId: input.userId,
         action,
-        reason: 'rate_limit_exceeded',
+        reason: rateLimitCheck.reason,
       });
       return err(AIErrors.rateLimitExceeded());
     }
