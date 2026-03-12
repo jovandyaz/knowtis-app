@@ -1,16 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
+import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 import { initAuth } from '@/auth/setup';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { useAIStore } from '@/stores/ai.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
-import { PanelLeft, X } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
+
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async () => {
@@ -22,16 +25,21 @@ export const Route = createFileRoute('/_app')({
 function AppLayout() {
   const user = useAuthUser();
   const isLoading = useAuthLoading();
-  const { t, i18n } = useTranslation('common');
+  const { i18n } = useTranslation('common');
   const isAnonymous = user?.isAnonymous ?? false;
-  const [upgradeDismissed, setUpgradeDismissed] = useState(false);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
+  const aiEnabled = useFeatureFlag('ai_enabled');
+  const setAIEnabled = useAIStore((s) => s.setAIEnabled);
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
   }, [isAnonymous, setSidebarCollapsed]);
+
+  useEffect(() => {
+    setAIEnabled(aiEnabled);
+  }, [aiEnabled, setAIEnabled]);
 
   useEffect(() => {
     if (user?.locale && user.locale !== i18n.language) {
@@ -71,28 +79,6 @@ function AppLayout() {
           >
             <PanelLeft className="h-4 w-4" />
           </motion.button>
-
-          {isAnonymous && !upgradeDismissed && (
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground/50">
-                {t('anonymous.banner.usingAsGuest')}
-              </span>
-              <Link
-                to="/register"
-                className="text-xs font-medium text-(--primary)/70 hover:text-(--primary) transition-colors"
-              >
-                {t('nav.createAccount')} →
-              </Link>
-              <button
-                type="button"
-                onClick={() => setUpgradeDismissed(true)}
-                className="p-0.5 text-muted-foreground/30 hover:text-muted-foreground/60 transition-colors cursor-pointer"
-                aria-label="Dismiss"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )}
         </div>
         <div className="flex-1 p-4 md:p-8 w-full">
           <Outlet />

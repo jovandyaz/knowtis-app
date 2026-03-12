@@ -39,7 +39,8 @@ export function SidebarUserMenu({
     });
   };
 
-  const initials = getInitials(username);
+  const displayName = isAnonymous ? t('anonymous.guest') : username;
+  const initials = getInitials(displayName);
 
   return (
     <DropdownMenu>
@@ -52,7 +53,7 @@ export function SidebarUserMenu({
             {initials || '?'}
           </div>
           <span className="min-w-0 flex-1 truncate text-left text-sm font-medium text-(--foreground)">
-            {username}
+            {displayName}
           </span>
           <ChevronUp className="h-4 w-4 shrink-0 text-(--muted-foreground)" />
         </button>
