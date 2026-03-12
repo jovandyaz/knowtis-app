@@ -20,9 +20,11 @@ interface AIState {
   error: AIErrorPayload | null;
   lastPayload: AICompletePayload | null;
   selectionRange: SelectionRange | null;
+  aiEnabled: boolean;
   _streamHandle: AIStreamHandle | null;
   startStream: (payload: AICompletePayload) => void;
   setSelectionRange: (range: SelectionRange | null) => void;
+  setAIEnabled: (enabled: boolean) => void;
   retry: () => void;
   cancelStream: () => void;
   reset: () => void;
@@ -34,6 +36,7 @@ export const useAIStore = create<AIState>((set, get) => ({
   error: null,
   lastPayload: null,
   selectionRange: null,
+  aiEnabled: false,
   _streamHandle: null,
 
   startStream: (payload) => {
@@ -67,6 +70,10 @@ export const useAIStore = create<AIState>((set, get) => ({
 
   setSelectionRange: (range) => {
     set({ selectionRange: range });
+  },
+
+  setAIEnabled: (enabled) => {
+    set({ aiEnabled: enabled });
   },
 
   retry: () => {

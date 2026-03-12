@@ -113,10 +113,7 @@
     "done": "Done"
   },
   "anonymous": {
-    "banner": {
-      "usingAsGuest": "You're using Knowtis as a guest.",
-      "upgradeMessage": "Sign up to unlock unlimited notes, collaboration, and multi-device sync."
-    },
+    "guest": "Guest",
     "limit": {
       "notesTitle": "You've reached the guest note limit",
       "notesDescription": "Create a free account to save unlimited notes and access them from any device. Guest accounts are limited to {{maxNotes}} notes.",

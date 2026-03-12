@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 
+import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
+import { useCreateAndNavigateToNote } from '@/hooks/useCreateAndNavigateToNote';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { FilePlus, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -31,10 +33,31 @@ function getGreetingKey(): GreetingKey {
 }
 
 export function WelcomePage() {
-  const { t, i18n } = useTranslation('common');
+  const { t, i18n } = useTranslation(['common', 'notes']);
   const user = useAuthUser();
   const { data: notes, isLoading } = useNotes();
   const firstName = user?.name?.split(' ')[0] ?? '';
+  const navigate = useNavigate();
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const hasAttemptedAutoCreate = useRef(false);
+  const createAndNavigate = useCreateAndNavigateToNote();
+
+  useEffect(() => {
+    if (
+      hasAttemptedAutoCreate.current ||
+      isLoading ||
+      !notes ||
+      notes.length > 0
+    ) {
+      return;
+    }
+
+    hasAttemptedAutoCreate.current = true;
+    createAndNavigate({
+      focusTarget: 'content',
+      onLimitReached: () => setShowLimitModal(true),
+    });
+  }, [isLoading, notes, createAndNavigate]);
 
   const recentNotes = useMemo(() => {
     if (!notes) {
@@ -51,102 +74,112 @@ export function WelcomePage() {
   const lastNote: NoteWithAccess | undefined = recentNotes[0];
 
   return (
-    <div className="mx-auto max-w-xl py-6 md:py-12 px-4">
-      <motion.h1
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="text-[28px] md:text-3xl font-semibold tracking-tight text-(--foreground)"
-      >
-        {t(getGreetingKey())}
-        {firstName ? `, ${firstName}` : ''}
-      </motion.h1>
+    <>
+      <AnonymousLimitModal
+        type="notes"
+        open={showLimitModal}
+        onClose={() => {
+          setShowLimitModal(false);
+          navigate({ to: '/', replace: true });
+        }}
+      />
+      <div className="mx-auto max-w-xl py-6 md:py-12 px-4">
+        <motion.h1
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-[28px] md:text-3xl font-semibold tracking-tight text-(--foreground)"
+        >
+          {t(getGreetingKey())}
+          {firstName ? `, ${firstName}` : ''}
+        </motion.h1>
 
-      {/* Quick actions */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.05 }}
-        className="mt-6 flex gap-3"
-      >
-        <CreateNoteDialog
-          trigger={
-            <Button className="rounded-lg px-4 py-2.5 text-sm font-medium gap-2">
-              <FilePlus className="h-4 w-4" />
-              {t('welcome.newNote')}
-            </Button>
-          }
-        />
+        {/* Quick actions */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="mt-6 flex gap-3"
+        >
+          <CreateNoteDialog
+            trigger={
+              <Button className="rounded-lg px-4 py-2.5 text-sm font-medium gap-2">
+                <FilePlus className="h-4 w-4" />
+                {t('welcome.newNote')}
+              </Button>
+            }
+          />
 
-        {lastNote && (
-          <Link
-            to="/notes/$noteId"
-            params={{ noteId: lastNote.id }}
-            className={cn(
-              buttonVariants({ variant: 'outline' }),
-              'rounded-lg px-4 py-2.5 text-sm font-medium max-w-[240px]'
-            )}
-          >
-            <span className="truncate">
-              {t('welcome.continue', { title: lastNote.title })}
-            </span>
-          </Link>
-        )}
-      </motion.div>
+          {lastNote && (
+            <Link
+              to="/notes/$noteId"
+              params={{ noteId: lastNote.id }}
+              className={cn(
+                buttonVariants({ variant: 'outline' }),
+                'rounded-lg px-4 py-2.5 text-sm font-medium max-w-[240px]'
+              )}
+            >
+              <span className="truncate">
+                {t('welcome.continue', { title: lastNote.title })}
+              </span>
+            </Link>
+          )}
+        </motion.div>
 
-      {/* Recent notes */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: 0.1 }}
-        className="mt-10"
-      >
-        <h2 className="text-xs font-medium text-(--muted-foreground)/50 uppercase tracking-wider mb-3">
-          {t('welcome.recent')}
-        </h2>
+        {/* Recent notes */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+          className="mt-10"
+        >
+          <h2 className="text-xs font-medium text-(--muted-foreground)/50 uppercase tracking-wider mb-3">
+            {t('welcome.recent')}
+          </h2>
 
-        {isLoading ? (
-          <div className="space-y-0 divide-y divide-(--border)/50">
-            {Array.from({ length: 3 }).map((_, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between py-3 animate-pulse"
-              >
-                <div className="h-4 w-40 bg-(--muted) rounded" />
-                <div className="h-3 w-16 bg-(--muted) rounded" />
-              </div>
-            ))}
-          </div>
-        ) : recentNotes.length === 0 ? (
-          <p className="text-sm text-(--muted-foreground)/70 py-3">
-            {t('welcome.noRecentNotes')}
-          </p>
-        ) : (
-          <div className="divide-y divide-(--border)/50">
-            {recentNotes.map((note) => (
-              <Link
-                key={note.id}
-                to="/notes/$noteId"
-                params={{ noteId: note.id }}
-                className={cn(
-                  'flex items-center justify-between py-3 group',
-                  'hover:bg-(--accent)/50 -mx-3 px-3 rounded-md transition-colors'
-                )}
-              >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <FileText className="h-4 w-4 text-(--muted-foreground)/60 shrink-0" />
-                  <span className="text-sm font-medium truncate text-(--foreground) group-hover:text-(--primary) transition-colors">
-                    {note.title}
-                  </span>
+          {isLoading ? (
+            <div className="space-y-0 divide-y divide-(--border)/50">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between py-3 animate-pulse"
+                >
+                  <div className="h-4 w-40 bg-(--muted) rounded" />
+                  <div className="h-3 w-16 bg-(--muted) rounded" />
                 </div>
-                <span className="text-xs text-(--muted-foreground)/50 shrink-0 ml-4">
-                  {formatRelativeTime(note.updatedAt, i18n.language)}
-                </span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </motion.div>
-    </div>
+              ))}
+            </div>
+          ) : recentNotes.length === 0 ? (
+            <p className="text-sm text-(--muted-foreground)/70 py-3">
+              {t('welcome.noRecentNotes')}
+            </p>
+          ) : (
+            <div className="divide-y divide-(--border)/50">
+              {recentNotes.map((note) => (
+                <Link
+                  key={note.id}
+                  to="/notes/$noteId"
+                  params={{ noteId: note.id }}
+                  className={cn(
+                    'flex items-center justify-between py-3 group',
+                    'hover:bg-(--accent)/50 -mx-3 px-3 rounded-md transition-colors'
+                  )}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FileText className="h-4 w-4 text-(--muted-foreground)/60 shrink-0" />
+                    <span className="text-sm font-medium truncate text-(--foreground) group-hover:text-(--primary) transition-colors">
+                      {note.title}
+                    </span>
+                  </div>
+                  <span className="text-xs text-(--muted-foreground)/50 shrink-0 ml-4">
+                    {formatRelativeTime(note.updatedAt, i18n.language)}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      </div>
+    </>
   );
 }
