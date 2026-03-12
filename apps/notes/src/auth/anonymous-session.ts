@@ -64,7 +64,7 @@ export async function initAnonymousSession(
           authStore.getState().setUser({
             id: session.userId,
             email: '',
-            name: 'Anonymous',
+            name: '',
             avatarUrl: null,
             isAnonymous: true,
           });
@@ -91,7 +91,7 @@ export async function initAnonymousSession(
     authStore.getState().setUser({
       id: response.user.id,
       email: '',
-      name: response.user.name,
+      name: '',
       avatarUrl: null,
       isAnonymous: true,
     });
