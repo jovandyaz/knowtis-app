@@ -29,7 +29,6 @@ function NewNotePage() {
     <>
       <LoadingState message={t('create.buttonLoading')} />
       <AnonymousLimitModal
-        type="notes"
         open={showLimitModal}
         onClose={() => {
           setShowLimitModal(false);

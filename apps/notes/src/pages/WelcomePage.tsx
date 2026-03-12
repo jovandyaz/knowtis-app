@@ -76,7 +76,6 @@ export function WelcomePage() {
   return (
     <>
       <AnonymousLimitModal
-        type="notes"
         open={showLimitModal}
         onClose={() => {
           setShowLimitModal(false);
