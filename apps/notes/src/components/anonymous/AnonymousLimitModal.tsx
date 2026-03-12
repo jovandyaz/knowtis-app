@@ -15,30 +15,20 @@ import {
 import { ANONYMOUS_LIMITS } from '@knowtis/shared-types';
 
 interface AnonymousLimitModalProps {
-  type: 'notes' | 'ai';
   open: boolean;
   onClose: () => void;
 }
 
 export function AnonymousLimitModal({
-  type,
   open,
   onClose,
 }: AnonymousLimitModalProps) {
   const { t } = useTranslation('common');
 
-  const title = t(
-    type === 'notes' ? 'anonymous.limit.notesTitle' : 'anonymous.limit.aiTitle'
-  );
-  const description = t(
-    type === 'notes'
-      ? 'anonymous.limit.notesDescription'
-      : 'anonymous.limit.aiDescription',
-    {
-      maxNotes: ANONYMOUS_LIMITS.maxNotes,
-      maxAiRequests: ANONYMOUS_LIMITS.maxAiRequestsPerDay,
-    }
-  );
+  const title = t('anonymous.limit.notesTitle');
+  const description = t('anonymous.limit.notesDescription', {
+    maxNotes: ANONYMOUS_LIMITS.maxNotes,
+  });
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>

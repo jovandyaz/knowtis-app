@@ -73,8 +73,7 @@ export class StreamTextHandler {
     const estimatedTokens = estimateTokenCount(input.content);
     const rateCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens,
-      input.isAnonymous
+      estimatedTokens
     );
     if (!rateCheck.allowed) {
       this.logger.warn({
@@ -82,7 +81,7 @@ export class StreamTextHandler {
         requestId,
         userId: input.userId,
         action,
-        reason: 'rate_limit_exceeded',
+        reason: rateCheck.reason,
       });
       callbacks.onError(AIErrors.rateLimitExceeded());
       return;
