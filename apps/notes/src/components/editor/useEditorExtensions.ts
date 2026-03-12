@@ -20,8 +20,7 @@ export function useEditorExtensions(
   yDoc: Y.Doc,
   yXmlFragment: Y.XmlFragment,
   awareness: Awareness | null,
-  currentUser: CollaborativeUser,
-  aiEnabled: boolean
+  currentUser: CollaborativeUser
 ): AnyExtension[] {
   return useMemo(() => {
     const extensions: AnyExtension[] = [
@@ -55,7 +54,8 @@ export function useEditorExtensions(
         minContentLength: 20,
         enabled: true,
         isAIBusy: () => {
-          return !aiEnabled || useAIStore.getState().status !== 'idle';
+          const { aiEnabled, status } = useAIStore.getState();
+          return !aiEnabled || status !== 'idle';
         },
       }),
     ];
@@ -73,12 +73,5 @@ export function useEditorExtensions(
     }
 
     return extensions;
-  }, [
-    yDoc,
-    yXmlFragment,
-    awareness,
-    currentUser.name,
-    currentUser.color,
-    aiEnabled,
-  ]);
+  }, [yDoc, yXmlFragment, awareness, currentUser.name, currentUser.color]);
 }
