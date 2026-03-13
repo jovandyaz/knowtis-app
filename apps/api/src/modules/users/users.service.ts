@@ -1,3 +1,4 @@
+import type { UserRole } from '@jovandyaz/auth';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { I18nService } from 'nestjs-i18n';
 
@@ -86,6 +87,18 @@ export class UsersService {
       throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
 
+    return user;
+  }
+
+  async findAll() {
+    return this.usersRepository.findAll();
+  }
+
+  async updateRole(id: string, role: UserRole) {
+    const user = await this.usersRepository.updateRole(id, role);
+    if (!user) {
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
+    }
     return user;
   }
 

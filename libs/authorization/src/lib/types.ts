@@ -1,3 +1,4 @@
+import type { UserRole } from '@jovandyaz/auth';
 import type { Ability } from '@jovandyaz/permissions-core';
 
 import type { PermissionLevel } from '@knowtis/shared-types';
@@ -28,6 +29,7 @@ export type AppAbility = Ability<Action, Subject>;
 export interface AuthUser {
   readonly id: string;
   readonly isAnonymous?: boolean;
+  readonly role?: UserRole;
 }
 
 export interface SharedNote {

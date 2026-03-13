@@ -5,6 +5,7 @@ import {
 import { Global, Module } from '@nestjs/common';
 
 import { AppAbilityFactory } from './ability.factory';
+import { RolesGuard } from './roles.guard';
 
 @Global()
 @Module({
@@ -15,7 +16,8 @@ import { AppAbilityFactory } from './ability.factory';
       useExisting: AppAbilityFactory,
     },
     PoliciesGuard,
+    RolesGuard,
   ],
-  exports: [AppAbilityFactory, ABILITY_FACTORY_KEY, PoliciesGuard],
+  exports: [AppAbilityFactory, ABILITY_FACTORY_KEY, PoliciesGuard, RolesGuard],
 })
 export class AuthorizationModule {}

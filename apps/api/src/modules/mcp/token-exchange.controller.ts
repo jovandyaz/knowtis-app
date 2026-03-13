@@ -10,12 +10,27 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, users, type Database } from '../../database';
 import { TokenExchangeDto } from './dto/token-exchange.dto';
 import { McpKeysService } from './mcp-keys.service';
 
+const tokenExchangeResultSchema = {
+  type: 'object' as const,
+  properties: {
+    accessToken: { type: 'string', description: 'Short-lived JWT token' },
+    expiresIn: {
+      type: 'number',
+      description: 'Token TTL in seconds',
+      example: 900,
+    },
+    scopes: { type: 'string', example: 'read,write' },
+  },
+};
+
+@ApiTags('MCP Token Exchange')
 @Controller('auth/token-exchange')
 export class TokenExchangeController {
   private readonly logger = new Logger(TokenExchangeController.name);
@@ -28,6 +43,21 @@ export class TokenExchangeController {
     private readonly db: Database
   ) {}
 
+  @ApiOperation({
+    summary: 'Exchange an MCP API key for a JWT token',
+    description:
+      'Validates the provided MCP API key and returns a short-lived JWT access token (15 minutes) that can be used to authenticate subsequent API requests.',
+  })
+  @ApiBody({ type: TokenExchangeDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Token exchanged successfully',
+    schema: tokenExchangeResultSchema,
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — invalid, expired, or revoked API key',
+  })
   @Post()
   @HttpCode(HttpStatus.OK)
   async exchange(@Body() dto: TokenExchangeDto) {

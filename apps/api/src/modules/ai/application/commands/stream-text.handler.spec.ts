@@ -61,6 +61,8 @@ describe('StreamTextHandler', () => {
       }),
       recordUsage: vi.fn(),
       getMetricsSummary: vi.fn(),
+      getGlobalDailyUsage: vi.fn(),
+      getGlobalMetricsSummary: vi.fn(),
     };
 
     const mockConfig = createMockConfig();
