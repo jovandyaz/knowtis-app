@@ -32,6 +32,7 @@
     "db:migrate": "nx db:migrate api",
     "db:push": "nx db:push api",
     "db:studio": "nx db:studio api",
+    "db:seed:admin": "nx seed-admin api",
     "docker:up": "docker compose up -d",
     "docker:down": "docker compose down",
     "prepare": "[ -d .git ] && lefthook install || true"

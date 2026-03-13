@@ -25,13 +25,17 @@ export interface MetricsSummary {
   >;
 }
 
+export type MetricsPeriod = 'day' | 'week' | 'month';
+
 export interface AIUsageRepository {
   getDailyUsage(userId: string): Promise<DailyUsageSummary>;
   recordUsage(input: RecordUsageInput): Promise<void>;
   getMetricsSummary(
     userId: string,
-    period: 'day' | 'week' | 'month'
+    period: MetricsPeriod
   ): Promise<MetricsSummary>;
+  getGlobalDailyUsage(): Promise<DailyUsageSummary>;
+  getGlobalMetricsSummary(period: MetricsPeriod): Promise<MetricsSummary>;
 }
 
 export const AI_USAGE_REPOSITORY = Symbol('AI_USAGE_REPOSITORY');

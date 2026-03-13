@@ -4,7 +4,12 @@ import type {
   UserRepository,
 } from '@jovandyaz/auth-nestjs';
 import { AuthErrors } from '@jovandyaz/auth/server';
-import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth/server';
+import type {
+  AuthDomainError,
+  Email,
+  UserId,
+  UserRole,
+} from '@jovandyaz/auth/server';
 import { Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -98,6 +103,7 @@ export class DrizzleUserRepository implements UserRepository {
     avatarUrl: string | null;
     passwordHash: string | null;
     emailVerifiedAt: Date | null;
+    role: string;
     createdAt: Date;
     updatedAt: Date;
   }): UserEntity {
@@ -108,6 +114,7 @@ export class DrizzleUserRepository implements UserRepository {
       avatarUrl: user.avatarUrl,
       passwordHash: user.passwordHash,
       emailVerifiedAt: user.emailVerifiedAt,
+      role: user.role as UserRole,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

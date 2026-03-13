@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, gte, sql, sum } from 'drizzle-orm';
+import { and, count, gte, sql, sum, type SQL } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { aiUsage } from '../../../../database/schema';
 import type {
   AIUsageRepository,
   DailyUsageSummary,
+  MetricsPeriod,
   MetricsSummary,
   RecordUsageInput,
 } from '../../domain/ports/ai-usage.repository';
@@ -26,8 +27,33 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
   }
 
   async getDailyUsage(userId: string): Promise<DailyUsageSummary> {
+    return this.queryDailyUsage(sql`${aiUsage.userId} = ${userId}`);
+  }
+
+  async getGlobalDailyUsage(): Promise<DailyUsageSummary> {
+    return this.queryDailyUsage();
+  }
+
+  async getMetricsSummary(
+    userId: string,
+    period: MetricsPeriod
+  ): Promise<MetricsSummary> {
+    return this.queryMetricsSummary(period, sql`${aiUsage.userId} = ${userId}`);
+  }
+
+  async getGlobalMetricsSummary(
+    period: MetricsPeriod
+  ): Promise<MetricsSummary> {
+    return this.queryMetricsSummary(period);
+  }
+
+  private async queryDailyUsage(userFilter?: SQL): Promise<DailyUsageSummary> {
     const startOfDay = new Date();
     startOfDay.setUTCHours(0, 0, 0, 0);
+
+    const conditions = userFilter
+      ? and(userFilter, gte(aiUsage.createdAt, startOfDay))
+      : gte(aiUsage.createdAt, startOfDay);
 
     const result = await this.db
       .select({
@@ -37,12 +63,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
         requestCount: count(),
       })
       .from(aiUsage)
-      .where(
-        and(
-          sql`${aiUsage.userId} = ${userId}`,
-          gte(aiUsage.createdAt, startOfDay)
-        )
-      );
+      .where(conditions);
 
     const row = result[0];
     return {
@@ -53,23 +74,16 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
     };
   }
 
-  async getMetricsSummary(
-    userId: string,
-    period: 'day' | 'week' | 'month'
+  private async queryMetricsSummary(
+    period: MetricsPeriod,
+    userFilter?: SQL
   ): Promise<MetricsSummary> {
-    const since = new Date();
-    if (period === 'day') {
-      since.setUTCHours(0, 0, 0, 0);
-    } else if (period === 'week') {
-      since.setUTCDate(since.getUTCDate() - 7);
-    } else {
-      since.setUTCDate(since.getUTCDate() - 30);
-    }
+    const since = this.periodToDate(period);
 
-    const userAndPeriodFilter = and(
-      sql`${aiUsage.userId} = ${userId}`,
-      gte(aiUsage.createdAt, since)
-    );
+    const periodFilter = gte(aiUsage.createdAt, since);
+    const conditions = userFilter
+      ? and(userFilter, periodFilter)
+      : periodFilter;
 
     const totals = await this.db
       .select({
@@ -79,7 +93,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
         totalCostUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
       })
       .from(aiUsage)
-      .where(userAndPeriodFilter);
+      .where(conditions);
 
     const byActionRows = await this.db
       .select({
@@ -89,7 +103,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
         costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
       })
       .from(aiUsage)
-      .where(userAndPeriodFilter)
+      .where(conditions)
       .groupBy(aiUsage.action);
 
     const row = totals[0];
@@ -109,5 +123,17 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       totalCostUsd: Number(row?.totalCostUsd ?? 0),
       byAction,
     };
+  }
+
+  private periodToDate(period: 'day' | 'week' | 'month'): Date {
+    const since = new Date();
+    if (period === 'day') {
+      since.setUTCHours(0, 0, 0, 0);
+    } else if (period === 'week') {
+      since.setUTCDate(since.getUTCDate() - 7);
+    } else {
+      since.setUTCDate(since.getUTCDate() - 30);
+    }
+    return since;
   }
 }

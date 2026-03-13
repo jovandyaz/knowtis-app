@@ -13,6 +13,8 @@ describe('AIRateLimitService', () => {
       getDailyUsage: vi.fn(),
       recordUsage: vi.fn(),
       getMetricsSummary: vi.fn(),
+      getGlobalDailyUsage: vi.fn(),
+      getGlobalMetricsSummary: vi.fn(),
     };
     const mockConfig = createMockConfig();
     service = new AIRateLimitService(mockUsageRepo, mockConfig);
