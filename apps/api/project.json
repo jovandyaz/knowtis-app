@@ -117,6 +117,13 @@
         "passWithNoTests": true
       }
     },
+    "seed-admin": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/scripts/seed-admin.ts",
+        "cwd": "apps/api"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
