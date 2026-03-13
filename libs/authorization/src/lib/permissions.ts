@@ -1,3 +1,4 @@
+import { USER_ROLE } from '@jovandyaz/auth';
 import { definePermissions } from '@jovandyaz/permissions-core';
 
 import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
@@ -19,6 +20,12 @@ export function defineAbilityFor(
     (allow) => {
       if (!user) {
         allow('read', Note, { generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK });
+        return;
+      }
+
+      // Admin: full access to all notes
+      if (user.role === USER_ROLE.ADMIN) {
+        allow('manage', Note);
         return;
       }
 

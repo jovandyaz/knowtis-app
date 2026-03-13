@@ -1,3 +1,4 @@
+import type { UserRole } from '@jovandyaz/auth';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq } from 'drizzle-orm';
 
@@ -67,6 +68,44 @@ export class UsersRepository {
       .delete(users)
       .where(eq(users.id, id))
       .returning();
+
+    return result[0] ?? null;
+  }
+
+  async findAll() {
+    return this.db
+      .select({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        role: users.role,
+        provider: users.provider,
+        isAnonymous: users.isAnonymous,
+        createdAt: users.createdAt,
+        emailVerifiedAt: users.emailVerifiedAt,
+      })
+      .from(users)
+      .where(eq(users.isAnonymous, false))
+      .orderBy(users.createdAt);
+  }
+
+  async updateRole(id: string, role: UserRole) {
+    const result = await this.db
+      .update(users)
+      .set({ role, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning({
+        id: users.id,
+        email: users.email,
+        name: users.name,
+        avatarUrl: users.avatarUrl,
+        role: users.role,
+        provider: users.provider,
+        isAnonymous: users.isAnonymous,
+        createdAt: users.createdAt,
+        emailVerifiedAt: users.emailVerifiedAt,
+      });
 
     return result[0] ?? null;
   }

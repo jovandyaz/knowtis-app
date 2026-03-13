@@ -6,12 +6,14 @@ export type {
   AuthTokens,
   AuthResponse,
   RequestUser,
+  UserRole,
   PasswordRequirements,
   PasswordCheck,
 } from './lib/types/auth.types';
 export {
   getPasswordChecks,
   PASSWORD_REQUIREMENTS,
+  USER_ROLE,
 } from './lib/types/auth.types';
 
 export { AuthErrors, AuthErrorCodes } from './lib/errors/auth.errors';
