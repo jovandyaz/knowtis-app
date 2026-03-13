@@ -1,4 +1,9 @@
-import type { AuthDomainError, Email, UserId } from '@jovandyaz/auth/server';
+import type {
+  AuthDomainError,
+  Email,
+  UserId,
+  UserRole,
+} from '@jovandyaz/auth/server';
 import type { Result } from 'neverthrow';
 
 export interface UserEntity {
@@ -8,6 +13,7 @@ export interface UserEntity {
   readonly avatarUrl: string | null;
   readonly passwordHash: string | null;
   readonly emailVerifiedAt: Date | null;
+  readonly role: UserRole;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
