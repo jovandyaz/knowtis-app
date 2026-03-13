@@ -29,12 +29,13 @@ export const ApiBadRequest = (reason = 'invalid input') =>
   });
 
 /**
- * Common 404 Not Found response decorator with a customizable entity name.
+ * Common 404 Not Found response decorator.
+ * Pass the full reason (e.g. "note does not exist").
  */
-export const ApiNotFound = (entity: string) =>
+export const ApiNotFound = (reason: string) =>
   ApiResponse({
     status: 404,
-    description: `Not found — ${entity} does not exist`,
+    description: `Not found — ${reason}`,
   });
 
 /**
