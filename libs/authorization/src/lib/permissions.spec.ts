@@ -1,3 +1,4 @@
+import { USER_ROLE } from '@jovandyaz/auth';
 import { describe, expect, it } from 'vitest';
 
 import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
@@ -116,6 +117,22 @@ describe('defineAbilityFor', () => {
     it('non-owner cannot update public note without permission', () => {
       const ability = defineAbilityFor(user);
       expect(ability.can('update', publicNote)).toBe(false);
+    });
+  });
+
+  describe('admin user', () => {
+    it('should manage any note', () => {
+      const ability = defineAbilityFor({
+        id: 'admin-1',
+        role: USER_ROLE.ADMIN,
+      });
+      const otherUserNote: NoteSubject = {
+        __typename: 'Note',
+        id: 'n1',
+        ownerId: 'other',
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+      };
+      expect(ability.can('manage', otherUserNote)).toBe(true);
     });
   });
 
