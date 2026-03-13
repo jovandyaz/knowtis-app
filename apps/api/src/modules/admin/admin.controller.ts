@@ -31,10 +31,10 @@ import { MetricsSummaryResponseDto } from './dto/metrics-summary-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
-const VALID_PERIODS: readonly string[] = ['day', 'week', 'month'];
+const VALID_PERIODS: readonly MetricsPeriod[] = ['day', 'week', 'month'];
 
 function isMetricsPeriod(value: string): value is MetricsPeriod {
-  return VALID_PERIODS.includes(value);
+  return (VALID_PERIODS as readonly string[]).includes(value);
 }
 
 @ApiTags('Admin')

@@ -29,6 +29,7 @@ import { AIErrorCodes, type AIDomainError } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
+  type MetricsPeriod,
 } from './domain/ports/ai-usage.repository';
 import { AICompleteDto } from './dto/ai.dto';
 
@@ -42,8 +43,7 @@ const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
-const VALID_PERIODS = ['day', 'week', 'month'] as const;
-type MetricsPeriod = (typeof VALID_PERIODS)[number];
+const VALID_PERIODS: readonly MetricsPeriod[] = ['day', 'week', 'month'];
 
 const completionResultSchema = {
   type: 'object' as const,
