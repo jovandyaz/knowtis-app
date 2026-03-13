@@ -1,6 +1,10 @@
 import { CurrentUser, JwtAuthGuard, Public } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import {
+  PoliciesGuard,
+  RequirePermission,
+} from '@jovandyaz/permissions-nestjs';
+import {
   Body,
   Controller,
   Delete,
@@ -20,7 +24,6 @@ import type { Result } from 'neverthrow';
 import { SUBJECTS } from '@knowtis/authorization';
 import { pickDefined } from '@knowtis/shared-util';
 
-import { PoliciesGuard, RequirePermission } from '../authorization';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { McpScopeGuard } from '../mcp/guards/mcp-scope.guard';
 import {
