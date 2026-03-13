@@ -5,12 +5,14 @@ export type {
   AuthTokens,
   AuthResponse,
   RequestUser,
+  UserRole,
   PasswordRequirements,
   PasswordCheck,
 } from './lib/types/auth.types';
 export {
   getPasswordChecks,
   PASSWORD_REQUIREMENTS,
+  USER_ROLE,
 } from './lib/types/auth.types';
 
 // Errors (browser-safe, also available from @jovandyaz/auth)
