@@ -19,11 +19,26 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiBody,
+  ApiOperation,
+  ApiParam,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import type { Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
 import { pickDefined } from '@knowtis/shared-util';
 
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+  ApiForbidden,
+  ApiNotFound,
+  ApiUnauthorized,
+} from '../../core/swagger';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { McpScopeGuard } from '../mcp/guards/mcp-scope.guard';
 import {
@@ -38,7 +53,7 @@ import {
   UpdateNoteHandler,
 } from './application';
 import { NoteErrorCodes, type NoteDomainError } from './domain';
-import type {
+import {
   CreateNoteDto,
   NotesQueryDto,
   ShareNoteDto,
@@ -72,9 +87,51 @@ function unwrapOrThrow<T>(result: Result<T, NoteDomainError>): T {
   return result.value;
 }
 
+const noteProperties = {
+  id: { type: 'string', format: 'uuid' },
+  title: { type: 'string', example: 'Meeting Notes' },
+  content: { type: 'string', example: '<p>Hello world</p>' },
+  ownerId: { type: 'string', format: 'uuid' },
+  generalAccess: {
+    type: 'string',
+    enum: ['restricted', 'anyone_with_link'] as string[],
+  },
+  generalAccessPermission: {
+    type: 'string',
+    enum: ['viewer', 'editor'] as string[],
+  },
+  shareToken: { type: 'string', nullable: true },
+  editorsCanShare: { type: 'boolean' },
+  createdAt: { type: 'string', format: 'date-time' },
+  updatedAt: { type: 'string', format: 'date-time' },
+};
+
+const noteSchema = { type: 'object' as const, properties: noteProperties };
+
+const noteWithOwnerSchema = {
+  type: 'object' as const,
+  properties: {
+    ...noteProperties,
+    owner: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        name: { type: 'string', example: 'John Doe' },
+        avatarUrl: { type: 'string', nullable: true },
+      },
+    },
+    accessLevel: {
+      type: 'string',
+      enum: ['owner', 'editor', 'viewer'] as string[],
+    },
+  },
+};
+
 /**
  * Notes REST API Controller
  */
+@ApiTags('Notes')
+@ApiBearerAuth()
 @Controller('notes')
 @UseGuards(JwtAuthGuard, PoliciesGuard, McpScopeGuard)
 export class NotesController {
@@ -90,6 +147,29 @@ export class NotesController {
     private readonly getNoteByTokenHandler: GetNoteByTokenHandler
   ) {}
 
+  @ApiOperation({
+    summary: 'List accessible notes',
+    description:
+      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term on the title.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of notes with access level',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          ...noteProperties,
+          accessLevel: {
+            type: 'string',
+            enum: ['owner', 'editor', 'viewer'],
+          },
+        },
+      },
+    },
+  })
+  @ApiUnauthorized()
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope('read')
@@ -104,6 +184,22 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Get a note by share token',
+    description:
+      'Returns a note accessible via its share link. Does not require authentication.',
+  })
+  @ApiParam({
+    name: 'token',
+    type: 'string',
+    description: 'The share token of the note',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Note retrieved successfully',
+    schema: noteWithOwnerSchema,
+  })
+  @ApiNotFound('share token does not exist')
   @Get('shared/:token')
   @Public()
   async getNoteByToken(@Param('token') token: string) {
@@ -111,6 +207,25 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Get a note by ID',
+    description:
+      'Returns a specific note if the authenticated user has access to it.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Note retrieved successfully',
+    schema: noteWithOwnerSchema,
+  })
+  @ApiUnauthorized()
+  @ApiForbidden('user does not have access to this note')
+  @ApiNotFound('note does not exist')
   @Get(':id')
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope('read')
@@ -125,6 +240,19 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Create a new note',
+    description:
+      'Creates a new note owned by the authenticated user. Anonymous users have a limit on the number of notes they can create.',
+  })
+  @ApiBody({ type: CreateNoteDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Note created successfully',
+    schema: noteSchema,
+  })
+  @ApiBadRequest('invalid title or content')
+  @ApiAuthErrors('anonymous note limit reached')
   @Post()
   @UseGuards(AnonymousNoteLimitGuard)
   @RequirePermission('create', SUBJECTS.Note)
@@ -138,6 +266,26 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Update a note',
+    description:
+      'Updates note content and/or sharing settings. Only owners can change sharing settings; editors can update title and content.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note to update',
+  })
+  @ApiBody({ type: UpdateNoteDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Note updated successfully',
+    schema: noteSchema,
+  })
+  @ApiBadRequest()
+  @ApiAuthErrors('insufficient permissions on this note')
+  @ApiNotFound('note does not exist')
   @Patch(':id')
   @RequirePermission('update', SUBJECTS.Note)
   @RequireMcpScope('write')
@@ -160,6 +308,20 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Delete a note',
+    description:
+      'Permanently deletes a note. Only the owner can delete a note.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note to delete',
+  })
+  @ApiResponse({ status: 204, description: 'Note deleted successfully' })
+  @ApiAuthErrors('only the owner can delete a note')
+  @ApiNotFound('note does not exist')
   @Delete(':id')
   @RequirePermission('delete', SUBJECTS.Note)
   @RequireMcpScope('write')
@@ -175,6 +337,33 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Share a note with a user',
+    description:
+      'Grants a user access to the note with the specified permission level. If the user already has access, their permission is updated.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note to share',
+  })
+  @ApiBody({ type: ShareNoteDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Permission granted or updated',
+    schema: {
+      type: 'object',
+      properties: {
+        noteId: { type: 'string', format: 'uuid' },
+        userId: { type: 'string', format: 'uuid' },
+        permission: { type: 'string', enum: ['viewer', 'editor'] },
+      },
+    },
+  })
+  @ApiBadRequest()
+  @ApiAuthErrors('only the owner can share a note')
+  @ApiNotFound('note does not exist')
   @Post(':id/share')
   @RequirePermission('share', SUBJECTS.Note)
   @RequireMcpScope('share')
@@ -192,6 +381,26 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'Revoke user access to a note',
+    description:
+      "Removes a specific user's access to the note. Only the note owner can revoke access.",
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note',
+  })
+  @ApiParam({
+    name: 'userId',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the user whose access will be revoked',
+  })
+  @ApiResponse({ status: 204, description: 'Access revoked successfully' })
+  @ApiAuthErrors('only the owner can revoke access')
+  @ApiNotFound('note does not exist')
   @Delete(':id/share/:userId')
   @RequirePermission('share', SUBJECTS.Note)
   @RequireMcpScope('share')
@@ -209,6 +418,48 @@ export class NotesController {
     return unwrapOrThrow(result);
   }
 
+  @ApiOperation({
+    summary: 'List note collaborators',
+    description:
+      'Returns all users who have been granted access to the note, along with their permissions.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of collaborators with permissions',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          permission: {
+            type: 'object',
+            properties: {
+              noteId: { type: 'string', format: 'uuid' },
+              userId: { type: 'string', format: 'uuid' },
+              permission: { type: 'string', enum: ['viewer', 'editor'] },
+            },
+          },
+          user: {
+            type: 'object',
+            properties: {
+              id: { type: 'string', format: 'uuid' },
+              name: { type: 'string', example: 'Jane Doe' },
+              email: { type: 'string', format: 'email' },
+              avatarUrl: { type: 'string', nullable: true },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiAuthErrors('insufficient permissions')
+  @ApiNotFound('note does not exist')
   @Get(':id/collaborators')
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope('read')
