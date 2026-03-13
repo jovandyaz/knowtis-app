@@ -6,7 +6,6 @@ import { NestFactory } from '@nestjs/core';
 import { hash } from 'bcryptjs';
 import { eq } from 'drizzle-orm';
 
-import { validateEnv } from '../config';
 import { DATABASE_CONNECTION, DatabaseModule } from '../database';
 import type { Database } from '../database';
 import { users } from '../database/schema';
@@ -17,7 +16,6 @@ const SALT_ROUNDS = 10;
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      validate: validateEnv,
       envFilePath: ['.env.local', '.env'],
     }),
     DatabaseModule,

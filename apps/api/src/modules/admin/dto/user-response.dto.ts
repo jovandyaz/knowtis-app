@@ -1,5 +1,5 @@
-import { USER_ROLE } from '@jovandyaz/auth';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { USER_ROLE, type UserRole } from '@jovandyaz/auth';
+import { ApiProperty } from '@nestjs/swagger';
 
 export class UserResponseDto {
   @ApiProperty({
@@ -14,11 +14,11 @@ export class UserResponseDto {
   @ApiProperty({ example: 'John Doe' })
   name!: string;
 
-  @ApiPropertyOptional({ example: null })
+  @ApiProperty({ nullable: true, example: null })
   avatarUrl!: string | null;
 
   @ApiProperty({ enum: Object.values(USER_ROLE), example: 'user' })
-  role!: string;
+  role!: UserRole;
 
   @ApiProperty({ example: 'local' })
   provider!: string;
@@ -29,6 +29,6 @@ export class UserResponseDto {
   @ApiProperty({ format: 'date-time', example: '2024-01-15T10:30:00.000Z' })
   createdAt!: Date;
 
-  @ApiPropertyOptional({ format: 'date-time', example: null })
+  @ApiProperty({ nullable: true, format: 'date-time', example: null })
   emailVerifiedAt!: Date | null;
 }

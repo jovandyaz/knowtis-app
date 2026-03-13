@@ -25,6 +25,7 @@ import {
   ApiOperation,
   ApiParam,
   ApiResponse,
+  ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Result } from 'neverthrow';
@@ -200,6 +201,7 @@ export class NotesController {
     schema: noteWithOwnerSchema,
   })
   @ApiNotFound('share token does not exist')
+  @ApiSecurity({})
   @Get('shared/:token')
   @Public()
   async getNoteByToken(@Param('token') token: string) {
