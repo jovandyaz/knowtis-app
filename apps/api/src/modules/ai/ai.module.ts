@@ -6,6 +6,7 @@ import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
+import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
@@ -38,10 +39,12 @@ import { SemanticCacheService } from './infrastructure/redis/semantic-cache.serv
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: SemanticCacheService },
     AIOrchestrator,
+    AIMetricsService,
     AIRateLimitService,
     CompleteTextHandler,
     StreamTextHandler,
     AIGateway,
   ],
+  exports: [AIMetricsService],
 })
 export class AIModule {}
