@@ -11,6 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
+import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagKeyParam } from './dto/feature-flag-key.param';
 import { UpsertFeatureFlagDto } from './dto/feature-flags.dto';
 import { FeatureFlagsService } from './feature-flags.service';
@@ -25,7 +26,8 @@ export class FeatureFlagsController {
   }
 
   @Put(':key')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   async upsert(
     @Param() params: FeatureFlagKeyParam,
     @Body() dto: UpsertFeatureFlagDto
@@ -38,7 +40,8 @@ export class FeatureFlagsController {
   }
 
   @Delete(':key')
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param() params: FeatureFlagKeyParam) {
     await this.featureFlagsService.remove(params.key);
