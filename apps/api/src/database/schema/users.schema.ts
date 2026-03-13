@@ -1,6 +1,7 @@
 import {
   boolean,
   index,
+  pgEnum,
   pgTable,
   text,
   timestamp,
@@ -9,6 +10,8 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
+
+export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
 
 export const users = pgTable(
   'users',
@@ -22,6 +25,7 @@ export const users = pgTable(
     passwordHash: text('password_hash'),
     locale: text('locale').default(DEFAULT_LOCALE),
     isAnonymous: boolean('is_anonymous').notNull().default(false),
+    role: userRoleEnum('role').notNull().default('user'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
