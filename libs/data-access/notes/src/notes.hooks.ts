@@ -105,6 +105,7 @@ export function useUpdateNote() {
     },
     onSettled: (_data, _error, { id }) => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
     },
   });
 }
