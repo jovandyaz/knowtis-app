@@ -133,24 +133,41 @@ export class CompleteTextHandler {
         DEFAULT_MODEL_PRICING[result.model]
       );
 
-      await this.rateLimitService.recordUsage({
-        userId: input.userId,
-        action,
-        model: result.model,
-        estimatedTokens,
-        inputTokens: result.inputTokens,
-        outputTokens: result.outputTokens,
-        costUsd: usage.costUsd,
-      });
-
-      if (this.cache?.isCacheable(action)) {
-        await this.cache.set(action, model, userPrompt, {
-          text: result.text,
+      this.rateLimitService
+        .recordUsage({
+          userId: input.userId,
+          action,
           model: result.model,
+          estimatedTokens,
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           costUsd: usage.costUsd,
-        });
+        })
+        .catch((err) =>
+          this.logger.warn({
+            event: 'ai.usage.record_failed',
+            requestId,
+            userId: input.userId,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          })
+        );
+
+      if (this.cache?.isCacheable(action)) {
+        this.cache
+          .set(action, model, userPrompt, {
+            text: result.text,
+            model: result.model,
+            inputTokens: result.inputTokens,
+            outputTokens: result.outputTokens,
+            costUsd: usage.costUsd,
+          })
+          .catch((err) =>
+            this.logger.warn({
+              event: 'ai.cache.write_failed',
+              requestId,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            })
+          );
       }
 
       this.logger.log({
