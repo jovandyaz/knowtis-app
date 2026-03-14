@@ -1,6 +1,7 @@
 import { useAIStore } from '@/stores/ai.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
+import i18next from 'i18next';
 import {
   FileText,
   Heading1,
@@ -70,7 +71,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
           useVoiceNoteEditorStore.getState().open(pos, stream);
         })
         .catch(() => {
-          toast.error('Could not access microphone. Please check permissions.');
+          toast.error(i18next.t('ai.voice.micGenericError', { ns: 'notes' }));
         });
     },
   },

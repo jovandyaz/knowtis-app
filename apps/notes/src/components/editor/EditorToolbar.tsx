@@ -62,6 +62,7 @@ export const EditorToolbar = memo(function EditorToolbar({
   onVoiceNote,
 }: EditorToolbarProps) {
   const { t } = useTranslation('common');
+  const { t: tNotes } = useTranslation('notes');
 
   if (!editor) {
     return null;
@@ -98,7 +99,7 @@ export const EditorToolbar = memo(function EditorToolbar({
             size="sm"
             className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary) md:hidden"
             onClick={onVoiceNote}
-            aria-label="Voice note"
+            aria-label={tNotes('ai.slash.voiceNote')}
           >
             <Mic className="h-4 w-4" />
           </Button>
