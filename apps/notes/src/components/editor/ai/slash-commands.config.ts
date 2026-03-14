@@ -1,4 +1,5 @@
 import { useAIStore } from '@/stores/ai.store';
+import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
 import {
   FileText,
@@ -7,11 +8,13 @@ import {
   Heading3,
   List,
   ListOrdered,
+  Mic,
   PenLine,
   Quote,
   Wand2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { AI_ACTION, type AIAction } from '@knowtis/shared-types';
 
@@ -43,7 +46,34 @@ export interface SlashCommandItem {
 }
 
 export const SLASH_COMMANDS: SlashCommandItem[] = [
-  // AI commands
+  {
+    id: 'ai-voice-note',
+    icon: Mic,
+    labelKey: 'ai.slash.voiceNote',
+    descriptionKey: 'ai.slash.voiceNoteDesc',
+    group: 'ai',
+    keywords: [
+      'voice',
+      'audio',
+      'record',
+      'dictate',
+      'voz',
+      'grabar',
+      'nota de voz',
+    ],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).run();
+      const pos = editor.state.selection.to;
+      navigator.mediaDevices
+        .getUserMedia({ audio: true })
+        .then((stream) => {
+          useVoiceNoteEditorStore.getState().open(pos, stream);
+        })
+        .catch(() => {
+          toast.error('Could not access microphone. Please check permissions.');
+        });
+    },
+  },
   {
     id: 'ai-summarize',
     icon: FileText,

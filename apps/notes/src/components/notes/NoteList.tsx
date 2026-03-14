@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { DEBOUNCE_DELAYS } from '@/lib';
+import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -22,6 +24,7 @@ export function NoteList() {
   const { t: tCommon } = useTranslation('common');
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
     useNotesSearchStore();
@@ -109,7 +112,8 @@ export function NoteList() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="hidden md:block">
+        <div className="hidden md:flex md:items-center md:gap-3">
+          {aiEnabled && <VoiceNoteRecorder size="default" />}
           <CreateNoteDialog />
         </div>
       </div>
