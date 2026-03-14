@@ -44,6 +44,7 @@ export interface UseVoiceRecorderReturn {
   audioBlob: Blob | null;
   isSupported: boolean;
   isWebSpeechSupported: boolean;
+  speechFailed: boolean;
   start: (preAcquiredStream?: MediaStream) => Promise<void>;
   pause: () => void;
   resume: () => void;
@@ -54,7 +55,7 @@ export interface UseVoiceRecorderReturn {
 const DEFAULT_MAX_DURATION = 300;
 const DATA_COLLECT_INTERVAL_MS = 1000;
 const ANALYSER_FFT_SIZE = 2048;
-const DEFAULT_SPEECH_LANGUAGE = 'en-US';
+const MAX_RECOGNITION_ERRORS = 3;
 
 export function useVoiceRecorder(
   options: UseVoiceRecorderOptions = {}
@@ -66,12 +67,14 @@ export function useVoiceRecorder(
   const [liveTranscript, setLiveTranscript] = useState('');
   const [analyserNode, setAnalyserNode] = useState<AnalyserNode | null>(null);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [speechFailed, setSpeechFailed] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+  const recognitionErrorCount = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const durationRef = useRef(0);
   const maxDurationRef = useRef(maxDuration);
@@ -136,6 +139,7 @@ export function useVoiceRecorder(
     setDuration(0);
     setLiveTranscript('');
     setAudioBlob(null);
+    setSpeechFailed(false);
     setState('idle');
   }, [releaseResources]);
 
@@ -167,12 +171,15 @@ export function useVoiceRecorder(
       return;
     }
 
+    recognitionErrorCount.current = 0;
+    setSpeechFailed(false);
+
     const recognition = new Ctor();
     recognition.continuous = true;
     recognition.interimResults = true;
-    recognition.lang = navigator.language || DEFAULT_SPEECH_LANGUAGE;
 
     recognition.onresult = (event: SpeechRecognitionEvent) => {
+      recognitionErrorCount.current = 0;
       let transcript = '';
       for (let i = 0; i < event.results.length; i++) {
         transcript += event.results[i][0].transcript;
@@ -181,16 +188,37 @@ export function useVoiceRecorder(
     };
 
     recognition.onerror = (event) => {
-      if (event.error !== 'no-speech' && event.error !== 'aborted') {
-        console.error(
-          '[useVoiceRecorder] SpeechRecognition error:',
-          event.error
-        );
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        return;
       }
+
+      recognitionErrorCount.current += 1;
+
+      if (recognitionErrorCount.current >= MAX_RECOGNITION_ERRORS) {
+        console.warn(
+          `[useVoiceRecorder] SpeechRecognition failed ${MAX_RECOGNITION_ERRORS} times, disabling live transcription`
+        );
+        setSpeechFailed(true);
+        try {
+          recognition.stop();
+        } catch (e) {
+          console.warn('[useVoiceRecorder] Recognition stop after failure:', e);
+        }
+        recognitionRef.current = null;
+        return;
+      }
+
+      console.error(
+        `[useVoiceRecorder] SpeechRecognition error (${recognitionErrorCount.current}/${MAX_RECOGNITION_ERRORS}):`,
+        event.error
+      );
     };
 
     recognition.onend = () => {
-      if (stateRef.current === 'recording') {
+      if (
+        stateRef.current === 'recording' &&
+        recognitionErrorCount.current < MAX_RECOGNITION_ERRORS
+      ) {
         try {
           recognition.start();
         } catch (e) {
@@ -207,6 +235,7 @@ export function useVoiceRecorder(
         '[useVoiceRecorder] Failed to start SpeechRecognition:',
         error
       );
+      setSpeechFailed(true);
     }
   }, []);
 
@@ -339,6 +368,7 @@ export function useVoiceRecorder(
     audioBlob,
     isSupported,
     isWebSpeechSupported,
+    speechFailed,
     start,
     pause,
     resume,
