@@ -1,6 +1,6 @@
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { generateObject } from 'ai';
+import { generateText, Output } from 'ai';
 import type { ProviderRegistryProvider } from 'ai';
 import type { ZodType } from 'zod';
 
@@ -31,18 +31,25 @@ export class AIStructuredOutputSDKProvider
     schema: ZodType<T>,
     options: StructuredOutputOptions
   ): Promise<StructuredOutputResult<T>> {
-    const result = await generateObject({
+    if (
+      options.model.startsWith('anthropic:') &&
+      !this.configService.get('ANTHROPIC_API_KEY')
+    ) {
+      throw new Error('ANTHROPIC_API_KEY is not configured');
+    }
+
+    const result = await generateText({
       model: this.registry.languageModel(
         options.model as `${string}:${string}`
       ),
       ...(options.system ? { system: options.system } : {}),
       prompt,
-      schema,
+      output: Output.object({ schema }),
       maxRetries: options.maxRetries ?? 3,
     });
 
     return {
-      object: result.object,
+      object: result.output as T,
       inputTokens: result.usage?.inputTokens ?? 0,
       outputTokens: result.usage?.outputTokens ?? 0,
     };

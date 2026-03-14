@@ -24,7 +24,6 @@ const envSchemaBase = z.object({
   EMAIL_FROM: z.string().default(DEFAULT_FROM_ADDRESS),
   ANTHROPIC_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  AI_ENABLED: z.string().default('false'),
   AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-4-20250514'),
   AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
@@ -35,7 +34,6 @@ const envSchemaBase = z.object({
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
   AI_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
   AI_CACHE_ENABLED: z.string().default('true'),
-  VOICE_NOTES_ENABLED: z.string().default('false'),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
@@ -45,29 +43,6 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
       message: 'RESEND_API_KEY is required when EMAIL_PROVIDER=resend',
       path: ['RESEND_API_KEY'],
       input: data.RESEND_API_KEY,
-    });
-  }
-
-  if (data.AI_ENABLED === 'true' && !data.ANTHROPIC_API_KEY) {
-    ctx.addIssue({
-      code: 'custom',
-      message: 'ANTHROPIC_API_KEY is required when AI_ENABLED=true',
-      path: ['ANTHROPIC_API_KEY'],
-      input: data.ANTHROPIC_API_KEY,
-    });
-  }
-
-  if (
-    data.AI_ENABLED === 'true' &&
-    data.VOICE_NOTES_ENABLED === 'true' &&
-    !data.OPENAI_API_KEY
-  ) {
-    ctx.addIssue({
-      code: 'custom',
-      message:
-        'OPENAI_API_KEY is required when AI_ENABLED=true and VOICE_NOTES_ENABLED=true',
-      path: ['OPENAI_API_KEY'],
-      input: data.OPENAI_API_KEY,
     });
   }
 });

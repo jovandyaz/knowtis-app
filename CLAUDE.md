@@ -191,13 +191,13 @@ JWT-based with HttpOnly cookie refresh tokens:
 
 ## Backend Modules
 
-- **ai** - AI text assistant with WebSocket streaming (`/ai` namespace), rate limiting, response caching, and usage tracking. Gated by `AI_ENABLED` feature flag. Uses DDD/Clean Architecture. See [docs/AI.md](docs/AI.md).
+- **ai** - AI text assistant with WebSocket streaming (`/ai` namespace), rate limiting, response caching, and usage tracking. Gated by `ai_enabled` DB feature flag. Uses DDD/Clean Architecture. See [docs/AI.md](docs/AI.md).
 - **auth** - JWT authentication with DDD/Clean Architecture (Ports & Adapters, Value Objects, Result pattern via neverthrow)
 - **notes** - Notes CRUD with DDD/Clean Architecture, sharing/permissions
 - **collaboration** - WebSocket gateway (Socket.io) for Yjs real-time sync
 - **users** - User management (service-based)
 - **health** - Health check endpoints (`/api/v1/health/ping` returns 200, `/api/v1/health/ready` checks DB connectivity via `DbHealthIndicator`, returns 503 when DB is down)
-- **feature-flags** - Env-based feature flag service with guard
+- **feature-flags** - DB-backed feature flag service with guard
 - **mcp** - MCP server for AI assistant integration (Claude, Cursor, VS Code). Standalone Hono app with 7 tools for notes CRUD and sharing. See [docs/MCP.md](docs/MCP.md).
 
 ## API Documentation
@@ -213,7 +213,7 @@ pnpm docker:up
 pnpm db:push
 ```
 
-> AI features require `AI_ENABLED=true` and `ANTHROPIC_API_KEY` in `apps/api/.env`. See [docs/AI.md](docs/AI.md).
+> AI features require `ANTHROPIC_API_KEY` in `apps/api/.env` and the `ai_enabled` flag toggled on in the DB. See [docs/AI.md](docs/AI.md).
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->

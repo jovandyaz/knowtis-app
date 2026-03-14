@@ -21,6 +21,10 @@ export class VoiceTranscriptionService {
     audio: Buffer,
     language?: string
   ): Promise<Result<string, AIDomainError>> {
+    if (!this.configService.get('OPENAI_API_KEY')) {
+      return err(AIErrors.providerError('OPENAI_API_KEY is not configured'));
+    }
+
     try {
       const result = await transcribe({
         model: this.openai.transcription('whisper-1'),
