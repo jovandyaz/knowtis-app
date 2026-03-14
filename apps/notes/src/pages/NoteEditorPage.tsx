@@ -139,7 +139,7 @@ function DesktopEditorHeader({
           <VoiceButton
             size="sm"
             onClick={onVoiceNoteClick}
-            aria-label="Record voice note"
+            aria-label={t('ai.voice.recordVoiceNote')}
           />
         )}
 

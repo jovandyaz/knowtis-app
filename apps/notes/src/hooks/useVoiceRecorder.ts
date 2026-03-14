@@ -215,6 +215,12 @@ export function useVoiceRecorder(
       if (startingRef.current) {
         return;
       }
+
+      const existingRecorder = mediaRecorderRef.current;
+      if (existingRecorder && existingRecorder.state !== 'inactive') {
+        return;
+      }
+
       startingRef.current = true;
 
       chunksRef.current = [];
