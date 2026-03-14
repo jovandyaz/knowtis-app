@@ -57,3 +57,7 @@ export {
   type CommandMenuItemProps,
   type CommandMenuBackProps,
 } from './CommandMenu';
+export { VoiceButton, type VoiceButtonProps } from './VoiceButton';
+export { AudioWaveform, type AudioWaveformProps } from './AudioWaveform';
+export { RecordingTimer, type RecordingTimerProps } from './RecordingTimer';
+export { RecordingModal, type RecordingModalProps } from './RecordingModal';

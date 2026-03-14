@@ -45,6 +45,8 @@ function InternalEditor({
   editable,
   saveStatus,
   autoFocus,
+  onEditorReady,
+  onVoiceNote,
 }: InternalEditorProps) {
   const aiEnabled = useAIStore((s) => s.aiEnabled);
 
@@ -115,9 +117,19 @@ function InternalEditor({
     }
   }, [autoFocus, editor]);
 
+  useEffect(() => {
+    if (editor && !editor.isDestroyed) {
+      onEditorReady?.(editor);
+    }
+  }, [editor, onEditorReady]);
+
   return (
     <>
-      <EditorToolbar editor={editor} saveStatus={saveStatus} />
+      <EditorToolbar
+        editor={editor}
+        saveStatus={saveStatus}
+        onVoiceNote={onVoiceNote}
+      />
       <div className={EDITOR_CONTAINER_CLASSES}>
         {editor && aiEnabled && (
           <>
@@ -170,6 +182,8 @@ export function CollaborativeEditor({
   onEditDenied,
   saveStatus,
   autoFocus,
+  onEditorReady,
+  onVoiceNote,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const editorState = useCollaborativeEditor(noteId);
@@ -237,6 +251,8 @@ export function CollaborativeEditor({
           editable={editable}
           saveStatus={saveStatus}
           autoFocus={autoFocus}
+          onEditorReady={onEditorReady}
+          onVoiceNote={onVoiceNote}
         />
       </div>
     </EditorErrorBoundary>

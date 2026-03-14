@@ -61,14 +61,18 @@ describe('AIOrchestrator', () => {
     expect(prompt).toContain('prefix or suffix');
   });
 
-  it.each(SUPPORTED_AI_ACTIONS)(
-    'should have a system prompt for action: %s',
-    (action) => {
-      const prompt = orchestrator.getSystemPrompt(action);
-      expect(prompt).toBeTruthy();
-      expect(typeof prompt).toBe('string');
-    }
-  );
+  it.each(
+    SUPPORTED_AI_ACTIONS.filter((a) => a !== AI_ACTION.VOICE_TRANSCRIPTION)
+  )('should have a system prompt for action: %s', (action) => {
+    const prompt = orchestrator.getSystemPrompt(action);
+    expect(prompt).toBeTruthy();
+    expect(typeof prompt).toBe('string');
+  });
+
+  it('should have an empty system prompt for voice-transcription (handled by Whisper)', () => {
+    const prompt = orchestrator.getSystemPrompt(AI_ACTION.VOICE_TRANSCRIPTION);
+    expect(prompt).toBe('');
+  });
 
   it.each([
     AI_ACTION.SUMMARIZE,

@@ -13,7 +13,7 @@ export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
   fullHeight?: boolean;
 }
 
-const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(
+export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(
   (
     {
       className,
@@ -59,5 +59,3 @@ const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(
   )
 );
 ErrorState.displayName = 'ErrorState';
-
-export { ErrorState };

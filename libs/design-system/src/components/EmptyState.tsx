@@ -17,7 +17,7 @@ export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
   children?: ReactNode;
 }
 
-const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
+export const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
   (
     {
       className,
@@ -59,5 +59,3 @@ const EmptyState = forwardRef<HTMLDivElement, EmptyStateProps>(
   )
 );
 EmptyState.displayName = 'EmptyState';
-
-export { EmptyState };

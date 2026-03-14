@@ -61,6 +61,14 @@ export {
   type CommandMenuGroupProps,
   type CommandMenuItemProps,
   type CommandMenuBackProps,
+  VoiceButton,
+  type VoiceButtonProps,
+  AudioWaveform,
+  type AudioWaveformProps,
+  RecordingTimer,
+  type RecordingTimerProps,
+  RecordingModal,
+  type RecordingModalProps,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 

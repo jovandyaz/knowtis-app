@@ -37,7 +37,7 @@ describe('FeatureFlagGuard', () => {
 
   it('should return true when no feature flag is required', async () => {
     const context = createMockExecutionContext();
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(undefined);
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([]);
 
     const result = await guard.canActivate(context);
 
@@ -47,7 +47,7 @@ describe('FeatureFlagGuard', () => {
 
   it('should return true when the required flag is enabled', async () => {
     const context = createMockExecutionContext();
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue('test_flag');
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue(['test_flag']);
     featureFlagsService.isEnabled.mockResolvedValue(true);
 
     const result = await guard.canActivate(context);
@@ -58,7 +58,7 @@ describe('FeatureFlagGuard', () => {
 
   it('should throw ForbiddenException when the required flag is disabled', async () => {
     const context = createMockExecutionContext();
-    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue('disabled_flag');
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue(['disabled_flag']);
     featureFlagsService.isEnabled.mockResolvedValue(false);
 
     await expect(guard.canActivate(context)).rejects.toThrow(
@@ -66,6 +66,39 @@ describe('FeatureFlagGuard', () => {
     );
     await expect(guard.canActivate(context)).rejects.toThrow(
       "Feature 'disabled_flag' is not enabled"
+    );
+  });
+
+  it('should check all flags from both handler and class levels', async () => {
+    const context = createMockExecutionContext();
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
+      'voice_notes_enabled',
+      'ai_enabled',
+    ]);
+    featureFlagsService.isEnabled.mockResolvedValue(true);
+
+    const result = await guard.canActivate(context);
+
+    expect(result).toBe(true);
+    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith(
+      'voice_notes_enabled'
+    );
+    expect(featureFlagsService.isEnabled).toHaveBeenCalledWith('ai_enabled');
+    expect(featureFlagsService.isEnabled).toHaveBeenCalledTimes(2);
+  });
+
+  it('should throw if any flag in a compound set is disabled', async () => {
+    const context = createMockExecutionContext();
+    vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([
+      'voice_notes_enabled',
+      'ai_enabled',
+    ]);
+    featureFlagsService.isEnabled
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+
+    await expect(guard.canActivate(context)).rejects.toThrow(
+      ForbiddenException
     );
   });
 
@@ -77,9 +110,7 @@ describe('FeatureFlagGuard', () => {
       getClass: vi.fn().mockReturnValue(cls),
     });
 
-    const spy = vi
-      .spyOn(reflector, 'getAllAndOverride')
-      .mockReturnValue(undefined);
+    const spy = vi.spyOn(reflector, 'getAllAndMerge').mockReturnValue([]);
 
     await guard.canActivate(context);
 
