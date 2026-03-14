@@ -2,7 +2,7 @@
 
 ## Overview
 
-Voice-to-Note lets users record spoken audio, transcribe it via OpenAI Whisper, and structure the result into a formatted note using Claude. Available in two modes: **create** (new note from voice) and **insert** (inject text into an existing note at cursor position). Gated by `AI_ENABLED` + `VOICE_NOTES_ENABLED` feature flags.
+Voice-to-Note lets users record spoken audio, transcribe it via OpenAI Whisper, and structure the result into a formatted note using Claude. Available in two modes: **create** (new note from voice) and **insert** (inject text into an existing note at cursor position). Gated by `ai_enabled` + `voice_notes_enabled` DB feature flags.
 
 | Layer         | Technology                                                   |
 | ------------- | ------------------------------------------------------------ |
@@ -213,14 +213,21 @@ Typing `/voice` or `/voz` in the editor opens the slash command menu with "Voice
 
 ---
 
-## Environment Variables
+## Configuration
 
-| Variable              | Required         | Default | Description                     |
-| --------------------- | ---------------- | ------- | ------------------------------- |
-| `AI_ENABLED`          | Yes              | `false` | Global AI feature gate          |
-| `VOICE_NOTES_ENABLED` | When AI_ENABLED  | `false` | Voice-to-note feature gate      |
-| `OPENAI_API_KEY`      | When voice notes | —       | OpenAI API key (Whisper)        |
-| `ANTHROPIC_API_KEY`   | When AI_ENABLED  | —       | Anthropic API key (structuring) |
+### Feature Flags (DB-backed)
+
+| Flag Key              | Description                |
+| --------------------- | -------------------------- |
+| `ai_enabled`          | Global AI feature gate     |
+| `voice_notes_enabled` | Voice-to-note feature gate |
+
+### Environment Variables
+
+| Variable            | Required | Description                                           |
+| ------------------- | -------- | ----------------------------------------------------- |
+| `OPENAI_API_KEY`    | No       | OpenAI API key (Whisper, validated at runtime)        |
+| `ANTHROPIC_API_KEY` | No       | Anthropic API key (structuring, validated at runtime) |
 
 ---
 

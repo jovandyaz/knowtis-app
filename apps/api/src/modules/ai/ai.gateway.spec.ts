@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AIGateway } from './ai.gateway';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
-import { createMockConfig } from './testing/create-mock-config';
 
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
   return {
@@ -22,7 +22,7 @@ describe('AIGateway', () => {
   let gateway: AIGateway;
   let mockStreamHandler: StreamTextHandler;
   let mockJwtService: JwtService;
-  let mockConfig: ReturnType<typeof createMockConfig>;
+  let mockFeatureFlags: FeatureFlagsService;
 
   beforeEach(() => {
     mockStreamHandler = {
@@ -33,28 +33,34 @@ describe('AIGateway', () => {
       verify: vi.fn().mockReturnValue({ sub: 'user-123' }),
     } as unknown as JwtService;
 
-    mockConfig = createMockConfig();
+    mockFeatureFlags = {
+      isEnabled: vi.fn().mockResolvedValue(true),
+    } as unknown as FeatureFlagsService;
 
-    gateway = new AIGateway(mockStreamHandler, mockJwtService, mockConfig);
+    gateway = new AIGateway(
+      mockStreamHandler,
+      mockJwtService,
+      mockFeatureFlags
+    );
   });
 
   describe('handleConnection', () => {
-    it('should authenticate client with valid token', () => {
+    it('should authenticate client with valid token', async () => {
       const client = createMockAISocket({
         handshake: { auth: { token: 'valid-jwt' }, headers: {} },
       });
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(mockJwtService.verify).toHaveBeenCalledWith('valid-jwt');
       expect(client.data.userId).toBe('user-123');
       expect(client.disconnect).not.toHaveBeenCalled();
     });
 
-    it('should disconnect when no token provided', () => {
+    it('should disconnect when no token provided', async () => {
       const client = createMockAISocket();
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.emit).toHaveBeenCalledWith(
         'ai:error',
@@ -63,7 +69,7 @@ describe('AIGateway', () => {
       expect(client.disconnect).toHaveBeenCalled();
     });
 
-    it('should disconnect on invalid token', () => {
+    it('should disconnect on invalid token', async () => {
       vi.spyOn(mockJwtService, 'verify').mockImplementation(() => {
         throw new Error('invalid');
       });
@@ -72,7 +78,7 @@ describe('AIGateway', () => {
         handshake: { auth: { token: 'bad-jwt' }, headers: {} },
       });
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
       expect(client.emit).toHaveBeenCalledWith(
         'ai:error',
@@ -81,20 +87,16 @@ describe('AIGateway', () => {
       expect(client.disconnect).toHaveBeenCalled();
     });
 
-    it('should disconnect when AI is disabled', () => {
-      vi.spyOn(mockConfig, 'get').mockImplementation((key: string) => {
-        if (key === 'AI_ENABLED') {
-          return 'false';
-        }
-        return 'http://localhost:4200';
-      });
+    it('should disconnect when AI is disabled', async () => {
+      vi.mocked(mockFeatureFlags.isEnabled).mockResolvedValue(false);
 
       const client = createMockAISocket({
         handshake: { auth: { token: 'valid-jwt' }, headers: {} },
       });
 
-      gateway.handleConnection(client);
+      await gateway.handleConnection(client);
 
+      expect(mockFeatureFlags.isEnabled).toHaveBeenCalledWith('ai_enabled');
       expect(client.emit).toHaveBeenCalledWith(
         'ai:error',
         expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })

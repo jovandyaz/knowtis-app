@@ -6,7 +6,6 @@ import type { EnvConfig } from '../../../config/env.config';
 type TypedConfigService = ConfigService<EnvConfig, true>;
 
 const DEFAULT_AI_CONFIG: Record<string, unknown> = {
-  AI_ENABLED: 'true',
   AI_DEFAULT_MODEL: 'anthropic:claude-sonnet-4-20250514',
   AI_FAST_MODEL: 'anthropic:claude-haiku-4-5-20251001',
   AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
@@ -18,6 +17,7 @@ const DEFAULT_AI_CONFIG: Record<string, unknown> = {
   AI_CACHE_TTL_SECONDS: 3600,
   AI_CACHE_ENABLED: 'true',
   FRONTEND_URL: 'http://localhost:4200',
+  ANTHROPIC_API_KEY: 'test-anthropic-key',
   OPENAI_API_KEY: '',
 };
 

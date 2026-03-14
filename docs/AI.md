@@ -2,7 +2,7 @@
 
 ## Overview
 
-AI text assistant integrated into the Tiptap editor. Supports streaming responses over WebSocket and non-streaming over REST. Gated by the `AI_ENABLED` feature flag.
+AI text assistant integrated into the Tiptap editor. Supports streaming responses over WebSocket and non-streaming over REST. Gated by the `ai_enabled` DB feature flag (managed via `feature_flags` table).
 
 | Layer         | Technology                                          |
 | ------------- | --------------------------------------------------- |
@@ -174,7 +174,7 @@ aiClient handle.cancel() OR emit 'ai:cancel'
 
 **Namespace:** `/ai`
 **Authentication:** JWT sent via `socket.auth.token` at connection time. Invalid or missing token results in `ai:error` + disconnect.
-**Feature gate:** If `AI_ENABLED !== 'true'`, server emits `ai:error` with `AI_FEATURE_DISABLED` and disconnects.
+**Feature gate:** If `ai_enabled` DB flag is disabled, server emits `ai:error` with `AI_FEATURE_DISABLED` and disconnects.
 
 ### Client → Server
 
@@ -198,7 +198,7 @@ aiClient handle.cancel() OR emit 'ai:cancel'
 | Code                     | Cause                               |
 | ------------------------ | ----------------------------------- |
 | `AI_RATE_LIMIT_EXCEEDED` | Daily token or cost limit reached   |
-| `AI_FEATURE_DISABLED`    | `AI_ENABLED` is not `'true'`        |
+| `AI_FEATURE_DISABLED`    | `ai_enabled` flag is disabled       |
 | `AUTH_REQUIRED`          | Missing or invalid JWT              |
 | `VALIDATION_ERROR`       | Invalid action, content too long    |
 | `AI_PROVIDER_ERROR`      | Upstream Anthropic API failure      |
@@ -236,23 +236,31 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 ## Environment Variables
 
-All AI variables go in `apps/api/.env`. `ANTHROPIC_API_KEY` is required when `AI_ENABLED=true`.
+All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
 
-| Variable                     | Required        | Default                               | Description                   |
-| ---------------------------- | --------------- | ------------------------------------- | ----------------------------- |
-| `AI_ENABLED`                 | Yes             | `false`                               | Feature gate                  |
-| `ANTHROPIC_API_KEY`          | When AI_ENABLED | —                                     | Anthropic API key             |
-| `OPENAI_API_KEY`             | No              | —                                     | Reserved (no provider yet)    |
-| `AI_DEFAULT_MODEL`           | No              | `anthropic:claude-sonnet-4-20250514`  | Model for most actions        |
-| `AI_FAST_MODEL`              | No              | `anthropic:claude-haiku-4-5-20251001` | Model for `ghost-text`        |
-| `AI_FALLBACK_MODEL`          | No              | `anthropic:claude-haiku-4-5-20251001` | Fallback on provider error    |
-| `AI_DAILY_TOKEN_LIMIT`       | No              | `100000`                              | Per-user daily token cap      |
-| `AI_DAILY_COST_LIMIT_USD`    | No              | `1.0`                                 | Per-user daily cost cap (USD) |
-| `AI_MAX_RETRIES`             | No              | `3`                                   | Provider retry count          |
-| `AI_TIMEOUT_MS`              | No              | `30000`                               | Total request timeout (ms)    |
-| `AI_STREAM_CHUNK_TIMEOUT_MS` | No              | `10000`                               | Per-chunk timeout (ms)        |
-| `AI_CACHE_ENABLED`           | No              | `true`                                | Enable response cache         |
-| `AI_CACHE_TTL_SECONDS`       | No              | `3600`                                | Cache TTL (seconds)           |
+| Variable                     | Required | Default                               | Description                              |
+| ---------------------------- | -------- | ------------------------------------- | ---------------------------------------- |
+| `ANTHROPIC_API_KEY`          | No       | —                                     | Anthropic API key (validated at runtime) |
+| `OPENAI_API_KEY`             | No       | —                                     | OpenAI API key (Whisper transcription)   |
+| `AI_DEFAULT_MODEL`           | No       | `anthropic:claude-sonnet-4-20250514`  | Model for most actions                   |
+| `AI_FAST_MODEL`              | No       | `anthropic:claude-haiku-4-5-20251001` | Model for `ghost-text`                   |
+| `AI_FALLBACK_MODEL`          | No       | `anthropic:claude-haiku-4-5-20251001` | Fallback on provider error               |
+| `AI_DAILY_TOKEN_LIMIT`       | No       | `100000`                              | Per-user daily token cap                 |
+| `AI_DAILY_COST_LIMIT_USD`    | No       | `1.0`                                 | Per-user daily cost cap (USD)            |
+| `AI_MAX_RETRIES`             | No       | `3`                                   | Provider retry count                     |
+| `AI_TIMEOUT_MS`              | No       | `30000`                               | Total request timeout (ms)               |
+| `AI_STREAM_CHUNK_TIMEOUT_MS` | No       | `10000`                               | Per-chunk timeout (ms)                   |
+| `AI_CACHE_ENABLED`           | No       | `true`                                | Enable response cache                    |
+| `AI_CACHE_TTL_SECONDS`       | No       | `3600`                                | Cache TTL (seconds)                      |
+
+### Feature Flags (DB-backed)
+
+| Flag Key              | Description                |
+| --------------------- | -------------------------- |
+| `ai_enabled`          | Global AI feature gate     |
+| `voice_notes_enabled` | Voice-to-note feature gate |
+
+Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
 ---
 
