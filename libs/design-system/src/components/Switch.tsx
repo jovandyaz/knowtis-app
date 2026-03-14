@@ -11,7 +11,7 @@ export interface SwitchProps extends Omit<
   size?: 'default' | 'sm';
 }
 
-const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
+export const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
   (
     {
       className,
@@ -61,5 +61,3 @@ const Switch = forwardRef<HTMLButtonElement, SwitchProps>(
 );
 
 Switch.displayName = 'Switch';
-
-export { Switch };
