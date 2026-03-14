@@ -3,12 +3,17 @@ import { useTranslation } from 'react-i18next';
 interface LivePreviewProps {
   transcript: string;
   isSupported: boolean;
+  speechFailed: boolean;
 }
 
-export function LivePreview({ transcript, isSupported }: LivePreviewProps) {
+export function LivePreview({
+  transcript,
+  isSupported,
+  speechFailed,
+}: LivePreviewProps) {
   const { t } = useTranslation('notes');
 
-  if (!isSupported) {
+  if (!isSupported || speechFailed) {
     return null;
   }
 

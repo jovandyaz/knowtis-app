@@ -15,7 +15,6 @@ import {
   RecordingTimer,
   VoiceButton,
 } from '@knowtis/design-system';
-import { getISOLanguage } from '@knowtis/shared-util';
 
 import { LivePreview } from './LivePreview';
 import { RecordingControls } from './RecordingControls';
@@ -120,12 +119,10 @@ export function VoiceNoteRecorder({
 
   useEffect(() => {
     if (recorder.state === 'stopped' && recorder.audioBlob && isVoiceNoteIdle) {
-      const language = getISOLanguage(navigator.language);
       submitVoiceNote(
         {
           audio: recorder.audioBlob,
           mode: isInsertMode ? 'insert' : 'create-note',
-          ...(language && { language }),
         },
         {
           onError: (error) => {
@@ -303,6 +300,7 @@ export function VoiceNoteRecorder({
               <LivePreview
                 transcript={recorder.liveTranscript}
                 isSupported={recorder.isWebSpeechSupported}
+                speechFailed={recorder.speechFailed}
               />
 
               <RecordingControls
