@@ -9,6 +9,7 @@
     "noContentYet": "Sin contenido aún..."
   },
   "editor": {
+    "back": "Volver",
     "backToNotes": "Volver a Notas",
     "share": "Compartir",
     "titlePlaceholder": "Título de la nota...",
@@ -138,7 +139,34 @@
       "ai": "IA",
       "formatting": "Formato"
     },
+    "voice": {
+      "title": "Nota de voz",
+      "recording": "Grabando",
+      "processing": "Procesando...",
+      "ready": "Nota de voz lista",
+      "error": "Algo salió mal",
+      "tapToStart": "Toca para empezar a grabar",
+      "transcribing": "Transcribiendo y estructurando tu nota...",
+      "errorMessage": "No se pudo procesar la grabación. Puedes intentar de nuevo.",
+      "discard": "Descartar",
+      "retry": "Reintentar",
+      "createNote": "Crear nota",
+      "insert": "Insertar",
+      "listening": "Escuchando...",
+      "pause": "Pausar",
+      "resume": "Reanudar",
+      "stop": "Detener",
+      "cancel": "Cancelar",
+      "recordVoiceNote": "Grabar nota de voz",
+      "startRecording": "Empezar a grabar",
+      "micPermissionDenied": "Permiso de micrófono denegado. Permite el acceso e inténtalo de nuevo.",
+      "micNotFound": "No se detectó un micrófono. Conecta uno e inténtalo de nuevo.",
+      "micError": "Error de micrófono: {{message}}",
+      "micGenericError": "No se pudo acceder al micrófono. Verifica los permisos."
+    },
     "slash": {
+      "voiceNote": "Nota de voz",
+      "voiceNoteDesc": "Graba audio e inserta como texto",
       "summarize": "Resumir",
       "summarizeDesc": "Crear un resumen de la nota",
       "outline": "Crear esquema",
