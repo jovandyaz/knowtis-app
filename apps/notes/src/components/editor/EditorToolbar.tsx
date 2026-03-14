@@ -6,6 +6,7 @@ import {
   type ToolbarToolConfig,
 } from '@/components/editor/editor.config';
 import type { Editor } from '@tiptap/react';
+import { Mic } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { Button, cn } from '@knowtis/design-system';
@@ -13,30 +14,17 @@ import { Button, cn } from '@knowtis/design-system';
 import type { SaveStatus } from './SaveStatusIndicator';
 import { SaveStatusIndicator } from './SaveStatusIndicator';
 
-/**
- * Props for the EditorToolbar component
- * @param editor - The TipTap editor instance
- */
 interface EditorToolbarProps {
   editor: Editor | null;
   saveStatus?: SaveStatus | undefined;
+  onVoiceNote?: (() => void) | undefined;
 }
 
-/**
- * Props for the ToolbarButton component
- * @param editor - The TipTap editor instance
- * @param tool - The tool configuration
- */
 interface ToolbarButtonProps {
   editor: Editor;
   tool: ToolbarToolConfig;
 }
 
-/**
- * Individual toolbar button component
- * @param editor - The TipTap editor instance
- * @param tool - The tool configuration
- */
 function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
   const Icon = tool.icon;
   const isActive = tool.isActive(editor);
@@ -51,7 +39,8 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
         'h-8 w-8 rounded-full p-0 transition-all',
         isActive
           ? 'bg-foreground text-background hover:bg-foreground/90'
-          : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+        tool.hideOnMobile && 'max-md:hidden'
       )}
       onClick={() => tool.action(editor)}
       disabled={isDisabled}
@@ -63,21 +52,14 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
   );
 }
 
-/**
- * Toolbar separator component
- * @returns A div element with a vertical separator line
- */
 function ToolbarSeparator() {
-  return <div className="mx-1 h-4 w-px bg-border" />;
+  return <div className="mx-1 h-4 w-px bg-border max-md:hidden" />;
 }
 
-/**
- * Collaborative editor toolbar component
- * @param editor - The TipTap editor instance
- */
 export const EditorToolbar = memo(function EditorToolbar({
   editor,
   saveStatus,
+  onVoiceNote,
 }: EditorToolbarProps) {
   const { t } = useTranslation('common');
 
@@ -92,7 +74,7 @@ export const EditorToolbar = memo(function EditorToolbar({
       className={cn(
         'z-10 mx-auto w-fit',
         'sticky top-4 mb-4',
-        'max-md:fixed max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
+        'max-md:fixed max-md:bottom-3 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
       )}
     >
       <div
@@ -109,13 +91,25 @@ export const EditorToolbar = memo(function EditorToolbar({
           const tool = item as ToolbarToolConfig;
           return <ToolbarButton key={tool.label} editor={editor} tool={tool} />;
         })}
+        {onVoiceNote && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary) md:hidden"
+            onClick={onVoiceNote}
+            aria-label="Voice note"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        )}
         {saveStatus && (
           <SaveStatusIndicator
             status={saveStatus}
             label={
               saveStatus === 'saving' ? t('states.saving') : t('states.saved')
             }
-            className="hidden max-md:flex ml-2 text-xs text-(--muted-foreground)"
+            className="hidden max-md:flex ml-1 text-xs text-(--muted-foreground)"
           />
         )}
       </div>
