@@ -9,15 +9,6 @@ import {
   Undo,
 } from 'lucide-react';
 
-/**
- * Configuration for a toolbar tool button
- * @param icon - The icon component to display
- * @param label - The accessible label for the button
- * @param action - The function to execute when the button is clicked
- * @param isActive - The function to check if the tool is currently active
- * @param disabled - The optional function to check if the tool is disabled
- * @param shortcut - The optional keyboard shortcut hint
- */
 export interface ToolbarToolConfig {
   icon: typeof Bold;
   label: string;
@@ -25,17 +16,14 @@ export interface ToolbarToolConfig {
   isActive: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
   shortcut?: string;
+  hideOnMobile?: boolean;
 }
 
-/**
- * Toolbar separator configuration
- * @param type - The type of separator
- */
-export interface ToolbarSeparatorConfig {
+interface ToolbarSeparatorConfig {
   type: 'separator';
 }
 
-export type ToolbarItemConfig = ToolbarToolConfig | ToolbarSeparatorConfig;
+type ToolbarItemConfig = ToolbarToolConfig | ToolbarSeparatorConfig;
 
 export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
   {
@@ -79,6 +67,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().undo().run(),
     isActive: () => false,
     disabled: (editor) => !editor.can().undo(),
+    hideOnMobile: true,
   },
   {
     icon: Redo,
@@ -86,5 +75,6 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().redo().run(),
     isActive: () => false,
     disabled: (editor) => !editor.can().redo(),
+    hideOnMobile: true,
   },
 ] as const;

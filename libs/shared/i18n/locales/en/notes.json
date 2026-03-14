@@ -9,6 +9,7 @@
     "noContentYet": "No content yet..."
   },
   "editor": {
+    "back": "Back",
     "backToNotes": "Back to Notes",
     "share": "Share",
     "titlePlaceholder": "Note title...",
@@ -138,7 +139,34 @@
       "ai": "AI",
       "formatting": "Formatting"
     },
+    "voice": {
+      "title": "Voice Note",
+      "recording": "Recording",
+      "processing": "Processing...",
+      "ready": "Voice Note Ready",
+      "error": "Something went wrong",
+      "tapToStart": "Tap to start recording",
+      "transcribing": "Transcribing and structuring your note...",
+      "errorMessage": "Failed to process the recording. You can try again.",
+      "discard": "Discard",
+      "retry": "Try again",
+      "createNote": "Create note",
+      "insert": "Insert",
+      "listening": "Listening...",
+      "pause": "Pause",
+      "resume": "Resume",
+      "stop": "Stop",
+      "cancel": "Cancel",
+      "recordVoiceNote": "Record voice note",
+      "startRecording": "Start recording",
+      "micPermissionDenied": "Microphone permission denied. Please allow access and try again.",
+      "micNotFound": "No microphone detected. Please connect one and try again.",
+      "micError": "Microphone error: {{message}}",
+      "micGenericError": "Could not access microphone. Please check permissions."
+    },
     "slash": {
+      "voiceNote": "Voice note",
+      "voiceNoteDesc": "Record audio and insert as text",
       "summarize": "Summarize",
       "summarizeDesc": "Create a summary of the note",
       "outline": "Create outline",

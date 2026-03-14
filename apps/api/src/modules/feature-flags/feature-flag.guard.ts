@@ -22,19 +22,21 @@ export class FeatureFlagGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const requiredFlag = this.reflector.getAllAndOverride<string>(
+    const requiredFlags = this.reflector.getAllAndMerge<string[]>(
       FEATURE_FLAG_KEY,
       [context.getHandler(), context.getClass()]
     );
 
-    if (!requiredFlag) {
+    if (!requiredFlags || requiredFlags.length === 0) {
       return true;
     }
 
-    const enabled = await this.featureFlags.isEnabled(requiredFlag);
+    for (const flag of requiredFlags) {
+      const enabled = await this.featureFlags.isEnabled(flag);
 
-    if (!enabled) {
-      throw new ForbiddenException(`Feature '${requiredFlag}' is not enabled`);
+      if (!enabled) {
+        throw new ForbiddenException(`Feature '${flag}' is not enabled`);
+      }
     }
 
     return true;

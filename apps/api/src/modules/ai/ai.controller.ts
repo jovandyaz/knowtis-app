@@ -4,17 +4,24 @@ import {
   BadRequestException,
   Body,
   Controller,
+  FileTypeValidator,
   Get,
   HttpException,
   HttpStatus,
   Inject,
+  MaxFileSizeValidator,
+  ParseFilePipe,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiQuery,
   ApiResponse,
@@ -25,6 +32,7 @@ import type { Result } from 'neverthrow';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
+import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import { AIErrorCodes, type AIDomainError } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
@@ -32,6 +40,7 @@ import {
   type MetricsPeriod,
 } from './domain/ports/ai-usage.repository';
 import { AICompleteDto } from './dto/ai.dto';
+import { VoiceNoteDto } from './dto/voice-note.dto';
 
 const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.RATE_LIMIT_EXCEEDED]: HttpStatus.TOO_MANY_REQUESTS,
@@ -114,6 +123,7 @@ function unwrapOrThrow<T>(result: Result<T, AIDomainError>): T {
 export class AIController {
   constructor(
     private readonly completeTextHandler: CompleteTextHandler,
+    private readonly voiceNoteHandler: VoiceNoteHandler,
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository
   ) {}
@@ -152,6 +162,65 @@ export class AIController {
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
       ...(user.isAnonymous && { isAnonymous: true }),
     });
+    return unwrapOrThrow(result);
+  }
+
+  @ApiOperation({ summary: 'Create a structured note from voice recording' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['audio', 'mode'],
+      properties: {
+        audio: { type: 'string', format: 'binary' },
+        mode: { type: 'string', enum: ['create-note', 'insert'] },
+        language: { type: 'string', maxLength: 5 },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Structured voice note result',
+    schema: {
+      type: 'object',
+      properties: {
+        title: { type: 'string', example: 'Meeting Notes' },
+        content: { type: 'string', example: '<p>Key discussion points...</p>' },
+        transcript: {
+          type: 'string',
+          example: "So in today's meeting we discussed...",
+        },
+      },
+    },
+  })
+  @ApiBadRequest('invalid audio file or mode')
+  @ApiAuthErrors('AI or voice-notes feature is disabled')
+  @RequireFeatureFlag('voice_notes_enabled')
+  @Post('voice-note')
+  @UseInterceptors(FileInterceptor('audio'))
+  async voiceNote(
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
+          new FileTypeValidator({
+            fileType: /^audio\//,
+            skipMagicNumbersValidation: true,
+          }),
+        ],
+      })
+    )
+    audio: Express.Multer.File,
+    @Body() dto: VoiceNoteDto,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.voiceNoteHandler.execute({
+      userId: user.id,
+      audio: audio.buffer,
+      mode: dto.mode,
+      ...(dto.language !== undefined && { language: dto.language }),
+    });
+
     return unwrapOrThrow(result);
   }
 

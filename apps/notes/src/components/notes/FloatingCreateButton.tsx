@@ -1,3 +1,5 @@
+import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { useAIStore } from '@/stores/ai.store';
 import { Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -9,11 +11,22 @@ import { CreateNoteDialog } from './CreateNoteDialog';
 export function FloatingCreateButton() {
   const scrollDirection = useScrollDirection();
   const isVisible = scrollDirection !== 'down';
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
 
   return (
     <AnimatePresence>
       {isVisible && (
-        <div className="fixed bottom-20 right-5 z-50 md:hidden">
+        <div className="fixed bottom-20 right-5 z-50 flex flex-col items-center gap-3 md:hidden">
+          {aiEnabled && (
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+            >
+              <VoiceNoteRecorder />
+            </motion.div>
+          )}
           <CreateNoteDialog
             trigger={
               <motion.button
