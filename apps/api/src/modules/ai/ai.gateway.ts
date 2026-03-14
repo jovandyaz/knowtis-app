@@ -1,5 +1,4 @@
 import { Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -16,7 +15,7 @@ import { z } from 'zod';
 
 import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
 
-import type { EnvConfig } from '../../config/env.config';
+import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
 import { SUPPORTED_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
@@ -56,15 +55,16 @@ export class AIGateway
   constructor(
     private readonly streamTextHandler: StreamTextHandler,
     private readonly jwtService: JwtService,
-    private readonly configService: ConfigService<EnvConfig, true>
+    private readonly featureFlagsService: FeatureFlagsService
   ) {}
 
   afterInit(): void {
     this.logger.log('AI WebSocket Gateway initialized');
   }
 
-  handleConnection(client: AuthenticatedAISocket): void {
-    if (!this.isAIEnabled()) {
+  async handleConnection(client: AuthenticatedAISocket): Promise<void> {
+    const aiEnabled = await this.featureFlagsService.isEnabled('ai_enabled');
+    if (!aiEnabled) {
       client.emit('ai:error', AIErrors.featureDisabled());
       client.disconnect();
       return;
@@ -178,10 +178,6 @@ export class AIGateway
   handleCancel(@ConnectedSocket() client: AuthenticatedAISocket): void {
     this.abortClientStream(client.id);
     this.logger.debug(`Client ${client.id} cancelled AI stream`);
-  }
-
-  private isAIEnabled(): boolean {
-    return this.configService.get('AI_ENABLED') === 'true';
   }
 
   private abortClientStream(clientId: string): void {

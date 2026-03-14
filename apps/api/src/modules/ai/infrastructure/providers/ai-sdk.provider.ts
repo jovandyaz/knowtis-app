@@ -29,6 +29,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
+    this.assertAnthropicKeyConfigured(options.model);
+
     try {
       return await this.callGenerateText(prompt, options);
     } catch (error) {
@@ -43,6 +45,15 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
         });
       }
       throw error;
+    }
+  }
+
+  private assertAnthropicKeyConfigured(model: string): void {
+    if (
+      model.startsWith('anthropic:') &&
+      !this.configService.get('ANTHROPIC_API_KEY')
+    ) {
+      throw new Error('ANTHROPIC_API_KEY is not configured');
     }
   }
 
@@ -76,6 +87,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     prompt: string,
     options: CompletionOptions
   ): StreamCompletionResult {
+    this.assertAnthropicKeyConfigured(options.model);
+
     const result = streamText({
       model: this.registry.languageModel(
         options.model as `${string}:${string}`
