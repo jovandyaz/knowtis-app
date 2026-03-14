@@ -16,7 +16,7 @@ const sizeClasses = {
   lg: 'h-12 w-12',
 } as const;
 
-const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
+export const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
   (
     {
       className,
@@ -48,5 +48,3 @@ const LoadingState = forwardRef<HTMLDivElement, LoadingStateProps>(
   )
 );
 LoadingState.displayName = 'LoadingState';
-
-export { LoadingState };

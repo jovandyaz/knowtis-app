@@ -11,7 +11,7 @@ export type PasswordInputProps = Omit<
   'type'
 >;
 
-const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
+export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
   ({ className, onKeyDown, ...props }, ref) => {
     const [showPassword, setShowPassword] = useState(false);
 
@@ -55,5 +55,3 @@ const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
 );
 
 PasswordInput.displayName = 'PasswordInput';
-
-export { PasswordInput };
