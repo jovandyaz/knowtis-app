@@ -242,18 +242,23 @@ function DialogContent({ className, children, ...props }: DialogContentProps) {
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 border border-(--border) bg-(--card) p-6 shadow-lg duration-200',
-          'animate-in fade-in-0 zoom-in-95 slide-in-from-left-1/2 slide-in-from-top-[48%]',
-          'rounded-lg',
+          'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg duration-200',
+          'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-6',
+          'md:animate-in md:fade-in-0 md:zoom-in-95 md:slide-in-from-left-1/2 md:slide-in-from-top-[48%]',
+          'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
+          'max-md:animate-in max-md:fade-in-0 max-md:slide-in-from-bottom-full',
           className
         )}
         onClick={(e) => e.stopPropagation()}
         {...props}
       >
+        <div className="mb-1 flex justify-center md:hidden">
+          <div className="h-1 w-8 rounded-full bg-(--muted-foreground)/30" />
+        </div>
         {children}
         <button
           type="button"
-          className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
+          className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
           onClick={() => onOpenChange(false)}
           aria-label="Close dialog"
         >
@@ -280,7 +285,7 @@ function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       className={cn(
-        'flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2',
+        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end',
         className
       )}
       {...props}

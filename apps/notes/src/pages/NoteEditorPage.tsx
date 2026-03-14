@@ -7,12 +7,17 @@ import { CollaborativeEditor } from '@/components/editor';
 import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
+import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import {
   ACCESS_BADGE_CONFIG,
   canPerformNoteAction,
   DEBOUNCE_DELAYS,
 } from '@/lib';
-import { Share2 } from 'lucide-react';
+import { useAIStore } from '@/stores/ai.store';
+import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
+import type { Editor } from '@tiptap/react';
+import { ArrowLeft, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -21,6 +26,7 @@ import {
   ErrorState,
   Input,
   LoadingState,
+  VoiceButton,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
 import type {
@@ -46,28 +52,34 @@ interface MobileEditorHeaderProps {
   accessLevel: NoteAccessLevel;
   editorsCanShare: boolean;
   onShareClick: () => void;
+  onBack: () => void;
 }
 
 function MobileEditorHeader({
   accessLevel,
   editorsCanShare,
   onShareClick,
+  onBack,
 }: MobileEditorHeaderProps) {
   const { t } = useTranslation('notes');
-
-  if (!canPerformNoteAction(accessLevel, 'share', { editorsCanShare })) {
-    return null;
-  }
 
   return (
     <>
       <FloatingActionButton
-        icon={Share2}
-        position="right"
-        onClick={onShareClick}
-        aria-label={t('editor.share')}
+        icon={ArrowLeft}
+        position="left"
+        onClick={onBack}
+        aria-label={t('editor.back')}
       />
-      {/* Spacer for floating button */}
+      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
+        <FloatingActionButton
+          icon={Share2}
+          position="right"
+          onClick={onShareClick}
+          aria-label={t('editor.share')}
+        />
+      )}
+
       <div className="h-14 md:hidden" />
     </>
   );
@@ -80,6 +92,8 @@ interface DesktopEditorHeaderProps {
   isSaving: boolean;
   hasSaved: boolean;
   onShareClick: () => void;
+  onVoiceNoteClick?: () => void;
+  showVoiceNote: boolean;
 }
 
 function DesktopEditorHeader({
@@ -89,6 +103,8 @@ function DesktopEditorHeader({
   isSaving,
   hasSaved,
   onShareClick,
+  onVoiceNoteClick,
+  showVoiceNote,
 }: DesktopEditorHeaderProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
@@ -119,6 +135,14 @@ function DesktopEditorHeader({
             />
           ) : null)}
 
+        {showVoiceNote && (
+          <VoiceButton
+            size="sm"
+            onClick={onVoiceNoteClick}
+            aria-label={t('ai.voice.recordVoiceNote')}
+          />
+        )}
+
         {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
           <Button
             variant="outline"
@@ -148,6 +172,7 @@ function NoteEditor({
   autoFocusContent,
 }: NoteEditorProps) {
   const { t } = useTranslation('notes');
+  const navigate = useNavigate();
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [title, setTitle] = useState(initialTitle);
@@ -157,6 +182,20 @@ function NoteEditor({
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<Editor | null>(null);
+
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
+  const voiceNoteClose = useVoiceNoteEditorStore((s) => s.close);
+  const voiceNoteEditorOpen = useVoiceNoteEditorStore((s) => s.open);
+  const insertPosition = useVoiceNoteEditorStore((s) => s.insertPosition);
+  const preAcquiredStream = useVoiceNoteEditorStore((s) => s.preAcquiredStream);
+
+  useEffect(() => {
+    return () => {
+      voiceNoteClose();
+    };
+  }, [voiceNoteClose]);
 
   useEffect(() => {
     if (autoFocusTitle && titleInputRef.current) {
@@ -215,8 +254,43 @@ function NoteEditor({
     [canEdit, debouncedUpdateNote]
   );
 
+  const handleEditorReady = useCallback((editor: Editor) => {
+    editorRef.current = editor;
+  }, []);
+
+  const handleVoiceInsert = useCallback(
+    (htmlContent: string) => {
+      const editor = editorRef.current;
+      if (!editor || editor.isDestroyed) {
+        return;
+      }
+
+      const pos = insertPosition ?? editor.state.selection.to;
+      editor
+        .chain()
+        .focus()
+        .setTextSelection(pos)
+        .insertContent(htmlContent)
+        .run();
+    },
+    [insertPosition]
+  );
+
+  const handleVoiceNoteClick = useCallback(async () => {
+    const editor = editorRef.current;
+    const pos = editor && !editor.isDestroyed ? editor.state.selection.to : 0;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceNoteEditorOpen(pos, stream);
+    } catch (e) {
+      console.warn('[NoteEditorPage] Microphone access failed:', e);
+      toast.error(t('ai.voice.micGenericError'));
+    }
+  }, [voiceNoteEditorOpen, t]);
+
   const isSaving = updateNote.isPending || isPendingUpdate;
   const openShareDialog = () => setIsShareDialogOpen(true);
+  const showVoiceNote = canEdit && aiEnabled;
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -224,6 +298,7 @@ function NoteEditor({
         accessLevel={accessLevel}
         editorsCanShare={editorsCanShare}
         onShareClick={openShareDialog}
+        onBack={() => navigate({ to: '/' })}
       />
 
       <DesktopEditorHeader
@@ -233,6 +308,8 @@ function NoteEditor({
         isSaving={isSaving}
         hasSaved={!!lastSaved}
         onShareClick={openShareDialog}
+        onVoiceNoteClick={handleVoiceNoteClick}
+        showVoiceNote={showVoiceNote}
       />
 
       <div className="mb-4">
@@ -254,7 +331,19 @@ function NoteEditor({
         editable={canEdit}
         saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
         autoFocus={autoFocusContent}
+        onEditorReady={handleEditorReady}
+        onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
       />
+
+      {showVoiceNote && (
+        <VoiceNoteRecorder
+          mode="insert"
+          open={voiceNoteOpen}
+          onClose={voiceNoteClose}
+          onInsert={handleVoiceInsert}
+          preAcquiredStream={preAcquiredStream}
+        />
+      )}
 
       {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
         <ShareDialog

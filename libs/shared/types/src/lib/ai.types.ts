@@ -1,8 +1,3 @@
-/**
- * AI action, language, and tone constants
- * Shared between frontend and backend
- */
-
 export const AI_ACTION = {
   SUMMARIZE: 'summarize',
   EXPAND: 'expand',
@@ -16,6 +11,8 @@ export const AI_ACTION = {
   FIX_SPELLING: 'fix-spelling',
   MAKE_SHORTER: 'make-shorter',
   MAKE_LONGER: 'make-longer',
+  VOICE_TRANSCRIPTION: 'voice-transcription',
+  STRUCTURE_VOICE_NOTE: 'structure-voice-note',
 } as const;
 
 export const AI_ACTIONS = Object.values(AI_ACTION);

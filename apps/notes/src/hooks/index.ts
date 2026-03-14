@@ -7,3 +7,14 @@ export {
   isWebSocketEnabled,
   type CollaborationMode,
 } from './useWebSocketCollaboration';
+export {
+  useVoiceRecorder,
+  type UseVoiceRecorderOptions,
+  type UseVoiceRecorderReturn,
+  type VoiceRecorderState,
+} from './useVoiceRecorder';
+export {
+  useVoiceNote,
+  type VoiceNoteInput,
+  type VoiceNoteResponse,
+} from './useVoiceNote';

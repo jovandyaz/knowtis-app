@@ -110,8 +110,10 @@ export class HttpClient implements IHttpClient {
     const locale = this.config.localeProvider
       ? this.config.localeProvider()
       : DEFAULT_LOCALE;
+    const isFormData =
+      typeof FormData !== 'undefined' && data instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      ...(!isFormData && { 'Content-Type': 'application/json' }),
       'Accept-Language': locale,
       ...options.headers,
     };
@@ -131,7 +133,7 @@ export class HttpClient implements IHttpClient {
     };
 
     if (data && method !== 'GET') {
-      fetchOptions.body = JSON.stringify(data);
+      fetchOptions.body = isFormData ? data : JSON.stringify(data);
     }
 
     try {

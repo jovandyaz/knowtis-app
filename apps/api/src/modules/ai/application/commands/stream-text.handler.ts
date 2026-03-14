@@ -18,7 +18,7 @@ import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../services/ai-rate-limit.service';
 
-export interface StreamTextInput {
+interface StreamTextInput {
   readonly userId: string;
   readonly action: string;
   readonly content: string;
@@ -176,24 +176,41 @@ export class StreamTextHandler {
         DEFAULT_MODEL_PRICING[model]
       );
 
-      await this.rateLimitService.recordUsage({
-        userId: input.userId,
-        action,
-        model,
-        estimatedTokens,
-        inputTokens: actualUsage.promptTokens,
-        outputTokens: actualUsage.completionTokens,
-        costUsd: usage.costUsd,
-      });
-
-      if (this.cache?.isCacheable(action) && !signal?.aborted) {
-        await this.cache.set(action, model, userPrompt, {
-          text: collectedChunks.join(''),
+      this.rateLimitService
+        .recordUsage({
+          userId: input.userId,
+          action,
           model,
+          estimatedTokens,
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
           costUsd: usage.costUsd,
-        });
+        })
+        .catch((err) =>
+          this.logger.warn({
+            event: 'ai.usage.record_failed',
+            requestId,
+            userId: input.userId,
+            error: err instanceof Error ? err.message : 'Unknown error',
+          })
+        );
+
+      if (this.cache?.isCacheable(action) && !signal?.aborted) {
+        this.cache
+          .set(action, model, userPrompt, {
+            text: collectedChunks.join(''),
+            model,
+            inputTokens: actualUsage.promptTokens,
+            outputTokens: actualUsage.completionTokens,
+            costUsd: usage.costUsd,
+          })
+          .catch((err) =>
+            this.logger.warn({
+              event: 'ai.cache.write_failed',
+              requestId,
+              error: err instanceof Error ? err.message : 'Unknown error',
+            })
+          );
       }
 
       this.logger.log({

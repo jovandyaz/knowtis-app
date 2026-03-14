@@ -35,6 +35,7 @@ const envSchemaBase = z.object({
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
   AI_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
   AI_CACHE_ENABLED: z.string().default('true'),
+  VOICE_NOTES_ENABLED: z.string().default('false'),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
@@ -53,6 +54,20 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
       message: 'ANTHROPIC_API_KEY is required when AI_ENABLED=true',
       path: ['ANTHROPIC_API_KEY'],
       input: data.ANTHROPIC_API_KEY,
+    });
+  }
+
+  if (
+    data.AI_ENABLED === 'true' &&
+    data.VOICE_NOTES_ENABLED === 'true' &&
+    !data.OPENAI_API_KEY
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'OPENAI_API_KEY is required when AI_ENABLED=true and VOICE_NOTES_ENABLED=true',
+      path: ['OPENAI_API_KEY'],
+      input: data.OPENAI_API_KEY,
     });
   }
 });
