@@ -6,7 +6,18 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import './lib/i18n';
 import './index.css';
 
+import { logger } from '@knowtis/shared-util';
+
+import { reloadIfStaleChunk } from './lib/chunk-reload';
 import { routeTree } from './routeTree.gen';
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  logger.warn('Stale chunk detected via vite:preloadError, attempting reload', {
+    error: event.payload,
+  });
+  reloadIfStaleChunk();
+});
 
 const router = createRouter({ routeTree });
 
