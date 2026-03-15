@@ -1,14 +1,41 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary';
 import { useTranslation } from 'react-i18next';
 
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, RefreshCw } from 'lucide-react';
 
 import { Button } from '@knowtis/design-system';
 import { logger } from '@knowtis/shared-util';
 
+import {
+  isChunkLoadError,
+  reloadIfStaleChunk,
+  shouldReloadForStaleChunk,
+} from '../lib/chunk-reload';
+
 function AppErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   const { t } = useTranslation('errors');
+
+  const willReload = isChunkLoadError(error) && shouldReloadForStaleChunk();
+
+  useEffect(() => {
+    if (isChunkLoadError(error)) {
+      reloadIfStaleChunk();
+    }
+  }, [error]);
+
+  if (willReload) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="text-center space-y-3">
+          <RefreshCw className="h-8 w-8 text-muted-foreground mx-auto animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            {t('boundary.refreshing', '...')}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-8">
