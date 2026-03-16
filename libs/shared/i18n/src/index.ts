@@ -1,10 +1,3 @@
-export {
-  DEFAULT_LOCALE,
-  I18N_STORAGE_KEY,
-  SUPPORTED_LOCALES,
-} from './constants';
-export type { SupportedLocale } from './constants';
-
 export { default as enCommon } from '../locales/en/common.json';
 export { default as enAuth } from '../locales/en/auth.json';
 export { default as enNotes } from '../locales/en/notes.json';

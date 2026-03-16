@@ -9,7 +9,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
+import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 export const userRoleEnum = pgEnum('user_role', ['user', 'admin']);
 

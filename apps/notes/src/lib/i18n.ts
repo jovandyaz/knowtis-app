@@ -4,7 +4,6 @@ import i18n from 'i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
 import {
-  DEFAULT_LOCALE,
   enAuth,
   enCommon,
   enErrors,
@@ -13,9 +12,12 @@ import {
   esCommon,
   esErrors,
   esNotes,
+} from '@knowtis/shared-i18n';
+import {
+  DEFAULT_LOCALE,
   I18N_STORAGE_KEY,
   SUPPORTED_LOCALES,
-} from '@knowtis/shared-i18n';
+} from '@knowtis/shared-util';
 
 i18n
   .use(LanguageDetector)

@@ -1,4 +1,4 @@
-import { DEFAULT_LOCALE, I18N_STORAGE_KEY } from '@knowtis/shared-i18n';
+import { DEFAULT_LOCALE, I18N_STORAGE_KEY } from '@knowtis/shared-util';
 
 export interface ApiClientConfig {
   baseUrl: string;

@@ -4,8 +4,8 @@ import { useAuthStore, useAuthUser } from '@jovandyaz/auth-react';
 
 import { useUpdateProfile } from '@knowtis/data-access-users';
 import { cn } from '@knowtis/design-system';
-import type { SupportedLocale } from '@knowtis/shared-i18n';
-import { SUPPORTED_LOCALES } from '@knowtis/shared-i18n';
+import type { SupportedLocale } from '@knowtis/shared-util';
+import { SUPPORTED_LOCALES } from '@knowtis/shared-util';
 
 import { SectionHeader } from '../SectionHeader';
 
