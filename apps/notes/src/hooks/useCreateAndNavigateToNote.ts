@@ -43,6 +43,7 @@ export function useCreateAndNavigateToNote() {
       { title: defaultTitle, content: '' },
       {
         onSuccess: (newNote) => {
+          isCreatingRef.current = false;
           navigateRef.current({
             to: '/notes/$noteId',
             params: { noteId: newNote.id },
