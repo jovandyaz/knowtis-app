@@ -1,10 +1,14 @@
 import type { Editor } from '@tiptap/react';
 import {
   Bold,
+  Code,
+  CodeXml,
   Italic,
   List,
   ListOrdered,
+  Minus,
   Redo,
+  Strikethrough,
   Underline,
   Undo,
 } from 'lucide-react';
@@ -23,9 +27,24 @@ interface ToolbarSeparatorConfig {
   type: 'separator';
 }
 
-type ToolbarItemConfig = ToolbarToolConfig | ToolbarSeparatorConfig;
+export interface ToolbarHeadingConfig {
+  type: 'heading-dropdown';
+}
+
+export interface ToolbarLinkConfig {
+  type: 'link-popover';
+  shortcut?: string;
+}
+
+export type ToolbarItemConfig =
+  | ToolbarToolConfig
+  | ToolbarSeparatorConfig
+  | ToolbarHeadingConfig
+  | ToolbarLinkConfig;
 
 export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
+  { type: 'heading-dropdown' },
+  { type: 'separator' },
   {
     icon: Bold,
     label: 'Bold',
@@ -47,6 +66,13 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     isActive: (editor) => editor.isActive('underline'),
     shortcut: 'Ctrl+U',
   },
+  {
+    icon: Strikethrough,
+    label: 'Strikethrough',
+    action: (editor) => editor.chain().focus().toggleStrike().run(),
+    isActive: (editor) => editor.isActive('strike'),
+    shortcut: 'Ctrl+Shift+S',
+  },
   { type: 'separator' },
   {
     icon: List,
@@ -59,6 +85,29 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     label: 'Numbered List',
     action: (editor) => editor.chain().focus().toggleOrderedList().run(),
     isActive: (editor) => editor.isActive('orderedList'),
+  },
+  { type: 'separator' },
+  {
+    icon: Code,
+    label: 'Inline Code',
+    action: (editor) => editor.chain().focus().toggleCode().run(),
+    isActive: (editor) => editor.isActive('code'),
+    shortcut: 'Ctrl+E',
+  },
+  {
+    icon: CodeXml,
+    label: 'Code Block',
+    action: (editor) => editor.chain().focus().toggleCodeBlock().run(),
+    isActive: (editor) => editor.isActive('codeBlock'),
+    shortcut: 'Ctrl+Alt+C',
+  },
+  { type: 'separator' },
+  { type: 'link-popover', shortcut: 'Ctrl+K' },
+  {
+    icon: Minus,
+    label: 'Horizontal Rule',
+    action: (editor) => editor.chain().focus().setHorizontalRule().run(),
+    isActive: () => false,
   },
   { type: 'separator' },
   {
@@ -77,4 +126,4 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     disabled: (editor) => !editor.can().redo(),
     hideOnMobile: true,
   },
-] as const;
+];
