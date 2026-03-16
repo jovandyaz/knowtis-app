@@ -1,0 +1,30 @@
+.code-block-wrapper {
+  position: relative;
+}
+
+.code-block-language-select {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 1;
+}
+
+@media (max-width: 768px) {
+  .code-block-language-select {
+    display: none;
+  }
+}
+
+.code-block-wrapper:hover .code-block-language-select,
+.code-block-language-select:focus {
+  opacity: 1;
+}
