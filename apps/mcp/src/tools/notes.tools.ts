@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import { markdownToHtml } from '../utils/markdown-to-html.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
 export function registerNotesTools(
@@ -45,26 +46,41 @@ export function registerNotesTools(
 
   server.tool(
     'create-note',
-    'Create a new note with a title and optional content.',
+    'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), blockquotes (>), and horizontal rules (---).',
     {
       title: z.string().min(1).describe('Title of the new note'),
-      content: z.string().optional().describe('Initial content'),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          'Note content in Markdown format. Use standard Markdown syntax for rich formatting.'
+        ),
     },
     wrapToolHandler(
       'create-note',
       authService,
-      (token, { title, content }) => notesApi.create(token, title, content),
+      (token, { title, content }) =>
+        notesApi.create(
+          token,
+          title,
+          content ? markdownToHtml(content) : undefined
+        ),
       defaultApiKey
     )
   );
 
   server.tool(
     'update-note',
-    'Update the title or content of an existing note.',
+    'Update the title or content of an existing note. Content should be in Markdown format.',
     {
       noteId: z.string().uuid().describe('The UUID of the note to update'),
       title: z.string().optional().describe('New title'),
-      content: z.string().optional().describe('New content'),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          'New content in Markdown format. This replaces the entire note content.'
+        ),
     },
     wrapToolHandler(
       'update-note',
@@ -75,7 +91,7 @@ export function registerNotesTools(
           data.title = title;
         }
         if (content !== undefined) {
-          data.content = content;
+          data.content = markdownToHtml(content);
         }
         return notesApi.update(token, noteId, data);
       },
