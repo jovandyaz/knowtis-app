@@ -8,6 +8,7 @@ import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { useAutoTitle } from '@/hooks/useAutoTitle';
 import {
   ACCESS_BADGE_CONFIG,
   canPerformNoteAction,
@@ -175,7 +176,6 @@ function NoteEditor({
   const navigate = useNavigate();
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
-  const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
@@ -183,6 +183,39 @@ function NoteEditor({
   const pendingUpdateRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
+
+  const debouncedUpdateNote = useDebouncedCallback(
+    (updates: { title?: string; content?: string }) => {
+      pendingUpdateRef.current = true;
+      setIsPendingUpdate(true);
+      updateNote.mutate(
+        { id: noteId, input: updates },
+        {
+          onSuccess: () => {
+            setLastSaved(new Date());
+            pendingUpdateRef.current = false;
+            setIsPendingUpdate(false);
+          },
+          onError: () => {
+            pendingUpdateRef.current = false;
+            setIsPendingUpdate(false);
+          },
+        }
+      );
+    },
+    DEBOUNCE_DELAYS.AUTO_SAVE
+  );
+
+  const defaultTitle = t('sidebar.untitled');
+  const {
+    title,
+    handleTitleChange: onTitleChange,
+    deriveAutoTitle,
+  } = useAutoTitle({
+    initialTitle,
+    defaultTitle,
+    onAutoTitleChange: (newTitle) => debouncedUpdateNote({ title: newTitle }),
+  });
 
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
@@ -212,34 +245,12 @@ function NoteEditor({
     };
   }, [title]);
 
-  const debouncedUpdateNote = useDebouncedCallback(
-    (updates: { title?: string; content?: string }) => {
-      pendingUpdateRef.current = true;
-      setIsPendingUpdate(true);
-      updateNote.mutate(
-        { id: noteId, input: updates },
-        {
-          onSuccess: () => {
-            setLastSaved(new Date());
-            pendingUpdateRef.current = false;
-            setIsPendingUpdate(false);
-          },
-          onError: () => {
-            pendingUpdateRef.current = false;
-            setIsPendingUpdate(false);
-          },
-        }
-      );
-    },
-    DEBOUNCE_DELAYS.AUTO_SAVE
-  );
-
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canEdit) {
       return;
     }
     const newTitle = e.target.value;
-    setTitle(newTitle);
+    onTitleChange(newTitle);
     debouncedUpdateNote({ title: newTitle });
   };
 
@@ -250,8 +261,9 @@ function NoteEditor({
       }
       setContent(newContent);
       debouncedUpdateNote({ content: newContent });
+      deriveAutoTitle(newContent);
     },
-    [canEdit, debouncedUpdateNote]
+    [canEdit, debouncedUpdateNote, deriveAutoTitle]
   );
 
   const handleEditorReady = useCallback((editor: Editor) => {

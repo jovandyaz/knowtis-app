@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, useNavigate } from '@tanstack/react-router';
 
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import { useCreateAndNavigateToNote } from '@/hooks/useCreateAndNavigateToNote';
+import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { FilePlus, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -13,8 +13,6 @@ import type { NoteWithAccess } from '@knowtis/api-client';
 import { useNotes } from '@knowtis/data-access-notes';
 import { Button, buttonVariants, cn } from '@knowtis/design-system';
 import { formatRelativeTime } from '@knowtis/shared-util';
-
-import { CreateNoteDialog } from '../components/notes/CreateNoteDialog';
 
 type GreetingKey =
   | 'welcome.goodMorning'
@@ -38,9 +36,9 @@ export function WelcomePage() {
   const { data: notes, isLoading } = useNotes();
   const firstName = user?.name?.split(' ')[0] ?? '';
   const navigate = useNavigate();
-  const [showLimitModal, setShowLimitModal] = useState(false);
   const hasAttemptedAutoCreate = useRef(false);
-  const createAndNavigate = useCreateAndNavigateToNote();
+  const { createNote, showLimitModal, dismissLimitModal } =
+    useCreateNoteAction();
 
   useEffect(() => {
     if (
@@ -53,11 +51,8 @@ export function WelcomePage() {
     }
 
     hasAttemptedAutoCreate.current = true;
-    createAndNavigate({
-      focusTarget: 'content',
-      onLimitReached: () => setShowLimitModal(true),
-    });
-  }, [isLoading, notes, createAndNavigate]);
+    createNote();
+  }, [isLoading, notes, createNote]);
 
   const recentNotes = useMemo(() => {
     if (!notes) {
@@ -78,7 +73,7 @@ export function WelcomePage() {
       <AnonymousLimitModal
         open={showLimitModal}
         onClose={() => {
-          setShowLimitModal(false);
+          dismissLimitModal();
           navigate({ to: '/', replace: true });
         }}
       />
@@ -100,14 +95,13 @@ export function WelcomePage() {
           transition={{ duration: 0.3, delay: 0.05 }}
           className="mt-6 flex gap-3"
         >
-          <CreateNoteDialog
-            trigger={
-              <Button className="rounded-lg px-4 py-2.5 text-sm font-medium gap-2">
-                <FilePlus className="h-4 w-4" />
-                {t('welcome.newNote')}
-              </Button>
-            }
-          />
+          <Button
+            className="rounded-lg px-4 py-2.5 text-sm font-medium gap-2"
+            onClick={createNote}
+          >
+            <FilePlus className="h-4 w-4" />
+            {t('welcome.newNote')}
+          </Button>
 
           {lastNote && (
             <Link
