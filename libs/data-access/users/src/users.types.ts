@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { SUPPORTED_LOCALES } from '@knowtis/shared-i18n';
+import { SUPPORTED_LOCALES } from '@knowtis/shared-util';
 
 export const UpdateProfileSchema = z.object({
   name: z
