@@ -9,6 +9,7 @@ import './index.css';
 import { logger } from '@knowtis/shared-util';
 
 import { reloadIfStaleChunk } from './lib/chunk-reload';
+import { initPostHog, posthog } from './lib/posthog';
 import { routeTree } from './routeTree.gen';
 
 window.addEventListener('vite:preloadError', (event) => {
@@ -19,7 +20,15 @@ window.addEventListener('vite:preloadError', (event) => {
   reloadIfStaleChunk();
 });
 
+initPostHog();
+
 const router = createRouter({ routeTree });
+
+router.subscribe('onResolved', () => {
+  if (posthog.__loaded) {
+    posthog.capture('$pageview');
+  }
+});
 
 declare module '@tanstack/react-router' {
   interface Register {
