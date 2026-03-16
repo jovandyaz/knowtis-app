@@ -61,3 +61,9 @@ export { VoiceButton, type VoiceButtonProps } from './VoiceButton';
 export { AudioWaveform, type AudioWaveformProps } from './AudioWaveform';
 export { RecordingTimer, type RecordingTimerProps } from './RecordingTimer';
 export { RecordingModal, type RecordingModalProps } from './RecordingModal';
+export {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from './Tooltip';

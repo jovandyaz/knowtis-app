@@ -2,7 +2,11 @@ import { useMemo } from 'react';
 
 import { useAIStore } from '@/stores/ai.store';
 import type { CollaborativeUser } from '@/types';
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Collaboration from '@tiptap/extension-collaboration';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
+import { ReactNodeViewRenderer } from '@tiptap/react';
 import type { AnyExtension } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import type { Awareness } from 'y-protocols/awareness';
@@ -10,6 +14,8 @@ import type * as Y from 'yjs';
 
 import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
 import { CollaborativeCursors } from './CollaborativeCursors';
+import { CodeBlockView } from './extensions/code-block/CodeBlockView';
+import { lowlight } from './extensions/code-block/lowlight-instance';
 import { GhostText } from './extensions/GhostText';
 
 import './extensions/GhostText.css';
@@ -25,6 +31,7 @@ export function useEditorExtensions(
   return useMemo(() => {
     const extensions: AnyExtension[] = [
       StarterKit.configure({
+        codeBlock: false,
         undoRedo: false,
         bulletList: {
           HTMLAttributes: { class: 'list-disc list-outside ml-6' },
@@ -41,7 +48,26 @@ export function useEditorExtensions(
               'border-l-2 border-muted-foreground/40 pl-4 italic text-muted-foreground',
           },
         },
+        heading: {
+          levels: [1, 2, 3],
+        },
       }),
+      CodeBlockLowlight.configure({
+        lowlight,
+        defaultLanguage: null,
+      }).extend({
+        addNodeView() {
+          return ReactNodeViewRenderer(CodeBlockView);
+        },
+      }),
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          rel: 'noopener noreferrer',
+          target: '_blank',
+        },
+      }),
+      Underline,
       Collaboration.configure({
         document: yDoc,
         fragment: yXmlFragment,

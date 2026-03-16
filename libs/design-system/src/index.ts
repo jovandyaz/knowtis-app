@@ -69,6 +69,10 @@ export {
   type RecordingTimerProps,
   RecordingModal,
   type RecordingModalProps,
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 
