@@ -327,7 +327,6 @@ function NoteEditor({
         noteId={noteId}
         initialContent={content}
         onUpdate={handleContentChange}
-        placeholder={t('editor.editorPlaceholder')}
         editable={canEdit}
         saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
         autoFocus={autoFocusContent}
