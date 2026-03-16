@@ -14,7 +14,7 @@ import {
   QueryResolver,
 } from 'nestjs-i18n';
 
-import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
+import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';

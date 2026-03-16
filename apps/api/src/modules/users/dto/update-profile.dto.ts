@@ -8,7 +8,7 @@ import {
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
 
-import { SUPPORTED_LOCALES } from '@knowtis/shared-i18n';
+import { SUPPORTED_LOCALES } from '@knowtis/shared-util';
 
 export class UpdateProfileDto {
   @ApiProperty({

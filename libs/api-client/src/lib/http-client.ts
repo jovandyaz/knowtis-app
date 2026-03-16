@@ -1,5 +1,4 @@
-import { DEFAULT_LOCALE } from '@knowtis/shared-i18n';
-import { logger } from '@knowtis/shared-util';
+import { DEFAULT_LOCALE, logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
 
