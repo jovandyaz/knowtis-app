@@ -4,7 +4,17 @@
   "outputDirectory": "dist/apps/notes",
   "installCommand": "pnpm install",
   "framework": "vite",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "rewrites": [
+    {
+      "source": "/ph/static/:path(.*)",
+      "destination": "https://us-assets.i.posthog.com/static/:path"
+    },
+    {
+      "source": "/ph/:path(.*)",
+      "destination": "https://us.i.posthog.com/:path"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
   "git": {
     "deploymentEnabled": false
   }

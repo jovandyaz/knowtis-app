@@ -13,7 +13,8 @@ export function initPostHog(): void {
   }
 
   posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST || 'https://us.i.posthog.com',
+    api_host: POSTHOG_HOST || '/ph',
+    ui_host: 'https://us.posthog.com',
     capture_pageview: false,
     capture_pageleave: true,
   });
