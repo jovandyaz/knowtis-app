@@ -3,9 +3,9 @@
     "searchPlaceholder": "Buscar notas...",
     "errorLoading": "Error al cargar las notas",
     "noNotesFound": "No se encontraron notas",
-    "startCollection": "Inicia tu colección",
+    "startCollection": "Silencio creativo...",
     "noSearchResults": "No pudimos encontrar notas que coincidan con tu búsqueda. Prueba con otro término.",
-    "createFirst": "Crea tu primera nota para empezar a capturar tus ideas.",
+    "createFirst": "Tus ideas están esperando.",
     "noContentYet": "Sin contenido aún..."
   },
   "editor": {
@@ -15,6 +15,9 @@
     "titlePlaceholder": "Título de la nota...",
     "lastUpdated": "Última actualización:",
     "editorPlaceholder": "Empieza a escribir tu nota...",
+    "placeholderWrite": "Empieza a escribir tu nota...",
+    "placeholderSlash": "Usa / para comandos de IA...",
+    "placeholderVoice": "Dicta una nota de voz...",
     "loadingNote": "Cargando nota...",
     "failedToLoad": "Error al cargar la nota",
     "notFound": "Nota no encontrada",
