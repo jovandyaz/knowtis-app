@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { DEBOUNCE_DELAYS } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
-import { Search } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
-import { ErrorState, Input } from '@knowtis/design-system';
+import { Button, ErrorState, Input } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
 
-import { CreateNoteDialog } from './CreateNoteDialog';
 import { DeleteNoteDialog } from './DeleteNoteDialog';
 import { EmptyState } from './EmptyState';
 import { FloatingCreateButton } from './FloatingCreateButton';
@@ -25,6 +26,9 @@ export function NoteList() {
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+
+  const { createNote, showLimitModal, dismissLimitModal } =
+    useCreateNoteAction();
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
     useNotesSearchStore();
@@ -114,7 +118,10 @@ export function NoteList() {
         </div>
         <div className="hidden md:flex md:items-center md:gap-3">
           {aiEnabled && <VoiceNoteRecorder size="default" />}
-          <CreateNoteDialog />
+          <Button className="gap-2" onClick={createNote}>
+            <Plus className="h-4 w-4" />
+            {t('create.newNote')}
+          </Button>
         </div>
       </div>
 
@@ -127,7 +134,9 @@ export function NoteList() {
         noteTitle={noteToDeleteData?.title ?? ''}
       />
 
-      <FloatingCreateButton />
+      <FloatingCreateButton onCreateNote={createNote} />
+
+      <AnonymousLimitModal open={showLimitModal} onClose={dismissLimitModal} />
     </div>
   );
 }

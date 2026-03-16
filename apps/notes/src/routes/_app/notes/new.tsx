@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import { useCreateAndNavigateToNote } from '@/hooks/useCreateAndNavigateToNote';
+import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 
 import { LoadingState } from '@knowtis/design-system';
 
@@ -15,15 +15,12 @@ export const Route = createFileRoute('/_app/notes/new')({
 function NewNotePage() {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
-  const [showLimitModal, setShowLimitModal] = useState(false);
-  const createAndNavigate = useCreateAndNavigateToNote();
+  const { createNote, showLimitModal, dismissLimitModal } =
+    useCreateNoteAction();
 
   useEffect(() => {
-    createAndNavigate({
-      focusTarget: 'title',
-      onLimitReached: () => setShowLimitModal(true),
-    });
-  }, [createAndNavigate]);
+    createNote();
+  }, [createNote]);
 
   return (
     <>
@@ -31,7 +28,7 @@ function NewNotePage() {
       <AnonymousLimitModal
         open={showLimitModal}
         onClose={() => {
-          setShowLimitModal(false);
+          dismissLimitModal();
           navigate({ to: '/', replace: true });
         }}
       />
