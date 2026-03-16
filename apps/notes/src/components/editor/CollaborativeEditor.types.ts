@@ -25,7 +25,7 @@ export interface InternalEditorProps {
   currentUser: CollaborativeUser;
   initialContent: string;
   onUpdate: (content: string) => void;
-  placeholder: string;
+  placeholder: string[];
   editable: boolean;
   saveStatus?: 'saving' | 'saved' | undefined;
   autoFocus?: boolean | undefined;

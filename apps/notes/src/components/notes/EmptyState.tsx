@@ -5,8 +5,6 @@ import { motion } from 'motion/react';
 
 import { EmptyState as DSEmptyState } from '@knowtis/design-system';
 
-import { CreateNoteDialog } from './CreateNoteDialog';
-
 interface EmptyStateProps {
   hasSearch: boolean;
 }
@@ -34,13 +32,7 @@ export function EmptyState({ hasSearch }: EmptyStateProps) {
         }
         fullHeight={false}
         className="rounded-2xl border border-dashed border-(--border) bg-(--card)/30 py-12"
-      >
-        {!hasSearch && (
-          <div className="mt-2">
-            <CreateNoteDialog />
-          </div>
-        )}
-      </DSEmptyState>
+      />
     </motion.div>
   );
 }

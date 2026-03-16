@@ -12,6 +12,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor } from '@tiptap/react';
 
 import { cn } from '@knowtis/design-system';
+import { useTypewriter } from '@knowtis/shared-hooks';
 import { logger } from '@knowtis/shared-util';
 
 import { AIBubbleMenu } from './ai/AIBubbleMenu';
@@ -28,11 +29,34 @@ import { EditorErrorBoundary } from './EditorErrorBoundary';
 import { EditorToolbar } from './EditorToolbar';
 import { useEditorExtensions } from './useEditorExtensions';
 
+const EDITOR_PADDING = 'p-4 md:p-6';
+
 const EDITOR_CONTAINER_CLASSES = cn(
   'rounded-2xl border border-border bg-card/50 backdrop-blur-sm',
   'transition-all duration-300',
   'focus-within:border-primary/50 focus-within:shadow-lg focus-within:shadow-primary/5'
 );
+
+function TypewriterPlaceholder({ texts }: { texts: string[] }) {
+  const text = useTypewriter({
+    texts,
+    speed: 60,
+    deleteSpeed: 35,
+    waitTime: 2000,
+  });
+
+  return (
+    <div
+      aria-hidden="true"
+      className={cn(
+        'absolute top-0 left-0 pointer-events-none text-muted-foreground/50 select-none',
+        EDITOR_PADDING
+      )}
+    >
+      {text}
+    </div>
+  );
+}
 
 function InternalEditor({
   yDoc,
@@ -70,7 +94,7 @@ function InternalEditor({
       attributes: {
         class: cn(
           'prose prose-sm sm:prose-base max-w-none',
-          'min-h-[300px] p-4 md:p-6',
+          `min-h-[300px] ${EDITOR_PADDING}`,
           'focus:outline-none',
           'prose-headings:text-foreground prose-headings:font-bold',
           'prose-p:text-foreground leading-relaxed',
@@ -87,6 +111,8 @@ function InternalEditor({
       queueMicrotask(() => onUpdateRef.current(html));
     },
   });
+
+  const editorIsEmpty = editor?.isEmpty ?? true;
 
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {
@@ -130,24 +156,17 @@ function InternalEditor({
         saveStatus={saveStatus}
         onVoiceNote={onVoiceNote}
       />
-      <div className={EDITOR_CONTAINER_CLASSES}>
+      <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (
           <>
             <AIBubbleMenu editor={editor} />
             <AIResultPanel editor={editor} />
           </>
         )}
+        {editorIsEmpty && <TypewriterPlaceholder texts={placeholder} />}
         <EditorContent
           editor={editor}
-          className={cn(
-            '[&_.ProseMirror]:min-h-[300px]',
-            '[&_.ProseMirror_p.is-editor-empty:first-child]:before:content-[attr(data-placeholder)]',
-            '[&_.ProseMirror_p.is-editor-empty:first-child]:before:text-muted-foreground/50',
-            '[&_.ProseMirror_p.is-editor-empty:first-child]:before:float-left',
-            '[&_.ProseMirror_p.is-editor-empty:first-child]:before:h-0',
-            '[&_.ProseMirror_p.is-editor-empty:first-child]:before:pointer-events-none'
-          )}
-          data-placeholder={placeholder}
+          className="[&_.ProseMirror]:min-h-[300px]"
         />
       </div>
 
@@ -186,11 +205,20 @@ export function CollaborativeEditor({
   onVoiceNote,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
   const editorState = useCollaborativeEditor(noteId);
   const otherUsers = useActiveCollaborators(noteId);
   usePresenceBroadcast(noteId);
-  const resolvedPlaceholder: string =
-    placeholder ?? t('editor.editorPlaceholder');
+
+  const resolvedPlaceholder: string[] = placeholder
+    ? [placeholder]
+    : aiEnabled
+      ? [
+          t('editor.placeholderWrite'),
+          t('editor.placeholderSlash'),
+          t('editor.placeholderVoice'),
+        ]
+      : [t('editor.editorPlaceholder')];
 
   const wsEnabled = isWebSocketEnabled();
   const { isConnected, isSynced, remoteUsers } = useWebSocketCollaboration({
