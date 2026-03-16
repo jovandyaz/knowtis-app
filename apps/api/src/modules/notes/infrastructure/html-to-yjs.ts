@@ -1,14 +1,20 @@
+import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Link from '@tiptap/extension-link';
+import Underline from '@tiptap/extension-underline';
 import { generateJSON } from '@tiptap/html/server';
 import { Schema } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
+import { common, createLowlight } from 'lowlight';
 import { prosemirrorJSONToYDoc } from 'y-prosemirror';
 import * as Y from 'yjs';
+
+const lowlight = createLowlight(common);
 
 /**
  * ProseMirror schema matching the frontend TipTap editor's StarterKit config.
  * Must stay in sync with apps/notes/src/components/editor/useEditorExtensions.ts
  */
-const editorSchema = new Schema({
+export const editorSchema = new Schema({
   nodes: {
     doc: { content: 'block+' },
     paragraph: {
@@ -27,7 +33,12 @@ const editorSchema = new Schema({
       defining: true,
     },
     blockquote: { content: 'block+', group: 'block' },
-    codeBlock: { content: 'text*', group: 'block', code: true },
+    codeBlock: {
+      content: 'text*',
+      group: 'block',
+      code: true,
+      attrs: { language: { default: null } },
+    },
     horizontalRule: { group: 'block' },
     hardBreak: { inline: true, group: 'inline' },
     bulletList: { content: 'listItem+', group: 'block' },
@@ -41,12 +52,25 @@ const editorSchema = new Schema({
   marks: {
     bold: {},
     italic: {},
+    underline: {},
     code: {},
     strike: {},
+    link: {
+      attrs: {
+        href: { default: null },
+        target: { default: '_blank' },
+        rel: { default: 'noopener noreferrer' },
+      },
+    },
   },
 });
 
-const tiptapExtensions = [StarterKit];
+const tiptapExtensions = [
+  StarterKit.configure({ codeBlock: false }),
+  CodeBlockLowlight.configure({ lowlight }),
+  Link,
+  Underline,
+];
 
 /**
  * Converts HTML content to a Yjs binary state (Uint8Array) compatible with
