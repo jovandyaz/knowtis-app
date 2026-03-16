@@ -14,5 +14,9 @@
     "noEmit": false,
     "types": ["node", "multer"]
   },
-  "include": ["src/**/*.ts"]
+  "include": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.spec.json" }
+  ]
 }
