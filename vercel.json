@@ -13,7 +13,10 @@
       "source": "/t/:path(.*)",
       "destination": "https://us.i.posthog.com/:path"
     },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ],
   "git": {
     "deploymentEnabled": false
