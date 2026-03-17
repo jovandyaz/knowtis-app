@@ -6,11 +6,11 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/ph/static/:path(.*)",
+      "source": "/t/static/:path(.*)",
       "destination": "https://us-assets.i.posthog.com/static/:path"
     },
     {
-      "source": "/ph/:path(.*)",
+      "source": "/t/:path(.*)",
       "destination": "https://us.i.posthog.com/:path"
     },
     { "source": "/(.*)", "destination": "/index.html" }
