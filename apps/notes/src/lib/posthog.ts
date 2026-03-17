@@ -8,12 +8,12 @@ const POSTHOG_HOST = import.meta.env.VITE_PUBLIC_POSTHOG_HOST as
   | undefined;
 
 export function initPostHog(): void {
-  if (!POSTHOG_KEY) {
+  if (import.meta.env.DEV || !POSTHOG_KEY) {
     return;
   }
 
   posthog.init(POSTHOG_KEY, {
-    api_host: POSTHOG_HOST || '/ph',
+    api_host: POSTHOG_HOST || '/t',
     ui_host: 'https://us.posthog.com',
     capture_pageview: false,
     capture_pageleave: true,
