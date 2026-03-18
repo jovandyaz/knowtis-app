@@ -1,3 +1,11 @@
+export const FEATURE_FLAG_KEYS = {
+  AI_ENABLED: 'ai_enabled',
+  VOICE_NOTES_ENABLED: 'voice_notes_enabled',
+} as const;
+
+export type FeatureFlagKey =
+  (typeof FEATURE_FLAG_KEYS)[keyof typeof FEATURE_FLAG_KEYS];
+
 export interface FeatureFlagDto {
   key: string;
   enabled: boolean;
