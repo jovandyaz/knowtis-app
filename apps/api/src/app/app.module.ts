@@ -21,6 +21,7 @@ import type { EnvConfig } from '../config/env.config';
 import { DatabaseModule } from '../database';
 import { AdminModule } from '../modules/admin/admin.module';
 import { AIModule } from '../modules/ai';
+import { ArtifactsModule } from '../modules/artifacts';
 import { AuthModule } from '../modules/auth';
 import { AuthorizationModule } from '../modules/authorization';
 import { CollaborationModule } from '../modules/collaboration';
@@ -70,6 +71,7 @@ import { AppService } from './app.service';
     }),
     AdminModule,
     AIModule,
+    ArtifactsModule,
     AuthModule,
     AuthorizationModule,
     McpModule,

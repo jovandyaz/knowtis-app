@@ -1,0 +1,69 @@
+import { Module } from '@nestjs/common';
+
+import { AIModule } from '../ai';
+import { NotesModule } from '../notes';
+import {
+  AIGenerationPipeline,
+  DeleteArtifactHandler,
+  GenerateArtifactHandler,
+  GetArtifactHandler,
+  GetArtifactsHandler,
+  GetFlashcardProgressHandler,
+  GetQuizAttemptsHandler,
+  GetStudySessionHandler,
+  LearnTopicHandler,
+  ReviewCardHandler,
+  SubmitQuizAttemptHandler,
+} from './application';
+import { ArtifactsController } from './artifacts.controller';
+import {
+  ARTIFACT_READ_REPOSITORY,
+  ARTIFACT_WRITE_REPOSITORY,
+  FLASHCARD_PROGRESS_REPOSITORY,
+  QUIZ_ATTEMPT_REPOSITORY,
+} from './domain';
+import {
+  DrizzleArtifactRepository,
+  DrizzleFlashcardProgressRepository,
+  DrizzleQuizAttemptRepository,
+} from './infrastructure';
+
+@Module({
+  imports: [AIModule, NotesModule],
+  controllers: [ArtifactsController],
+  providers: [
+    // Repositories
+    DrizzleArtifactRepository,
+    {
+      provide: ARTIFACT_READ_REPOSITORY,
+      useExisting: DrizzleArtifactRepository,
+    },
+    {
+      provide: ARTIFACT_WRITE_REPOSITORY,
+      useExisting: DrizzleArtifactRepository,
+    },
+    {
+      provide: FLASHCARD_PROGRESS_REPOSITORY,
+      useClass: DrizzleFlashcardProgressRepository,
+    },
+    {
+      provide: QUIZ_ATTEMPT_REPOSITORY,
+      useClass: DrizzleQuizAttemptRepository,
+    },
+    // Pipeline
+    AIGenerationPipeline,
+    // Command handlers
+    GenerateArtifactHandler,
+    LearnTopicHandler,
+    DeleteArtifactHandler,
+    ReviewCardHandler,
+    SubmitQuizAttemptHandler,
+    // Query handlers
+    GetArtifactHandler,
+    GetArtifactsHandler,
+    GetStudySessionHandler,
+    GetFlashcardProgressHandler,
+    GetQuizAttemptsHandler,
+  ],
+})
+export class ArtifactsModule {}
