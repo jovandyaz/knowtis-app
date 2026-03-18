@@ -13,6 +13,12 @@ export const AI_ACTION = {
   MAKE_LONGER: 'make-longer',
   VOICE_TRANSCRIPTION: 'voice-transcription',
   STRUCTURE_VOICE_NOTE: 'structure-voice-note',
+  GENERATE_FLASHCARDS: 'generate-flashcards',
+  GENERATE_QUIZ: 'generate-quiz',
+  GENERATE_SUMMARY: 'generate-summary',
+  GENERATE_MIND_MAP: 'generate-mind-map',
+  GENERATE_OUTLINE: 'generate-outline',
+  LEARN_TOPIC: 'learn-topic',
 } as const;
 
 export const AI_ACTIONS = Object.values(AI_ACTION);
