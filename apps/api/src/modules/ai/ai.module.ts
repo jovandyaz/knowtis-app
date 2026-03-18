@@ -55,6 +55,11 @@ import { SemanticCacheService } from './infrastructure/redis/semantic-cache.serv
     VoiceTranscriptionService,
     AIGateway,
   ],
-  exports: [AIMetricsService],
+  exports: [
+    AIMetricsService,
+    AIOrchestrator,
+    AIRateLimitService,
+    AI_STRUCTURED_OUTPUT_PROVIDER,
+  ],
 })
 export class AIModule {}
