@@ -14,6 +14,7 @@ import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async () => {
@@ -30,7 +31,7 @@ function AppLayout() {
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
-  const aiEnabled = useFeatureFlag('ai_enabled');
+  const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
 
   useEffect(() => {
