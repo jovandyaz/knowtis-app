@@ -11,15 +11,18 @@ import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import {
   ACCESS_BADGE_CONFIG,
+  addKnowtisListener,
   canPerformNoteAction,
   DEBOUNCE_DELAYS,
 } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
+import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor } from '@tiptap/react';
 import { ArrowLeft, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { useGenerateArtifact } from '@knowtis/data-access-artifacts';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import {
   Badge,
@@ -218,11 +221,52 @@ function NoteEditor({
   });
 
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
+
+  useEffect(() => {
+    setActiveNoteId(noteId);
+    return () => setActiveNoteId(null);
+  }, [noteId, setActiveNoteId]);
+
   const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
   const voiceNoteClose = useVoiceNoteEditorStore((s) => s.close);
   const voiceNoteEditorOpen = useVoiceNoteEditorStore((s) => s.open);
   const insertPosition = useVoiceNoteEditorStore((s) => s.insertPosition);
   const preAcquiredStream = useVoiceNoteEditorStore((s) => s.preAcquiredStream);
+
+  const generateArtifact = useGenerateArtifact();
+  const generateArtifactRef = useRef(generateArtifact);
+  useEffect(() => {
+    generateArtifactRef.current = generateArtifact;
+  });
+
+  // Listen for slash command artifact generation events
+  useEffect(() => {
+    const removeArtifactListener = addKnowtisListener(
+      'knowtis:generate-artifact',
+      (e) => {
+        generateArtifactRef.current.mutate(
+          { noteId, type: e.detail.type },
+          {
+            onSuccess: () => {
+              toast.success(t('ai.artifacts.generated'));
+            },
+            onError: (error) => {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : t('ai.artifacts.generateError');
+              toast.error(message);
+            },
+          }
+        );
+      }
+    );
+
+    return () => {
+      removeArtifactListener();
+    };
+  }, [noteId, t]);
 
   useEffect(() => {
     return () => {
