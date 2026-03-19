@@ -18,7 +18,6 @@ import { Route as ResetPasswordImport } from './routes/reset-password';
 import { Route as VerifyEmailImport } from './routes/verify-email';
 import { Route as STokenImport } from './routes/s.$token';
 import { Route as AppIndexImport } from './routes/_app/index';
-import { Route as AppStudyImport } from './routes/_app/study';
 import { Route as AppNotesIndexImport } from './routes/_app/notes/index';
 import { Route as AppNotesNoteIdImport } from './routes/_app/notes/$noteId';
 import { Route as AppNotesNewImport } from './routes/_app/notes/new';
@@ -79,12 +78,6 @@ const STokenRoute = STokenImport.update({
 const AppIndexRoute = AppIndexImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppRoute,
-} as any);
-
-const AppStudyRoute = AppStudyImport.update({
-  id: '/study',
-  path: '/study',
   getParentRoute: () => AppRoute,
 } as any);
 
@@ -191,13 +184,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexImport;
       parentRoute: typeof AppImport;
     };
-    '/_app/study': {
-      id: '/_app/study';
-      path: '/study';
-      fullPath: '/study';
-      preLoaderRoute: typeof AppStudyImport;
-      parentRoute: typeof AppImport;
-    };
     '/_app/notes/': {
       id: '/_app/notes/';
       path: '/notes';
@@ -254,7 +240,6 @@ export interface FileRoutesByFullPath {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AppIndexRoute;
-  '/study': typeof AppStudyRoute;
   '/notes': typeof AppNotesIndexRoute;
   '/notes/$noteId': typeof AppNotesNoteIdRoute;
   '/notes/new': typeof AppNotesNewRoute;
@@ -268,7 +253,6 @@ export interface FileRoutesByTo {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/': typeof AppIndexRoute;
-  '/study': typeof AppStudyRoute;
   '/notes': typeof AppNotesIndexRoute;
   '/notes/$noteId': typeof AppNotesNoteIdRoute;
   '/notes/new': typeof AppNotesNewRoute;
@@ -285,7 +269,6 @@ export interface FileRoutesById {
   '/verify-email': typeof VerifyEmailRoute;
   '/s/$token': typeof STokenRoute;
   '/_app/': typeof AppIndexRoute;
-  '/_app/study': typeof AppStudyRoute;
   '/_app/notes/': typeof AppNotesIndexRoute;
   '/_app/notes/$noteId': typeof AppNotesNoteIdRoute;
   '/_app/notes/new': typeof AppNotesNewRoute;
@@ -296,16 +279,15 @@ export interface FileRoutesById {
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/study' | '/notes' | '/notes/$noteId' | '/notes/new';
+  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes' | '/notes/$noteId' | '/notes/new';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/study' | '/notes' | '/notes/$noteId' | '/notes/new';
-  id: '__root__' | '/_app' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/study' | '/_app/notes/' | '/_app/notes/$noteId' | '/_app/notes/new' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
+  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/notes' | '/notes/$noteId' | '/notes/new';
+  id: '__root__' | '/_app' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/notes/' | '/_app/notes/$noteId' | '/_app/notes/new' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
 export interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute;
-  AppStudyRoute: typeof AppStudyRoute;
   AppNotesIndexRoute: typeof AppNotesIndexRoute;
   AppNotesNoteIdRoute: typeof AppNotesNoteIdRoute;
   AppNotesNewRoute: typeof AppNotesNewRoute;
@@ -313,7 +295,6 @@ export interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
-  AppStudyRoute: AppStudyRoute,
   AppNotesIndexRoute: AppNotesIndexRoute,
   AppNotesNoteIdRoute: AppNotesNoteIdRoute,
   AppNotesNewRoute: AppNotesNewRoute,
@@ -381,7 +362,6 @@ export const routeTree = rootRoute
       "filePath": "_app.tsx",
       "children": [
         "/_app/",
-        "/_app/study",
         "/_app/notes/",
         "/_app/notes/$noteId",
         "/_app/notes/new"
@@ -415,10 +395,6 @@ export const routeTree = rootRoute
     },
     "/_app/": {
       "filePath": "_app/index.tsx",
-      "parent": "/_app"
-    },
-    "/_app/study": {
-      "filePath": "_app/study.tsx",
       "parent": "/_app"
     },
     "/_app/notes/": {

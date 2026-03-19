@@ -12,7 +12,6 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { NavigationLinks } from './NavigationLinks';
 import { SidebarBrand } from './SidebarBrand';
-import { SidebarFlashcardsSection } from './SidebarFlashcardsSection';
 import { SidebarNotesSection } from './SidebarNotesSection';
 import { SidebarUserMenu } from './SidebarUserMenu';
 
@@ -74,7 +73,6 @@ export function Sidebar() {
             </div>
             <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-4">
               <SidebarNotesSection />
-              <SidebarFlashcardsSection />
             </div>
             <SidebarUserMenu
               username={user?.name ?? ''}
