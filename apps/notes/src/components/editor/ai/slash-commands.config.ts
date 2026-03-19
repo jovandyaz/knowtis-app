@@ -1,9 +1,11 @@
+import { dispatchKnowtisEvent } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
 import i18next from 'i18next';
 import {
   FileText,
+  GraduationCap,
   Heading1,
   Heading2,
   Heading3,
@@ -17,9 +19,24 @@ import {
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { AI_ACTION, type AIAction } from '@knowtis/shared-types';
+import {
+  AI_ACTION,
+  type AIAction,
+  type ArtifactType,
+} from '@knowtis/shared-types';
 
-type SlashCommandGroup = 'ai' | 'formatting';
+import { ARTIFACT_DISPLAY } from '../../artifacts/artifact-display.config';
+
+type SlashCommandGroup = 'ai' | 'formatting' | 'artifacts';
+
+function createArtifactSlashAction(
+  type: ArtifactType
+): (editor: Editor, range: Range) => void {
+  return (editor, range) => {
+    editor.chain().focus().deleteRange(range).run();
+    dispatchKnowtisEvent('knowtis:generate-artifact', { type });
+  };
+}
 
 function createAISlashAction(
   action: AIAction
@@ -110,6 +127,57 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     group: 'ai',
     keywords: ['continue', 'write', 'extend', 'continuar'],
     action: createAISlashAction(AI_ACTION.GHOST_TEXT),
+  },
+
+  {
+    id: 'artifact-flashcards',
+    icon: ARTIFACT_DISPLAY.flashcard_deck.icon,
+    labelKey: 'ai.slash.flashcards',
+    descriptionKey: 'ai.slash.flashcardsDesc',
+    group: 'artifacts',
+    keywords: ['flashcards', 'cards', 'study', 'tarjetas', 'estudiar', 'deck'],
+    action: createArtifactSlashAction('flashcard_deck'),
+  },
+  {
+    id: 'artifact-quiz',
+    icon: ARTIFACT_DISPLAY.quiz.icon,
+    labelKey: 'ai.slash.quiz',
+    descriptionKey: 'ai.slash.quizDesc',
+    group: 'artifacts',
+    keywords: [
+      'quiz',
+      'test',
+      'questions',
+      'examen',
+      'preguntas',
+      'cuestionario',
+    ],
+    action: createArtifactSlashAction('quiz'),
+  },
+  {
+    id: 'artifact-mindmap',
+    icon: ARTIFACT_DISPLAY.mind_map.icon,
+    labelKey: 'ai.slash.mindMap',
+    descriptionKey: 'ai.slash.mindMapDesc',
+    group: 'artifacts',
+    keywords: ['mind map', 'mapa mental', 'diagram', 'diagrama', 'tree'],
+    action: createArtifactSlashAction('mind_map'),
+  },
+  {
+    id: 'artifact-learn',
+    icon: GraduationCap,
+    labelKey: 'ai.slash.learn',
+    descriptionKey: 'ai.slash.learnDesc',
+    group: 'artifacts',
+    keywords: ['learn', 'aprender', 'topic', 'tema', 'research', 'investigar'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: 'aiBlock', attrs: { status: 'input' } })
+        .run();
+    },
   },
 
   {

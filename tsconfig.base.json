@@ -26,6 +26,9 @@
       "@knowtis/shared-hooks": ["libs/shared/hooks/src/index.ts"],
       "@knowtis/shared-util": ["libs/shared/util/src/index.ts"],
       "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
+      "@knowtis/data-access-artifacts": [
+        "libs/data-access/artifacts/src/index.ts"
+      ],
       "@knowtis/data-access-users": ["libs/data-access/users/src/index.ts"],
       "@knowtis/data-access-mcp-keys": [
         "libs/data-access/mcp-keys/src/index.ts"
