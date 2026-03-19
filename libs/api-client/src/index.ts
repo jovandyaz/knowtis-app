@@ -34,3 +34,10 @@ export {
   type CreateMcpKeyInput,
   type CreateMcpKeyResponse,
 } from './lib/mcp-keys.api';
+
+export {
+  artifactsApi,
+  type GenerateArtifactInput,
+  type ReviewCardInput,
+  type SubmitQuizInput,
+} from './lib/artifacts.api';

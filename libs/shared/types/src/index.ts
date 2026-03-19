@@ -37,7 +37,11 @@ export {
   type UserLeftPayload,
 } from './lib/collaboration.types';
 
-export type { FeatureFlagDto } from './lib/feature-flags.types';
+export {
+  FEATURE_FLAG_KEYS,
+  type FeatureFlagKey,
+  type FeatureFlagDto,
+} from './lib/feature-flags.types';
 
 export { ANONYMOUS_LIMITS, type AnonymousLimits } from './lib/anonymous.types';
 
@@ -50,3 +54,26 @@ export {
   type AILanguage,
   type AITone,
 } from './lib/ai.types';
+
+export {
+  ARTIFACT_TYPE,
+  ARTIFACT_TYPES,
+  type ArtifactType,
+  type FlashcardDifficulty,
+  type FlashcardContent,
+  type QuizContent,
+  type SummaryContent,
+  type MindMapNode,
+  type MindMapContent,
+  type ArtifactContent,
+  type Artifact,
+  type FlashcardArtifact,
+  type QuizArtifact,
+  type SummaryArtifact,
+  type MindMapArtifact,
+  SM2_QUALITY,
+  type SM2Quality,
+  type FlashcardProgress,
+  type QuizAttempt,
+  type StudyStats,
+} from './lib/artifact.types';

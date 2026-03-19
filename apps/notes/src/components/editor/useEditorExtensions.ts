@@ -20,6 +20,7 @@ import { GhostText } from './extensions/GhostText';
 
 import './extensions/GhostText.css';
 
+import { AIBlockNode } from './extensions/ai-block';
 import { SlashCommands } from './extensions/SlashCommands';
 
 export function useEditorExtensions(
@@ -68,6 +69,7 @@ export function useEditorExtensions(
         },
       }),
       Underline,
+      AIBlockNode,
       Collaboration.configure({
         document: yDoc,
         fragment: yXmlFragment,

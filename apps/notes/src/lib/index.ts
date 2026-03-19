@@ -15,3 +15,4 @@ export { COLLAB_CONFIG } from './collaboration.constants';
 export { stripHtmlTags, normalizeWhitespace, createPreview } from './text';
 export { ACCESS_BADGE_CONFIG, canPerformNoteAction } from './note-permissions';
 export type { NoteAccessLevel, NoteAction } from './note-permissions';
+export { dispatchKnowtisEvent, addKnowtisListener } from './custom-events';
