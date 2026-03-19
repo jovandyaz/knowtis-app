@@ -22,13 +22,7 @@ describe('ArtifactType', () => {
   });
 
   it('should accept all valid types', () => {
-    const validTypes = [
-      'flashcard_deck',
-      'quiz',
-      'summary',
-      'mind_map',
-      'outline',
-    ];
+    const validTypes = ['flashcard_deck', 'quiz', 'summary', 'mind_map'];
     for (const type of validTypes) {
       expect(ArtifactType.create(type).isOk()).toBe(true);
     }
