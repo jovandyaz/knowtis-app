@@ -1,14 +1,13 @@
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useNavigate } from '@tanstack/react-router';
 
 import { NAVIGATION_LINKS } from '@/config/navigation.config';
-import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { GraduationCap, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { NavigationLinks } from './NavigationLinks';
@@ -24,7 +23,6 @@ export function Sidebar() {
   const user = useAuthUser();
   const { t } = useTranslation('common');
   const collapsed = useSidebarStore((s) => s.collapsed);
-  const aiEnabled = useAIStore((s) => s.aiEnabled);
   const { requestFocus } = useNotesSearchStore();
   const navigate = useNavigate();
 
@@ -59,24 +57,6 @@ export function Sidebar() {
               <SidebarBrand />
             </div>
             <NavigationLinks links={NAVIGATION_LINKS} />
-            {aiEnabled && (
-              <nav className="px-4 -mt-1 mb-1 flex flex-col gap-1">
-                <Link
-                  to="/study"
-                  activeProps={{
-                    className: 'bg-muted text-foreground',
-                  }}
-                  inactiveProps={{
-                    className:
-                      'text-muted-foreground hover:bg-primary/5 hover:text-primary',
-                  }}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all cursor-pointer"
-                >
-                  <GraduationCap className="h-4 w-4" />
-                  {t('labels.study')}
-                </Link>
-              </nav>
-            )}
             <div className="px-3 mb-3">
               <button
                 type="button"
