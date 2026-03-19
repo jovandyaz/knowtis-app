@@ -3,7 +3,7 @@ import { Type } from 'class-transformer';
 import {
   IsArray,
   IsIn,
-  IsNumber,
+  IsInt,
   IsOptional,
   IsString,
   IsUUID,
@@ -31,7 +31,7 @@ export class GenerateArtifactDto {
 
 export class ReviewCardDto {
   @ApiProperty({ description: 'Card index in the deck' })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   cardIndex!: number;
 
@@ -40,7 +40,7 @@ export class ReviewCardDto {
     minimum: 0,
     maximum: 5,
   })
-  @IsNumber()
+  @IsInt()
   @Min(0)
   @Max(5)
   quality!: number;
@@ -48,11 +48,13 @@ export class ReviewCardDto {
 
 export class QuizAnswerDto {
   @ApiProperty({ description: 'Index of the question being answered' })
-  @IsNumber()
+  @IsInt()
+  @Min(0)
   questionIndex!: number;
 
   @ApiProperty({ description: 'Index of the selected answer option' })
-  @IsNumber()
+  @IsInt()
+  @Min(0)
   selectedIndex!: number;
 }
 
