@@ -33,6 +33,7 @@ interface SlashCommandMenuRef {
 
 const GROUP_LABELS: Record<string, string> = {
   ai: 'ai.groups.ai',
+  artifacts: 'ai.groups.artifacts',
   formatting: 'ai.groups.formatting',
 };
 
@@ -103,7 +104,7 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
     return (
       <CommandMenuContent width="lg">
         {groups.map((group, groupIdx) => {
-          const isAI = group.group === 'ai';
+          const isAI = group.group === 'ai' || group.group === 'artifacts';
 
           return (
             <CommandMenuGroup
