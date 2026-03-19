@@ -3,17 +3,19 @@ export const ARTIFACT_TYPE = {
   QUIZ: 'quiz',
   SUMMARY: 'summary',
   MIND_MAP: 'mind_map',
-  OUTLINE: 'outline',
 } as const;
 
 export const ARTIFACT_TYPES = Object.values(ARTIFACT_TYPE);
 export type ArtifactType = (typeof ARTIFACT_TYPES)[number];
 
+export const FLASHCARD_DIFFICULTIES = ['easy', 'medium', 'hard'] as const;
+export type FlashcardDifficulty = (typeof FLASHCARD_DIFFICULTIES)[number];
+
 export interface FlashcardContent {
   cards: {
     front: string;
     back: string;
-    difficulty: 'easy' | 'medium' | 'hard';
+    difficulty: FlashcardDifficulty;
   }[];
 }
 
@@ -41,27 +43,41 @@ export interface MindMapContent {
   children: MindMapNode[];
 }
 
-export interface OutlineContent {
-  outline: string;
-}
-
 export type ArtifactContent =
   | FlashcardContent
   | QuizContent
   | SummaryContent
-  | MindMapContent
-  | OutlineContent;
+  | MindMapContent;
 
-export interface Artifact {
+interface ArtifactBase {
   id: string;
-  type: ArtifactType;
   userId: string;
   sourceNoteId: string;
   title: string;
-  content: ArtifactContent;
   createdAt: string;
   updatedAt: string;
 }
+
+export type Artifact =
+  | (ArtifactBase & { type: 'flashcard_deck'; content: FlashcardContent })
+  | (ArtifactBase & { type: 'quiz'; content: QuizContent })
+  | (ArtifactBase & { type: 'summary'; content: SummaryContent })
+  | (ArtifactBase & { type: 'mind_map'; content: MindMapContent });
+
+export type FlashcardArtifact = Extract<Artifact, { type: 'flashcard_deck' }>;
+export type QuizArtifact = Extract<Artifact, { type: 'quiz' }>;
+export type SummaryArtifact = Extract<Artifact, { type: 'summary' }>;
+export type MindMapArtifact = Extract<Artifact, { type: 'mind_map' }>;
+
+/** SM-2 spaced repetition quality ratings (0–5 scale) */
+export const SM2_QUALITY = {
+  AGAIN: 0,
+  HARD: 2,
+  GOOD: 3,
+  EASY: 5,
+} as const;
+
+export type SM2Quality = (typeof SM2_QUALITY)[keyof typeof SM2_QUALITY];
 
 export interface FlashcardProgress {
   artifactId: string;
