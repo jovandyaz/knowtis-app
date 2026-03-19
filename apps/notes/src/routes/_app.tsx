@@ -4,10 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 import { initAuth } from '@/auth/setup';
+import {
+  ArtifactMobileFAB,
+  ArtifactSidebar,
+  ArtifactSidebarToggle,
+} from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useAIStore } from '@/stores/ai.store';
+import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
@@ -15,6 +21,14 @@ import { motion } from 'motion/react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
+function ArtifactSidebarLayout() {
+  const noteId = useArtifactSidebarStore((s) => s.activeNoteId);
+  if (!noteId) {
+    return null;
+  }
+  return <ArtifactSidebar noteId={noteId} />;
+}
 
 export const Route = createFileRoute('/_app')({
   beforeLoad: async () => {
@@ -61,29 +75,35 @@ function AppLayout() {
       <Sidebar />
       {!isAnonymous && <SettingsModal />}
       <BottomNav />
+      {aiEnabled && <ArtifactMobileFAB />}
 
       <main
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 pb-20 md:pb-0 ${
+        className={`flex-1 flex min-w-0 transition-all duration-300 pb-20 md:pb-0 ${
           sidebarCollapsed ? 'md:pl-0' : 'md:pl-56'
         }`}
       >
-        <div className="hidden md:flex items-center justify-between h-16 px-3 border-b border-border/20">
-          <motion.button
-            type="button"
-            onClick={toggle}
-            className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
-            aria-label={
-              sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
-            }
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-          >
-            <PanelLeft className="h-4 w-4" />
-          </motion.button>
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="hidden md:flex items-center justify-between h-12 px-3">
+            <motion.button
+              type="button"
+              onClick={toggle}
+              className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
+              aria-label={
+                sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+              }
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <PanelLeft className="h-4 w-4" />
+            </motion.button>
+
+            {aiEnabled && <ArtifactSidebarToggle />}
+          </div>
+          <div className="flex-1 p-4 md:p-8 w-full overflow-y-auto">
+            <Outlet />
+          </div>
         </div>
-        <div className="flex-1 p-4 md:p-8 w-full">
-          <Outlet />
-        </div>
+        {aiEnabled && <ArtifactSidebarLayout />}
       </main>
     </div>
   );
