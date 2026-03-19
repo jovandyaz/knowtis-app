@@ -129,7 +129,6 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     action: createAISlashAction(AI_ACTION.GHOST_TEXT),
   },
 
-  // Artifact generation commands
   {
     id: 'artifact-flashcards',
     icon: ARTIFACT_DISPLAY.flashcard_deck.icon,

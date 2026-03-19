@@ -85,7 +85,6 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
       return null;
     }
 
-    // Group items by their group property while preserving order
     const groups = items.reduce<{ group: string; items: SlashCommandItem[] }[]>(
       (acc, item) => {
         const existing = acc.find((g) => g.group === item.group);

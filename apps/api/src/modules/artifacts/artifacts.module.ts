@@ -34,7 +34,6 @@ import { QuizController } from './quiz.controller';
   imports: [AIModule, NotesModule],
   controllers: [ArtifactsController, FlashcardStudyController, QuizController],
   providers: [
-    // Repositories
     DrizzleArtifactRepository,
     {
       provide: ARTIFACT_READ_REPOSITORY,
@@ -52,15 +51,12 @@ import { QuizController } from './quiz.controller';
       provide: QUIZ_ATTEMPT_REPOSITORY,
       useClass: DrizzleQuizAttemptRepository,
     },
-    // Pipeline
     AIGenerationPipeline,
-    // Command handlers
     GenerateArtifactHandler,
     LearnTopicHandler,
     DeleteArtifactHandler,
     ReviewCardHandler,
     SubmitQuizAttemptHandler,
-    // Query handlers
     GetArtifactHandler,
     GetArtifactsHandler,
     GetStudySessionHandler,

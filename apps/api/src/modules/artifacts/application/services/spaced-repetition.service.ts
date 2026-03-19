@@ -1,5 +1,5 @@
 interface SM2Input {
-  quality: number; // 0-5
+  quality: number;
   repetitions: number;
   easeFactor: number;
   intervalDays: number;
@@ -12,7 +12,6 @@ export interface SM2Output {
   nextReview: Date;
 }
 
-// SM-2 algorithm constants
 const MIN_EASE_FACTOR = 1.3;
 const INITIAL_EASE_FACTOR = 2.5;
 const SM2_PASS_THRESHOLD = 3;
@@ -31,7 +30,6 @@ export function calculateNextReview(input: SM2Input): SM2Output {
   const { quality, repetitions, easeFactor, intervalDays } = input;
 
   if (quality < SM2_PASS_THRESHOLD) {
-    // Failed — reset
     return {
       repetitions: 0,
       easeFactor,
@@ -40,7 +38,6 @@ export function calculateNextReview(input: SM2Input): SM2Output {
     };
   }
 
-  // Correct answer — advance
   let newInterval: number;
 
   if (repetitions === 0) {
@@ -51,7 +48,6 @@ export function calculateNextReview(input: SM2Input): SM2Output {
     newInterval = Math.round(intervalDays * easeFactor);
   }
 
-  // SM-2 ease factor formula: EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
   const newEaseFactor = Math.max(
     MIN_EASE_FACTOR,
     easeFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
