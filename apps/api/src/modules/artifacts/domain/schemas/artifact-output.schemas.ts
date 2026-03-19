@@ -16,20 +16,27 @@ export const flashcardDeckOutputSchema = z.object({
 
 export const quizOutputSchema = z.object({
   questions: z.array(
-    z.object({
-      question: z.string().describe('The quiz question'),
-      options: z
-        .array(z.string())
-        .min(3)
-        .max(5)
-        .describe('Answer options (3-5 choices)'),
-      correctIndex: z
-        .number()
-        .describe('Zero-based index of the correct option'),
-      explanation: z
-        .string()
-        .describe('Brief explanation of why the answer is correct'),
-    })
+    z
+      .object({
+        question: z.string().describe('The quiz question'),
+        options: z
+          .array(z.string())
+          .min(3)
+          .max(5)
+          .describe('Answer options (3-5 choices)'),
+        correctIndex: z
+          .number()
+          .int()
+          .min(0)
+          .describe('Zero-based index of the correct option'),
+        explanation: z
+          .string()
+          .describe('Brief explanation of why the answer is correct'),
+      })
+      .refine((q) => q.correctIndex < q.options.length, {
+        message: 'correctIndex must be within options range',
+        path: ['correctIndex'],
+      })
   ),
 });
 

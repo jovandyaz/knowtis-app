@@ -45,8 +45,13 @@ export const artifactsApi = {
     return httpClient.post<Artifact>('/artifacts/generate', input);
   },
 
-  async learnTopic(input: LearnTopicInput): Promise<{ content: string }> {
-    return httpClient.post<{ content: string }>('/artifacts/learn', input);
+  async learnTopic(
+    input: LearnTopicInput
+  ): Promise<{ title: string; content: string }> {
+    return httpClient.post<{ title: string; content: string }>(
+      '/artifacts/learn',
+      input
+    );
   },
 
   async delete(id: string): Promise<void> {
