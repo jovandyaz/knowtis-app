@@ -40,7 +40,9 @@ module.exports = composePlugins(
           if (
             request &&
             (request.startsWith('@tiptap/html') ||
-              request.startsWith('happy-dom'))
+              request.startsWith('happy-dom') ||
+              request.startsWith('lowlight') ||
+              request.startsWith('highlight.js'))
           ) {
             return callback();
           }
