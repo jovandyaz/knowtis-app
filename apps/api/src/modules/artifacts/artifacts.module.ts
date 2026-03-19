@@ -22,15 +22,17 @@ import {
   FLASHCARD_PROGRESS_REPOSITORY,
   QUIZ_ATTEMPT_REPOSITORY,
 } from './domain';
+import { FlashcardStudyController } from './flashcard-study.controller';
 import {
   DrizzleArtifactRepository,
   DrizzleFlashcardProgressRepository,
   DrizzleQuizAttemptRepository,
 } from './infrastructure';
+import { QuizController } from './quiz.controller';
 
 @Module({
   imports: [AIModule, NotesModule],
-  controllers: [ArtifactsController],
+  controllers: [ArtifactsController, FlashcardStudyController, QuizController],
   providers: [
     // Repositories
     DrizzleArtifactRepository,

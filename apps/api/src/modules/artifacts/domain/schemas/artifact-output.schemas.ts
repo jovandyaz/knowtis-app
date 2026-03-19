@@ -62,12 +62,6 @@ export const mindMapOutputSchema = z.object({
     .describe('First-level branches from the root'),
 });
 
-export const outlineOutputSchema = z.object({
-  outline: z
-    .string()
-    .describe('Structured outline in HTML using h2, h3, ul, li tags'),
-});
-
 export const learnTopicOutputSchema = z.object({
   title: z.string().max(50).describe('Concise title for the note, 3-8 words'),
   content: z

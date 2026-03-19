@@ -223,8 +223,8 @@ describe('GenerateArtifactHandler', () => {
 
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.code).toBe(ArtifactErrorCodes.GENERATION_FAILED);
-        expect(result.error.message).toContain('empty');
+        expect(result.error.code).toBe(ArtifactErrorCodes.EMPTY_CONTENT);
+        expect(result.error.message).toContain('no content');
       }
     });
   });

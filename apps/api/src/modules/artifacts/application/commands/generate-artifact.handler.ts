@@ -20,7 +20,6 @@ import {
 import {
   flashcardDeckOutputSchema,
   mindMapOutputSchema,
-  outlineOutputSchema,
   quizOutputSchema,
   summaryOutputSchema,
 } from '../../domain/schemas/artifact-output.schemas';
@@ -39,7 +38,6 @@ const ACTION_MAP: Record<ArtifactType, SupportedAIAction> = {
   quiz: AI_ACTION.GENERATE_QUIZ,
   summary: AI_ACTION.GENERATE_SUMMARY,
   mind_map: AI_ACTION.GENERATE_MIND_MAP,
-  outline: AI_ACTION.GENERATE_OUTLINE,
 };
 
 const SCHEMA_MAP = {
@@ -47,7 +45,6 @@ const SCHEMA_MAP = {
   quiz: quizOutputSchema,
   summary: summaryOutputSchema,
   mind_map: mindMapOutputSchema,
-  outline: outlineOutputSchema,
 } as const;
 
 const TITLE_PREFIX_MAP: Record<ArtifactType, string> = {
@@ -55,7 +52,6 @@ const TITLE_PREFIX_MAP: Record<ArtifactType, string> = {
   quiz: 'Quiz',
   summary: 'Summary',
   mind_map: 'Mind Map',
-  outline: 'Outline',
 };
 
 @Injectable()
@@ -72,11 +68,7 @@ export class GenerateArtifactHandler {
     const sanitizedContent = sanitizeContent(input.noteContent);
 
     if (!sanitizedContent) {
-      return err(
-        ArtifactErrors.generationFailed(
-          'Note content is empty after sanitization'
-        )
-      );
+      return err(ArtifactErrors.emptyContent());
     }
 
     const action = ACTION_MAP[input.type];

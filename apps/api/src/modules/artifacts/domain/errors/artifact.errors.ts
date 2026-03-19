@@ -8,6 +8,7 @@ export const ArtifactErrorCodes = {
   ARTIFACT_NOT_FOUND: 'ARTIFACT_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   GENERATION_FAILED: 'GENERATION_FAILED',
+  EMPTY_CONTENT: 'EMPTY_CONTENT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -36,6 +37,12 @@ export const ArtifactErrors = {
 
   permissionDenied: (message = 'Permission denied') =>
     createArtifactError(ArtifactErrorCodes.PERMISSION_DENIED, message),
+
+  emptyContent: () =>
+    createArtifactError(
+      ArtifactErrorCodes.EMPTY_CONTENT,
+      'Cannot generate artifact: the note has no content. Write some content first.'
+    ),
 
   generationFailed: (reason: string) =>
     createArtifactError(
