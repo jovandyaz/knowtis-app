@@ -240,7 +240,6 @@ function NoteEditor({
     generateArtifactRef.current = generateArtifact;
   });
 
-  // Listen for slash command artifact generation events
   useEffect(() => {
     const removeArtifactListener = addKnowtisListener(
       'knowtis:generate-artifact',

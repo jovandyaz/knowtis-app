@@ -57,7 +57,7 @@ describe('SpacedRepetitionService', () => {
         intervalDays: 6,
       });
       expect(result.repetitions).toBe(3);
-      expect(result.intervalDays).toBe(15); // Math.round(6 * 2.5)
+      expect(result.intervalDays).toBe(15);
     });
 
     it('should decrease ease factor on quality 3', () => {
