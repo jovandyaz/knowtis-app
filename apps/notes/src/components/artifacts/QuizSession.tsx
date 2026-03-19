@@ -140,7 +140,6 @@ export function QuizSession({ artifact }: QuizSessionProps) {
         </span>
       </div>
 
-      {/* Progress bar */}
       <div className="h-2 w-full rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary transition-all duration-300"
@@ -150,14 +149,12 @@ export function QuizSession({ artifact }: QuizSessionProps) {
         />
       </div>
 
-      {/* Question */}
       <div className="rounded-lg border border-border bg-card p-6">
         <p className="text-base font-medium text-foreground">
           {currentQuestion.question}
         </p>
       </div>
 
-      {/* Options */}
       <div className="space-y-3">
         {currentQuestion.options.map((option, index) => {
           const isSelected = selectedOption === index;
@@ -205,7 +202,6 @@ export function QuizSession({ artifact }: QuizSessionProps) {
         })}
       </div>
 
-      {/* Explanation */}
       {answered && currentQuestion.explanation && (
         <div className="rounded-lg border border-border bg-muted/50 p-4">
           <p className="text-sm font-medium text-foreground">
@@ -217,7 +213,6 @@ export function QuizSession({ artifact }: QuizSessionProps) {
         </div>
       )}
 
-      {/* Next button */}
       {answered && (
         <div className="flex justify-end">
           <Button onClick={handleNext}>

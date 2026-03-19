@@ -171,7 +171,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         </div>
       </div>
 
-      {/* Progress bar */}
       <div className="h-2 w-full rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-primary transition-all duration-300"
@@ -179,7 +178,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         />
       </div>
 
-      {/* Flashcard */}
       <div
         className="perspective-[1000px] cursor-pointer"
         onClick={handleFlip}
@@ -202,7 +200,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
             flipped ? '[transform:rotateY(180deg)]' : ''
           }`}
         >
-          {/* Front */}
           <div className="absolute inset-0 flex flex-col rounded-xl border border-border bg-card p-6 [backface-visibility:hidden]">
             <Badge
               className={`mb-3 self-center shrink-0 ${DIFFICULTY_COLORS[currentCard.difficulty] ?? ''}`}
@@ -221,7 +218,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
             )}
           </div>
 
-          {/* Back */}
           <div className="absolute inset-0 flex flex-col rounded-xl border border-border bg-card p-6 [backface-visibility:hidden] [transform:rotateY(180deg)]">
             <div className="flex-1 overflow-y-auto min-h-0 flex items-center justify-center">
               <p className="text-center text-sm text-foreground">
@@ -232,7 +228,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         </div>
       </div>
 
-      {/* Rating buttons (when flipped) or show answer */}
       {flipped ? (
         <div className="flex flex-wrap items-center justify-center gap-2">
           {qualityButtons.map(({ quality, label, variant }) => (
@@ -258,7 +253,6 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         </div>
       )}
 
-      {/* Navigation */}
       <div className="flex items-center justify-between">
         <Button
           variant="outline"

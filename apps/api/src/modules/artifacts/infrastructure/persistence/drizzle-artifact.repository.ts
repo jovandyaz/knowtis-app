@@ -26,8 +26,6 @@ export class DrizzleArtifactRepository
     private readonly db: Database
   ) {}
 
-  // ── ArtifactReadRepository ──────────────────────────────────────────
-
   async findById(id: string): Promise<ArtifactEntity | null> {
     const rows = await this.db
       .select()
@@ -62,8 +60,6 @@ export class DrizzleArtifactRepository
 
     return rows.map((row) => this.toEntity(row));
   }
-
-  // ── ArtifactWriteRepository ─────────────────────────────────────────
 
   async create(
     data: CreateArtifactData
@@ -125,8 +121,6 @@ export class DrizzleArtifactRepository
       );
     }
   }
-
-  // ── Private helpers ─────────────────────────────────────────────────
 
   private toEntity(row: typeof artifacts.$inferSelect): ArtifactEntity {
     return {
