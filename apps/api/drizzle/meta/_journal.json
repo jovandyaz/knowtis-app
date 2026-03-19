@@ -36,6 +36,13 @@
       "when": 1773385147369,
       "tag": "0004_nervous_mentallo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773901353247,
+      "tag": "0005_whole_hulk",
+      "breakpoints": true
     }
   ]
 }
