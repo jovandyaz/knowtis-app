@@ -140,6 +140,7 @@
     },
     "groups": {
       "ai": "IA",
+      "artifacts": "Herramientas de Estudio",
       "formatting": "Formato"
     },
     "voice": {
@@ -167,6 +168,113 @@
       "micError": "Error de micrófono: {{message}}",
       "micGenericError": "No se pudo acceder al micrófono. Verifica los permisos."
     },
+    "artifacts": {
+      "studyTools": "Herramientas de Estudio",
+      "generated": "¡Artefacto generado exitosamente!",
+      "generateError": "Error al generar artefacto",
+      "learningAbout": "Aprendiendo sobre: {{topic}}",
+      "learnSuccess": "Contenido sobre {{topic}} agregado a tu nota",
+      "learnError": "Error al generar contenido de aprendizaje",
+      "learnTitle": "Aprender sobre un tema",
+      "learnPlaceholder": "ej. NestJS Dependency Injection",
+      "learnAction": "Generar",
+      "cancel": "Cancelar",
+      "loadingStudy": "Cargando sesión de estudio...",
+      "noCardsTitle": "¡Todo al día!",
+      "noCardsDesc": "No hay tarjetas pendientes de repasar. Genera flashcards desde tus notas para comenzar a estudiar.",
+      "studySession": "Sesión de Estudio",
+      "cardsDue": "{{count}} tarjetas pendientes de repaso",
+      "types": {
+        "flashcards": "Flashcards",
+        "quiz": "Quiz",
+        "summary": "Resumen",
+        "mindMap": "Mapa mental"
+      },
+      "sidebar": {
+        "back": "Volver",
+        "openPanel": "Abrir panel de estudio",
+        "closePanel": "Cerrar panel de estudio",
+        "studyTools": "Herramientas de Estudio"
+      },
+      "list": {
+        "loading": "Cargando artefactos...",
+        "emptyTitle": "Sin artefactos aún",
+        "emptyDescription": "Genera materiales de estudio a partir de tus notas con IA.",
+        "deleted": "Artefacto eliminado",
+        "deleteError": "Error al eliminar el artefacto",
+        "deleteAriaLabel": "Eliminar {{title}}"
+      },
+      "generate": {
+        "button": "Generar",
+        "title": "Generar material de estudio",
+        "description": "Elige el tipo de artefacto a generar a partir del contenido de tu nota.",
+        "generating": "Generando artefacto...",
+        "success": "Artefacto generado con éxito",
+        "error": "Error al generar el artefacto",
+        "flashcards": "Flashcards",
+        "flashcardsDesc": "Crea flashcards para estudio con repetición espaciada",
+        "quiz": "Quiz",
+        "quizDesc": "Genera un quiz de opción múltiple para evaluar tus conocimientos",
+        "summary": "Resumen",
+        "summaryDesc": "Crea un resumen conciso con puntos clave",
+        "mindMap": "Mapa mental",
+        "mindMapDesc": "Genera un mapa mental jerárquico de conceptos"
+      },
+      "flashcards": {
+        "cardOf": "{{current}} / {{total}}",
+        "showAnswer": "Mostrar respuesta",
+        "showFront": "Mostrar frente de la tarjeta",
+        "showBack": "Mostrar dorso de la tarjeta",
+        "clickToFlip": "Haz clic para voltear",
+        "prev": "Anterior",
+        "next": "Siguiente",
+        "reviewError": "Error al enviar la revisión",
+        "complete": "Sesión completada!",
+        "reviewedAll": "Revisaste las {{total}} tarjetas",
+        "restart": "Empezar de nuevo",
+        "difficulty": {
+          "easy": "Fácil",
+          "medium": "Medio",
+          "hard": "Difícil"
+        },
+        "quality": {
+          "again": "De nuevo",
+          "hard": "Difícil",
+          "good": "Bien",
+          "easy": "Fácil"
+        }
+      },
+      "quiz": {
+        "questionOf": "{{current}} / {{total}}",
+        "explanation": "Explicación",
+        "next": "Siguiente",
+        "finish": "Finalizar",
+        "completed": "¡Quiz completado!",
+        "scoreText": "Obtuviste {{score}} de {{total}} ({{percentage}}%)",
+        "tryAgain": "Intentar de nuevo",
+        "submitError": "Error al enviar el quiz"
+      },
+      "summary": {
+        "keyPointsTitle": "Puntos clave",
+        "copy": "Copiar",
+        "copied": "¡Copiado!",
+        "copyError": "Error al copiar al portapapeles"
+      },
+      "mindMap": {
+        "expandHint": "Haz clic en los nodos para expandir o colapsar"
+      }
+    },
+    "aiBlock": {
+      "title": "Aprender sobre un tema",
+      "placeholder": "ej. NestJS Dependency Injection",
+      "generate": "Generar",
+      "generating": "Generando contenido...",
+      "cancel": "Cancelar",
+      "insert": "Insertar",
+      "retry": "Reintentar",
+      "discard": "Descartar",
+      "errorGeneric": "Error al generar contenido. Intenta de nuevo."
+    },
     "slash": {
       "voiceNote": "Nota de voz",
       "voiceNoteDesc": "Graba audio e inserta como texto",
@@ -189,7 +297,15 @@
       "numberedList": "Lista numerada",
       "numberedListDesc": "Crear una lista numerada",
       "blockquote": "Cita",
-      "blockquoteDesc": "Insertar una cita"
+      "blockquoteDesc": "Insertar una cita",
+      "flashcards": "Generar flashcards",
+      "flashcardsDesc": "Crear tarjetas de estudio desde la nota",
+      "quiz": "Generar quiz",
+      "quizDesc": "Crear un cuestionario del contenido de la nota",
+      "mindMap": "Generar mapa mental",
+      "mindMapDesc": "Crear un mapa mental visual desde la nota",
+      "learn": "Aprender sobre un tema",
+      "learnDesc": "Generar contenido educativo sobre un tema"
     }
   },
   "profile": {

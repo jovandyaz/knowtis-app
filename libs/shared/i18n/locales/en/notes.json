@@ -140,6 +140,7 @@
     },
     "groups": {
       "ai": "AI",
+      "artifacts": "Study Tools",
       "formatting": "Formatting"
     },
     "voice": {
@@ -167,6 +168,113 @@
       "micError": "Microphone error: {{message}}",
       "micGenericError": "Could not access microphone. Please check permissions."
     },
+    "artifacts": {
+      "studyTools": "Study Tools",
+      "generated": "Artifact generated successfully!",
+      "generateError": "Failed to generate artifact",
+      "learningAbout": "Learning about: {{topic}}",
+      "learnSuccess": "Content about {{topic}} added to your note",
+      "learnError": "Failed to generate learning content",
+      "learnTitle": "Learn about a topic",
+      "learnPlaceholder": "e.g. NestJS Dependency Injection",
+      "learnAction": "Generate",
+      "cancel": "Cancel",
+      "loadingStudy": "Loading study session...",
+      "noCardsTitle": "All caught up!",
+      "noCardsDesc": "No flashcards due for review. Generate flashcards from your notes to start studying.",
+      "studySession": "Study Session",
+      "cardsDue": "{{count}} cards due for review",
+      "types": {
+        "flashcards": "Flashcards",
+        "quiz": "Quiz",
+        "summary": "Summary",
+        "mindMap": "Mind Map"
+      },
+      "sidebar": {
+        "back": "Back",
+        "openPanel": "Open study panel",
+        "closePanel": "Close study panel",
+        "studyTools": "Study Tools"
+      },
+      "list": {
+        "loading": "Loading artifacts...",
+        "emptyTitle": "No artifacts yet",
+        "emptyDescription": "Generate study materials from your notes using AI.",
+        "deleted": "Artifact deleted",
+        "deleteError": "Failed to delete artifact",
+        "deleteAriaLabel": "Delete {{title}}"
+      },
+      "generate": {
+        "button": "Generate",
+        "title": "Generate Study Material",
+        "description": "Choose the type of artifact to generate from your note content.",
+        "generating": "Generating artifact...",
+        "success": "Artifact generated successfully",
+        "error": "Failed to generate artifact",
+        "flashcards": "Flashcards",
+        "flashcardsDesc": "Create flashcards for spaced repetition study",
+        "quiz": "Quiz",
+        "quizDesc": "Generate a multiple-choice quiz to test your knowledge",
+        "summary": "Summary",
+        "summaryDesc": "Create a concise summary with key points",
+        "mindMap": "Mind Map",
+        "mindMapDesc": "Generate a hierarchical mind map of concepts"
+      },
+      "flashcards": {
+        "cardOf": "{{current}} / {{total}}",
+        "showAnswer": "Show Answer",
+        "showFront": "Show front of card",
+        "showBack": "Show back of card",
+        "clickToFlip": "Click to flip",
+        "prev": "Previous",
+        "next": "Next",
+        "reviewError": "Failed to submit review",
+        "complete": "Session complete!",
+        "reviewedAll": "You reviewed all {{total}} cards",
+        "restart": "Start over",
+        "difficulty": {
+          "easy": "Easy",
+          "medium": "Medium",
+          "hard": "Hard"
+        },
+        "quality": {
+          "again": "Again",
+          "hard": "Hard",
+          "good": "Good",
+          "easy": "Easy"
+        }
+      },
+      "quiz": {
+        "questionOf": "{{current}} / {{total}}",
+        "explanation": "Explanation",
+        "next": "Next",
+        "finish": "Finish",
+        "completed": "Quiz Completed!",
+        "scoreText": "You scored {{score}} out of {{total}} ({{percentage}}%)",
+        "tryAgain": "Try Again",
+        "submitError": "Failed to submit quiz"
+      },
+      "summary": {
+        "keyPointsTitle": "Key Points",
+        "copy": "Copy",
+        "copied": "Copied!",
+        "copyError": "Failed to copy to clipboard"
+      },
+      "mindMap": {
+        "expandHint": "Click nodes to expand or collapse"
+      }
+    },
+    "aiBlock": {
+      "title": "Learn about a topic",
+      "placeholder": "e.g. NestJS Dependency Injection",
+      "generate": "Generate",
+      "generating": "Generating content...",
+      "cancel": "Cancel",
+      "insert": "Insert",
+      "retry": "Retry",
+      "discard": "Discard",
+      "errorGeneric": "Failed to generate content. Try again."
+    },
     "slash": {
       "voiceNote": "Voice note",
       "voiceNoteDesc": "Record audio and insert as text",
@@ -189,7 +297,15 @@
       "numberedList": "Numbered list",
       "numberedListDesc": "Create a numbered list",
       "blockquote": "Quote",
-      "blockquoteDesc": "Insert a blockquote"
+      "blockquoteDesc": "Insert a blockquote",
+      "flashcards": "Generate flashcards",
+      "flashcardsDesc": "Create study flashcards from note",
+      "quiz": "Generate quiz",
+      "quizDesc": "Create a quiz from note content",
+      "mindMap": "Generate mind map",
+      "mindMapDesc": "Create a visual mind map from note",
+      "learn": "Learn about topic",
+      "learnDesc": "Generate educational content about a topic"
     }
   },
   "profile": {
