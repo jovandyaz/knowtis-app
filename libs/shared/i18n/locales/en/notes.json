@@ -305,7 +305,19 @@
       "mindMap": "Generate mind map",
       "mindMapDesc": "Create a visual mind map from note",
       "learn": "Learn about topic",
-      "learnDesc": "Generate educational content about a topic"
+      "learnDesc": "Generate educational content about a topic",
+      "fixSpelling": "Fix spelling",
+      "fixSpellingDesc": "Correct spelling and grammar errors",
+      "shorter": "Make shorter",
+      "shorterDesc": "Condense the content",
+      "longer": "Make longer",
+      "longerDesc": "Expand and elaborate the content",
+      "actionItems": "Extract action items",
+      "actionItemsDesc": "Pull out tasks and action items",
+      "translate": "Translate",
+      "translateDesc": "Translate content to another language",
+      "changeTone": "Change tone",
+      "changeToneDesc": "Adjust the writing tone"
     }
   },
   "profile": {
