@@ -67,7 +67,6 @@ function InternalEditor({
   onUpdate,
   placeholder,
   editable,
-  saveStatus,
   autoFocus,
   onEditorReady,
   onVoiceNote,
@@ -151,11 +150,7 @@ function InternalEditor({
 
   return (
     <>
-      <EditorToolbar
-        editor={editor}
-        saveStatus={saveStatus}
-        onVoiceNote={onVoiceNote}
-      />
+      <EditorToolbar editor={editor} onVoiceNote={onVoiceNote} />
       <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (
           <>
@@ -199,7 +194,6 @@ export function CollaborativeEditor({
   editable = true,
   shareToken,
   onEditDenied,
-  saveStatus,
   autoFocus,
   onEditorReady,
   onVoiceNote,
@@ -277,7 +271,6 @@ export function CollaborativeEditor({
           onUpdate={onUpdate}
           placeholder={resolvedPlaceholder}
           editable={editable}
-          saveStatus={saveStatus}
           autoFocus={autoFocus}
           onEditorReady={onEditorReady}
           onVoiceNote={onVoiceNote}

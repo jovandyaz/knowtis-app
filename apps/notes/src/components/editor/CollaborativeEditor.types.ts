@@ -12,7 +12,7 @@ export interface CollaborativeEditorProps {
   editable?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
-  saveStatus?: 'saving' | 'saved' | undefined;
+
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;
   onVoiceNote?: (() => void) | undefined;
@@ -27,7 +27,7 @@ export interface InternalEditorProps {
   onUpdate: (content: string) => void;
   placeholder: string[];
   editable: boolean;
-  saveStatus?: 'saving' | 'saved' | undefined;
+
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;
   onVoiceNote?: (() => void) | undefined;

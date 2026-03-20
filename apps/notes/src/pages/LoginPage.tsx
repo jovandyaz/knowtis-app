@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors, resolvePostLoginRedirect } from '@/auth';
+import { useAutofillDetect } from '@/hooks/useAutofillDetect';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { LoginFormData } from '@jovandyaz/auth-react';
@@ -44,6 +45,7 @@ export function LoginPage() {
     handleSubmit,
     setError,
     setFocus,
+    setValue,
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -52,6 +54,8 @@ export function LoginPage() {
       password: '',
     },
   });
+
+  const handleAutofill = useAutofillDetect(setValue);
 
   const onSubmit = (data: LoginFormData) => {
     resetRateLimit();
@@ -110,6 +114,7 @@ export function LoginPage() {
               autoComplete="email"
               aria-invalid={!!errors.email}
               aria-describedby={errors.email ? 'email-error' : undefined}
+              onAnimationStart={handleAutofill}
               {...register('email')}
             />
           </FormField>
@@ -125,6 +130,7 @@ export function LoginPage() {
               autoComplete="current-password"
               aria-invalid={!!errors.password}
               aria-describedby={errors.password ? 'password-error' : undefined}
+              onAnimationStart={handleAutofill}
               {...register('password')}
             />
           </FormField>

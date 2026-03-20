@@ -14,7 +14,6 @@ import {
   Mic,
   PenLine,
   Quote,
-  Wand2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -109,15 +108,6 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     group: 'ai',
     keywords: ['outline', 'structure', 'esquema'],
     action: createAISlashAction(AI_ACTION.OUTLINE),
-  },
-  {
-    id: 'ai-improve',
-    icon: Wand2,
-    labelKey: 'ai.slash.improve',
-    descriptionKey: 'ai.slash.improveDesc',
-    group: 'ai',
-    keywords: ['improve', 'enhance', 'mejorar', 'writing'],
-    action: createAISlashAction(AI_ACTION.IMPROVE_WRITING),
   },
   {
     id: 'ai-continue',
