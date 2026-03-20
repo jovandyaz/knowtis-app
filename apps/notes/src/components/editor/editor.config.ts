@@ -93,6 +93,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCode().run(),
     isActive: (editor) => editor.isActive('code'),
     shortcut: 'Ctrl+E',
+    hideOnMobile: true,
   },
   {
     icon: CodeXml,
@@ -100,6 +101,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCodeBlock().run(),
     isActive: (editor) => editor.isActive('codeBlock'),
     shortcut: 'Ctrl+Alt+C',
+    hideOnMobile: true,
   },
   { type: 'separator' },
   { type: 'link-popover', shortcut: 'Ctrl+K' },
@@ -108,6 +110,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     label: 'Horizontal Rule',
     action: (editor) => editor.chain().focus().setHorizontalRule().run(),
     isActive: () => false,
+    hideOnMobile: true,
   },
   { type: 'separator' },
   {

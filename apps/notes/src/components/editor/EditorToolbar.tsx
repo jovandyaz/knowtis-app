@@ -20,12 +20,9 @@ import {
 
 import { HeadingDropdown } from './HeadingDropdown';
 import { LinkPopover } from './LinkPopover';
-import type { SaveStatus } from './SaveStatusIndicator';
-import { SaveStatusIndicator } from './SaveStatusIndicator';
 
 interface EditorToolbarProps {
   editor: Editor | null;
-  saveStatus?: SaveStatus | undefined;
   onVoiceNote?: (() => void) | undefined;
 }
 
@@ -74,10 +71,8 @@ function ToolbarSeparator() {
 
 export const EditorToolbar = memo(function EditorToolbar({
   editor,
-  saveStatus,
   onVoiceNote,
 }: EditorToolbarProps) {
-  const { t } = useTranslation('common');
   const { t: tNotes } = useTranslation('notes');
 
   if (!editor) {
@@ -91,14 +86,14 @@ export const EditorToolbar = memo(function EditorToolbar({
         animate={{ opacity: 1, y: 0 }}
         className={cn(
           'z-10 mx-auto w-fit',
-          'sticky top-4 mb-4',
+          'sticky top-0 mb-4',
           'max-md:fixed max-md:bottom-3 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
         )}
       >
         <div
           className={cn(
             'flex items-center gap-1 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30',
-            'max-md:mx-auto max-md:max-w-[calc(100vw-2rem)] max-md:overflow-x-auto max-md:rounded-2xl max-md:scrollbar-none'
+            'max-md:mx-auto max-md:w-fit max-md:max-w-[calc(100vw-2rem)] max-md:overflow-x-auto max-md:rounded-2xl max-md:scrollbar-none'
           )}
         >
           {TOOLBAR_TOOLS.map((item, index) => {
@@ -127,21 +122,12 @@ export const EditorToolbar = memo(function EditorToolbar({
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary) md:hidden"
+              className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary)"
               onClick={onVoiceNote}
               aria-label={tNotes('ai.slash.voiceNote')}
             >
               <Mic className="h-4 w-4" />
             </Button>
-          )}
-          {saveStatus && (
-            <SaveStatusIndicator
-              status={saveStatus}
-              label={
-                saveStatus === 'saving' ? t('states.saving') : t('states.saved')
-              }
-              className="hidden max-md:flex ml-1 text-xs text-(--muted-foreground)"
-            />
           )}
         </div>
       </motion.div>

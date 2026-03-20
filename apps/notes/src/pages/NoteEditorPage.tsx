@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
@@ -30,7 +31,10 @@ import {
   ErrorState,
   Input,
   LoadingState,
-  VoiceButton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
 import type {
@@ -89,77 +93,75 @@ function MobileEditorHeader({
   );
 }
 
-interface DesktopEditorHeaderProps {
+interface NoteControlsPortalProps {
   accessLevel: NoteAccessLevel;
   editorsCanShare: boolean;
   canEdit: boolean;
   isSaving: boolean;
   hasSaved: boolean;
   onShareClick: () => void;
-  onVoiceNoteClick?: () => void;
-  showVoiceNote: boolean;
 }
 
-function DesktopEditorHeader({
+function NoteControlsPortal({
   accessLevel,
   editorsCanShare,
   canEdit,
   isSaving,
   hasSaved,
   onShareClick,
-  onVoiceNoteClick,
-  showVoiceNote,
-}: DesktopEditorHeaderProps) {
+}: NoteControlsPortalProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
   const showBadge = accessLevel !== 'owner';
 
-  return (
-    <div className="mb-6 hidden md:flex items-center justify-between">
-      <div className="flex items-center gap-2">
-        {showBadge && (
-          <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
-        )}
-      </div>
+  const portalTarget = document.getElementById('note-controls-portal');
+  if (!portalTarget) {
+    return null;
+  }
 
-      <div className="flex items-center gap-2 text-sm text-(--muted-foreground)">
-        {canEdit &&
-          (isSaving ? (
-            <SaveStatusIndicator
-              status="saving"
-              label={tCommon('states.saving')}
-              className="text-sm"
-            />
-          ) : hasSaved ? (
-            <SaveStatusIndicator
-              status="saved"
-              label={tCommon('states.saved')}
-              className="text-sm"
-            />
-          ) : null)}
+  return createPortal(
+    <TooltipProvider delayDuration={300}>
+      {showBadge && (
+        <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
+      )}
 
-        {showVoiceNote && (
-          <VoiceButton
-            size="sm"
-            onClick={onVoiceNoteClick}
-            aria-label={t('ai.voice.recordVoiceNote')}
+      {canEdit &&
+        (isSaving ? (
+          <SaveStatusIndicator
+            status="saving"
+            label={tCommon('states.saving')}
+            className="text-xs text-(--muted-foreground)"
+            transient
           />
-        )}
+        ) : hasSaved ? (
+          <SaveStatusIndicator
+            status="saved"
+            label={tCommon('states.saved')}
+            className="text-xs text-(--muted-foreground)"
+            transient
+          />
+        ) : null)}
 
-        {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={onShareClick}
-          >
-            <Share2 className="h-4 w-4" />
-            {t('editor.share')}
-          </Button>
-        )}
-      </div>
-    </div>
+      {canPerformNoteAction(accessLevel, 'share', {
+        editorsCanShare,
+      }) && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+              onClick={onShareClick}
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('editor.share')}</TooltipContent>
+        </Tooltip>
+      )}
+    </TooltipProvider>,
+    portalTarget
   );
 }
 
@@ -356,15 +358,13 @@ function NoteEditor({
         onBack={() => navigate({ to: '/' })}
       />
 
-      <DesktopEditorHeader
+      <NoteControlsPortal
         accessLevel={accessLevel}
         editorsCanShare={editorsCanShare}
         canEdit={canEdit}
         isSaving={isSaving}
         hasSaved={!!lastSaved}
         onShareClick={openShareDialog}
-        onVoiceNoteClick={handleVoiceNoteClick}
-        showVoiceNote={showVoiceNote}
       />
 
       <div className="mb-4">
@@ -383,7 +383,6 @@ function NoteEditor({
         initialContent={content}
         onUpdate={handleContentChange}
         editable={canEdit}
-        saveStatus={isSaving ? 'saving' : lastSaved ? 'saved' : undefined}
         autoFocus={autoFocusContent}
         onEditorReady={handleEditorReady}
         onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}

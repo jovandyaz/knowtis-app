@@ -47,6 +47,7 @@ function AppLayout() {
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
+  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
@@ -71,19 +72,19 @@ function AppLayout() {
   }
 
   return (
-    <div className="flex min-h-screen bg-(--background)">
+    <div className="flex h-screen overflow-hidden bg-(--background)">
       <Sidebar />
       {!isAnonymous && <SettingsModal />}
       <BottomNav />
       {aiEnabled && <ArtifactMobileFAB />}
 
       <main
-        className={`flex-1 flex min-w-0 transition-all duration-300 pb-20 md:pb-0 ${
+        className={`flex-1 flex min-w-0 min-h-0 transition-all duration-300 pb-20 md:pb-0 ${
           sidebarCollapsed ? 'md:pl-0' : 'md:pl-56'
         }`}
       >
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="hidden md:flex items-center justify-between h-12 px-3">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
             <motion.button
               type="button"
               onClick={toggle}
@@ -97,9 +98,15 @@ function AppLayout() {
               <PanelLeft className="h-4 w-4" />
             </motion.button>
 
-            {aiEnabled && <ArtifactSidebarToggle />}
+            <div className="flex items-center gap-1">
+              <div
+                id="note-controls-portal"
+                className="flex items-center gap-1"
+              />
+              {activeNoteId && aiEnabled && <ArtifactSidebarToggle />}
+            </div>
           </div>
-          <div className="flex-1 p-4 md:p-8 w-full overflow-y-auto">
+          <div className="flex-1 min-h-0 p-4 md:px-8 md:pt-3 md:pb-8 w-full overflow-y-auto">
             <Outlet />
           </div>
         </div>

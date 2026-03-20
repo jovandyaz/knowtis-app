@@ -305,7 +305,19 @@
       "mindMap": "Generar mapa mental",
       "mindMapDesc": "Crear un mapa mental visual desde la nota",
       "learn": "Aprender sobre un tema",
-      "learnDesc": "Generar contenido educativo sobre un tema"
+      "learnDesc": "Generar contenido educativo sobre un tema",
+      "fixSpelling": "Corregir ortografía",
+      "fixSpellingDesc": "Corregir errores de ortografía y gramática",
+      "shorter": "Hacer más corto",
+      "shorterDesc": "Condensar el contenido",
+      "longer": "Hacer más largo",
+      "longerDesc": "Expandir y elaborar el contenido",
+      "actionItems": "Extraer tareas",
+      "actionItemsDesc": "Identificar tareas y puntos de acción",
+      "translate": "Traducir",
+      "translateDesc": "Traducir el contenido a otro idioma",
+      "changeTone": "Cambiar tono",
+      "changeToneDesc": "Ajustar el tono de la redacción"
     }
   },
   "profile": {
