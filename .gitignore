@@ -71,3 +71,7 @@ AGENTS.md
 # Worktrees
 .worktrees/
 .mcp.json
+
+.nx/polygraph
+.claude/worktrees
+.claude/settings.local.json
