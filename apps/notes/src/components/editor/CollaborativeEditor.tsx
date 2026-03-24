@@ -74,6 +74,7 @@ function InternalEditor({
   const aiEnabled = useAIStore((s) => s.aiEnabled);
 
   const onUpdateRef = useRef(onUpdate);
+  const isInitializingRef = useRef(false);
 
   useEffect(() => {
     onUpdateRef.current = onUpdate;
@@ -106,6 +107,7 @@ function InternalEditor({
       },
     },
     onUpdate: ({ editor }) => {
+      if (isInitializingRef.current) {return;}
       const html = editor.getHTML();
       queueMicrotask(() => onUpdateRef.current(html));
     },
@@ -120,9 +122,14 @@ function InternalEditor({
 
     try {
       if (yXmlFragment.length === 0) {
+        isInitializingRef.current = true;
         editor.commands.setContent(initialContent);
+        queueMicrotask(() => {
+          isInitializingRef.current = false;
+        });
       }
     } catch (error) {
+      isInitializingRef.current = false;
       logger.error('Error setting initial content', {
         error,
         context: 'CollaborativeEditor',
