@@ -20,6 +20,7 @@ import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 function ArtifactSidebarLayout() {
@@ -40,14 +41,16 @@ export const Route = createFileRoute('/_app')({
 function AppLayout() {
   const user = useAuthUser();
   const isLoading = useAuthLoading();
-  const { i18n } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const isAnonymous = user?.isAnonymous ?? false;
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const sidebarWidth = useSidebarStore((s) => s.width);
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
@@ -79,9 +82,8 @@ function AppLayout() {
       {aiEnabled && <ArtifactMobileFAB />}
 
       <main
-        className={`flex-1 flex min-w-0 min-h-0 transition-all duration-300 pb-20 md:pb-0 ${
-          sidebarCollapsed ? 'md:pl-0' : 'md:pl-56'
-        }`}
+        className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0"
+        style={{ paddingLeft: isDesktop ? `${sidebarWidth}px` : undefined }}
       >
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
           <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
@@ -90,7 +92,9 @@ function AppLayout() {
               onClick={toggle}
               className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
               aria-label={
-                sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'
+                sidebarCollapsed
+                  ? t('labels.expandSidebar')
+                  : t('labels.collapseSidebar')
               }
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
