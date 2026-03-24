@@ -21,7 +21,10 @@
     "flashcards": "Flashcards",
     "expand": "Expandir",
     "collapse": "Contraer",
-    "toggleMenu": "Alternar menú"
+    "toggleMenu": "Alternar menú",
+    "expandSidebar": "Expandir barra lateral",
+    "collapseSidebar": "Contraer barra lateral",
+    "resizeSidebar": "Redimensionar barra lateral"
   },
   "states": {
     "loading": "Cargando...",

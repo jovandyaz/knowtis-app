@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
@@ -10,6 +10,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  ResizablePanel,
 } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import type { Artifact } from '@knowtis/shared-types';
@@ -47,6 +48,11 @@ function ArtifactPanelContent({
   );
 }
 
+const SIDEBAR_DEFAULT_WIDTH = 480;
+const SIDEBAR_MIN_WIDTH = 320;
+const SIDEBAR_MAX_WIDTH = 600;
+const COLLAPSE_THRESHOLD = 100;
+
 export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
   const { t } = useTranslation('notes');
   const { data: artifacts } = useArtifacts(noteId);
@@ -58,44 +64,58 @@ export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
     null
   );
 
+  const handleCollapse = useCallback(() => setOpen(false), [setOpen]);
+
   useEffect(() => {
     if (artifacts && artifacts.length > 0) {
       autoShow();
     }
   }, [artifacts, autoShow]);
 
-  if (!open) {
-    return null;
-  }
-
   if (isDesktop) {
     return (
-      <aside className="w-80 shrink-0 border-l border-border bg-background overflow-y-auto">
-        {selectedArtifact ? (
-          <div className="p-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setSelectedArtifact(null)}
-                className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                aria-label={t('ai.artifacts.sidebar.back')}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </button>
-              <h2 className="text-sm font-semibold text-foreground truncate flex-1">
-                {selectedArtifact.title}
-              </h2>
+      <ResizablePanel
+        side="right"
+        defaultWidth={SIDEBAR_DEFAULT_WIDTH}
+        minWidth={SIDEBAR_MIN_WIDTH}
+        maxWidth={SIDEBAR_MAX_WIDTH}
+        collapseThreshold={COLLAPSE_THRESHOLD}
+        isOpen={open}
+        onCollapse={handleCollapse}
+        handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}
+        className="border-l border-border bg-background"
+      >
+        <div className="overflow-y-auto h-full min-w-0">
+          {selectedArtifact ? (
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedArtifact(null)}
+                  className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={t('ai.artifacts.sidebar.back')}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </button>
+                <h2 className="text-sm font-semibold text-foreground truncate flex-1">
+                  {selectedArtifact.title}
+                </h2>
+              </div>
+              <ArtifactViewer artifact={selectedArtifact} />
             </div>
-            <ArtifactViewer artifact={selectedArtifact} />
-          </div>
-        ) : (
-          <ArtifactPanelContent
-            noteId={noteId}
-            onSelect={setSelectedArtifact}
-          />
-        )}
-      </aside>
+          ) : (
+            <ArtifactPanelContent
+              noteId={noteId}
+              onSelect={setSelectedArtifact}
+            />
+          )}
+        </div>
+      </ResizablePanel>
     );
+  }
+
+  if (!open) {
+    return null;
   }
 
   return (
