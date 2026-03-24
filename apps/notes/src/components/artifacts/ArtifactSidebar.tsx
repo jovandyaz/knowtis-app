@@ -63,6 +63,12 @@ export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(
     null
   );
+  const [prevNoteId, setPrevNoteId] = useState(noteId);
+
+  if (noteId !== prevNoteId) {
+    setPrevNoteId(noteId);
+    setSelectedArtifact(null);
+  }
 
   const handleCollapse = useCallback(() => setOpen(false), [setOpen]);
 

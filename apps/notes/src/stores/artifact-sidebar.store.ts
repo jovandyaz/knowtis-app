@@ -21,7 +21,7 @@ export const useArtifactSidebarStore = create<ArtifactSidebarStore>(
     setActiveNoteId: (noteId) => {
       const current = get().activeNoteId;
       if (noteId !== current) {
-        set({ activeNoteId: noteId, manuallyToggled: false, open: false });
+        set({ activeNoteId: noteId, manuallyToggled: false });
       }
     },
     autoShow: () => {
