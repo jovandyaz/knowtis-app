@@ -21,7 +21,10 @@
     "flashcards": "Flashcards",
     "expand": "Expand",
     "collapse": "Collapse",
-    "toggleMenu": "Toggle menu"
+    "toggleMenu": "Toggle menu",
+    "expandSidebar": "Expand sidebar",
+    "collapseSidebar": "Collapse sidebar",
+    "resizeSidebar": "Resize sidebar"
   },
   "states": {
     "loading": "Loading...",

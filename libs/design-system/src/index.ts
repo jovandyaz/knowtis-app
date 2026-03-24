@@ -73,6 +73,8 @@ export {
   Tooltip,
   TooltipTrigger,
   TooltipContent,
+  ResizeHandle,
+  ResizablePanel,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 

@@ -67,3 +67,5 @@ export {
   TooltipTrigger,
   TooltipContent,
 } from './Tooltip';
+export { ResizeHandle } from './ResizeHandle';
+export { ResizablePanel } from './ResizablePanel';
