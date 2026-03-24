@@ -186,6 +186,7 @@ function NoteEditor({
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
+  const contentRef = useRef(initialContent);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
 
@@ -304,6 +305,10 @@ function NoteEditor({
       if (!canEdit) {
         return;
       }
+      if (newContent === contentRef.current) {
+        return;
+      }
+      contentRef.current = newContent;
       setContent(newContent);
       debouncedUpdateNote({ content: newContent });
       deriveAutoTitle(newContent);
