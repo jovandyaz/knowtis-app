@@ -4,6 +4,7 @@ import { AIErrorCodes } from '../../../domain/errors/ai.errors';
 import type { AIStructuredOutputProvider } from '../../../domain/ports/ai-structured-output.port';
 import type { AIUsageRepository } from '../../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../../testing/create-mock-config';
+import type { AIConfigService } from '../../services/ai-config.service';
 import { AIOrchestrator } from '../../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../services/ai-rate-limit.service';
 import { VoiceTranscriptionService } from '../../services/voice-transcription.service';
@@ -41,7 +42,20 @@ describe('VoiceNoteHandler', () => {
       generateStructuredOutput: vi.fn(),
     };
 
-    const orchestrator = new AIOrchestrator(mockConfig);
+    const mockAIConfigService = {
+      getDefaultModel: vi
+        .fn()
+        .mockResolvedValue('anthropic:claude-sonnet-4-20250514'),
+      getFastModel: vi
+        .fn()
+        .mockResolvedValue('anthropic:claude-haiku-4-5-20251001'),
+      getFallbackModel: vi
+        .fn()
+        .mockResolvedValue('anthropic:claude-haiku-4-5-20251001'),
+      getAllConfig: vi.fn().mockResolvedValue({}),
+      setConfig: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AIConfigService;
+    const orchestrator = new AIOrchestrator(mockAIConfigService);
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
 
     handler = new VoiceNoteHandler(

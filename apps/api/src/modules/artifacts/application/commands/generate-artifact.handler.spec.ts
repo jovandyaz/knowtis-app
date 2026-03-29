@@ -114,7 +114,7 @@ describe('GenerateArtifactHandler', () => {
       });
 
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockReturnValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
       orchestrator.getSystemPrompt.mockReturnValue(
         'You are a study assistant.'
       );
@@ -167,7 +167,7 @@ describe('GenerateArtifactHandler', () => {
       };
 
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockReturnValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockResolvedValue({
         object: flashcardContent,
@@ -232,7 +232,7 @@ describe('GenerateArtifactHandler', () => {
   describe('AI provider error', () => {
     it('should return a generation failed error when the provider throws', async () => {
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockReturnValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockRejectedValue(
         new Error('Provider unavailable')

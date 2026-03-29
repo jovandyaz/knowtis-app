@@ -34,6 +34,8 @@ const envSchemaBase = z.object({
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
   AI_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
   AI_CACHE_ENABLED: z.string().default('true'),
+  AI_RPM_LIMIT: z.coerce.number().default(15),
+  AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
