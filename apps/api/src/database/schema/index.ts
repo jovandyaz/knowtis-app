@@ -7,3 +7,4 @@ export * from './feature-flags.schema';
 export * from './ai-usage.schema';
 export * from './mcp-api-keys.schema';
 export * from './artifacts.schema';
+export * from './ai-config.schema';

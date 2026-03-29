@@ -48,6 +48,27 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     }
   }
 
+  /**
+   * Builds the `system` parameter for Vercel AI SDK calls.
+   * Anthropic models receive cache-control metadata to enable prompt caching
+   * (ephemeral, ~5 min TTL). Other providers receive a plain string.
+   */
+  private buildSystemParam(model: string, system: string | undefined) {
+    if (!system) {return {};}
+    if (model.startsWith('anthropic:')) {
+      return {
+        system: {
+          role: 'system' as const,
+          content: system,
+          providerOptions: {
+            anthropic: { cacheControl: { type: 'ephemeral' as const } },
+          },
+        },
+      };
+    }
+    return { system };
+  }
+
   private assertAnthropicKeyConfigured(model: string): void {
     if (
       model.startsWith('anthropic:') &&
@@ -65,7 +86,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       model: this.registry.languageModel(
         options.model as `${string}:${string}`
       ),
-      ...(options.system ? { system: options.system } : {}),
+      ...this.buildSystemParam(options.model, options.system),
       messages: [{ role: 'user', content: prompt }],
       maxOutputTokens: options.maxTokens ?? 2048,
       temperature: options.temperature ?? 0.7,
@@ -93,7 +114,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       model: this.registry.languageModel(
         options.model as `${string}:${string}`
       ),
-      ...(options.system ? { system: options.system } : {}),
+      ...this.buildSystemParam(options.model, options.system),
       messages: [{ role: 'user', content: prompt }],
       maxOutputTokens: options.maxTokens ?? 2048,
       temperature: options.temperature ?? 0.7,

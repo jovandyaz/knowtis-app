@@ -1,16 +1,23 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
 import DOMPurify from 'dompurify';
 import { Check, GraduationCap, Loader2, RotateCcw, X } from 'lucide-react';
+import MarkdownIt from 'markdown-it';
+import { Streamdown } from 'streamdown';
 
-import { useLearnTopic } from '@knowtis/data-access-artifacts';
+import { aiClient, type AIStreamHandle } from '@knowtis/api-client';
 import { Button, Input } from '@knowtis/design-system';
 
 import { AI_BLOCK_STATUS, type AIBlockAttributes } from './AIBlockNode';
 
+const MARKDOWN_RENDERER = new MarkdownIt({
+  html: false,
+  linkify: true,
+  typographer: true,
+});
 const MIN_TOPIC_LENGTH = 2;
 
 export function AIBlockView({
@@ -23,10 +30,11 @@ export function AIBlockView({
   const { t } = useTranslation('notes');
   const attrs = node.attrs as AIBlockAttributes;
   const [topicInput, setTopicInput] = useState(attrs.topic);
-  const learnTopic = useLearnTopic();
+  const [streamedText, setStreamedText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cancelledRef = useRef(false);
+  const streamHandleRef = useRef<AIStreamHandle | null>(null);
 
   useEffect(() => {
     if (attrs.status === AI_BLOCK_STATUS.INPUT && inputRef.current) {
@@ -34,30 +42,47 @@ export function AIBlockView({
     }
   }, [attrs.status]);
 
-  const mutationCallbacks = useMemo(
-    () => ({
-      onSuccess: (data: { content: string }) => {
-        if (cancelledRef.current) {
-          return;
+  useEffect(() => {
+    return () => {
+      streamHandleRef.current?.cancel();
+    };
+  }, []);
+
+  const startStream = useCallback(
+    (topic: string) => {
+      cancelledRef.current = false;
+      setStreamedText('');
+      updateAttributes({ status: AI_BLOCK_STATUS.STREAMING, topic });
+
+      const accumulated: string[] = [];
+      streamHandleRef.current = aiClient.stream(
+        { action: 'learn-topic', content: topic },
+        {
+          onChunk: ({ text }) => {
+            accumulated.push(text);
+            setStreamedText(accumulated.join(''));
+          },
+          onDone: () => {
+            if (cancelledRef.current) {
+              return;
+            }
+            updateAttributes({
+              status: AI_BLOCK_STATUS.DONE,
+              content: accumulated.join(''),
+            });
+          },
+          onError: (error) => {
+            if (cancelledRef.current) {
+              return;
+            }
+            updateAttributes({
+              status: AI_BLOCK_STATUS.ERROR,
+              errorMessage: error.message ?? t('ai.aiBlock.errorGeneric'),
+            });
+          },
         }
-        updateAttributes({
-          status: AI_BLOCK_STATUS.DONE,
-          content: data.content,
-        });
-      },
-      onError: (error: unknown) => {
-        if (cancelledRef.current) {
-          return;
-        }
-        updateAttributes({
-          status: AI_BLOCK_STATUS.ERROR,
-          errorMessage:
-            error instanceof Error
-              ? error.message
-              : t('ai.aiBlock.errorGeneric'),
-        });
-      },
-    }),
+      );
+    },
     [updateAttributes, t]
   );
 
@@ -66,11 +91,8 @@ export function AIBlockView({
     if (topic.length < MIN_TOPIC_LENGTH) {
       return;
     }
-
-    cancelledRef.current = false;
-    updateAttributes({ status: AI_BLOCK_STATUS.LOADING, topic });
-    learnTopic.mutate(topic, mutationCallbacks);
-  }, [topicInput, updateAttributes, learnTopic, mutationCallbacks]);
+    startStream(topic);
+  }, [topicInput, startStream]);
 
   const handleInsert = useCallback(() => {
     if (typeof getPos !== 'function') {
@@ -81,34 +103,29 @@ export function AIBlockView({
       return;
     }
 
+    const html = DOMPurify.sanitize(MARKDOWN_RENDERER.render(attrs.content));
     editor
       .chain()
       .focus()
       .deleteRange({ from: pos, to: pos + node.nodeSize })
-      .insertContentAt(pos, attrs.content)
+      .insertContentAt(pos, html)
       .run();
   }, [editor, getPos, node.nodeSize, attrs.content]);
 
   const handleRetry = useCallback(() => {
-    cancelledRef.current = false;
-    updateAttributes({
-      status: AI_BLOCK_STATUS.LOADING,
-      content: '',
-      errorMessage: '',
-    });
-    learnTopic.mutate(attrs.topic, mutationCallbacks);
-  }, [attrs.topic, updateAttributes, learnTopic, mutationCallbacks]);
+    startStream(attrs.topic);
+  }, [attrs.topic, startStream]);
 
   const handleCancel = useCallback(() => {
     cancelledRef.current = true;
-    learnTopic.reset();
+    streamHandleRef.current?.cancel();
     updateAttributes({ status: AI_BLOCK_STATUS.INPUT });
-  }, [learnTopic, updateAttributes]);
+  }, [updateAttributes]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
-        if (attrs.status === AI_BLOCK_STATUS.LOADING) {
+        if (attrs.status === AI_BLOCK_STATUS.STREAMING) {
           handleCancel();
         } else {
           deleteNode();
@@ -164,8 +181,8 @@ export function AIBlockView({
           </div>
         )}
 
-        {attrs.status === AI_BLOCK_STATUS.LOADING && (
-          <div className="p-4 space-y-3">
+        {attrs.status === AI_BLOCK_STATUS.STREAMING && (
+          <div className="space-y-3 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-primary">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -177,12 +194,16 @@ export function AIBlockView({
                 {t('ai.aiBlock.cancel')}
               </Button>
             </div>
-            <div className="space-y-2">
-              <div className="h-4 w-3/4 rounded bg-primary/10 animate-pulse" />
-              <div className="h-4 w-full rounded bg-primary/10 animate-pulse" />
-              <div className="h-4 w-5/6 rounded bg-primary/10 animate-pulse" />
-              <div className="h-4 w-2/3 rounded bg-primary/10 animate-pulse" />
-            </div>
+            {streamedText ? (
+              <Streamdown isAnimating>{streamedText}</Streamdown>
+            ) : (
+              <div className="space-y-2">
+                <div className="h-4 w-3/4 animate-pulse rounded bg-primary/10" />
+                <div className="h-4 w-full animate-pulse rounded bg-primary/10" />
+                <div className="h-4 w-5/6 animate-pulse rounded bg-primary/10" />
+                <div className="h-4 w-2/3 animate-pulse rounded bg-primary/10" />
+              </div>
+            )}
           </div>
         )}
 
@@ -202,12 +223,9 @@ export function AIBlockView({
                 </Button>
               </div>
             </div>
-            <div
-              className="px-4 pb-4 prose prose-sm dark:prose-invert max-w-none [&_pre]:bg-muted [&_pre]:p-3 [&_pre]:rounded-md [&_code]:text-xs"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(attrs.content),
-              }}
-            />
+            <div className="px-4 pb-4">
+              <Streamdown mode="static">{attrs.content}</Streamdown>
+            </div>
           </div>
         )}
 

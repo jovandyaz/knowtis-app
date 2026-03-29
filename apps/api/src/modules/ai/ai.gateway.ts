@@ -1,4 +1,7 @@
+import { randomUUID } from 'node:crypto';
+
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
@@ -15,6 +18,7 @@ import { z } from 'zod';
 
 import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
 
+import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
@@ -47,7 +51,12 @@ export class AIGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(AIGateway.name);
+  // NOTE: In-memory tracking — enforced per-instance only.
+  // If horizontally scaled, move to Redis (e.g. ai:streams:{userId} sorted set).
   private readonly activeStreams = new Map<string, AbortController>();
+  private readonly userStreamCount = new Map<string, number>();
+  private readonly clientStreams = new Map<string, Set<string>>();
+  private readonly maxConcurrentStreams: number;
 
   @WebSocketServer()
   server!: Server;
@@ -55,8 +64,11 @@ export class AIGateway
   constructor(
     private readonly streamTextHandler: StreamTextHandler,
     private readonly jwtService: JwtService,
-    private readonly featureFlagsService: FeatureFlagsService
-  ) {}
+    private readonly featureFlagsService: FeatureFlagsService,
+    configService: ConfigService<EnvConfig, true>
+  ) {
+    this.maxConcurrentStreams = configService.get('AI_MAX_CONCURRENT_STREAMS');
+  }
 
   afterInit(): void {
     this.logger.log('AI WebSocket Gateway initialized');
@@ -108,13 +120,14 @@ export class AIGateway
   }
 
   handleDisconnect(client: AuthenticatedAISocket): void {
-    const hadActiveStream = this.activeStreams.has(client.id);
-    this.abortClientStream(client.id);
+    const hadActiveStreams = (this.clientStreams.get(client.id)?.size ?? 0) > 0;
+    this.abortClientStreams(client.id);
+
     this.logger.log({
       event: 'ai.client.disconnected',
       clientId: client.id,
       userId: client.data?.userId,
-      hadActiveStream,
+      hadActiveStreams,
     });
   }
 
@@ -145,46 +158,111 @@ export class AIGateway
     const { action, content, selection, suffix, targetLanguage, targetTone } =
       parsed.data;
 
-    const controller = new AbortController();
-    this.activeStreams.set(client.id, controller);
+    const currentCount = this.userStreamCount.get(userId) ?? 0;
+    if (currentCount >= this.maxConcurrentStreams) {
+      client.emit(
+        'ai:error',
+        AIErrors.rateLimitExceeded(
+          `Maximum ${this.maxConcurrentStreams} concurrent AI requests allowed.`
+        )
+      );
+      return;
+    }
 
-    await this.streamTextHandler.execute(
-      {
+    const streamId = randomUUID();
+    this.acquireStreamSlot(userId, client.id, streamId);
+
+    const controller = new AbortController();
+    this.activeStreams.set(streamId, controller);
+
+    try {
+      await this.streamTextHandler.execute(
+        {
+          userId,
+          action,
+          content,
+          ...(selection !== undefined && { selection }),
+          ...(suffix !== undefined && { suffix }),
+          ...(targetLanguage !== undefined && { targetLanguage }),
+          ...(targetTone !== undefined && { targetTone }),
+          ...(client.data.isAnonymous && { isAnonymous: true }),
+        },
+        {
+          onChunk: (text) => client.emit('ai:chunk', { text }),
+          onDone: (usage) => client.emit('ai:done', { usage }),
+          onError: (error) => {
+            if (!controller.signal.aborted) {
+              client.emit('ai:error', error);
+            }
+          },
+        },
+        controller.signal
+      );
+    } catch (error) {
+      this.logger.error({
+        event: 'ai.stream.unexpected_error',
         userId,
-        action,
-        content,
-        ...(selection !== undefined && { selection }),
-        ...(suffix !== undefined && { suffix }),
-        ...(targetLanguage !== undefined && { targetLanguage }),
-        ...(targetTone !== undefined && { targetTone }),
-        ...(client.data.isAnonymous && { isAnonymous: true }),
-      },
-      {
-        onChunk: (text) => client.emit('ai:chunk', { text }),
-        onDone: (usage) => {
-          this.activeStreams.delete(client.id);
-          client.emit('ai:done', { usage });
-        },
-        onError: (error) => {
-          this.activeStreams.delete(client.id);
-          client.emit('ai:error', error);
-        },
-      },
-      controller.signal
-    );
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      if (!controller.signal.aborted) {
+        client.emit(
+          'ai:error',
+          AIErrors.providerError(
+            error instanceof Error ? error.message : 'AI streaming failed'
+          )
+        );
+      }
+    } finally {
+      this.releaseStreamSlot(userId, client.id, streamId);
+    }
   }
 
   @SubscribeMessage('ai:cancel')
   handleCancel(@ConnectedSocket() client: AuthenticatedAISocket): void {
-    this.abortClientStream(client.id);
-    this.logger.debug(`Client ${client.id} cancelled AI stream`);
+    this.abortClientStreams(client.id);
+    this.logger.debug(`Client ${client.id} cancelled AI stream(s)`);
   }
 
-  private abortClientStream(clientId: string): void {
-    const controller = this.activeStreams.get(clientId);
-    if (controller) {
-      controller.abort();
-      this.activeStreams.delete(clientId);
+  private acquireStreamSlot(
+    userId: string,
+    clientId: string,
+    streamId: string
+  ): void {
+    this.userStreamCount.set(
+      userId,
+      (this.userStreamCount.get(userId) ?? 0) + 1
+    );
+    const clientSet = this.clientStreams.get(clientId) ?? new Set();
+    clientSet.add(streamId);
+    this.clientStreams.set(clientId, clientSet);
+  }
+
+  private releaseStreamSlot(
+    userId: string,
+    clientId: string,
+    streamId: string
+  ): void {
+    if (!this.activeStreams.delete(streamId)) {return;}
+
+    const clientSet = this.clientStreams.get(clientId);
+    if (clientSet) {
+      clientSet.delete(streamId);
+      if (clientSet.size === 0) {this.clientStreams.delete(clientId);}
+    }
+
+    const count = this.userStreamCount.get(userId) ?? 0;
+    if (count <= 1) {
+      this.userStreamCount.delete(userId);
+    } else {
+      this.userStreamCount.set(userId, count - 1);
+    }
+  }
+
+  private abortClientStreams(clientId: string): void {
+    const streamIds = this.clientStreams.get(clientId);
+    if (!streamIds) {return;}
+    for (const streamId of streamIds) {
+      this.activeStreams.get(streamId)?.abort();
     }
   }
 }

@@ -29,16 +29,16 @@ apps/api/src/modules/ai/
 ├── ai.module.ts
 ├── dto/                     # Request validation (class-validator)
 ├── domain/
-│   ├── constants/           # Model pricing
+│   ├── constants/           # Model pricing, system prompts
 │   ├── errors/              # AIErrors + AIErrorCodes
-│   ├── ports/               # AICompletionProvider, AICache, AIUsageRepository, RateLimitProvider
-│   ├── services/            # input-sanitizer, token-estimator
+│   ├── ports/               # AICompletionProvider, AICache, AIUsageRepository, RateLimitProvider, AIConfigRepository
+│   ├── services/            # input-sanitizer, token-estimator, prompt-guard
 │   └── value-objects/       # AIAction, AIModel, TokenUsage
 ├── application/
 │   ├── commands/            # StreamTextHandler, CompleteTextHandler
-│   └── services/            # AIOrchestrator, AIRateLimitService
+│   └── services/            # AIOrchestrator, AIRateLimitService, AIConfigService
 ├── infrastructure/
-│   ├── persistence/         # DrizzleAIUsageRepository
+│   ├── persistence/         # DrizzleAIUsageRepository, DrizzleAIConfigRepository
 │   ├── providers/           # AISDKProvider (Vercel AI SDK)
 │   └── redis/               # AIRedisProvider, RedisRateLimitService, SemanticCacheService
 └── testing/                 # createMockConfig helper
@@ -80,12 +80,13 @@ AIGateway / AIController
 
 ### Ports & Adapters
 
-| DI Symbol                | Interface              | Implementation             |
-| ------------------------ | ---------------------- | -------------------------- |
-| `AI_COMPLETION_PROVIDER` | `AICompletionProvider` | `AISDKProvider`            |
-| `AI_USAGE_REPOSITORY`    | `AIUsageRepository`    | `DrizzleAIUsageRepository` |
-| `RATE_LIMIT_PROVIDER`    | `RateLimitProvider`    | `RedisRateLimitService`    |
-| `AI_CACHE`               | `AICache`              | `SemanticCacheService`     |
+| DI Symbol                | Interface              | Implementation              |
+| ------------------------ | ---------------------- | --------------------------- |
+| `AI_COMPLETION_PROVIDER` | `AICompletionProvider` | `AISDKProvider`             |
+| `AI_USAGE_REPOSITORY`    | `AIUsageRepository`    | `DrizzleAIUsageRepository`  |
+| `RATE_LIMIT_PROVIDER`    | `RateLimitProvider`    | `RedisRateLimitService`     |
+| `AI_CACHE`               | `AICache`              | `SemanticCacheService`      |
+| `AI_CONFIG_REPOSITORY`   | `AIConfigRepository`   | `DrizzleAIConfigRepository` |
 
 ---
 
@@ -135,8 +136,9 @@ User action (BubbleMenu / SlashCommand / GhostText)
       Zod validation of payload
   → StreamTextHandler.execute()
       AIAction.create()                     # validate action VO
+      detectPromptInjection()               # content, selection, suffix
       estimateTokenCount()                  # rough token estimate
-      AIRateLimitService.checkLimit()       # Redis or PG
+      AIRateLimitService.checkLimit()       # RPM (Redis) + daily tokens/cost
       AIOrchestrator.selectModel()          # haiku if ghost-text, sonnet otherwise
       SemanticCacheService.get()            # hash(action:model:prompt) lookup
         if hit → emit ai:chunk + ai:done → done
@@ -195,16 +197,17 @@ aiClient handle.cancel() OR emit 'ai:cancel'
 
 ### Error Codes
 
-| Code                     | Cause                               |
-| ------------------------ | ----------------------------------- |
-| `AI_RATE_LIMIT_EXCEEDED` | Daily token or cost limit reached   |
-| `AI_FEATURE_DISABLED`    | `ai_enabled` flag is disabled       |
-| `AUTH_REQUIRED`          | Missing or invalid JWT              |
-| `VALIDATION_ERROR`       | Invalid action, content too long    |
-| `AI_PROVIDER_ERROR`      | Upstream Anthropic API failure      |
-| `AI_INVALID_MODEL`       | Model string not in supported list  |
-| `AI_INVALID_ACTION`      | Action string not in supported list |
-| `AI_INTERNAL_ERROR`      | Unexpected server error             |
+| Code                        | Cause                               |
+| --------------------------- | ----------------------------------- |
+| `AI_RATE_LIMIT_EXCEEDED`    | Daily token or cost limit reached   |
+| `AI_FEATURE_DISABLED`       | `ai_enabled` flag is disabled       |
+| `AUTH_REQUIRED`             | Missing or invalid JWT              |
+| `VALIDATION_ERROR`          | Invalid action, content too long    |
+| `AI_PROVIDER_ERROR`         | Upstream Anthropic API failure      |
+| `AI_INVALID_MODEL`          | Model string not in supported list  |
+| `AI_INVALID_ACTION`         | Action string not in supported list |
+| `PROMPT_INJECTION_DETECTED` | Input flagged as prompt injection   |
+| `AI_INTERNAL_ERROR`         | Unexpected server error             |
 
 ---
 
@@ -234,6 +237,78 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 ---
 
+## Prompt Injection Defense
+
+`detectPromptInjection()` in `domain/services/prompt-guard.ts` checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
+
+**Detection categories:**
+
+- Instruction override ("ignore previous instructions")
+- Role hijacking ("you are now DAN")
+- System prompt extraction ("output your system prompt")
+- Delimiter injection (`</system>`, `[INST]`)
+- Encoded payload detection (base64 with execute/decode commands)
+
+**Behavior:** Requests scoring ≥ 0.6 are blocked with `PROMPT_INJECTION_DETECTED` error. Content, selection, and suffix fields are all checked. Inputs over 50,000 characters are rejected as a ReDoS defense.
+
+**Logged as:** `ai.request.injection_blocked` with score and reason.
+
+---
+
+## RPM Rate Limiting
+
+Per-user requests-per-minute limiting via Redis, enforced before daily token/cost limits.
+
+**Strategy:** Fixed-window counter with 60s TTL per Redis key (`ai:ratelimit:{userId}:rpm:{minute}`). Atomic Lua script ensures no race conditions.
+
+**Concurrent streams:** Maximum simultaneous AI streams per user, tracked via per-user numeric counter with unique stream IDs. Each `ai:complete` event generates a unique stream ID, preventing a single socket from bypassing the limit. Slots are released atomically via `try/finally` in the gateway.
+
+| Variable                    | Default | Description                          |
+| --------------------------- | ------- | ------------------------------------ |
+| `AI_RPM_LIMIT`              | `15`    | Max requests per minute per user     |
+| `AI_MAX_CONCURRENT_STREAMS` | `2`     | Max simultaneous AI streams per user |
+
+---
+
+## Dynamic Model Configuration
+
+AI models can be changed at runtime via the `ai_config` database table, without redeployment.
+
+**Priority:** DB value (cached 30s) → environment variable fallback.
+
+**Supported keys:**
+
+| Key                 | Env Fallback        | Description                |
+| ------------------- | ------------------- | -------------------------- |
+| `ai_default_model`  | `AI_DEFAULT_MODEL`  | Model for most actions     |
+| `ai_fast_model`     | `AI_FAST_MODEL`     | Model for ghost-text       |
+| `ai_fallback_model` | `AI_FALLBACK_MODEL` | Fallback on provider error |
+
+**REST API:**
+
+| Method | Path              | Description                                   |
+| ------ | ----------------- | --------------------------------------------- |
+| GET    | `/ai/config`      | Get all DB config values                      |
+| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys only) |
+
+After updating a config value, the in-memory cache is invalidated and the new model takes effect within 30 seconds across all instances.
+
+---
+
+## Anthropic Prompt Caching
+
+System prompts are automatically cached by Anthropic using `cacheControl: { type: 'ephemeral' }` via Vercel AI SDK `providerOptions`. This is applied only for Anthropic models (prefix `anthropic:`).
+
+**Benefits:**
+
+- 90% reduction on input token costs for cache hits (0.1× base price)
+- Up to 85% latency reduction on repeated system prompts
+- 5-minute cache TTL (Anthropic default for ephemeral)
+
+Non-Anthropic models receive the system prompt as a plain string (no caching metadata).
+
+---
+
 ## Environment Variables
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
@@ -252,6 +327,8 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `AI_STREAM_CHUNK_TIMEOUT_MS` | No       | `10000`                               | Per-chunk timeout (ms)                   |
 | `AI_CACHE_ENABLED`           | No       | `true`                                | Enable response cache                    |
 | `AI_CACHE_TTL_SECONDS`       | No       | `3600`                                | Cache TTL (seconds)                      |
+| `AI_RPM_LIMIT`               | No       | `15`                                  | Max requests per minute per user         |
+| `AI_MAX_CONCURRENT_STREAMS`  | No       | `2`                                   | Max simultaneous AI streams per user     |
 
 ### Feature Flags (DB-backed)
 
@@ -266,7 +343,7 @@ Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
 ## Database Schema
 
-One table: `ai_usage`.
+Two tables: `ai_usage` and `ai_config`.
 
 | Column          | Type              | Notes                         |
 | --------------- | ----------------- | ----------------------------- |
@@ -280,6 +357,17 @@ One table: `ai_usage`.
 | `created_at`    | timestamptz       | Auto-set                      |
 
 Indexed on `(user_id, created_at)` for efficient daily aggregation queries.
+
+### `ai_config`
+
+| Column        | Type            | Notes                 |
+| ------------- | --------------- | --------------------- |
+| `key`         | varchar(100) PK | Config key identifier |
+| `value`       | varchar(500)    | Config value          |
+| `description` | varchar(500)    | Human-readable label  |
+| `updated_at`  | timestamptz     | Auto-set on upsert    |
+
+Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Configuration](#dynamic-model-configuration)).
 
 > After schema changes, run `pnpm db:push`.
 
@@ -355,11 +443,13 @@ aiClient.setTokenProvider({ getAccessToken, clearTokens });
 
 All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enabled`.
 
-| Method | Path           | Description                                       |
-| ------ | -------------- | ------------------------------------------------- |
-| POST   | `/ai/complete` | Non-streaming completion. Body: `AICompleteDto`.  |
-| GET    | `/ai/usage`    | Daily token + cost usage for authenticated user.  |
-| GET    | `/ai/metrics`  | Usage summary. Query: `?period=day\|week\|month`. |
+| Method | Path              | Description                                       |
+| ------ | ----------------- | ------------------------------------------------- |
+| POST   | `/ai/complete`    | Non-streaming completion. Body: `AICompleteDto`.  |
+| GET    | `/ai/usage`       | Daily token + cost usage for authenticated user.  |
+| GET    | `/ai/metrics`     | Usage summary. Query: `?period=day\|week\|month`. |
+| GET    | `/ai/config`      | All dynamic AI config values (auth required).     |
+| PUT    | `/ai/config/:key` | Update a config value (admin only).               |
 
 > Swagger UI available at `/api/docs` in development.
 
@@ -368,7 +458,7 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 ## Adding a New Action
 
 1. Add the action string to `AI_ACTION` in `libs/shared/types/src/lib/ai.types.ts`
-2. Add a system prompt in `SYSTEM_PROMPTS` in `apps/api/src/modules/ai/application/services/ai-orchestrator.service.ts`
+2. Add a system prompt in `SYSTEM_PROMPTS` in `apps/api/src/modules/ai/domain/constants/system-prompts.ts`
 3. If it needs the fast model, add it to `FAST_MODEL_ACTIONS` in the same file
 4. If it should be cached, add it to `CACHEABLE_ACTIONS` in `apps/api/src/modules/ai/infrastructure/redis/semantic-cache.service.ts`
 5. Add it to the relevant UI config (`ai-actions.config.ts` for bubble menu, `slash-commands.config.ts` for slash commands)

@@ -1,6 +1,7 @@
 /* Import design system styles (includes Tailwind, tokens, and base theme) */
 @import '@knowtis/design-system/styles.css';
 @import 'highlight.js/styles/github.css';
+@import 'streamdown/styles.css';
 
 /* Scan design-system components for Tailwind classes */
 @source "../../../libs/design-system/src/**/*.tsx";
@@ -28,27 +29,8 @@
 }
 
 @theme {
-  --animate-blink: blink 1s ease-in-out infinite;
-  --animate-shimmer: shimmer 2s linear infinite;
   --animate-fade-out: fade-out 2.5s ease-out forwards;
 
-  @keyframes blink {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0;
-    }
-  }
-  @keyframes shimmer {
-    0% {
-      background-position: -200% 0;
-    }
-    100% {
-      background-position: 200% 0;
-    }
-  }
   @keyframes fade-out {
     0%,
     75% {
@@ -72,14 +54,6 @@
  * explicitly set zIndex: 50 since they don't inherit from inner classes.
  */
 @layer utilities {
-  .animate-blink {
-    animation: var(--animate-blink);
-  }
-  .animate-shimmer {
-    animation: var(--animate-shimmer);
-    background-size: 200% 100%;
-  }
-
   .animate-fade-out {
     animation: var(--animate-fade-out);
   }
@@ -127,7 +101,6 @@
     overscroll-behavior: none;
   }
 
-  /* Tiptap heading styling */
   .ProseMirror h1 {
     @apply text-3xl font-bold mt-6 mb-3 leading-tight;
   }
@@ -138,7 +111,6 @@
     @apply text-xl font-semibold mt-4 mb-2 leading-snug;
   }
 
-  /* Tiptap code block styling */
   .ProseMirror pre {
     @apply bg-muted/50 rounded-lg p-4 font-mono text-sm border border-border/50 my-3 overflow-x-auto;
   }
@@ -148,17 +120,14 @@
     @apply bg-transparent p-0 font-mono text-sm;
   }
 
-  /* Tiptap inline code styling */
   .ProseMirror code:not(pre code) {
     @apply bg-muted/60 text-foreground rounded px-1.5 py-0.5 font-mono text-[0.875em] border border-border/30;
   }
 
-  /* Tiptap horizontal rule styling */
   .ProseMirror hr {
     @apply border-border/50 my-6;
   }
 
-  /* Tiptap link styling */
   .ProseMirror a {
     @apply text-primary underline decoration-primary/30 hover:decoration-primary cursor-pointer;
   }

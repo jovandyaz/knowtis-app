@@ -77,7 +77,7 @@ export class AIGenerationPipeline {
       ...request.logContext,
     });
 
-    const modelResult = this.orchestrator.selectModel(request.action);
+    const modelResult = await this.orchestrator.selectModel(request.action);
     if (modelResult.isErr()) {
       return err(ArtifactErrors.generationFailed(modelResult.error.message));
     }

@@ -10,8 +10,10 @@ import {
   HttpStatus,
   Inject,
   MaxFileSizeValidator,
+  Param,
   ParseFilePipe,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -30,9 +32,11 @@ import {
 import type { Result } from 'neverthrow';
 
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
+import { AIConfigService } from './application/services/ai-config.service';
 import { AIErrorCodes, type AIDomainError } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
@@ -40,6 +44,7 @@ import {
   type MetricsPeriod,
 } from './domain/ports/ai-usage.repository';
 import { AICompleteDto } from './dto/ai.dto';
+import { SetAIConfigDto } from './dto/set-ai-config.dto';
 import { VoiceNoteDto } from './dto/voice-note.dto';
 
 const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
@@ -49,6 +54,7 @@ const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.INVALID_MODEL]: HttpStatus.BAD_REQUEST,
   [AIErrorCodes.INVALID_ACTION]: HttpStatus.BAD_REQUEST,
   [AIErrorCodes.INVALID_INPUT]: HttpStatus.BAD_REQUEST,
+  [AIErrorCodes.PROMPT_INJECTION_DETECTED]: HttpStatus.UNPROCESSABLE_ENTITY,
   [AIErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
@@ -124,6 +130,7 @@ export class AIController {
   constructor(
     private readonly completeTextHandler: CompleteTextHandler,
     private readonly voiceNoteHandler: VoiceNoteHandler,
+    private readonly aiConfigService: AIConfigService,
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository
   ) {}
@@ -266,6 +273,82 @@ export class AIController {
   ) {
     const validPeriod = this.parsePeriod(period);
     return this.usageRepository.getMetricsSummary(user.id, validPeriod);
+  }
+
+  @ApiOperation({
+    summary: 'Get all AI configuration values',
+    description:
+      'Returns all dynamic AI configuration key-value pairs from the database.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'AI configuration map',
+    schema: {
+      type: 'object',
+      additionalProperties: { type: 'string' },
+      example: {
+        ai_default_model: 'anthropic:claude-sonnet-4-20250514',
+        ai_fast_model: 'anthropic:claude-haiku-4-5-20251001',
+      },
+    },
+  })
+  @ApiAuthErrors('AI feature is disabled')
+  @Get('config')
+  async getConfig(): Promise<Record<string, string>> {
+    return this.aiConfigService.getAllConfig();
+  }
+
+  @ApiOperation({
+    summary: 'Set an AI configuration value',
+    description:
+      'Creates or updates a dynamic AI configuration key in the database.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['value'],
+      properties: {
+        value: {
+          type: 'string',
+          example: 'anthropic:claude-sonnet-4-20250514',
+        },
+        description: {
+          type: 'string',
+          example: 'Default model for AI completions',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Configuration updated successfully',
+    schema: {
+      type: 'object',
+      properties: { success: { type: 'boolean', example: true } },
+    },
+  })
+  @ApiBadRequest('invalid config key or value')
+  @ApiAuthErrors('AI feature is disabled')
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — admin role required',
+  })
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @RequireFeatureFlag('ai_enabled')
+  @Roles('admin')
+  @Put('config/:key')
+  async setConfig(
+    @Param('key') key: string,
+    @Body() body: SetAIConfigDto
+  ): Promise<{ success: true }> {
+    try {
+      await this.aiConfigService.setConfig(key, body.value, body.description);
+    } catch (error) {
+      throw new BadRequestException(
+        error instanceof Error ? error.message : `Invalid config key: '${key}'`
+      );
+    }
+    return { success: true };
   }
 
   private parsePeriod(period?: string): MetricsPeriod {
