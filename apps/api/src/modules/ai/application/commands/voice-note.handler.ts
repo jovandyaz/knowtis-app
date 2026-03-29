@@ -140,7 +140,7 @@ export class VoiceNoteHandler {
     });
 
     try {
-      const modelResult = this.orchestrator.selectModel(
+      const modelResult = await this.orchestrator.selectModel(
         AI_ACTION.STRUCTURE_VOICE_NOTE
       );
       if (modelResult.isErr()) {

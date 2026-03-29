@@ -10,6 +10,7 @@ export const AIErrorCodes = {
   INVALID_MODEL: 'AI_INVALID_MODEL',
   INVALID_ACTION: 'AI_INVALID_ACTION',
   INVALID_INPUT: 'AI_INVALID_INPUT',
+  PROMPT_INJECTION_DETECTED: 'PROMPT_INJECTION_DETECTED',
   INTERNAL_ERROR: 'AI_INTERNAL_ERROR',
   AUTH_REQUIRED: 'AUTH_REQUIRED',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
@@ -22,11 +23,9 @@ function createAIError(code: AIErrorCode, message: string): AIDomainError {
 }
 
 export const AIErrors = {
-  rateLimitExceeded: () =>
-    createAIError(
-      AIErrorCodes.RATE_LIMIT_EXCEEDED,
-      'Daily AI usage limit exceeded. Please try again tomorrow.'
-    ),
+  rateLimitExceeded: (
+    message = 'Daily AI usage limit exceeded. Please try again tomorrow.'
+  ) => createAIError(AIErrorCodes.RATE_LIMIT_EXCEEDED, message),
 
   providerError: (reason: string) =>
     createAIError(AIErrorCodes.PROVIDER_ERROR, `AI provider error: ${reason}`),
@@ -39,6 +38,12 @@ export const AIErrors = {
 
   invalidAction: (action: string) =>
     createAIError(AIErrorCodes.INVALID_ACTION, `Invalid AI action: ${action}`),
+
+  promptInjectionDetected: () =>
+    createAIError(
+      AIErrorCodes.PROMPT_INJECTION_DETECTED,
+      'Request blocked for safety reasons.'
+    ),
 
   invalidInput: (reason: string) =>
     createAIError(AIErrorCodes.INVALID_INPUT, `Invalid AI input: ${reason}`),
