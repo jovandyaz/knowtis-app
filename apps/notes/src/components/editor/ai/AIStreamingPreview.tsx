@@ -9,6 +9,7 @@ import {
   RotateCcw,
   X,
 } from 'lucide-react';
+import { Streamdown } from 'streamdown';
 
 import { Button, cn } from '@knowtis/design-system';
 
@@ -40,25 +41,21 @@ export function AIStreamingPreview({
       )}
       style={width ? { width: `${width}px` } : { width: 420, maxWidth: '90vw' }}
     >
-      {/* Streaming / Done text preview */}
       {(status === 'streaming' || status === 'done') && (
-        <div className="relative max-h-52 overflow-y-auto overflow-hidden px-4 pt-3 pb-2 text-sm leading-relaxed text-foreground">
+        <div className="relative max-h-52 overflow-y-auto overflow-hidden px-4 pt-3 pb-2 text-sm text-foreground">
           {status === 'streaming' && (
-            <>
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-popover/80 via-transparent to-transparent" />
-              <div className="animate-shimmer pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent_0%,currentColor_50%,transparent_100%)] opacity-4" />
-            </>
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-popover/80 via-transparent to-transparent" />
           )}
-          <p className="whitespace-pre-wrap leading-relaxed">
+          <Streamdown
+            animated
+            isAnimating={status === 'streaming'}
+            {...(status === 'done' && { mode: 'static' as const })}
+          >
             {streamedText}
-            {status === 'streaming' && (
-              <span className="animate-blink ml-0.5 inline-block h-5 w-0.5 bg-primary" />
-            )}
-          </p>
+          </Streamdown>
         </div>
       )}
 
-      {/* Error state */}
       {status === 'error' && (
         <div className="px-4 pt-3 pb-2 text-sm text-destructive">
           {error?.message ?? t('ai.errors.generic')}

@@ -97,12 +97,13 @@ Adapt the HTML format to the nature of the content:
 
 <rules>
 - Start with a brief introduction paragraph explaining what the topic is and why it matters
-- Use <h2> sections for main concepts (3-5 sections)
-- Include practical examples with <code> blocks when relevant
+- Use ## markdown headings for main concepts (3-5 sections)
+- Include practical examples with fenced code blocks (\`\`\`language) when relevant
 - Add a "Common Pitfalls" or "Key Takeaways" section at the end
-- Use <ul>/<li> for lists, <strong> for important terms
+- Use markdown lists (- item) and **bold** for important terms
 - Content should be suitable for a student learning the topic for the first time
 - Be accurate and educational, not superficial
+- Output plain markdown only — no HTML tags
 - ${PRESERVE_LANGUAGE}
 </rules>`,
 };

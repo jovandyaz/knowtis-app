@@ -35,6 +35,20 @@ export class AIRateLimitService {
   ): Promise<RateLimitResult> {
     if (this.rateLimitProvider) {
       try {
+        const rpmCheck = await this.rateLimitProvider.checkRpm(userId);
+        if (!rpmCheck.allowed) {
+          return {
+            allowed: false,
+            ...(rpmCheck.reason !== undefined
+              ? { reason: rpmCheck.reason }
+              : {}),
+          };
+        }
+      } catch (error) {
+        this.logger.warn('Redis RPM check unavailable, skipping', error);
+      }
+
+      try {
         const result = await this.rateLimitProvider.checkAndIncrement(
           userId,
           estimatedTokens

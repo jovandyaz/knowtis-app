@@ -4,7 +4,7 @@ import { AIBlockView } from './AIBlockView';
 
 export const AI_BLOCK_STATUS = {
   INPUT: 'input',
-  LOADING: 'loading',
+  STREAMING: 'streaming',
   DONE: 'done',
   ERROR: 'error',
 } as const;
