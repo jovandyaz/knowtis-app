@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto';
-import { StringDecoder } from 'node:string_decoder';
 
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -12,6 +11,7 @@ import {
   AI_COMPLETION_PROVIDER,
   type AICompletionProvider,
 } from '../../domain/ports/ai-provider.port';
+import { detectPromptInjection } from '../../domain/services/prompt-guard';
 import { estimateTokenCount } from '../../domain/services/token-estimator';
 import { AIAction } from '../../domain/value-objects/ai-action.vo';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
@@ -70,6 +70,52 @@ export class StreamTextHandler {
     }
     const action = actionResult.value.toPrimitive();
 
+    const injectionCheck = detectPromptInjection(input.content);
+    if (!injectionCheck.safe) {
+      this.logger.warn({
+        event: 'ai.request.injection_blocked',
+        requestId,
+        userId: input.userId,
+        action,
+        score: injectionCheck.score,
+        reason: injectionCheck.reason,
+      });
+      callbacks.onError(AIErrors.promptInjectionDetected());
+      return;
+    }
+    if (input.selection) {
+      const selectionCheck = detectPromptInjection(input.selection);
+      if (!selectionCheck.safe) {
+        this.logger.warn({
+          event: 'ai.request.injection_blocked',
+          requestId,
+          userId: input.userId,
+          action,
+          field: 'selection',
+          score: selectionCheck.score,
+          reason: selectionCheck.reason,
+        });
+        callbacks.onError(AIErrors.promptInjectionDetected());
+        return;
+      }
+    }
+    if (input.suffix) {
+      const suffixCheck = detectPromptInjection(input.suffix);
+      if (!suffixCheck.safe) {
+        this.logger.warn({
+          event: 'ai.request.injection_blocked',
+          requestId,
+          userId: input.userId,
+          action,
+          field: 'suffix',
+          score: suffixCheck.score,
+          reason: suffixCheck.reason,
+        });
+        callbacks.onError(AIErrors.promptInjectionDetected());
+        return;
+      }
+    }
+
     const estimatedTokens = estimateTokenCount(input.content);
     const rateCheck = await this.rateLimitService.checkLimit(
       input.userId,
@@ -87,7 +133,7 @@ export class StreamTextHandler {
       return;
     }
 
-    const modelResult = this.orchestrator.selectModel(action);
+    const modelResult = await this.orchestrator.selectModel(action);
     if (modelResult.isErr()) {
       callbacks.onError(modelResult.error);
       return;
@@ -105,6 +151,10 @@ export class StreamTextHandler {
 
     const systemPrompt = this.orchestrator.getSystemPrompt(action);
     const userPrompt = this.orchestrator.buildUserPrompt(input, action);
+
+    const cacheStatus: 'miss' | 'skip' = this.cache?.isCacheable(action)
+      ? 'miss'
+      : 'skip';
 
     if (this.cache?.isCacheable(action)) {
       const cached = await this.cache.get(action, model, userPrompt);
@@ -140,7 +190,6 @@ export class StreamTextHandler {
         },
       });
 
-      const decoder = new StringDecoder('utf8');
       const collectedChunks: string[] = [];
 
       for await (const chunk of streamResult.textStream) {
@@ -153,17 +202,10 @@ export class StreamTextHandler {
           });
           return;
         }
-        const decoded = decoder.write(Buffer.from(chunk, 'utf8'));
-        if (decoded) {
-          collectedChunks.push(decoded);
-          callbacks.onChunk(decoded);
+        if (chunk !== '') {
+          collectedChunks.push(chunk);
+          callbacks.onChunk(chunk);
         }
-      }
-
-      const finalChunk = decoder.end();
-      if (finalChunk) {
-        collectedChunks.push(finalChunk);
-        callbacks.onChunk(finalChunk);
       }
 
       const actualUsage = await streamResult.usage;
@@ -221,8 +263,10 @@ export class StreamTextHandler {
         model,
         inputTokens: actualUsage.promptTokens,
         outputTokens: actualUsage.completionTokens,
+        estimatedTokens,
         costUsd: usage.costUsd,
         latencyMs: Date.now() - startTime,
+        cacheStatus,
         status: 'success',
         mode: 'stream',
       });

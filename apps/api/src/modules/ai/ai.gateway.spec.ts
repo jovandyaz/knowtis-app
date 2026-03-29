@@ -1,3 +1,4 @@
+import type { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -5,6 +6,7 @@ import { AI_ACTION } from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AIGateway } from './ai.gateway';
+import type { StreamTextCallbacks } from './application/commands/stream-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
@@ -16,6 +18,52 @@ function createMockAISocket(overrides: Record<string, unknown> = {}) {
     handshake: { auth: {}, headers: {} },
     ...overrides,
   } as unknown as Parameters<AIGateway['handleConnection']>[0];
+}
+
+function createMockConfigService(maxConcurrentStreams = 2) {
+  return {
+    get: vi.fn((key: string) => {
+      if (key === 'AI_MAX_CONCURRENT_STREAMS') {return maxConcurrentStreams;}
+      return undefined;
+    }),
+  } as unknown as ConfigService<Record<string, unknown>, true>;
+}
+
+/**
+ * Creates an execute mock that blocks until manually resolved or the
+ * AbortSignal fires. Tracks all pending promises so resolveAll() can
+ * unblock every in-flight stream at once.
+ */
+function createBlockingExecute() {
+  const pending: Array<() => void> = [];
+  let capturedCallbacks: StreamTextCallbacks | undefined;
+
+  const fn = vi
+    .fn()
+    .mockImplementation(
+      (
+        _input: unknown,
+        callbacks: StreamTextCallbacks,
+        signal?: AbortSignal
+      ) => {
+        capturedCallbacks = callbacks;
+        return new Promise<void>((resolve) => {
+          pending.push(resolve);
+          signal?.addEventListener('abort', () => resolve(), { once: true });
+        });
+      }
+    );
+
+  return {
+    fn,
+    get callbacks() {
+      return capturedCallbacks;
+    },
+    resolveAll() {
+      for (const resolve of pending) {resolve();}
+      pending.length = 0;
+    },
+  };
 }
 
 describe('AIGateway', () => {
@@ -40,7 +88,8 @@ describe('AIGateway', () => {
     gateway = new AIGateway(
       mockStreamHandler,
       mockJwtService,
-      mockFeatureFlags
+      mockFeatureFlags,
+      createMockConfigService()
     );
   });
 
@@ -194,6 +243,110 @@ describe('AIGateway', () => {
       );
     });
 
+    it('should reject when max concurrent streams reached', async () => {
+      const blocking = createBlockingExecute();
+      const singleStreamGateway = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+
+      const client1 = createMockAISocket({ id: 'socket-1' });
+      client1.data.userId = 'user-123';
+      const client2 = createMockAISocket({ id: 'socket-2' });
+      client2.data.userId = 'user-123';
+
+      // Start first stream (hangs until resolved)
+      const p1 = singleStreamGateway.handleComplete(client1, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'First request',
+      });
+
+      // Second request should be rejected (slot occupied)
+      await singleStreamGateway.handleComplete(client2, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Second request',
+      });
+
+      expect(client2.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+      );
+      expect(blocking.fn).toHaveBeenCalledTimes(1);
+
+      blocking.resolveAll();
+      await p1;
+    });
+
+    it('should reject same socket sending multiple concurrent requests', async () => {
+      const blocking = createBlockingExecute();
+      const singleStreamGateway = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+
+      const client = createMockAISocket({ id: 'socket-1' });
+      client.data.userId = 'user-123';
+
+      const p1 = singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'First request',
+      });
+
+      await singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Second request from same socket',
+      });
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+      );
+      expect(blocking.fn).toHaveBeenCalledTimes(1);
+
+      blocking.resolveAll();
+      await p1;
+    });
+
+    it('should release stream slot when execute rejects', async () => {
+      const singleStreamGateway = new AIGateway(
+        {
+          execute: vi
+            .fn()
+            .mockRejectedValueOnce(new Error('unexpected failure'))
+            .mockResolvedValue(undefined),
+        } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+
+      const client = createMockAISocket({ id: 'socket-1' });
+      client.data.userId = 'user-123';
+
+      // First request fails — slot should be freed by try/finally
+      await singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Request that will fail',
+      });
+
+      const client2 = createMockAISocket({ id: 'socket-2' });
+      client2.data.userId = 'user-123';
+
+      await singleStreamGateway.handleComplete(client2, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Should succeed after slot freed',
+      });
+
+      // Both execute calls should have been made (second wasn't blocked)
+      expect(
+        singleStreamGateway['streamTextHandler'].execute
+      ).toHaveBeenCalledTimes(2);
+    });
+
     it('should emit validation error for invalid targetLanguage', async () => {
       const client = createMockAISocket();
       client.data.userId = 'user-123';
@@ -213,41 +366,149 @@ describe('AIGateway', () => {
 
   describe('handleCancel', () => {
     it('should abort an active stream', async () => {
+      const blocking = createBlockingExecute();
+      const gw = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService()
+      );
+
       const client = createMockAISocket();
       client.data.userId = 'user-123';
 
-      await gateway.handleComplete(client, {
+      const p = gw.handleComplete(client, {
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
 
-      const executeCall = vi.mocked(mockStreamHandler.execute).mock.calls[0];
-      const signal = executeCall?.[2] as AbortSignal;
-
+      const signal = blocking.fn.mock.calls[0]?.[2] as AbortSignal;
       expect(signal?.aborted).toBe(false);
 
-      gateway.handleCancel(client);
+      gw.handleCancel(client);
 
       expect(signal?.aborted).toBe(true);
+      await p; // resolves because abort listener fires
+    });
+
+    it('should release user stream slot on cancel', async () => {
+      const blocking = createBlockingExecute();
+      const singleStreamGateway = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+
+      const client = createMockAISocket({ id: 'socket-1' });
+      client.data.userId = 'user-123';
+
+      const p1 = singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'First request',
+      });
+
+      singleStreamGateway.handleCancel(client);
+      await p1;
+
+      const client2 = createMockAISocket({ id: 'socket-2' });
+      client2.data.userId = 'user-123';
+
+      const p2 = singleStreamGateway.handleComplete(client2, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Second request after cancel',
+      });
+
+      expect(blocking.fn).toHaveBeenCalledTimes(2);
+      blocking.resolveAll();
+      await p2;
     });
   });
 
   describe('handleDisconnect', () => {
     it('should abort active stream on disconnect', async () => {
+      const blocking = createBlockingExecute();
+      const gw = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService()
+      );
+
       const client = createMockAISocket();
       client.data.userId = 'user-123';
 
-      await gateway.handleComplete(client, {
+      const p = gw.handleComplete(client, {
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
 
-      const signal = vi.mocked(mockStreamHandler.execute).mock
-        .calls[0]?.[2] as AbortSignal;
+      const signal = blocking.fn.mock.calls[0]?.[2] as AbortSignal;
 
-      gateway.handleDisconnect(client);
+      gw.handleDisconnect(client);
 
       expect(signal?.aborted).toBe(true);
+      await p;
+    });
+
+    it('should not wipe stream counter for other tabs on disconnect', async () => {
+      const blocking = createBlockingExecute();
+      const twoStreamGateway = new AIGateway(
+        { execute: blocking.fn } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(2)
+      );
+
+      const client1 = createMockAISocket({ id: 'socket-1' });
+      client1.data.userId = 'user-123';
+      const client2 = createMockAISocket({ id: 'socket-2' });
+      client2.data.userId = 'user-123';
+
+      const p1 = twoStreamGateway.handleComplete(client1, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Tab 1 request',
+      });
+      const p2 = twoStreamGateway.handleComplete(client2, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Tab 2 request',
+      });
+
+      expect(blocking.fn).toHaveBeenCalledTimes(2);
+
+      // Disconnect tab 1 — tab 2's slot should still be tracked
+      twoStreamGateway.handleDisconnect(client1);
+      await p1; // resolves because abort listener fires
+
+      // A third request should succeed since one slot freed up
+      const client3 = createMockAISocket({ id: 'socket-3' });
+      client3.data.userId = 'user-123';
+
+      const p3 = twoStreamGateway.handleComplete(client3, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Tab 3 request',
+      });
+
+      expect(blocking.fn).toHaveBeenCalledTimes(3);
+
+      // But a fourth concurrent request should be rejected (2 active: socket-2 + socket-3)
+      const client4 = createMockAISocket({ id: 'socket-4' });
+      client4.data.userId = 'user-123';
+
+      await twoStreamGateway.handleComplete(client4, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Tab 4 request',
+      });
+
+      expect(client4.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+      );
+      expect(blocking.fn).toHaveBeenCalledTimes(3);
+
+      // Cleanup
+      blocking.resolveAll();
+      await Promise.all([p2, p3]);
     });
   });
 });

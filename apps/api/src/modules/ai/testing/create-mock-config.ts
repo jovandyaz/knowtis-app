@@ -16,6 +16,8 @@ const DEFAULT_AI_CONFIG: Record<string, unknown> = {
   AI_STREAM_CHUNK_TIMEOUT_MS: 10000,
   AI_CACHE_TTL_SECONDS: 3600,
   AI_CACHE_ENABLED: 'true',
+  AI_RPM_LIMIT: 15,
+  AI_MAX_CONCURRENT_STREAMS: 2,
   FRONTEND_URL: 'http://localhost:4200',
   ANTHROPIC_API_KEY: 'test-anthropic-key',
   OPENAI_API_KEY: '',

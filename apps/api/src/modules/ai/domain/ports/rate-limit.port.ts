@@ -11,6 +11,8 @@ export interface RateLimitProvider {
     estimatedTokens: number
   ): Promise<RateLimitCheckResult>;
 
+  checkRpm(userId: string): Promise<RateLimitCheckResult>;
+
   correctUsage(
     userId: string,
     estimatedTokens: number,
