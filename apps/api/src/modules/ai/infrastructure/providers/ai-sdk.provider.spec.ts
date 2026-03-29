@@ -94,6 +94,67 @@ describe('AISDKProvider', () => {
     ).rejects.toThrow('Model unavailable');
   });
 
+  it('should add Anthropic cache control to system prompt for streaming', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+
+    provider.streamCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      system: 'You are a helpful assistant.',
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: {
+          role: 'system',
+          content: 'You are a helpful assistant.',
+          providerOptions: {
+            anthropic: {
+              cacheControl: { type: 'ephemeral' },
+            },
+          },
+        },
+      })
+    );
+  });
+
+  it('should pass plain system string for non-Anthropic models', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+
+    provider.streamCompletion('test prompt', {
+      model: 'openai:gpt-4o',
+      system: 'You are a helpful assistant.',
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: 'You are a helpful assistant.',
+      })
+    );
+  });
+
+  it('should add Anthropic cache control to system prompt for generateText', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+
+    await provider.generateCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      system: 'You are a helpful assistant.',
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: {
+          role: 'system',
+          content: 'You are a helpful assistant.',
+          providerOptions: {
+            anthropic: {
+              cacheControl: { type: 'ephemeral' },
+            },
+          },
+        },
+      })
+    );
+  });
+
   it('should stream a completion via registry', async () => {
     const streamResult = provider.streamCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',

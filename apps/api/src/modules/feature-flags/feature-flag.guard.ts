@@ -12,7 +12,7 @@ import { FeatureFlagsService } from './feature-flags.service';
 export const FEATURE_FLAG_KEY = 'feature_flag';
 
 export const RequireFeatureFlag = (flag: string) =>
-  SetMetadata(FEATURE_FLAG_KEY, flag);
+  SetMetadata(FEATURE_FLAG_KEY, [flag]);
 
 @Injectable()
 export class FeatureFlagGuard implements CanActivate {

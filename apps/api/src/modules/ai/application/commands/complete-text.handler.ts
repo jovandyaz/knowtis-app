@@ -12,6 +12,7 @@ import {
   AI_COMPLETION_PROVIDER,
   type AICompletionProvider,
 } from '../../domain/ports/ai-provider.port';
+import { detectPromptInjection } from '../../domain/services/prompt-guard';
 import { estimateTokenCount } from '../../domain/services/token-estimator';
 import { AIAction } from '../../domain/value-objects/ai-action.vo';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
@@ -62,6 +63,34 @@ export class CompleteTextHandler {
     }
     const action = actionResult.value.toPrimitive();
 
+    const injectionCheck = detectPromptInjection(input.content);
+    if (!injectionCheck.safe) {
+      this.logger.warn({
+        event: 'ai.request.injection_blocked',
+        requestId,
+        userId: input.userId,
+        action,
+        score: injectionCheck.score,
+        reason: injectionCheck.reason,
+      });
+      return err(AIErrors.promptInjectionDetected());
+    }
+    if (input.selection) {
+      const selectionCheck = detectPromptInjection(input.selection);
+      if (!selectionCheck.safe) {
+        this.logger.warn({
+          event: 'ai.request.injection_blocked',
+          requestId,
+          userId: input.userId,
+          action,
+          field: 'selection',
+          score: selectionCheck.score,
+          reason: selectionCheck.reason,
+        });
+        return err(AIErrors.promptInjectionDetected());
+      }
+    }
+
     const estimatedTokens = estimateTokenCount(input.content);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
@@ -78,7 +107,7 @@ export class CompleteTextHandler {
       return err(AIErrors.rateLimitExceeded());
     }
 
-    const modelResult = this.orchestrator.selectModel(action);
+    const modelResult = await this.orchestrator.selectModel(action);
     if (modelResult.isErr()) {
       return err(modelResult.error);
     }

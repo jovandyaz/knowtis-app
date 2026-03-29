@@ -57,6 +57,25 @@ end
 return {tonumber(redis.call('GET', token_key)), new_cost}
 `;
 
+const RPM_CHECK_LUA = `
+local rpm_key = KEYS[1]
+local rpm_limit = tonumber(ARGV[1])
+local ttl = 60
+
+local current = tonumber(redis.call('GET', rpm_key) or '0')
+
+if current >= rpm_limit then
+  return {0, current}
+end
+
+redis.call('INCR', rpm_key)
+if redis.call('TTL', rpm_key) == -1 then
+  redis.call('EXPIRE', rpm_key, ttl)
+end
+
+return {1, current + 1}
+`;
+
 const KEY_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
@@ -102,6 +121,30 @@ export class RedisRateLimitService implements RateLimitProvider {
     }
 
     return { allowed: true, currentTokens, currentCostUsd };
+  }
+
+  async checkRpm(userId: string): Promise<RateLimitCheckResult> {
+    const minute = Math.floor(Date.now() / 60000);
+    const rpmKey = `ai:ratelimit:${userId}:rpm:${minute}`;
+
+    const result = (await this.redis.client.eval(
+      RPM_CHECK_LUA,
+      1,
+      rpmKey,
+      this.configService.get('AI_RPM_LIMIT')
+    )) as [number, number];
+
+    const allowed = result[0] === 1;
+    if (!allowed) {
+      return {
+        allowed: false,
+        reason: `Rate limit exceeded (${result[1]} requests/min)`,
+        currentTokens: 0,
+        currentCostUsd: 0,
+      };
+    }
+
+    return { allowed: true, currentTokens: 0, currentCostUsd: 0 };
   }
 
   async correctUsage(

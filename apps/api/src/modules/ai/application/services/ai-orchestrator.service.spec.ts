@@ -1,50 +1,76 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import { SUPPORTED_AI_ACTIONS } from '../../domain/value-objects/ai-action.vo';
-import { createMockConfig } from '../../testing/create-mock-config';
+import type { AIConfigService } from './ai-config.service';
 import { AIOrchestrator } from './ai-orchestrator.service';
+
+function createMockAIConfigService(
+  overrides?: Partial<
+    Record<'getDefaultModel' | 'getFastModel' | 'getFallbackModel', string>
+  >
+): AIConfigService {
+  return {
+    getDefaultModel: vi
+      .fn()
+      .mockResolvedValue(
+        overrides?.getDefaultModel ?? 'anthropic:claude-sonnet-4-20250514'
+      ),
+    getFastModel: vi
+      .fn()
+      .mockResolvedValue(
+        overrides?.getFastModel ?? 'anthropic:claude-haiku-4-5-20251001'
+      ),
+    getFallbackModel: vi
+      .fn()
+      .mockResolvedValue(
+        overrides?.getFallbackModel ?? 'anthropic:claude-haiku-4-5-20251001'
+      ),
+    getAllConfig: vi.fn().mockResolvedValue({}),
+    setConfig: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AIConfigService;
+}
 
 describe('AIOrchestrator', () => {
   let orchestrator: AIOrchestrator;
 
   beforeEach(() => {
-    const mockConfig = createMockConfig();
-    orchestrator = new AIOrchestrator(mockConfig);
+    const mockAIConfigService = createMockAIConfigService();
+    orchestrator = new AIOrchestrator(mockAIConfigService);
   });
 
-  it('should route ghost-text to fast model', () => {
-    const result = orchestrator.selectModel(AI_ACTION.GHOST_TEXT);
+  it('should route ghost-text to fast model', async () => {
+    const result = await orchestrator.selectModel(AI_ACTION.GHOST_TEXT);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().toPrimitive()).toBe(
       'anthropic:claude-haiku-4-5-20251001'
     );
   });
 
-  it('should route summarize to default model', () => {
-    const result = orchestrator.selectModel(AI_ACTION.SUMMARIZE);
+  it('should route summarize to default model', async () => {
+    const result = await orchestrator.selectModel(AI_ACTION.SUMMARIZE);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().toPrimitive()).toBe(
       'anthropic:claude-sonnet-4-20250514'
     );
   });
 
-  it('should route expand to default model', () => {
-    const result = orchestrator.selectModel(AI_ACTION.EXPAND);
+  it('should route expand to default model', async () => {
+    const result = await orchestrator.selectModel(AI_ACTION.EXPAND);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().toPrimitive()).toBe(
       'anthropic:claude-sonnet-4-20250514'
     );
   });
 
-  it('should return err for unsupported model from config', () => {
-    const badConfig = createMockConfig({
-      AI_DEFAULT_MODEL: 'gpt-4o',
-      AI_FAST_MODEL: 'gpt-4o',
+  it('should return err for unsupported model from config', async () => {
+    const badAIConfigService = createMockAIConfigService({
+      getDefaultModel: 'gpt-4o',
+      getFastModel: 'gpt-4o',
     });
-    const orch = new AIOrchestrator(badConfig);
-    const result = orch.selectModel(AI_ACTION.SUMMARIZE);
+    const orch = new AIOrchestrator(badAIConfigService);
+    const result = await orch.selectModel(AI_ACTION.SUMMARIZE);
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('AI_INVALID_MODEL');
   });
@@ -107,8 +133,8 @@ describe('AIOrchestrator', () => {
     AI_ACTION.FIX_SPELLING,
     AI_ACTION.MAKE_SHORTER,
     AI_ACTION.MAKE_LONGER,
-  ] as const)('should route %s to default model', (action) => {
-    const result = orchestrator.selectModel(action);
+  ] as const)('should route %s to default model', async (action) => {
+    const result = await orchestrator.selectModel(action);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().toPrimitive()).toBe(
       'anthropic:claude-sonnet-4-20250514'
