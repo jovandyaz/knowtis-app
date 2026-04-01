@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useSearch } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import {
   useIsAuthenticated,
   useResendVerification,
@@ -64,7 +65,7 @@ export function VerifyEmailPage() {
 
         <CardFooter>
           <Link
-            to="/login"
+            to={ROUTES.LOGIN}
             search={{ redirect: undefined }}
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
@@ -108,7 +109,11 @@ export function VerifyEmailPage() {
         </CardHeader>
 
         <CardFooter>
-          <Link to="/login" search={{ redirect: undefined }} className="w-full">
+          <Link
+            to={ROUTES.LOGIN}
+            search={{ redirect: undefined }}
+            className="w-full"
+          >
             <Button className="w-full">{t('login.button')}</Button>
           </Link>
         </CardFooter>
@@ -196,7 +201,7 @@ export function VerifyEmailPage() {
 
       <CardFooter>
         <Link
-          to="/login"
+          to={ROUTES.LOGIN}
           search={{ redirect: undefined }}
           className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
         >
