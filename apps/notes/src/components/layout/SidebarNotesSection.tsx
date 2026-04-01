@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useParams } from '@tanstack/react-router';
 
-import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import { STORAGE_KEYS } from '@/config';
+import { ROUTES, STORAGE_KEYS } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
+import { preloadEditorChunk } from '@/lib/preload-editor';
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react';
 
 import { useNotes } from '@knowtis/data-access-notes';
@@ -17,10 +17,9 @@ export function SidebarNotesSection() {
     STORAGE_KEYS.SIDEBAR_NOTES_COLLAPSED
   );
   const { data: notes } = useNotes();
+  const { createNote } = useCreateNoteAction();
   const params = useParams({ strict: false }) as { noteId?: string };
   const activeNoteId = params.noteId;
-  const { createNote, showLimitModal, dismissLimitModal } =
-    useCreateNoteAction();
 
   const ChevronIcon = isCollapsed ? ChevronRight : ChevronDown;
 
@@ -46,7 +45,7 @@ export function SidebarNotesSection() {
               <ChevronIcon className="h-3.5 w-3.5" />
             </button>
             <Link
-              to="/notes"
+              to={ROUTES.NOTES}
               className="flex-1 truncate rounded-md px-1.5 py-1 text-sm font-medium text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
             >
               {t('sidebar.myNotes')}
@@ -55,9 +54,10 @@ export function SidebarNotesSection() {
 
           <button
             type="button"
+            onClick={createNote}
+            onPointerDown={preloadEditorChunk}
             className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
             title={t('sidebar.newNote')}
-            onClick={createNote}
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
@@ -68,7 +68,7 @@ export function SidebarNotesSection() {
             {notes?.map((note) => (
               <Link
                 key={note.id}
-                to="/notes/$noteId"
+                to={ROUTES.NOTE}
                 params={{ noteId: note.id }}
                 className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer truncate ${
                   activeNoteId === note.id
@@ -91,8 +91,6 @@ export function SidebarNotesSection() {
           </div>
         )}
       </div>
-
-      <AnonymousLimitModal open={showLimitModal} onClose={dismissLimitModal} />
     </>
   );
 }

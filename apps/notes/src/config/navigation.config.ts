@@ -6,6 +6,7 @@ import { Home } from 'lucide-react';
 import type { enCommon } from '@knowtis/shared-i18n';
 
 import type { FileRouteTypes } from '../routeTree.gen';
+import { ROUTES } from './routes.config';
 
 /** Flatten nested object keys into dot-notation string union */
 type FlattenKeys<T, Prefix extends string = ''> = T extends object
@@ -44,6 +45,6 @@ export const NAVIGATION_LINKS: NavigationLink[] = [
   {
     icon: Home,
     labelKey: 'labels.home',
-    to: '/',
+    to: ROUTES.DASHBOARD,
   },
 ] as const satisfies NavigationLink[];
