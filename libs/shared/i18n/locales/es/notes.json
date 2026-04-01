@@ -18,6 +18,8 @@
     "placeholderWrite": "Empieza a escribir tu nota...",
     "placeholderSlash": "Usa / para comandos de IA...",
     "placeholderVoice": "Dicta una nota de voz...",
+    "placeholderLearn": "Usa /learn para aprender sobre un tema...",
+    "placeholderStudyTools": "Genera flashcards y quizzes con /study-tools...",
     "loadingNote": "Cargando nota...",
     "failedToLoad": "Error al cargar la nota",
     "notFound": "Nota no encontrada",

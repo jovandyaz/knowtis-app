@@ -34,7 +34,7 @@ function svgToPng(svgString, width) {
 // 1. OG Image (1200x630) — Purple background, white wordmark centered
 const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
   <rect width="1200" height="630" fill="${RICH_PURPLE}"/>
-  <g transform="translate(350, 210) scale(2)" fill="white">
+  <g transform="translate(225, -62) scale(3)" fill="white">
     ${WORDMARK_PATHS}
   </g>
 </svg>`;

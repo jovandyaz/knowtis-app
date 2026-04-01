@@ -32,7 +32,6 @@ import {
   LoadingState,
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@knowtis/design-system';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
@@ -118,7 +117,7 @@ function NoteControlsPortal({
   }
 
   return createPortal(
-    <TooltipProvider delayDuration={300}>
+    <>
       {showBadge && (
         <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
       )}
@@ -157,7 +156,7 @@ function NoteControlsPortal({
           <TooltipContent>{t('editor.share')}</TooltipContent>
         </Tooltip>
       )}
-    </TooltipProvider>,
+    </>,
     portalTarget
   );
 }

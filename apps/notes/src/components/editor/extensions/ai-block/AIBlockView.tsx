@@ -14,7 +14,6 @@ import {
   Input,
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@knowtis/design-system';
 
@@ -235,24 +234,22 @@ export function AIBlockView({
                   <Check className="mr-1 h-3 w-3" />
                   {t('ai.aiBlock.insert')}
                 </Button>
-                <TooltipProvider delayDuration={300}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" onClick={handleRetry}>
-                        <RotateCcw className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('ai.aiBlock.retry')}</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="ghost" size="icon" onClick={deleteNode}>
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('ai.aiBlock.discard')}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" onClick={handleRetry}>
+                      <RotateCcw className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('ai.aiBlock.retry')}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" onClick={deleteNode}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('ai.aiBlock.discard')}</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             <div className="px-4 pb-4">

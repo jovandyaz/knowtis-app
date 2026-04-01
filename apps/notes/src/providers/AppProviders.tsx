@@ -8,7 +8,7 @@ import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 
-import { Toaster } from '@knowtis/design-system';
+import { Toaster, TooltipProvider } from '@knowtis/design-system';
 
 import { AbilityProvider } from './ability-provider';
 import { PostHogProvider } from './PostHogProvider';
@@ -49,10 +49,12 @@ export function AppProviders({ children }: AppProvidersProps) {
             <SessionManager />
             <AuthCacheSync />
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-              <AbilityProvider>
-                <YjsProvider>{children}</YjsProvider>
-              </AbilityProvider>
-              <Toaster />
+              <TooltipProvider delayDuration={300}>
+                <AbilityProvider>
+                  <YjsProvider>{children}</YjsProvider>
+                </AbilityProvider>
+                <Toaster />
+              </TooltipProvider>
             </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>

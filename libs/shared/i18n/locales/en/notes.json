@@ -18,6 +18,8 @@
     "placeholderWrite": "Start writing your note...",
     "placeholderSlash": "Use / for AI commands...",
     "placeholderVoice": "Dictate a voice note...",
+    "placeholderLearn": "Use /learn to explore any topic...",
+    "placeholderStudyTools": "Generate flashcards and quizzes with /study-tools...",
     "loadingNote": "Loading note...",
     "failedToLoad": "Failed to load note",
     "notFound": "Note not found",
