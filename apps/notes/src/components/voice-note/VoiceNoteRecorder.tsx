@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import { useVoiceNote, useVoiceRecorder } from '@/hooks';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -176,56 +177,45 @@ export function VoiceNoteRecorder({
     }
   }, [recorder, handleClose, t]);
 
-  const handleSaveNote = useCallback(
-    (opts?: { focus?: 'title' | 'content' }) => {
-      if (!voiceNoteData) {
-        return;
+  const handleSaveNote = useCallback(() => {
+    if (!voiceNoteData) {
+      return;
+    }
+
+    if (isInsertMode) {
+      onInsert?.(voiceNoteData.content);
+      handleClose();
+      return;
+    }
+
+    const { title, content } = voiceNoteData;
+
+    createNote.mutate(
+      { title, content },
+      {
+        onSuccess: (newNote) => {
+          handleClose();
+          navigate({
+            to: ROUTES.NOTE,
+            params: { noteId: newNote.id },
+          });
+        },
+        onError: (error) => {
+          toast.error(
+            error instanceof Error ? error.message : t('create.failedToCreate')
+          );
+        },
       }
-
-      if (isInsertMode) {
-        onInsert?.(voiceNoteData.content);
-        handleClose();
-        return;
-      }
-
-      const { title, content } = voiceNoteData;
-
-      createNote.mutate(
-        { title, content },
-        {
-          onSuccess: (newNote) => {
-            handleClose();
-            navigate({
-              to: '/notes/$noteId',
-              params: { noteId: newNote.id },
-              ...(opts?.focus && { search: { focus: opts.focus } }),
-            });
-          },
-          onError: (error) => {
-            toast.error(
-              error instanceof Error
-                ? error.message
-                : t('create.failedToCreate')
-            );
-          },
-        }
-      );
-    },
-    [
-      voiceNoteData,
-      createNote,
-      navigate,
-      handleClose,
-      isInsertMode,
-      onInsert,
-      t,
-    ]
-  );
-
-  const handleCreateNote = useCallback(
-    () => handleSaveNote({ focus: 'content' }),
-    [handleSaveNote]
-  );
+    );
+  }, [
+    voiceNoteData,
+    createNote,
+    navigate,
+    handleClose,
+    isInsertMode,
+    onInsert,
+    t,
+  ]);
 
   const handleRetry = useCallback(async () => {
     resetVoiceNote();
@@ -326,7 +316,7 @@ export function VoiceNoteRecorder({
             <VoiceNoteResult
               title={voiceNoteData.title}
               content={voiceNoteData.content}
-              onCreateNote={handleCreateNote}
+              onCreateNote={handleSaveNote}
               onRetry={handleRetry}
               onDiscard={handleClose}
               actionLabel={actionLabel}

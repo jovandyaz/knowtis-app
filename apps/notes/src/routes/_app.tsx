@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { createFileRoute, Outlet } from '@tanstack/react-router';
 
 import { initAuth } from '@/auth/setup';
+import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import {
   ArtifactMobileFAB,
   ArtifactSidebar,
@@ -13,6 +14,7 @@ import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { useAIStore } from '@/stores/ai.store';
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
@@ -51,6 +53,8 @@ function AppLayout() {
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const isDesktop = useMediaQuery('(min-width: 768px)');
+  const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
+  const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
@@ -78,6 +82,7 @@ function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-(--background)">
       <Sidebar />
       {!isAnonymous && <SettingsModal />}
+      <AnonymousLimitModal open={showLimitModal} onClose={closeLimitModal} />
       <BottomNav />
       {aiEnabled && <ArtifactMobileFAB />}
 

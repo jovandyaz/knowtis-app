@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
 import { LogOut } from 'lucide-react';
@@ -20,7 +21,7 @@ export function AccountSection() {
     logout(undefined, {
       onSuccess: () => {
         close();
-        navigate({ to: '/login', search: { redirect: undefined } });
+        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
       },
     });
   };

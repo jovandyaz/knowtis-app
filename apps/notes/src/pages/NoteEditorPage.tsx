@@ -1,14 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useNavigate, useParams, useSearch } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor';
 import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import {
   ACCESS_BADGE_CONFIG,
@@ -52,8 +53,6 @@ interface NoteEditorProps {
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
   editorsCanShare: boolean;
-  autoFocusTitle?: boolean | undefined;
-  autoFocusContent?: boolean | undefined;
 }
 
 interface MobileEditorHeaderProps {
@@ -174,14 +173,14 @@ function NoteEditor({
   generalAccessPermission,
   shareToken,
   editorsCanShare,
-  autoFocusTitle,
-  autoFocusContent,
 }: NoteEditorProps) {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [content, setContent] = useState(initialContent);
+  // Stable for the lifetime of this mount (component remounts via key={noteId}).
+  const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
@@ -277,13 +276,6 @@ function NoteEditor({
   }, [voiceNoteClose]);
 
   useEffect(() => {
-    if (autoFocusTitle && titleInputRef.current) {
-      titleInputRef.current.focus();
-      titleInputRef.current.select();
-    }
-  }, [autoFocusTitle]);
-
-  useEffect(() => {
     const originalTitle = document.title;
     document.title = `${title} · Knowtis`;
     return () => {
@@ -360,7 +352,7 @@ function NoteEditor({
         accessLevel={accessLevel}
         editorsCanShare={editorsCanShare}
         onShareClick={openShareDialog}
-        onBack={() => navigate({ to: '/' })}
+        onBack={() => navigate({ to: ROUTES.DASHBOARD })}
       />
 
       <NoteControlsPortal
@@ -388,7 +380,8 @@ function NoteEditor({
         initialContent={content}
         onUpdate={handleContentChange}
         editable={canEdit}
-        autoFocus={autoFocusContent}
+        autoFocus={canEdit && isNewNote}
+        localFirst={isNewNote}
         onEditorReady={handleEditorReady}
         onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
       />
@@ -422,7 +415,6 @@ function NoteEditor({
 
 export function NoteEditorPage() {
   const { noteId } = useParams({ from: '/_app/notes/$noteId' });
-  const { focus } = useSearch({ from: '/_app/notes/$noteId' });
   const navigate = useNavigate();
   const { t } = useTranslation('notes');
 
@@ -437,7 +429,7 @@ export function NoteEditorPage() {
       <ErrorState
         title={t('editor.failedToLoad')}
         message={error instanceof Error ? error.message : t('editor.notFound')}
-        onRetry={() => navigate({ to: '/' })}
+        onRetry={() => navigate({ to: ROUTES.DASHBOARD })}
         retryLabel={t('editor.backToNotes')}
       />
     );
@@ -458,8 +450,6 @@ export function NoteEditorPage() {
       generalAccessPermission={note.generalAccessPermission}
       shareToken={note.shareToken}
       editorsCanShare={note.editorsCanShare}
-      autoFocusTitle={focus === 'title'}
-      autoFocusContent={focus === 'content'}
     />
   );
 }
