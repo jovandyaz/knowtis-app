@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors } from '@/auth';
+import { ROUTES } from '@/config';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
@@ -110,7 +111,7 @@ export function ResetPasswordPage() {
 
         <CardFooter>
           <Link
-            to="/forgot-password"
+            to={ROUTES.FORGOT_PASSWORD}
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--primary) hover:underline"
           >
             {t('resetPassword.requestNewLink')}
@@ -134,7 +135,11 @@ export function ResetPasswordPage() {
         </CardHeader>
 
         <CardFooter>
-          <Link to="/login" search={{ redirect: undefined }} className="w-full">
+          <Link
+            to={ROUTES.LOGIN}
+            search={{ redirect: undefined }}
+            className="w-full"
+          >
             <Button className="w-full">{t('login.button')}</Button>
           </Link>
         </CardFooter>
@@ -219,7 +224,7 @@ export function ResetPasswordPage() {
           </LoadingButton>
 
           <Link
-            to="/login"
+            to={ROUTES.LOGIN}
             search={{ redirect: undefined }}
             className="flex items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >

@@ -51,6 +51,7 @@ export interface NoteWithOwner extends Note {
 }
 
 export interface CreateNoteInput {
+  id?: string;
   title: string;
   content?: string;
 }

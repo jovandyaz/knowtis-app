@@ -1,21 +1,18 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
+
+import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 
 import { useCreateAndNavigateToNote } from './useCreateAndNavigateToNote';
 
 export function useCreateNoteAction() {
   const createAndNavigate = useCreateAndNavigateToNote();
-  const [showLimitModal, setShowLimitModal] = useState(false);
+  const openModal = useAnonymousLimitStore((s) => s.openModal);
 
   const createNote = useCallback(() => {
     createAndNavigate({
-      focusTarget: 'content',
-      onLimitReached: () => setShowLimitModal(true),
+      onLimitReached: openModal,
     });
-  }, [createAndNavigate]);
+  }, [createAndNavigate, openModal]);
 
-  const dismissLimitModal = useCallback(() => {
-    setShowLimitModal(false);
-  }, []);
-
-  return { createNote, showLimitModal, dismissLimitModal };
+  return { createNote };
 }

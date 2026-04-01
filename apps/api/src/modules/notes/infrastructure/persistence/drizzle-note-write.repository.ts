@@ -37,6 +37,7 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
   ): Promise<Result<NoteEntity, NoteDomainError>> {
     try {
       const newNote: NewNote = {
+        ...(data.id ? { id: data.id } : {}),
         title: data.title,
         content: data.content,
         ownerId: data.ownerId.value,
@@ -48,12 +49,12 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
       }
 
       return ok(mapToNoteEntity(result[0]));
-    } catch (e) {
-      return err(
-        NoteErrors.invalidContent(
-          e instanceof Error ? e.message : 'Unknown error'
-        )
+    } catch (error) {
+      this.logger.error(
+        `Failed to create note`,
+        error instanceof Error ? error.stack : error
       );
+      return err(NoteErrors.persistenceError('create', data.id ?? 'unknown'));
     }
   }
 

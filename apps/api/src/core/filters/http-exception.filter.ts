@@ -17,6 +17,7 @@ interface ErrorResponse {
   statusCode: number;
   message: string | string[];
   error: string;
+  code?: string;
   errors?: FieldError[];
   timestamp: string;
   path: string;
@@ -34,6 +35,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message: string | string[] = 'Internal server error';
     let error = 'Internal Server Error';
+    let code: string | undefined;
     let errors: FieldError[] | undefined;
 
     if (exception instanceof HttpException) {
@@ -45,6 +47,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
         message = (responseObj['message'] as string | string[]) || message;
         error =
           (responseObj['error'] as string) || this.getDefaultErrorName(status);
+        code = responseObj['code'] as string | undefined;
 
         if (Array.isArray(responseObj['errors'])) {
           errors = responseObj['errors'] as FieldError[];
@@ -69,6 +72,7 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       statusCode: status,
       message,
       error,
+      ...(code && { code }),
       ...(errors && { errors }),
       timestamp: new Date().toISOString(),
       path: request.url,

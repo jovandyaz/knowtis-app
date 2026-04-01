@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { FileText, Home, LogIn, Settings, UserPlus, X } from 'lucide-react';
@@ -36,8 +37,8 @@ export function BottomNav() {
   }
 
   const tabs: BottomNavTab[] = [
-    { icon: Home, labelKey: 'labels.home', to: '/' },
-    { icon: FileText, labelKey: 'labels.notes', to: '/notes' },
+    { icon: Home, labelKey: 'labels.home', to: ROUTES.DASHBOARD },
+    { icon: FileText, labelKey: 'labels.notes', to: ROUTES.NOTES },
     {
       icon: Settings,
       labelKey: 'settings.title',
@@ -130,7 +131,7 @@ export function BottomNav() {
                       type="button"
                       onClick={() => {
                         setIsAccountSheetOpen(false);
-                        void navigate({ to: '/register' });
+                        void navigate({ to: ROUTES.REGISTER });
                       }}
                       className="flex w-full items-center gap-3 rounded-xl bg-(--primary)/10 px-4 py-3.5 text-(--primary) transition-colors active:bg-(--primary)/20"
                     >
@@ -145,7 +146,7 @@ export function BottomNav() {
                       onClick={() => {
                         setIsAccountSheetOpen(false);
                         void navigate({
-                          to: '/login',
+                          to: ROUTES.LOGIN,
                           search: { redirect: undefined },
                         });
                       }}

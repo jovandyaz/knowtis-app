@@ -2,6 +2,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
+
 import {
   Button,
   buttonVariants,
@@ -41,7 +43,7 @@ export function AnonymousLimitModal({
           <Button variant="outline" onClick={onClose}>
             {t('anonymous.limit.maybeLater')}
           </Button>
-          <Link to="/register" className={buttonVariants()}>
+          <Link to={ROUTES.REGISTER} className={buttonVariants()}>
             {t('anonymous.limit.createFreeAccount')}
           </Link>
         </DialogFooter>
