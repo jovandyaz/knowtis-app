@@ -170,8 +170,8 @@
     },
     "artifacts": {
       "studyTools": "Study Tools",
-      "generated": "Artifact generated successfully!",
-      "generateError": "Failed to generate artifact",
+      "generated": "Study material generated successfully!",
+      "generateError": "Failed to generate study material",
       "learningAbout": "Learning about: {{topic}}",
       "learnSuccess": "Content about {{topic}} added to your note",
       "learnError": "Failed to generate learning content",
@@ -198,20 +198,20 @@
         "resizePanel": "Resize panel"
       },
       "list": {
-        "loading": "Loading artifacts...",
-        "emptyTitle": "No artifacts yet",
+        "loading": "Loading study materials...",
+        "emptyTitle": "No study materials yet",
         "emptyDescription": "Generate study materials from your notes using AI.",
-        "deleted": "Artifact deleted",
-        "deleteError": "Failed to delete artifact",
+        "deleted": "Study material deleted",
+        "deleteError": "Failed to delete study material",
         "deleteAriaLabel": "Delete {{title}}"
       },
       "generate": {
         "button": "Generate",
         "title": "Generate Study Material",
-        "description": "Choose the type of artifact to generate from your note content.",
-        "generating": "Generating artifact...",
-        "success": "Artifact generated successfully",
-        "error": "Failed to generate artifact",
+        "description": "Choose the type of study material to generate from your note content.",
+        "generating": "Generating study material...",
+        "success": "Study material generated successfully",
+        "error": "Failed to generate study material",
         "flashcards": "Flashcards",
         "flashcardsDesc": "Create flashcards for spaced repetition study",
         "quiz": "Quiz",
@@ -287,7 +287,7 @@
     },
     "aiBlock": {
       "title": "Learn about a topic",
-      "placeholder": "e.g. NestJS Dependency Injection",
+      "placeholder": "What do you want to learn?",
       "generate": "Generate",
       "generating": "Generating content...",
       "cancel": "Cancel",
@@ -319,14 +319,10 @@
       "numberedListDesc": "Create a numbered list",
       "blockquote": "Quote",
       "blockquoteDesc": "Insert a blockquote",
-      "flashcards": "Generate flashcards",
-      "flashcardsDesc": "Create study flashcards from note",
-      "quiz": "Generate quiz",
-      "quizDesc": "Create a quiz from note content",
-      "mindMap": "Generate mind map",
-      "mindMapDesc": "Create a visual mind map from note",
       "learn": "Learn about topic",
       "learnDesc": "Generate educational content about a topic",
+      "studyTools": "Study tools",
+      "studyToolsDesc": "Generate flashcards, quizzes, and more",
       "fixSpelling": "Fix spelling",
       "fixSpellingDesc": "Correct spelling and grammar errors",
       "shorter": "Make shorter",
@@ -339,6 +335,9 @@
       "translateDesc": "Translate content to another language",
       "changeTone": "Change tone",
       "changeToneDesc": "Adjust the writing tone"
+    },
+    "contentGuard": {
+      "emptyNote": "Write some content in your note first."
     }
   },
   "profile": {

@@ -15,7 +15,7 @@ import {
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import type { Artifact } from '@knowtis/shared-types';
 
-import { ArtifactGenerator } from './ArtifactGenerator';
+import { ArtifactGeneratorButton } from './ArtifactGenerator';
 import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
 
@@ -38,10 +38,7 @@ function ArtifactPanelContent({
         <h2 className="text-sm font-semibold text-foreground">
           {t('ai.artifacts.studyTools')}
         </h2>
-        <ArtifactGenerator
-          noteId={noteId}
-          onGenerated={(artifact) => onSelect(artifact)}
-        />
+        <ArtifactGeneratorButton />
       </div>
       <ArtifactList noteId={noteId} onSelect={onSelect} />
     </div>
