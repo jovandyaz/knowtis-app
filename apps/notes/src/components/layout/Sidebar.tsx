@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
-import { NAVIGATION_LINKS } from '@/config/navigation.config';
+import { NAVIGATION_LINKS, ROUTES } from '@/config';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -34,7 +34,7 @@ export function Sidebar() {
   const handleCollapse = useCallback(() => setCollapsed(true), [setCollapsed]);
 
   const openSearch = useCallback(async () => {
-    await navigate({ to: '/notes' });
+    await navigate({ to: ROUTES.NOTES });
     requestFocus();
   }, [navigate, requestFocus]);
 

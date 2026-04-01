@@ -3,6 +3,7 @@ import { lazy, Suspense } from 'react';
 import { createFileRoute, redirect } from '@tanstack/react-router';
 
 import { authStore } from '@/auth';
+import { ROUTES } from '@/config';
 
 import { LoadingState } from '@knowtis/design-system';
 
@@ -14,7 +15,7 @@ export const Route = createFileRoute('/register')({
   beforeLoad: () => {
     const { isAuthenticated, user } = authStore.getState();
     if (isAuthenticated && !user?.isAnonymous) {
-      throw redirect({ to: '/' });
+      throw redirect({ to: ROUTES.ROOT });
     }
   },
   component: RegisterPageWrapper,
