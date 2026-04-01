@@ -75,4 +75,11 @@ export {
   type FlashcardProgress,
   type QuizAttempt,
   type StudyStats,
+  CARD_SESSION_STATUSES,
+  type CardSessionStatus,
+  CARD_STATUS,
+  RESTART_FILTERS,
+  type RestartFilter,
+  type CardResult,
+  type StudySessionResult,
 } from './lib/artifact.types';
