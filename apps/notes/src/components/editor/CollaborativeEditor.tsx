@@ -90,6 +90,7 @@ function InternalEditor({
   const editor = useEditor({
     extensions,
     editable,
+    autofocus: autoFocus ? 'start' : false,
     editorProps: {
       attributes: {
         class: cn(
@@ -107,7 +108,9 @@ function InternalEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      if (isInitializingRef.current) {return;}
+      if (isInitializingRef.current) {
+        return;
+      }
       const html = editor.getHTML();
       queueMicrotask(() => onUpdateRef.current(html));
     },
@@ -142,12 +145,6 @@ function InternalEditor({
       editor.setEditable(editable);
     }
   }, [editor, editable]);
-
-  useEffect(() => {
-    if (autoFocus && editor && !editor.isDestroyed) {
-      editor.commands.focus('end');
-    }
-  }, [autoFocus, editor]);
 
   useEffect(() => {
     if (editor && !editor.isDestroyed) {
@@ -204,12 +201,18 @@ export function CollaborativeEditor({
   autoFocus,
   onEditorReady,
   onVoiceNote,
+  localFirst = false,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-  const editorState = useCollaborativeEditor(noteId);
-  const otherUsers = useActiveCollaborators(noteId);
-  usePresenceBroadcast(noteId);
+  const collaborationEnabled = !localFirst;
+  const editorState = useCollaborativeEditor(noteId, {
+    skipProviderDelay: localFirst,
+  });
+  const otherUsers = useActiveCollaborators(noteId, {
+    enabled: collaborationEnabled,
+  });
+  usePresenceBroadcast(noteId, { enabled: collaborationEnabled });
 
   const resolvedPlaceholder: string[] = placeholder
     ? [placeholder]
@@ -221,7 +224,7 @@ export function CollaborativeEditor({
         ]
       : [t('editor.editorPlaceholder')];
 
-  const wsEnabled = isWebSocketEnabled();
+  const wsEnabled = collaborationEnabled && isWebSocketEnabled();
   const { isConnected, isSynced, remoteUsers } = useWebSocketCollaboration({
     noteId,
     yDoc: editorState.yDoc,

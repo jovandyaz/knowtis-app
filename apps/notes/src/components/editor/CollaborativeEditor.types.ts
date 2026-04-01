@@ -16,6 +16,8 @@ export interface CollaborativeEditorProps {
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;
   onVoiceNote?: (() => void) | undefined;
+  /** When true, disables WebSocket collaboration and skips the provider init delay */
+  localFirst?: boolean | undefined;
 }
 
 export interface InternalEditorProps {

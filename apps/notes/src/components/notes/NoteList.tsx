@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { DEBOUNCE_DELAYS } from '@/lib';
@@ -26,9 +25,7 @@ export function NoteList() {
   const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
-
-  const { createNote, showLimitModal, dismissLimitModal } =
-    useCreateNoteAction();
+  const { createNote } = useCreateNoteAction();
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
     useNotesSearchStore();
@@ -135,8 +132,6 @@ export function NoteList() {
       />
 
       <FloatingCreateButton onCreateNote={createNote} />
-
-      <AnonymousLimitModal open={showLimitModal} onClose={dismissLimitModal} />
     </div>
   );
 }
