@@ -18,6 +18,14 @@ import {
 } from '@knowtis/shared-types';
 
 export class CreateNoteDto {
+  @ApiPropertyOptional({
+    description: 'Client-generated UUID v4 for the note',
+    format: 'uuid',
+  })
+  @IsUUID('4', { message: 'ID must be a valid UUID v4' })
+  @IsOptional()
+  id?: string;
+
   @ApiProperty({
     description: 'Title of the note',
     example: 'Meeting Notes',

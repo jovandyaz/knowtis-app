@@ -261,6 +261,7 @@ export class NotesController {
   @RequireMcpScope('write')
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
     const result = await this.createNoteHandler.execute({
+      ...(dto.id ? { id: dto.id } : {}),
       title: dto.title,
       ownerId: user.id,
       ...(dto.content ? { content: dto.content } : {}),
