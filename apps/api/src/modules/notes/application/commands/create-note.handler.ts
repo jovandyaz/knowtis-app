@@ -15,6 +15,7 @@ import { NoteCreatedEvent } from '../../domain/events';
 import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
 
 export interface CreateNoteInput {
+  readonly id?: string;
   readonly title: string;
   readonly content?: string;
   readonly ownerId: string;
@@ -49,6 +50,7 @@ export class CreateNoteHandler {
     }
 
     const result = await this.noteRepository.create({
+      ...(input.id ? { id: input.id } : {}),
       title: titleResult.value.value,
       content: contentResult.value.value,
       ownerId: ownerIdResult.value,
