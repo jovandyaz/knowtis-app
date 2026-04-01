@@ -5,6 +5,7 @@ import type { NoteEntity } from '../entities';
 import type { NoteDomainError } from '../errors';
 
 export interface CreateNoteData {
+  readonly id?: string;
   readonly title: string;
   readonly content: string;
   readonly ownerId: UserId;

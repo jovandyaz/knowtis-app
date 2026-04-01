@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
 import { ChevronUp, LogIn, LogOut, Settings, UserPlus } from 'lucide-react';
@@ -34,7 +35,7 @@ export function SidebarUserMenu({
     logout(undefined, {
       onSuccess: () => {
         toast.success(t('nav.signedOutSuccess'));
-        navigate({ to: '/login', search: { redirect: undefined } });
+        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
       },
     });
   };
@@ -68,7 +69,7 @@ export function SidebarUserMenu({
         {isAnonymous ? (
           <>
             <DropdownMenuItem
-              onClick={() => navigate({ to: '/register' })}
+              onClick={() => navigate({ to: ROUTES.REGISTER })}
               className="text-(--primary) focus:text-(--primary)"
             >
               <UserPlus className="h-4 w-4" />
@@ -79,7 +80,7 @@ export function SidebarUserMenu({
 
             <DropdownMenuItem
               onClick={() =>
-                navigate({ to: '/login', search: { redirect: undefined } })
+                navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } })
               }
             >
               <LogIn className="h-4 w-4" />

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ForgotPasswordFormData } from '@jovandyaz/auth-react';
@@ -117,7 +118,7 @@ export function ForgotPasswordPage() {
 
         <CardFooter>
           <Link
-            to="/login"
+            to={ROUTES.LOGIN}
             search={{ redirect: undefined }}
             className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >
@@ -180,7 +181,7 @@ export function ForgotPasswordPage() {
           </LoadingButton>
 
           <Link
-            to="/login"
+            to={ROUTES.LOGIN}
             search={{ redirect: undefined }}
             className="flex items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
           >

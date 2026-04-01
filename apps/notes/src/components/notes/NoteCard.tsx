@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
 
+import { ROUTES } from '@/config';
 import {
   ACCESS_BADGE_CONFIG,
   canPerformNoteAction,
@@ -49,7 +50,7 @@ export const NoteCard = memo(function NoteCard({
     >
       <Card className="group relative h-full overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5">
         <Link
-          to="/notes/$noteId"
+          to={ROUTES.NOTE}
           params={{ noteId: note.id }}
           className="flex h-full flex-col"
         >

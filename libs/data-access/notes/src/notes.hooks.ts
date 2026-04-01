@@ -45,15 +45,9 @@ export function useCreateNote() {
   return useMutation({
     mutationFn: (input: CreateNoteInput) => notesApi.create(input),
     onSuccess: (newNote: Note) => {
-      queryClient.setQueryData<NoteWithAccess[]>(
-        notesQueryKeys.lists(),
-        (old) => {
-          if (!old) {
-            return undefined;
-          }
-          return [{ ...newNote, accessLevel: 'owner' as const }, ...old];
-        }
-      );
+      queryClient.invalidateQueries({
+        queryKey: notesQueryKeys.detail(newNote.id),
+      });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
     },
   });
@@ -69,9 +63,9 @@ export function useUpdateNote() {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.detail(id) });
 
       const previousNote = queryClient.getQueryData(notesQueryKeys.detail(id));
-      const previousList = queryClient.getQueryData<NoteWithAccess[]>(
-        notesQueryKeys.lists()
-      );
+      const previousLists = queryClient.getQueriesData<NoteWithAccess[]>({
+        queryKey: notesQueryKeys.lists(),
+      });
 
       if (previousNote) {
         queryClient.setQueryData(notesQueryKeys.detail(id), {
@@ -81,16 +75,15 @@ export function useUpdateNote() {
         });
       }
 
-      if (previousList) {
-        queryClient.setQueryData<NoteWithAccess[]>(
-          notesQueryKeys.lists(),
-          previousList.map((note) =>
+      queryClient.setQueriesData<NoteWithAccess[]>(
+        { queryKey: notesQueryKeys.lists() },
+        (old) =>
+          old?.map((note) =>
             note.id === id ? { ...note, ...input, updatedAt: new Date() } : note
           )
-        );
-      }
+      );
 
-      return { previousNote, previousList };
+      return { previousNote, previousLists };
     },
     onError: (_err, { id }, context) => {
       if (context?.previousNote) {
@@ -99,8 +92,10 @@ export function useUpdateNote() {
           context.previousNote
         );
       }
-      if (context?.previousList) {
-        queryClient.setQueryData(notesQueryKeys.lists(), context.previousList);
+      if (context?.previousLists) {
+        for (const [queryKey, data] of context.previousLists) {
+          queryClient.setQueryData(queryKey, data);
+        }
       }
     },
     onSettled: (_data, _error, { id }) => {
@@ -118,22 +113,22 @@ export function useDeleteNote() {
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.lists() });
 
-      const previousList = queryClient.getQueryData<NoteWithAccess[]>(
-        notesQueryKeys.lists()
+      const previousLists = queryClient.getQueriesData<NoteWithAccess[]>({
+        queryKey: notesQueryKeys.lists(),
+      });
+
+      queryClient.setQueriesData<NoteWithAccess[]>(
+        { queryKey: notesQueryKeys.lists() },
+        (old) => old?.filter((note) => note.id !== id)
       );
 
-      if (previousList) {
-        queryClient.setQueryData<NoteWithAccess[]>(
-          notesQueryKeys.lists(),
-          previousList.filter((note) => note.id !== id)
-        );
-      }
-
-      return { previousList };
+      return { previousLists };
     },
     onError: (_err, _id, context) => {
-      if (context?.previousList) {
-        queryClient.setQueryData(notesQueryKeys.lists(), context.previousList);
+      if (context?.previousLists) {
+        for (const [queryKey, data] of context.previousLists) {
+          queryClient.setQueryData(queryKey, data);
+        }
       }
     },
     onSettled: () => {

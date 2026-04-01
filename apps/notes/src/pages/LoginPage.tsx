@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors, resolvePostLoginRedirect } from '@/auth';
+import { ROUTES } from '@/config';
 import { useAutofillDetect } from '@/hooks/useAutofillDetect';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -137,7 +138,7 @@ export function LoginPage() {
 
           <div className="flex justify-end">
             <Link
-              to="/forgot-password"
+              to={ROUTES.FORGOT_PASSWORD}
               className="text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
             >
               {t('login.forgotPassword')}
@@ -158,7 +159,7 @@ export function LoginPage() {
           <p className="text-center text-sm text-(--muted-foreground)">
             {t('login.noAccount')}{' '}
             <Link
-              to="/register"
+              to={ROUTES.REGISTER}
               className="font-medium text-(--foreground) hover:underline"
             >
               {t('login.createOne')}
