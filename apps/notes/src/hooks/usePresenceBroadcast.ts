@@ -7,10 +7,21 @@ import { useYjs } from '@/providers';
  * Hook for broadcasting user presence in a collaborative note
  * @param noteId - The ID of the note to broadcast presence for
  */
-export function usePresenceBroadcast(noteId: string): void {
+interface UsePresenceBroadcastOptions {
+  enabled?: boolean;
+}
+
+export function usePresenceBroadcast(
+  noteId: string,
+  { enabled = true }: UsePresenceBroadcastOptions = {}
+): void {
   const { broadcastPresence, broadcastLeave } = useYjs();
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     broadcastPresence(noteId);
 
     const interval = setInterval(
@@ -22,5 +33,5 @@ export function usePresenceBroadcast(noteId: string): void {
       clearInterval(interval);
       broadcastLeave(noteId);
     };
-  }, [noteId, broadcastPresence, broadcastLeave]);
+  }, [noteId, broadcastPresence, broadcastLeave, enabled]);
 }

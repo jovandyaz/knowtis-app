@@ -14,8 +14,13 @@ interface UseCollaborativeEditorReturn {
   isReady: boolean;
 }
 
+interface UseCollaborativeEditorOptions {
+  skipProviderDelay?: boolean;
+}
+
 export function useCollaborativeEditor(
-  noteId: string
+  noteId: string,
+  options?: UseCollaborativeEditorOptions
 ): UseCollaborativeEditorReturn {
   const {
     getYDoc,
@@ -24,7 +29,9 @@ export function useCollaborativeEditor(
     currentUser,
     clearAwarenessForNote,
   } = useYjs();
-  const [isReady, setIsReady] = useState<boolean>(false);
+  // Captured once at mount — subsequent changes are ignored (component remounts via key={noteId}).
+  const [skipProviderDelay] = useState(() => !!options?.skipProviderDelay);
+  const [isReady, setIsReady] = useState<boolean>(skipProviderDelay);
 
   const yDoc = useMemo(() => getYDoc(noteId), [getYDoc, noteId]);
   const awareness = useMemo(() => getAwareness(noteId), [getAwareness, noteId]);
@@ -35,6 +42,12 @@ export function useCollaborativeEditor(
       return;
     }
 
+    if (skipProviderDelay) {
+      return () => {
+        clearAwarenessForNote(noteId);
+      };
+    }
+
     const timer = setTimeout(() => {
       setIsReady(true);
     }, COLLAB_CONFIG.PROVIDER_INIT_DELAY_MS);
@@ -43,7 +56,7 @@ export function useCollaborativeEditor(
       clearTimeout(timer);
       clearAwarenessForNote(noteId);
     };
-  }, [yXmlFragment, yDoc, noteId, clearAwarenessForNote]);
+  }, [yXmlFragment, yDoc, noteId, clearAwarenessForNote, skipProviderDelay]);
 
   return { yDoc, yXmlFragment, awareness, currentUser, isReady };
 }

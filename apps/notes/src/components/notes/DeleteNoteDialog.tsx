@@ -75,6 +75,7 @@ export function DeleteNoteDialog({
             variant="destructive"
             onClick={handleDelete}
             disabled={deleteNote.isPending}
+            autoFocus
           >
             {deleteNote.isPending ? (
               <>
