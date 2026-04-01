@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { useReviewCard } from '@knowtis/data-access-artifacts';
-import { TooltipProvider } from '@knowtis/design-system';
 import {
   SM2_QUALITY,
   type FlashcardArtifact,
@@ -91,40 +90,38 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
     session.counts.correct + session.counts.wrong + session.counts.skipped;
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="flex flex-col gap-6 min-w-0 overflow-x-hidden">
-        <FlashcardHeader
-          current={session.currentIndex}
-          total={session.totalCards}
-          reviewedCount={reviewedCount}
-          isAdvancedMode={session.isAdvancedMode}
-          onToggleAdvanced={session.toggleAdvanced}
-          onRestart={() => session.restart('all')}
-        />
+    <div className="flex flex-col gap-6 min-w-0 overflow-x-hidden">
+      <FlashcardHeader
+        current={session.currentIndex}
+        total={session.totalCards}
+        reviewedCount={reviewedCount}
+        isAdvancedMode={session.isAdvancedMode}
+        onToggleAdvanced={session.toggleAdvanced}
+        onRestart={() => session.restart('all')}
+      />
 
-        <FlashcardCard
-          front={session.currentCard.front}
-          back={session.currentCard.back}
-          difficulty={session.currentCard.difficulty}
-          flipped={session.flipped}
-          cardIndex={session.currentIndex}
-          onFlip={session.flip}
-        />
+      <FlashcardCard
+        front={session.currentCard.front}
+        back={session.currentCard.back}
+        difficulty={session.currentCard.difficulty}
+        flipped={session.flipped}
+        cardIndex={session.currentIndex}
+        onFlip={session.flip}
+      />
 
-        <FlashcardControls
-          isAdvancedMode={session.isAdvancedMode}
-          isFlipped={session.flipped}
-          onWrong={handleWrong}
-          onCorrect={handleCorrect}
-          onNavigatePrev={handleNavigatePrev}
-          onNavigateNext={handleNavigateNext}
-          onRateAdvanced={handleRateAdvanced}
-          wrongCount={session.counts.wrong}
-          correctCount={session.counts.correct}
-          disabled={reviewCard.isPending}
-          canGoPrev={session.currentIndex > 0}
-        />
-      </div>
-    </TooltipProvider>
+      <FlashcardControls
+        isAdvancedMode={session.isAdvancedMode}
+        isFlipped={session.flipped}
+        onWrong={handleWrong}
+        onCorrect={handleCorrect}
+        onNavigatePrev={handleNavigatePrev}
+        onNavigateNext={handleNavigateNext}
+        onRateAdvanced={handleRateAdvanced}
+        wrongCount={session.counts.wrong}
+        correctCount={session.counts.correct}
+        disabled={reviewCard.isPending}
+        canGoPrev={session.currentIndex > 0}
+      />
+    </div>
   );
 }

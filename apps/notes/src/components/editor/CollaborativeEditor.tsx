@@ -221,6 +221,8 @@ export function CollaborativeEditor({
           t('editor.placeholderWrite'),
           t('editor.placeholderSlash'),
           t('editor.placeholderVoice'),
+          t('editor.placeholderLearn'),
+          t('editor.placeholderStudyTools'),
         ]
       : [t('editor.editorPlaceholder')];
 

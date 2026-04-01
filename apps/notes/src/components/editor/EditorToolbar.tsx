@@ -14,7 +14,6 @@ import {
   cn,
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from '@knowtis/design-system';
 
@@ -80,57 +79,53 @@ export const EditorToolbar = memo(function EditorToolbar({
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
+    <motion.div
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={cn(
+        'z-10 mx-auto w-fit',
+        'sticky top-0 mb-4',
+        'max-md:fixed max-md:bottom-3 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
+      )}
+    >
+      <div
         className={cn(
-          'z-10 mx-auto w-fit',
-          'sticky top-0 mb-4',
-          'max-md:fixed max-md:bottom-3 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:w-full max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
+          'flex items-center gap-1 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30',
+          'max-md:mx-auto max-md:w-fit max-md:max-w-[calc(100vw-2rem)] max-md:overflow-x-auto max-md:rounded-2xl max-md:scrollbar-none'
         )}
       >
-        <div
-          className={cn(
-            'flex items-center gap-1 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30',
-            'max-md:mx-auto max-md:w-fit max-md:max-w-[calc(100vw-2rem)] max-md:overflow-x-auto max-md:rounded-2xl max-md:scrollbar-none'
-          )}
-        >
-          {TOOLBAR_TOOLS.map((item, index) => {
-            if ('type' in item && item.type === 'separator') {
-              return <ToolbarSeparator key={`sep-${index}`} />;
-            }
-            if ('type' in item && item.type === 'heading-dropdown') {
-              return <HeadingDropdown key="heading" editor={editor} />;
-            }
-            if ('type' in item && item.type === 'link-popover') {
-              return (
-                <LinkPopover
-                  key="link"
-                  editor={editor}
-                  shortcut={item.shortcut}
-                />
-              );
-            }
-            const tool = item as ToolbarToolConfig;
+        {TOOLBAR_TOOLS.map((item, index) => {
+          if ('type' in item && item.type === 'separator') {
+            return <ToolbarSeparator key={`sep-${index}`} />;
+          }
+          if ('type' in item && item.type === 'heading-dropdown') {
+            return <HeadingDropdown key="heading" editor={editor} />;
+          }
+          if ('type' in item && item.type === 'link-popover') {
             return (
-              <ToolbarButton key={tool.label} editor={editor} tool={tool} />
+              <LinkPopover
+                key="link"
+                editor={editor}
+                shortcut={item.shortcut}
+              />
             );
-          })}
-          {onVoiceNote && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary)"
-              onClick={onVoiceNote}
-              aria-label={tNotes('ai.slash.voiceNote')}
-            >
-              <Mic className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </motion.div>
-    </TooltipProvider>
+          }
+          const tool = item as ToolbarToolConfig;
+          return <ToolbarButton key={tool.label} editor={editor} tool={tool} />;
+        })}
+        {onVoiceNote && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 rounded-full p-0 text-(--primary) hover:bg-(--primary)/10 hover:text-(--primary)"
+            onClick={onVoiceNote}
+            aria-label={tNotes('ai.slash.voiceNote')}
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
+    </motion.div>
   );
 });
