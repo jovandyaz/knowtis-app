@@ -243,6 +243,26 @@
           "hard": "Hard",
           "good": "Good",
           "easy": "Easy"
+        },
+        "wrong": "Incorrect",
+        "correct": "Correct",
+        "skip": "Skip",
+        "advancedMode": "Advanced mode",
+        "summary": {
+          "excellentMastery": "Excellent mastery!",
+          "greatJob": "Great job, keep it up!",
+          "goodProgress": "Good progress!",
+          "keepPracticing": "Keep practicing!",
+          "nextTimeBetter": "You'll get it next time!",
+          "gotIt": "Got it",
+          "missedIt": "Missed it",
+          "skipped": "Skipped",
+          "missedCards": "Cards you missed",
+          "practiceAgain": "Practice again",
+          "allCards": "All cards",
+          "onlyMissed": "Only cards you missed",
+          "onlySkipped": "Only cards you skipped",
+          "timeSpent": "{{minutes}}m {{seconds}}s"
         }
       },
       "quiz": {
