@@ -102,3 +102,37 @@ export interface StudyStats {
   currentStreak: number;
   totalCardsStudied: number;
 }
+
+export const CARD_SESSION_STATUSES = [
+  'pending',
+  'correct',
+  'wrong',
+  'skipped',
+] as const;
+export type CardSessionStatus = (typeof CARD_SESSION_STATUSES)[number];
+
+export const CARD_STATUS = {
+  PENDING: 'pending',
+  CORRECT: 'correct',
+  WRONG: 'wrong',
+  SKIPPED: 'skipped',
+} as const satisfies Record<string, CardSessionStatus>;
+
+export const RESTART_FILTERS = ['all', 'missed', 'skipped'] as const;
+export type RestartFilter = (typeof RESTART_FILTERS)[number];
+
+export interface CardResult {
+  cardIndex: number;
+  status: CardSessionStatus;
+  front: string;
+  back: string;
+}
+
+export interface StudySessionResult {
+  correct: number;
+  wrong: number;
+  skipped: number;
+  total: number;
+  durationMs: number;
+  cardResults: CardResult[];
+}
