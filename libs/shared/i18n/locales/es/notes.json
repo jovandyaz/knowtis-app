@@ -170,8 +170,8 @@
     },
     "artifacts": {
       "studyTools": "Herramientas de Estudio",
-      "generated": "¡Artefacto generado exitosamente!",
-      "generateError": "Error al generar artefacto",
+      "generated": "¡Material de estudio generado exitosamente!",
+      "generateError": "Error al generar material de estudio",
       "learningAbout": "Aprendiendo sobre: {{topic}}",
       "learnSuccess": "Contenido sobre {{topic}} agregado a tu nota",
       "learnError": "Error al generar contenido de aprendizaje",
@@ -198,20 +198,20 @@
         "resizePanel": "Redimensionar panel"
       },
       "list": {
-        "loading": "Cargando artefactos...",
-        "emptyTitle": "Sin artefactos aún",
+        "loading": "Cargando materiales de estudio...",
+        "emptyTitle": "Sin materiales de estudio aún",
         "emptyDescription": "Genera materiales de estudio a partir de tus notas con IA.",
-        "deleted": "Artefacto eliminado",
-        "deleteError": "Error al eliminar el artefacto",
+        "deleted": "Material de estudio eliminado",
+        "deleteError": "Error al eliminar el material de estudio",
         "deleteAriaLabel": "Eliminar {{title}}"
       },
       "generate": {
         "button": "Generar",
         "title": "Generar material de estudio",
-        "description": "Elige el tipo de artefacto a generar a partir del contenido de tu nota.",
-        "generating": "Generando artefacto...",
-        "success": "Artefacto generado con éxito",
-        "error": "Error al generar el artefacto",
+        "description": "Elige el tipo de material de estudio a generar a partir del contenido de tu nota.",
+        "generating": "Generando material de estudio...",
+        "success": "Material de estudio generado con éxito",
+        "error": "Error al generar el material de estudio",
         "flashcards": "Flashcards",
         "flashcardsDesc": "Crea flashcards para estudio con repetición espaciada",
         "quiz": "Quiz",
@@ -287,7 +287,7 @@
     },
     "aiBlock": {
       "title": "Aprender sobre un tema",
-      "placeholder": "ej. NestJS Dependency Injection",
+      "placeholder": "¿Qué quieres aprender?",
       "generate": "Generar",
       "generating": "Generando contenido...",
       "cancel": "Cancelar",
@@ -319,14 +319,10 @@
       "numberedListDesc": "Crear una lista numerada",
       "blockquote": "Cita",
       "blockquoteDesc": "Insertar una cita",
-      "flashcards": "Generar flashcards",
-      "flashcardsDesc": "Crear tarjetas de estudio desde la nota",
-      "quiz": "Generar quiz",
-      "quizDesc": "Crear un cuestionario del contenido de la nota",
-      "mindMap": "Generar mapa mental",
-      "mindMapDesc": "Crear un mapa mental visual desde la nota",
       "learn": "Aprender sobre un tema",
       "learnDesc": "Generar contenido educativo sobre un tema",
+      "studyTools": "Herramientas de estudio",
+      "studyToolsDesc": "Genera flashcards, quizzes y más",
       "fixSpelling": "Corregir ortografía",
       "fixSpellingDesc": "Corregir errores de ortografía y gramática",
       "shorter": "Hacer más corto",
@@ -339,6 +335,9 @@
       "translateDesc": "Traducir el contenido a otro idioma",
       "changeTone": "Cambiar tono",
       "changeToneDesc": "Ajustar el tono de la redacción"
+    },
+    "contentGuard": {
+      "emptyNote": "Escribe contenido en tu nota antes de usar esta función."
     }
   },
   "profile": {

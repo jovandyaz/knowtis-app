@@ -33,7 +33,6 @@ interface SlashCommandMenuRef {
 
 const GROUP_LABELS: Record<string, string> = {
   ai: 'ai.groups.ai',
-  artifacts: 'ai.groups.artifacts',
   formatting: 'ai.groups.formatting',
 };
 
@@ -68,7 +67,8 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
           return true;
         }
 
-        if (event.key === 'Enter') {
+        if (event.key === 'Enter' || event.key === 'Tab') {
+          event.preventDefault();
           selectItem(selectedIndex);
           return true;
         }
@@ -103,7 +103,7 @@ const SlashCommandMenu = forwardRef<SlashCommandMenuRef, SlashCommandMenuProps>(
     return (
       <CommandMenuContent width="lg">
         {groups.map((group, groupIdx) => {
-          const isAI = group.group === 'ai' || group.group === 'artifacts';
+          const isAI = group.group === 'ai';
 
           return (
             <CommandMenuGroup

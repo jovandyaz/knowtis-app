@@ -1,5 +1,5 @@
-import { dispatchKnowtisEvent } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
+import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
 import i18next from 'i18next';
@@ -14,34 +14,34 @@ import {
   Mic,
   PenLine,
   Quote,
+  Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
-import {
-  AI_ACTION,
-  type AIAction,
-  type ArtifactType,
-} from '@knowtis/shared-types';
+import { AI_ACTION, type AIAction } from '@knowtis/shared-types';
 
-import { ARTIFACT_DISPLAY } from '../../artifacts/artifact-display.config';
+type SlashCommandGroup = 'ai' | 'formatting';
 
-type SlashCommandGroup = 'ai' | 'formatting' | 'artifacts';
-
-function createArtifactSlashAction(
-  type: ArtifactType
-): (editor: Editor, range: Range) => void {
-  return (editor, range) => {
-    editor.chain().focus().deleteRange(range).run();
-    dispatchKnowtisEvent('knowtis:generate-artifact', { type });
-  };
+interface CreateAISlashActionOptions {
+  requiresContent?: boolean;
 }
 
 function createAISlashAction(
-  action: AIAction
+  action: AIAction,
+  options?: CreateAISlashActionOptions
 ): (editor: Editor, range: Range) => void {
   return (editor, range) => {
     editor.chain().focus().deleteRange(range).run();
+
+    if (options?.requiresContent) {
+      const textContent = editor.state.doc.textContent.trim();
+      if (!textContent) {
+        toast.error(i18next.t('ai.contentGuard.emptyNote', { ns: 'notes' }));
+        return;
+      }
+    }
+
     const pos = editor.state.selection.to;
     const store = useAIStore.getState();
     store.setSelectionRange({ from: pos, to: pos });
@@ -63,6 +63,43 @@ export interface SlashCommandItem {
 }
 
 export const SLASH_COMMANDS: SlashCommandItem[] = [
+  {
+    id: 'ai-learn',
+    icon: GraduationCap,
+    labelKey: 'ai.slash.learn',
+    descriptionKey: 'ai.slash.learnDesc',
+    group: 'ai',
+    keywords: ['learn', 'aprender', 'topic', 'tema', 'research', 'investigar'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent({ type: 'aiBlock', attrs: { status: 'input' } })
+        .run();
+    },
+  },
+  {
+    id: 'ai-study-tools',
+    icon: Sparkles,
+    labelKey: 'ai.slash.studyTools',
+    descriptionKey: 'ai.slash.studyToolsDesc',
+    group: 'ai',
+    keywords: [
+      'study',
+      'tools',
+      'generate',
+      'flashcards',
+      'quiz',
+      'herramientas',
+      'estudio',
+      'generar',
+    ],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).run();
+      useArtifactSidebarStore.getState().openGenerator();
+    },
+  },
   {
     id: 'ai-voice-note',
     icon: Mic,
@@ -98,7 +135,9 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     descriptionKey: 'ai.slash.summarizeDesc',
     group: 'ai',
     keywords: ['summarize', 'summary', 'tldr', 'resumir'],
-    action: createAISlashAction(AI_ACTION.SUMMARIZE),
+    action: createAISlashAction(AI_ACTION.SUMMARIZE, {
+      requiresContent: true,
+    }),
   },
   {
     id: 'ai-outline',
@@ -107,7 +146,7 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     descriptionKey: 'ai.slash.outlineDesc',
     group: 'ai',
     keywords: ['outline', 'structure', 'esquema'],
-    action: createAISlashAction(AI_ACTION.OUTLINE),
+    action: createAISlashAction(AI_ACTION.OUTLINE, { requiresContent: true }),
   },
   {
     id: 'ai-continue',
@@ -117,57 +156,6 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     group: 'ai',
     keywords: ['continue', 'write', 'extend', 'continuar'],
     action: createAISlashAction(AI_ACTION.GHOST_TEXT),
-  },
-
-  {
-    id: 'artifact-flashcards',
-    icon: ARTIFACT_DISPLAY.flashcard_deck.icon,
-    labelKey: 'ai.slash.flashcards',
-    descriptionKey: 'ai.slash.flashcardsDesc',
-    group: 'artifacts',
-    keywords: ['flashcards', 'cards', 'study', 'tarjetas', 'estudiar', 'deck'],
-    action: createArtifactSlashAction('flashcard_deck'),
-  },
-  {
-    id: 'artifact-quiz',
-    icon: ARTIFACT_DISPLAY.quiz.icon,
-    labelKey: 'ai.slash.quiz',
-    descriptionKey: 'ai.slash.quizDesc',
-    group: 'artifacts',
-    keywords: [
-      'quiz',
-      'test',
-      'questions',
-      'examen',
-      'preguntas',
-      'cuestionario',
-    ],
-    action: createArtifactSlashAction('quiz'),
-  },
-  {
-    id: 'artifact-mindmap',
-    icon: ARTIFACT_DISPLAY.mind_map.icon,
-    labelKey: 'ai.slash.mindMap',
-    descriptionKey: 'ai.slash.mindMapDesc',
-    group: 'artifacts',
-    keywords: ['mind map', 'mapa mental', 'diagram', 'diagrama', 'tree'],
-    action: createArtifactSlashAction('mind_map'),
-  },
-  {
-    id: 'artifact-learn',
-    icon: GraduationCap,
-    labelKey: 'ai.slash.learn',
-    descriptionKey: 'ai.slash.learnDesc',
-    group: 'artifacts',
-    keywords: ['learn', 'aprender', 'topic', 'tema', 'research', 'investigar'],
-    action: (editor, range) => {
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({ type: 'aiBlock', attrs: { status: 'input' } })
-        .run();
-    },
   },
 
   {

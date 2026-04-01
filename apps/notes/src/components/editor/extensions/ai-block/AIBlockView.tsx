@@ -9,7 +9,14 @@ import MarkdownIt from 'markdown-it';
 import { Streamdown } from 'streamdown';
 
 import { aiClient, type AIStreamHandle } from '@knowtis/api-client';
-import { Button, Input } from '@knowtis/design-system';
+import {
+  Button,
+  Input,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@knowtis/design-system';
 
 import { AI_BLOCK_STATUS, type AIBlockAttributes } from './AIBlockNode';
 
@@ -37,8 +44,11 @@ export function AIBlockView({
   const streamHandleRef = useRef<AIStreamHandle | null>(null);
 
   useEffect(() => {
-    if (attrs.status === AI_BLOCK_STATUS.INPUT && inputRef.current) {
-      inputRef.current.focus();
+    if (attrs.status === AI_BLOCK_STATUS.INPUT) {
+      // Use requestAnimationFrame to ensure the input is mounted before focusing
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
     }
   }, [attrs.status]);
 
@@ -150,11 +160,21 @@ export function AIBlockView({
       >
         {attrs.status === AI_BLOCK_STATUS.INPUT && (
           <div className="p-4 space-y-3">
-            <div className="flex items-center gap-2 text-primary">
-              <GraduationCap className="h-4 w-4" />
-              <span className="text-sm font-medium">
-                {t('ai.aiBlock.title')}
-              </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-primary">
+                <GraduationCap className="h-4 w-4" />
+                <span className="text-sm font-medium">
+                  {t('ai.aiBlock.title')}
+                </span>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                onClick={deleteNode}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
             </div>
             <form
               onSubmit={(e) => {
@@ -215,12 +235,24 @@ export function AIBlockView({
                   <Check className="mr-1 h-3 w-3" />
                   {t('ai.aiBlock.insert')}
                 </Button>
-                <Button variant="ghost" size="icon" onClick={handleRetry}>
-                  <RotateCcw className="h-3 w-3" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={deleteNode}>
-                  <X className="h-3 w-3" />
-                </Button>
+                <TooltipProvider delayDuration={300}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={handleRetry}>
+                        <RotateCcw className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('ai.aiBlock.retry')}</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" onClick={deleteNode}>
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('ai.aiBlock.discard')}</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
             <div className="px-4 pb-4">

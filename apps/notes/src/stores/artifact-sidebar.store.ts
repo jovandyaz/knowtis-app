@@ -4,10 +4,13 @@ interface ArtifactSidebarStore {
   open: boolean;
   manuallyToggled: boolean;
   activeNoteId: string | null;
+  generatorOpen: boolean;
   toggle: () => void;
   setOpen: (open: boolean) => void;
   setActiveNoteId: (noteId: string | null) => void;
   autoShow: () => void;
+  openGenerator: () => void;
+  closeGenerator: () => void;
 }
 
 export const useArtifactSidebarStore = create<ArtifactSidebarStore>(
@@ -15,6 +18,7 @@ export const useArtifactSidebarStore = create<ArtifactSidebarStore>(
     open: false,
     manuallyToggled: false,
     activeNoteId: null,
+    generatorOpen: false,
     toggle: () =>
       set((state) => ({ open: !state.open, manuallyToggled: true })),
     setOpen: (open) => set({ open, manuallyToggled: true }),
@@ -29,5 +33,7 @@ export const useArtifactSidebarStore = create<ArtifactSidebarStore>(
         set({ open: true });
       }
     },
+    openGenerator: () => set({ generatorOpen: true }),
+    closeGenerator: () => set({ generatorOpen: false }),
   })
 );

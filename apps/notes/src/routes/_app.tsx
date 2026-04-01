@@ -6,6 +6,7 @@ import { createFileRoute, Outlet } from '@tanstack/react-router';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import {
+  ArtifactGeneratorDialog,
   ArtifactMobileFAB,
   ArtifactSidebar,
   ArtifactSidebarToggle,
@@ -31,6 +32,14 @@ function ArtifactSidebarLayout() {
     return null;
   }
   return <ArtifactSidebar noteId={noteId} />;
+}
+
+function ArtifactGeneratorDialogLayout() {
+  const noteId = useArtifactSidebarStore((s) => s.activeNoteId);
+  if (!noteId) {
+    return null;
+  }
+  return <ArtifactGeneratorDialog noteId={noteId} />;
 }
 
 export const Route = createFileRoute('/_app')({
@@ -121,6 +130,7 @@ function AppLayout() {
         </div>
         {aiEnabled && <ArtifactSidebarLayout />}
       </main>
+      {aiEnabled && <ArtifactGeneratorDialogLayout />}
     </div>
   );
 }

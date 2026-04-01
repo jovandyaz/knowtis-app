@@ -1,6 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import type { TFunction } from 'i18next';
 import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -18,14 +19,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@knowtis/design-system';
-import type { Artifact, ArtifactType } from '@knowtis/shared-types';
+import type { ArtifactType } from '@knowtis/shared-types';
 
 import { ARTIFACT_DISPLAY } from './artifact-display.config';
-
-interface ArtifactGeneratorProps {
-  noteId: string;
-  onGenerated?: (artifact: Artifact) => void;
-}
 
 interface ArtifactOptionDisplay {
   type: ArtifactType;
@@ -70,12 +66,36 @@ function getArtifactOptions(t: TFunction<'notes'>): ArtifactOptionDisplay[] {
   }));
 }
 
-export function ArtifactGenerator({
-  noteId,
-  onGenerated,
-}: ArtifactGeneratorProps) {
+/**
+ * Trigger button for the artifact generator dialog.
+ */
+export function ArtifactGeneratorButton() {
   const { t } = useTranslation('notes');
-  const [open, setOpen] = useState(false);
+  const openGenerator = useArtifactSidebarStore((s) => s.openGenerator);
+
+  return (
+    <Button variant="outline" size="sm" onClick={openGenerator}>
+      <Sparkles className="mr-1.5 h-4 w-4" />
+      {t('ai.artifacts.generate.button')}
+    </Button>
+  );
+}
+
+interface ArtifactGeneratorDialogProps {
+  noteId: string;
+}
+
+/**
+ * Global dialog for generating study artifacts.
+ */
+export function ArtifactGeneratorDialog({
+  noteId,
+}: ArtifactGeneratorDialogProps) {
+  const { t } = useTranslation('notes');
+  const open = useArtifactSidebarStore((s) => s.generatorOpen);
+  const openGenerator = useArtifactSidebarStore((s) => s.openGenerator);
+  const closeGenerator = useArtifactSidebarStore((s) => s.closeGenerator);
+  const openSidebar = useArtifactSidebarStore((s) => s.setOpen);
   const generateArtifact = useGenerateArtifact();
 
   const { data: existingArtifacts } = useArtifacts(noteId);
@@ -94,10 +114,10 @@ export function ArtifactGenerator({
       generateArtifact.mutate(
         { noteId, type },
         {
-          onSuccess: (artifact: Artifact) => {
-            setOpen(false);
+          onSuccess: () => {
+            closeGenerator();
+            openSidebar(true);
             toast.success(t('ai.artifacts.generate.success'));
-            onGenerated?.(artifact);
           },
           onError: (error) => {
             const message =
@@ -109,69 +129,73 @@ export function ArtifactGenerator({
         }
       );
     },
-    [noteId, generateArtifact, onGenerated, t]
+    [noteId, generateArtifact, t, closeGenerator, openSidebar]
+  );
+
+  const handleOpenChange = useCallback(
+    (value: boolean) => {
+      if (value) {
+        openGenerator();
+      } else {
+        closeGenerator();
+      }
+    },
+    [openGenerator, closeGenerator]
   );
 
   return (
-    <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Sparkles className="mr-1.5 h-4 w-4" />
-        {t('ai.artifacts.generate.button')}
-      </Button>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>{t('ai.artifacts.generate.title')}</DialogTitle>
+          <DialogDescription>
+            {t('ai.artifacts.generate.description')}
+          </DialogDescription>
+        </DialogHeader>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{t('ai.artifacts.generate.title')}</DialogTitle>
-            <DialogDescription>
-              {t('ai.artifacts.generate.description')}
-            </DialogDescription>
-          </DialogHeader>
-
-          {generateArtifact.isPending ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              <p className="mt-4 text-sm text-muted-foreground">
-                {t('ai.artifacts.generate.generating')}
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {options.map(({ type, icon: Icon, label, description }) => {
-                const count = existingCounts[type] ?? 0;
-                return (
-                  <button
-                    key={type}
-                    type="button"
-                    className="relative flex items-start gap-3 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-muted"
-                    onClick={() => handleGenerate(type)}
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">
-                        {label}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {description}
-                      </p>
-                    </div>
-                    {count > 0 && (
-                      <Badge
-                        variant="secondary"
-                        className="absolute right-2 top-2 text-[10px] px-1.5 py-0"
-                      >
-                        {count}
-                      </Badge>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+        {generateArtifact.isPending ? (
+          <div className="flex flex-col items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="mt-4 text-sm text-muted-foreground">
+              {t('ai.artifacts.generate.generating')}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {options.map(({ type, icon: Icon, label, description }) => {
+              const count = existingCounts[type] ?? 0;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  className="relative flex items-start gap-3 rounded-lg border border-border bg-card p-4 text-left transition-all hover:border-primary/50 hover:bg-muted"
+                  onClick={() => handleGenerate(type)}
+                >
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      {label}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {description}
+                    </p>
+                  </div>
+                  {count > 0 && (
+                    <Badge
+                      variant="secondary"
+                      className="absolute right-2 top-2 text-[10px] px-1.5 py-0"
+                    >
+                      {count}
+                    </Badge>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
