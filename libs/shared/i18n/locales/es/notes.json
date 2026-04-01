@@ -243,6 +243,26 @@
           "hard": "Difícil",
           "good": "Bien",
           "easy": "Fácil"
+        },
+        "wrong": "Incorrecto",
+        "correct": "Correcto",
+        "skip": "Saltar",
+        "advancedMode": "Modo avanzado",
+        "summary": {
+          "excellentMastery": "¡Excelente dominio!",
+          "greatJob": "¡Muy bien, sigue así!",
+          "goodProgress": "¡Buen progreso!",
+          "keepPracticing": "¡Sigue practicando!",
+          "nextTimeBetter": "¡La próxima será mejor!",
+          "gotIt": "Acertadas",
+          "missedIt": "Falladas",
+          "skipped": "Saltadas",
+          "missedCards": "Tarjetas que fallaste",
+          "practiceAgain": "Practicar de nuevo",
+          "allCards": "Todas las tarjetas",
+          "onlyMissed": "Solo las que fallaste",
+          "onlySkipped": "Solo las que saltaste",
+          "timeSpent": "{{minutes}}m {{seconds}}s"
         }
       },
       "quiz": {
