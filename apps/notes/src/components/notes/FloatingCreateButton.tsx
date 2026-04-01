@@ -1,4 +1,5 @@
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { preloadEditorChunk } from '@/lib/preload-editor';
 import { useAIStore } from '@/stores/ai.store';
 import { Plus } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -44,6 +45,7 @@ export function FloatingCreateButton({
             )}
             aria-label="Create new note"
             onClick={onCreateNote}
+            onPointerDown={preloadEditorChunk}
           >
             <Plus className="h-6 w-6" />
           </motion.button>

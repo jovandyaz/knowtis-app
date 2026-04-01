@@ -3,11 +3,22 @@ import { useEffect, useState } from 'react';
 import { useYjs } from '@/providers';
 import type { AwarenessState, CollaborativeUser } from '@/types';
 
-export function useActiveCollaborators(noteId: string): CollaborativeUser[] {
+interface UseActiveCollaboratorsOptions {
+  enabled?: boolean;
+}
+
+export function useActiveCollaborators(
+  noteId: string,
+  { enabled = true }: UseActiveCollaboratorsOptions = {}
+): CollaborativeUser[] {
   const { getAwareness } = useYjs();
   const [collaborators, setCollaborators] = useState<CollaborativeUser[]>([]);
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const awareness = getAwareness(noteId);
     if (!awareness) {
       return;
@@ -42,7 +53,7 @@ export function useActiveCollaborators(noteId: string): CollaborativeUser[] {
     return () => {
       awareness.off('change', updateCollaborators);
     };
-  }, [noteId, getAwareness]);
+  }, [noteId, getAwareness, enabled]);
 
   return collaborators;
 }
