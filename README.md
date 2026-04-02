@@ -1,6 +1,13 @@
 # Knowtis
 
 <p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License" /></a>
+  <a href="https://github.com/jovandyaz/knowtis_app/stargazers"><img src="https://img.shields.io/github/stars/jovandyaz/knowtis_app?style=for-the-badge" alt="GitHub Stars" /></a>
+  <a href="https://github.com/jovandyaz/knowtis_app/issues"><img src="https://img.shields.io/github/issues/jovandyaz/knowtis_app?style=for-the-badge" alt="GitHub Issues" /></a>
+  <a href="https://github.com/jovandyaz/knowtis_app/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/jovandyaz/knowtis_app/ci.yml?style=for-the-badge&label=CI" alt="CI Status" /></a>
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/Nx-22.3-blue?style=for-the-badge&logo=nx" alt="Nx" />
   <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react" alt="React" />
   <img src="https://img.shields.io/badge/NestJS-11-E0234E?style=for-the-badge&logo=nestjs" alt="NestJS" />
@@ -9,7 +16,7 @@
 </p>
 
 <p align="center">
-  <strong>A modern, real-time collaborative notes platform built as a full-stack monorepo.</strong>
+  <strong>AI-powered collaborative notes platform — your notes are your knowledge base</strong>
 </p>
 
 ---
@@ -371,35 +378,20 @@ Recommended VS Code extensions:
 | [API Architecture](./apps/api/ARCHITECTURE.md)    | Backend DDD patterns & module structure   |
 | [Email Templates](./packages/email/README.md)     | React Email templates & i18n              |
 | [Email NestJS](./packages/email-nestjs/README.md) | NestJS email module (Resend/Console)      |
+| [Contributing Guide](./CONTRIBUTING.md)           | How to contribute to the project          |
+| [Security Policy](./SECURITY.md)                  | Vulnerability reporting & disclosure      |
 
 ---
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Commit Convention
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat: add login functionality
-fix: resolve navigation bug
-docs: update README
-refactor: simplify auth flow
-test: add unit tests for notes store
-chore: update dependencies
-```
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
 
 ---
 
 ## License
 
-This project is proprietary software. All rights reserved.
+Licensed under the [MIT License](LICENSE).
 
 ---
 
