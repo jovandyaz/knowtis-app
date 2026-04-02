@@ -37,8 +37,10 @@ import type { RefreshTokenDto } from './dto/auth.dto';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import {
   clearRefreshTokenCookie,
+  deriveCookieDomain,
   REFRESH_TOKEN_COOKIE_NAME,
   setRefreshTokenCookie,
+  type CookieConfig,
 } from './utils/cookie.utils';
 
 @ApiTags('Authentication')
@@ -46,7 +48,7 @@ import {
 @UseGuards(JwtAuthGuard)
 export class AuthSessionController {
   private readonly logger = new Logger(AuthSessionController.name);
-  private readonly isProduction: boolean;
+  private readonly cookieConfig: CookieConfig;
 
   constructor(
     private readonly registerHandler: RegisterUserHandler,
@@ -58,7 +60,13 @@ export class AuthSessionController {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService
   ) {
-    this.isProduction = configService.get('NODE_ENV') === 'production';
+    const isProduction = configService.get('NODE_ENV') === 'production';
+    const frontendUrl = configService.get<string>('FRONTEND_URL') ?? '';
+
+    this.cookieConfig = {
+      secure: isProduction,
+      domain: isProduction ? deriveCookieDomain(frontendUrl) : undefined,
+    };
   }
 
   @ApiOperation({ summary: 'Create an anonymous session' })
@@ -172,7 +180,7 @@ export class AuthSessionController {
     const result = await this.refreshHandler.execute(refreshToken);
     const data = unwrapOrThrow(result);
 
-    setRefreshTokenCookie(res, data.refreshToken, this.isProduction);
+    setRefreshTokenCookie(res, data.refreshToken, this.cookieConfig);
 
     return { accessToken: data.accessToken };
   }
@@ -194,7 +202,7 @@ export class AuthSessionController {
       unwrapOrThrow(result);
     }
 
-    clearRefreshTokenCookie(res);
+    clearRefreshTokenCookie(res, this.cookieConfig);
   }
 
   private extractRefreshToken(
@@ -234,7 +242,7 @@ export class AuthSessionController {
       tokens: { accessToken: string; refreshToken: string };
     }
   ) {
-    setRefreshTokenCookie(res, data.tokens.refreshToken, this.isProduction);
+    setRefreshTokenCookie(res, data.tokens.refreshToken, this.cookieConfig);
     return {
       user: data.user,
       tokens: { accessToken: data.tokens.accessToken },
