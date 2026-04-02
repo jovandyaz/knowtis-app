@@ -6,7 +6,6 @@ import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
 import { ChevronUp, LogIn, LogOut, Settings, UserPlus } from 'lucide-react';
-import { toast } from 'sonner';
 
 import {
   DropdownMenu,
@@ -34,7 +33,6 @@ export function SidebarUserMenu({
   const handleLogout = () => {
     logout(undefined, {
       onSuccess: () => {
-        toast.success(t('nav.signedOutSuccess'));
         navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
       },
     });
