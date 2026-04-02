@@ -9,7 +9,7 @@ export function SidebarBrand() {
     <div className="flex h-16 items-center px-6">
       <Link
         to={ROUTES.DASHBOARD}
-        className="flex items-center text-[oklch(0.58_0.24_290)] hover:opacity-80 transition-opacity cursor-pointer"
+        className="flex items-center text-primary hover:opacity-80 transition-opacity cursor-pointer"
       >
         <KnowtisLogo className="h-7 w-auto" />
       </Link>
