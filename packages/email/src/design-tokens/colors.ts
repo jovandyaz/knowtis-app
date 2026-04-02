@@ -3,21 +3,27 @@
 export const White = '#ffffff';
 export const Black = '#000000';
 
-// Neutral scale
-export const Neutral50 = '#fcfcfc';
-export const Neutral100 = '#f7f6f3';
-export const Neutral200 = '#f1f0ed';
-export const Neutral300 = '#e9e9e7';
-export const Neutral400 = '#9b9b9b';
-export const Neutral500 = '#787774';
-export const Neutral600 = '#37352f';
+// Neutral scale (purple-tinted)
+export const Neutral50 = '#fafafc';
+export const Neutral100 = '#f5f4f8';
+export const Neutral200 = '#eeedf3';
+export const Neutral300 = '#e6e5ec';
+export const Neutral400 = '#9a99a6';
+export const Neutral500 = '#7a7888';
+export const Neutral600 = '#35333f';
 
 // Purple — brand primary
-export const Purple400 = '#8B5CF6';
-export const Purple500 = '#7C3AED';
+export const Purple400 = '#9B6DFF';
+export const Purple500 = '#7B3CCF';
 
 // Destructive
-export const Red500 = '#d74745';
+export const Red500 = '#c43535';
+
+// Success
+export const Green500 = '#2da87a';
+
+// Warning
+export const Yellow500 = '#c9a020';
 
 // --- Semantic aliases ---
 

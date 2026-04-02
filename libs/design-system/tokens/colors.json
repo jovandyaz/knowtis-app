@@ -4,27 +4,38 @@
       "white": { "value": "oklch(1 0 0)", "type": "color" },
       "black": { "value": "oklch(0 0 0)", "type": "color" },
       "neutral": {
-        "50": { "value": "oklch(0.985 0.002 90)", "type": "color" },
-        "100": { "value": "oklch(0.973 0.004 91.4)", "type": "color" },
-        "200": { "value": "oklch(0.955 0.004 91.4)", "type": "color" },
-        "300": { "value": "oklch(0.933 0.003 106.5)", "type": "color" },
-        "400": { "value": "oklch(0.689 0 0)", "type": "color" },
-        "500": { "value": "oklch(0.569 0.005 91.5)", "type": "color" },
-        "600": { "value": "oklch(0.329 0.011 91.7)", "type": "color" },
-        "700": { "value": "oklch(0.305 0 0)", "type": "color" },
-        "800": { "value": "oklch(0.277 0 0)", "type": "color" },
-        "850": { "value": "oklch(0.269 0 0)", "type": "color" },
-        "900": { "value": "oklch(0.264 0 0)", "type": "color" },
-        "950": { "value": "oklch(0.213 0 0)", "type": "color" }
+        "50": { "value": "oklch(0.985 0.003 290)", "type": "color" },
+        "100": { "value": "oklch(0.970 0.004 290)", "type": "color" },
+        "200": { "value": "oklch(0.950 0.005 290)", "type": "color" },
+        "300": { "value": "oklch(0.930 0.005 290)", "type": "color" },
+        "400": { "value": "oklch(0.680 0.006 290)", "type": "color" },
+        "500": { "value": "oklch(0.560 0.008 290)", "type": "color" },
+        "600": { "value": "oklch(0.330 0.012 290)", "type": "color" },
+        "700": { "value": "oklch(0.305 0.012 290)", "type": "color" },
+        "800": { "value": "oklch(0.275 0.014 290)", "type": "color" },
+        "850": { "value": "oklch(0.260 0.016 290)", "type": "color" },
+        "900": { "value": "oklch(0.250 0.018 290)", "type": "color" },
+        "950": { "value": "oklch(0.195 0.020 290)", "type": "color" }
       },
       "purple": {
-        "400": { "value": "oklch(0.65 0.18 290)", "type": "color" },
-        "500": { "value": "oklch(0.45 0.18 290)", "type": "color" },
-        "50": { "value": "oklch(0.99 0.01 290)", "type": "color" }
+        "50": { "value": "oklch(0.97 0.02 295)", "type": "color" },
+        "400": { "value": "oklch(0.68 0.20 295)", "type": "color" },
+        "500": { "value": "oklch(0.47 0.22 295)", "type": "color" }
       },
       "red": {
-        "500": { "value": "oklch(0.6 0.18 25)", "type": "color" },
-        "50": { "value": "oklch(0.99 0 0)", "type": "color" }
+        "50": { "value": "oklch(0.97 0.02 25)", "type": "color" },
+        "400": { "value": "oklch(0.65 0.18 25)", "type": "color" },
+        "500": { "value": "oklch(0.55 0.20 25)", "type": "color" }
+      },
+      "green": {
+        "50": { "value": "oklch(0.97 0.02 160)", "type": "color" },
+        "400": { "value": "oklch(0.72 0.14 160)", "type": "color" },
+        "500": { "value": "oklch(0.62 0.15 160)", "type": "color" }
+      },
+      "yellow": {
+        "50": { "value": "oklch(0.97 0.02 85)", "type": "color" },
+        "400": { "value": "oklch(0.82 0.12 85)", "type": "color" },
+        "500": { "value": "oklch(0.75 0.15 85)", "type": "color" }
       }
     },
     "semantic": {
@@ -113,7 +124,7 @@
         "accent": { "value": "{color.primitive.neutral.850}", "type": "color" },
         "accent-foreground": { "value": "oklch(0.87 0 0)", "type": "color" },
         "destructive": {
-          "value": "{color.primitive.red.500}",
+          "value": "{color.primitive.red.400}",
           "type": "color"
         },
         "destructive-foreground": {
