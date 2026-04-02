@@ -2,9 +2,10 @@
  * Generates brand PNG assets from SVG sources.
  * Run: node tools/generate-brand-assets.mjs
  */
-import { Resvg } from '@resvg/resvg-js';
 import { writeFileSync } from 'fs';
 import { join } from 'path';
+
+import { Resvg } from '@resvg/resvg-js';
 
 const NOTES_PUBLIC = join(import.meta.dirname, '../apps/notes/public');
 
@@ -21,8 +22,8 @@ const KW_PATHS = `
   <path d="m140 195.4c-3.24 3.17-8.58 3.41-11.43 3.21-17.78-1.2-30.59-11.43-38.17-24.45-7.39-11.38-12.21-22.08-17.45-35.43 17.9-3.88 34.3-20.68 34.3-37.56 0-10.44-6.3-14.59-16.1-14.59-15.27 0-27.7 10.31-41.1 22.15 8.78-23.5 20.2-47.69 35.71-64.49 3.39-3.58 2.94-7.12 1.39-9.43-3.39-4.79-9.2-6.31-15.5-6.31-8.9 0-15.75 5.23-23.15 17.82-14.24 24.59-30.85 69.1-38.05 101.3-2.2 9.69-2.9 18.72-2.9 25.42 0 9.28 6.9 14.5 18.1 14.5 5.1 0 9.3-1.63 11.1-3.42 0.9-0.88 0-4.91 0-10.25 0-9.72 2.1-18.42 4.2-30.09 6.5 4.95 9.8 19.16 13.8 32.49 8.2 23.5 24.2 51.19 53.3 51.19 14.75 0 26.8-10.7 31.2-18.39 2.8-5.24 2.45-10.18 1.8-13.03-0.35-1.12-0.6-1.17-1.05-0.68zm-91.35-66.26c8.4-12.87 23.5-24.01 33.2-24.01 3.6 0 4 1.98 4 3.69 0 8.79-13.2 20.12-33.8 20.72-1.6 0-2.6-0.05-3.4-0.4z"/>
 `;
 
-// Rich Purple as hex (oklch(0.58 0.24 290) ≈ #7C3AED)
-const RICH_PURPLE = '#7C3AED';
+// Brand purple as hex (oklch(0.47 0.22 295) ≈ #7B3CCF)
+const BRAND_PURPLE = '#7B3CCF';
 
 function svgToPng(svgString, width) {
   const resvg = new Resvg(svgString, {
@@ -33,7 +34,7 @@ function svgToPng(svgString, width) {
 
 // 1. OG Image (1200x630) — Purple background, white wordmark centered
 const ogSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
-  <rect width="1200" height="630" fill="${RICH_PURPLE}"/>
+  <rect width="1200" height="630" fill="${BRAND_PURPLE}"/>
   <g transform="translate(225, -62) scale(3)" fill="white">
     ${WORDMARK_PATHS}
   </g>
@@ -43,12 +44,15 @@ console.log('Created: og-image.png (1200x630)');
 
 // 2. Apple Touch Icon (180x180) — Purple background, white KW icon
 const appleSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180" viewBox="0 0 180 180">
-  <rect width="180" height="180" rx="36" fill="${RICH_PURPLE}"/>
+  <rect width="180" height="180" rx="36" fill="${BRAND_PURPLE}"/>
   <g transform="translate(20, 20) scale(0.546875)" fill="white">
     ${KW_PATHS}
   </g>
 </svg>`;
-writeFileSync(join(NOTES_PUBLIC, 'apple-touch-icon.png'), svgToPng(appleSvg, 180));
+writeFileSync(
+  join(NOTES_PUBLIC, 'apple-touch-icon.png'),
+  svgToPng(appleSvg, 180)
+);
 console.log('Created: apple-touch-icon.png (180x180)');
 
 // 3. Email logo white (400x~152) — Transparent background, white wordmark
@@ -57,7 +61,10 @@ const emailSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="15
     ${WORDMARK_PATHS}
   </g>
 </svg>`;
-writeFileSync(join(NOTES_PUBLIC, 'email/knowtis-logo-white.png'), svgToPng(emailSvg, 400));
+writeFileSync(
+  join(NOTES_PUBLIC, 'email/knowtis-logo-white.png'),
+  svgToPng(emailSvg, 400)
+);
 console.log('Created: email/knowtis-logo-white.png (400w)');
 
 console.log('All brand assets generated.');
