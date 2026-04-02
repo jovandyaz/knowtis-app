@@ -36,6 +36,7 @@ import { LoginDto, RegisterDto } from './dto/auth.dto';
 import type { RefreshTokenDto } from './dto/auth.dto';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import {
+  clearLegacyHostOnlyCookie,
   clearRefreshTokenCookie,
   deriveCookieDomain,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -180,6 +181,7 @@ export class AuthSessionController {
     const result = await this.refreshHandler.execute(refreshToken);
     const data = unwrapOrThrow(result);
 
+    clearLegacyHostOnlyCookie(res, this.cookieConfig);
     setRefreshTokenCookie(res, data.refreshToken, this.cookieConfig);
 
     return { accessToken: data.accessToken };
@@ -202,6 +204,7 @@ export class AuthSessionController {
       unwrapOrThrow(result);
     }
 
+    clearLegacyHostOnlyCookie(res, this.cookieConfig);
     clearRefreshTokenCookie(res, this.cookieConfig);
   }
 
@@ -242,6 +245,7 @@ export class AuthSessionController {
       tokens: { accessToken: string; refreshToken: string };
     }
   ) {
+    clearLegacyHostOnlyCookie(res, this.cookieConfig);
     setRefreshTokenCookie(res, data.tokens.refreshToken, this.cookieConfig);
     return {
       user: data.user,

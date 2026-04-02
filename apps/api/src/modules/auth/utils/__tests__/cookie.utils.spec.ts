@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { CookieConfig } from '../cookie.utils';
 import {
+  clearLegacyHostOnlyCookie,
   clearRefreshTokenCookie,
   deriveCookieDomain,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -120,6 +121,33 @@ describe('cookie.utils', () => {
           domain: '.example.com',
         })
       );
+    });
+  });
+
+  describe('clearLegacyHostOnlyCookie', () => {
+    it('should clear host-only cookie without domain attribute when config has domain', () => {
+      const res = createMockResponse();
+      clearLegacyHostOnlyCookie(res, prodConfig);
+
+      expect(res.clearCookie).toHaveBeenCalledWith(
+        REFRESH_TOKEN_COOKIE_NAME,
+        expect.objectContaining({
+          httpOnly: true,
+          secure: true,
+          sameSite: 'lax',
+          path: '/api/v1/auth',
+        })
+      );
+      const options = (res.clearCookie as ReturnType<typeof vi.fn>).mock
+        .calls[0][1];
+      expect(options).not.toHaveProperty('domain');
+    });
+
+    it('should not clear anything when config has no domain (dev)', () => {
+      const res = createMockResponse();
+      clearLegacyHostOnlyCookie(res, devConfig);
+
+      expect(res.clearCookie).not.toHaveBeenCalled();
     });
   });
 });

@@ -49,3 +49,17 @@ export function clearRefreshTokenCookie(
     ...(config.domain && { domain: config.domain }),
   });
 }
+
+export function clearLegacyHostOnlyCookie(
+  res: Response,
+  config: CookieConfig
+): void {
+  if (!config.domain) {return;}
+
+  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
+    httpOnly: true,
+    secure: config.secure,
+    sameSite: 'lax',
+    path: '/api/v1/auth',
+  });
+}
