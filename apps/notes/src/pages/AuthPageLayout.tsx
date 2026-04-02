@@ -11,7 +11,7 @@ interface AuthPageLayoutProps {
 export function AuthPageLayout({ children }: AuthPageLayoutProps) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center p-4">
-      <KnowtisLogo className="mb-8 h-10 w-auto text-[oklch(0.58_0.24_290)]" />
+      <KnowtisLogo className="mb-8 h-10 w-auto text-primary" />
       <Card className="w-full max-w-md border-border/50 bg-card/95 backdrop-blur-sm">
         {children}
       </Card>
