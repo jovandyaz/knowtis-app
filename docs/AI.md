@@ -31,7 +31,7 @@ apps/api/src/modules/ai/
 ├── domain/
 │   ├── constants/           # Model pricing, system prompts
 │   ├── errors/              # AIErrors + AIErrorCodes
-│   ├── ports/               # AICompletionProvider, AICache, AIUsageRepository, RateLimitProvider, AIConfigRepository
+│   ├── ports/               # AICompletionProvider, AIStructuredOutputProvider, AICache, AIUsageRepository, RateLimitProvider, AIConfigRepository
 │   ├── services/            # input-sanitizer, token-estimator, prompt-guard
 │   └── value-objects/       # AIAction, AIModel, TokenUsage
 ├── application/
@@ -39,7 +39,7 @@ apps/api/src/modules/ai/
 │   └── services/            # AIOrchestrator, AIRateLimitService, AIConfigService
 ├── infrastructure/
 │   ├── persistence/         # DrizzleAIUsageRepository, DrizzleAIConfigRepository
-│   ├── providers/           # AISDKProvider (Vercel AI SDK)
+│   ├── providers/           # AISDKProvider, AIStructuredOutputSDKProvider (Vercel AI SDK)
 │   └── redis/               # AIRedisProvider, RedisRateLimitService, SemanticCacheService
 └── testing/                 # createMockConfig helper
 
@@ -52,6 +52,10 @@ apps/notes/src/components/editor/ai/
 └── slash-commands.config.ts   # Slash command definitions
 
 apps/notes/src/components/editor/extensions/
+├── ai-block/
+│   ├── AIBlockNode.ts           # Custom Tiptap node (atom block, React node view)
+│   ├── AIBlockView.tsx          # React component (input → stream → insert flow)
+│   └── index.ts
 ├── GhostText.ts               # Tiptap extension for inline autocomplete
 └── GhostText.css
 
@@ -80,13 +84,14 @@ AIGateway / AIController
 
 ### Ports & Adapters
 
-| DI Symbol                | Interface              | Implementation              |
-| ------------------------ | ---------------------- | --------------------------- |
-| `AI_COMPLETION_PROVIDER` | `AICompletionProvider` | `AISDKProvider`             |
-| `AI_USAGE_REPOSITORY`    | `AIUsageRepository`    | `DrizzleAIUsageRepository`  |
-| `RATE_LIMIT_PROVIDER`    | `RateLimitProvider`    | `RedisRateLimitService`     |
-| `AI_CACHE`               | `AICache`              | `SemanticCacheService`      |
-| `AI_CONFIG_REPOSITORY`   | `AIConfigRepository`   | `DrizzleAIConfigRepository` |
+| DI Symbol                       | Interface                    | Implementation                  |
+| ------------------------------- | ---------------------------- | ------------------------------- |
+| `AI_COMPLETION_PROVIDER`        | `AICompletionProvider`       | `AISDKProvider`                 |
+| `AI_STRUCTURED_OUTPUT_PROVIDER` | `AIStructuredOutputProvider` | `AIStructuredOutputSDKProvider` |
+| `AI_USAGE_REPOSITORY`           | `AIUsageRepository`          | `DrizzleAIUsageRepository`      |
+| `RATE_LIMIT_PROVIDER`           | `RateLimitProvider`          | `RedisRateLimitService`         |
+| `AI_CACHE`                      | `AICache`                    | `SemanticCacheService`          |
+| `AI_CONFIG_REPOSITORY`          | `AIConfigRepository`         | `DrizzleAIConfigRepository`     |
 
 ---
 
@@ -96,22 +101,28 @@ All constants are defined in `libs/shared/types/src/lib/ai.types.ts` and shared 
 
 ### Actions
 
-| Action            | Model   | Cacheable | Description                       |
-| ----------------- | ------- | --------- | --------------------------------- |
-| `summarize`       | default | Yes       | Concise summary of content        |
-| `expand`          | default | No        | Expand with more detail           |
-| `translate`       | default | Yes       | Translate to target language      |
-| `tone`            | default | No        | Rewrite in requested tone         |
-| `outline`         | default | Yes       | Structured outline from content   |
-| `action-items`    | default | Yes       | Extract checklist of action items |
-| `ghost-text`      | fast    | No        | Inline autocomplete at cursor     |
-| `chat`            | default | No        | Q&A about note content            |
-| `improve-writing` | default | No        | Improve clarity and readability   |
-| `fix-spelling`    | default | No        | Fix spelling and grammar          |
-| `make-shorter`    | default | No        | Make text more concise            |
-| `make-longer`     | default | No        | Expand text with more detail      |
+| Action                | Model   | Cacheable | Description                               |
+| --------------------- | ------- | --------- | ----------------------------------------- |
+| `summarize`           | default | Yes       | Concise summary of content                |
+| `expand`              | default | No        | Expand with more detail                   |
+| `translate`           | default | Yes       | Translate to target language              |
+| `tone`                | default | No        | Rewrite in requested tone                 |
+| `outline`             | default | Yes       | Structured outline from content           |
+| `action-items`        | default | Yes       | Extract checklist of action items         |
+| `ghost-text`          | fast    | No        | Inline autocomplete at cursor             |
+| `chat`                | default | No        | Q&A about note content                    |
+| `improve-writing`     | default | No        | Improve clarity and readability           |
+| `fix-spelling`        | default | No        | Fix spelling and grammar                  |
+| `make-shorter`        | default | No        | Make text more concise                    |
+| `make-longer`         | default | No        | Expand text with more detail              |
+| `learn-topic`         | default | No        | Generate content about a topic (AI Block) |
+| `generate-flashcards` | default | No        | Generate flashcard deck from note content |
+| `generate-quiz`       | default | No        | Generate quiz from note content           |
+| `generate-summary`    | default | No        | Generate structured summary from note     |
+| `generate-mind-map`   | default | No        | Generate mind map from note content       |
 
 **Model:** `default` = claude-sonnet, `fast` = claude-haiku. Configured via `FAST_MODEL_ACTIONS` in `ai-orchestrator.service.ts`.
+**Note:** `generate-*` actions use the structured output port (Zod schema validation) via the artifacts module, not the streaming text pipeline.
 
 ### Languages
 
@@ -384,6 +395,7 @@ Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Co
 | `AIResultPanel`      | Tippy panel below selection. Replace, insert below, or discard result.                  |
 | `AIStreamingPreview` | Streams text as chunks arrive. Shows retry button on error.                             |
 | `GhostText`          | Tiptap extension. Inline suggestion after inactivity. Tab to accept, Escape to dismiss. |
+| `AIBlockNode`        | Tiptap atom node. Inline topic-based content generator with streaming preview.          |
 
 ### Zustand Store (`useAIStore`)
 
@@ -436,6 +448,69 @@ aiClient.setTokenProvider({ getAccessToken, clearTokens });
 - Suppressed if another AI action is active (`isAIBusy` check)
 - Cursor move or selection change clears suggestion and cancels in-flight stream
 - **Tab** accepts, **Escape** dismisses
+
+### AI Block
+
+Custom Tiptap node extension (`aiBlock`) that renders an inline AI content generator inside the editor. Users type a topic, and the block streams a `learn-topic` response directly into the document.
+
+**Lifecycle:** `input` → `streaming` → `done` / `error`
+
+| Status      | Behavior                                                                 |
+| ----------- | ------------------------------------------------------------------------ |
+| `input`     | Text input + generate button. Escape deletes the block.                  |
+| `streaming` | Streams chunks via `aiClient.stream()`. Cancel returns to `input`.       |
+| `done`      | Rendered markdown. Insert (replaces block with HTML), retry, or discard. |
+| `error`     | Error message with retry and discard buttons.                            |
+
+Inserted via slash command. The block is an atom node (non-editable content), rendered with `ReactNodeViewRenderer`. Markdown is converted to sanitized HTML via `markdown-it` + `DOMPurify` before insertion.
+
+**Source:** `apps/notes/src/components/editor/extensions/ai-block/`
+
+---
+
+## Structured Output
+
+The AI module exposes an `AIStructuredOutputProvider` port for schema-based generation using Zod schemas. Unlike the streaming text completions, this port returns typed objects validated against a Zod schema at generation time.
+
+**Port:** `AIStructuredOutputProvider` (`ai-structured-output.port.ts`)
+**Implementation:** `AIStructuredOutputSDKProvider` — uses Vercel AI SDK `generateText()` with `Output.object({ schema })`.
+
+```typescript
+interface AIStructuredOutputProvider {
+  generateStructuredOutput<T>(
+    prompt: string,
+    schema: ZodType<T>,
+    options: StructuredOutputOptions
+  ): Promise<StructuredOutputResult<T>>;
+}
+```
+
+Used by the artifacts module via `AIGenerationPipeline` to generate flashcards, quizzes, summaries, and mind maps with guaranteed schema conformance.
+
+---
+
+## Artifact Generation
+
+The `artifacts` module (`apps/api/src/modules/artifacts/`) uses the AI structured output port to generate study artifacts from note content. Each artifact type has a Zod schema that enforces the output structure.
+
+**Supported types:**
+
+| Type             | AI Action             | Output Schema      |
+| ---------------- | --------------------- | ------------------ |
+| `flashcard_deck` | `generate-flashcards` | `FlashcardContent` |
+| `quiz`           | `generate-quiz`       | `QuizContent`      |
+| `summary`        | `generate-summary`    | `SummaryContent`   |
+| `mind_map`       | `generate-mind-map`   | `MindMapContent`   |
+
+**Pipeline:** `AIGenerationPipeline` orchestrates each generation request: rate limit check, model selection via `AIOrchestrator`, structured output call, usage recording. Shared types live in `libs/shared/types/src/lib/artifact.types.ts`.
+
+**Frontend:** `apps/notes/src/components/artifacts/` contains the sidebar, generators, and viewers (flashcard study with SM-2 spaced repetition, quiz sessions, summary viewer, mind map viewer).
+
+---
+
+## Voice Notes
+
+Voice-to-Note is documented separately in [docs/VOICE-NOTE.md](VOICE-NOTE.md). It uses the AI module for transcription (OpenAI Whisper) and note structuring (Claude). Gated by both `ai_enabled` and `voice_notes_enabled` feature flags.
 
 ---
 

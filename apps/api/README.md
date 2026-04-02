@@ -33,6 +33,11 @@
 | 📝 Notes CRUD         | Full create, read, update, delete operations |
 | 👥 User Management    | User profiles and settings                   |
 | 🔄 Real-time Sync     | WebSocket + Yjs for live collaboration       |
+| 🤖 AI Assistant       | Text completions, WebSocket streaming, voice |
+| 🎴 Artifacts          | Flashcards, quizzes, summaries, mind maps    |
+| 🔑 Authorization      | CASL-based permissions and roles             |
+| 🔌 MCP Integration    | API key exchange for AI assistant tools      |
+| 🛠️ Admin              | Administrative features and management       |
 | 🗄️ PostgreSQL         | Reliable data persistence with Drizzle ORM   |
 | ⚡ Redis Cache        | Session and cache management                 |
 | 🛡️ Input Validation   | class-validator for request validation       |
@@ -105,77 +110,32 @@ curl http://localhost:3333/api/v1/health/ping
 ## Project Structure
 
 ```
-apps/api/
-├── src/
-│   ├── main.ts                  # Application entry point
-│   │
-│   ├── app/                     # Root module
-│   │   ├── app.module.ts
-│   │   ├── app.controller.ts
-│   │   └── app.service.ts
-│   │
-│   ├── adapters/                # Platform adapters
-│   │   └── socket-io.adapter.ts # Socket.io WebSocket adapter
-│   │
-│   ├── config/                  # Configuration
-│   │   └── env.config.ts        # Environment validation (Zod)
-│   │
-│   ├── core/                    # Shared infrastructure
-│   │   ├── domain/events/       # Domain event interfaces
-│   │   ├── exceptions/          # Custom domain exceptions
-│   │   ├── filters/             # HTTP exception filter
-│   │   ├── interceptors/        # Logging interceptor
-│   │   └── logging/             # Logger service (Pino)
-│   │
-│   ├── database/                # Database layer
-│   │   ├── database.module.ts   # Drizzle connection setup
-│   │   └── schema/              # Table definitions
-│   │       ├── users.schema.ts
-│   │       ├── notes.schema.ts
-│   │       ├── sessions.schema.ts
-│   │       └── index.ts
-│   │
-│   └── modules/                 # Feature modules
-│       ├── auth/                # Authentication (DDD)
-│       │   ├── application/     # Command handlers
-│       │   ├── domain/          # Entities, VOs, Ports
-│       │   ├── infrastructure/  # Adapters (Drizzle, bcrypt, JWT)
-│       │   ├── strategies/      # Passport strategies (JWT, Local)
-│       │   ├── guards/          # JWT & Local auth guards
-│       │   ├── decorators/      # @CurrentUser, @Public
-│       │   └── dto/
-│       │
-│       ├── notes/               # Notes CRUD (DDD)
-│       │   ├── application/     # Command & Query handlers
-│       │   ├── domain/          # Note entity, VOs, Ports
-│       │   ├── infrastructure/  # DrizzleNoteRepository
-│       │   └── dto/
-│       │
-│       ├── collaboration/       # Real-time WebSocket
-│       │   ├── collaboration.gateway.ts
-│       │   ├── collaboration.service.ts
-│       │   ├── ws-auth.service.ts
-│       │   └── collaboration.types.ts
-│       │
-│       ├── users/               # User management
-│       │   ├── users.module.ts
-│       │   ├── users.service.ts
-│       │   └── users.repository.ts
-│       │
-│       ├── health/              # Health checks
-│       │   ├── health.controller.ts
-│       │   └── health.module.ts
-│       │
-│       └── feature-flags/       # Feature flag service
-│           ├── feature-flags.module.ts
-│           ├── feature-flags.service.ts
-│           └── feature-flag.guard.ts
-│
-├── drizzle.config.ts
-├── ARCHITECTURE.md              # DDD patterns guide
-├── webpack.config.cjs
-└── project.json
+src/
+├── app/          # Root module
+├── adapters/     # WebSocket adapter (Socket.io)
+├── config/       # Environment validation (Zod)
+├── core/         # Filters, interceptors, exceptions, logging (Pino)
+├── database/     # Drizzle schema and module
+└── modules/      # Feature modules (see table below)
 ```
+
+### Modules
+
+| Module          | Pattern | Description                                  |
+| --------------- | ------- | -------------------------------------------- |
+| `auth`          | DDD     | JWT authentication (access + refresh tokens) |
+| `notes`         | DDD     | Notes CRUD with sharing and permissions      |
+| `ai`            | DDD     | AI text assistant with WebSocket streaming   |
+| `artifacts`     | DDD     | Flashcards, quizzes, summaries, mind maps    |
+| `collaboration` | Service | Real-time Yjs sync via WebSocket gateway     |
+| `authorization` | Service | CASL-based permissions and roles             |
+| `mcp`           | Service | MCP API key exchange for AI assistants       |
+| `admin`         | Service | Admin features and management                |
+| `users`         | Service | User profiles and settings                   |
+| `feature-flags` | Service | DB-backed feature flags with Redis cache     |
+| `health`        | Service | Health check endpoints                       |
+
+DDD modules follow Clean Architecture with `application/`, `domain/`, `infrastructure/` layers. See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 
 ---
 
@@ -524,41 +484,7 @@ All errors follow this format:
 
 ### Schema Overview
 
-```
-┌─────────────────┐     ┌──────────────────┐
-│     users       │     │      notes       │
-├─────────────────┤     ├──────────────────┤
-│ id (PK)         │────<│ owner_id (FK)    │
-│ email           │     │ id (PK)          │
-│ name            │     │ title            │
-│ password_hash   │     │ content          │
-│ avatar_url      │     │ yjs_state        │
-│ provider        │     │ is_public        │
-│ provider_id     │     │ created_at       │
-│ created_at      │     │ updated_at       │
-│ updated_at      │     └──────────────────┘
-└─────────────────┘             │
-        │               ┌──────┴───────────┐
-        │               │ note_permissions │
-        │               ├──────────────────┤
-        └──────────────<│ user_id (FK)     │
-                        │ note_id (FK)     │
-                        │ permission       │
-                        │ created_at       │
-                        └──────────────────┘
-
-┌─────────────────┐
-│    sessions     │
-├─────────────────┤
-│ id (PK)         │
-│ user_id (FK)    │
-│ refresh_token   │
-│ user_agent      │
-│ ip_address      │
-│ expires_at      │
-│ created_at      │
-└─────────────────┘
-```
+Core tables: `users`, `notes`, `note_permissions`, `sessions`, `artifacts`, `feature_flags`. Schema defined in `src/database/schema/` — use `pnpm db:studio` to explore visually.
 
 ### Database Commands
 
@@ -637,16 +563,7 @@ nx test api --watch
 nx test api --coverage
 ```
 
-### Test Structure
-
-```
-src/
-├── modules/
-│   ├── auth/
-│   │   └── application/handlers/*.spec.ts
-│   └── notes/
-│       └── application/commands/*.spec.ts
-```
+Tests are co-located inside each module's `application/` folder (`*.spec.ts`).
 
 ---
 

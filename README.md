@@ -38,14 +38,19 @@
 
 ## Overview
 
-**Knowtis** is a collaborative workspace platform that enables real-time note-taking with features like:
+**Knowtis** is an AI-powered collaborative workspace that turns your notes into a knowledge base:
 
-- 🔐 **Secure Authentication** - JWT-based auth with refresh tokens
-- 📝 **Rich Text Editing** - Powered by Tiptap/ProseMirror
-- 🔄 **Real-time Collaboration** - CRDT-based sync using Yjs
-- 🌐 **Offline Support** - IndexedDB persistence for offline access
-- 👥 **Live Presence** - See collaborators editing in real-time
-- 🎨 **Modern UI** - Tailwind CSS 4 with dark mode support
+- 🤖 **AI Assistant** - Improve writing, fix spelling, summarize, translate, and expand content with inline AI actions
+- 🧠 **Study Tools** - Auto-generate flashcards, quizzes, summaries, and mind maps from your notes
+- 🃏 **Spaced Repetition** - SM2 algorithm for optimal flashcard review scheduling
+- 📝 **Rich Text Editing** - Tiptap/ProseMirror with slash commands, ghost text suggestions, and AI blocks
+- 🔄 **Real-time Collaboration** - CRDT-based sync using Yjs with live presence and remote cursors
+- 🎙️ **Voice Notes** - Record and transcribe voice notes with AI processing
+- 🌐 **Offline Support** - IndexedDB persistence with optimistic local-first updates
+- 🔐 **Secure Authentication** - JWT-based auth with HttpOnly cookie refresh tokens
+- 🌍 **Internationalization** - Full i18n support (English and Spanish)
+- 🔌 **MCP Integration** - Model Context Protocol server for AI assistant workflows
+- 🎨 **Modern UI** - Tailwind CSS 4 with dark mode, resizable panels, and responsive design
 
 ---
 
@@ -258,9 +263,11 @@ Run `make help` to see all available targets with descriptions.
 | Frontend  | React 19, Vite, TanStack Router/Query |
 | Backend   | NestJS 11, Drizzle ORM                |
 | Database  | PostgreSQL 16, Redis 7                |
+| AI        | Claude API (Sonnet 4, Haiku 4.5)      |
 | Real-time | Socket.io, Yjs (CRDT)                 |
 | Email     | React Email, Resend                   |
 | Styling   | Tailwind CSS 4                        |
+| i18n      | react-i18next                         |
 | Testing   | Vitest, React Testing Library         |
 | Monorepo  | Nx 22.3                               |
 
