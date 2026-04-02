@@ -39,17 +39,24 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  ┌───────────────────────────────────────────────────────────┐  │
 │  │                    API (NestJS) v1                         │  │
 │  │  • Authentication (JWT)                                    │  │
+│  │  • Authorization (CASL)                                    │  │
 │  │  • Notes CRUD                                              │  │
+│  │  • AI Assistant (streaming)                                │  │
+│  │  • Study Artifacts (flashcards, quizzes, summaries)        │  │
 │  │  • Collaboration Gateway                                   │  │
-│  │  • Feature Flags (Env-based)                               │  │
+│  │  • Feature Flags (DB-backed, Redis-cached)                 │  │
+│  │  • MCP API key exchange                                    │  │
+│  │  • Admin (user management, AI metrics)                     │  │
 │  └───────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                         DATA LAYER                              │
 │  ┌──────────────────────┐    ┌──────────────────────────────┐  │
 │  │   PostgreSQL 16      │    │         Redis 7              │  │
 │  │  • Users             │    │  • Session cache             │  │
-│  │  • Notes             │    │  • Rate limiting             │  │
-│  │  • Collaborators     │    │  • Pub/sub (future)          │  │
+│  │  • Notes             │    │  • Rate limiting (AI)        │  │
+│  │  • Collaborators     │    │  • Feature flag cache (30s)  │  │
+│  │  • Feature flags     │    │  • AI semantic cache         │  │
+│  │  • Artifacts         │    │                              │  │
 │  └──────────────────────┘    └──────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -68,16 +75,22 @@ The codebase is strictly divided into **Apps** (deployable units) and **Libs** (
 knowtis/
 ├── apps/                    # Deployable applications
 │   ├── api/                 # Backend (NestJS)
+│   ├── mcp/                 # MCP server for AI assistants (Hono)
 │   └── notes/               # Frontend (React)
 │
 └── libs/                    # Shared libraries
     ├── api-client/          # HTTP/WebSocket client
-    ├── auth/                # Auth hooks, store & API
+    ├── authorization/       # CASL permission definitions
     ├── data-access/         # Domain logic & state
-    │   └── notes/           # Notes hooks & store
+    │   ├── artifacts/       # Study artifacts hooks & schemas
+    │   ├── feature-flags/   # Feature flags hooks & schemas
+    │   ├── mcp-keys/        # MCP API keys hooks & schemas
+    │   ├── notes/           # Notes hooks & store
+    │   └── users/           # Users hooks & schemas
     ├── design-system/       # UI components & tokens
     └── shared/              # Common utilities
         ├── hooks/           # Generic React hooks
+        ├── i18n/            # Internationalization
         ├── types/           # Shared TypeScript types
         └── util/            # Utility functions
 ```
@@ -87,9 +100,10 @@ knowtis/
 | Category          | Path                 | Description                                     |
 | ----------------- | -------------------- | ----------------------------------------------- |
 | **API Client**    | `libs/api-client`    | HTTP client, WebSocket client, API types        |
+| **Authorization** | `libs/authorization` | CASL permission definitions (shared FE/BE)      |
 | **Data Access**   | `libs/data-access/*` | Domain logic, Zustand stores, React Query hooks |
 | **Design System** | `libs/design-system` | UI components, design tokens, styles            |
-| **Shared**        | `libs/shared/*`      | Hooks, utilities, TypeScript types              |
+| **Shared**        | `libs/shared/*`      | Hooks, i18n, utilities, TypeScript types        |
 
 ### Dependency Rules
 
@@ -200,7 +214,7 @@ Shared (no internal workspace dependencies)
 
 ### Backend Architecture (Modular DDD)
 
-The backend follows a **Modular Monolith** architecture where core domains (`auth`, `notes`) implement **DDD/Clean Architecture**:
+The backend follows a **Modular Monolith** architecture where core domains (`auth`, `notes`, `ai`, `artifacts`) implement **DDD/Clean Architecture**:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -210,12 +224,19 @@ The backend follows a **Modular Monolith** architecture where core domains (`aut
 │  │                    Controllers                         │  │
 │  │  • AuthController (HTTP -> Command/Query)             │  │
 │  │  • NotesController (HTTP -> Command/Query)            │  │
+│  │  • AIController + AIGateway (HTTP + WebSocket)        │  │
+│  │  • ArtifactsController (study artifacts)              │  │
+│  │  • AdminController (user mgmt, AI metrics)            │  │
+│  │  • McpKeysController (MCP API key exchange)           │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                           ↓                                  │
 │  ┌───────────────────────────────────────────────────────┐  │
 │  │                 Application Layer                      │  │
 │  │  • Command Handlers (CreateNote, LoginUser)           │  │
 │  │  • Query Handlers (GetNote, GetProfile)               │  │
+│  │  • AI Orchestration (streaming, rate limiting)        │  │
+│  │  • Artifact Generation (flashcards, quizzes, etc.)   │  │
+│  │  • Authorization (CASL ability factory)               │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                           ↓                                  │
 │  ┌───────────────────────────────────────────────────────┐  │
@@ -489,11 +510,13 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`):
 - [API Documentation](../apps/api/README.md) - Backend details
 - [API Architecture](../apps/api/ARCHITECTURE.md) - DDD patterns
 - [Notes App Documentation](../apps/notes/README.md) - Frontend details
+- [AI Module](./AI.md) - AI assistant & voice notes
+- [MCP Server](./MCP.md) - MCP integration for AI assistants
 - [Deployment Guide](./DEPLOYMENT.md) - Railway & Vercel deployment
 
 ---
 
 <p align="center">
-  <strong>Knowtis Architecture v1.1</strong><br/>
-  Last updated: February 2026
+  <strong>Knowtis Architecture v1.2</strong><br/>
+  Last updated: April 2026
 </p>

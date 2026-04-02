@@ -17,9 +17,8 @@
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
 - [Configuration](#configuration)
-- [Frontend Architecture](#frontend-architecture)
+- [Architecture](#frontend-architecture)
 - [Components](#components)
-- [State Management](#state-management)
 - [Real-time Collaboration](#real-time-collaboration)
 - [Testing](#testing)
 - [Building for Production](#building-for-production)
@@ -28,16 +27,28 @@
 
 ## Features
 
-| Feature              | Description                                    |
-| -------------------- | ---------------------------------------------- |
-| 🔐 Authentication    | Login, register, and protected routes with JWT |
-| 📝 Rich Text Editor  | Tiptap-based editor with formatting toolbar    |
-| 🔄 Real-time Sync    | CRDT-based collaboration using Yjs             |
-| 👥 Live Presence     | See collaborators' cursors and selections      |
-| 📱 Responsive Design | Mobile-first, works on all devices             |
-| 🌙 Dark Mode         | System-aware theme switching                   |
-| 💾 Offline Support   | IndexedDB persistence for offline editing      |
-| ⚡ Fast Performance  | Optimized with React 19 and Vite               |
+| Feature                 | Description                                                                                    |
+| ----------------------- | ---------------------------------------------------------------------------------------------- |
+| 🔐 Authentication       | Login, register, forgot/reset password, email verification, protected routes with JWT          |
+| 📝 Rich Text Editor     | Tiptap-based editor with formatting toolbar, heading dropdown, link popover, code blocks       |
+| 🤖 AI Writing Assistant | Bubble menu AI actions (improve, fix spelling, summarize, translate, expand, change tone)      |
+| ✨ AI Slash Commands    | `/` commands to trigger AI actions, generate study tools, and insert voice notes inline        |
+| 👻 Ghost Text           | AI-powered autocomplete suggestions displayed as inline ghost text while typing                |
+| 🧩 AI Blocks            | Custom editor nodes for inline AI content generation with streaming status                     |
+| 📊 Artifacts & Study    | AI-generated flashcards, quizzes, summaries, and mind maps in a dedicated sidebar              |
+| 🃏 Spaced Repetition    | SM2 algorithm for flashcard review with advanced rating, progress tracking, and missed cards   |
+| 🎙️ Voice Notes          | Voice recording with live audio preview, transcription, and editor insertion                   |
+| 🔗 Note Sharing         | Share notes via link with configurable access levels (viewer/editor), editors-can-share toggle |
+| 👤 Anonymous Mode       | Try the app without an account with usage limit modal and upgrade prompts                      |
+| 🔄 Real-time Sync       | CRDT-based collaboration using Yjs                                                             |
+| 👥 Live Presence        | See collaborators' cursors and selections                                                      |
+| ⚙️ Settings             | Modal with profile, account, appearance (theme), language, and MCP integrations sections       |
+| 🌐 Internationalization | i18n support with English and Spanish via react-i18next                                        |
+| 📱 Responsive Design    | Mobile-first with bottom nav and floating action button                                        |
+| 🌙 Dark Mode            | System-aware theme switching                                                                   |
+| 💾 Offline Support      | IndexedDB persistence for offline editing                                                      |
+| 📈 Analytics            | PostHog integration for product analytics                                                      |
+| ⚡ Fast Performance     | Optimized with React 19 and Vite                                                               |
 
 ---
 
@@ -72,72 +83,17 @@ pnpm dev:all      # API + Notes app
 ## Project Structure
 
 ```
-apps/notes/
-├── src/
-│   ├── components/           # Feature components
-│   │   ├── auth/            # Route guards
-│   │   │   ├── ProtectedRoute.tsx
-│   │   │   └── PublicRoute.tsx
-│   │   ├── editor/          # Rich text editor
-│   │   │   ├── CollaborativeEditor.tsx
-│   │   │   ├── EditorToolbar.tsx
-│   │   │   └── cursors/     # Cursor rendering
-│   │   ├── layout/          # Layout components
-│   │   │   ├── Layout.tsx
-│   │   │   ├── Sidebar.tsx
-│   │   │   ├── NavigationLinks.tsx
-│   │   │   └── SidebarUserFooter.tsx
-│   │   └── notes/           # Notes list & management
-│   │       ├── NoteCard.tsx
-│   │       ├── NoteList.tsx
-│   │       ├── CreateDialog.tsx
-│   │       ├── DeleteDialog.tsx
-│   │       └── EmptyState.tsx
-│   │
-│   ├── pages/               # Page components
-│   │   ├── HomePage.tsx
-│   │   ├── LoginPage.tsx
-│   │   ├── RegisterPage.tsx
-│   │   └── NoteEditorPage.tsx
-│   │
-│   ├── routes/              # TanStack Router routes
-│   │   ├── __root.tsx
-│   │   ├── index.tsx
-│   │   ├── login.tsx
-│   │   ├── register.tsx
-│   │   └── notes.$noteId.tsx
-│   │
-│   ├── providers/           # React context providers
-│   │   ├── YjsProvider.tsx  # Yjs document management
-│   │   ├── YjsContext.ts    # Context definition
-│   │   ├── useYjs.ts        # Context hook
-│   │   └── ThemeProvider.tsx # Dark/light theme
-│   │
-│   ├── hooks/               # App-specific hooks
-│   │   ├── useActiveCollaborators.ts
-│   │   ├── useCollaborativeEditor.ts
-│   │   ├── useWebSocketCollaboration.ts
-│   │   └── usePresenceBroadcast.ts
-│   │
-│   ├── lib/                 # Utilities
-│   │   ├── date.ts
-│   │   ├── text.ts
-│   │   ├── collaboration.ts
-│   │   ├── collaboration.constants.ts
-│   │   └── constants.ts
-│   │
-│   ├── config/              # App configuration
-│   │   └── navigation.config.ts
-│   │
-│   ├── types/               # TypeScript types
-│   │   ├── editor.ts
-│   │   └── collaboration.ts
-│   │
-│   └── main.tsx
-│
-├── vite.config.ts
-├── vitest.config.ts
-└── tsconfig.json
+src/
+├── components/       # Feature components (editor, ai, artifacts, voice-note, settings, layout, notes, anonymous)
+├── pages/            # Route page components
+├── routes/           # TanStack Router file-based routes
+├── providers/        # React context providers (Yjs, Theme, PostHog, CASL)
+├── stores/           # Zustand stores (ai, artifacts, sidebar, settings, voice-note)
+├── hooks/            # App-specific hooks (collaboration, voice, auto-title)
+├── auth/             # Auth adapters and anonymous session
+├── lib/              # Utilities (i18n, query-client, collaboration)
+├── config/           # Navigation, routes, storage keys
+└── types/            # TypeScript type definitions
 ```
 
 ---
@@ -174,39 +130,14 @@ VITE_COLLABORATION_MODE=websocket
 
 ## Frontend Architecture
 
-### Component Hierarchy
-
-```
-<App>
-  └── <Providers>
-        ├── <ThemeProvider>          # Dark/light mode
-        └── <YjsProvider>           # Collaboration documents
-              └── <RouterProvider>
-                    └── <RootLayout>
-                          ├── <Sidebar />
-                          └── <Outlet />
-                                ├── <HomePage />
-                                ├── <LoginPage />
-                                ├── <RegisterPage />
-                                └── <NoteEditorPage />
-```
-
 ### Data Flow
 
 ```
-User Action
-    ↓
-Page/Component
-    ↓
-Custom Hook (useNotes, useLogin, etc.)
-    ↓
-├── React Query (API calls via @knowtis/api-client)
-└── Zustand Store (local state via @knowtis/data-access)
-    ↓
-API Response / State Update
-    ↓
-Component Re-render
+User Action → Component → Custom Hook → React Query / Zustand → Re-render
 ```
+
+- **Server state**: React Query hooks from `@knowtis/data-access-notes` (caching, optimistic updates)
+- **Client state**: Zustand stores in `src/stores/` (UI state, AI state, sidebar)
 
 ---
 
@@ -214,75 +145,31 @@ Component Re-render
 
 ### Pages
 
-| Page             | Route        | Auth Required | Description           |
-| ---------------- | ------------ | ------------- | --------------------- |
-| `HomePage`       | `/`          | Yes           | Notes dashboard       |
-| `LoginPage`      | `/login`     | No            | User login form       |
-| `RegisterPage`   | `/register`  | No            | User registration     |
-| `NoteEditorPage` | `/notes/:id` | Yes           | Rich text note editor |
+| Page                 | Route              | Auth Required | Description                  |
+| -------------------- | ------------------ | ------------- | ---------------------------- |
+| `HomePage`           | `/`                | Yes           | Notes dashboard              |
+| `LoginPage`          | `/login`           | No            | User login form              |
+| `RegisterPage`       | `/register`        | No            | User registration            |
+| `ForgotPasswordPage` | `/forgot-password` | No            | Password reset request       |
+| `ResetPasswordPage`  | `/reset-password`  | No            | Password reset form          |
+| `VerifyEmailPage`    | `/verify-email`    | No            | Email verification           |
+| `NoteEditorPage`     | `/notes/:id`       | Yes           | Rich text note editor        |
+| `SharedNotePage`     | `/s/:token`        | No            | Shared note access via token |
+| `WelcomePage`        | `/`                | No            | Landing page for new users   |
 
-### Key Components
+### Key Component Areas
 
-#### `ProtectedRoute`
-
-Wraps routes that require authentication. Redirects to `/login` if user is not authenticated.
-
-```tsx
-<ProtectedRoute>
-  <HomePage />
-</ProtectedRoute>
-```
-
-#### `NoteEditor`
-
-Rich text editor powered by Tiptap with collaboration support.
-
-```tsx
-<NoteEditor
-  noteId={noteId}
-  yDoc={yDoc}
-  provider={provider}
-  onSave={handleSave}
-/>
-```
-
-#### `EditorToolbar`
-
-Formatting toolbar for the rich text editor.
-
-```tsx
-<EditorToolbar editor={editor} />
-```
-
----
-
-## State Management
-
-### Server State (TanStack Query)
-
-Server data is managed via React Query hooks from `@knowtis/data-access-notes`:
-
-```typescript
-import {
-  useCreateNote,
-  useDeleteNote,
-  useNote,
-  useNotes,
-  useUpdateNote,
-} from '@knowtis/data-access-notes';
-```
-
-These hooks provide caching, optimistic updates, and automatic refetching.
-
-### Client State (Zustand)
-
-Authentication state is managed via Zustand from `@knowtis/auth`:
-
-```typescript
-import { useAuthStore } from '@knowtis/auth';
-```
-
-The auth store manages user session, tokens, and authentication status.
+| Area                 | Description                                                              |
+| -------------------- | ------------------------------------------------------------------------ |
+| `editor/`            | Tiptap collaborative editor with toolbar, cursors, save indicator        |
+| `editor/ai/`         | AI bubble menu, slash commands, streaming preview                        |
+| `editor/extensions/` | Ghost text autocomplete, AI blocks, code blocks                          |
+| `artifacts/`         | Study tools sidebar (flashcards with SM2, quizzes, summaries, mind maps) |
+| `voice-note/`        | Voice recording, live preview, transcription                             |
+| `notes/`             | Note list, cards, sharing dialog                                         |
+| `settings/`          | Profile, account, appearance, language, MCP integrations                 |
+| `layout/`            | Sidebar, bottom nav (mobile), floating action button                     |
+| `anonymous/`         | Usage limit modal for unauthenticated users                              |
 
 ---
 
@@ -362,26 +249,7 @@ nx test notes --coverage
 nx test notes --testPathPattern=NoteCard
 ```
 
-### Test Structure
-
-```
-src/
-├── components/
-│   └── notes/
-│       ├── NoteCard.tsx
-│       └── NoteCard.test.tsx     # Component test
-├── hooks/
-│   └── useAutoSave.ts
-│       └── useAutoSave.test.ts   # Hook test
-└── test/
-    └── setup.ts                  # Test setup
-```
-
-### Testing Libraries
-
-- **Vitest** - Test runner
-- **React Testing Library** - Component testing
-- **@testing-library/user-event** - User interaction simulation
+Tests are co-located with source files (`*.test.tsx`). Uses Vitest + React Testing Library.
 
 ---
 
@@ -397,55 +265,7 @@ pnpm build
 nx build notes
 ```
 
-### Output
-
-Build artifacts are generated in `dist/apps/notes/`:
-
-```
-dist/apps/notes/
-├── index.html
-├── assets/
-│   ├── index.[hash].js
-│   └── index.[hash].css
-└── ...
-```
-
-### Preview Production Build
-
-```bash
-pnpm preview
-# or
-nx preview notes
-```
-
-### Deployment
-
-The built app is a static site that can be deployed to:
-
-- **Vercel** (configured via `vercel.json`)
-- **Netlify**
-- **AWS S3 + CloudFront**
-- **Any static hosting**
-
-#### Vercel Deployment
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy
-vercel
-```
-
-#### Environment Variables for Production
-
-Set these in your hosting provider:
-
-```env
-VITE_API_URL=https://api.your-domain.com/api/v1
-VITE_WS_URL=https://api.your-domain.com
-VITE_COLLABORATION_MODE=websocket
-```
+Output: `dist/apps/notes/`. Deployed to Vercel (see [Deployment Guide](../../docs/DEPLOYMENT.md)).
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Knowtis API follows a modular NestJS architecture with **DDD (Domain-Driven Design)** patterns fully implemented in the core modules (`auth` and `notes`).
+The Knowtis API follows a modular NestJS architecture with **DDD (Domain-Driven Design)** patterns implemented in the core modules (`auth`, `notes`, `ai`, and `artifacts`).
 
 ## Tech Stack
 
@@ -25,19 +25,24 @@ apps/api/src/
 ├── core/             # Filters, interceptors, exceptions
 ├── database/         # Drizzle schema and module
 └── modules/
+    ├── admin/        # Admin dashboard & metrics (Service-based)
+    ├── ai/           # AI text assistant (DDD) ✅
+    ├── artifacts/    # AI-generated study artifacts (DDD) ✅
     ├── auth/         # Authentication (DDD) ✅
+    ├── authorization/# CASL-based role & permission guards (Service-based)
     ├── collaboration/# Real-time collaboration
     ├── feature-flags/# DB-backed feature flags with cache
     ├── health/       # Health checks
+    ├── mcp/          # MCP API keys & token exchange (Service-based)
     ├── notes/        # Notes CRUD (DDD) ✅
     └── users/        # User management (Service-based)
 ```
 
 ## Module Architecture
 
-### DDD Modules (auth, notes)
+### DDD Modules (auth, notes, ai, artifacts)
 
-Both `auth` and `notes` modules use **Clean Architecture** with Ports & Adapters:
+The `auth`, `notes`, `ai`, and `artifacts` modules use **Clean Architecture** with Ports & Adapters:
 
 ```
 module/
@@ -56,35 +61,9 @@ module/
 └── module.ts         # NestJS DI wiring
 ```
 
-### Notes Module Structure
+### Example: Notes Module
 
-```
-notes/
-├── application/
-│   ├── commands/
-│   │   ├── create-note.handler.ts
-│   │   ├── update-note.handler.ts
-│   │   ├── delete-note.handler.ts
-│   │   ├── share-note.handler.ts
-│   │   └── revoke-access.handler.ts
-│   └── queries/
-│       ├── get-note.handler.ts
-│       ├── get-notes.handler.ts
-│       └── get-collaborators.handler.ts
-├── domain/
-│   ├── entities/note.entity.ts
-│   ├── errors/note.errors.ts
-│   ├── ports/note.repository.ts
-│   └── value-objects/
-│       ├── note-title.vo.ts
-│       ├── note-content.vo.ts
-│       └── permission-level.vo.ts
-├── infrastructure/
-│   └── persistence/drizzle-note.repository.ts
-├── dto/notes.dto.ts
-├── notes.controller.ts
-└── notes.module.ts
-```
+The `notes` module illustrates the pattern: commands (`create`, `update`, `delete`, `share`, `revoke-access`), queries (`get-note`, `get-notes`, `get-collaborators`), value objects (`NoteTitle`, `NoteContent`, `PermissionLevel`), and a single infrastructure adapter (`DrizzleNoteRepository`).
 
 ## Data Flow
 
