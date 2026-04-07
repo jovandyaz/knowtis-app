@@ -95,7 +95,13 @@ interface NoteControlsPortalProps {
   canEdit: boolean;
   isSaving: boolean;
   hasSaved: boolean;
-  onShareClick: () => void;
+  shareDialogOpen: boolean;
+  onShareDialogOpenChange: (open: boolean) => void;
+  noteId: string;
+  noteTitle: string;
+  generalAccess: GeneralAccessLevel;
+  generalAccessPermission: PermissionLevel;
+  shareToken: string | null;
 }
 
 function NoteControlsPortal({
@@ -104,12 +110,21 @@ function NoteControlsPortal({
   canEdit,
   isSaving,
   hasSaved,
-  onShareClick,
+  shareDialogOpen,
+  onShareDialogOpenChange,
+  noteId,
+  noteTitle,
+  generalAccess,
+  generalAccessPermission,
+  shareToken,
 }: NoteControlsPortalProps) {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
   const showBadge = accessLevel !== 'owner';
+  const canShare = canPerformNoteAction(accessLevel, 'share', {
+    editorsCanShare,
+  });
 
   const portalTarget = document.getElementById('note-controls-portal');
   if (!portalTarget) {
@@ -139,22 +154,47 @@ function NoteControlsPortal({
           />
         ) : null)}
 
-      {canPerformNoteAction(accessLevel, 'share', {
-        editorsCanShare,
-      }) && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
-              onClick={onShareClick}
+      {canShare && (
+        <>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+                onClick={() => onShareDialogOpenChange(true)}
+              >
+                <Share2 className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent
+              hidden={shareDialogOpen}
+              onPointerDownOutside={(e) => e.preventDefault()}
             >
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('editor.share')}</TooltipContent>
-        </Tooltip>
+              {t('editor.share')}
+            </TooltipContent>
+          </Tooltip>
+          <ShareDialog
+            open={shareDialogOpen}
+            onOpenChange={(open) => {
+              onShareDialogOpenChange(open);
+              if (!open) {
+                requestAnimationFrame(() => {
+                  if (document.activeElement instanceof HTMLElement) {
+                    document.activeElement.blur();
+                  }
+                });
+              }
+            }}
+            noteId={noteId}
+            noteTitle={noteTitle}
+            generalAccess={generalAccess}
+            generalAccessPermission={generalAccessPermission}
+            shareToken={shareToken}
+            editorsCanShare={editorsCanShare}
+            accessLevel={accessLevel}
+          />
+        </>
       )}
     </>,
     portalTarget
@@ -325,7 +365,13 @@ function NoteEditor({
         canEdit={canEdit}
         isSaving={isSaving}
         hasSaved={!!lastSaved}
-        onShareClick={openShareDialog}
+        shareDialogOpen={isShareDialogOpen}
+        onShareDialogOpenChange={setIsShareDialogOpen}
+        noteId={noteId}
+        noteTitle={title}
+        generalAccess={generalAccess}
+        generalAccessPermission={generalAccessPermission}
+        shareToken={shareToken}
       />
 
       <div className="mb-4">
@@ -357,20 +403,6 @@ function NoteEditor({
           onClose={voiceNoteClose}
           onInsert={handleVoiceInsert}
           preAcquiredStream={preAcquiredStream}
-        />
-      )}
-
-      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
-        <ShareDialog
-          open={isShareDialogOpen}
-          onOpenChange={setIsShareDialogOpen}
-          noteId={noteId}
-          noteTitle={title}
-          generalAccess={generalAccess}
-          generalAccessPermission={generalAccessPermission}
-          shareToken={shareToken}
-          editorsCanShare={editorsCanShare}
-          accessLevel={accessLevel}
         />
       )}
     </div>

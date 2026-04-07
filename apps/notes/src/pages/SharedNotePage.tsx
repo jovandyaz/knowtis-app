@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useParams } from '@tanstack/react-router';
+import { Link, useParams } from '@tanstack/react-router';
 
-import { CollaborativeEditor } from '@/components/editor';
+import { CollaborativeEditor, ReadOnlyEditor } from '@/components/editor';
+import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
+import { ROUTES } from '@/config';
 import { format } from 'date-fns';
 import DOMPurify from 'dompurify';
 import { Eye, Pencil } from 'lucide-react';
@@ -79,12 +81,10 @@ export function SharedNotePage() {
   return (
     <div className="min-h-screen bg-(--background)">
       {/* Minimal header */}
-      <header className="border-b border-border/30 bg-(--card)/50 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-border/30 bg-(--card)/50 backdrop-blur-sm">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-(--foreground)">
-              Knowtis
-            </span>
+            <KnowtisLogo className="h-5 w-auto text-primary" />
             <Badge variant={canEdit ? 'default' : 'secondary'}>
               {canEdit ? (
                 <span className="flex items-center gap-1">
@@ -98,6 +98,11 @@ export function SharedNotePage() {
                 </span>
               )}
             </Badge>
+            <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground/50">
+              <span>{data.owner.name}</span>
+              <span>&middot;</span>
+              <span>{format(new Date(data.updatedAt), 'MMM d, yyyy')}</span>
+            </span>
           </div>
           <div className="flex items-center gap-2">
             {canEdit && !isEditing && (
@@ -116,27 +121,17 @@ export function SharedNotePage() {
                 {t('shared.viewButton')}
               </Button>
             )}
-            <a href="/login">
+            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
               <Button variant="outline" size="sm">
                 {t('shared.signIn')}
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       </header>
 
       {/* Note content */}
       <main className="mx-auto max-w-4xl px-4 py-8">
-        <h1 className="mb-2 text-[28px] md:text-3xl font-bold tracking-tight text-(--foreground)">
-          {data.title}
-        </h1>
-
-        <div className="mb-8 flex items-center gap-2 text-xs text-muted-foreground/50">
-          <span>{t('shared.byAuthor', { name: data.owner.name })}</span>
-          <span>&middot;</span>
-          <span>{format(new Date(data.updatedAt), 'MMMM d, yyyy')}</span>
-        </div>
-
         {isEditing ? (
           <CollaborativeEditor
             noteId={data.id}
@@ -147,12 +142,7 @@ export function SharedNotePage() {
             onEditDenied={handleEditDenied}
           />
         ) : (
-          <div
-            className="prose prose-neutral dark:prose-invert max-w-none"
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(displayContent),
-            }}
-          />
+          <ReadOnlyEditor content={DOMPurify.sanitize(displayContent)} />
         )}
       </main>
     </div>
