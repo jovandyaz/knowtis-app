@@ -1,0 +1,124 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: en-US
+tone_instructions: >
+  Senior-level reviewer. Focus on bugs, security, anti-patterns, and
+  architecture violations. Skip style/formatting — ESLint handles that.
+
+early_access: false
+
+reviews:
+  profile: assertive
+  high_level_summary: true
+  review_status: true
+  request_changes_workflow: true
+  collapse_walkthrough: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - main
+
+  path_instructions:
+    - path: apps/api/src/modules/**/domain/**
+      instructions: |
+        Strictest review tier. Flag ANY of these violations:
+        - Infrastructure imports (Drizzle, @nestjs/*, database drivers)
+        - Anemic models (data bags with public setters, no invariant enforcement)
+        - Business rules implemented outside this layer
+        - Thrown exceptions instead of Result pattern (neverthrow)
+        - Mutable domain event payloads
+        - Repository implementations (only port interfaces belong here)
+
+    - path: apps/api/src/modules/**/application/**
+      instructions: |
+        - Handlers must be thin orchestrators — flag business logic here
+        - Flag direct database access (must go through repository ports)
+        - Use cases must be transport-agnostic (no HTTP/WebSocket specifics)
+
+    - path: apps/api/src/modules/**/infrastructure/**
+      instructions: |
+        - Flag N+1 query patterns
+        - Drizzle: flag string interpolation in queries (SQL injection risk)
+        - Mappers must be explicit — flag implicit type coercion between
+          persistence models and domain entities
+
+    - path: apps/api/src/modules/auth/**
+      instructions: |
+        Security-critical module:
+        - Flag tokens in localStorage (refresh tokens must use HttpOnly cookies)
+        - Password: must use bcrypt/argon2, flag plaintext comparisons or logging
+        - Verify SameSite cookie attributes for CSRF protection
+        - Flag missing rate limiting on auth endpoints
+        - Verify refresh token rotation invalidates old tokens
+        - Flag any hardcoded secret or credential
+
+    - path: apps/api/src/modules/ai/**
+      instructions: |
+        - Flag missing rate limiting per user
+        - API keys must come from ConfigService, never hardcoded
+        - Streaming: verify backpressure handling and cleanup on disconnect
+        - Flag missing feature flag guard on endpoints
+        - Sanitize user input before sending to LLM (prompt injection)
+
+    - path: apps/api/src/modules/collaboration/**
+      instructions: |
+        Real-time (WebSocket/Yjs) — review for:
+        - Race conditions and concurrency issues
+        - Memory leaks: socket listeners and Y.Doc cleanup on disconnect
+        - Reconnection handling with stale state
+        - Awareness updates must be debounced
+        - Validate binary Yjs updates before broadcasting
+
+    - path: apps/notes/src/**
+      instructions: |
+        - Flag stale closures in callbacks passed to children or effects
+        - Flag useEffect that should be event handlers instead
+        - Flag prop drilling (use Zustand for shared state)
+        - Flag inline functions in JSX passed to memoized children
+        - Verify conditional rendering covers all states (loading, error, empty)
+        - Flag unsafe HTML rendering without sanitization (XSS)
+
+    - path: libs/design-system/**
+      instructions: |
+        - Accessibility: verify ARIA attributes, keyboard nav, focus management
+        - Flag hardcoded colors/spacing — must use design tokens
+        - Flag app-specific or business logic in components
+        - Props API should follow composition patterns (Radix-style)
+
+    - path: '**/*.spec.ts'
+      instructions: |
+        - Flag tests that only cover happy paths — require edge cases
+        - Assertions must be specific (toBe/toEqual, not toBeTruthy)
+        - Test names must describe behavior ("should reject expired tokens")
+        - Flag tests that assert implementation details instead of behavior
+
+    - path: '**/*.spec.tsx'
+      instructions: |
+        - Use testing-library queries by role/text, not querySelector
+        - Flag snapshot tests — prefer explicit assertions
+        - Verify error states and edge cases are tested
+
+  tools:
+    eslint:
+      enabled: true
+    gitleaks:
+      enabled: true
+
+  path_filters:
+    - '!pnpm-lock.yaml'
+    - '!**/routeTree.gen.ts'
+    - '!**/*.gen.ts'
+    - '!dist/**'
+    - '!coverage/**'
+    - '!.nx/**'
+    - '!tmp/**'
+    - '!**/*.config.js'
+    - '!**/*.config.cjs'
+    - '!**/*.config.ts'
+    - '!**/tsconfig*.json'
+    - '!libs/design-system/storybook-static/**'
+
+chat:
+  auto_reply: true
