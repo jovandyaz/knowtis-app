@@ -3,7 +3,13 @@ import { useTranslation } from 'react-i18next';
 
 import { Check, Copy, Users } from 'lucide-react';
 
-import { Button, cn } from '@knowtis/design-system';
+import {
+  Button,
+  cn,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@knowtis/design-system';
 import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
 
 interface LinkAccessSectionProps {
@@ -72,24 +78,27 @@ export function LinkAccessSection({
             {shareUrl}
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleCopyLink}
-          className="flex-shrink-0 gap-2"
-        >
-          {copiedLink ? (
-            <>
-              <Check className="h-4 w-4 text-emerald-500" />
-              <span>{tCommon('buttons.copied')}</span>
-            </>
-          ) : (
-            <>
-              <Copy className="h-4 w-4" />
-              <span>{tCommon('buttons.copyLink')}</span>
-            </>
-          )}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCopyLink}
+              className="flex-shrink-0 h-8 w-8"
+            >
+              {copiedLink ? (
+                <Check className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <Copy className="h-4 w-4" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {copiedLink
+              ? tCommon('buttons.copied')
+              : tCommon('buttons.copyLink')}
+          </TooltipContent>
+        </Tooltip>
       </div>
 
       <p className="text-xs text-muted-foreground">

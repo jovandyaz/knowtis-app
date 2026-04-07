@@ -13,9 +13,11 @@ import {
 import {
   ACCESS,
   GENERAL_ACCESS,
+  PERMISSION,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type PermissionLevel,
+  type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
 import {
@@ -59,7 +61,7 @@ export function ShareDialog({
     ? `${window.location.origin}/s/${shareToken}`
     : null;
 
-  const handleUpdate = (input: Record<string, unknown>) => {
+  const handleUpdate = (input: UpdateNoteInput) => {
     updateNote.mutate({ id: noteId, input });
   };
 
@@ -123,15 +125,17 @@ export function ShareDialog({
             />
           )}
 
-          {isOwner && (
-            <EditorsCanShareToggle
-              enabled={editorsCanShare}
-              disabled={updateNote.isPending}
-              onToggle={() =>
-                handleUpdate({ editorsCanShare: !editorsCanShare })
-              }
-            />
-          )}
+          {isOwner &&
+            isPublicAccess &&
+            generalAccessPermission === PERMISSION.EDITOR && (
+              <EditorsCanShareToggle
+                enabled={editorsCanShare}
+                disabled={updateNote.isPending}
+                onToggle={() =>
+                  handleUpdate({ editorsCanShare: !editorsCanShare })
+                }
+              />
+            )}
 
           {!isOwner && <AccessInfoBanner canShare={canShare} />}
         </div>
