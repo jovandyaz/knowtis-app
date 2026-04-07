@@ -142,63 +142,18 @@ npx nx affected -t lint test build --base=main --head=HEAD      # Simulate CI
 
 Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 
+### Pull Requests
+
+- **Graphite** manages PR workflow — use stacked PRs for multi-step features instead of one large PR
+- **CodeRabbit** auto-reviews every PR — address its feedback before requesting human review
+- When creating PRs, prefer `gt create` (Graphite CLI) over `gh pr create` for proper stack tracking
+- PR branches created by Graphite follow the pattern `<user>/<branch-name>`
+
 ### Git Hooks (Lefthook)
 
 - **pre-commit**: Runs ESLint + Prettier on staged files, TypeScript type checking
 - **pre-push**: Runs affected tests
 - **commit-msg**: Validates Conventional Commits format
-
-### TypeScript Style
-
-- Use `import type` for type-only imports
-- Prefer `interface` over `type` for object shapes
-- Use `const` by default, never `var`
-- Always use curly braces for control structures
-
-### Error Handling
-
-- **Never use empty `catch` blocks** — always log the error with context (`this.logger.warn(...)` in NestJS, `console.error(...)` in frontend). Silent failures hide bugs and make debugging impossible.
-- When a non-critical operation fails (e.g., data migration during login), log a warning and continue — but never silently swallow the error.
-
-### NestJS DI Rule
-
-In the backend, **never use `import type`** for classes that are injected via NestJS DI. NestJS needs runtime metadata from these imports. See `.agent/workflows/nestjs-di-rules.md`.
-
-## Real-time Collaboration
-
-The collaboration system uses Yjs (CRDT) for conflict-free sync:
-
-1. User edits in Tiptap → Y.Doc updates
-2. Y.Doc generates binary diff
-3. Diff sent via Socket.io to collaboration gateway
-4. Server broadcasts to room members
-5. Clients apply update, Tiptap re-renders
-
-Presence/awareness is synced over WebSocket via the Yjs Awareness API:
-
-- `useAwarenessSync` hook encodes local awareness updates and sends them via `collaborationClient.sendAwarenessUpdate()`
-- Incoming awareness changes are applied with `applyAwarenessUpdate()` from `y-protocols/awareness`
-- `useActiveCollaborators` reads awareness state to render remote cursors and "X users editing" indicator
-
-## Authentication
-
-JWT-based with HttpOnly cookie refresh tokens:
-
-- Access token: stored in memory (Zustand), sent via `Authorization` header
-- Refresh token: stored in HttpOnly cookie (`rid`, path `/api/v1/auth`, SameSite=Strict), set/cleared by the backend
-- `@knowtis/api-client` sends `credentials: 'include'` and handles silent refresh on 401 responses
-- WebSocket auth: JWT sent via Socket.IO `auth.token` (not `extraHeaders`)
-
-## Backend Modules
-
-- **ai** - AI text assistant with WebSocket streaming (`/ai` namespace), rate limiting, response caching, and usage tracking. Gated by `ai_enabled` DB feature flag. Uses DDD/Clean Architecture. See [docs/AI.md](docs/AI.md).
-- **auth** - JWT authentication with DDD/Clean Architecture (Ports & Adapters, Value Objects, Result pattern via neverthrow)
-- **notes** - Notes CRUD with DDD/Clean Architecture, sharing/permissions
-- **collaboration** - WebSocket gateway (Socket.io) for Yjs real-time sync
-- **users** - User management (service-based)
-- **health** - Health check endpoints (`/api/v1/health/ping` returns 200, `/api/v1/health/ready` checks DB connectivity via `DbHealthIndicator`, returns 503 when DB is down)
-- **feature-flags** - DB-backed feature flag service with guard
-- **mcp** - MCP server for AI assistant integration (Claude, Cursor, VS Code). Standalone Hono app with 7 tools for notes CRUD and sharing. See [docs/MCP.md](docs/MCP.md).
 
 ## API Documentation
 
