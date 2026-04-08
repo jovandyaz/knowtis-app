@@ -10,6 +10,7 @@ import {
   GetArtifactsHandler,
   GetFlashcardProgressHandler,
   GetQuizAttemptsHandler,
+  GetSharedNoteArtifactsHandler,
   GetStudySessionHandler,
   LearnTopicHandler,
   ReviewCardHandler,
@@ -29,10 +30,16 @@ import {
   DrizzleQuizAttemptRepository,
 } from './infrastructure';
 import { QuizController } from './quiz.controller';
+import { SharedNoteArtifactsController } from './shared-note-artifacts.controller';
 
 @Module({
   imports: [AIModule, NotesModule],
-  controllers: [ArtifactsController, FlashcardStudyController, QuizController],
+  controllers: [
+    ArtifactsController,
+    FlashcardStudyController,
+    QuizController,
+    SharedNoteArtifactsController,
+  ],
   providers: [
     DrizzleArtifactRepository,
     {
@@ -59,6 +66,7 @@ import { QuizController } from './quiz.controller';
     SubmitQuizAttemptHandler,
     GetArtifactHandler,
     GetArtifactsHandler,
+    GetSharedNoteArtifactsHandler,
     GetStudySessionHandler,
     GetFlashcardProgressHandler,
     GetQuizAttemptsHandler,

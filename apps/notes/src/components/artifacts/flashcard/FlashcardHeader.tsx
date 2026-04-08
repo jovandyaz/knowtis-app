@@ -18,6 +18,7 @@ interface FlashcardHeaderProps {
   isAdvancedMode: boolean;
   onToggleAdvanced: () => void;
   onRestart: () => void;
+  readOnly?: boolean | undefined;
 }
 
 const RING_SIZE = 40;
@@ -32,6 +33,7 @@ export function FlashcardHeader({
   isAdvancedMode,
   onToggleAdvanced,
   onRestart,
+  readOnly,
 }: FlashcardHeaderProps) {
   const { t } = useTranslation('notes');
   const progress = total > 0 ? reviewedCount / total : 0;
@@ -87,39 +89,42 @@ export function FlashcardHeader({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="flex items-center gap-1.5">
-              <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
-              <Switch
-                checked={isAdvancedMode}
-                onCheckedChange={onToggleAdvanced}
-                size="sm"
-                aria-label={t('ai.artifacts.flashcards.advancedMode')}
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t('ai.artifacts.flashcards.advancedMode')}
-          </TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onRestart}
-              className="h-8 w-8"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t('ai.artifacts.flashcards.restart')}
-          </TooltipContent>
-        </Tooltip>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center gap-2">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div className="flex items-center gap-1.5">
+                <Settings2 className="h-3.5 w-3.5 text-muted-foreground" />
+                <Switch
+                  checked={isAdvancedMode}
+                  onCheckedChange={onToggleAdvanced}
+                  size="sm"
+                  aria-label={t('ai.artifacts.flashcards.advancedMode')}
+                />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('ai.artifacts.flashcards.advancedMode')}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRestart}
+                className="h-8 w-8"
+                aria-label={t('ai.artifacts.flashcards.restart')}
+              >
+                <RotateCcw className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('ai.artifacts.flashcards.restart')}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 }

@@ -18,7 +18,9 @@ import type { Artifact } from '@knowtis/shared-types';
 import { ARTIFACT_DISPLAY } from './artifact-display.config';
 
 interface ArtifactListProps {
-  noteId: string;
+  noteId?: string;
+  artifacts?: Artifact[];
+  readOnly?: boolean;
   onSelect: (artifact: Artifact) => void;
 }
 
@@ -29,10 +31,18 @@ function formatDate(dateStr: string): string {
   });
 }
 
-export function ArtifactList({ noteId, onSelect }: ArtifactListProps) {
+export function ArtifactList({
+  noteId,
+  artifacts: externalArtifacts,
+  readOnly,
+  onSelect,
+}: ArtifactListProps) {
   const { t } = useTranslation('notes');
-  const { data: artifacts, isLoading } = useArtifacts(noteId);
+  const { data: fetchedArtifacts, isLoading } = useArtifacts(
+    externalArtifacts ? undefined : noteId
+  );
   const deleteArtifact = useDeleteArtifact();
+  const artifacts = externalArtifacts ?? fetchedArtifacts;
 
   const handleDelete = (e: React.MouseEvent, artifactId: string) => {
     e.stopPropagation();
@@ -87,18 +97,20 @@ export function ArtifactList({ noteId, onSelect }: ArtifactListProps) {
                 </span>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={(e) => handleDelete(e, artifact.id)}
-              disabled={deleteArtifact.isPending}
-              aria-label={t('ai.artifacts.list.deleteAriaLabel', {
-                title: artifact.title,
-              })}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
+            {!readOnly && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                onClick={(e) => handleDelete(e, artifact.id)}
+                disabled={deleteArtifact.isPending}
+                aria-label={t('ai.artifacts.list.deleteAriaLabel', {
+                  title: artifact.title,
+                })}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
         );
       })}

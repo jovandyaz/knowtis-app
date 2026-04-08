@@ -51,6 +51,11 @@ import { NotesController } from './notes.controller';
     RevokeAccessHandler,
     GetCollaboratorsHandler,
   ],
-  exports: [GetNoteHandler, GetNoteByTokenHandler, NOTE_REPOSITORY],
+  exports: [
+    GetNoteHandler,
+    GetNoteByTokenHandler,
+    NOTE_REPOSITORY,
+    NOTE_READ_REPOSITORY,
+  ],
 })
 export class NotesModule {}

@@ -13,19 +13,13 @@ import {
 import {
   ACCESS,
   GENERAL_ACCESS,
-  PERMISSION,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type PermissionLevel,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
-import {
-  AccessInfoBanner,
-  AccessOptionCard,
-  EditorsCanShareToggle,
-  LinkAccessSection,
-} from './share';
+import { AccessInfoBanner, AccessOptionCard, LinkAccessSection } from './share';
 
 interface ShareDialogProps {
   open: boolean;
@@ -124,18 +118,6 @@ export function ShareDialog({
               }
             />
           )}
-
-          {isOwner &&
-            isPublicAccess &&
-            generalAccessPermission === PERMISSION.EDITOR && (
-              <EditorsCanShareToggle
-                enabled={editorsCanShare}
-                disabled={updateNote.isPending}
-                onToggle={() =>
-                  handleUpdate({ editorsCanShare: !editorsCanShare })
-                }
-              />
-            )}
 
           {!isOwner && <AccessInfoBanner canShare={canShare} />}
         </div>

@@ -24,6 +24,8 @@ export const artifactsQueryKeys = {
   quizAttempts: (id: string) =>
     [...artifactsQueryKeys.all, 'quiz-attempts', id] as const,
   dueCards: () => [...artifactsQueryKeys.all, 'due'] as const,
+  shared: (token: string) =>
+    [...artifactsQueryKeys.all, 'shared', token] as const,
 } as const;
 
 export function useArtifacts(noteId?: string) {
@@ -32,6 +34,7 @@ export function useArtifacts(noteId?: string) {
       ? artifactsQueryKeys.byNote(noteId)
       : artifactsQueryKeys.all,
     queryFn: () => artifactsApi.getAll(noteId),
+    enabled: !!noteId,
     staleTime: STALE_TIME.DEFAULT,
   });
 }
@@ -137,6 +140,15 @@ export function useDueCards() {
   return useQuery({
     queryKey: artifactsQueryKeys.dueCards(),
     queryFn: () => artifactsApi.getDueCards(),
+    staleTime: STALE_TIME.LONG,
+  });
+}
+
+export function useSharedNoteArtifacts(token: string) {
+  return useQuery({
+    queryKey: artifactsQueryKeys.shared(token),
+    queryFn: () => artifactsApi.getByShareToken(token),
+    enabled: !!token,
     staleTime: STALE_TIME.LONG,
   });
 }
