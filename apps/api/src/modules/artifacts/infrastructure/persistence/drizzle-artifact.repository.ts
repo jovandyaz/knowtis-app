@@ -51,6 +51,16 @@ export class DrizzleArtifactRepository
     return rows.map((row) => this.toEntity(row));
   }
 
+  async findBySourceNoteId(noteId: string): Promise<ArtifactEntity[]> {
+    const rows = await this.db
+      .select()
+      .from(artifacts)
+      .where(eq(artifacts.sourceNoteId, noteId))
+      .orderBy(desc(artifacts.createdAt));
+
+    return rows.map((row) => this.toEntity(row));
+  }
+
   async findByUserId(userId: string): Promise<ArtifactEntity[]> {
     const rows = await this.db
       .select()

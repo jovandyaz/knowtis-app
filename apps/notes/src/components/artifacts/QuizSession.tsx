@@ -15,6 +15,7 @@ const QUIZ_SCORE_THRESHOLD = {
 
 interface QuizSessionProps {
   artifact: QuizArtifact;
+  readOnly?: boolean | undefined;
 }
 
 interface QuizAnswer {
@@ -22,7 +23,7 @@ interface QuizAnswer {
   selectedIndex: number;
 }
 
-export function QuizSession({ artifact }: QuizSessionProps) {
+export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
   const { t } = useTranslation('notes');
   const content = artifact.content;
   const submitQuiz = useSubmitQuiz(artifact.id);
@@ -65,16 +66,18 @@ export function QuizSession({ artifact }: QuizSessionProps) {
       setAnswered(false);
     } else {
       setCompleted(true);
-      submitQuiz.mutate(
-        { answers: [...answers] },
-        {
-          onError: () => {
-            toast.error(t('ai.artifacts.quiz.submitError'));
-          },
-        }
-      );
+      if (!readOnly) {
+        submitQuiz.mutate(
+          { answers: [...answers] },
+          {
+            onError: () => {
+              toast.error(t('ai.artifacts.quiz.submitError'));
+            },
+          }
+        );
+      }
     }
-  }, [currentIndex, totalQuestions, answers, submitQuiz, t]);
+  }, [currentIndex, totalQuestions, answers, submitQuiz, t, readOnly]);
 
   const handleRestart = useCallback(() => {
     setCurrentIndex(0);

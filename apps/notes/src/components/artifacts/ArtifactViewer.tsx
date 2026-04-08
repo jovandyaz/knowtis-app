@@ -7,14 +7,27 @@ import { SummaryViewer } from './SummaryViewer';
 
 interface ArtifactViewerProps {
   artifact: Artifact;
+  readOnly?: boolean;
 }
 
-export function ArtifactViewer({ artifact }: ArtifactViewerProps) {
+export function ArtifactViewer({ artifact, readOnly }: ArtifactViewerProps) {
   switch (artifact.type) {
     case 'flashcard_deck':
-      return <FlashcardStudy key={artifact.id} artifact={artifact} />;
+      return (
+        <FlashcardStudy
+          key={artifact.id}
+          artifact={artifact}
+          readOnly={readOnly}
+        />
+      );
     case 'quiz':
-      return <QuizSession key={artifact.id} artifact={artifact} />;
+      return (
+        <QuizSession
+          key={artifact.id}
+          artifact={artifact}
+          readOnly={readOnly}
+        />
+      );
     case 'summary':
       return <SummaryViewer artifact={artifact} />;
     case 'mind_map':

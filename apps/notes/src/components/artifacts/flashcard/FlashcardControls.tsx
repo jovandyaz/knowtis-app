@@ -14,6 +14,7 @@ import { SM2_QUALITY, type SM2Quality } from '@knowtis/shared-types';
 interface FlashcardControlsProps {
   isAdvancedMode: boolean;
   isFlipped: boolean;
+  readOnly?: boolean | undefined;
   onWrong: () => void;
   onCorrect: () => void;
   onNavigatePrev: () => void;
@@ -68,6 +69,7 @@ function AnimatedCounter({ count }: { count: number }) {
 export function FlashcardControls({
   isAdvancedMode,
   isFlipped,
+  readOnly,
   onWrong,
   onCorrect,
   onNavigatePrev,
@@ -80,7 +82,7 @@ export function FlashcardControls({
 }: FlashcardControlsProps) {
   const { t } = useTranslation('notes');
 
-  if (isFlipped && isAdvancedMode) {
+  if (isFlipped && isAdvancedMode && !readOnly) {
     return (
       <motion.div
         className="flex flex-wrap items-center justify-center gap-2"

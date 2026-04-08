@@ -3,20 +3,25 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useParams } from '@tanstack/react-router';
 
+import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
 import { CollaborativeEditor, ReadOnlyEditor } from '@/components/editor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES } from '@/config';
+import { useCopyLink } from '@/hooks/useCopyLink';
 import { format } from 'date-fns';
-import DOMPurify from 'dompurify';
-import { Eye, Pencil } from 'lucide-react';
+import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
 
 import { ApiClientError } from '@knowtis/api-client';
+import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
 import { useNoteByToken } from '@knowtis/data-access-notes';
 import {
   Badge,
   Button,
   ErrorState,
   LoadingState,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@knowtis/design-system';
 import { PERMISSION } from '@knowtis/shared-types';
 
@@ -25,8 +30,12 @@ export function SharedNotePage() {
   const { t: tCommon } = useTranslation('common');
   const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, error } = useNoteByToken(token);
+  const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
   const [latestContent, setLatestContent] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { copied, copy: copyLink } = useCopyLink();
+  const hasArtifacts = !!artifacts && artifacts.length > 0;
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);
@@ -77,13 +86,14 @@ export function SharedNotePage() {
 
   const canEdit = data.accessLevel === PERMISSION.EDITOR;
   const displayContent = latestContent ?? data.content;
+  const CopyIcon = copied ? Check : Share2;
 
   return (
-    <div className="min-h-screen bg-(--background)">
-      {/* Minimal header */}
-      <header className="sticky top-0 z-40 border-b border-border/30 bg-(--card)/50 backdrop-blur-sm">
-        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
+    <div className="flex h-screen flex-col overflow-hidden bg-(--background)">
+      {/* Mobile header */}
+      <header className="md:hidden shrink-0 border-b border-border/30 bg-(--card)/50 px-4 py-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <KnowtisLogo className="h-5 w-auto text-primary" />
             <Badge variant={canEdit ? 'default' : 'secondary'}>
               {canEdit ? (
@@ -98,28 +108,35 @@ export function SharedNotePage() {
                 </span>
               )}
             </Badge>
-            <span className="hidden sm:flex items-center gap-1.5 text-xs text-muted-foreground/50">
-              <span>{data.owner.name}</span>
-              <span>&middot;</span>
-              <span>{format(new Date(data.updatedAt), 'MMM d, yyyy')}</span>
-            </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={copyLink}
+              className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
+              aria-label={tCommon('buttons.copyLink')}
+            >
+              <CopyIcon className="h-4 w-4" />
+            </button>
             {canEdit && !isEditing && (
-              <Button
-                variant="default"
-                size="sm"
+              <button
+                type="button"
                 onClick={() => setIsEditing(true)}
+                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
+                aria-label={t('shared.editButton')}
               >
-                <Pencil className="mr-1 h-3 w-3" />
-                {t('shared.editButton')}
-              </Button>
+                <Pencil className="h-4 w-4" />
+              </button>
             )}
             {isEditing && (
-              <Button variant="outline" size="sm" onClick={handleStopEditing}>
-                <Eye className="mr-1 h-3 w-3" />
-                {t('shared.viewButton')}
-              </Button>
+              <button
+                type="button"
+                onClick={handleStopEditing}
+                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
+                aria-label={t('shared.viewButton')}
+              >
+                <Eye className="h-4 w-4" />
+              </button>
             )}
             <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
               <Button variant="outline" size="sm">
@@ -130,21 +147,125 @@ export function SharedNotePage() {
         </div>
       </header>
 
-      {/* Note content */}
-      <main className="mx-auto max-w-4xl px-4 py-8">
-        {isEditing ? (
-          <CollaborativeEditor
-            noteId={data.id}
-            initialContent={data.content}
-            onUpdate={handleUpdate}
-            editable={true}
-            shareToken={token}
-            onEditDenied={handleEditDenied}
+      {/* Desktop: content column + sidebar side-by-side */}
+      <div className="flex flex-1 min-h-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
+            <div className="flex items-center gap-3">
+              <KnowtisLogo className="h-5 w-auto text-primary" />
+              <Badge variant={canEdit ? 'default' : 'secondary'}>
+                {canEdit ? (
+                  <span className="flex items-center gap-1">
+                    <Pencil className="h-3 w-3" />
+                    {t('shared.editorBadge')}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1">
+                    <Eye className="h-3 w-3" />
+                    {t('shared.viewOnlyBadge')}
+                  </span>
+                )}
+              </Badge>
+              <span className="flex items-center gap-1.5 text-xs text-muted-foreground/50">
+                <span>{data.owner.name}</span>
+                <span>&middot;</span>
+                <span>{format(new Date(data.updatedAt), 'MMM d, yyyy')}</span>
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+                    onClick={copyLink}
+                  >
+                    <CopyIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{tCommon('buttons.copyLink')}</TooltipContent>
+              </Tooltip>
+              {canEdit && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+                      onClick={
+                        isEditing ? handleStopEditing : () => setIsEditing(true)
+                      }
+                    >
+                      {isEditing ? (
+                        <Eye className="h-4 w-4" />
+                      ) : (
+                        <Pencil className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isEditing
+                      ? t('shared.viewButton')
+                      : t('shared.editButton')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+                <Button variant="outline" size="sm">
+                  {t('shared.signIn')}
+                </Button>
+              </Link>
+              {hasArtifacts && (
+                <button
+                  type="button"
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                  className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
+                  aria-label={t('ai.artifacts.sidebar.openPanel')}
+                >
+                  <PanelLeft className="h-4 w-4 -scale-x-100" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <main className="flex-1 min-h-0 overflow-y-auto p-4 md:px-8 md:pt-3 md:pb-8">
+            <div className="mx-auto max-w-4xl">
+              {isEditing ? (
+                <CollaborativeEditor
+                  noteId={data.id}
+                  initialContent={data.content}
+                  onUpdate={handleUpdate}
+                  editable={true}
+                  shareToken={token}
+                  onEditDenied={handleEditDenied}
+                />
+              ) : (
+                <ReadOnlyEditor content={displayContent} />
+              )}
+            </div>
+          </main>
+        </div>
+
+        {hasArtifacts && (
+          <SharedArtifactSidebar
+            artifacts={artifacts}
+            open={sidebarOpen}
+            onToggle={() => setSidebarOpen((prev) => !prev)}
           />
-        ) : (
-          <ReadOnlyEditor content={DOMPurify.sanitize(displayContent)} />
         )}
-      </main>
+      </div>
+
+      {hasArtifacts && (
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          className="fixed bottom-4 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
+          aria-label={t('ai.artifacts.sidebar.studyTools')}
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      )}
     </div>
   );
 }
