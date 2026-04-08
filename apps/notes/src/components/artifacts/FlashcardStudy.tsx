@@ -20,15 +20,19 @@ import {
 
 interface FlashcardStudyProps {
   artifact: FlashcardArtifact;
+  readOnly?: boolean | undefined;
 }
 
-export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
+export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
   const { t } = useTranslation('notes');
   const reviewCard = useReviewCard(artifact.id);
   const session = useStudySession(artifact.content);
 
   const submitReview = useCallback(
     (quality: number) => {
+      if (readOnly) {
+        return;
+      }
       reviewCard.mutate(
         { cardIndex: session.currentIndex, quality },
         {
@@ -38,7 +42,7 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         }
       );
     },
-    [session.currentIndex, reviewCard, t]
+    [session.currentIndex, reviewCard, t, readOnly]
   );
 
   const handleWrong = useCallback(() => {
@@ -98,6 +102,7 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
         isAdvancedMode={session.isAdvancedMode}
         onToggleAdvanced={session.toggleAdvanced}
         onRestart={() => session.restart('all')}
+        readOnly={readOnly}
       />
 
       <FlashcardCard
@@ -112,6 +117,7 @@ export function FlashcardStudy({ artifact }: FlashcardStudyProps) {
       <FlashcardControls
         isAdvancedMode={session.isAdvancedMode}
         isFlipped={session.flipped}
+        readOnly={readOnly}
         onWrong={handleWrong}
         onCorrect={handleCorrect}
         onNavigatePrev={handleNavigatePrev}

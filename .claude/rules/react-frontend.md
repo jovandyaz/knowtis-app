@@ -67,7 +67,8 @@ paths:
 ## Security
 
 - Never render unsanitized user input as HTML — XSS risk.
-- Always sanitize with DOMPurify or equivalent before any HTML rendering.
+- Sanitize with DOMPurify when injecting raw HTML into the DOM (e.g., innerHTML).
+- Tiptap's `setContent`/`insertContent` already filters by ProseMirror schema — DOMPurify is redundant there.
 
 ## Design
 

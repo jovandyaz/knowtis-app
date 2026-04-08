@@ -8,6 +8,7 @@ export {
   useSubmitQuiz,
   useQuizAttempts,
   useDueCards,
+  useSharedNoteArtifacts,
   useLearnTopic,
   artifactsQueryKeys,
 } from './artifacts.hooks';

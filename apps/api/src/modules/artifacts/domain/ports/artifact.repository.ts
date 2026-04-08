@@ -31,6 +31,7 @@ export interface CreateArtifactData {
 export interface ArtifactReadRepository {
   findById(id: string): Promise<ArtifactEntity | null>;
   findByNoteId(noteId: string, userId: string): Promise<ArtifactEntity[]>;
+  findBySourceNoteId(noteId: string): Promise<ArtifactEntity[]>;
   findByUserId(userId: string): Promise<ArtifactEntity[]>;
 }
 
