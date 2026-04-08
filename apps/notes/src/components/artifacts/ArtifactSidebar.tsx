@@ -15,6 +15,12 @@ import {
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import type { Artifact } from '@knowtis/shared-types';
 
+import {
+  SIDEBAR_COLLAPSE_THRESHOLD,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+} from './artifact-sidebar.constants';
 import { ArtifactGeneratorButton } from './ArtifactGenerator';
 import { ArtifactList } from './ArtifactList';
 import { ArtifactViewer } from './ArtifactViewer';
@@ -44,11 +50,6 @@ function ArtifactPanelContent({
     </div>
   );
 }
-
-const SIDEBAR_DEFAULT_WIDTH = 480;
-const SIDEBAR_MIN_WIDTH = 320;
-const SIDEBAR_MAX_WIDTH = 600;
-const COLLAPSE_THRESHOLD = 100;
 
 export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
   const { t } = useTranslation('notes');
@@ -82,7 +83,7 @@ export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
         defaultWidth={SIDEBAR_DEFAULT_WIDTH}
         minWidth={SIDEBAR_MIN_WIDTH}
         maxWidth={SIDEBAR_MAX_WIDTH}
-        collapseThreshold={COLLAPSE_THRESHOLD}
+        collapseThreshold={SIDEBAR_COLLAPSE_THRESHOLD}
         isOpen={open}
         onCollapse={handleCollapse}
         handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}

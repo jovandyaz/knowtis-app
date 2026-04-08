@@ -93,4 +93,10 @@ export const artifactsApi = {
   async getDueCards(): Promise<DueCard[]> {
     return httpClient.get<DueCard[]>('/artifacts/study/due');
   },
+
+  async getByShareToken(token: string): Promise<Artifact[]> {
+    return httpClient.get<Artifact[]>(`/notes/shared/${token}/artifacts`, {
+      skipAuth: true,
+    });
+  },
 };
