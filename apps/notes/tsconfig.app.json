@@ -5,11 +5,11 @@
     "baseUrl": "../..",
     "paths": {
       "@/*": ["./apps/notes/src/*"],
-      "@knowtis/design-system": ["./libs/design-system/src/index.ts"],
-      "@knowtis/shared-hooks": ["./libs/shared/hooks/src/index.ts"],
-      "@knowtis/shared-util": ["./libs/shared/util/src/index.ts"],
-      "@knowtis/shared-i18n": ["./libs/shared/i18n/src/index.ts"],
-      "@knowtis/shared-types": ["./libs/shared/types/src/index.ts"],
+      "@knowtis/design-system": ["./packages/design-system/src/index.ts"],
+      "@knowtis/shared-hooks": ["./packages/shared/hooks/src/index.ts"],
+      "@knowtis/shared-util": ["./packages/shared/util/src/index.ts"],
+      "@knowtis/shared-i18n": ["./packages/shared/i18n/src/index.ts"],
+      "@knowtis/shared-types": ["./packages/shared/types/src/index.ts"],
       "@knowtis/api-client": ["./libs/api-client/src/index.ts"],
       "@knowtis/data-access-notes": ["./libs/data-access/notes/src/index.ts"],
       "@knowtis/data-access-artifacts": [

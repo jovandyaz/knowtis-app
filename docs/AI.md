@@ -65,7 +65,7 @@ apps/notes/src/stores/
 libs/api-client/src/lib/
 └── ai.client.ts               # Socket.io client for /ai namespace
 
-libs/shared/types/src/lib/
+packages/shared/types/src/lib/
 └── ai.types.ts                # AIAction, AILanguage, AITone constants + types
 ```
 
@@ -97,7 +97,7 @@ AIGateway / AIController
 
 ## Actions, Languages, and Tones
 
-All constants are defined in `libs/shared/types/src/lib/ai.types.ts` and shared between frontend and backend.
+All constants are defined in `packages/shared/types/src/lib/ai.types.ts` and shared between frontend and backend.
 
 ### Actions
 
@@ -502,7 +502,7 @@ The `artifacts` module (`apps/api/src/modules/artifacts/`) uses the AI structure
 | `summary`        | `generate-summary`    | `SummaryContent`   |
 | `mind_map`       | `generate-mind-map`   | `MindMapContent`   |
 
-**Pipeline:** `AIGenerationPipeline` orchestrates each generation request: rate limit check, model selection via `AIOrchestrator`, structured output call, usage recording. Shared types live in `libs/shared/types/src/lib/artifact.types.ts`.
+**Pipeline:** `AIGenerationPipeline` orchestrates each generation request: rate limit check, model selection via `AIOrchestrator`, structured output call, usage recording. Shared types live in `packages/shared/types/src/lib/artifact.types.ts`.
 
 **Frontend:** `apps/notes/src/components/artifacts/` contains the sidebar, generators, and viewers (flashcard study with SM-2 spaced repetition, quiz sessions, summary viewer, mind map viewer).
 
@@ -532,9 +532,9 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 
 ## Adding a New Action
 
-1. Add the action string to `AI_ACTION` in `libs/shared/types/src/lib/ai.types.ts`
+1. Add the action string to `AI_ACTION` in `packages/shared/types/src/lib/ai.types.ts`
 2. Add a system prompt in `SYSTEM_PROMPTS` in `apps/api/src/modules/ai/domain/constants/system-prompts.ts`
 3. If it needs the fast model, add it to `FAST_MODEL_ACTIONS` in the same file
 4. If it should be cached, add it to `CACHEABLE_ACTIONS` in `apps/api/src/modules/ai/infrastructure/redis/semantic-cache.service.ts`
 5. Add it to the relevant UI config (`ai-actions.config.ts` for bubble menu, `slash-commands.config.ts` for slash commands)
-6. Add i18n keys in `libs/shared/i18n/locales/{en,es}/notes.json`
+6. Add i18n keys in `packages/shared/i18n/locales/{en,es}/notes.json`

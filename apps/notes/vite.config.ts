@@ -27,7 +27,7 @@ export default defineConfig({
       // CSS import needs explicit path (not handled by tsconfig)
       '@knowtis/design-system/styles.css': resolve(
         __dirname,
-        '../../libs/design-system/src/styles.css'
+        '../../packages/design-system/src/styles.css'
       ),
     },
   },

@@ -44,7 +44,7 @@ apps/notes/src/
 ├── stores/
 │   └── voice-note-editor.store.ts   # Zustand bridge for slash command → RecordingModal
 
-libs/design-system/src/components/
+packages/design-system/src/components/
 ├── VoiceButton.tsx              # FAB trigger button (idle/listening/paused/processing/disabled states)
 ├── RecordingModal.tsx           # Radix Dialog — centered on desktop, bottom sheet on mobile
 ├── RecordingTimer.tsx           # Elapsed/max timer with Radix Progress bar
