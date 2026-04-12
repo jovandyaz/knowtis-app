@@ -30,7 +30,42 @@
     "editorErrorDesc": "Something went wrong with the collaborative editor. This could be due to a synchronization issue or a temporary problem.",
     "errorDetails": "Error Details",
     "usersEditing_one": "{{count}} user editing",
-    "usersEditing_other": "{{count}} users editing"
+    "usersEditing_other": "{{count}} users editing",
+    "table": {
+      "insert": "Insert table",
+      "options": "Table options",
+      "addRow": "Add row",
+      "addRowAbove": "Add row above",
+      "addRowBelow": "Add row below",
+      "addColumn": "Add column",
+      "addColumnLeft": "Add column left",
+      "addColumnRight": "Add column right",
+      "deleteRow": "Delete row",
+      "deleteColumn": "Delete column",
+      "deleteTable": "Delete table",
+      "toggleHeaderRow": "Toggle header row",
+      "sectionRow": "Row",
+      "sectionColumn": "Column",
+      "sectionTable": "Table"
+    },
+    "highlight": {
+      "label": "Highlight",
+      "remove": "Remove highlight",
+      "colorYellow": "Yellow",
+      "colorGreen": "Green",
+      "colorBlue": "Blue",
+      "colorPink": "Pink",
+      "colorOrange": "Orange",
+      "colorPurple": "Purple"
+    },
+    "mermaid": {
+      "label": "Mermaid",
+      "modeCode": "Code",
+      "modeSplit": "Split",
+      "modePreview": "Preview",
+      "previewPlaceholder": "Diagram preview",
+      "invalidSyntax": "Invalid Mermaid syntax"
+    }
   },
   "create": {
     "newNote": "New Note",
@@ -336,7 +371,13 @@
       "translate": "Translate",
       "translateDesc": "Translate content to another language",
       "changeTone": "Change tone",
-      "changeToneDesc": "Adjust the writing tone"
+      "changeToneDesc": "Adjust the writing tone",
+      "table": "Table",
+      "tableDesc": "Insert a table",
+      "taskList": "Task list",
+      "taskListDesc": "Create a checklist with checkboxes",
+      "diagram": "Diagram",
+      "diagramDesc": "Insert a Mermaid diagram"
     },
     "contentGuard": {
       "emptyNote": "Write some content in your note first."

@@ -1,6 +1,7 @@
 import type { Editor } from '@tiptap/react';
 import {
   Bold,
+  CheckSquare,
   Code,
   CodeXml,
   Italic,
@@ -9,6 +10,8 @@ import {
   Minus,
   Redo,
   Strikethrough,
+  Subscript as SubscriptIcon,
+  Superscript as SuperscriptIcon,
   Underline,
   Undo,
 } from 'lucide-react';
@@ -36,11 +39,21 @@ export interface ToolbarLinkConfig {
   shortcut?: string;
 }
 
+export interface ToolbarHighlightConfig {
+  type: 'highlight-picker';
+}
+
+export interface ToolbarTableConfig {
+  type: 'table-insert';
+}
+
 export type ToolbarItemConfig =
   | ToolbarToolConfig
   | ToolbarSeparatorConfig
   | ToolbarHeadingConfig
-  | ToolbarLinkConfig;
+  | ToolbarLinkConfig
+  | ToolbarHighlightConfig
+  | ToolbarTableConfig;
 
 export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
   { type: 'heading-dropdown' },
@@ -86,6 +99,12 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleOrderedList().run(),
     isActive: (editor) => editor.isActive('orderedList'),
   },
+  {
+    icon: CheckSquare,
+    label: 'Task List',
+    action: (editor) => editor.chain().focus().toggleTaskList().run(),
+    isActive: (editor) => editor.isActive('taskList'),
+  },
   { type: 'separator' },
   {
     icon: Code,
@@ -105,6 +124,24 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
   },
   { type: 'separator' },
   { type: 'link-popover', shortcut: 'Ctrl+K' },
+  { type: 'highlight-picker' },
+  {
+    icon: SuperscriptIcon,
+    label: 'Superscript',
+    action: (editor) => editor.chain().focus().toggleSuperscript().run(),
+    isActive: (editor) => editor.isActive('superscript'),
+    shortcut: 'Ctrl+.',
+    hideOnMobile: true,
+  },
+  {
+    icon: SubscriptIcon,
+    label: 'Subscript',
+    action: (editor) => editor.chain().focus().toggleSubscript().run(),
+    isActive: (editor) => editor.isActive('subscript'),
+    shortcut: 'Ctrl+,',
+    hideOnMobile: true,
+  },
+  { type: 'table-insert' },
   {
     icon: Minus,
     label: 'Horizontal Rule',

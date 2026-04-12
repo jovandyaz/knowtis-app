@@ -46,7 +46,7 @@ export function registerNotesTools(
 
   server.tool(
     'create-note',
-    'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), blockquotes (>), and horizontal rules (---).',
+    'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
     {
       title: z.string().min(1).describe('Title of the new note'),
       content: z
@@ -71,7 +71,7 @@ export function registerNotesTools(
 
   server.tool(
     'update-note',
-    'Update the title or content of an existing note. Content should be in Markdown format.',
+    'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, highlight, super/subscript, Mermaid diagrams).',
     {
       noteId: z.string().uuid().describe('The UUID of the note to update'),
       title: z.string().optional().describe('New title'),
