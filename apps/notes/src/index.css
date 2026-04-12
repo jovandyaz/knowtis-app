@@ -152,20 +152,23 @@
   }
 
   /* Task Lists */
-  .ProseMirror ul[data-type="taskList"] {
+  .ProseMirror > ul[data-type="taskList"] {
     @apply list-none ml-0 pl-0;
   }
   .ProseMirror ul[data-type="taskList"] li {
     @apply flex items-start gap-2;
   }
-  .ProseMirror ul[data-type="taskList"] li label {
+  .ProseMirror ul[data-type="taskList"] li > label {
     @apply mt-1 shrink-0;
   }
-  .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"] {
+  .ProseMirror ul[data-type="taskList"] li > label input[type="checkbox"] {
     @apply h-4 w-4 rounded border-border accent-primary cursor-pointer;
   }
-  .ProseMirror ul[data-type="taskList"] li div {
+  .ProseMirror ul[data-type="taskList"] li > div {
     @apply flex-1;
+  }
+  .ProseMirror ul[data-type="taskList"] li > div > ul[data-type="taskList"] {
+    @apply list-none ml-6 mt-2 pl-0;
   }
   .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
     @apply line-through text-muted-foreground;
@@ -179,6 +182,7 @@
   /* Placeholder */
   .ProseMirror .is-empty::before {
     @apply text-muted-foreground/40 float-left h-0 pointer-events-none;
+
     content: attr(data-placeholder);
   }
 

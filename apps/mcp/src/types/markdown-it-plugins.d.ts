@@ -5,7 +5,6 @@ declare module 'markdown-it-task-lists' {
     enabled?: boolean;
     label?: boolean;
     labelAfter?: boolean;
-    lineNumber?: boolean;
   }
 
   const taskLists: PluginWithOptions<TaskListsOptions>;
