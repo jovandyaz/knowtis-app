@@ -6,7 +6,7 @@ import type { ZodType } from 'zod';
 
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
-import { DEFAULT_MODEL_PRICING } from '../../../ai/domain/constants/model-pricing';
+import { getModelPricing } from '../../../ai/domain/constants/model-pricing';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
   type AIStructuredOutputProvider,
@@ -95,7 +95,7 @@ export class AIGenerationPipeline {
       const { inputTokens, outputTokens } = result;
       const usage = TokenUsage.create(
         { inputTokens, outputTokens, model },
-        DEFAULT_MODEL_PRICING[model]
+        getModelPricing(model)
       );
 
       this.rateLimitService

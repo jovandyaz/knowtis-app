@@ -76,7 +76,7 @@ describe('SemanticCacheService', () => {
   it('should return null when cache is disabled', async () => {
     vi.spyOn(mockConfig, 'get').mockImplementation((key: string) => {
       if (key === 'AI_CACHE_ENABLED') {
-        return 'false';
+        return false;
       }
       return 3600;
     });

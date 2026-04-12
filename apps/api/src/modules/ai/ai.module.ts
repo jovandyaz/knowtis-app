@@ -8,10 +8,12 @@ import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
+import { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
+import { PromptLoaderService } from './application/services/prompt-loader.service';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
 import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
@@ -53,7 +55,9 @@ import { SemanticCacheService } from './infrastructure/redis/semantic-cache.serv
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: SemanticCacheService },
     AIConfigService,
+    PromptLoaderService,
     AIOrchestrator,
+    AICompletionPipeline,
     AIMetricsService,
     AIRateLimitService,
     CompleteTextHandler,

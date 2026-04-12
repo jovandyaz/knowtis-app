@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.50",
+    "@ai-sdk/google": "^3.0.62",
     "@ai-sdk/openai": "^3.0.37",
     "@casl/ability": "^6.8.0",
     "@casl/react": "^5.0.1",
@@ -89,6 +90,7 @@
     "dompurify": "^3.3.1",
     "drizzle-orm": "^0.45.1",
     "gpt-tokenizer": "^3.4.0",
+    "gray-matter": "^4.0.3",
     "helmet": "^8.1.0",
     "highlight.js": "^11.11.1",
     "hono": "^4.12.5",

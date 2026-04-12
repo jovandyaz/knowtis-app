@@ -28,6 +28,20 @@ describe('AIModel', () => {
     }
   });
 
+  it('should accept google:gemini-2.0-flash', () => {
+    const result = AIModel.create('google:gemini-2.0-flash');
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().provider).toBe('google');
+    expect(result._unsafeUnwrap().isFast).toBe(true);
+  });
+
+  it('should accept google:gemini-2.5-pro', () => {
+    const result = AIModel.create('google:gemini-2.5-pro');
+    expect(result.isOk()).toBe(true);
+    expect(result._unsafeUnwrap().provider).toBe('google');
+    expect(result._unsafeUnwrap().isFast).toBe(false);
+  });
+
   it('should fail for empty string', () => {
     const result = AIModel.create('');
     expect(result.isErr()).toBe(true);
