@@ -9,7 +9,7 @@ import {
   useWebSocketCollaboration,
 } from '@/hooks';
 import { useAIStore } from '@/stores/ai.store';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { cn } from '@knowtis/design-system';
 import { useTypewriter } from '@knowtis/shared-hooks';
@@ -18,6 +18,7 @@ import { logger } from '@knowtis/shared-util';
 import { AIBubbleMenu } from './ai/AIBubbleMenu';
 import { AIResultPanel } from './ai/AIResultPanel';
 import { CollaborationIndicator } from './CollaborationIndicator';
+import { TableControls } from './TableControls';
 
 import './CollaborativeCursor.css';
 
@@ -116,7 +117,20 @@ function InternalEditor({
     },
   });
 
-  const editorIsEmpty = editor?.isEmpty ?? true;
+  const editorIsEmpty = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      if (!e) {
+        return true;
+      }
+      const { doc } = e.state;
+      return (
+        doc.childCount === 1 &&
+        doc.firstChild?.type.name === 'paragraph' &&
+        doc.firstChild?.content.size === 0
+      );
+    },
+  });
 
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {
@@ -162,6 +176,7 @@ function InternalEditor({
             <AIResultPanel editor={editor} />
           </>
         )}
+        {editor && editor.isEditable && <TableControls editor={editor} />}
         {editorIsEmpty && <TypewriterPlaceholder texts={placeholder} />}
         <EditorContent
           editor={editor}

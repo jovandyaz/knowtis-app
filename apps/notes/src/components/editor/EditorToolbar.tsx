@@ -18,7 +18,9 @@ import {
 } from '@knowtis/design-system';
 
 import { HeadingDropdown } from './HeadingDropdown';
+import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';
+import { TableInsertButton } from './TableInsertButton';
 
 interface EditorToolbarProps {
   editor: Editor | null;
@@ -95,23 +97,35 @@ export const EditorToolbar = memo(function EditorToolbar({
         )}
       >
         {TOOLBAR_TOOLS.map((item, index) => {
-          if ('type' in item && item.type === 'separator') {
-            return <ToolbarSeparator key={`sep-${index}`} />;
-          }
-          if ('type' in item && item.type === 'heading-dropdown') {
-            return <HeadingDropdown key="heading" editor={editor} />;
-          }
-          if ('type' in item && item.type === 'link-popover') {
+          if (!('type' in item)) {
             return (
-              <LinkPopover
-                key="link"
-                editor={editor}
-                shortcut={item.shortcut}
-              />
+              <ToolbarButton key={item.label} editor={editor} tool={item} />
             );
           }
-          const tool = item as ToolbarToolConfig;
-          return <ToolbarButton key={tool.label} editor={editor} tool={tool} />;
+          switch (item.type) {
+            case 'separator':
+              return <ToolbarSeparator key={`sep-${index}`} />;
+            case 'heading-dropdown':
+              return <HeadingDropdown key="heading" editor={editor} />;
+            case 'link-popover':
+              return (
+                <LinkPopover
+                  key="link"
+                  editor={editor}
+                  shortcut={item.shortcut}
+                />
+              );
+            case 'highlight-picker':
+              return <HighlightPicker key="highlight" editor={editor} />;
+            case 'table-insert':
+              return <TableInsertButton key="table" editor={editor} />;
+            default: {
+              const _exhaustive: never = item;
+              throw new Error(
+                `Unhandled toolbar item: ${JSON.stringify(_exhaustive)}`
+              );
+            }
+          }
         })}
         {onVoiceNote && (
           <Button
