@@ -70,4 +70,72 @@ describe('htmlToYjsState', () => {
       expect.objectContaining({ type: 'bold' })
     );
   });
+
+  it('should preserve table structure with header and body rows', () => {
+    const html =
+      '<table><tbody><tr><th>Name</th><th>Age</th></tr><tr><td>Ada</td><td>36</td></tr></tbody></table>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const table = json.content[0];
+    expect(table.type).toBe('table');
+    expect(table.content).toHaveLength(2);
+
+    const [headerRow, bodyRow] = table.content;
+    expect(headerRow.type).toBe('tableRow');
+    expect(headerRow.content[0].type).toBe('tableHeader');
+    expect(bodyRow.content[0].type).toBe('tableCell');
+  });
+
+  it('should preserve task list with checked state', () => {
+    const html =
+      '<ul data-type="taskList"><li data-type="taskItem" data-checked="true"><p>Done</p></li><li data-type="taskItem" data-checked="false"><p>Todo</p></li></ul>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const taskList = json.content[0];
+    expect(taskList.type).toBe('taskList');
+    expect(taskList.content).toHaveLength(2);
+    expect(taskList.content[0].attrs.checked).toBe(true);
+    expect(taskList.content[1].attrs.checked).toBe(false);
+  });
+
+  it('should preserve highlight mark with color attribute', () => {
+    const html =
+      '<p>Normal <mark data-color="#fef08a" style="background-color: #fef08a">highlighted</mark> text</p>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const paragraph = json.content[0];
+    const markedNode = paragraph.content.find(
+      (n: { marks?: { type: string }[] }) =>
+        n.marks?.some((m) => m.type === 'highlight')
+    );
+    expect(markedNode).toBeDefined();
+    expect(markedNode.text).toBe('highlighted');
+  });
+
+  it('should preserve superscript and subscript marks', () => {
+    const superHtml = '<p>x<sup>2</sup></p>';
+    const superJson = decodeState(htmlToYjsState(superHtml));
+    const superNode = superJson.content[0].content[1];
+    expect(superNode.marks).toContainEqual(
+      expect.objectContaining({ type: 'superscript' })
+    );
+
+    const subHtml = '<p>H<sub>2</sub>O</p>';
+    const subJson = decodeState(htmlToYjsState(subHtml));
+    const subNode = subJson.content[0].content[1];
+    expect(subNode.marks).toContainEqual(
+      expect.objectContaining({ type: 'subscript' })
+    );
+  });
+
+  it('should preserve mermaidBlock node with code attribute', () => {
+    const html =
+      '<div data-mermaid-block data-code="graph TD&#10;  A --&gt; B"></div>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const mermaidNode = json.content[0];
+    expect(mermaidNode.type).toBe('mermaidBlock');
+    expect(mermaidNode.attrs.code).toContain('graph TD');
+    expect(mermaidNode.attrs.code).toContain('A --> B');
+  });
 });

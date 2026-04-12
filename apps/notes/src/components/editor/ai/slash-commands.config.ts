@@ -4,7 +4,9 @@ import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
 import i18next from 'i18next';
 import {
+  CheckSquare,
   FileText,
+  GitBranch,
   GraduationCap,
   Heading1,
   Heading2,
@@ -15,6 +17,7 @@ import {
   PenLine,
   Quote,
   Sparkles,
+  Table2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -123,7 +126,8 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .then((stream) => {
           useVoiceNoteEditorStore.getState().open(pos, stream);
         })
-        .catch(() => {
+        .catch((error) => {
+          console.error('Failed to acquire microphone:', error);
           toast.error(i18next.t('ai.voice.micGenericError', { ns: 'notes' }));
         });
     },
@@ -237,6 +241,57 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
     keywords: ['quote', 'blockquote', 'cita'],
     action: (editor, range) => {
       editor.chain().focus().deleteRange(range).toggleBlockquote().run();
+    },
+  },
+  {
+    id: 'task-list',
+    icon: CheckSquare,
+    labelKey: 'ai.slash.taskList',
+    descriptionKey: 'ai.slash.taskListDesc',
+    group: 'formatting',
+    keywords: ['task', 'todo', 'checkbox', 'checklist', 'tarea'],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).toggleTaskList().run();
+    },
+  },
+  {
+    id: 'table',
+    icon: Table2,
+    labelKey: 'ai.slash.table',
+    descriptionKey: 'ai.slash.tableDesc',
+    group: 'formatting',
+    keywords: ['table', 'grid', 'tabla'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+        .run();
+    },
+  },
+  {
+    id: 'diagram',
+    icon: GitBranch,
+    labelKey: 'ai.slash.diagram',
+    descriptionKey: 'ai.slash.diagramDesc',
+    group: 'formatting',
+    keywords: ['diagram', 'mermaid', 'flowchart', 'diagrama', 'flujo'],
+    action: (editor, range) => {
+      editor
+        .chain()
+        .focus()
+        .deleteRange(range)
+        .insertContent([
+          {
+            type: 'mermaidBlock',
+            attrs: {
+              code: 'graph TD\n  A[Start] --> B{Decision}\n  B -->|Yes| C[Result A]\n  B -->|No| D[Result B]',
+            },
+          },
+          { type: 'paragraph' },
+        ])
+        .run();
     },
   },
 ];

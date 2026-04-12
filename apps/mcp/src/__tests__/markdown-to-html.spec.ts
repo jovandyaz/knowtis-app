@@ -52,4 +52,57 @@ describe('markdownToHtml', () => {
     const result = markdownToHtml('<script>alert("xss")</script>');
     expect(result).not.toContain('<script>');
   });
+
+  it('should convert GFM tables', () => {
+    const result = markdownToHtml(
+      '| Name | Age |\n| --- | --- |\n| Ada | 36 |'
+    );
+    expect(result).toContain('<table>');
+    expect(result).toContain('<th>Name</th>');
+    expect(result).toContain('<td>Ada</td>');
+  });
+
+  it('should convert task lists into Tiptap-compatible HTML', () => {
+    const result = markdownToHtml('- [ ] todo\n- [x] done');
+    expect(result).toContain('<ul data-type="taskList">');
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="false"><p>todo</p></li>'
+    );
+    expect(result).toContain(
+      '<li data-type="taskItem" data-checked="true"><p>done</p></li>'
+    );
+  });
+
+  it('should convert highlight marks', () => {
+    expect(markdownToHtml('text ==highlight== more')).toContain(
+      '<mark>highlight</mark>'
+    );
+  });
+
+  it('should convert superscript', () => {
+    expect(markdownToHtml('x^2^')).toContain('<sup>2</sup>');
+  });
+
+  it('should convert subscript', () => {
+    expect(markdownToHtml('H~2~O')).toContain('<sub>2</sub>');
+  });
+
+  it('should convert mermaid code blocks to mermaidBlock divs', () => {
+    const result = markdownToHtml('```mermaid\ngraph TD\n  A --> B\n```');
+    expect(result).toContain('data-mermaid-block');
+    expect(result).toContain('data-code="graph TD');
+    expect(result).toContain('A --&gt; B');
+  });
+
+  it('should escape HTML inside mermaid code to prevent injection', () => {
+    const result = markdownToHtml('```mermaid\n<script>alert(1)</script>\n```');
+    expect(result).not.toContain('<script>');
+    expect(result).toContain('&lt;script&gt;');
+  });
+
+  it('should preserve non-mermaid code blocks', () => {
+    const result = markdownToHtml('```javascript\nconst x = 1;\n```');
+    expect(result).toContain('<pre>');
+    expect(result).not.toContain('data-mermaid-block');
+  });
 });
