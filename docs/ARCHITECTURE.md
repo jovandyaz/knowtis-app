@@ -97,13 +97,13 @@ knowtis/
 
 ### Library Categories
 
-| Category          | Path                 | Description                                     |
-| ----------------- | -------------------- | ----------------------------------------------- |
-| **API Client**    | `libs/api-client`    | HTTP client, WebSocket client, API types        |
-| **Authorization** | `libs/authorization` | CASL permission definitions (shared FE/BE)      |
-| **Data Access**   | `libs/data-access/*` | Domain logic, Zustand stores, React Query hooks |
-| **Design System** | `libs/design-system` | UI components, design tokens, styles            |
-| **Shared**        | `libs/shared/*`      | Hooks, i18n, utilities, TypeScript types        |
+| Category          | Path                     | Description                                     |
+| ----------------- | ------------------------ | ----------------------------------------------- |
+| **API Client**    | `libs/api-client`        | HTTP client, WebSocket client, API types        |
+| **Authorization** | `libs/authorization`     | CASL permission definitions (shared FE/BE)      |
+| **Data Access**   | `libs/data-access/*`     | Domain logic, Zustand stores, React Query hooks |
+| **Design System** | `packages/design-system` | UI components, design tokens, styles            |
+| **Shared**        | `packages/shared/*`      | Hooks, i18n, utilities, TypeScript types        |
 
 ### Dependency Rules
 

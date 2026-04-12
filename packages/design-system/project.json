@@ -1,14 +1,14 @@
 {
   "name": "design-system",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
-  "sourceRoot": "libs/design-system/src",
+  "sourceRoot": "packages/design-system/src",
   "projectType": "library",
   "tags": ["type:ui", "scope:shared"],
   "targets": {
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "node style-dictionary.config.mjs"
       },
       "outputs": ["{projectRoot}/build"]
@@ -16,35 +16,35 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "eslint src"
       }
     },
     "test": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "vitest run --passWithNoTests"
       }
     },
     "tokens:build": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "node style-dictionary.config.mjs"
       }
     },
     "storybook": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "storybook dev -p 6006"
       }
     },
     "storybook:build": {
       "executor": "nx:run-commands",
       "options": {
-        "cwd": "libs/design-system",
+        "cwd": "packages/design-system",
         "command": "storybook build -o storybook-static"
       },
       "outputs": ["{projectRoot}/storybook-static"]

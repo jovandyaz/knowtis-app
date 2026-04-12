@@ -80,7 +80,7 @@ reviews:
         - Verify conditional rendering covers all states (loading, error, empty)
         - Flag unsafe HTML rendering without sanitization (XSS)
 
-    - path: libs/design-system/**
+    - path: packages/design-system/**
       instructions: |
         - Accessibility: verify ARIA attributes, keyboard nav, focus management
         - Flag hardcoded colors/spacing — must use design tokens
@@ -118,7 +118,7 @@ reviews:
     - '!**/*.config.cjs'
     - '!**/*.config.ts'
     - '!**/tsconfig*.json'
-    - '!libs/design-system/storybook-static/**'
+    - '!packages/design-system/storybook-static/**'
 
 chat:
   auto_reply: true

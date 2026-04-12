@@ -285,8 +285,12 @@ graph TD
     subgraph Libs
         ApiClient[libs/api-client]
         DataAccess[libs/data-access]
-        DesignSystem[libs/design-system]
-        Shared[libs/shared]
+        Authorization[libs/authorization]
+    end
+
+    subgraph SharedPackages
+        DesignSystem[packages/design-system]
+        Shared[packages/shared]
     end
 
     Notes --> ApiClient
