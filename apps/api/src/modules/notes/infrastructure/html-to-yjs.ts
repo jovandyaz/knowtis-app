@@ -1,6 +1,4 @@
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
-import Link from '@tiptap/extension-link';
-import Underline from '@tiptap/extension-underline';
 import { generateJSON } from '@tiptap/html/server';
 import { Schema } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
@@ -68,8 +66,6 @@ export const editorSchema = new Schema({
 const tiptapExtensions = [
   StarterKit.configure({ codeBlock: false }),
   CodeBlockLowlight.configure({ lowlight }),
-  Link,
-  Underline,
 ];
 
 /**

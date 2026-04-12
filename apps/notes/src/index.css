@@ -132,6 +132,56 @@
     @apply text-primary underline decoration-primary/30 hover:decoration-primary cursor-pointer;
   }
 
+  /* Tables */
+  .ProseMirror .tiptap-table {
+    @apply border-collapse w-full my-4 rounded-lg overflow-hidden;
+  }
+  .ProseMirror .tiptap-table td,
+  .ProseMirror .tiptap-table th {
+    @apply border border-border/50 px-3 py-2 text-sm align-top min-w-[80px];
+  }
+  .ProseMirror .tiptap-table th {
+    @apply bg-muted/50 font-semibold text-left;
+  }
+  .ProseMirror .tiptap-table td > *,
+  .ProseMirror .tiptap-table th > * {
+    @apply mb-0;
+  }
+  .ProseMirror .tiptap-table .selectedCell {
+    @apply bg-primary/10;
+  }
+
+  /* Task Lists */
+  .ProseMirror ul[data-type="taskList"] {
+    @apply list-none ml-0 pl-0;
+  }
+  .ProseMirror ul[data-type="taskList"] li {
+    @apply flex items-start gap-2;
+  }
+  .ProseMirror ul[data-type="taskList"] li label {
+    @apply mt-1 shrink-0;
+  }
+  .ProseMirror ul[data-type="taskList"] li label input[type="checkbox"] {
+    @apply h-4 w-4 rounded border-border accent-primary cursor-pointer;
+  }
+  .ProseMirror ul[data-type="taskList"] li div {
+    @apply flex-1;
+  }
+  .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+    @apply line-through text-muted-foreground;
+  }
+
+  /* Highlight */
+  .ProseMirror mark {
+    @apply rounded px-0.5;
+  }
+
+  /* Placeholder */
+  .ProseMirror .is-empty::before {
+    @apply text-muted-foreground/40 float-left h-0 pointer-events-none;
+    content: attr(data-placeholder);
+  }
+
   /* Syntax highlighting — dark mode (github-dark theme) */
   .dark .hljs {
     color: #c9d1d9;

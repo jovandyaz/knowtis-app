@@ -30,7 +30,42 @@
     "editorErrorDesc": "Algo salió mal con el editor colaborativo. Esto puede deberse a un problema de sincronización o un problema temporal.",
     "errorDetails": "Detalles del Error",
     "usersEditing_one": "{{count}} usuario editando",
-    "usersEditing_other": "{{count}} usuarios editando"
+    "usersEditing_other": "{{count}} usuarios editando",
+    "table": {
+      "insert": "Insertar tabla",
+      "options": "Opciones de tabla",
+      "addRow": "Agregar fila",
+      "addRowAbove": "Agregar fila arriba",
+      "addRowBelow": "Agregar fila abajo",
+      "addColumn": "Agregar columna",
+      "addColumnLeft": "Agregar columna a la izquierda",
+      "addColumnRight": "Agregar columna a la derecha",
+      "deleteRow": "Eliminar fila",
+      "deleteColumn": "Eliminar columna",
+      "deleteTable": "Eliminar tabla",
+      "toggleHeaderRow": "Alternar fila de cabecera",
+      "sectionRow": "Fila",
+      "sectionColumn": "Columna",
+      "sectionTable": "Tabla"
+    },
+    "highlight": {
+      "label": "Resaltar",
+      "remove": "Quitar resaltado",
+      "colorYellow": "Amarillo",
+      "colorGreen": "Verde",
+      "colorBlue": "Azul",
+      "colorPink": "Rosa",
+      "colorOrange": "Naranja",
+      "colorPurple": "Morado"
+    },
+    "mermaid": {
+      "label": "Mermaid",
+      "modeCode": "Código",
+      "modeSplit": "Dividido",
+      "modePreview": "Vista previa",
+      "previewPlaceholder": "Vista previa del diagrama",
+      "invalidSyntax": "Sintaxis de Mermaid inválida"
+    }
   },
   "create": {
     "newNote": "Nueva nota",
@@ -336,7 +371,13 @@
       "translate": "Traducir",
       "translateDesc": "Traducir el contenido a otro idioma",
       "changeTone": "Cambiar tono",
-      "changeToneDesc": "Ajustar el tono de la redacción"
+      "changeToneDesc": "Ajustar el tono de la redacción",
+      "table": "Tabla",
+      "tableDesc": "Insertar una tabla",
+      "taskList": "Lista de tareas",
+      "taskListDesc": "Crear una lista con casillas de verificación",
+      "diagram": "Diagrama",
+      "diagramDesc": "Insertar un diagrama Mermaid"
     },
     "contentGuard": {
       "emptyNote": "Escribe contenido en tu nota antes de usar esta función."

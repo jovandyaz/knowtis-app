@@ -18,6 +18,7 @@ import { logger } from '@knowtis/shared-util';
 import { AIBubbleMenu } from './ai/AIBubbleMenu';
 import { AIResultPanel } from './ai/AIResultPanel';
 import { CollaborationIndicator } from './CollaborationIndicator';
+import { TableControls } from './TableControls';
 
 import './CollaborativeCursor.css';
 
@@ -116,7 +117,11 @@ function InternalEditor({
     },
   });
 
-  const editorIsEmpty = editor?.isEmpty ?? true;
+  const editorIsEmpty = editor
+    ? editor.state.doc.childCount === 1 &&
+      editor.state.doc.firstChild?.type.name === 'paragraph' &&
+      editor.state.doc.firstChild?.content.size === 0
+    : true;
 
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {
@@ -162,6 +167,7 @@ function InternalEditor({
             <AIResultPanel editor={editor} />
           </>
         )}
+        {editor && editor.isEditable && <TableControls editor={editor} />}
         {editorIsEmpty && <TypewriterPlaceholder texts={placeholder} />}
         <EditorContent
           editor={editor}
