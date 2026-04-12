@@ -81,6 +81,6 @@ export class SemanticCacheService implements AICache {
   }
 
   private isEnabled(): boolean {
-    return this.configService.get('AI_CACHE_ENABLED') === 'true';
+    return this.configService.get('AI_CACHE_ENABLED');
   }
 }

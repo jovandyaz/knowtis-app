@@ -20,7 +20,15 @@
         "outputPath": "dist/apps/api",
         "main": "apps/api/src/main.ts",
         "tsConfig": "apps/api/tsconfig.app.json",
-        "assets": ["apps/api/src/assets", "apps/api/src/i18n"],
+        "assets": [
+          "apps/api/src/assets",
+          "apps/api/src/i18n",
+          {
+            "input": "apps/api/src/modules/ai/prompts",
+            "output": "prompts",
+            "glob": "**/*.md"
+          }
+        ],
         "webpackConfig": "apps/api/webpack.config.cjs",
         "generatePackageJson": true
       },

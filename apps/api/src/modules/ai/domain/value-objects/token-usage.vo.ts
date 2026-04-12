@@ -1,7 +1,4 @@
-import {
-  DEFAULT_MODEL_PRICING,
-  type ModelPricing,
-} from '../constants/model-pricing';
+import { getModelPricing, type ModelPricing } from '../constants/model-pricing';
 
 interface TokenUsageInput {
   readonly inputTokens: number;
@@ -22,7 +19,7 @@ export class TokenUsage {
   }
 
   static create(input: TokenUsageInput, pricing?: ModelPricing): TokenUsage {
-    const resolvedPricing = pricing ?? DEFAULT_MODEL_PRICING[input.model];
+    const resolvedPricing = pricing ?? getModelPricing(input.model);
     const costUsd = resolvedPricing
       ? (input.inputTokens * resolvedPricing.input) / 1_000_000 +
         (input.outputTokens * resolvedPricing.output) / 1_000_000

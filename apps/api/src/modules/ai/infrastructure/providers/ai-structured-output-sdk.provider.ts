@@ -21,9 +21,11 @@ export class AIStructuredOutputSDKProvider
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
 
   onModuleInit() {
-    this.registry = buildProviderRegistry(
-      this.configService.get('OPENAI_API_KEY') || undefined
-    );
+    this.registry = buildProviderRegistry({
+      googleApiKey:
+        this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined,
+      openaiApiKey: this.configService.get('OPENAI_API_KEY') || undefined,
+    });
   }
 
   async generateStructuredOutput<T>(

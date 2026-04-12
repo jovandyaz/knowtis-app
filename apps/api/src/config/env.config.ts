@@ -23,6 +23,7 @@ const envSchemaBase = z.object({
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default(DEFAULT_FROM_ADDRESS),
   ANTHROPIC_API_KEY: z.string().optional(),
+  GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-4-20250514'),
   AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
@@ -33,7 +34,10 @@ const envSchemaBase = z.object({
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
   AI_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
-  AI_CACHE_ENABLED: z.string().default('true'),
+  AI_CACHE_ENABLED: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true'),
   AI_RPM_LIMIT: z.coerce.number().default(15),
   AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
 });

@@ -78,15 +78,17 @@ knowtis/
 │   ├── mcp/                 # MCP server for AI assistants (Hono)
 │   └── notes/               # Frontend (React)
 │
-└── libs/                    # Shared libraries
-    ├── api-client/          # HTTP/WebSocket client
-    ├── authorization/       # CASL permission definitions
-    ├── data-access/         # Domain logic & state
-    │   ├── artifacts/       # Study artifacts hooks & schemas
-    │   ├── feature-flags/   # Feature flags hooks & schemas
-    │   ├── mcp-keys/        # MCP API keys hooks & schemas
-    │   ├── notes/           # Notes hooks & store
-    │   └── users/           # Users hooks & schemas
+├── libs/                    # App-specific libraries (not publishable)
+│   ├── api-client/          # HTTP/WebSocket client
+│   ├── authorization/       # CASL permission definitions
+│   └── data-access/         # Domain logic & state
+│       ├── artifacts/       # Study artifacts hooks & schemas
+│       ├── feature-flags/   # Feature flags hooks & schemas
+│       ├── mcp-keys/        # MCP API keys hooks & schemas
+│       ├── notes/           # Notes hooks & store
+│       └── users/           # Users hooks & schemas
+│
+└── packages/                # Shared packages (publishable)
     ├── design-system/       # UI components & tokens
     └── shared/              # Common utilities
         ├── hooks/           # Generic React hooks

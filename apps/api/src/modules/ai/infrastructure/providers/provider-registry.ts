@@ -1,10 +1,21 @@
 import { anthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createProviderRegistry } from 'ai';
 
-export function buildProviderRegistry(openaiApiKey?: string) {
+interface ProviderRegistryOptions {
+  googleApiKey?: string | undefined;
+  openaiApiKey?: string | undefined;
+}
+
+export function buildProviderRegistry(opts: ProviderRegistryOptions = {}) {
   return createProviderRegistry({
     anthropic,
-    ...(openaiApiKey ? { openai: createOpenAI({ apiKey: openaiApiKey }) } : {}),
+    ...(opts.googleApiKey
+      ? { google: createGoogleGenerativeAI({ apiKey: opts.googleApiKey }) }
+      : {}),
+    ...(opts.openaiApiKey
+      ? { openai: createOpenAI({ apiKey: opts.openaiApiKey }) }
+      : {}),
   });
 }
