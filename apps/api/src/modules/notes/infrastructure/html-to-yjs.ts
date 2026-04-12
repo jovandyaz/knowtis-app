@@ -1,3 +1,4 @@
+import { Node } from '@tiptap/core';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import Highlight from '@tiptap/extension-highlight';
 import Subscript from '@tiptap/extension-subscript';
@@ -91,6 +92,15 @@ export const editorSchema = new Schema({
       tableRole: 'header_cell',
       isolating: true,
     },
+    mermaidBlock: {
+      group: 'block',
+      atom: true,
+      selectable: true,
+      attrs: {
+        code: { default: 'graph TD\n  A[Start] --> B[End]' },
+        viewMode: { default: 'split' },
+      },
+    },
   },
   marks: {
     bold: {},
@@ -113,6 +123,36 @@ export const editorSchema = new Schema({
   },
 });
 
+const MermaidBlockNode = Node.create({
+  name: 'mermaidBlock',
+  group: 'block',
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      code: {
+        default: 'graph TD\n  A[Start] --> B[End]',
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute('data-code') ?? '',
+      },
+      viewMode: {
+        default: 'split',
+        parseHTML: (element: HTMLElement) =>
+          element.getAttribute('data-view-mode') ?? 'split',
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'div[data-mermaid-block]' }];
+  },
+
+  renderHTML({ HTMLAttributes }: { HTMLAttributes: Record<string, unknown> }) {
+    return ['div', { ...HTMLAttributes, 'data-mermaid-block': '' }];
+  },
+});
+
 const tiptapExtensions = [
   StarterKit.configure({ codeBlock: false }),
   CodeBlockLowlight.configure({ lowlight }),
@@ -125,6 +165,7 @@ const tiptapExtensions = [
   Superscript,
   Subscript,
   Highlight.configure({ multicolor: true }),
+  MermaidBlockNode,
 ];
 
 /**
