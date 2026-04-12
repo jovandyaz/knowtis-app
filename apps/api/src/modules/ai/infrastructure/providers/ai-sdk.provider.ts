@@ -20,16 +20,18 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
 
   onModuleInit() {
-    this.registry = buildProviderRegistry(
-      this.configService.get('OPENAI_API_KEY') || undefined
-    );
+    this.registry = buildProviderRegistry({
+      googleApiKey:
+        this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined,
+      openaiApiKey: this.configService.get('OPENAI_API_KEY') || undefined,
+    });
   }
 
   async generateCompletion(
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
-    this.assertAnthropicKeyConfigured(options.model);
+    this.assertProviderKeyConfigured(options.model);
 
     try {
       return await this.callGenerateText(prompt, options);
@@ -48,13 +50,10 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     }
   }
 
-  /**
-   * Builds the `system` parameter for Vercel AI SDK calls.
-   * Anthropic models receive cache-control metadata to enable prompt caching
-   * (ephemeral, ~5 min TTL). Other providers receive a plain string.
-   */
   private buildSystemParam(model: string, system: string | undefined) {
-    if (!system) {return {};}
+    if (!system) {
+      return {};
+    }
     if (model.startsWith('anthropic:')) {
       return {
         system: {
@@ -69,12 +68,18 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     return { system };
   }
 
-  private assertAnthropicKeyConfigured(model: string): void {
+  private assertProviderKeyConfigured(model: string): void {
     if (
       model.startsWith('anthropic:') &&
       !this.configService.get('ANTHROPIC_API_KEY')
     ) {
       throw new Error('ANTHROPIC_API_KEY is not configured');
+    }
+    if (
+      model.startsWith('google:') &&
+      !this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY')
+    ) {
+      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is not configured');
     }
   }
 
@@ -108,7 +113,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     prompt: string,
     options: CompletionOptions
   ): StreamCompletionResult {
-    this.assertAnthropicKeyConfigured(options.model);
+    this.assertProviderKeyConfigured(options.model);
 
     const result = streamText({
       model: this.registry.languageModel(

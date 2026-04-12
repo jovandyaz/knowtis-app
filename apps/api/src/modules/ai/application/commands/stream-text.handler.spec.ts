@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
@@ -5,9 +7,11 @@ import { AI_ACTION } from '@knowtis/shared-types';
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../testing/create-mock-config';
+import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
 import type { AIConfigService } from '../services/ai-config.service';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../services/ai-rate-limit.service';
+import { PromptLoaderService } from '../services/prompt-loader.service';
 import {
   StreamTextHandler,
   type StreamTextCallbacks,
@@ -81,14 +85,14 @@ describe('StreamTextHandler', () => {
       getAllConfig: vi.fn().mockResolvedValue({}),
       setConfig: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIConfigService;
-    const orchestrator = new AIOrchestrator(mockAIConfigService);
-    const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    handler = new StreamTextHandler(
-      mockProvider,
-      orchestrator,
-      rateLimitService,
-      mockConfig
+    const promptLoader = new PromptLoaderService(
+      join(__dirname, '../../prompts')
     );
+    promptLoader.onModuleInit();
+    const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
+    const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
+    const pipeline = new AICompletionPipeline(orchestrator, rateLimitService);
+    handler = new StreamTextHandler(mockProvider, pipeline, mockConfig);
   });
 
   it('should stream chunks and call onDone with usage', async () => {

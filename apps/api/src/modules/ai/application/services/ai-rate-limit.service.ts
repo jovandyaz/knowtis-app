@@ -5,6 +5,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
+  type RecordUsageInput,
 } from '../../domain/ports/ai-usage.repository';
 import {
   RATE_LIMIT_PROVIDER,
@@ -68,15 +69,9 @@ export class AIRateLimitService {
     return this.checkLimitViaPg(userId, estimatedTokens);
   }
 
-  async recordUsage(params: {
-    userId: string;
-    action: string;
-    model: string;
-    estimatedTokens: number;
-    inputTokens: number;
-    outputTokens: number;
-    costUsd: number;
-  }): Promise<void> {
+  async recordUsage(
+    params: RecordUsageInput & { readonly estimatedTokens: number }
+  ): Promise<void> {
     await this.usageRepository.recordUsage(params);
 
     if (this.rateLimitProvider) {

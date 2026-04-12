@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIErrorCodes } from '../../../domain/errors/ai.errors';
@@ -7,6 +9,7 @@ import { createMockConfig } from '../../../testing/create-mock-config';
 import type { AIConfigService } from '../../services/ai-config.service';
 import { AIOrchestrator } from '../../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../services/ai-rate-limit.service';
+import { PromptLoaderService } from '../../services/prompt-loader.service';
 import { VoiceTranscriptionService } from '../../services/voice-transcription.service';
 import { VoiceNoteHandler } from '../voice-note.handler';
 
@@ -55,7 +58,11 @@ describe('VoiceNoteHandler', () => {
       getAllConfig: vi.fn().mockResolvedValue({}),
       setConfig: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIConfigService;
-    const orchestrator = new AIOrchestrator(mockAIConfigService);
+    const promptLoader = new PromptLoaderService(
+      join(__dirname, '../../../prompts')
+    );
+    promptLoader.onModuleInit();
+    const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
 
     handler = new VoiceNoteHandler(

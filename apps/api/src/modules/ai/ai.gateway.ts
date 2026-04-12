@@ -242,12 +242,16 @@ export class AIGateway
     clientId: string,
     streamId: string
   ): void {
-    if (!this.activeStreams.delete(streamId)) {return;}
+    if (!this.activeStreams.delete(streamId)) {
+      return;
+    }
 
     const clientSet = this.clientStreams.get(clientId);
     if (clientSet) {
       clientSet.delete(streamId);
-      if (clientSet.size === 0) {this.clientStreams.delete(clientId);}
+      if (clientSet.size === 0) {
+        this.clientStreams.delete(clientId);
+      }
     }
 
     const count = this.userStreamCount.get(userId) ?? 0;
@@ -260,7 +264,9 @@ export class AIGateway
 
   private abortClientStreams(clientId: string): void {
     const streamIds = this.clientStreams.get(clientId);
-    if (!streamIds) {return;}
+    if (!streamIds) {
+      return;
+    }
     for (const streamId of streamIds) {
       this.activeStreams.get(streamId)?.abort();
     }

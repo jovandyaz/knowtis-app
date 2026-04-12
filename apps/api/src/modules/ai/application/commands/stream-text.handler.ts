@@ -1,22 +1,15 @@
-import { randomUUID } from 'node:crypto';
-
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { DEFAULT_MODEL_PRICING } from '../../domain/constants/model-pricing';
+import { getModelPricing } from '../../domain/constants/model-pricing';
 import { AIErrors } from '../../domain/errors/ai.errors';
-import { AI_CACHE, type AICache } from '../../domain/ports/ai-cache.port';
 import {
   AI_COMPLETION_PROVIDER,
   type AICompletionProvider,
 } from '../../domain/ports/ai-provider.port';
-import { detectPromptInjection } from '../../domain/services/prompt-guard';
-import { estimateTokenCount } from '../../domain/services/token-estimator';
-import { AIAction } from '../../domain/value-objects/ai-action.vo';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
-import { AIOrchestrator } from '../services/ai-orchestrator.service';
-import { AIRateLimitService } from '../services/ai-rate-limit.service';
+import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
 
 interface StreamTextInput {
   readonly userId: string;
@@ -47,12 +40,8 @@ export class StreamTextHandler {
   constructor(
     @Inject(AI_COMPLETION_PROVIDER)
     private readonly aiProvider: AICompletionProvider,
-    private readonly orchestrator: AIOrchestrator,
-    private readonly rateLimitService: AIRateLimitService,
-    private readonly configService: ConfigService<EnvConfig, true>,
-    @Optional()
-    @Inject(AI_CACHE)
-    private readonly cache?: AICache
+    private readonly pipeline: AICompletionPipeline,
+    private readonly configService: ConfigService<EnvConfig, true>
   ) {}
 
   async execute(
@@ -60,135 +49,45 @@ export class StreamTextHandler {
     callbacks: StreamTextCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
-    const requestId = randomUUID();
-    const startTime = Date.now();
-
-    const actionResult = AIAction.create(input.action);
-    if (actionResult.isErr()) {
-      callbacks.onError(actionResult.error);
+    const preflightResult = await this.pipeline.preflight(input);
+    if (preflightResult.isErr()) {
+      callbacks.onError(preflightResult.error);
       return;
     }
-    const action = actionResult.value.toPrimitive();
 
-    const injectionCheck = detectPromptInjection(input.content);
-    if (!injectionCheck.safe) {
-      this.logger.warn({
-        event: 'ai.request.injection_blocked',
-        requestId,
-        userId: input.userId,
-        action,
-        score: injectionCheck.score,
-        reason: injectionCheck.reason,
+    const preflight = preflightResult.value;
+    if (preflight.kind === 'cache_hit') {
+      const { context, data } = preflight;
+      this.pipeline.recordUsage(context, input, {
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        model: data.model,
+        costUsd: data.costUsd,
       });
-      callbacks.onError(AIErrors.promptInjectionDetected());
-      return;
-    }
-    if (input.selection) {
-      const selectionCheck = detectPromptInjection(input.selection);
-      if (!selectionCheck.safe) {
-        this.logger.warn({
-          event: 'ai.request.injection_blocked',
-          requestId,
-          userId: input.userId,
-          action,
-          field: 'selection',
-          score: selectionCheck.score,
-          reason: selectionCheck.reason,
-        });
-        callbacks.onError(AIErrors.promptInjectionDetected());
-        return;
-      }
-    }
-    if (input.suffix) {
-      const suffixCheck = detectPromptInjection(input.suffix);
-      if (!suffixCheck.safe) {
-        this.logger.warn({
-          event: 'ai.request.injection_blocked',
-          requestId,
-          userId: input.userId,
-          action,
-          field: 'suffix',
-          score: suffixCheck.score,
-          reason: suffixCheck.reason,
-        });
-        callbacks.onError(AIErrors.promptInjectionDetected());
-        return;
-      }
-    }
-
-    const estimatedTokens = estimateTokenCount(input.content);
-    const rateCheck = await this.rateLimitService.checkLimit(
-      input.userId,
-      estimatedTokens
-    );
-    if (!rateCheck.allowed) {
-      this.logger.warn({
-        event: 'ai.request.rejected',
-        requestId,
-        userId: input.userId,
-        action,
-        reason: rateCheck.reason,
+      callbacks.onChunk(data.text);
+      callbacks.onDone({
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        model: data.model,
+        costUsd: data.costUsd,
       });
-      callbacks.onError(AIErrors.rateLimitExceeded());
       return;
     }
 
-    const modelResult = await this.orchestrator.selectModel(action);
-    if (modelResult.isErr()) {
-      callbacks.onError(modelResult.error);
-      return;
-    }
-    const model = modelResult.value.toPrimitive();
-
-    this.logger.log({
-      event: 'ai.request.start',
-      requestId,
-      userId: input.userId,
-      action,
-      model,
-      mode: 'stream',
-    });
-
-    const systemPrompt = this.orchestrator.getSystemPrompt(action);
-    const userPrompt = this.orchestrator.buildUserPrompt(input, action);
-
-    const cacheStatus: 'miss' | 'skip' = this.cache?.isCacheable(action)
-      ? 'miss'
-      : 'skip';
-
-    if (this.cache?.isCacheable(action)) {
-      const cached = await this.cache.get(action, model, userPrompt);
-      if (cached) {
-        callbacks.onChunk(cached.text);
-        callbacks.onDone({
-          inputTokens: cached.inputTokens,
-          outputTokens: cached.outputTokens,
-          model: cached.model,
-          costUsd: cached.costUsd,
-        });
-        this.logger.log({
-          event: 'ai.request.complete',
-          requestId,
-          userId: input.userId,
-          action,
-          model: cached.model,
-          latencyMs: Date.now() - startTime,
-          status: 'cache_hit',
-          mode: 'stream',
-        });
-        return;
-      }
-    }
+    const { context } = preflight;
 
     try {
-      const streamResult = this.aiProvider.streamCompletion(userPrompt, {
-        model,
-        system: systemPrompt,
-        maxRetries: this.configService.get('AI_MAX_RETRIES'),
-        timeout: {
-          chunkMs: this.configService.get('AI_STREAM_CHUNK_TIMEOUT_MS'),
-        },
-      });
+      const streamResult = this.aiProvider.streamCompletion(
+        context.userPrompt,
+        {
+          model: context.model,
+          system: context.systemPrompt,
+          maxRetries: this.configService.get('AI_MAX_RETRIES'),
+          timeout: {
+            chunkMs: this.configService.get('AI_STREAM_CHUNK_TIMEOUT_MS'),
+          },
+        }
+      );
 
       const collectedChunks: string[] = [];
 
@@ -196,11 +95,11 @@ export class StreamTextHandler {
         if (signal?.aborted) {
           this.logger.log({
             event: 'ai.request.cancelled',
-            requestId,
+            requestId: context.requestId,
             userId: input.userId,
-            latencyMs: Date.now() - startTime,
+            latencyMs: Date.now() - context.startTime,
           });
-          return;
+          break;
         }
         if (chunk !== '') {
           collectedChunks.push(chunk);
@@ -213,79 +112,39 @@ export class StreamTextHandler {
         {
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
-          model,
+          model: context.model,
         },
-        DEFAULT_MODEL_PRICING[model]
+        getModelPricing(context.model)
       );
 
-      this.rateLimitService
-        .recordUsage({
-          userId: input.userId,
-          action,
-          model,
-          estimatedTokens,
+      this.pipeline.recordCompletion(
+        context,
+        input,
+        {
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
+          model: context.model,
           costUsd: usage.costUsd,
-        })
-        .catch((err) =>
-          this.logger.warn({
-            event: 'ai.usage.record_failed',
-            requestId,
-            userId: input.userId,
-            error: err instanceof Error ? err.message : 'Unknown error',
-          })
-        );
-
-      if (this.cache?.isCacheable(action) && !signal?.aborted) {
-        this.cache
-          .set(action, model, userPrompt, {
-            text: collectedChunks.join(''),
-            model,
-            inputTokens: actualUsage.promptTokens,
-            outputTokens: actualUsage.completionTokens,
-            costUsd: usage.costUsd,
-          })
-          .catch((err) =>
-            this.logger.warn({
-              event: 'ai.cache.write_failed',
-              requestId,
-              error: err instanceof Error ? err.message : 'Unknown error',
-            })
-          );
-      }
-
-      this.logger.log({
-        event: 'ai.request.complete',
-        requestId,
-        userId: input.userId,
-        action,
-        model,
-        inputTokens: actualUsage.promptTokens,
-        outputTokens: actualUsage.completionTokens,
-        estimatedTokens,
-        costUsd: usage.costUsd,
-        latencyMs: Date.now() - startTime,
-        cacheStatus,
-        status: 'success',
-        mode: 'stream',
-      });
+          text: collectedChunks.join(''),
+        },
+        { mode: 'stream', aborted: signal?.aborted ?? false }
+      );
 
       callbacks.onDone({
         inputTokens: actualUsage.promptTokens,
         outputTokens: actualUsage.completionTokens,
-        model,
+        model: context.model,
         costUsd: usage.costUsd,
       });
     } catch (error) {
       this.logger.error({
         event: 'ai.request.error',
-        requestId,
+        requestId: context.requestId,
         userId: input.userId,
-        action,
-        model,
+        action: context.action,
+        model: context.model,
         error: error instanceof Error ? error.message : 'AI streaming failed',
-        latencyMs: Date.now() - startTime,
+        latencyMs: Date.now() - context.startTime,
         mode: 'stream',
       });
       callbacks.onError(

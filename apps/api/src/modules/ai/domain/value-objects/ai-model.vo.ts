@@ -5,9 +5,14 @@ import { AIErrors, type AIDomainError } from '../errors/ai.errors';
 export const SUPPORTED_MODELS = [
   'anthropic:claude-sonnet-4-20250514',
   'anthropic:claude-haiku-4-5-20251001',
+  'google:gemini-2.0-flash',
+  'google:gemini-2.5-pro',
 ] as const;
 
-const FAST_MODELS = new Set<string>(['anthropic:claude-haiku-4-5-20251001']);
+const FAST_MODELS = new Set<string>([
+  'anthropic:claude-haiku-4-5-20251001',
+  'google:gemini-2.0-flash',
+]);
 
 export type SupportedModel = (typeof SUPPORTED_MODELS)[number];
 

@@ -5,11 +5,13 @@ export interface ModelPricing {
   readonly output: number;
 }
 
-/**
- * Pricing per 1M tokens (USD).
- * Source: https://docs.anthropic.com/en/docs/about-claude/pricing
- */
-export const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
+const DEFAULT_MODEL_PRICING = {
   'anthropic:claude-sonnet-4-20250514': { input: 3.0, output: 15.0 },
   'anthropic:claude-haiku-4-5-20251001': { input: 0.8, output: 4.0 },
+  'google:gemini-2.0-flash': { input: 0.1, output: 0.4 },
+  'google:gemini-2.5-pro': { input: 1.25, output: 10.0 },
 } satisfies Record<SupportedModel, ModelPricing>;
+
+export function getModelPricing(model: string): ModelPricing | undefined {
+  return (DEFAULT_MODEL_PRICING as Record<string, ModelPricing>)[model];
+}

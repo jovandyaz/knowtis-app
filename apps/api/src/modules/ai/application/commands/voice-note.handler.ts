@@ -7,12 +7,10 @@ import { err, ok, type Result } from 'neverthrow';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { DEFAULT_MODEL_PRICING } from '../../domain/constants/model-pricing';
+import { getModelPricing } from '../../domain/constants/model-pricing';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
-import {
-  AI_STRUCTURED_OUTPUT_PROVIDER,
-  AIStructuredOutputProvider,
-} from '../../domain/ports/ai-structured-output.port';
+import { AI_STRUCTURED_OUTPUT_PROVIDER } from '../../domain/ports/ai-structured-output.port';
+import type { AIStructuredOutputProvider } from '../../domain/ports/ai-structured-output.port';
 import { voiceNoteOutputSchema } from '../../domain/schemas/voice-note.schema';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
@@ -167,7 +165,7 @@ export class VoiceNoteHandler {
 
       const usage = TokenUsage.create(
         { inputTokens, outputTokens, model },
-        DEFAULT_MODEL_PRICING[model]
+        getModelPricing(model)
       );
 
       this.rateLimitService
