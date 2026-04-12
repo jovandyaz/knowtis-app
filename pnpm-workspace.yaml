@@ -1,6 +1,10 @@
 packages:
-  - apps/*
-  - libs/*
-  - libs/shared/*
-  - libs/data-access/*
-  - packages/*
+  - 'apps/*'
+  - 'libs/*'
+  - 'libs/shared/*'
+  - 'libs/data-access/*'
+  - 'packages/*'
+  - 'packages/shared/types'
+  - 'packages/shared/hooks'
+  - 'packages/shared/util'
+  - 'packages/shared/i18n'

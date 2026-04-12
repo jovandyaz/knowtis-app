@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../dist/libs/design-system"
+    "outDir": "../../dist/packages/design-system"
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": [

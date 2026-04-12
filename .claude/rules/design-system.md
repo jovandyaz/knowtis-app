@@ -1,6 +1,6 @@
 ---
 paths:
-  - 'libs/design-system/**'
+  - 'packages/design-system/**'
 ---
 
 # Design System Rules

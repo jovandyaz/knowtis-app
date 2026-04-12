@@ -1,4 +1,4 @@
-// NOTE: These constants intentionally mirror libs/shared/i18n/src/constants.ts.
+// NOTE: These constants intentionally mirror packages/shared/i18n/src/constants.ts.
 // packages/email is a buildable package and cannot import from non-buildable
 // workspace libraries (@knowtis/shared-i18n). Keep in sync manually when
 // adding new locales.

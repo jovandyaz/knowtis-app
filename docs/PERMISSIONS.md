@@ -32,7 +32,7 @@ Knowtis defines three access levels:
 
 The `owner` level is computed at runtime by comparing `note.ownerId` with the current user ID. Only `viewer` and `editor` are persisted as a PostgreSQL enum (`permission_level`).
 
-These are defined in `libs/shared/types/src/lib/note.types.ts`:
+These are defined in `packages/shared/types/src/lib/note.types.ts`:
 
 ```typescript
 const PERMISSION = { VIEWER: 'viewer', EDITOR: 'editor' } as const;
@@ -350,7 +350,7 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 | File                                                                     | Description                                 |
 | ------------------------------------------------------------------------ | ------------------------------------------- |
-| `libs/shared/types/src/lib/note.types.ts`                                | Permission/access constants and types       |
+| `packages/shared/types/src/lib/note.types.ts`                            | Permission/access constants and types       |
 | `apps/api/src/modules/notes/domain/value-objects/permission-level.vo.ts` | PermissionLevel value object                |
 | `apps/api/src/modules/notes/domain/entities/note.entity.ts`              | NoteEntity, NotePermissionEntity interfaces |
 | `apps/api/src/modules/notes/domain/errors/note.errors.ts`                | Error codes and factory functions           |

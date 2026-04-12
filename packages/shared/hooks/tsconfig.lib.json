@@ -1,7 +1,7 @@
 {
   "extends": "../../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "../../../dist/libs/shared/hooks",
+    "outDir": "../../../dist/packages/shared/hooks",
     "composite": true,
     "declaration": true,
     "emitDeclarationOnly": true

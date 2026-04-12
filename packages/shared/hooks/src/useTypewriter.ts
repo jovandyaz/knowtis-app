@@ -48,7 +48,9 @@ export function useTypewriter({
     function tick() {
       const currentTexts = textsRef.current;
       const currentText = currentTexts[textIndex];
-      if (!currentText) {return;}
+      if (!currentText) {
+        return;
+      }
 
       if (phase === Phase.TYPING) {
         if (charIndex < currentText.length) {
@@ -58,7 +60,9 @@ export function useTypewriter({
           return;
         }
         setDisplayText(currentText);
-        if (currentTexts.length === 1) {return;}
+        if (currentTexts.length === 1) {
+          return;
+        }
         phase = Phase.WAITING;
         timeoutId = setTimeout(tick, waitTimeRef.current);
         return;

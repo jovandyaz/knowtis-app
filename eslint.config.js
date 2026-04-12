@@ -110,7 +110,11 @@ export default defineConfig([
   },
   // React-specific config
   {
-    files: ['apps/notes/**/*.{ts,tsx}', 'libs/**/*.{ts,tsx}'],
+    files: [
+      'apps/notes/**/*.{ts,tsx}',
+      'libs/**/*.{ts,tsx}',
+      'packages/**/*.{ts,tsx}',
+    ],
     extends: [reactHooks.configs.flat.recommended, reactRefresh.configs.vite],
     rules: {
       'react-refresh/only-export-components': [

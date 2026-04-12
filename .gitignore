@@ -31,8 +31,8 @@ dist
 tmp
 
 # Design System
-libs/design-system/build
-libs/design-system/storybook-static
+packages/design-system/build
+packages/design-system/storybook-static
 
 # Environment files
 .env

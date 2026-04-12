@@ -14,15 +14,15 @@ export default defineConfig({
       '@': resolve(__dirname, './src'),
       '@knowtis/design-system': resolve(
         __dirname,
-        '../../libs/design-system/src/index.ts'
+        '../../packages/design-system/src/index.ts'
       ),
       '@knowtis/shared-hooks': resolve(
         __dirname,
-        '../../libs/shared/hooks/src/index.ts'
+        '../../packages/shared/hooks/src/index.ts'
       ),
       '@knowtis/shared-util': resolve(
         __dirname,
-        '../../libs/shared/util/src/index.ts'
+        '../../packages/shared/util/src/index.ts'
       ),
       '@knowtis/data-access-notes': resolve(
         __dirname,
@@ -30,7 +30,7 @@ export default defineConfig({
       ),
       '@knowtis/shared-types': resolve(
         __dirname,
-        '../../libs/shared/types/src/index.ts'
+        '../../packages/shared/types/src/index.ts'
       ),
       '@knowtis/api-client': resolve(
         __dirname,
@@ -55,7 +55,7 @@ export default defineConfig({
       ),
       '@knowtis/shared-i18n': resolve(
         __dirname,
-        '../../libs/shared/i18n/src/index.ts'
+        '../../packages/shared/i18n/src/index.ts'
       ),
     },
   },

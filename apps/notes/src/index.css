@@ -4,7 +4,7 @@
 @import 'streamdown/styles.css';
 
 /* Scan design-system components for Tailwind classes */
-@source "../../../libs/design-system/src/**/*.tsx";
+@source "../../../packages/design-system/src/**/*.tsx";
 
 @theme {
   --animate-accordion-down: accordion-down 0.2s ease-out;
