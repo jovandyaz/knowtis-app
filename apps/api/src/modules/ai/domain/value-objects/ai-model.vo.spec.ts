@@ -42,6 +42,14 @@ describe('AIModel', () => {
     expect(result._unsafeUnwrap().isFast).toBe(false);
   });
 
+  it('should fail for unsupported google model', () => {
+    const result = AIModel.create('google:gemini-nonexistent');
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('AI_INVALID_MODEL');
+    }
+  });
+
   it('should fail for empty string', () => {
     const result = AIModel.create('');
     expect(result.isErr()).toBe(true);

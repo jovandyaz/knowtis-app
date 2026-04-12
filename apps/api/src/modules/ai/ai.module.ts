@@ -1,3 +1,5 @@
+import { join } from 'node:path';
+
 import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -13,7 +15,10 @@ import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
-import { PromptLoaderService } from './application/services/prompt-loader.service';
+import {
+  PromptLoaderService,
+  PROMPTS_DIR,
+} from './application/services/prompt-loader.service';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
 import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
@@ -54,6 +59,7 @@ import { SemanticCacheService } from './infrastructure/redis/semantic-cache.serv
     { provide: AI_REDIS, useClass: AIRedisProvider },
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: SemanticCacheService },
+    { provide: PROMPTS_DIR, useValue: join(__dirname, 'prompts') },
     AIConfigService,
     PromptLoaderService,
     AIOrchestrator,

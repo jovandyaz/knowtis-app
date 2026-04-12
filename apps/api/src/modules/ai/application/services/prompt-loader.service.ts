@@ -12,8 +12,6 @@ import matter from 'gray-matter';
 
 export const PROMPTS_DIR = Symbol('PROMPTS_DIR');
 
-const DEFAULT_PROMPTS_DIR = join(__dirname, 'prompts');
-
 export interface ParsedPrompt {
   readonly id: string;
   readonly category: string;
@@ -29,7 +27,12 @@ export class PromptLoaderService implements OnModuleInit {
   private readonly promptsDir: string;
 
   constructor(@Optional() @Inject(PROMPTS_DIR) promptsDir?: string) {
-    this.promptsDir = promptsDir ?? DEFAULT_PROMPTS_DIR;
+    if (!promptsDir) {
+      throw new Error(
+        'PROMPTS_DIR must be provided via DI (ai.module.ts) or constructor argument'
+      );
+    }
+    this.promptsDir = promptsDir;
   }
 
   onModuleInit(): void {
