@@ -167,7 +167,7 @@
   .ProseMirror ul[data-type="taskList"] li div {
     @apply flex-1;
   }
-  .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div {
+  .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
     @apply line-through text-muted-foreground;
   }
 

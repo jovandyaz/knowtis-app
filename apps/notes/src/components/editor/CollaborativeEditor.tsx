@@ -9,7 +9,7 @@ import {
   useWebSocketCollaboration,
 } from '@/hooks';
 import { useAIStore } from '@/stores/ai.store';
-import { EditorContent, useEditor } from '@tiptap/react';
+import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { cn } from '@knowtis/design-system';
 import { useTypewriter } from '@knowtis/shared-hooks';
@@ -117,11 +117,20 @@ function InternalEditor({
     },
   });
 
-  const editorIsEmpty = editor
-    ? editor.state.doc.childCount === 1 &&
-      editor.state.doc.firstChild?.type.name === 'paragraph' &&
-      editor.state.doc.firstChild?.content.size === 0
-    : true;
+  const editorIsEmpty = useEditorState({
+    editor,
+    selector: ({ editor: e }) => {
+      if (!e) {
+        return true;
+      }
+      const { doc } = e.state;
+      return (
+        doc.childCount === 1 &&
+        doc.firstChild?.type.name === 'paragraph' &&
+        doc.firstChild?.content.size === 0
+      );
+    },
+  });
 
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {

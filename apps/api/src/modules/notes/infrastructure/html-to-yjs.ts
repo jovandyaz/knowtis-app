@@ -1,4 +1,13 @@
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
+import Highlight from '@tiptap/extension-highlight';
+import Subscript from '@tiptap/extension-subscript';
+import Superscript from '@tiptap/extension-superscript';
+import { Table } from '@tiptap/extension-table';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableRow } from '@tiptap/extension-table-row';
+import TaskItem from '@tiptap/extension-task-item';
+import TaskList from '@tiptap/extension-task-list';
 import { generateJSON } from '@tiptap/html/server';
 import { Schema } from '@tiptap/pm/model';
 import StarterKit from '@tiptap/starter-kit';
@@ -9,8 +18,8 @@ import * as Y from 'yjs';
 const lowlight = createLowlight(common);
 
 /**
- * ProseMirror schema matching the frontend TipTap editor's StarterKit config.
- * Must stay in sync with apps/notes/src/components/editor/useEditorExtensions.ts
+ * ProseMirror schema matching the frontend TipTap editor's extension set.
+ * Must stay in sync with apps/notes/src/components/editor/extensions/base-extensions.ts
  */
 export const editorSchema = new Schema({
   nodes: {
@@ -46,6 +55,42 @@ export const editorSchema = new Schema({
       attrs: { start: { default: 1 } },
     },
     listItem: { content: 'paragraph block*' },
+    taskList: { content: 'taskItem+', group: 'block' },
+    taskItem: {
+      content: 'paragraph block*',
+      defining: true,
+      attrs: { checked: { default: false } },
+    },
+    table: {
+      content: 'tableRow+',
+      group: 'block',
+      tableRole: 'table',
+      isolating: true,
+    },
+    tableRow: {
+      content: '(tableCell | tableHeader)*',
+      tableRole: 'row',
+    },
+    tableCell: {
+      content: 'block+',
+      attrs: {
+        colspan: { default: 1 },
+        rowspan: { default: 1 },
+        colwidth: { default: null },
+      },
+      tableRole: 'cell',
+      isolating: true,
+    },
+    tableHeader: {
+      content: 'block+',
+      attrs: {
+        colspan: { default: 1 },
+        rowspan: { default: 1 },
+        colwidth: { default: null },
+      },
+      tableRole: 'header_cell',
+      isolating: true,
+    },
   },
   marks: {
     bold: {},
@@ -53,6 +98,11 @@ export const editorSchema = new Schema({
     underline: {},
     code: {},
     strike: {},
+    superscript: {},
+    subscript: {},
+    highlight: {
+      attrs: { color: { default: null } },
+    },
     link: {
       attrs: {
         href: { default: null },
@@ -66,6 +116,15 @@ export const editorSchema = new Schema({
 const tiptapExtensions = [
   StarterKit.configure({ codeBlock: false }),
   CodeBlockLowlight.configure({ lowlight }),
+  TaskList,
+  TaskItem.configure({ nested: true }),
+  Table.configure({ resizable: false }),
+  TableRow,
+  TableHeader,
+  TableCell,
+  Superscript,
+  Subscript,
+  Highlight.configure({ multicolor: true }),
 ];
 
 /**
