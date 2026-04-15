@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { OnEvent } from '@nestjs/event-emitter';
 import {
   ConnectedSocket,
   MessageBody,
@@ -11,6 +12,7 @@ import {
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
 
+import { NoteUpdatedEvent } from '../notes/domain/events';
 import { CollaborationService } from './collaboration.service';
 import {
   COLLABORATION_EVENTS,
@@ -56,6 +58,39 @@ export class CollaborationGateway
 
   afterInit(): void {
     this.logger.log('Collaboration WebSocket Gateway initialized');
+  }
+
+  @OnEvent(NoteUpdatedEvent.EVENT_NAME, { async: true })
+  handleExternalNoteUpdate(event: NoteUpdatedEvent): void {
+    if (event.updates.content === undefined || !event.yjsState) {
+      return;
+    }
+
+    try {
+      const delta = this.collaborationService.applyExternalYjsUpdate(
+        event.aggregateId,
+        event.yjsState
+      );
+
+      if (!delta) {
+        return;
+      }
+
+      this.server
+        .to(event.aggregateId)
+        .emit(COLLABORATION_EVENTS.DOCUMENT_UPDATE, {
+          noteId: event.aggregateId,
+          update: Array.from(delta),
+        });
+      this.logger.debug(
+        `Broadcast external content update to room ${event.aggregateId}`
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to broadcast external update for note ${event.aggregateId}`,
+        error instanceof Error ? error.stack : error
+      );
+    }
   }
 
   handleConnection(client: AuthenticatedSocket): void {

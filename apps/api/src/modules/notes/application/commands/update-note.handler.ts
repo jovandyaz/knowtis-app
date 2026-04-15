@@ -1,11 +1,15 @@
 import { randomBytes } from 'node:crypto';
 
 import { UserId } from '@jovandyaz/auth/server';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { err, type Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
-import { GENERAL_ACCESS } from '@knowtis/shared-types';
+import {
+  GENERAL_ACCESS,
+  type GeneralAccessLevel,
+  type PermissionLevel,
+} from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import {
@@ -16,17 +20,27 @@ import {
   type NoteDomainError,
   type NoteEntity,
   type NoteRepository,
+  type UpdateNoteData,
 } from '../../domain';
-import { NoteUpdatedEvent } from '../../domain/events';
+import {
+  NoteUpdatedEvent,
+  type NoteUpdatedEventUpdates,
+} from '../../domain/events';
+import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
   readonly userId: string;
   readonly title?: string;
   readonly content?: string;
-  readonly generalAccess?: string;
-  readonly generalAccessPermission?: string;
+  readonly generalAccess?: GeneralAccessLevel;
+  readonly generalAccessPermission?: PermissionLevel;
   readonly editorsCanShare?: boolean;
+}
+
+interface PersistUpdateResult {
+  readonly entity: NoteEntity;
+  readonly yjsState?: Buffer;
 }
 
 const CONTENT_FIELDS = ['title', 'content'] as const;
@@ -38,6 +52,8 @@ const SHARING_FIELDS = [
 
 @Injectable()
 export class UpdateNoteHandler {
+  private readonly logger = new Logger(UpdateNoteHandler.name);
+
   constructor(
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
     private readonly eventEmitter: EventEmitter2
@@ -62,15 +78,98 @@ export class UpdateNoteHandler {
     }
 
     const isOwner = note.ownerId === input.userId;
-    const result = isOwner
+    const persisted = isOwner
       ? await this.executeOwnerUpdate(input, note)
       : await this.executeEditorUpdate(input, userIdResult.value);
 
-    if (result.isOk()) {
-      this.emitUpdateEvent(input, note.id);
+    if (persisted.isOk()) {
+      this.emitUpdateEvent(input, note.id, persisted.value.yjsState);
     }
 
-    return result;
+    return persisted.map(({ entity }) => entity);
+  }
+
+  private async executeOwnerUpdate(
+    input: UpdateNoteInput,
+    note: NoteEntity
+  ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
+    const updateData: UpdateNoteData = {
+      ...pickDefined(input, [...CONTENT_FIELDS, ...SHARING_FIELDS]),
+      ...this.resolveShareToken(input, note),
+    };
+
+    return this.persistUpdate(input.noteId, updateData, input.content);
+  }
+
+  private async executeEditorUpdate(
+    input: UpdateNoteInput,
+    userId: UserId
+  ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
+    const canEdit = await this.noteRepository.hasAccess(
+      input.noteId,
+      userId,
+      'editor'
+    );
+    if (!canEdit) {
+      return err(NoteErrors.editPermissionDenied());
+    }
+
+    const hasSharingFields = SHARING_FIELDS.some(
+      (field) => input[field] !== undefined
+    );
+    if (hasSharingFields) {
+      return err(NoteErrors.ownerOnly('change sharing settings'));
+    }
+
+    return this.persistUpdate(
+      input.noteId,
+      pickDefined(input, [...CONTENT_FIELDS]),
+      input.content
+    );
+  }
+
+  private async persistUpdate(
+    noteId: string,
+    updateData: UpdateNoteData,
+    content: string | undefined
+  ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
+    if (content === undefined) {
+      const result = await this.noteRepository.update(noteId, updateData);
+      return result.map((entity) => ({ entity }));
+    }
+
+    const yjsResult = this.generateYjsState(noteId, content);
+    if (yjsResult.isErr()) {
+      return err(yjsResult.error);
+    }
+
+    const yjsState = yjsResult.value;
+    const result = await this.noteRepository.updateContentWithYjsState(
+      noteId,
+      { ...updateData, content },
+      yjsState
+    );
+    return result.map((entity) => ({ entity, yjsState }));
+  }
+
+  private generateYjsState(
+    noteId: string,
+    content: string
+  ): Result<Buffer, NoteDomainError> {
+    try {
+      return ok(htmlToYjsState(content));
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Unknown parser error';
+      this.logger.warn(
+        `Failed to generate yjsState for note ${noteId}: ${message}`
+      );
+      return err(
+        NoteErrors.invalidContent(
+          `Cannot convert HTML to Yjs state: ${message}`
+        )
+      );
+    }
   }
 
   private validateFields(
@@ -91,44 +190,6 @@ export class UpdateNoteHandler {
     }
 
     return null;
-  }
-
-  private async executeOwnerUpdate(
-    input: UpdateNoteInput,
-    note: NoteEntity
-  ): Promise<Result<NoteEntity, NoteDomainError>> {
-    const updateData = {
-      ...pickDefined(input, [...CONTENT_FIELDS, ...SHARING_FIELDS]),
-      ...this.resolveShareToken(input, note),
-    };
-
-    return this.noteRepository.update(input.noteId, updateData);
-  }
-
-  private async executeEditorUpdate(
-    input: UpdateNoteInput,
-    userId: UserId
-  ): Promise<Result<NoteEntity, NoteDomainError>> {
-    const canEdit = await this.noteRepository.hasAccess(
-      input.noteId,
-      userId,
-      'editor'
-    );
-    if (!canEdit) {
-      return err(NoteErrors.editPermissionDenied());
-    }
-
-    const hasSharingFields = SHARING_FIELDS.some(
-      (field) => input[field] !== undefined
-    );
-    if (hasSharingFields) {
-      return err(NoteErrors.ownerOnly('change sharing settings'));
-    }
-
-    return this.noteRepository.update(
-      input.noteId,
-      pickDefined(input, [...CONTENT_FIELDS])
-    );
   }
 
   private resolveShareToken(
@@ -153,13 +214,20 @@ export class UpdateNoteHandler {
     return {};
   }
 
-  private emitUpdateEvent(input: UpdateNoteInput, noteId: string): void {
-    const updates = pickDefined(input, [...CONTENT_FIELDS, ...SHARING_FIELDS]);
+  private emitUpdateEvent(
+    input: UpdateNoteInput,
+    noteId: string,
+    yjsState: Buffer | undefined
+  ): void {
+    const updates = pickDefined(input, [
+      ...CONTENT_FIELDS,
+      ...SHARING_FIELDS,
+    ]) as NoteUpdatedEventUpdates;
 
     if (Object.keys(updates).length > 0) {
       this.eventEmitter.emit(
         NoteUpdatedEvent.EVENT_NAME,
-        new NoteUpdatedEvent(noteId, updates, input.userId)
+        new NoteUpdatedEvent(noteId, updates, input.userId, yjsState)
       );
     }
   }

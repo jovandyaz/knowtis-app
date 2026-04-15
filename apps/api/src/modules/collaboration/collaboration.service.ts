@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as Y from 'yjs';
 
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import {
   GENERAL_ACCESS,
   PERMISSION,
@@ -15,9 +16,10 @@ import {
 
 import { NOTE_REPOSITORY } from '../notes/domain';
 import type { NoteRepository } from '../notes/domain';
-import type {
-  CollaborationRoom,
-  CollaborationUser,
+import {
+  EXTERNAL_UPDATE_ORIGIN,
+  type CollaborationRoom,
+  type CollaborationUser,
 } from './collaboration.types';
 
 @Injectable()
@@ -100,6 +102,53 @@ export class CollaborationService implements OnModuleDestroy {
 
   getRoom(noteId: string): CollaborationRoom | undefined {
     return this.rooms.get(noteId);
+  }
+
+  /**
+   * Apply an externally-generated Yjs state (e.g. from a REST update) to a
+   * live room and return the delta to broadcast. The caller is responsible
+   * for the authoritative DB write — this method intentionally does NOT
+   * schedule persistence to avoid overwriting the caller's write.
+   */
+  applyExternalYjsUpdate(
+    noteId: string,
+    yjsState: Uint8Array
+  ): Uint8Array | null {
+    const room = this.rooms.get(noteId);
+    if (!room) {
+      return null;
+    }
+
+    const probeDoc = new Y.Doc();
+    try {
+      Y.applyUpdate(probeDoc, yjsState);
+    } catch (error) {
+      this.logger.error(
+        `Rejected malformed external Yjs state for note ${noteId}`,
+        error instanceof Error ? error.stack : error
+      );
+      probeDoc.destroy();
+      return null;
+    }
+    probeDoc.destroy();
+
+    const oldStateVector = Y.encodeStateVector(room.yjsDoc);
+
+    room.yjsDoc.transact(() => {
+      const fragment = room.yjsDoc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+      fragment.delete(0, fragment.length);
+      Y.applyUpdate(room.yjsDoc, yjsState, EXTERNAL_UPDATE_ORIGIN);
+    }, EXTERNAL_UPDATE_ORIGIN);
+
+    const delta = Y.encodeStateAsUpdate(room.yjsDoc, oldStateVector);
+
+    room.lastActivity = new Date();
+
+    this.logger.debug(
+      `Applied external Yjs update to active room ${noteId} (delta ${delta.byteLength}B)`
+    );
+
+    return delta;
   }
 
   async noteExists(noteId: string): Promise<boolean> {

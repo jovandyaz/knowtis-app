@@ -7,8 +7,10 @@ import { AlertTriangle, Code, Eye, SplitSquareHorizontal } from 'lucide-react';
 import type mermaidType from 'mermaid';
 
 import { Button, cn } from '@knowtis/design-system';
-
-import { MERMAID_VIEW_MODE, type MermaidViewMode } from './constants';
+import {
+  MERMAID_VIEW_MODE,
+  type MermaidViewMode,
+} from '@knowtis/editor-schema';
 
 const DEFAULT_MERMAID_CODE = 'graph TD\n  A[Start] --> B[End]';
 const RENDER_DEBOUNCE_MS = 300;

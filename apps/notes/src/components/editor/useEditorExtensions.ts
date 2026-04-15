@@ -25,7 +25,7 @@ export function useEditorExtensions(
 ): AnyExtension[] {
   return useMemo(() => {
     const extensions: AnyExtension[] = [
-      ...createBaseExtensions({ undoRedo: false }),
+      ...createBaseExtensions({ disableHistory: true }),
       AIBlockNode,
       Collaboration.configure({
         document: yDoc,
