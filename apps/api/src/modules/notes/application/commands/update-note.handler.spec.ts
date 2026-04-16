@@ -11,9 +11,9 @@ import {
   NoteRepository,
 } from '../../domain';
 import { NoteUpdatedEvent } from '../../domain/events';
+import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
 import { UpdateNoteHandler } from './update-note.handler';
 
-// Mock note constant
 const mockNote: NoteEntity = {
   id: 'note-1',
   title: 'Original Title',
@@ -34,7 +34,6 @@ describe('UpdateNoteHandler', () => {
   let mockEventEmitter: EventEmitter2;
 
   beforeEach(() => {
-    // Mock the composite repository
     mockRepository = {
       findById: vi.fn(),
       findByIdWithOwner: vi.fn(),
@@ -44,6 +43,7 @@ describe('UpdateNoteHandler', () => {
       create: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
+      updateContentWithYjsState: vi.fn(),
       delete: vi.fn(),
       findPermission: vi.fn(),
       findPermissionsByNote: vi.fn(),
@@ -142,17 +142,17 @@ describe('UpdateNoteHandler', () => {
     );
   });
 
-  it('should allow editor to update content and title', async () => {
+  it('should allow editor to update content atomically with yjsState', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
-    vi.spyOn(mockRepository, 'update').mockResolvedValue(
-      ok({ ...mockNote, content: 'New Content' })
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok({ ...mockNote, content: '<p>New Content</p>' })
     );
 
     const input = {
       noteId: 'note-1',
       userId: 'editor-1',
-      content: 'New Content',
+      content: '<p>New Content</p>',
     };
 
     const result = await handler.execute(input);
@@ -163,9 +163,70 @@ describe('UpdateNoteHandler', () => {
       expect.objectContaining({ value: 'editor-1' }),
       'editor'
     );
-    expect(mockRepository.update).toHaveBeenCalledWith('note-1', {
-      content: 'New Content',
+    expect(mockRepository.updateContentWithYjsState).toHaveBeenCalledTimes(1);
+    expect(mockRepository.update).not.toHaveBeenCalled();
+    const [noteIdArg, dataArg, bufferArg] = vi.mocked(
+      mockRepository.updateContentWithYjsState
+    ).mock.calls[0];
+    expect(noteIdArg).toBe('note-1');
+    expect(dataArg).toEqual({ content: '<p>New Content</p>' });
+    expect(Buffer.isBuffer(bufferArg)).toBe(true);
+    expect((bufferArg as Buffer).byteLength).toBeGreaterThan(0);
+  });
+
+  it('should take atomic transactional path when owner updates content', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok({ ...mockNote, content: '<p>New</p>' })
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p>New</p>',
     });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.updateContentWithYjsState).toHaveBeenCalledTimes(1);
+    expect(mockRepository.update).not.toHaveBeenCalled();
+    expect(mockRepository.updateYjsState).not.toHaveBeenCalled();
+  });
+
+  it('should skip yjsState regen when only sharing fields change (non-atomic path)', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
+
+    await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    });
+
+    expect(mockRepository.update).toHaveBeenCalled();
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+    expect(mockRepository.updateYjsState).not.toHaveBeenCalled();
+  });
+
+  it('should return INVALID_CONTENT and not touch DB when HTML parsing throws', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(htmlToYjsModule, 'htmlToYjsState').mockImplementationOnce(() => {
+      throw new Error('malformed HTML');
+    });
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<garbage>',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.INVALID_CONTENT);
+      expect(result.error.message).toContain('malformed HTML');
+    }
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+    expect(mockRepository.update).not.toHaveBeenCalled();
+    expect(mockEventEmitter.emit).not.toHaveBeenCalled();
   });
 
   it('should deny editor from changing sharing settings', async () => {

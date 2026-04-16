@@ -7,6 +7,7 @@
   "implicitDependencies": [
     "design-system",
     "data-access-notes",
+    "editor-schema",
     "shared-hooks",
     "shared-util"
   ],

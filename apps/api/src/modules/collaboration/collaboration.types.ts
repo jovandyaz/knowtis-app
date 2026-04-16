@@ -42,6 +42,8 @@ export interface CollaborationRoom {
   persistenceTimeout?: NodeJS.Timeout;
 }
 
+export const EXTERNAL_UPDATE_ORIGIN = 'external-update' as const;
+
 export const COLLABORATION_EVENTS = {
   JOIN_ROOM: 'collaboration:join',
   LEAVE_ROOM: 'collaboration:leave',

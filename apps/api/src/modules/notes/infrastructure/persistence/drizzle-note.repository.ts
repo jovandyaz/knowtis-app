@@ -13,6 +13,7 @@ import type {
   NoteEntityWithOwner,
   NotePermissionEntity,
   NoteRepository,
+  UpdateNoteContentData,
   UpdateNoteData,
 } from '../../domain';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
@@ -57,7 +58,6 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.readRepo.findByShareToken(token);
   }
 
-  // NoteWriteRepository
   create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>> {
     return this.writeRepo.create(data);
   }
@@ -76,11 +76,18 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.writeRepo.updateYjsState(id, yjsState);
   }
 
+  updateContentWithYjsState(
+    id: string,
+    data: UpdateNoteContentData,
+    yjsState: Buffer
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.updateContentWithYjsState(id, data, yjsState);
+  }
+
   delete(id: string): Promise<Result<boolean, NoteDomainError>> {
     return this.writeRepo.delete(id);
   }
 
-  // PermissionRepository
   findPermission(
     noteId: string,
     userId: UserId

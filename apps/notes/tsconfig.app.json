@@ -6,6 +6,7 @@
     "paths": {
       "@/*": ["./apps/notes/src/*"],
       "@knowtis/design-system": ["./packages/design-system/src/index.ts"],
+      "@knowtis/editor-schema": ["./packages/editor-schema/src/index.ts"],
       "@knowtis/shared-hooks": ["./packages/shared/hooks/src/index.ts"],
       "@knowtis/shared-util": ["./packages/shared/util/src/index.ts"],
       "@knowtis/shared-i18n": ["./packages/shared/i18n/src/index.ts"],

@@ -16,6 +16,7 @@ describe('CreateNoteHandler', () => {
       create: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
+      updateContentWithYjsState: vi.fn(),
       delete: vi.fn(),
     };
 
@@ -32,7 +33,6 @@ describe('CreateNoteHandler', () => {
       content: 'Valid content',
       ownerId: 'user-123',
     };
-    // ... expectedNote setup ...
     const expectedNote: NoteEntity = {
       id: 'note-1',
       title: input.title,
