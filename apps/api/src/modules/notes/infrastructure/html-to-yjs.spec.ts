@@ -1,13 +1,15 @@
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import * as Y from 'yjs';
 
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+
 import { editorSchema, htmlToYjsState } from './html-to-yjs';
 
 function decodeState(state: Buffer) {
   const yDoc = new Y.Doc();
   Y.applyUpdate(yDoc, state);
   const node = yXmlFragmentToProseMirrorRootNode(
-    yDoc.getXmlFragment('content'),
+    yDoc.getXmlFragment(YJS_XML_FRAGMENT_NAME),
     editorSchema
   );
   yDoc.destroy();
@@ -137,5 +139,42 @@ describe('htmlToYjsState', () => {
     expect(mermaidNode.type).toBe('mermaidBlock');
     expect(mermaidNode.attrs.code).toContain('graph TD');
     expect(mermaidNode.attrs.code).toContain('A --> B');
+  });
+
+  it('should preserve mermaidBlock viewMode attribute across modes', () => {
+    const cases: Array<'code' | 'preview' | 'split'> = [
+      'code',
+      'preview',
+      'split',
+    ];
+
+    for (const mode of cases) {
+      const html = `<div data-mermaid-block data-code="graph TD" data-view-mode="${mode}"></div>`;
+      const json = decodeState(htmlToYjsState(html));
+
+      const mermaidNode = json.content[0];
+      expect(mermaidNode.type).toBe('mermaidBlock');
+      expect(mermaidNode.attrs.viewMode).toBe(mode);
+      expect(mermaidNode.attrs.code).toBe('graph TD');
+    }
+  });
+
+  it('should fall back to default viewMode when data-view-mode is missing', () => {
+    const html = '<div data-mermaid-block data-code="graph TD"></div>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const mermaidNode = json.content[0];
+    expect(mermaidNode.type).toBe('mermaidBlock');
+    expect(mermaidNode.attrs.viewMode).toBe('split');
+  });
+
+  it('should fall back to default viewMode when data-view-mode is invalid', () => {
+    const html =
+      '<div data-mermaid-block data-code="graph TD" data-view-mode="foo"></div>';
+    const json = decodeState(htmlToYjsState(html));
+
+    const mermaidNode = json.content[0];
+    expect(mermaidNode.type).toBe('mermaidBlock');
+    expect(mermaidNode.attrs.viewMode).toBe('split');
   });
 });

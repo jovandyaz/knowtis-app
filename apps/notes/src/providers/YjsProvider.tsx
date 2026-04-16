@@ -11,6 +11,7 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { logger } from '@knowtis/shared-util';
 
 import { YjsContext } from './YjsContext';
@@ -109,7 +110,7 @@ export function YjsProvider({ children }: YjsProviderProps) {
   const getYText = useCallback(
     (noteId: string): Y.XmlFragment => {
       const doc = getYDoc(noteId);
-      return doc.getXmlFragment('content');
+      return doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
     },
     [getYDoc]
   );

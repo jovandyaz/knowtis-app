@@ -1,0 +1,30 @@
+{
+  "name": "editor-schema",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "packages/editor-schema/src",
+  "projectType": "library",
+  "tags": ["type:util", "scope:shared"],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/editor-schema",
+        "command": "eslint src"
+      }
+    },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/editor-schema",
+        "command": "vitest run --passWithNoTests"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash $(git rev-parse --show-toplevel)/tools/typecheck-project.sh",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}

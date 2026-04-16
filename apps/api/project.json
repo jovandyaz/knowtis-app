@@ -4,6 +4,7 @@
   "sourceRoot": "apps/api/src",
   "projectType": "application",
   "tags": ["type:app", "scope:api"],
+  "implicitDependencies": ["editor-schema"],
   "targets": {
     "build": {
       "executor": "@nx/webpack:webpack",

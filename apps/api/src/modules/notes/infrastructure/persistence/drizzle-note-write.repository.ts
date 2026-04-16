@@ -2,11 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
-import type {
-  GeneralAccessLevel,
-  PermissionLevel as PermissionLevelType,
-} from '@knowtis/shared-types';
-
 import {
   DATABASE_CONNECTION,
   notes,
@@ -19,9 +14,38 @@ import {
   type NoteDomainError,
   type NoteEntity,
   type NoteWriteRepository,
+  type UpdateNoteContentData,
   type UpdateNoteData,
 } from '../../domain';
 import { mapToNoteEntity } from './note-entity.mapper';
+
+function buildUpdatePayload(
+  data: UpdateNoteData,
+  extras: Partial<NewNote> = {}
+): Partial<NewNote> {
+  const payload: Partial<NewNote> = { updatedAt: new Date(), ...extras };
+
+  if (data.title !== undefined) {
+    payload.title = data.title;
+  }
+  if (data.content !== undefined) {
+    payload.content = data.content;
+  }
+  if (data.generalAccess !== undefined) {
+    payload.generalAccess = data.generalAccess;
+  }
+  if (data.generalAccessPermission !== undefined) {
+    payload.generalAccessPermission = data.generalAccessPermission;
+  }
+  if (data.shareToken !== undefined) {
+    payload.shareToken = data.shareToken;
+  }
+  if (data.editorsCanShare !== undefined) {
+    payload.editorsCanShare = data.editorsCanShare;
+  }
+
+  return payload;
+}
 
 @Injectable()
 export class DrizzleNoteWriteRepository implements NoteWriteRepository {
@@ -63,31 +87,9 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
     data: UpdateNoteData
   ): Promise<Result<NoteEntity, NoteDomainError>> {
     try {
-      const updateData: Partial<NewNote> = { updatedAt: new Date() };
-
-      if (data.title !== undefined) {
-        updateData.title = data.title;
-      }
-      if (data.content !== undefined) {
-        updateData.content = data.content;
-      }
-      if (data.generalAccess !== undefined) {
-        updateData.generalAccess = data.generalAccess as GeneralAccessLevel;
-      }
-      if (data.generalAccessPermission !== undefined) {
-        updateData.generalAccessPermission =
-          data.generalAccessPermission as PermissionLevelType;
-      }
-      if (data.shareToken !== undefined) {
-        updateData.shareToken = data.shareToken;
-      }
-      if (data.editorsCanShare !== undefined) {
-        updateData.editorsCanShare = data.editorsCanShare;
-      }
-
       const result = await this.db
         .update(notes)
-        .set(updateData)
+        .set(buildUpdatePayload(data))
         .where(eq(notes.id, id))
         .returning();
 
@@ -95,12 +97,12 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
         return err(NoteErrors.noteNotFound(id));
       }
       return ok(mapToNoteEntity(result[0]));
-    } catch (e) {
-      return err(
-        NoteErrors.invalidContent(
-          e instanceof Error ? e.message : 'Unknown error'
-        )
+    } catch (error) {
+      this.logger.error(
+        `Failed to update note ${id}`,
+        error instanceof Error ? error.stack : error
       );
+      return err(NoteErrors.persistenceError('update', id));
     }
   }
 
@@ -125,6 +127,35 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
         error instanceof Error ? error.stack : error
       );
       return err(NoteErrors.persistenceError('updateYjsState', id));
+    }
+  }
+
+  async updateContentWithYjsState(
+    id: string,
+    data: UpdateNoteContentData,
+    yjsState: Buffer
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    try {
+      const payload = buildUpdatePayload(data, { yjsState });
+
+      return await this.db.transaction(async (tx) => {
+        const result = await tx
+          .update(notes)
+          .set(payload)
+          .where(eq(notes.id, id))
+          .returning();
+
+        if (!result[0]) {
+          return err(NoteErrors.noteNotFound(id));
+        }
+        return ok(mapToNoteEntity(result[0]));
+      });
+    } catch (error) {
+      this.logger.error(
+        `Failed atomic content+yjsState update for note ${id}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('updateContentWithYjsState', id));
     }
   }
 

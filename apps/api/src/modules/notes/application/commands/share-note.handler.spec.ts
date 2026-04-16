@@ -58,6 +58,7 @@ describe('ShareNoteHandler', () => {
       create: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
+      updateContentWithYjsState: vi.fn(),
       delete: vi.fn(),
       findPermission: vi.fn(),
       findPermissionsByNote: vi.fn(),

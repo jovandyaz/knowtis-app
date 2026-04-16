@@ -28,6 +28,7 @@ import {
   ApiSecurity,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
@@ -61,6 +62,7 @@ import {
   UpdateNoteDto,
 } from './dto';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
+import { NOTE_UPDATE_THROTTLE } from './notes.constants';
 
 const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.INVALID_TITLE]: HttpStatus.BAD_REQUEST,
@@ -290,6 +292,7 @@ export class NotesController {
   @ApiAuthErrors('insufficient permissions on this note')
   @ApiNotFound('note does not exist')
   @Patch(':id')
+  @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('update', SUBJECTS.Note)
   @RequireMcpScope('write')
   async update(
