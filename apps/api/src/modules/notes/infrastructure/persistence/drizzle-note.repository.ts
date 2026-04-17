@@ -62,6 +62,13 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.writeRepo.create(data);
   }
 
+  createWithYjsState(
+    data: CreateNoteData,
+    yjsState: Buffer
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.createWithYjsState(data, yjsState);
+  }
+
   update(
     id: string,
     data: UpdateNoteData

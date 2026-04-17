@@ -59,12 +59,27 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
   async create(
     data: CreateNoteData
   ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.insertNote(data);
+  }
+
+  async createWithYjsState(
+    data: CreateNoteData,
+    yjsState: Buffer
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.insertNote(data, { yjsState });
+  }
+
+  private async insertNote(
+    data: CreateNoteData,
+    extras: Partial<NewNote> = {}
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
     try {
       const newNote: NewNote = {
         ...(data.id ? { id: data.id } : {}),
         title: data.title,
         content: data.content,
         ownerId: data.ownerId.value,
+        ...extras,
       };
 
       const result = await this.db.insert(notes).values(newNote).returning();

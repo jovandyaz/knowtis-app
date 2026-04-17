@@ -12,6 +12,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { cn } from '@knowtis/design-system';
+import { isTrivialProseMirrorDoc } from '@knowtis/editor-schema';
 import { useTypewriter } from '@knowtis/shared-hooks';
 import { logger } from '@knowtis/shared-util';
 
@@ -28,6 +29,7 @@ import type {
 } from './CollaborativeEditor.types';
 import { EditorErrorBoundary } from './EditorErrorBoundary';
 import { EditorToolbar } from './EditorToolbar';
+import { shouldPropagateUpdate } from './shouldPropagateUpdate';
 import { useEditorExtensions } from './useEditorExtensions';
 
 const EDITOR_PADDING = 'p-4 md:p-6';
@@ -68,6 +70,7 @@ function InternalEditor({
   onUpdate,
   placeholder,
   editable,
+  isSynced,
   autoFocus,
   onEditorReady,
   onVoiceNote,
@@ -76,10 +79,15 @@ function InternalEditor({
 
   const onUpdateRef = useRef(onUpdate);
   const isInitializingRef = useRef(false);
+  const isSyncedRef = useRef(isSynced);
 
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
+
+  useEffect(() => {
+    isSyncedRef.current = isSynced;
+  }, [isSynced]);
 
   const extensions = useEditorExtensions(
     yDoc,
@@ -109,7 +117,12 @@ function InternalEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      if (isInitializingRef.current) {
+      if (
+        !shouldPropagateUpdate({
+          isInitializing: isInitializingRef.current,
+          isSynced: isSyncedRef.current,
+        })
+      ) {
         return;
       }
       const html = editor.getHTML();
@@ -119,17 +132,8 @@ function InternalEditor({
 
   const editorIsEmpty = useEditorState({
     editor,
-    selector: ({ editor: e }) => {
-      if (!e) {
-        return true;
-      }
-      const { doc } = e.state;
-      return (
-        doc.childCount === 1 &&
-        doc.firstChild?.type.name === 'paragraph' &&
-        doc.firstChild?.content.size === 0
-      );
-    },
+    selector: ({ editor: e }) =>
+      e ? isTrivialProseMirrorDoc(e.state.doc) : true,
   });
 
   useEffect(() => {
@@ -298,6 +302,7 @@ export function CollaborativeEditor({
           onUpdate={onUpdate}
           placeholder={resolvedPlaceholder}
           editable={editable}
+          isSynced={!wsEnabled || isSynced}
           autoFocus={autoFocus}
           onEditorReady={onEditorReady}
           onVoiceNote={onVoiceNote}

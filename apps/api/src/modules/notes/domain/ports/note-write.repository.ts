@@ -31,6 +31,10 @@ export type UpdateNoteContentData = UpdateNoteData & {
 
 export interface NoteWriteRepository {
   create(data: CreateNoteData): Promise<Result<NoteEntity, NoteDomainError>>;
+  createWithYjsState(
+    data: CreateNoteData,
+    yjsState: Buffer
+  ): Promise<Result<NoteEntity, NoteDomainError>>;
   update(
     id: string,
     data: UpdateNoteData

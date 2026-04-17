@@ -29,6 +29,7 @@ export interface InternalEditorProps {
   onUpdate: (content: string) => void;
   placeholder: string[];
   editable: boolean;
+  isSynced: boolean;
 
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;

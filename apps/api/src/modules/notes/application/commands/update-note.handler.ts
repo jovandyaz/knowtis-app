@@ -27,6 +27,7 @@ import {
   type NoteUpdatedEventUpdates,
 } from '../../domain/events';
 import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
+import { isTrivialHtml } from '../../infrastructure/trivial-html';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
@@ -36,6 +37,7 @@ export interface UpdateNoteInput {
   readonly generalAccess?: GeneralAccessLevel;
   readonly generalAccessPermission?: PermissionLevel;
   readonly editorsCanShare?: boolean;
+  readonly force?: boolean;
 }
 
 interface PersistUpdateResult {
@@ -70,6 +72,18 @@ export class UpdateNoteHandler {
     const note = await this.noteRepository.findById(input.noteId);
     if (!note) {
       return err(NoteErrors.noteNotFound(input.noteId));
+    }
+
+    if (
+      input.content !== undefined &&
+      !input.force &&
+      isTrivialHtml(input.content) &&
+      !isTrivialHtml(note.content)
+    ) {
+      this.logger.warn(
+        `Refused overwrite of non-trivial content with trivial HTML for note ${input.noteId}`
+      );
+      return err(NoteErrors.contentOverwriteRefused());
     }
 
     const validationError = this.validateFields(input);

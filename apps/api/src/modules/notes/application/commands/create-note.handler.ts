@@ -6,6 +6,7 @@ import { err, type Result } from 'neverthrow';
 import {
   NOTE_WRITE_REPOSITORY,
   NoteContent,
+  NoteErrors,
   NoteTitle,
   type NoteDomainError,
   type NoteEntity,
@@ -49,27 +50,39 @@ export class CreateNoteHandler {
       return err(contentResult.error);
     }
 
-    const result = await this.noteRepository.create({
+    const data = {
       ...(input.id ? { id: input.id } : {}),
       title: titleResult.value.value,
       content: contentResult.value.value,
       ownerId: ownerIdResult.value,
-    });
+    };
+
+    let result: Result<NoteEntity, NoteDomainError>;
+
+    if (input.content !== undefined) {
+      let yjsState: Buffer;
+      try {
+        yjsState = htmlToYjsState(input.content);
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Unknown parser error';
+        this.logger.warn(
+          `Failed to generate yjsState for new note (id=${input.id ?? 'new'}, size=${input.content.length}B): ${message}`
+        );
+        return err(
+          NoteErrors.invalidContent(
+            `Cannot convert HTML to Yjs state: ${message}`
+          )
+        );
+      }
+
+      result = await this.noteRepository.createWithYjsState(data, yjsState);
+    } else {
+      result = await this.noteRepository.create(data);
+    }
 
     if (result.isOk()) {
       const note = result.value;
-
-      if (input.content) {
-        try {
-          const yjsState = htmlToYjsState(input.content);
-          await this.noteRepository.updateYjsState(note.id, yjsState);
-        } catch (error) {
-          this.logger.warn(
-            `Failed to generate yjsState for note ${note.id}: ${error}`
-          );
-        }
-      }
-
       this.eventEmitter.emit(
         NoteCreatedEvent.EVENT_NAME,
         new NoteCreatedEvent(note.id, note.title, note.ownerId)
