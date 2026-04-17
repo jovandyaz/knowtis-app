@@ -10,3 +10,4 @@ export {
   type NodeAttributeClasses,
   type SemanticExtensionsOptions,
 } from './semantic-extensions';
+export { isTrivialFragment, isTrivialProseMirrorDoc } from './trivial';

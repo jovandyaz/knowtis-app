@@ -7,7 +7,10 @@ import {
 } from '@nestjs/common';
 import * as Y from 'yjs';
 
-import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
+import {
+  isTrivialFragment,
+  YJS_XML_FRAGMENT_NAME,
+} from '@knowtis/editor-schema';
 import {
   GENERAL_ACCESS,
   PERMISSION,
@@ -16,6 +19,7 @@ import {
 
 import { NOTE_REPOSITORY } from '../notes/domain';
 import type { NoteRepository } from '../notes/domain';
+import { isTrivialHtml } from '../notes/infrastructure/trivial-html';
 import {
   EXTERNAL_UPDATE_ORIGIN,
   type CollaborationRoom,
@@ -275,6 +279,25 @@ export class CollaborationService implements OnModuleDestroy {
   }
 
   private async persistDocument(room: CollaborationRoom): Promise<void> {
+    const fragment = room.yjsDoc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+    if (isTrivialFragment(fragment)) {
+      const note = await this.notesRepository
+        .findById(room.noteId)
+        .catch((error) => {
+          this.logger.warn(
+            `persistDocument guard: findById failed for note ${room.noteId}, failing open`,
+            error instanceof Error ? error.stack : error
+          );
+          return null;
+        });
+      if (note && !isTrivialHtml(note.content)) {
+        this.logger.warn(
+          `Skipping persistence of trivial Y.Doc over non-trivial content for note ${room.noteId}`
+        );
+        return;
+      }
+    }
+
     try {
       const state = Y.encodeStateAsUpdate(room.yjsDoc);
       await this.notesRepository.updateYjsState(

@@ -41,6 +41,7 @@ describe('UpdateNoteHandler', () => {
       findAccessibleByUser: vi.fn(),
       findByShareToken: vi.fn(),
       create: vi.fn(),
+      createWithYjsState: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
       updateContentWithYjsState: vi.fn(),
@@ -216,7 +217,7 @@ describe('UpdateNoteHandler', () => {
     const result = await handler.execute({
       noteId: 'note-1',
       userId: 'owner-1',
-      content: '<garbage>',
+      content: '<p>real content</p>',
     });
 
     expect(result.isErr()).toBe(true);
@@ -262,6 +263,66 @@ describe('UpdateNoteHandler', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe(NoteErrorCodes.NOTE_NOT_FOUND);
     }
+  });
+
+  it('should refuse to overwrite non-trivial content with trivial HTML', async () => {
+    const existingContent = '<h1>Real content</h1><p>Many lines</p>';
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      content: existingContent,
+    });
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p></p>',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.CONTENT_OVERWRITE_REFUSED);
+    }
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+    expect(mockRepository.update).not.toHaveBeenCalled();
+    expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+  });
+
+  it('should allow trivial overwrite when force flag is set', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      content: '<h1>Real</h1>',
+    });
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok({ ...mockNote, content: '<p></p>' })
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p></p>',
+      force: true,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.updateContentWithYjsState).toHaveBeenCalled();
+  });
+
+  it('should allow trivial-to-trivial writes (no-op safe)', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      content: '<p></p>',
+    });
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok(mockNote)
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p></p>',
+    });
+
+    expect(result.isOk()).toBe(true);
   });
 
   it('should fail if user has no permission', async () => {

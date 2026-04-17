@@ -36,6 +36,7 @@ describe('GetNotesHandler', () => {
       findAccessibleByUser: vi.fn(),
       findByShareToken: vi.fn(),
       create: vi.fn(),
+      createWithYjsState: vi.fn(),
       update: vi.fn(),
       updateYjsState: vi.fn(),
       updateContentWithYjsState: vi.fn(),

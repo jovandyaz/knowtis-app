@@ -10,6 +10,7 @@ export const NoteErrorCodes = {
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
+  CONTENT_OVERWRITE_REFUSED: 'CONTENT_OVERWRITE_REFUSED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -61,6 +62,12 @@ export const NoteErrors = {
     createNoteError(
       NoteErrorCodes.SHARE_TOKEN_NOT_FOUND,
       `Share token not found: ${token}`
+    ),
+
+  contentOverwriteRefused: () =>
+    createNoteError(
+      NoteErrorCodes.CONTENT_OVERWRITE_REFUSED,
+      'Refusing to overwrite non-trivial content with an empty document; pass force: true to override'
     ),
 
   internalError: (message: string) =>
