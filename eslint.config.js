@@ -38,10 +38,12 @@ export default defineConfig([
                 'type:util',
               ],
             },
-            // UI libraries can only depend on utilities
+            // UI libraries can compose other UI libraries (e.g., editor → design-system).
+            // The constraint that UI libraries cannot reach into data-access or app-tier
+            // remains enforced.
             {
               sourceTag: 'type:ui',
-              onlyDependOnLibsWithTags: ['type:util'],
+              onlyDependOnLibsWithTags: ['type:ui', 'type:util'],
             },
             // Data access libraries can depend on utilities and other data access
             {

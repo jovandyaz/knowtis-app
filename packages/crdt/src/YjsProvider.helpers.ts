@@ -1,15 +1,20 @@
-import {
-  BROADCAST_MESSAGE_TYPES,
-  COLLAB_CONFIG,
-  generateUserName,
-  getInstanceId,
-  getRandomCursorColor,
-} from '@/lib';
-import type { BroadcastMessage, CollaborativeUser } from '@/types';
 import * as Y from 'yjs';
 
 import { logger } from '@knowtis/shared-util';
 
+import {
+  generateUserName,
+  getInstanceId,
+  getRandomCursorColor,
+} from './collaboration';
+import {
+  BROADCAST_MESSAGE_TYPES,
+  COLLAB_CONFIG,
+} from './collaboration.constants';
+import type {
+  BroadcastMessage,
+  CollaborativeUser,
+} from './collaboration.types';
 import type { DocumentResources } from './YjsProvider.types';
 
 /**

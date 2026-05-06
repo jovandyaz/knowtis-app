@@ -1,7 +1,6 @@
 import { useEffect } from 'react';
 
-import { COLLAB_CONFIG } from '@/lib';
-import { useYjs } from '@/providers';
+import { COLLAB_CONFIG, useYjs } from '@knowtis/crdt';
 
 /**
  * Hook for broadcasting user presence in a collaborative note

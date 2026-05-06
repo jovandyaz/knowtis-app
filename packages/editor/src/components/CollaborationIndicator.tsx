@@ -1,9 +1,9 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CollaborativeUser } from '@/types';
 import { Users } from 'lucide-react';
 
+import type { CollaborativeUser } from '@knowtis/crdt';
 import { Badge, cn } from '@knowtis/design-system';
 
 /**

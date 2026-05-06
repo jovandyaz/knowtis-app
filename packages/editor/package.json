@@ -2,13 +2,38 @@
   "name": "@knowtis/editor",
   "version": "0.0.1",
   "type": "commonjs",
-  "main": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "dependencies": {
+    "@knowtis/crdt": "workspace:*",
+    "@tiptap/core": "^3.22.3",
+    "@tiptap/extension-placeholder": "^3.22.3",
+    "@tiptap/pm": "^3.22.3",
+    "@tiptap/react": "^3.22.3",
+    "@tiptap/starter-kit": "^3.22.3",
+    "@tiptap/suggestion": "^3.22.3",
+    "dompurify": "^3.3.1",
+    "highlight.js": "^11.11.1",
+    "lowlight": "^3.3.0",
+    "lucide-react": "^0.555.0",
+    "markdown-it": "^14.1.1",
+    "mermaid": "^11.14.0",
+    "motion": "^12.23.25",
+    "react-error-boundary": "^6.0.0",
+    "streamdown": "^2.5.0",
     "tslib": "^2.3.0"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-i18next": "^16.0.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/react": "^19.2.5",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-i18next": "^16.5.4"
   }
 }

@@ -1,10 +1,6 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import {
-  TOOLBAR_TOOLS,
-  type ToolbarToolConfig,
-} from '@/components/editor/editor.config';
 import type { Editor } from '@tiptap/react';
 import { Mic } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -17,6 +13,7 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import { TOOLBAR_TOOLS, type ToolbarToolConfig } from '../editor.config';
 import { HeadingDropdown } from './HeadingDropdown';
 import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';

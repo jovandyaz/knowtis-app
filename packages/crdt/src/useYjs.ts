@@ -1,7 +1,6 @@
 import { useContext } from 'react';
 
-import type { YjsContextValue } from '@/types';
-
+import type { YjsContextValue } from './collaboration.types';
 import { YjsContext } from './YjsContext';
 
 /**

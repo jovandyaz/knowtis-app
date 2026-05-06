@@ -2,13 +2,22 @@
   "name": "@knowtis/crdt",
   "version": "0.0.1",
   "type": "commonjs",
-  "main": "./src/index.js",
-  "types": "./src/index.d.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "dependencies": {
-    "tslib": "^2.3.0"
+    "tslib": "^2.3.0",
+    "unique-names-generator": "^4.7.1",
+    "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.27"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
-    "access": "restricted"
+  "peerDependencies": {
+    "@tiptap/pm": "^3.22.3",
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tiptap/pm": "^3.22.3",
+    "@types/react": "^19.2.5",
+    "react": "^19.2.0"
   }
 }

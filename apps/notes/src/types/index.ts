@@ -10,16 +10,3 @@ export {
   CreateNoteSchema,
   UpdateNoteSchema,
 } from '@knowtis/data-access-notes';
-
-export type {
-  CollaborativeUser,
-  CursorPosition,
-  AwarenessState,
-  CollaborativeCursorsOptions,
-  YjsContextValue,
-  BroadcastMessage,
-  AwarenessBroadcastMessage,
-  PresenceBroadcastMessage,
-  DocumentUpdateBroadcastMessage,
-  LeaveBroadcastMessage,
-} from './collaboration';

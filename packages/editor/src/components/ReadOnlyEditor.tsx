@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 
 import { EditorContent, useEditor } from '@tiptap/react';
 
-import { createBaseExtensions } from './extensions/base-extensions';
+import { createBaseExtensions } from '../extensions/base-extensions';
 
 interface ReadOnlyEditorProps {
   content: string;

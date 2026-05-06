@@ -58,7 +58,7 @@ export function createBaseExtensions({
     Placeholder.configure({
       placeholder: ({ node }) => {
         if (node.type.name === 'heading') {
-          return `Heading ${node.attrs.level}`;
+          return `Heading ${node.attrs['level']}`;
         }
         if (node.type.name === 'codeBlock') {
           return 'Write code...';

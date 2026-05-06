@@ -8,7 +8,7 @@ import './CodeBlockView.css';
 const LANGUAGES = lowlight.listLanguages().sort();
 
 export function CodeBlockView({ node, updateAttributes }: NodeViewProps) {
-  const currentLanguage = (node.attrs.language as string) ?? '';
+  const currentLanguage = (node.attrs['language'] as string) ?? '';
 
   return (
     <NodeViewWrapper as="pre" className="code-block-wrapper">

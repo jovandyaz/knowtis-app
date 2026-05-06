@@ -1,5 +1,4 @@
-import type { AwarenessState } from '@/types';
-
+import type { AwarenessState } from './collaboration.types';
 import type { RemoteUserState } from './cursor-decorations.types';
 
 /**

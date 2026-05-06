@@ -1,12 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { COLLAB_CONFIG, isInvalidStateError } from '@/lib';
-import { BROADCAST_MESSAGE_TYPES } from '@/lib/collaboration.constants';
-import type {
-  BroadcastMessage,
-  CollaborativeUser,
-  YjsContextValue,
-} from '@/types';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
@@ -14,6 +7,16 @@ import * as Y from 'yjs';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 import { logger } from '@knowtis/shared-util';
 
+import { isInvalidStateError } from './collaboration';
+import {
+  BROADCAST_MESSAGE_TYPES,
+  COLLAB_CONFIG,
+} from './collaboration.constants';
+import type {
+  BroadcastMessage,
+  CollaborativeUser,
+  YjsContextValue,
+} from './collaboration.types';
 import { YjsContext } from './YjsContext';
 import {
   cleanupResources,

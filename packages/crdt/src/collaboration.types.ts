@@ -1,9 +1,10 @@
+import type { Awareness } from 'y-protocols/awareness';
+import type * as Y from 'yjs';
+
 import type {
   BROADCAST_MESSAGE_TYPES,
   BroadcastMessageType,
-} from '@/lib/collaboration.constants';
-import type { Awareness } from 'y-protocols/awareness';
-import type * as Y from 'yjs';
+} from './collaboration.constants';
 
 /**
  * Generic collaboration provider interface

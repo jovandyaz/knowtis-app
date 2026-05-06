@@ -24,8 +24,8 @@ export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
   const isActive = editor.isActive('link');
 
   const openPopover = useCallback(() => {
-    const existingUrl = editor.getAttributes('link').href ?? '';
-    setUrl(existingUrl);
+    const existingHref = editor.getAttributes('link')['href'];
+    setUrl(typeof existingHref === 'string' ? existingHref : '');
     setIsOpen(true);
   }, [editor]);
 

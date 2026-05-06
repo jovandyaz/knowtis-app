@@ -1,4 +1,4 @@
-import type { CursorPosition } from '@/types';
+import type { CursorPosition } from './collaboration.types';
 
 /**
  * User information for cursor display

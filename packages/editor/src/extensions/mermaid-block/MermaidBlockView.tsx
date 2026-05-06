@@ -51,8 +51,8 @@ export function MermaidBlockView({
   editor,
 }: NodeViewProps) {
   const { t } = useTranslation('notes');
-  const code: string = node.attrs.code;
-  const viewMode: MermaidViewMode = node.attrs.viewMode;
+  const code: string = node.attrs['code'];
+  const viewMode: MermaidViewMode = node.attrs['viewMode'];
   const effectiveViewMode = editor.isEditable
     ? viewMode
     : MERMAID_VIEW_MODE.PREVIEW;

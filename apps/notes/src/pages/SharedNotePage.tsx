@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
-import { CollaborativeEditor, ReadOnlyEditor } from '@/components/editor';
+import { CollaborativeEditor } from '@/components/editor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
@@ -23,6 +23,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
+import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION } from '@knowtis/shared-types';
 
 export function SharedNotePage() {

@@ -1,12 +1,16 @@
-import type { AwarenessState, CollaborativeCursorsOptions } from '@/types';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, type Decoration } from '@tiptap/pm/view';
 import { Extension } from '@tiptap/react';
 
+import {
+  createUserDecorations,
+  getRemoteUserStates,
+  type AwarenessState,
+  type CollaborativeCursorsOptions,
+} from '@knowtis/crdt';
 import { logger } from '@knowtis/shared-util';
 
-import { getRemoteUserStates } from './awareness.utils';
-import { createUserDecorations } from './cursor-decorations.utils';
+import './CollaborativeCursors.css';
 
 const PLUGIN_KEY = new PluginKey('collaborativeCursors');
 

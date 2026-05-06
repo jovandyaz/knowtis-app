@@ -1,6 +1,6 @@
-import { clampPosition } from '@/lib';
 import { Decoration } from '@tiptap/pm/view';
 
+import { clampPosition } from './collaboration';
 import type { RemoteUserState, UserInfo } from './cursor-decorations.types';
 
 /**
