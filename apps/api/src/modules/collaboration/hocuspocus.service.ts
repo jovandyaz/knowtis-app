@@ -8,10 +8,7 @@ import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as Y from 'yjs';
 
-import {
-  isTrivialFragment,
-  YJS_XML_FRAGMENT_NAME,
-} from '@knowtis/editor-schema';
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import type { EnvConfig } from '../../config/env.config';
 import { HocuspocusAuthExtension } from './extensions/hocuspocus-auth.extension';
@@ -137,14 +134,25 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
    * The caller is responsible for the authoritative DB write — this method
    * performs no persistence by itself, only an in-memory CRDT merge.
    *
-   * Returns `true` when the update was applied to a live document, `false`
-   * when no document is currently loaded for that note (no live editors).
+   * Returns `true` when the update was applied. Returns `false` when:
+   *   - the server has not yet been initialised,
+   *   - the input bytes are empty or malformed (no-op rejected),
+   *   - no document is currently loaded for that note (no live editors).
    */
   async applyExternalUpdate(
     noteId: string,
     yjsState: Uint8Array
   ): Promise<boolean> {
     if (!this.server) {
+      return false;
+    }
+
+    // Reject empty/zero-length payloads up front — `Y.applyUpdate` accepts
+    // them as no-ops, but combined with the unconditional fragment clear in
+    // `mergeIntoLiveDocument` an empty payload would silently wipe the live
+    // document.
+    if (yjsState.byteLength === 0) {
+      this.logger.warn(`Rejected empty external Yjs state for note ${noteId}`);
       return false;
     }
 
@@ -188,8 +196,13 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Opens a DirectConnection for the live document and merges the externally
-   * supplied state. Clears non-trivial fragment content first so the merge
-   * is a true replacement (matches the legacy gateway's behavior).
+   * supplied state. Clears the existing fragment unconditionally so the merge
+   * is a true replacement — preserving the legacy gateway's semantics.
+   *
+   * The clear must be unconditional: a "trivial" but non-empty fragment (e.g.
+   * a default empty `<p>` node from a freshly mounted client) has its own CRDT
+   * identity. Applying an update from an independent `Y.Doc` without clearing
+   * first would coexist with that node, producing duplicated trivial blocks.
    */
   private async mergeIntoLiveDocument(
     noteId: string,
@@ -201,9 +214,7 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
       // document.transact({ source: 'local' }), so we apply directly here.
       await direct.transact((document) => {
         const fragment = document.getXmlFragment(YJS_XML_FRAGMENT_NAME);
-        if (!isTrivialFragment(fragment)) {
-          fragment.delete(0, fragment.length);
-        }
+        fragment.delete(0, fragment.length);
         Y.applyUpdate(document, yjsState);
       });
     } finally {
