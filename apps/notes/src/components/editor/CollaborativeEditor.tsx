@@ -2,11 +2,14 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  getCollaborationServerUrl,
   isWebSocketEnabled,
+  useHocuspocusCollaboration,
+} from '@/collaboration/useHocuspocusCollaboration';
+import {
   useActiveCollaborators,
   useCollaborativeEditor,
   usePresenceBroadcast,
-  useWebSocketCollaboration,
 } from '@/hooks';
 import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
@@ -245,21 +248,17 @@ export function CollaborativeEditor({
       : [t('editor.editorPlaceholder')];
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
-  const { isConnected, isSynced, remoteUsers } = useWebSocketCollaboration({
+  const { isConnected, isSynced } = useHocuspocusCollaboration({
     noteId,
     yDoc: editorState.yDoc,
     awareness: editorState.awareness,
-    currentUser: {
-      name: editorState.currentUser.name,
-      color: editorState.currentUser.color,
-    },
+    serverUrl: getCollaborationServerUrl(),
     enabled: wsEnabled,
     shareToken,
     onEditDenied,
   });
 
-  const allUsers = wsEnabled ? [...otherUsers, ...remoteUsers] : otherUsers;
-  const uniqueUsers = allUsers.filter(
+  const uniqueUsers = otherUsers.filter(
     (user, index, self) => index === self.findIndex((u) => u.name === user.name)
   );
 
