@@ -5,6 +5,7 @@ import { JwtService } from '@nestjs/jwt';
 import {
   defineAbilityFor,
   SUBJECTS,
+  type AppAbility,
   type AuthUser,
   type SharedNote,
 } from '@knowtis/authorization';
@@ -12,7 +13,10 @@ import { GENERAL_ACCESS, type PermissionLevel } from '@knowtis/shared-types';
 
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
+import type { NoteEntity } from '../../notes/domain/entities/note.entity';
 import { UsersService } from '../../users/users.service';
+
+type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
 
 interface JwtPayload {
   sub: string;
@@ -37,10 +41,9 @@ export class HocuspocusAuthExtension {
   ) {}
 
   toExtension(): Extension<HocuspocusAuthContext> {
-    const jwtService = this.jwtService;
-    const usersService = this.usersService;
-    const noteRepository = this.noteRepository;
-    const logger = this.logger;
+    // Bind once so Hocuspocus' callbacks (which lose `this`) can still reach
+    // the instance methods + injected dependencies.
+    const authenticate = this.authenticate.bind(this);
 
     return {
       priority: 100,
@@ -52,81 +55,132 @@ export class HocuspocusAuthExtension {
         connectionConfig,
         requestParameters,
       }) {
-        if (!token) {
-          throw new Error('Authentication required');
-        }
-
-        let payload: JwtPayload;
-        try {
-          payload = jwtService.verify<JwtPayload>(token);
-        } catch (error) {
-          logger.warn(
-            `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
-          );
-          throw new Error('Invalid token');
-        }
-
-        const user = await usersService.findById(payload.sub);
-        if (!user) {
-          throw new Error('Invalid token');
-        }
-
-        const note = await noteRepository.findById(documentName);
-        if (!note) {
-          throw new Error('Note not found');
-        }
-
-        const permissions =
-          await noteRepository.findPermissionsByNote(documentName);
-        const sharedNotes: SharedNote[] = permissions
-          .filter((entry) => entry.permission.userId === user.id)
-          .map((entry) => ({
-            noteId: entry.permission.noteId,
-            permission: entry.permission.permission.value as PermissionLevel,
-          }));
-
-        // Honor share tokens passed via the WebSocket URL query string
-        // (e.g. `?shareToken=xyz`). A valid token grants the permission level
-        // configured on the note (`generalAccessPermission`) — usually viewer,
-        // sometimes editor. We model this as a synthetic SharedNote entry so
-        // the ability check below uses a single, consistent code path.
-        const shareTokenParam = requestParameters?.get('shareToken') ?? null;
-        if (
-          shareTokenParam &&
-          note.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
-          note.shareToken === shareTokenParam
-        ) {
-          sharedNotes.push({
-            noteId: note.id,
-            permission: note.generalAccessPermission as PermissionLevel,
-          });
-        }
-
-        const authUser: AuthUser = {
-          id: user.id,
-          isAnonymous: user.isAnonymous ?? false,
-          ...(user.role ? { role: user.role } : {}),
-        };
-
-        const ability = defineAbilityFor(authUser, { sharedNotes });
-
-        const noteSubject = {
-          __typename: SUBJECTS.Note,
-          id: note.id,
-          ownerId: note.ownerId,
-          generalAccess: note.generalAccess,
-        } as const;
-
-        if (!ability.can('read', noteSubject)) {
-          throw new Error('Forbidden');
-        }
-
-        if (!ability.can('update', noteSubject)) {
-          connectionConfig.readOnly = true;
-        }
-
-        return { user: authUser, noteId: documentName };
+        return authenticate({
+          token,
+          documentName,
+          connectionConfig,
+          requestParameters,
+        });
       },
     };
+  }
+
+  private async authenticate(params: {
+    token: string;
+    documentName: string;
+    connectionConfig: { readOnly: boolean };
+    requestParameters?: URLSearchParams;
+  }): Promise<HocuspocusAuthContext> {
+    const { token, documentName, connectionConfig, requestParameters } = params;
+
+    const user = await this.loadAuthenticatedUser(token, documentName);
+    const note = await this.loadNote(documentName);
+    const sharedNotes = this.buildSharedNotes(
+      await this.noteRepository.findPermissionsByNote(documentName),
+      user.id,
+      note,
+      requestParameters?.get('shareToken') ?? null
+    );
+
+    const authUser = this.toAuthUser(user);
+    const ability = defineAbilityFor(authUser, { sharedNotes });
+    this.enforcePermissions(ability, note, connectionConfig);
+
+    return { user: authUser, noteId: documentName };
+  }
+
+  private async loadAuthenticatedUser(
+    token: string,
+    documentName: string
+  ): Promise<AuthenticatedUser> {
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+
+    let payload: JwtPayload;
+    try {
+      payload = this.jwtService.verify<JwtPayload>(token);
+    } catch (error) {
+      this.logger.warn(
+        `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
+      );
+      throw new Error('Invalid token');
+    }
+
+    const user = await this.usersService.findById(payload.sub);
+    if (!user) {
+      throw new Error('Invalid token');
+    }
+    return user;
+  }
+
+  private async loadNote(documentName: string): Promise<NoteEntity> {
+    const note = await this.noteRepository.findById(documentName);
+    if (!note) {
+      throw new Error('Note not found');
+    }
+    return note;
+  }
+
+  /**
+   * Builds the SharedNote list used by CASL to evaluate per-note permissions.
+   * Combines (a) explicit collaborator entries from the DB filtered to the
+   * current user, and (b) a synthetic entry derived from a valid `shareToken`
+   * URL parameter — keeping a single permission-evaluation code path.
+   */
+  private buildSharedNotes(
+    permissions: Awaited<ReturnType<NoteRepository['findPermissionsByNote']>>,
+    userId: string,
+    note: NoteEntity,
+    shareTokenParam: string | null
+  ): SharedNote[] {
+    const sharedNotes: SharedNote[] = permissions
+      .filter((entry) => entry.permission.userId === userId)
+      .map((entry) => ({
+        noteId: entry.permission.noteId,
+        permission: entry.permission.permission.value as PermissionLevel,
+      }));
+
+    if (
+      shareTokenParam &&
+      note.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
+      note.shareToken === shareTokenParam
+    ) {
+      sharedNotes.push({
+        noteId: note.id,
+        permission: note.generalAccessPermission as PermissionLevel,
+      });
+    }
+
+    return sharedNotes;
+  }
+
+  private toAuthUser(user: AuthenticatedUser): AuthUser {
+    return {
+      id: user.id,
+      isAnonymous: user.isAnonymous ?? false,
+      ...(user.role ? { role: user.role } : {}),
+    };
+  }
+
+  private enforcePermissions(
+    ability: AppAbility,
+    note: NoteEntity,
+    connectionConfig: { readOnly: boolean }
+  ): void {
+    const noteSubject = {
+      __typename: SUBJECTS.Note,
+      id: note.id,
+      ownerId: note.ownerId,
+      generalAccess: note.generalAccess,
+    } as const;
+
+    if (!ability.can('read', noteSubject)) {
+      throw new Error('Forbidden');
+    }
+
+    if (!ability.can('update', noteSubject)) {
+      connectionConfig.readOnly = true;
+    }
   }
 }

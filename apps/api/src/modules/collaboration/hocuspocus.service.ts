@@ -19,13 +19,6 @@ import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persiste
 
 const COLLABORATION_PATH_PREFIX = '/collaboration';
 
-/**
- * Origin used for Yjs transactions triggered by REST/MCP-side updates.
- * Persistence extensions can inspect the transaction origin to skip
- * re-persisting updates that the caller already wrote to the database.
- */
-export const EXTERNAL_UPDATE_ORIGIN = 'external-update' as const;
-
 @Injectable()
 export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(HocuspocusService.name);
@@ -155,48 +148,67 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
       return false;
     }
 
-    // Validate the incoming state in a probe doc before mutating the live one
-    // so a malformed payload can never corrupt the active session.
-    const probeDoc = new Y.Doc();
-    try {
-      Y.applyUpdate(probeDoc, yjsState);
-    } catch (error) {
-      this.logger.error(
-        `Rejected malformed external Yjs state for note ${noteId}`,
-        error instanceof Error ? error.stack : error
-      );
-      probeDoc.destroy();
+    if (!this.isValidYjsUpdate(noteId, yjsState)) {
       return false;
     }
-    probeDoc.destroy();
 
     // Avoid loading a document just to broadcast — if no clients are
     // connected, the next reader will hydrate from the DB anyway.
-    const isLoaded = this.server.hocuspocus.documents.has(noteId);
-    if (!isLoaded) {
+    if (!this.server.hocuspocus.documents.has(noteId)) {
       this.logger.debug(
         `No live document for note ${noteId}, skipping external broadcast`
       );
       return false;
     }
 
+    await this.mergeIntoLiveDocument(noteId, yjsState);
+    this.logger.debug(`Applied external Yjs update to live document ${noteId}`);
+    return true;
+  }
+
+  /**
+   * Validates an incoming Yjs state in a throwaway probe doc so a malformed
+   * payload can never corrupt the active session.
+   */
+  private isValidYjsUpdate(noteId: string, yjsState: Uint8Array): boolean {
+    const probeDoc = new Y.Doc();
+    try {
+      Y.applyUpdate(probeDoc, yjsState);
+      return true;
+    } catch (error) {
+      this.logger.error(
+        `Rejected malformed external Yjs state for note ${noteId}`,
+        error instanceof Error ? error.stack : error
+      );
+      return false;
+    } finally {
+      probeDoc.destroy();
+    }
+  }
+
+  /**
+   * Opens a DirectConnection for the live document and merges the externally
+   * supplied state. Clears non-trivial fragment content first so the merge
+   * is a true replacement (matches the legacy gateway's behavior).
+   */
+  private async mergeIntoLiveDocument(
+    noteId: string,
+    yjsState: Uint8Array
+  ): Promise<void> {
     const direct = await this.server.hocuspocus.openDirectConnection(noteId);
     try {
-      // DirectConnection.transact already wraps the callback in
+      // DirectConnection.transact wraps the callback in
       // document.transact({ source: 'local' }), so we apply directly here.
       await direct.transact((document) => {
         const fragment = document.getXmlFragment(YJS_XML_FRAGMENT_NAME);
         if (!isTrivialFragment(fragment)) {
           fragment.delete(0, fragment.length);
         }
-        Y.applyUpdate(document, yjsState, EXTERNAL_UPDATE_ORIGIN);
+        Y.applyUpdate(document, yjsState);
       });
     } finally {
       await direct.disconnect();
     }
-
-    this.logger.debug(`Applied external Yjs update to live document ${noteId}`);
-    return true;
   }
 
   private buildRedisExtensions(redisUrl: string | undefined): RedisExtension[] {
