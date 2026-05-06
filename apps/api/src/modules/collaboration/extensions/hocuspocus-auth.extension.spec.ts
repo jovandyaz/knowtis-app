@@ -9,12 +9,22 @@ interface CallPayload {
   token: string;
   documentName: string;
   connectionConfig: { readOnly: boolean; isAuthenticated: boolean };
+  requestParameters: URLSearchParams;
 }
 
-const buildPayload = (token: string, readOnly = false): CallPayload => ({
+const buildPayload = (
+  token: string,
+  options: { readOnly?: boolean; shareToken?: string } = {}
+): CallPayload => ({
   token,
   documentName: 'note-1',
-  connectionConfig: { readOnly, isAuthenticated: false },
+  connectionConfig: {
+    readOnly: options.readOnly ?? false,
+    isAuthenticated: false,
+  },
+  requestParameters: new URLSearchParams(
+    options.shareToken ? { shareToken: options.shareToken } : {}
+  ),
 });
 
 describe('HocuspocusAuthExtension', () => {
@@ -139,5 +149,74 @@ describe('HocuspocusAuthExtension', () => {
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
     ).rejects.toThrow('Note not found');
+  });
+
+  it('should grant editor access via valid share token on a public note', async () => {
+    const note = {
+      id: 'note-1',
+      ownerId: 'other-user',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.EDITOR,
+      shareToken: 'share-secret',
+    };
+    const noteRepository = {
+      findById: vi.fn().mockResolvedValue(note),
+      findPermissionsByNote: vi.fn().mockResolvedValue([]),
+    } as unknown as NoteRepository;
+
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
+      } as never,
+      noteRepository
+    );
+
+    const payload = buildPayload('valid-token', { shareToken: 'share-secret' });
+    await ext.toExtension().onAuthenticate?.(payload as never);
+
+    expect(payload.connectionConfig.readOnly).toBe(false);
+  });
+
+  it('should ignore share token when it does not match the note', async () => {
+    const note = {
+      id: 'note-1',
+      ownerId: 'other-user',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.EDITOR,
+      shareToken: 'share-secret',
+    };
+    const noteRepository = {
+      findById: vi.fn().mockResolvedValue(note),
+      findPermissionsByNote: vi.fn().mockResolvedValue([]),
+    } as unknown as NoteRepository;
+
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
+      } as never,
+      noteRepository
+    );
+
+    const payload = buildPayload('valid-token', {
+      shareToken: 'wrong-token',
+    });
+    await ext.toExtension().onAuthenticate?.(payload as never);
+
+    // Falls back to ANYONE_WITH_LINK ability, which is read-only.
+    expect(payload.connectionConfig.readOnly).toBe(true);
   });
 });

@@ -8,7 +8,7 @@ import {
   type AuthUser,
   type SharedNote,
 } from '@knowtis/authorization';
-import type { PermissionLevel } from '@knowtis/shared-types';
+import { GENERAL_ACCESS, type PermissionLevel } from '@knowtis/shared-types';
 
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
@@ -46,7 +46,12 @@ export class HocuspocusAuthExtension {
       priority: 100,
       extensionName: 'KnowtisAuth',
 
-      async onAuthenticate({ token, documentName, connectionConfig }) {
+      async onAuthenticate({
+        token,
+        documentName,
+        connectionConfig,
+        requestParameters,
+      }) {
         if (!token) {
           throw new Error('Authentication required');
         }
@@ -79,6 +84,23 @@ export class HocuspocusAuthExtension {
             noteId: entry.permission.noteId,
             permission: entry.permission.permission.value as PermissionLevel,
           }));
+
+        // Honor share tokens passed via the WebSocket URL query string
+        // (e.g. `?shareToken=xyz`). A valid token grants the permission level
+        // configured on the note (`generalAccessPermission`) — usually viewer,
+        // sometimes editor. We model this as a synthetic SharedNote entry so
+        // the ability check below uses a single, consistent code path.
+        const shareTokenParam = requestParameters?.get('shareToken') ?? null;
+        if (
+          shareTokenParam &&
+          note.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
+          note.shareToken === shareTokenParam
+        ) {
+          sharedNotes.push({
+            noteId: note.id,
+            permission: note.generalAccessPermission as PermissionLevel,
+          });
+        }
 
         const authUser: AuthUser = {
           id: user.id,

@@ -7,6 +7,7 @@ import { UsersModule } from '../users';
 import { HocuspocusAuthExtension } from './extensions/hocuspocus-auth.extension';
 import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persistence.extension';
 import { HocuspocusService } from './hocuspocus.service';
+import { NoteUpdatedListener } from './listeners/note-updated.listener';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { HocuspocusService } from './hocuspocus.service';
     HocuspocusAuthExtension,
     HocuspocusPersistenceExtension,
     HocuspocusService,
+    NoteUpdatedListener,
   ],
   exports: [HocuspocusService],
 })
