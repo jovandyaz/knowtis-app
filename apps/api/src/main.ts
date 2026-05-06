@@ -9,6 +9,7 @@ import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
+import { HocuspocusService } from './modules/collaboration/hocuspocus.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -79,6 +80,10 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api/docs', app, document);
   }
+
+  const hocuspocusService = app.get(HocuspocusService);
+  const httpServer = app.getHttpAdapter().getHttpServer();
+  hocuspocusService.attachToHttpServer(httpServer);
 
   const port = configService.get<number>('PORT') || 3333;
   await app.listen(port);

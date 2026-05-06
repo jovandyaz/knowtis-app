@@ -2,8 +2,14 @@ import type { Extension } from '@hocuspocus/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import * as Y from 'yjs';
 
+import {
+  isTrivialFragment,
+  YJS_XML_FRAGMENT_NAME,
+} from '@knowtis/editor-schema';
+
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
+import { isTrivialHtml } from '../../notes/infrastructure/trivial-html';
 
 @Injectable()
 export class HocuspocusPersistenceExtension {
@@ -43,6 +49,29 @@ export class HocuspocusPersistenceExtension {
       },
 
       async onStoreDocument({ document, documentName }) {
+        // Guard: refuse to overwrite non-trivial stored content with a trivial
+        // live Y.Doc. This prevents the CRDT layer from clobbering REST-side
+        // updates with empty initial state when a fresh client connects before
+        // hydration completes.
+        const fragment = document.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+        if (isTrivialFragment(fragment)) {
+          const note = await noteRepository
+            .findById(documentName)
+            .catch((error) => {
+              logger.warn(
+                `onStoreDocument guard: findById failed for note ${documentName}, failing open`,
+                error instanceof Error ? error.stack : error
+              );
+              return null;
+            });
+          if (note && !isTrivialHtml(note.content)) {
+            logger.warn(
+              `Skipping persistence of trivial Y.Doc over non-trivial content for note ${documentName}`
+            );
+            return;
+          }
+        }
+
         const state = Y.encodeStateAsUpdate(document);
         const result = await noteRepository.updateYjsState(
           documentName,
