@@ -21,10 +21,11 @@ function readAttrs(node: ProseMirrorNode): AIBlockAttributes {
   const topic = node.attrs['topic'];
   const content = node.attrs['content'];
   const errorMessage = node.attrs['errorMessage'];
+  const validStatuses = Object.values(AI_BLOCK_STATUS) as readonly string[];
   return {
     topic: typeof topic === 'string' ? topic : '',
     status:
-      typeof status === 'string'
+      typeof status === 'string' && validStatuses.includes(status)
         ? (status as AIBlockStatus)
         : AI_BLOCK_STATUS.INPUT,
     content: typeof content === 'string' ? content : '',

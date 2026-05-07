@@ -1,7 +1,7 @@
+import { Extension } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
-import { Extension } from '@tiptap/react';
 
 import './ghost-text.css';
 
@@ -140,6 +140,7 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
           return false;
         }
 
+        this.storage.suggestion = '';
         editor
           .chain()
           .focus()
@@ -149,7 +150,6 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
           })
           .run();
         this.options.onAccept?.(suggestion);
-        this.storage.suggestion = '';
         return true;
       },
       Escape: () => {

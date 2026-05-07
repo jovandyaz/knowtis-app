@@ -68,6 +68,7 @@ export function AIBlockInputForm({
           value={topicInput}
           onChange={(e) => setTopicInput(e.target.value)}
           placeholder={t('ai.aiBlock.placeholder')}
+          aria-label={t('ai.aiBlock.title')}
           className="flex-1"
         />
         <Button
