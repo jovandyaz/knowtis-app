@@ -50,6 +50,8 @@ export function AIBlockInputForm({
           size="icon"
           className="h-6 w-6 text-muted-foreground hover:text-foreground"
           onClick={onDiscard}
+          aria-label={t('ai.aiBlock.discard')}
+          title={t('ai.aiBlock.discard')}
         >
           <X className="h-3.5 w-3.5" />
         </Button>

@@ -1,6 +1,6 @@
 # @knowtis/editor
 
-Knowtis collaborative rich-text editor (Tiptap + Yjs). Publishable React library.
+Knowtis collaborative rich-text editor (Tiptap + Yjs). Source-only workspace library.
 
 ## Running unit tests
 

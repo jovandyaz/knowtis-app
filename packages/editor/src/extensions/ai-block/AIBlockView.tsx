@@ -51,7 +51,12 @@ export function AIBlockView({
     if (typeof getPos !== 'function') {
       return;
     }
-    const pos = getPos();
+    let pos: number | undefined;
+    try {
+      pos = getPos();
+    } catch {
+      return;
+    }
     if (pos == null) {
       return;
     }
@@ -68,6 +73,8 @@ export function AIBlockView({
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
         if (attrs.status === AI_BLOCK_STATUS.STREAMING) {
           cancel();
         } else {

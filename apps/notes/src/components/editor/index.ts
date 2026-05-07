@@ -1,1 +1,0 @@
-export { CollaborativeEditor } from './CollaborativeEditor';

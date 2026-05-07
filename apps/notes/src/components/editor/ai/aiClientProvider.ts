@@ -107,5 +107,6 @@ async function* pump(
     }
   } finally {
     signal.removeEventListener('abort', onAbort);
+    handle.cancel();
   }
 }

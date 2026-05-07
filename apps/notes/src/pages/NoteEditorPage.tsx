@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
 
-import { CollaborativeEditor } from '@/components/editor';
+import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';

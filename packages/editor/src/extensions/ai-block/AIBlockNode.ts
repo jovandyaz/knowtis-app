@@ -1,4 +1,5 @@
-import { Node, ReactNodeViewRenderer } from '@tiptap/react';
+import { Node } from '@tiptap/core';
+import { ReactNodeViewRenderer } from '@tiptap/react';
 
 import type { GhostTextStreamChunk, GhostTextStreamInput } from '../ghost-text';
 import { AIBlockView } from './AIBlockView';

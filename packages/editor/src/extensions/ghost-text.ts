@@ -140,7 +140,14 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
           return false;
         }
 
-        editor.chain().focus().insertContent(suggestion).run();
+        editor
+          .chain()
+          .focus()
+          .command(({ tr }) => {
+            tr.insertText(suggestion);
+            return true;
+          })
+          .run();
         this.options.onAccept?.(suggestion);
         this.storage.suggestion = '';
         return true;
@@ -150,6 +157,7 @@ export const GhostText = Extension.create<GhostTextOptions, GhostTextStorage>({
           return false;
         }
 
+        this.storage.abortController?.abort();
         this.storage.suggestion = '';
         this.editor.view.dispatch(this.editor.state.tr);
         return true;

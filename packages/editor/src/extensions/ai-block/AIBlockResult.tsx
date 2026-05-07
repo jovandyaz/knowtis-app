@@ -35,7 +35,12 @@ export function AIBlockResult({
           </Button>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={onRetry}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRetry}
+                aria-label={t('ai.aiBlock.retry')}
+              >
                 <RotateCcw className="h-3 w-3" />
               </Button>
             </TooltipTrigger>
@@ -43,7 +48,12 @@ export function AIBlockResult({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon" onClick={onDiscard}>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onDiscard}
+                aria-label={t('ai.aiBlock.discard')}
+              >
                 <X className="h-3 w-3" />
               </Button>
             </TooltipTrigger>

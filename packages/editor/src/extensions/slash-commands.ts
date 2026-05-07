@@ -1,5 +1,5 @@
+import { Extension } from '@tiptap/core';
 import { PluginKey } from '@tiptap/pm/state';
-import { Extension } from '@tiptap/react';
 import Suggestion from '@tiptap/suggestion';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 

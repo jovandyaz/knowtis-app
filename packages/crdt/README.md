@@ -1,6 +1,6 @@
 # @knowtis/crdt
 
-Knowtis CRDT primitives (Yjs helpers and shared types). Publishable utility library.
+Knowtis CRDT primitives (Yjs helpers and shared types). Source-only workspace library.
 
 ## Running unit tests
 

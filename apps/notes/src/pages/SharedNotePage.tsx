@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
-import { CollaborativeEditor } from '@/components/editor';
+import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
