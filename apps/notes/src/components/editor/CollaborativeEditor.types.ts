@@ -1,7 +1,8 @@
-import type { CollaborativeUser } from '@/types';
 import type { Editor } from '@tiptap/react';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
+
+import type { CollaborativeUser } from '@knowtis/crdt';
 
 export interface CollaborativeEditorProps {
   noteId: string;

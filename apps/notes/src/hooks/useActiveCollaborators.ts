@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 
-import { useYjs } from '@/providers';
-import type { AwarenessState, CollaborativeUser } from '@/types';
+import {
+  useYjs,
+  type AwarenessState,
+  type CollaborativeUser,
+} from '@knowtis/crdt';
 
 interface UseActiveCollaboratorsOptions {
   enabled?: boolean;

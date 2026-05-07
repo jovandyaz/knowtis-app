@@ -12,24 +12,23 @@ import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
 import { cn } from '@knowtis/design-system';
+import {
+  CollaborationIndicator,
+  EditorErrorBoundary,
+  EditorToolbar,
+  shouldPropagateUpdate,
+  TableControls,
+} from '@knowtis/editor';
 import { isTrivialProseMirrorDoc } from '@knowtis/editor-schema';
 import { useTypewriter } from '@knowtis/shared-hooks';
 import { logger } from '@knowtis/shared-util';
 
 import { AIBubbleMenu } from './ai/AIBubbleMenu';
 import { AIResultPanel } from './ai/AIResultPanel';
-import { CollaborationIndicator } from './CollaborationIndicator';
-import { TableControls } from './TableControls';
-
-import './CollaborativeCursor.css';
-
 import type {
   CollaborativeEditorProps,
   InternalEditorProps,
 } from './CollaborativeEditor.types';
-import { EditorErrorBoundary } from './EditorErrorBoundary';
-import { EditorToolbar } from './EditorToolbar';
-import { shouldPropagateUpdate } from './shouldPropagateUpdate';
 import { useEditorExtensions } from './useEditorExtensions';
 
 const EDITOR_PADDING = 'p-4 md:p-6';

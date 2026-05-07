@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import { COLLAB_CONFIG } from '@/lib';
-import { useYjs } from '@/providers';
-import type { CollaborativeUser } from '@/types';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
+
+import { COLLAB_CONFIG, useYjs, type CollaborativeUser } from '@knowtis/crdt';
 
 interface UseCollaborativeEditorReturn {
   yDoc: Y.Doc;
@@ -29,7 +28,6 @@ export function useCollaborativeEditor(
     currentUser,
     clearAwarenessForNote,
   } = useYjs();
-  // Captured once at mount — subsequent changes are ignored (component remounts via key={noteId}).
   const [skipProviderDelay] = useState(() => !!options?.skipProviderDelay);
   const [isReady, setIsReady] = useState<boolean>(skipProviderDelay);
 

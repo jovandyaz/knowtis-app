@@ -9,7 +9,8 @@
     "data-access-notes",
     "editor-schema",
     "shared-hooks",
-    "shared-util"
+    "shared-util",
+    "crdt"
   ],
   "targets": {
     "build": {

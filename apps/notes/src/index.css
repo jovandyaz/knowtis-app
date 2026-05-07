@@ -3,8 +3,10 @@
 @import 'highlight.js/styles/github.css';
 @import 'streamdown/styles.css';
 
-/* Scan design-system components for Tailwind classes */
+/* Scan workspace packages for Tailwind classes */
 @source "../../../packages/design-system/src/**/*.tsx";
+@source "../../../packages/editor/src/**/*.{ts,tsx}";
+@source "../../../packages/crdt/src/**/*.{ts,tsx}";
 
 @theme {
   --animate-accordion-down: accordion-down 0.2s ease-out;
