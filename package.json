@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "dev": "nx serve notes",
     "dev:api": "nx serve api",
