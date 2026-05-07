@@ -4,8 +4,13 @@ import type { Duplex } from 'node:stream';
 import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
 import { Server as HocuspocusServer } from '@hocuspocus/server';
 import { Injectable, Logger } from '@nestjs/common';
-import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import type {
+  OnApplicationBootstrap,
+  OnModuleDestroy,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { HttpAdapterHost } from '@nestjs/core';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
@@ -17,7 +22,9 @@ import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persiste
 const COLLABORATION_PATH_PREFIX = '/collaboration';
 
 @Injectable()
-export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
+export class HocuspocusService
+  implements OnModuleInit, OnApplicationBootstrap, OnModuleDestroy
+{
   private readonly logger = new Logger(HocuspocusService.name);
   private server!: HocuspocusServer;
   private upgradeHandler:
@@ -28,7 +35,8 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly auth: HocuspocusAuthExtension,
     private readonly persistence: HocuspocusPersistenceExtension,
-    private readonly config: ConfigService<EnvConfig, true>
+    private readonly config: ConfigService<EnvConfig, true>,
+    private readonly adapterHost: HttpAdapterHost
   ) {}
 
   onModuleInit(): void {
@@ -92,12 +100,31 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Attach the Hocuspocus upgrade listener to the NestJS HTTP server right
+   * after `onModuleInit` builds the Hocuspocus instance and before NestJS
+   * binds the HTTP listener — keeping all the wiring inside the framework's
+   * standard lifecycle hooks.
+   */
+  onApplicationBootstrap(): void {
+    const httpServer = this.adapterHost.httpAdapter?.getHttpServer() as
+      | HttpServer
+      | undefined;
+    if (!httpServer) {
+      this.logger.warn(
+        'Skipping Hocuspocus upgrade attach: no HTTP server available'
+      );
+      return;
+    }
+    this.attachToHttpServer(httpServer);
+  }
+
+  /**
    * Attach Hocuspocus to an existing Node HTTP server (the NestJS HTTP server).
    * We forward 'upgrade' events whose URL targets the collaboration path
    * prefix to Hocuspocus' internal HTTP server, where its crossws-based
    * upgrade handler is already wired.
    */
-  attachToHttpServer(httpServer: HttpServer): void {
+  private attachToHttpServer(httpServer: HttpServer): void {
     if (!this.server) {
       throw new Error('HocuspocusService.onModuleInit must run before attach');
     }
