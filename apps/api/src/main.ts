@@ -81,6 +81,8 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
+  await app.init();
+
   const hocuspocusService = app.get(HocuspocusService);
   const httpServer = app.getHttpAdapter().getHttpServer();
   hocuspocusService.attachToHttpServer(httpServer);
