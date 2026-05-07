@@ -91,7 +91,7 @@ Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/auth`, `@knowtis/data
 Projects are tagged with `type:` and `scope:` tags:
 
 - **type:app** - Applications (can depend on any library type)
-- **type:ui** - UI components (can only depend on type:util)
+- **type:ui** - UI components (can depend on type:ui and type:util; cannot reach into type:data-access or type:app)
 - **type:data-access** - State/API access (can depend on type:util, type:data-access)
 - **type:util** - Pure utilities (can only depend on type:util)
 

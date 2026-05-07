@@ -635,6 +635,107 @@ importers:
         specifier: ^5.0.9
         version: 5.0.9(@types/react@19.2.14)(react@19.2.1)(use-sync-external-store@1.6.0(react@19.2.1))
 
+  packages/crdt:
+    dependencies:
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+      unique-names-generator:
+        specifier: ^4.7.1
+        version: 4.7.1
+      y-indexeddb:
+        specifier: ^9.0.12
+        version: 9.0.12(yjs@13.6.27)
+      y-protocols:
+        specifier: ^1.0.7
+        version: 1.0.7(yjs@13.6.27)
+      yjs:
+        specifier: ^13.6.27
+        version: 13.6.27
+    devDependencies:
+      '@tiptap/pm':
+        specifier: ^3.22.3
+        version: 3.22.3
+      '@types/react':
+        specifier: ^19.2.5
+        version: 19.2.14
+      react:
+        specifier: 19.2.1
+        version: 19.2.1
+
+  packages/editor:
+    dependencies:
+      '@knowtis/crdt':
+        specifier: workspace:*
+        version: link:../crdt
+      '@tiptap/core':
+        specifier: ^3.22.3
+        version: 3.22.3(@tiptap/pm@3.22.3)
+      '@tiptap/extension-placeholder':
+        specifier: ^3.22.3
+        version: 3.22.3(@tiptap/extensions@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3))
+      '@tiptap/pm':
+        specifier: ^3.22.3
+        version: 3.22.3
+      '@tiptap/react':
+        specifier: ^3.22.3
+        version: 3.22.3(@floating-ui/dom@1.7.5)(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      '@tiptap/starter-kit':
+        specifier: ^3.22.3
+        version: 3.22.3
+      '@tiptap/suggestion':
+        specifier: ^3.22.3
+        version: 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)
+      dompurify:
+        specifier: ^3.3.1
+        version: 3.3.3
+      highlight.js:
+        specifier: ^11.11.1
+        version: 11.11.1
+      lowlight:
+        specifier: ^3.3.0
+        version: 3.3.0
+      lucide-react:
+        specifier: ^0.555.0
+        version: 0.555.0(react@19.2.1)
+      markdown-it:
+        specifier: ^14.1.1
+        version: 14.1.1
+      mermaid:
+        specifier: ^11.14.0
+        version: 11.14.0
+      motion:
+        specifier: ^12.23.25
+        version: 12.23.25(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      react-error-boundary:
+        specifier: ^6.0.0
+        version: 6.0.0(react@19.2.1)
+      streamdown:
+        specifier: ^2.5.0
+        version: 2.5.0(react-dom@19.2.1(react@19.2.1))(react@19.2.1)
+      tslib:
+        specifier: ^2.3.0
+        version: 2.8.1
+    devDependencies:
+      '@types/markdown-it':
+        specifier: ^14.1.2
+        version: 14.1.2
+      '@types/react':
+        specifier: ^19.2.5
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: 19.2.1
+        version: 19.2.1
+      react-dom:
+        specifier: 19.2.1
+        version: 19.2.1(react@19.2.1)
+      react-i18next:
+        specifier: ^16.5.4
+        version: 16.5.4(i18next@25.8.13(typescript@5.9.3))(react-dom@19.2.1(react@19.2.1))(react@19.2.1)(typescript@5.9.3)
+
   packages/email:
     dependencies:
       '@react-email/components':

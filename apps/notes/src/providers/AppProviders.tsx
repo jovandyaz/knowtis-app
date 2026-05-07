@@ -8,12 +8,12 @@ import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 
+import { YjsProvider } from '@knowtis/crdt';
 import { Toaster, TooltipProvider } from '@knowtis/design-system';
 
 import { AbilityProvider } from './ability-provider';
 import { PostHogProvider } from './PostHogProvider';
 import { ThemeProvider } from './ThemeProvider';
-import { YjsProvider } from './YjsProvider';
 
 function SessionManager() {
   useSessionManager({ refreshMarginMs: 60_000 });
