@@ -4,8 +4,9 @@ import {
   createTokenStorage,
 } from '@jovandyaz/auth-react';
 
-import { aiClient, collaborationClient, httpClient } from '@knowtis/api-client';
+import { aiClient, httpClient } from '@knowtis/api-client';
 
+import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
 
@@ -19,7 +20,7 @@ export const authStore = createAuthStore({
   storageKey: AUTH_STORAGE_KEY,
 });
 
-collaborationClient.setTokenProvider(tokenStorage);
+setCollaborationTokenStorage(tokenStorage);
 aiClient.setTokenProvider(tokenStorage);
 
 export const authApi = createAuthApiAdapter({

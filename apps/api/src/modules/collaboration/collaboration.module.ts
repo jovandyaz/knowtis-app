@@ -1,15 +1,19 @@
 import { Module } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
 import { NotesModule } from '../notes';
-import { CollaborationGateway } from './collaboration.gateway';
-import { CollaborationService } from './collaboration.service';
-import { WsAuthService } from './ws-auth.service';
+import { UsersModule } from '../users';
+import { HocuspocusAuthExtension } from './extensions/hocuspocus-auth.extension';
+import { HocuspocusPersistenceExtension } from './extensions/hocuspocus-persistence.extension';
+import { HocuspocusService } from './hocuspocus.service';
+import { NoteUpdatedListener } from './listeners/note-updated.listener';
 
 @Module({
   imports: [
+    ConfigModule,
     NotesModule,
+    UsersModule,
     JwtModule.registerAsync({
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
@@ -17,7 +21,12 @@ import { WsAuthService } from './ws-auth.service';
       }),
     }),
   ],
-  providers: [CollaborationService, CollaborationGateway, WsAuthService],
-  exports: [CollaborationService],
+  providers: [
+    HocuspocusAuthExtension,
+    HocuspocusPersistenceExtension,
+    HocuspocusService,
+    NoteUpdatedListener,
+  ],
+  exports: [HocuspocusService],
 })
 export class CollaborationModule {}
