@@ -11,7 +11,8 @@ Knowtis is a real-time collaborative notes platform built as an Nx monorepo with
 - **Always use `pnpm`** instead of `npm` or `yarn` for package management
 - **No backwards-compatibility hacks** — no re-exports from barrel files, no legacy shims, no "old key" comments. If something is renamed or moved, update all consumers. Clean breaks over compat layers.
 - **No re-exports** — imports must come from their original source, never re-export from barrel files just for convenience
-- **Always consult official docs** — before implementing or configuring anything involving external tools, libraries, or services (Vercel, Railway, Nx, etc.), fetch the latest official documentation using Context7 MCP, web search, or CLI help. Never assume behavior from memory alone.
+- **Always consult official docs** — before implementing or configuring anything involving external tools, libraries, or services (Vercel, Railway, Nx, etc.), AND before debugging library-specific issues (auth flows, init APIs, error codes), fetch the latest official documentation using Context7 MCP, web search, or CLI help. Never assume behavior from memory alone.
+- **Minimal comments** — default to no inline comments. Only write JSDoc on exported APIs, `TODO`/`FIXME` markers, or comments that explain a non-obvious WHY (hidden constraint, subtle invariant, framework quirk workaround). Never paraphrase code, never reference the current task/PR/fix in comments.
 
 ## Essential Commands
 

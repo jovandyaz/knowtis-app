@@ -1,7 +1,10 @@
 import type { Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 
-import { Redis as RedisExtension } from '@hocuspocus/extension-redis';
+import {
+  Redis as RedisExtension,
+  type RedisInstance,
+} from '@hocuspocus/extension-redis';
 import { Server as HocuspocusServer } from '@hocuspocus/server';
 import { Injectable, Logger } from '@nestjs/common';
 import type {
@@ -11,6 +14,7 @@ import type {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpAdapterHost } from '@nestjs/core';
+import IORedis from 'ioredis';
 import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
@@ -265,9 +269,8 @@ export class HocuspocusService
       return [];
     }
 
-    let parsed: URL;
     try {
-      parsed = new URL(redisUrl);
+      new URL(redisUrl);
     } catch (error) {
       this.logger.warn(
         `Invalid REDIS_URL, skipping Redis extension: ${
@@ -277,12 +280,10 @@ export class HocuspocusService
       return [];
     }
 
-    const port = parsed.port ? parseInt(parsed.port, 10) : 6379;
-
     return [
       new RedisExtension({
-        host: parsed.hostname,
-        port,
+        createClient: (): RedisInstance =>
+          new IORedis(redisUrl) as unknown as RedisInstance,
         prefix: 'knowtis-collab',
       }),
     ];
