@@ -10,49 +10,82 @@ paths:
 
 ## Architecture
 
-The collaboration system uses Yjs (CRDT) for conflict-free document sync over Socket.io:
+Real-time collaboration uses **Yjs (CRDT)** for conflict-free document sync over **Hocuspocus**, the official Yjs WebSocket server:
 
-1. User edits in Tiptap editor produce Y.Doc updates
-2. Y.Doc generates binary diff (Uint8Array)
-3. Diff sent via Socket.io to `CollaborationGateway` (`/collaboration` namespace)
-4. Server applies update to room's Y.Doc and broadcasts to other room members
-5. Clients apply incoming update, Tiptap re-renders
+1. User edits in Tiptap editor produce Y.Doc updates.
+2. `@hocuspocus/provider` syncs the local `Y.Doc` + `Awareness` to the server.
+3. Server's `Hocuspocus` instance fans the update out to other connected peers and persists periodically.
+4. Persistence and authentication are pluggable via Hocuspocus' extension API; both extensions are NestJS services that compose at module init.
 
-## Backend Gateway (`CollaborationGateway`)
+Hocuspocus binds to the same Node HTTP server as the REST API — only the upgrade path differs (`/collaboration`).
 
-- Decorated with `@WebSocketGateway({ namespace: '/collaboration' })`.
-- Implements `OnGatewayInit`, `OnGatewayConnection`, `OnGatewayDisconnect` lifecycle interfaces.
-- Event handlers use `@SubscribeMessage(COLLABORATION_EVENTS.EVENT_NAME)` with typed payloads.
-- Socket data is typed via `AuthenticatedSocket` interface extending Socket with `data: { wsUser, shareToken, noteId, user, readOnly }`.
-- Room-based broadcasting: `client.to(noteId).emit(event, payload)` — never broadcast to the sender.
+## Backend Service (`HocuspocusService`)
 
-## WebSocket Authentication
+- `apps/api/src/modules/collaboration/hocuspocus.service.ts` — `@Injectable()` NestJS service implementing `OnModuleInit` + `OnModuleDestroy`.
+- Instantiates `Server` from `@hocuspocus/server` with `stopOnSignals: false` (NestJS owns process lifecycle).
+- Forwards `'upgrade'` events from the NestJS HTTP server when the URL starts with `/collaboration` to Hocuspocus' internal HTTP server (which has the crossws WebSocket adapter wired).
+- Persistence cadence: `debounce: 2000`, `maxDebounce: 10000`, `unloadImmediately: false` (matches the prior gateway).
+- Multi-instance fan-out: when `REDIS_URL` is set, registers `@hocuspocus/extension-redis` so multiple API replicas stay in sync. Without `REDIS_URL`, the server runs single-instance (dev only).
 
-- JWT token sent via Socket.IO `auth.token` field (NOT `extraHeaders`).
-- Share token support for anonymous viewers: `auth.shareToken`.
-- `WsAuthService` validates tokens and attaches user data to `socket.data`.
+## Authentication (`HocuspocusAuthExtension`)
 
-## Yjs Document Lifecycle
+- `apps/api/src/modules/collaboration/extensions/hocuspocus-auth.extension.ts`.
+- Implements Hocuspocus' `onAuthenticate` hook. Throws to abort the handshake; the thrown message becomes the `reason` the client receives.
+- Handshake flow (one method per concern; orchestrated by `authenticate`):
+  1. Verify the JWT (real or anonymous) via `JwtService.verify`.
+  2. Load the authenticated user via `UsersService.findById`.
+  3. Load the note via `NoteRepository.findById` (throws if missing).
+  4. Build the `SharedNote[]` list combining DB-stored permissions and any valid `?shareToken=` URL parameter (`ANYONE_WITH_LINK` notes only).
+  5. Define the CASL ability via `defineAbilityFor` and gate `read`/`update` on the note subject.
+  6. Set `connectionConfig.readOnly = true` when the user can read but not edit.
+- The extension publishes a `HocuspocusAuthContext` (`{ user, noteId }`) that downstream extensions can consume via the `Context` generic.
 
-- Each collaboration room has one Y.Doc instance on the server.
-- Y.Doc must be destroyed when the last user leaves the room — memory leak if not cleaned up.
-- Binary Yjs updates (`Uint8Array`) must be validated before applying to prevent corrupt document state.
-- Persist Y.Doc state (`yjs_state` column in notes table) periodically and on room close.
+### Token transport
+
+- Frontend supplies the JWT via the `token` config of `@hocuspocus/provider` — pass a function so the latest token is read on each (re)connect.
+- Anonymous users authenticate via the same path (anonymous JWT issued by `POST /auth/anonymous`).
+- Share-tokened public/link-share notes: append `?shareToken=xxx` to the provider's `url` config. The auth extension reads it from `requestParameters` and grants the configured `generalAccessPermission`.
+
+## Persistence (`HocuspocusPersistenceExtension`)
+
+- `apps/api/src/modules/collaboration/extensions/hocuspocus-persistence.extension.ts`.
+- `onLoadDocument`: hydrates a `Y.Doc` from `note.yjsState` (`Buffer`). Returns `null` when no stored state exists or the stored bytes are malformed (Hocuspocus then uses a fresh doc).
+- `onStoreDocument`: encodes the live `Y.Doc` and persists via `NoteRepository.updateYjsState(id, Buffer)`.
+- **Trivial-fragment guard**: refuses to overwrite non-trivial DB content with a trivial live `Y.Doc`. Prevents the CRDT layer from clobbering REST/MCP-side updates with empty initial state when a fresh client connects before hydration completes.
+- `NoteRepository.updateYjsState` returns `Result<NoteEntity, NoteDomainError>`; failures are logged but do not throw (Hocuspocus would close the connection otherwise).
+
+## External Update Broadcast (`NoteUpdatedListener` + `HocuspocusService.applyExternalUpdate`)
+
+- REST/MCP `update-note` mutations emit `NoteUpdatedEvent`. `NoteUpdatedListener` listens for events with both `updates.content` and `yjsState`.
+- It calls `HocuspocusService.applyExternalUpdate(noteId, state)` which:
+  1. Validates the incoming state in a probe `Y.Doc` (`isValidYjsUpdate`).
+  2. Short-circuits if no live document is loaded for the note (no editors connected — next reader hydrates from DB).
+  3. Opens a `DirectConnection` and runs `transact()` (`mergeIntoLiveDocument`): clears the non-trivial XML fragment then applies the new state. Hocuspocus' fan-out delivers the resulting delta to connected peers automatically.
+- Always `disconnect()` the `DirectConnection` in `finally`.
+- `DirectConnection.transact` wraps callbacks in `document.transact({ source: 'local' })`, which overrides any caller-supplied origin tag — so origin-based filtering inside the persistence extension is NOT reliable through this code path. The redundant write produced by the post-broadcast persistence cycle is a no-op overwrite (REST handler already persisted the same state). Acceptable trade-off; revisit if persistence cost ever matters.
+
+## Frontend Provider (`useHocuspocusCollaboration`)
+
+- `apps/notes/src/collaboration/useHocuspocusCollaboration.ts` — React hook wrapping `HocuspocusProvider`.
+- Accepts the `Y.Doc` + `Awareness` exposed by `@knowtis/crdt`'s `useYjs(noteId)` so the editor and provider share a single source of truth (no duplicate doc instances).
+- Handles `onStatus`, `onAuthenticated` (sets `readOnly`), `onAuthenticationFailed`, and `onSynced` callbacks.
+- Returns `{ status, isConnected, isSynced, readOnly }` — consumers use `readOnly` to call `editor.setEditable(false)`.
+- Reconnection backoff is built into the provider; a fresh JWT is fetched on each attempt via `getCollaborationToken`.
 
 ## Awareness (Presence)
 
-- `useAwarenessSync` hook encodes local awareness updates and sends via `collaborationClient.sendAwarenessUpdate()`.
-- Incoming awareness changes applied with `applyAwarenessUpdate()` from `y-protocols/awareness`.
-- `useActiveCollaborators` reads awareness state for remote cursors and user count.
-- Awareness updates must be debounced to prevent flooding the WebSocket connection.
+- The provider operates on the same `Awareness` instance produced by `@knowtis/crdt`'s `YjsProvider`. Local presence updates (`Awareness.setLocalState`) are broadcast automatically; remote ones land via the same instance.
+- `useActiveCollaborators(noteId)` reads the awareness states map for remote cursors and user count.
+- `usePresenceBroadcast(noteId)` keeps the local user's awareness entry up to date (display name, color, etc.).
+- No manual encode/decode of awareness updates — Hocuspocus' protocol handles it.
 
 ## Resource Cleanup
 
-- On client disconnect: remove socket from room, clean up event listeners, update awareness.
-- On server: dispose Y.Doc when room is empty, persist final state to database.
-- Socket.io `disconnect` event is the authoritative signal — handle all cleanup there.
+- On client unmount: `useHocuspocusCollaboration` calls `provider.destroy()` in the effect cleanup. The provider closes the WebSocket and tears down its event listeners.
+- On server module destroy (`OnModuleDestroy`): detach the upgrade handler, call `flushPendingStores()` (forces debounced `onStoreDocument` to run before shutdown), then `await server.destroy()`.
+- Empty rooms: Hocuspocus unloads the `Y.Doc` automatically (respects `unloadImmediately: false` debounce). Persistence extension's final `onStoreDocument` runs as part of unload.
 
 ## Permission Enforcement
 
-- Read-only users: `socket.data.readOnly = true`. Emit `EDIT_DENIED` event if they attempt to sync updates.
-- Permission checks happen on join and on every write operation.
+- Read-only flag is set server-side during `onAuthenticate` (`connectionConfig.readOnly = true`) when CASL denies `update`. The provider receives `scope: 'readonly'` via `onAuthenticated`.
+- Frontend should not rely on client-side flags to block writes — the server rejects updates from read-only connections at the protocol level.

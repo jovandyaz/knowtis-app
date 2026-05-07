@@ -13,8 +13,6 @@ export {
   type NoteCollaborator,
 } from './lib/notes.api';
 
-export { collaborationClient } from './lib/collaboration.client';
-
 export { aiClient } from './lib/ai.client';
 export type {
   AICompletePayload,

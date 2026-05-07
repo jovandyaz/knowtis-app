@@ -33,7 +33,7 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  └───────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                       TRANSPORT LAYER                           │
-│         HTTP/REST                    WebSocket (Socket.io)      │
+│         HTTP/REST                    WebSocket (Hocuspocus)     │
 ├─────────────────────────────────────────────────────────────────┤
 │                        SERVER LAYER                             │
 │  ┌───────────────────────────────────────────────────────────┐  │
@@ -43,7 +43,7 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  │  • Notes CRUD                                              │  │
 │  │  • AI Assistant (streaming)                                │  │
 │  │  • Study Artifacts (flashcards, quizzes, summaries)        │  │
-│  │  • Collaboration Gateway                                   │  │
+│  │  • Collaboration Service (Hocuspocus + Yjs)                │  │
 │  │  • Feature Flags (DB-backed, Redis-cached)                 │  │
 │  │  • MCP API key exchange                                    │  │
 │  │  • Admin (user management, AI metrics)                     │  │
@@ -148,7 +148,7 @@ Shared (no internal workspace dependencies)
 | Drizzle ORM     | 0.45    | Type-safe database ORM     |
 | PostgreSQL      | 16      | Primary database           |
 | Redis           | 7       | Caching & sessions         |
-| Socket.io       | 4.8     | WebSocket transport        |
+| Hocuspocus      | 4       | Yjs WebSocket sync server  |
 | Passport        | 0.7     | Authentication middleware  |
 | bcryptjs        | 3       | Password hashing           |
 | class-validator | 0.14    | Request validation (DTO)   |
