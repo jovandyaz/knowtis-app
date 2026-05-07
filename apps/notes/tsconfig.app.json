@@ -30,7 +30,9 @@
       ],
       "@jovandyaz/auth": ["./packages/auth/src/index.ts"],
       "@jovandyaz/auth/server": ["./packages/auth/src/server.ts"],
-      "@jovandyaz/auth-react": ["./packages/auth-react/src/index.ts"]
+      "@jovandyaz/auth-react": ["./packages/auth-react/src/index.ts"],
+      "@knowtis/crdt": ["./packages/crdt/src/index.ts"],
+      "@knowtis/editor": ["./packages/editor/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],

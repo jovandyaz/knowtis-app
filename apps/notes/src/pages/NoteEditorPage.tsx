@@ -4,8 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
 
-import { CollaborativeEditor } from '@/components/editor';
-import { SaveStatusIndicator } from '@/components/editor/SaveStatusIndicator';
+import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
@@ -34,6 +33,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
+import { SaveStatusIndicator } from '@knowtis/editor';
 import { useDebouncedCallback } from '@knowtis/shared-hooks';
 import type {
   GeneralAccessLevel,
@@ -216,7 +216,6 @@ function NoteEditor({
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const [content, setContent] = useState(initialContent);
-  // Stable for the lifetime of this mount (component remounts via key={noteId}).
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);

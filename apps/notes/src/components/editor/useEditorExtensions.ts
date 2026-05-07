@@ -1,21 +1,27 @@
 import { useMemo } from 'react';
 
 import { useAIStore } from '@/stores/ai.store';
-import type { CollaborativeUser } from '@/types';
 import Collaboration from '@tiptap/extension-collaboration';
 import type { AnyExtension } from '@tiptap/react';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
+import type { CollaborativeUser } from '@knowtis/crdt';
+import {
+  AIBlockNode,
+  CollaborativeCursors,
+  createBaseExtensions,
+  GhostText,
+  SlashCommands,
+} from '@knowtis/editor';
+import { AI_ACTION } from '@knowtis/shared-types';
+import { logger } from '@knowtis/shared-util';
+
+import { createAiClientProvider } from './ai/aiClientProvider';
 import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
-import { CollaborativeCursors } from './CollaborativeCursors';
-import { createBaseExtensions } from './extensions/base-extensions';
-import { GhostText } from './extensions/GhostText';
 
-import './extensions/GhostText.css';
-
-import { AIBlockNode } from './extensions/ai-block';
-import { SlashCommands } from './extensions/SlashCommands';
+const ghostTextProvider = createAiClientProvider(AI_ACTION.GHOST_TEXT);
+const aiBlockProvider = createAiClientProvider(AI_ACTION.LEARN_TOPIC);
 
 export function useEditorExtensions(
   yDoc: Y.Doc,
@@ -26,7 +32,9 @@ export function useEditorExtensions(
   return useMemo(() => {
     const extensions: AnyExtension[] = [
       ...createBaseExtensions({ disableHistory: true }),
-      AIBlockNode,
+      AIBlockNode.configure({
+        provider: aiBlockProvider,
+      }),
       Collaboration.configure({
         document: yDoc,
         fragment: yXmlFragment,
@@ -35,12 +43,16 @@ export function useEditorExtensions(
         suggestion: slashCommandsSuggestion,
       }),
       GhostText.configure({
+        provider: ghostTextProvider,
         debounceMs: 750,
         minContentLength: 20,
         enabled: true,
         isAIBusy: () => {
           const { aiEnabled, status } = useAIStore.getState();
           return !aiEnabled || status !== 'idle';
+        },
+        onError: (error) => {
+          logger.error('GhostText: provider stream failed', { error });
         },
       }),
     ];
