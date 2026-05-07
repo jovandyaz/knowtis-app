@@ -60,6 +60,24 @@ describe('HocuspocusPersistenceExtension', () => {
     expect(loaded).toBeNull();
   });
 
+  it('should return null and not crash when stored yjsState is malformed', async () => {
+    const repo = {
+      findById: vi
+        .fn()
+        .mockResolvedValue({
+          id: 'note-1',
+          yjsState: Buffer.from([0xff, 0xff, 0x00]),
+        }),
+    } as unknown as NoteRepository;
+
+    const ext = new HocuspocusPersistenceExtension(repo);
+    const loaded = await ext.toExtension().onLoadDocument?.({
+      documentName: 'note-1',
+    } as never);
+
+    expect(loaded).toBeNull();
+  });
+
   it('should persist Y.Doc state on store', async () => {
     const updateYjsState = vi.fn().mockResolvedValue(
       ok({

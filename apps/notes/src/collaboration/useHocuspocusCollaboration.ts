@@ -44,10 +44,15 @@ function mapStatus(status: WebSocketStatus): CollaborationStatus {
       return 'connected';
     case WebSocketStatus.Disconnected:
       return 'disconnected';
-    default: {
-      const _exhaustive: never = status;
-      throw new Error(`Unhandled WebSocketStatus: ${String(_exhaustive)}`);
-    }
+    default:
+      // A future @hocuspocus/provider release may add new WebSocketStatus
+      // values. Throwing inside a provider callback would propagate as an
+      // uncaught exception and likely crash the connection — degrade
+      // gracefully to 'disconnected' instead.
+      logger.warn(`Unhandled WebSocketStatus: ${String(status)}`, {
+        context: 'useHocuspocusCollaboration',
+      });
+      return 'disconnected';
   }
 }
 
@@ -93,6 +98,11 @@ export function useHocuspocusCollaboration({
 
     const url = buildUrl(serverUrl, shareToken);
 
+    // `disposed` short-circuits any provider callback that fires after
+    // `provider.destroy()` (e.g. a final `onStatus(Disconnected)` from the
+    // socket close event) so it cannot stomp the reset state.
+    let disposed = false;
+
     // Note: do not call setState synchronously here — `onStatus` fires with
     // `connecting` immediately on construction and `onSynced` fires once the
     // initial sync completes, so the UI converges naturally.
@@ -103,9 +113,15 @@ export function useHocuspocusCollaboration({
       awareness,
       token: getCollaborationToken,
       onStatus: ({ status: wsStatus }: onStatusParameters) => {
+        if (disposed) {
+          return;
+        }
         setStatus(mapStatus(wsStatus));
       },
       onAuthenticated: ({ scope }: onAuthenticatedParameters) => {
+        if (disposed) {
+          return;
+        }
         const isReadOnly = scope === 'readonly';
         setReadOnly(isReadOnly);
         if (isReadOnly) {
@@ -113,17 +129,24 @@ export function useHocuspocusCollaboration({
         }
       },
       onAuthenticationFailed: ({ reason }) => {
+        if (disposed) {
+          return;
+        }
         logger.warn(`Hocuspocus authentication failed: ${reason}`, {
           context: 'useHocuspocusCollaboration',
         });
         setStatus('authenticationFailed');
       },
       onSynced: ({ state }) => {
+        if (disposed) {
+          return;
+        }
         setIsSynced(state);
       },
     });
 
     return () => {
+      disposed = true;
       provider.destroy();
       setStatus('connecting');
       setIsSynced(false);

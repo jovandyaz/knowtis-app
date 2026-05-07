@@ -71,7 +71,9 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
     try {
       // Force pending debounced onStoreDocument calls to run before tearing
       // down the server, otherwise in-flight edits may be lost on shutdown.
-      this.server.hocuspocus.flushPendingStores();
+      // Optional chaining guards against future Hocuspocus releases that may
+      // remove or rename this internal method.
+      this.server.hocuspocus.flushPendingStores?.();
     } catch (error) {
       this.logger.warn(
         'flushPendingStores failed on shutdown',
@@ -131,13 +133,22 @@ export class HocuspocusService implements OnModuleInit, OnModuleDestroy {
    * code paths (e.g. `update-note`) so editor sessions reflect server-side
    * mutations without forcing a reconnect.
    *
-   * The caller is responsible for the authoritative DB write — this method
-   * performs no persistence by itself, only an in-memory CRDT merge.
+   * The caller is responsible for the authoritative DB write. This method
+   * performs an in-memory CRDT merge via `DirectConnection.transact`, which
+   * Hocuspocus follows up with its standard `onStoreDocument` debounce — so
+   * `HocuspocusPersistenceExtension` WILL emit a (redundant but idempotent)
+   * persistence write shortly after the broadcast. Yjs state merges are
+   * idempotent so the duplicate write is safe.
    *
    * Returns `true` when the update was applied. Returns `false` when:
    *   - the server has not yet been initialised,
    *   - the input bytes are empty or malformed (no-op rejected),
    *   - no document is currently loaded for that note (no live editors).
+   *
+   * Note: the `documents.has(noteId)` guard below is a performance hint, not
+   * a correctness gate. `openDirectConnection` would still load the document
+   * from storage if it had been evicted between the guard and the call —
+   * skipping the early-return is harmless for correctness.
    */
   async applyExternalUpdate(
     noteId: string,

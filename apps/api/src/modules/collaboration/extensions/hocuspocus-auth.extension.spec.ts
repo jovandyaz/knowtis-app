@@ -126,6 +126,52 @@ describe('HocuspocusAuthExtension', () => {
     ).rejects.toThrow('Invalid token');
   });
 
+  it('should reject with Invalid token when JWT is valid but user no longer exists', async () => {
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'user-deleted', email: 'u@example.com' }),
+      } as never,
+      { findById: vi.fn().mockResolvedValue(null) } as never,
+      {
+        findById: vi.fn(),
+        findPermissionsByNote: vi.fn(),
+      } as unknown as NoteRepository
+    );
+
+    await expect(
+      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
+    ).rejects.toThrow('Invalid token');
+  });
+
+  it('should mask raw repository errors as Internal server error', async () => {
+    const noteRepository = {
+      findById: vi.fn().mockRejectedValue(new Error('DB connection refused')),
+      findPermissionsByNote: vi
+        .fn()
+        .mockRejectedValue(new Error('DB connection refused')),
+    } as unknown as NoteRepository;
+
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
+      } as never,
+      noteRepository
+    );
+
+    await expect(
+      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
+    ).rejects.toThrow('Internal server error');
+  });
+
   it('should reject when note is not found', async () => {
     const noteRepository = {
       findById: vi.fn().mockResolvedValue(null),

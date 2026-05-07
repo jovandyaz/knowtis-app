@@ -74,9 +74,33 @@ export class HocuspocusAuthExtension {
     const { token, documentName, connectionConfig, requestParameters } = params;
 
     const user = await this.loadAuthenticatedUser(token, documentName);
-    const note = await this.loadNote(documentName);
+
+    let note: NoteEntity;
+    let rawPermissions: Awaited<
+      ReturnType<NoteRepository['findPermissionsByNote']>
+    >;
+    try {
+      [note, rawPermissions] = await Promise.all([
+        this.loadNote(documentName),
+        this.noteRepository.findPermissionsByNote(documentName),
+      ]);
+    } catch (error) {
+      // Throws like "Note not found" are intentional and re-thrown verbatim;
+      // unexpected DB/repo failures are normalised so the raw error message
+      // (which may include connection strings, SQL, table names) is never
+      // delivered as the WebSocket close reason.
+      if (error instanceof Error && error.message === 'Note not found') {
+        throw error;
+      }
+      this.logger.error(
+        `Internal error during auth for note ${documentName}`,
+        error instanceof Error ? error.stack : error
+      );
+      throw new Error('Internal server error');
+    }
+
     const sharedNotes = this.buildSharedNotes(
-      await this.noteRepository.findPermissionsByNote(documentName),
+      rawPermissions,
       user.id,
       note,
       requestParameters?.get('shareToken') ?? null
@@ -107,7 +131,16 @@ export class HocuspocusAuthExtension {
       throw new Error('Invalid token');
     }
 
-    const user = await this.usersService.findById(payload.sub);
+    let user: AuthenticatedUser | null;
+    try {
+      user = await this.usersService.findById(payload.sub);
+    } catch (error) {
+      this.logger.error(
+        `Failed to load user ${payload.sub} during auth for note ${documentName}`,
+        error instanceof Error ? error.stack : error
+      );
+      throw new Error('Invalid token');
+    }
     if (!user) {
       throw new Error('Invalid token');
     }

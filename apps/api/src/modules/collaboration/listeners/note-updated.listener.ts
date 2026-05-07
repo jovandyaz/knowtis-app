@@ -20,7 +20,11 @@ export class NoteUpdatedListener {
 
   @OnEvent(NoteUpdatedEvent.EVENT_NAME, { async: true })
   async handleExternalNoteUpdate(event: NoteUpdatedEvent): Promise<void> {
-    if (event.updates.content === undefined || !event.yjsState) {
+    if (
+      event.updates.content === undefined ||
+      !event.yjsState ||
+      event.yjsState.byteLength === 0
+    ) {
       return;
     }
 

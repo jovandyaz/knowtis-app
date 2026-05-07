@@ -33,6 +33,23 @@ describe('NoteUpdatedListener', () => {
       .mock.calls[0];
     expect(calledNoteId).toBe('note-1');
     expect(calledUpdate).toBeInstanceOf(Uint8Array);
+    expect(Array.from(calledUpdate)).toEqual([1, 2, 3]);
+  });
+
+  it('should ignore events with empty (zero-length) yjsState buffers', async () => {
+    const service = makeService();
+    const listener = new NoteUpdatedListener(service);
+
+    const event = new NoteUpdatedEvent(
+      'note-1',
+      { content: '<p>updated</p>' },
+      'user-1',
+      Buffer.alloc(0)
+    );
+
+    await listener.handleExternalNoteUpdate(event);
+
+    expect(service.applyExternalUpdate).not.toHaveBeenCalled();
   });
 
   it('should ignore events without content updates', async () => {
