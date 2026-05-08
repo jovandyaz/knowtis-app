@@ -69,8 +69,7 @@
 ```bash
 git clone git@github.com:jovandyaz/knowtis_app.git
 cd knowtis_app
-pnpm install
-pnpm setup       # scaffolds .env files, starts Docker, pushes the schema
+pnpm setup       # installs deps, scaffolds .env files, starts Docker, pushes the schema
 pnpm dev:all     # starts the API + frontend
 ```
 

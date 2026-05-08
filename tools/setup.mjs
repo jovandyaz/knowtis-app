@@ -69,7 +69,7 @@ function waitForPostgres() {
   while (Date.now() < deadline) {
     const result = spawnSync(
       'docker',
-      ['compose', 'exec', '-T', 'postgres', 'pg_isready', '-U', 'postgres'],
+      ['compose', 'exec', '-T', 'postgres', 'pg_isready'],
       { stdio: 'ignore', cwd: repoRoot }
     );
     if (result.status === 0) return;
