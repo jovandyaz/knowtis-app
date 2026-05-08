@@ -1,11 +1,15 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useNavigate } from '@tanstack/react-router';
+
+import { authStore, refreshAccessToken, tokenStorage } from '@/auth';
 import {
   getCollaborationServerUrl,
   isWebSocketEnabled,
   useHocuspocusCollaboration,
 } from '@/collaboration/useHocuspocusCollaboration';
+import { ROUTES } from '@/config';
 import {
   useActiveCollaborators,
   useCollaborativeEditor,
@@ -247,6 +251,17 @@ export function CollaborativeEditor({
         ]
       : [t('editor.editorPlaceholder')];
 
+  const navigate = useNavigate();
+
+  const handleSessionExpired = useCallback(() => {
+    const wasAnonymous = authStore.getState().user?.isAnonymous ?? false;
+    tokenStorage.clearTokens();
+    authStore.getState().logout();
+    if (!wasAnonymous) {
+      navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
+    }
+  }, [navigate]);
+
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
   const { isConnected, isSynced } = useHocuspocusCollaboration({
     noteId,
@@ -256,6 +271,8 @@ export function CollaborativeEditor({
     enabled: wsEnabled,
     shareToken,
     onEditDenied,
+    onAuthRefresh: refreshAccessToken,
+    onSessionExpired: handleSessionExpired,
   });
 
   const uniqueUsers = otherUsers.filter(
