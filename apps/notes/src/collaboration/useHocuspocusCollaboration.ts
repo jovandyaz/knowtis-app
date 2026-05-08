@@ -29,10 +29,15 @@ interface UseHocuspocusCollaborationOptions {
   onEditDenied?: (() => void) | undefined;
   /**
    * Called once when the server rejects the JWT mid-session. Should attempt a
-   * silent refresh (e.g. `authApi.refreshToken()`) and resolve `true` when the
-   * stored access token has been replaced. Resolving `false` (or rejecting) is
-   * treated as terminal — the hook destroys the provider so the connection
-   * does not loop with an expired token.
+   * silent refresh and resolve `true` ONLY after the new access token is
+   * observable via the same storage that `getCollaborationToken()` reads
+   * (e.g. `tokenStorage.getAccessToken()` returns the new token synchronously).
+   * The hook relies on the provider's automatic reconnect to pick up the
+   * refreshed token — it does not call `provider.connect()` itself.
+   *
+   * Resolving `false` (or rejecting) is treated as terminal — the hook
+   * destroys the provider so the connection does not loop with an expired
+   * token.
    */
   onAuthRefresh?: (() => Promise<boolean>) | undefined;
   /**
@@ -130,6 +135,7 @@ export function useHocuspocusCollaboration({
     // Scoped to this provider so a fresh connection (e.g. noteId change) gets
     // a clean retry budget; a ref would persist across providers.
     let recoveryAttempted = false;
+    let recoveryInFlight = false;
 
     // Note: do not call setState synchronously here — `onStatus` fires with
     // `connecting` immediately on construction and `onSynced` fires once the
@@ -165,19 +171,29 @@ export function useHocuspocusCollaboration({
         });
         setStatus('authenticationFailed');
 
+        if (recoveryInFlight) {
+          return;
+        }
+
         if (recoveryAttempted) {
           provider.destroy();
           onSessionExpiredRef.current?.();
           return;
         }
+
         recoveryAttempted = true;
 
         if (!onAuthRefreshRef.current) {
+          logger.warn(
+            'Auth failed and no onAuthRefresh callback configured; destroying provider',
+            { context: 'useHocuspocusCollaboration' }
+          );
           provider.destroy();
           onSessionExpiredRef.current?.();
           return;
         }
 
+        recoveryInFlight = true;
         try {
           const refreshed = await onAuthRefreshRef.current();
           if (disposed) {
@@ -196,6 +212,8 @@ export function useHocuspocusCollaboration({
           }
           provider.destroy();
           onSessionExpiredRef.current?.();
+        } finally {
+          recoveryInFlight = false;
         }
       },
       onSynced: ({ state }) => {

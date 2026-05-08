@@ -1,3 +1,4 @@
+import { HocuspocusProvider } from '@hocuspocus/provider';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Awareness } from 'y-protocols/awareness';
@@ -90,5 +91,120 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       expect(provider.destroy).toHaveBeenCalledTimes(1);
       expect(onSessionExpired).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('passes onAuthenticationFailed to the HocuspocusProvider constructor', () => {
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+      })
+    );
+
+    const lastCall = vi.mocked(HocuspocusProvider).mock.calls.at(-1);
+    expect(lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        onAuthenticationFailed: expect.any(Function),
+      })
+    );
+  });
+
+  it('destroys the provider and fires onSessionExpired when no onAuthRefresh is configured', async () => {
+    const onSessionExpired = vi.fn();
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: 'jwt expired' });
+
+    await waitFor(() => {
+      expect(provider.destroy).toHaveBeenCalledTimes(1);
+      expect(onSessionExpired).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('destroys the provider when onAuthRefresh rejects', async () => {
+    const onAuthRefresh = vi.fn().mockRejectedValue(new Error('network down'));
+    const onSessionExpired = vi.fn();
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: 'jwt expired' });
+
+    await waitFor(() => {
+      expect(provider.destroy).toHaveBeenCalledTimes(1);
+      expect(onSessionExpired).toHaveBeenCalledTimes(1);
+      expect(onAuthRefresh).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('does not destroy the provider if a second auth failure fires while refresh is in-flight and refresh succeeds', async () => {
+    let resolveRefresh: ((value: boolean) => void) | undefined;
+    const onAuthRefresh = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRefresh = resolve;
+        })
+    );
+    const onSessionExpired = vi.fn();
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: 'jwt expired' });
+
+    resolveRefresh?.(true);
+
+    await waitFor(() => {
+      expect(onAuthRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(provider.destroy).not.toHaveBeenCalled();
+    expect(onSessionExpired).not.toHaveBeenCalled();
   });
 });
