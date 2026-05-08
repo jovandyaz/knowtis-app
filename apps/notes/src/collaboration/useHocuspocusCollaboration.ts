@@ -27,6 +27,19 @@ interface UseHocuspocusCollaborationOptions {
   enabled?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
+  /**
+   * Called once when the server rejects the JWT mid-session. Should attempt a
+   * silent refresh (e.g. `authApi.refreshToken()`) and resolve `true` when the
+   * stored access token has been replaced. Resolving `false` (or rejecting) is
+   * treated as terminal — the hook destroys the provider so the connection
+   * does not loop with an expired token.
+   */
+  onAuthRefresh?: (() => Promise<boolean>) | undefined;
+  /**
+   * Called once after `onAuthRefresh` rejects/resolves false. Use it to surface
+   * the auth failure to the user (toast, redirect to /login, etc).
+   */
+  onSessionExpired?: (() => void) | undefined;
 }
 
 interface UseHocuspocusCollaborationReturn {
@@ -81,15 +94,27 @@ export function useHocuspocusCollaboration({
   enabled = true,
   shareToken,
   onEditDenied,
+  onAuthRefresh,
+  onSessionExpired,
 }: UseHocuspocusCollaborationOptions): UseHocuspocusCollaborationReturn {
   const [status, setStatus] = useState<CollaborationStatus>('connecting');
   const [isSynced, setIsSynced] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const onEditDeniedRef = useRef(onEditDenied);
+  const onAuthRefreshRef = useRef(onAuthRefresh);
+  const onSessionExpiredRef = useRef(onSessionExpired);
 
   useEffect(() => {
     onEditDeniedRef.current = onEditDenied;
   }, [onEditDenied]);
+
+  useEffect(() => {
+    onAuthRefreshRef.current = onAuthRefresh;
+  }, [onAuthRefresh]);
+
+  useEffect(() => {
+    onSessionExpiredRef.current = onSessionExpired;
+  }, [onSessionExpired]);
 
   useEffect(() => {
     if (!enabled || !noteId) {
@@ -102,6 +127,9 @@ export function useHocuspocusCollaboration({
     // `provider.destroy()` (e.g. a final `onStatus(Disconnected)` from the
     // socket close event) so it cannot stomp the reset state.
     let disposed = false;
+    // Scoped to this provider so a fresh connection (e.g. noteId change) gets
+    // a clean retry budget; a ref would persist across providers.
+    let recoveryAttempted = false;
 
     // Note: do not call setState synchronously here — `onStatus` fires with
     // `connecting` immediately on construction and `onSynced` fires once the
@@ -128,7 +156,7 @@ export function useHocuspocusCollaboration({
           onEditDeniedRef.current?.();
         }
       },
-      onAuthenticationFailed: ({ reason }) => {
+      onAuthenticationFailed: async ({ reason }) => {
         if (disposed) {
           return;
         }
@@ -136,6 +164,39 @@ export function useHocuspocusCollaboration({
           context: 'useHocuspocusCollaboration',
         });
         setStatus('authenticationFailed');
+
+        if (recoveryAttempted) {
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+          return;
+        }
+        recoveryAttempted = true;
+
+        if (!onAuthRefreshRef.current) {
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+          return;
+        }
+
+        try {
+          const refreshed = await onAuthRefreshRef.current();
+          if (disposed) {
+            return;
+          }
+          if (!refreshed) {
+            provider.destroy();
+            onSessionExpiredRef.current?.();
+          }
+        } catch (error) {
+          logger.warn(`onAuthRefresh threw: ${String(error)}`, {
+            context: 'useHocuspocusCollaboration',
+          });
+          if (disposed) {
+            return;
+          }
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+        }
       },
       onSynced: ({ state }) => {
         if (disposed) {
