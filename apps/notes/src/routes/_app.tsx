@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createFileRoute, Outlet } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
+import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import {
@@ -14,6 +15,7 @@ import {
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { ROUTES } from '@/config';
 import { useAIStore } from '@/stores/ai.store';
 import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
@@ -43,8 +45,18 @@ function ArtifactGeneratorDialogLayout() {
 }
 
 export const Route = createFileRoute('/_app')({
-  beforeLoad: async () => {
-    await initAuth();
+  beforeLoad: async ({ location }) => {
+    try {
+      await initAuth();
+    } catch (error) {
+      if (error instanceof SessionExpiredError) {
+        throw redirect({
+          to: ROUTES.LOGIN,
+          search: { redirect: location.pathname },
+        });
+      }
+      throw error;
+    }
   },
   component: AppLayout,
 });

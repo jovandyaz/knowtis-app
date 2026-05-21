@@ -4,6 +4,7 @@ export {
   authStore,
   performSessionLogout,
   refreshAccessToken,
+  SessionExpiredError,
   tokenStorage,
 } from './setup';
 export { createAuthApiAdapter } from './auth-api-adapter';

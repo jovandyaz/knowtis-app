@@ -9,7 +9,10 @@ import { aiClient, httpClient } from '@knowtis/api-client';
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
+import { runInitAuth } from './init-auth';
 import { performSessionLogout } from './perform-session-logout';
+
+export { SessionExpiredError } from './init-auth';
 
 const AUTH_STORAGE_KEY = 'knowtis-auth';
 
@@ -44,19 +47,15 @@ createCrossTabSync({
 
 export { performSessionLogout } from './perform-session-logout';
 
-/** Restores authenticated session or creates an anonymous one. */
+/** Restores session or creates an anonymous one. Throws SessionExpiredError
+ *  when a non-anonymous user's silent refresh fails. */
 export async function initAuth(): Promise<void> {
-  const { isAuthenticated, user } = authStore.getState();
-  if (isAuthenticated && !user?.isAnonymous && !tokenStorage.hasTokens()) {
-    try {
-      await authApi.refreshToken();
-    } catch (error) {
-      console.error('[initAuth] Silent refresh failed, logging out', error);
-      authStore.getState().logout();
-    }
-  }
-
-  await initAnonymousSession(tokenStorage, authStore);
+  await runInitAuth({
+    authStore,
+    authApi,
+    tokenStorage,
+    initAnonymousSession,
+  });
 }
 
 /** Resolves true only when the refresh succeeded AND tokenStorage has the new token. */
