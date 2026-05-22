@@ -13,7 +13,6 @@ import { performSessionLogout } from './perform-session-logout';
 
 const AUTH_STORAGE_KEY = 'knowtis-auth';
 
-/** App-level auth instances created once at module load. */
 export const tokenStorage = createTokenStorage();
 
 export const authStore = createAuthStore({
@@ -30,7 +29,6 @@ export const authApi = createAuthApiAdapter({
   authStore,
 });
 
-/** Cross-tab logout sync — detects logout in other tabs. */
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
   onLogoutDetected: () => {
@@ -46,9 +44,7 @@ createCrossTabSync({
 
 export { performSessionLogout } from './perform-session-logout';
 
-/**
- * Initialize auth — restores authenticated session or creates anonymous session.
- */
+/** Restores authenticated session or creates an anonymous one. */
 export async function initAuth(): Promise<void> {
   const { isAuthenticated, user } = authStore.getState();
   if (isAuthenticated && !user?.isAnonymous && !tokenStorage.hasTokens()) {
@@ -56,8 +52,6 @@ export async function initAuth(): Promise<void> {
       await authApi.refreshToken();
     } catch (error) {
       console.error('[initAuth] Silent refresh failed, logging out', error);
-      // logout() is synchronous — it mutates the store immediately, so
-      // initAnonymousSession reads the cleared state below.
       authStore.getState().logout();
     }
   }
@@ -65,12 +59,7 @@ export async function initAuth(): Promise<void> {
   await initAnonymousSession(tokenStorage, authStore);
 }
 
-/**
- * Returns true if the auth refresh succeeded and the new access token is
- * synchronously observable via `tokenStorage.getAccessToken()`. Returns false
- * on any failure — callers (e.g. the collaboration hook's `onAuthRefresh`)
- * should treat false as terminal.
- */
+/** Resolves true only when the refresh succeeded AND tokenStorage has the new token. */
 export async function refreshAccessToken(): Promise<boolean> {
   try {
     await authApi.refreshToken();

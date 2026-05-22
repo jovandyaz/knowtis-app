@@ -6,16 +6,7 @@ interface PerformSessionLogoutDeps {
   redirect?: (() => void) | undefined;
 }
 
-/**
- * Single source of truth for "session ended" cleanup: clears tokens, logs the
- * user out of the auth store, and optionally redirects. Anonymous users skip
- * the redirect (they have no login state to return to).
- *
- * Used by the cross-tab logout sync (hard navigation via `window.location`)
- * and the collaboration hook's session-expired path (SPA navigation via
- * `useNavigate`). Keep both consumers calling this helper so the logout
- * semantics stay consistent.
- */
+/** Clear tokens + log out the store. Skip the redirect for anonymous users. */
 export function performSessionLogout({
   authStore,
   tokenStorage,
