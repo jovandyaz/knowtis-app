@@ -27,6 +27,11 @@ interface UseHocuspocusCollaborationOptions {
   enabled?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
+  /** Must resolve true only after the new token is synchronously observable
+   *  via `getCollaborationToken()`'s storage. False/throw is terminal. */
+  onAuthRefresh?: (() => Promise<boolean>) | undefined;
+  /** Fired once after `onAuthRefresh` resolves false or throws. */
+  onSessionExpired?: (() => void) | undefined;
 }
 
 interface UseHocuspocusCollaborationReturn {
@@ -45,10 +50,7 @@ function mapStatus(status: WebSocketStatus): CollaborationStatus {
     case WebSocketStatus.Disconnected:
       return 'disconnected';
     default:
-      // A future @hocuspocus/provider release may add new WebSocketStatus
-      // values. Throwing inside a provider callback would propagate as an
-      // uncaught exception and likely crash the connection — degrade
-      // gracefully to 'disconnected' instead.
+      // Throwing inside a provider callback would crash the connection.
       logger.warn(`Unhandled WebSocketStatus: ${String(status)}`, {
         context: 'useHocuspocusCollaboration',
       });
@@ -64,15 +66,8 @@ function buildUrl(serverUrl: string, shareToken: string | undefined): string {
   return `${serverUrl}${separator}shareToken=${encodeURIComponent(shareToken)}`;
 }
 
-/**
- * Connects a Yjs document to a `@hocuspocus/server` instance via the official
- * `@hocuspocus/provider` v4 client. Uses the `Y.Doc` and `Awareness` instances
- * supplied by `@knowtis/crdt`'s `useYjs` hook so the editor and provider share
- * a single source of truth.
- *
- * Authentication is delegated to `getCollaborationToken`, which reads the
- * latest JWT from the auth `TokenStorage` on every (re)connect.
- */
+/** Wraps `HocuspocusProvider` v4. Token is re-read from `TokenStorage` on every
+ *  (re)connect via `getCollaborationToken`. */
 export function useHocuspocusCollaboration({
   noteId,
   yDoc,
@@ -81,15 +76,27 @@ export function useHocuspocusCollaboration({
   enabled = true,
   shareToken,
   onEditDenied,
+  onAuthRefresh,
+  onSessionExpired,
 }: UseHocuspocusCollaborationOptions): UseHocuspocusCollaborationReturn {
   const [status, setStatus] = useState<CollaborationStatus>('connecting');
   const [isSynced, setIsSynced] = useState(false);
   const [readOnly, setReadOnly] = useState(false);
   const onEditDeniedRef = useRef(onEditDenied);
+  const onAuthRefreshRef = useRef(onAuthRefresh);
+  const onSessionExpiredRef = useRef(onSessionExpired);
 
   useEffect(() => {
     onEditDeniedRef.current = onEditDenied;
   }, [onEditDenied]);
+
+  useEffect(() => {
+    onAuthRefreshRef.current = onAuthRefresh;
+  }, [onAuthRefresh]);
+
+  useEffect(() => {
+    onSessionExpiredRef.current = onSessionExpired;
+  }, [onSessionExpired]);
 
   useEffect(() => {
     if (!enabled || !noteId) {
@@ -98,14 +105,12 @@ export function useHocuspocusCollaboration({
 
     const url = buildUrl(serverUrl, shareToken);
 
-    // `disposed` short-circuits any provider callback that fires after
-    // `provider.destroy()` (e.g. a final `onStatus(Disconnected)` from the
-    // socket close event) so it cannot stomp the reset state.
+    // Short-circuits provider callbacks that fire after `provider.destroy()`.
     let disposed = false;
+    // Per-provider so a fresh connection resets the retry budget.
+    let recoveryAttempted = false;
+    let recoveryInFlight = false;
 
-    // Note: do not call setState synchronously here — `onStatus` fires with
-    // `connecting` immediately on construction and `onSynced` fires once the
-    // initial sync completes, so the UI converges naturally.
     const provider = new HocuspocusProvider({
       url,
       name: noteId,
@@ -128,7 +133,7 @@ export function useHocuspocusCollaboration({
           onEditDeniedRef.current?.();
         }
       },
-      onAuthenticationFailed: ({ reason }) => {
+      onAuthenticationFailed: async ({ reason }) => {
         if (disposed) {
           return;
         }
@@ -136,6 +141,54 @@ export function useHocuspocusCollaboration({
           context: 'useHocuspocusCollaboration',
         });
         setStatus('authenticationFailed');
+
+        if (recoveryInFlight) {
+          return;
+        }
+
+        if (recoveryAttempted) {
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+          return;
+        }
+
+        recoveryAttempted = true;
+
+        if (!onAuthRefreshRef.current) {
+          logger.warn(
+            'Auth failed and no onAuthRefresh callback configured; destroying provider',
+            { context: 'useHocuspocusCollaboration' }
+          );
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+          return;
+        }
+
+        recoveryInFlight = true;
+        try {
+          const refreshed = await onAuthRefreshRef.current();
+          if (disposed) {
+            return;
+          }
+          if (!refreshed) {
+            provider.destroy();
+            onSessionExpiredRef.current?.();
+            return;
+          }
+          // v4 auto-reconnect re-invokes getToken() on next onOpen.
+          // provider.disconnect() would flip shouldConnect=false and block it.
+        } catch (error) {
+          logger.warn(`onAuthRefresh threw: ${String(error)}`, {
+            context: 'useHocuspocusCollaboration',
+          });
+          if (disposed) {
+            return;
+          }
+          provider.destroy();
+          onSessionExpiredRef.current?.();
+        } finally {
+          recoveryInFlight = false;
+        }
       },
       onSynced: ({ state }) => {
         if (disposed) {
@@ -164,10 +217,7 @@ export function useHocuspocusCollaboration({
 
 const COLLABORATION_PATH = '/collaboration';
 
-/**
- * Resolves the WebSocket URL for the Hocuspocus collaboration server from
- * Vite env, falling back to localhost in development.
- */
+/** Resolves the WS URL from Vite env, falling back to localhost. */
 export function getCollaborationServerUrl(): string {
   const env = import.meta.env;
   const wsUrl = env['VITE_WS_URL'];
@@ -186,11 +236,7 @@ export function getCollaborationServerUrl(): string {
   return `${wsBase}${COLLABORATION_PATH}`;
 }
 
-/**
- * Returns whether the Hocuspocus WebSocket transport should be enabled, based
- * on the `VITE_COLLABORATION_MODE` env var. Mirrors the previous Socket.io
- * helper so the editor's call site stays unchanged.
- */
+/** Reads `VITE_COLLABORATION_MODE` — true for `websocket` or `hybrid`. */
 export function isWebSocketEnabled(): boolean {
   const mode = import.meta.env['VITE_COLLABORATION_MODE'] as string | undefined;
   return mode === 'websocket' || mode === 'hybrid';
