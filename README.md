@@ -64,43 +64,20 @@
 | pnpm        | ≥ 10.x  |
 | Docker      | ≥ 20.x  |
 
-### 1. Clone and Install
+### Setup
 
 ```bash
 git clone git@github.com:jovandyaz/knowtis_app.git
-cd knowtis
-pnpm install
+cd knowtis_app
+pnpm setup       # installs deps, scaffolds .env files, starts Docker, pushes the schema
+pnpm dev:all     # starts the API + frontend
 ```
 
-### 2. Start Infrastructure
+> `pnpm setup` is idempotent — it never overwrites an existing `.env`. AI features (`/api/ai/*`) need an `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `apps/api/.env` after the first run.
+
+To run apps individually instead:
 
 ```bash
-# Start PostgreSQL and Redis containers
-pnpm docker:up
-```
-
-### 3. Configure Environment
-
-```bash
-# Copy environment files
-cp apps/api/.env.example apps/api/.env
-cp apps/notes/.env.example apps/notes/.env
-```
-
-### 4. Initialize Database
-
-```bash
-# Push database schema
-pnpm db:push
-```
-
-### 5. Start Development Servers
-
-```bash
-# Option A: Start both apps simultaneously
-pnpm dev:all
-
-# Option B: Start individually
 pnpm dev      # Frontend only (http://localhost:4200)
 pnpm dev:api  # Backend only (http://localhost:3333)
 ```

@@ -15,6 +15,7 @@
     "build:api": "nx build api",
     "dev:mcp": "nx serve mcp",
     "build:mcp": "nx build mcp",
+    "setup": "node tools/setup.mjs",
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint -- --fix",
     "format": "prettier --write .",
