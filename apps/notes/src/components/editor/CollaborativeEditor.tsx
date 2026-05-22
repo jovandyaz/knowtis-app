@@ -3,7 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
-import { authStore, refreshAccessToken, tokenStorage } from '@/auth';
+import {
+  authStore,
+  performSessionLogout,
+  refreshAccessToken,
+  tokenStorage,
+} from '@/auth';
 import {
   getCollaborationServerUrl,
   isWebSocketEnabled,
@@ -254,12 +259,13 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
-    const wasAnonymous = authStore.getState().user?.isAnonymous ?? false;
-    tokenStorage.clearTokens();
-    authStore.getState().logout();
-    if (!wasAnonymous) {
-      navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
-    }
+    performSessionLogout({
+      authStore,
+      tokenStorage,
+      redirect: () => {
+        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
+      },
+    });
   }, [navigate]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();

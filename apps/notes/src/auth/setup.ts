@@ -9,6 +9,7 @@ import { aiClient, httpClient } from '@knowtis/api-client';
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
+import { performSessionLogout } from './perform-session-logout';
 
 const AUTH_STORAGE_KEY = 'knowtis-auth';
 
@@ -33,15 +34,17 @@ export const authApi = createAuthApiAdapter({
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
   onLogoutDetected: () => {
-    const wasAnonymous = authStore.getState().user?.isAnonymous;
-    tokenStorage.clearTokens();
-    authStore.getState().logout();
-
-    if (!wasAnonymous) {
-      window.location.href = '/login';
-    }
+    performSessionLogout({
+      authStore,
+      tokenStorage,
+      redirect: () => {
+        window.location.href = '/login';
+      },
+    });
   },
 });
+
+export { performSessionLogout } from './perform-session-logout';
 
 /**
  * Initialize auth — restores authenticated session or creates anonymous session.
