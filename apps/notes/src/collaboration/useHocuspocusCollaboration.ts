@@ -202,7 +202,16 @@ export function useHocuspocusCollaboration({
           if (!refreshed) {
             provider.destroy();
             onSessionExpiredRef.current?.();
+            return;
           }
+          // Refresh succeeded — no manual reconnect needed. The Knowtis
+          // Hocuspocus auth extension throws in `onAuthenticate`, which closes
+          // the WebSocket. @hocuspocus/provider v4 schedules an auto-reconnect
+          // (HocuspocusProviderWebsocket.onClose → setTimeout(connect, delay)
+          // while shouldConnect===true) and the next onOpen calls sendToken()
+          // → getToken(), which re-invokes our `token` function and reads the
+          // freshly stored access token. Calling provider.disconnect() here
+          // would set shouldConnect=false and BLOCK the reconnect.
         } catch (error) {
           logger.warn(`onAuthRefresh threw: ${String(error)}`, {
             context: 'useHocuspocusCollaboration',
