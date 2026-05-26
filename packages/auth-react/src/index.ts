@@ -12,6 +12,12 @@ export type {
   AuthStore,
 } from './lib/store/auth.store.types';
 
+export { readPersistedAuth } from './lib/store/persisted-auth';
+export type {
+  PersistedAuthSnapshot,
+  PersistedUser,
+} from './lib/store/persisted-auth';
+
 export {
   AuthProvider,
   useAuthApi,
