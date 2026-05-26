@@ -56,6 +56,7 @@ describe('initAnonymousSession — demotion guard', () => {
 
   afterEach(() => {
     localStorage.clear();
+    vi.restoreAllMocks();
   });
 
   it('throws SessionExpiredError when the persisted auth store recorded a registered user but the in-memory store has been cleared', async () => {

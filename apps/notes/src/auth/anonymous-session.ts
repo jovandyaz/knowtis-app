@@ -136,12 +136,22 @@ export function getAnonymousSession(): StoredAnonymousSession | null {
   if (!stored) {
     return null;
   }
+  let parsed: Partial<StoredAnonymousSession>;
   try {
-    return JSON.parse(stored) as StoredAnonymousSession;
+    parsed = JSON.parse(stored) as Partial<StoredAnonymousSession>;
   } catch (error) {
     console.warn('[AnonymousSession] Failed to parse stored session', error);
     return null;
   }
+  if (
+    typeof parsed.userId !== 'string' ||
+    typeof parsed.accessToken !== 'string' ||
+    typeof parsed.expiresAt !== 'number' ||
+    parsed.expiresAt < Date.now()
+  ) {
+    return null;
+  }
+  return parsed as StoredAnonymousSession;
 }
 
 export function getAnonymousUserId(): string | null {

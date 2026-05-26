@@ -5,6 +5,21 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { IHttpClient } from '@knowtis/api-client';
 
 import { createAuthApiAdapter } from '../auth-api-adapter';
+import { ANON_STORAGE_KEY } from '../constants';
+
+function seedAnonymousSession(
+  payload: unknown,
+  { stringified = false }: { stringified?: boolean } = {}
+): void {
+  const value = stringified ? (payload as string) : JSON.stringify(payload);
+  localStorage.setItem(ANON_STORAGE_KEY, value);
+}
+
+const VALID_ANON_PAYLOAD = {
+  userId: 'anon-1',
+  accessToken: 'anon-jwt',
+  expiresAt: Date.now() + 60_000,
+};
 
 function createMockHttpClient() {
   const mock = {
@@ -108,14 +123,7 @@ describe('createAuthApiAdapter', () => {
     });
 
     it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
-      localStorage.setItem(
-        'knowtis-anon',
-        JSON.stringify({
-          userId: 'anon-1',
-          accessToken: 'anon-jwt',
-          expiresAt: Date.now() + 60_000,
-        })
-      );
+      seedAnonymousSession(VALID_ANON_PAYLOAD);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
         httpClient,
@@ -135,7 +143,69 @@ describe('createAuthApiAdapter', () => {
         }),
         { skipAuth: true }
       );
-      expect(localStorage.getItem('knowtis-anon')).toBeNull();
+      expect(localStorage.getItem(ANON_STORAGE_KEY)).toBeNull();
+    });
+
+    it('does not forward anonymous fields when stored session JSON is malformed', async () => {
+      seedAnonymousSession('{not-json', { stringified: true });
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.login({ email: 'a@b.com', password: 'pass' });
+
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        { email: 'a@b.com', password: 'pass' },
+        { skipAuth: true }
+      );
+    });
+
+    it('does not forward anonymous fields when stored session is missing required fields', async () => {
+      seedAnonymousSession({
+        userId: 'anon-1',
+        expiresAt: Date.now() + 60_000,
+      });
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.login({ email: 'a@b.com', password: 'pass' });
+
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        { email: 'a@b.com', password: 'pass' },
+        { skipAuth: true }
+      );
+    });
+
+    it('does not forward anonymous fields when stored session is expired', async () => {
+      seedAnonymousSession({
+        userId: 'anon-1',
+        accessToken: 'anon-jwt',
+        expiresAt: Date.now() - 1_000,
+      });
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.login({ email: 'a@b.com', password: 'pass' });
+
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        { email: 'a@b.com', password: 'pass' },
+        { skipAuth: true }
+      );
     });
   });
 
@@ -164,14 +234,7 @@ describe('createAuthApiAdapter', () => {
     });
 
     it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
-      localStorage.setItem(
-        'knowtis-anon',
-        JSON.stringify({
-          userId: 'anon-1',
-          accessToken: 'anon-jwt',
-          expiresAt: Date.now() + 60_000,
-        })
-      );
+      seedAnonymousSession(VALID_ANON_PAYLOAD);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
         httpClient,
@@ -196,7 +259,50 @@ describe('createAuthApiAdapter', () => {
         }),
         { skipAuth: true }
       );
-      expect(localStorage.getItem('knowtis-anon')).toBeNull();
+      expect(localStorage.getItem(ANON_STORAGE_KEY)).toBeNull();
+    });
+
+    it('does not forward anonymous fields when stored session is malformed, missing fields, or expired', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+      const baseInput = { email: 'a@b.com', name: 'Test', password: 'pass' };
+      const baseExpected = { skipAuth: true };
+
+      seedAnonymousSession('{not-json', { stringified: true });
+      await adapter.register(baseInput);
+      expect(httpClient.post).toHaveBeenLastCalledWith(
+        '/auth/register',
+        baseInput,
+        baseExpected
+      );
+
+      seedAnonymousSession({
+        userId: 'anon-1',
+        expiresAt: Date.now() + 60_000,
+      });
+      await adapter.register(baseInput);
+      expect(httpClient.post).toHaveBeenLastCalledWith(
+        '/auth/register',
+        baseInput,
+        baseExpected
+      );
+
+      seedAnonymousSession({
+        userId: 'anon-1',
+        accessToken: 'anon-jwt',
+        expiresAt: Date.now() - 1_000,
+      });
+      await adapter.register(baseInput);
+      expect(httpClient.post).toHaveBeenLastCalledWith(
+        '/auth/register',
+        baseInput,
+        baseExpected
+      );
     });
   });
 

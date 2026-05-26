@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-import type { AuthUserProfile } from '../types';
-
 const persistedUserSchema = z
   .looseObject({ isAnonymous: z.boolean().optional() })
   .nullable();
@@ -13,8 +11,10 @@ const persistedAuthSchema = z.looseObject({
   }),
 });
 
+export type PersistedUser = z.infer<typeof persistedUserSchema>;
+
 export interface PersistedAuthSnapshot {
-  user: AuthUserProfile | null;
+  user: PersistedUser;
   isAuthenticated: boolean;
 }
 
@@ -45,7 +45,7 @@ export function readPersistedAuth(
     return null;
   }
   return {
-    user: (result.data.state.user as AuthUserProfile | null) ?? null,
+    user: result.data.state.user,
     isAuthenticated: result.data.state.isAuthenticated,
   };
 }

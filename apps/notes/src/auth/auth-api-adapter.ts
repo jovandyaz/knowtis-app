@@ -183,7 +183,14 @@ export function createAuthApiAdapter(
       );
       void adapter.logout();
       authStore.getState().logout();
-      onSessionLost();
+      try {
+        onSessionLost();
+      } catch (sessionLostError) {
+        console.warn(
+          '[AuthApiAdapter] onSessionLost callback failed:',
+          sessionLostError
+        );
+      }
       return null;
     }
   });
