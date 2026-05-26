@@ -1,8 +1,13 @@
-import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
+import {
+  readPersistedAuth,
+  type AuthStoreInstance,
+  type TokenStorage,
+} from '@jovandyaz/auth-react';
 
 import { httpClient } from '@knowtis/api-client';
 
-const ANON_STORAGE_KEY = 'knowtis-anon';
+import { ANON_STORAGE_KEY, AUTH_STORAGE_KEY } from './constants';
+import { SessionExpiredError } from './init-auth';
 
 interface StoredAnonymousSession {
   userId: string;
@@ -15,10 +20,6 @@ export interface AnonymousSessionResponse {
   accessToken: string;
 }
 
-/**
- * Decode JWT payload without verification (server verifies on each request).
- * Used only to extract the `exp` claim for localStorage expiry sync.
- */
 function getJwtExpiry(token: string): number | null {
   try {
     const payload = JSON.parse(atob(token.split('.')[1]));
@@ -28,19 +29,36 @@ function getJwtExpiry(token: string): number | null {
   }
 }
 
-/**
- * Initialize anonymous session if no auth exists.
- * Called during app initialization.
- *
- * SECURITY NOTE: The anonymous JWT is stored in localStorage (not HttpOnly cookies).
- * This is an accepted risk because:
- * 1. Anonymous accounts are ephemeral (30-day TTL, auto-cleaned by cron)
- * 2. Anonymous data is limited (max 5 notes)
- * 3. No sensitive personal data (no email, no password)
- * 4. Moving to HttpOnly cookies would require significant backend changes
- *    (cookie-based auth flow for anonymous sessions) with minimal security benefit
- * 5. If XSS occurs, authenticated users' refresh tokens (HttpOnly) remain safe
- */
+function wasPreviouslyRegistered(): boolean {
+  const snapshot = readPersistedAuth(AUTH_STORAGE_KEY);
+  return snapshot?.user != null && snapshot.user.isAnonymous !== true;
+}
+
+/** Single source of truth for creating a fresh anonymous session via the server.
+ *  Used by bootstrap (initAnonymousSession) and the http-client refresh callback. */
+export async function createAnonymousSession(
+  tokenStorage: TokenStorage,
+  authStore: AuthStoreInstance
+): Promise<AnonymousSessionResponse> {
+  const response = await httpClient.post<AnonymousSessionResponse>(
+    '/auth/anonymous',
+    {},
+    { skipAuth: true }
+  );
+  tokenStorage.setAccessToken(response.accessToken);
+  authStore.getState().setUser({
+    id: response.user.id,
+    email: '',
+    name: response.user.name,
+    avatarUrl: null,
+    isAnonymous: true,
+  });
+  persistAnonymousSession(response);
+  return response;
+}
+
+/** Restores or creates an anonymous session; throws SessionExpiredError if the
+ *  persisted snapshot was a registered user (avoids silent demotion). */
 export async function initAnonymousSession(
   tokenStorage: TokenStorage,
   authStore: AuthStoreInstance
@@ -80,33 +98,23 @@ export async function initAnonymousSession(
     }
   }
 
+  const latest = authStore.getState();
+  if (latest.isAuthenticated && !latest.user?.isAnonymous) {
+    return;
+  }
+
+  if (wasPreviouslyRegistered()) {
+    throw new SessionExpiredError();
+  }
+
   try {
-    const response = await httpClient.post<AnonymousSessionResponse>(
-      '/auth/anonymous',
-      {},
-      { skipAuth: true }
-    );
-
-    tokenStorage.setAccessToken(response.accessToken);
-    authStore.getState().setUser({
-      id: response.user.id,
-      email: '',
-      name: '',
-      avatarUrl: null,
-      isAnonymous: true,
-    });
-
-    persistAnonymousSession(response);
+    await createAnonymousSession(tokenStorage, authStore);
   } catch (error) {
     console.warn('[AnonymousSession] Failed to create session:', error);
     authStore.getState().setLoading(false);
   }
 }
 
-/**
- * Persist anonymous session response to localStorage.
- * Used by both initAnonymousSession and the token recovery callback.
- */
 export function persistAnonymousSession(
   response: AnonymousSessionResponse
 ): void {
@@ -123,10 +131,6 @@ export function persistAnonymousSession(
   );
 }
 
-/**
- * Get the full anonymous session data if one exists.
- * Used during registration/login to send token for ownership verification.
- */
 export function getAnonymousSession(): StoredAnonymousSession | null {
   const stored = localStorage.getItem(ANON_STORAGE_KEY);
   if (!stored) {
@@ -140,18 +144,10 @@ export function getAnonymousSession(): StoredAnonymousSession | null {
   }
 }
 
-/**
- * Get the anonymous user ID if one exists.
- * Used for UI checks (e.g., showing migration message on register page).
- */
 export function getAnonymousUserId(): string | null {
   return getAnonymousSession()?.userId ?? null;
 }
 
-/**
- * Clear anonymous session data.
- * Called after successful registration.
- */
 export function clearAnonymousSession(): void {
   localStorage.removeItem(ANON_STORAGE_KEY);
 }

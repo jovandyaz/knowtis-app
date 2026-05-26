@@ -1,14 +1,10 @@
 import type { AuthResponse, AuthTokens } from '@jovandyaz/auth';
 import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IHttpClient } from '@knowtis/api-client';
 
 import { createAuthApiAdapter } from '../auth-api-adapter';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function createMockHttpClient() {
   const mock = {
@@ -64,10 +60,6 @@ const AUTH_TOKENS: AuthTokens = {
   refreshToken: 'new-rt',
 };
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
-
 describe('createAuthApiAdapter', () => {
   let httpClient: ReturnType<typeof createMockHttpClient>;
   let tokenStorage: ReturnType<typeof createMockTokenStorage>;
@@ -77,9 +69,12 @@ describe('createAuthApiAdapter', () => {
     httpClient = createMockHttpClient();
     tokenStorage = createMockTokenStorage();
     authStore = createMockAuthStore();
+    localStorage.clear();
   });
 
-  // ---- Side effect: refresh callback registration ----
+  afterEach(() => {
+    localStorage.clear();
+  });
 
   it('registers a refresh token callback on creation', () => {
     createAuthApiAdapter({ httpClient, tokenStorage, authStore });
@@ -88,8 +83,6 @@ describe('createAuthApiAdapter', () => {
       expect.any(Function)
     );
   });
-
-  // ---- login ----
 
   describe('login', () => {
     it('calls POST /auth/login with skipAuth and stores access token only', async () => {
@@ -113,9 +106,38 @@ describe('createAuthApiAdapter', () => {
       expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('at');
       expect(result).toBe(AUTH_RESPONSE);
     });
-  });
 
-  // ---- register ----
+    it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
+      localStorage.setItem(
+        'knowtis-anon',
+        JSON.stringify({
+          userId: 'anon-1',
+          accessToken: 'anon-jwt',
+          expiresAt: Date.now() + 60_000,
+        })
+      );
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.login({ email: 'a@b.com', password: 'pass' });
+
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/login',
+        expect.objectContaining({
+          email: 'a@b.com',
+          password: 'pass',
+          anonymousUserId: 'anon-1',
+          anonymousToken: 'anon-jwt',
+        }),
+        { skipAuth: true }
+      );
+      expect(localStorage.getItem('knowtis-anon')).toBeNull();
+    });
+  });
 
   describe('register', () => {
     it('calls POST /auth/register with skipAuth and stores access token only', async () => {
@@ -140,9 +162,43 @@ describe('createAuthApiAdapter', () => {
       expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('at');
       expect(result).toBe(AUTH_RESPONSE);
     });
-  });
 
-  // ---- logout ----
+    it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
+      localStorage.setItem(
+        'knowtis-anon',
+        JSON.stringify({
+          userId: 'anon-1',
+          accessToken: 'anon-jwt',
+          expiresAt: Date.now() + 60_000,
+        })
+      );
+      httpClient.post.mockResolvedValue(AUTH_RESPONSE);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.register({
+        email: 'a@b.com',
+        name: 'Test',
+        password: 'pass',
+      });
+
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/register',
+        expect.objectContaining({
+          email: 'a@b.com',
+          name: 'Test',
+          password: 'pass',
+          anonymousUserId: 'anon-1',
+          anonymousToken: 'anon-jwt',
+        }),
+        { skipAuth: true }
+      );
+      expect(localStorage.getItem('knowtis-anon')).toBeNull();
+    });
+  });
 
   describe('logout', () => {
     it('sends empty body to /auth/logout then clears tokens', async () => {
@@ -173,8 +229,6 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
-  // ---- refreshToken ----
-
   describe('refreshToken', () => {
     it('calls POST /auth/refresh with empty body and stores access token only', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
@@ -195,8 +249,6 @@ describe('createAuthApiAdapter', () => {
       expect(result).toBe(AUTH_TOKENS);
     });
   });
-
-  // ---- getProfile ----
 
   describe('getProfile', () => {
     it('calls GET /auth/me (authenticated)', async () => {
@@ -220,8 +272,6 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
-  // ---- forgotPassword ----
-
   describe('forgotPassword', () => {
     it('calls POST /auth/forgot-password with skipAuth', async () => {
       httpClient.post.mockResolvedValue(undefined);
@@ -240,8 +290,6 @@ describe('createAuthApiAdapter', () => {
       );
     });
   });
-
-  // ---- resetPassword ----
 
   describe('resetPassword', () => {
     it('calls POST /auth/reset-password with skipAuth', async () => {
@@ -262,8 +310,6 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
-  // ---- verifyEmail ----
-
   describe('verifyEmail', () => {
     it('calls POST /auth/verify-email with skipAuth', async () => {
       httpClient.post.mockResolvedValue(undefined);
@@ -283,8 +329,6 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
-  // ---- resendVerification ----
-
   describe('resendVerification', () => {
     it('calls POST /auth/resend-verification (authenticated)', async () => {
       httpClient.post.mockResolvedValue(undefined);
@@ -303,8 +347,6 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
-  // ---- Refresh callback behavior ----
-
   describe('refresh token callback', () => {
     it('returns new access token on successful refresh', async () => {
       httpClient.post.mockResolvedValue(AUTH_TOKENS);
@@ -319,21 +361,97 @@ describe('createAuthApiAdapter', () => {
       expect(result).toBe('new-at');
     });
 
-    it('calls logout and returns null on refresh failure', async () => {
+    it('clears store, redirects to login and returns null on refresh failure for non-anonymous user', async () => {
+      const onSessionLost = vi.fn();
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       httpClient.post.mockRejectedValue(new Error('expired'));
       authStore.getState().user = { isAnonymous: false } as ReturnType<
         AuthStoreInstance['getState']
       >['user'];
-      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
+      createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+        onSessionLost,
+      });
 
       const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
       const result = await callback();
 
       expect(result).toBeNull();
-      // logout is fire-and-forget (void), wait a tick for it to complete
       await vi.waitFor(() => {
         expect(tokenStorage.clearTokens).toHaveBeenCalled();
       });
+      expect(authStore.getState().logout).toHaveBeenCalledTimes(1);
+      expect(onSessionLost).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('refreshToken idempotency', () => {
+    it('coalesces concurrent refresh calls into a single POST /auth/refresh', async () => {
+      let resolvePost: (value: AuthTokens) => void = () => {};
+      httpClient.post.mockImplementation(
+        () =>
+          new Promise<AuthTokens>((resolve) => {
+            resolvePost = resolve;
+          })
+      );
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      const callA = adapter.refreshToken();
+      const callB = adapter.refreshToken();
+      const callC = adapter.refreshToken();
+
+      expect(httpClient.post).toHaveBeenCalledTimes(1);
+
+      resolvePost(AUTH_TOKENS);
+      const [resA, resB, resC] = await Promise.all([callA, callB, callC]);
+
+      expect(resA).toBe(AUTH_TOKENS);
+      expect(resB).toBe(AUTH_TOKENS);
+      expect(resC).toBe(AUTH_TOKENS);
+      expect(tokenStorage.setAccessToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('allows a new refresh after the previous one settles', async () => {
+      httpClient.post.mockResolvedValueOnce(AUTH_TOKENS);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.refreshToken();
+
+      httpClient.post.mockResolvedValueOnce({
+        accessToken: 'second-at',
+        refreshToken: 'second-rt',
+      });
+      const second = await adapter.refreshToken();
+
+      expect(httpClient.post).toHaveBeenCalledTimes(2);
+      expect(second.accessToken).toBe('second-at');
+    });
+
+    it('clears the in-flight promise on failure so retries are possible', async () => {
+      httpClient.post.mockRejectedValueOnce(new Error('boom'));
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await expect(adapter.refreshToken()).rejects.toThrow('boom');
+
+      httpClient.post.mockResolvedValueOnce(AUTH_TOKENS);
+      const retry = await adapter.refreshToken();
+
+      expect(retry).toBe(AUTH_TOKENS);
+      expect(httpClient.post).toHaveBeenCalledTimes(2);
     });
   });
 });

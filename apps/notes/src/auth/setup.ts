@@ -9,12 +9,11 @@ import { aiClient, httpClient } from '@knowtis/api-client';
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
+import { AUTH_STORAGE_KEY } from './constants';
 import { runInitAuth } from './init-auth';
 import { performSessionLogout } from './perform-session-logout';
 
 export { SessionExpiredError } from './init-auth';
-
-const AUTH_STORAGE_KEY = 'knowtis-auth';
 
 export const tokenStorage = createTokenStorage();
 
