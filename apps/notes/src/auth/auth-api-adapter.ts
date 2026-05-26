@@ -13,23 +13,42 @@ import type {
 
 import type { IHttpClient } from '@knowtis/api-client';
 
-import type { AnonymousSessionResponse } from './anonymous-session';
 import {
   clearAnonymousSession,
+  createAnonymousSession,
   getAnonymousSession,
-  persistAnonymousSession,
 } from './anonymous-session';
 
 interface CreateAuthApiAdapterDeps {
   httpClient: IHttpClient;
   tokenStorage: TokenStorage;
   authStore: AuthStoreInstance;
+  onSessionLost?: () => void;
+}
+
+const DEFAULT_LOGIN_PATH = '/login';
+
+function defaultOnSessionLost(): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  if (window.location.pathname.startsWith(DEFAULT_LOGIN_PATH)) {
+    return;
+  }
+  window.location.href = DEFAULT_LOGIN_PATH;
 }
 
 export function createAuthApiAdapter(
   deps: CreateAuthApiAdapterDeps
 ): AuthApiAdapter {
-  const { httpClient, tokenStorage, authStore } = deps;
+  const {
+    httpClient,
+    tokenStorage,
+    authStore,
+    onSessionLost = defaultOnSessionLost,
+  } = deps;
+
+  let inflightRefresh: Promise<AuthTokens> | null = null;
 
   const adapter: AuthApiAdapter = {
     async login(input: LoginInput): Promise<AuthResponse> {
@@ -83,15 +102,23 @@ export function createAuthApiAdapter(
     },
 
     async refreshToken(): Promise<AuthTokens> {
-      const response = await httpClient.post<AuthTokens>(
-        '/auth/refresh',
-        {},
-        { skipAuth: true }
-      );
-
-      tokenStorage.setAccessToken(response.accessToken);
-
-      return response;
+      if (inflightRefresh) {
+        return inflightRefresh;
+      }
+      inflightRefresh = (async () => {
+        try {
+          const response = await httpClient.post<AuthTokens>(
+            '/auth/refresh',
+            {},
+            { skipAuth: true }
+          );
+          tokenStorage.setAccessToken(response.accessToken);
+          return response;
+        } finally {
+          inflightRefresh = null;
+        }
+      })();
+      return inflightRefresh;
     },
 
     async getProfile(): Promise<AuthUserProfile> {
@@ -138,20 +165,7 @@ export function createAuthApiAdapter(
 
     if (user.isAnonymous) {
       try {
-        const response = await httpClient.post<AnonymousSessionResponse>(
-          '/auth/anonymous',
-          {},
-          { skipAuth: true }
-        );
-        tokenStorage.setAccessToken(response.accessToken);
-        authStore.getState().setUser({
-          id: response.user.id,
-          email: '',
-          name: response.user.name,
-          avatarUrl: null,
-          isAnonymous: true,
-        });
-        persistAnonymousSession(response);
+        const response = await createAnonymousSession(tokenStorage, authStore);
         return response.accessToken;
       } catch (error) {
         console.warn('[AuthApiAdapter] Anonymous token refresh failed:', error);
@@ -168,6 +182,15 @@ export function createAuthApiAdapter(
         error
       );
       void adapter.logout();
+      authStore.getState().logout();
+      try {
+        onSessionLost();
+      } catch (sessionLostError) {
+        console.warn(
+          '[AuthApiAdapter] onSessionLost callback failed:',
+          sessionLostError
+        );
+      }
       return null;
     }
   });
