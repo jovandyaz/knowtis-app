@@ -20,6 +20,7 @@ import {
   useCollaborativeEditor,
   usePresenceBroadcast,
 } from '@/hooks';
+import { useAIMenuStore } from '@/stores/ai-menu.store';
 import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
@@ -35,7 +36,7 @@ import { isTrivialProseMirrorDoc } from '@knowtis/editor-schema';
 import { useTypewriter } from '@knowtis/shared-hooks';
 import { logger } from '@knowtis/shared-util';
 
-import { AIBubbleMenu } from './ai/AIBubbleMenu';
+import { AIMenuPopover } from './ai/AIMenuPopover';
 import { AIResultPanel } from './ai/AIResultPanel';
 import type {
   CollaborativeEditorProps,
@@ -87,6 +88,8 @@ function InternalEditor({
   onVoiceNote,
 }: InternalEditorProps) {
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const openAIMenu = useAIMenuStore((s) => s.open);
+  const handleAskAI = useCallback(() => openAIMenu(), [openAIMenu]);
 
   const onUpdateRef = useRef(onUpdate);
   const isInitializingRef = useRef(false);
@@ -183,11 +186,15 @@ function InternalEditor({
 
   return (
     <>
-      <EditorToolbar editor={editor} onVoiceNote={onVoiceNote} />
+      <EditorToolbar
+        editor={editor}
+        onVoiceNote={onVoiceNote}
+        onAskAI={aiEnabled ? handleAskAI : undefined}
+      />
       <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (
           <>
-            <AIBubbleMenu editor={editor} />
+            <AIMenuPopover editor={editor} />
             <AIResultPanel editor={editor} />
           </>
         )}
