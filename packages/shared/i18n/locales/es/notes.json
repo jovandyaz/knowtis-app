@@ -129,9 +129,10 @@
     "flashcardsComingSoon": "Las flashcards estarán disponibles pronto. ¡Mantente atento!"
   },
   "ai": {
-    "bubbleMenu": {
+    "menu": {
       "askAI": "Preguntar a IA",
-      "back": "Volver"
+      "back": "Volver",
+      "title": "Preguntar a IA"
     },
     "actions": {
       "improveWriting": "Mejorar redacción",
@@ -178,7 +179,9 @@
     "groups": {
       "ai": "IA",
       "artifacts": "Herramientas de Estudio",
-      "formatting": "Formato"
+      "formatting": "Formato",
+      "transform": "Transformar",
+      "generate": "Generar"
     },
     "voice": {
       "title": "Nota de voz",

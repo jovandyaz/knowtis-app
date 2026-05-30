@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Editor } from '@tiptap/react';
-import { Mic } from 'lucide-react';
+import { Mic, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import {
@@ -22,6 +22,7 @@ import { TableInsertButton } from './TableInsertButton';
 interface EditorToolbarProps {
   editor: Editor | null;
   onVoiceNote?: (() => void) | undefined;
+  onAskAI?: (() => void) | undefined;
 }
 
 interface ToolbarButtonProps {
@@ -70,6 +71,7 @@ function ToolbarSeparator() {
 export const EditorToolbar = memo(function EditorToolbar({
   editor,
   onVoiceNote,
+  onAskAI,
 }: EditorToolbarProps) {
   const { t: tNotes } = useTranslation('notes');
 
@@ -93,6 +95,26 @@ export const EditorToolbar = memo(function EditorToolbar({
           'max-md:mx-auto max-md:w-fit max-md:max-w-[calc(100vw-2rem)] max-md:overflow-x-auto max-md:rounded-2xl max-md:scrollbar-none'
         )}
       >
+        {onAskAI && (
+          <>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 w-8 shrink-0 rounded-full p-0 text-(--primary) transition-all hover:bg-(--primary)/10 hover:text-(--primary)"
+                  onClick={onAskAI}
+                  aria-label={tNotes('ai.menu.askAI')}
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{tNotes('ai.menu.askAI')}</TooltipContent>
+            </Tooltip>
+            <ToolbarSeparator />
+          </>
+        )}
         {TOOLBAR_TOOLS.map((item, index) => {
           if (!('type' in item)) {
             return (
