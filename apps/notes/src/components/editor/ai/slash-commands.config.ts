@@ -1,59 +1,24 @@
-import { useAIStore } from '@/stores/ai.store';
-import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
-import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor, Range } from '@tiptap/react';
-import i18next from 'i18next';
 import {
   CheckSquare,
-  FileText,
   GitBranch,
-  GraduationCap,
   Heading1,
   Heading2,
   Heading3,
   List,
   ListOrdered,
-  Mic,
-  PenLine,
   Quote,
-  Sparkles,
   Table2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { toast } from 'sonner';
 
-import { AI_ACTION, type AIAction } from '@knowtis/shared-types';
+import {
+  AI_MENU_CONTEXT,
+  executeAIAction,
+  getAIActionsForContext,
+} from './ai-actions.config';
 
 type SlashCommandGroup = 'ai' | 'formatting';
-
-interface CreateAISlashActionOptions {
-  requiresContent?: boolean;
-}
-
-function createAISlashAction(
-  action: AIAction,
-  options?: CreateAISlashActionOptions
-): (editor: Editor, range: Range) => void {
-  return (editor, range) => {
-    editor.chain().focus().deleteRange(range).run();
-
-    if (options?.requiresContent) {
-      const textContent = editor.state.doc.textContent.trim();
-      if (!textContent) {
-        toast.error(i18next.t('ai.contentGuard.emptyNote', { ns: 'notes' }));
-        return;
-      }
-    }
-
-    const pos = editor.state.selection.to;
-    const store = useAIStore.getState();
-    store.setSelectionRange({ from: pos, to: pos });
-    store.startStream({
-      action,
-      content: editor.state.doc.textContent,
-    });
-  };
-}
 
 export interface SlashCommandItem {
   id: string;
@@ -65,103 +30,20 @@ export interface SlashCommandItem {
   action: (editor: Editor, range: Range) => void;
 }
 
-export const SLASH_COMMANDS: SlashCommandItem[] = [
-  {
-    id: 'ai-learn',
-    icon: GraduationCap,
-    labelKey: 'ai.slash.learn',
-    descriptionKey: 'ai.slash.learnDesc',
-    group: 'ai',
-    keywords: ['learn', 'aprender', 'topic', 'tema', 'research', 'investigar'],
-    action: (editor, range) => {
-      editor
-        .chain()
-        .focus()
-        .deleteRange(range)
-        .insertContent({ type: 'aiBlock', attrs: { status: 'input' } })
-        .run();
-    },
-  },
-  {
-    id: 'ai-study-tools',
-    icon: Sparkles,
-    labelKey: 'ai.slash.studyTools',
-    descriptionKey: 'ai.slash.studyToolsDesc',
-    group: 'ai',
-    keywords: [
-      'study',
-      'tools',
-      'generate',
-      'flashcards',
-      'quiz',
-      'herramientas',
-      'estudio',
-      'generar',
-    ],
-    action: (editor, range) => {
-      editor.chain().focus().deleteRange(range).run();
-      useArtifactSidebarStore.getState().openGenerator();
-    },
-  },
-  {
-    id: 'ai-voice-note',
-    icon: Mic,
-    labelKey: 'ai.slash.voiceNote',
-    descriptionKey: 'ai.slash.voiceNoteDesc',
-    group: 'ai',
-    keywords: [
-      'voice',
-      'audio',
-      'record',
-      'dictate',
-      'voz',
-      'grabar',
-      'nota de voz',
-    ],
-    action: (editor, range) => {
-      editor.chain().focus().deleteRange(range).run();
-      const pos = editor.state.selection.to;
-      navigator.mediaDevices
-        .getUserMedia({ audio: true })
-        .then((stream) => {
-          useVoiceNoteEditorStore.getState().open(pos, stream);
-        })
-        .catch((error) => {
-          console.error('Failed to acquire microphone:', error);
-          toast.error(i18next.t('ai.voice.micGenericError', { ns: 'notes' }));
-        });
-    },
-  },
-  {
-    id: 'ai-summarize',
-    icon: FileText,
-    labelKey: 'ai.slash.summarize',
-    descriptionKey: 'ai.slash.summarizeDesc',
-    group: 'ai',
-    keywords: ['summarize', 'summary', 'tldr', 'resumir'],
-    action: createAISlashAction(AI_ACTION.SUMMARIZE, {
-      requiresContent: true,
-    }),
-  },
-  {
-    id: 'ai-outline',
-    icon: ListOrdered,
-    labelKey: 'ai.slash.outline',
-    descriptionKey: 'ai.slash.outlineDesc',
-    group: 'ai',
-    keywords: ['outline', 'structure', 'esquema'],
-    action: createAISlashAction(AI_ACTION.OUTLINE, { requiresContent: true }),
-  },
-  {
-    id: 'ai-continue',
-    icon: PenLine,
-    labelKey: 'ai.slash.continue',
-    descriptionKey: 'ai.slash.continueDesc',
-    group: 'ai',
-    keywords: ['continue', 'write', 'extend', 'continuar'],
-    action: createAISlashAction(AI_ACTION.GHOST_TEXT),
-  },
+const AI_SLASH_COMMANDS: SlashCommandItem[] = getAIActionsForContext(
+  AI_MENU_CONTEXT.CURSOR
+).map((config) => ({
+  id: config.id,
+  icon: config.icon,
+  labelKey: config.labelKey,
+  descriptionKey: config.descriptionKey ?? config.labelKey,
+  group: 'ai',
+  keywords: [...config.keywords],
+  action: (editor, range) =>
+    executeAIAction({ editor, config, context: AI_MENU_CONTEXT.CURSOR, range }),
+}));
 
+const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   {
     id: 'heading-1',
     icon: Heading1,
@@ -294,6 +176,11 @@ export const SLASH_COMMANDS: SlashCommandItem[] = [
         .run();
     },
   },
+];
+
+export const SLASH_COMMANDS: SlashCommandItem[] = [
+  ...AI_SLASH_COMMANDS,
+  ...FORMATTING_SLASH_COMMANDS,
 ];
 
 export function filterSlashCommands(query: string): SlashCommandItem[] {
