@@ -55,7 +55,7 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  │  • Users             │    │  • Session cache             │  │
 │  │  • Notes             │    │  • Rate limiting (AI)        │  │
 │  │  • Collaborators     │    │  • Feature flag cache (30s)  │  │
-│  │  • Feature flags     │    │  • AI semantic cache         │  │
+│  │  • Feature flags     │    │  • AI response cache         │  │
 │  │  • Artifacts         │    │                              │  │
 │  └──────────────────────┘    └──────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
