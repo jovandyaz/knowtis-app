@@ -211,6 +211,80 @@ describe('AISDKProvider', () => {
     );
   });
 
+  it('should fall back to AI_FALLBACK_MODEL when the stream fails before the first chunk', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    streamText
+      .mockReturnValueOnce({
+        // eslint-disable-next-line require-yield -- mock: stream that fails before first chunk
+        textStream: (async function* () {
+          throw new Error('Primary model unavailable');
+        })(),
+        usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
+      } as unknown as ReturnType<typeof streamText>)
+      .mockReturnValueOnce({
+        textStream: (async function* () {
+          yield 'recovered';
+        })(),
+        usage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+      } as unknown as ReturnType<typeof streamText>);
+
+    const fallbackProvider = new AISDKProvider(
+      createMockConfig({
+        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+      })
+    );
+    fallbackProvider.onModuleInit();
+
+    const stream = fallbackProvider.streamCompletion('p', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    const chunks: string[] = [];
+    for await (const c of stream.textStream) {
+      chunks.push(c);
+    }
+
+    expect(chunks).toEqual(['recovered']);
+    expect(streamText).toHaveBeenCalledTimes(2);
+  });
+
+  it('should NOT fall back once a chunk has already been emitted', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    streamText.mockReturnValueOnce({
+      textStream: (async function* () {
+        yield 'partial';
+        throw new Error('mid-stream failure');
+      })(),
+      usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
+    } as unknown as ReturnType<typeof streamText>);
+
+    const provider2 = new AISDKProvider(
+      createMockConfig({
+        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+      })
+    );
+    provider2.onModuleInit();
+
+    const stream = provider2.streamCompletion('p', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    const received: string[] = [];
+    await expect(
+      (async () => {
+        for await (const c of stream.textStream) {
+          received.push(c);
+        }
+      })()
+    ).rejects.toThrow('mid-stream failure');
+    expect(received).toEqual(['partial']);
+    expect(streamText).toHaveBeenCalledTimes(1);
+  });
+
   it('should stream a completion via registry', async () => {
     const streamResult = provider.streamCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
