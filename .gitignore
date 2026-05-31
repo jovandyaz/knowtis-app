@@ -83,3 +83,6 @@ AGENTS.md
 
 # Superpowers planning artifacts
 docs/superpowers/
+
+# Playwright MCP artifacts
+.playwright-mcp/

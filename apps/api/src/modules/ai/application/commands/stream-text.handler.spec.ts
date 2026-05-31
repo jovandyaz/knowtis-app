@@ -119,6 +119,24 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('should cap streaming with the generous stream timeout, not the REST timeout', async () => {
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    expect(mockProvider.streamCompletion).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        timeout: { totalMs: 180000, chunkMs: 10000 },
+      })
+    );
+  });
+
   it('should call onError for invalid action', async () => {
     await handler.execute(
       { userId: 'user-123', action: 'invalid', content: 'Some content' },

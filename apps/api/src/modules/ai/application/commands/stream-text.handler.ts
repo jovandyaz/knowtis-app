@@ -84,7 +84,7 @@ export class StreamTextHandler {
           system: context.systemPrompt,
           maxRetries: this.configService.get('AI_MAX_RETRIES'),
           timeout: {
-            totalMs: this.configService.get('AI_TIMEOUT_MS'),
+            totalMs: this.configService.get('AI_STREAM_MAX_MS'),
             chunkMs: this.configService.get('AI_STREAM_CHUNK_TIMEOUT_MS'),
           },
         }
