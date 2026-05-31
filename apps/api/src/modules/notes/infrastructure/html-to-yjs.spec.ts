@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
-import { editorSchema, htmlToYjsState } from './html-to-yjs';
+import { editorSchema, htmlToYjsState, yDocToHtml } from './html-to-yjs';
 
 function decodeState(state: Buffer) {
   const yDoc = new Y.Doc();
@@ -176,5 +176,25 @@ describe('htmlToYjsState', () => {
     const mermaidNode = json.content[0];
     expect(mermaidNode.type).toBe('mermaidBlock');
     expect(mermaidNode.attrs.viewMode).toBe('split');
+  });
+});
+
+describe('yDocToHtml', () => {
+  it('round-trips html through a Y.Doc back to equivalent html', () => {
+    const html = '<p>Hello <strong>world</strong></p>';
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, new Uint8Array(htmlToYjsState(html)));
+
+    const out = yDocToHtml(doc);
+
+    expect(out).toContain('Hello');
+    expect(out).toContain('<strong>world</strong>');
+  });
+
+  it('produces a paragraph for a single empty paragraph doc', () => {
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, new Uint8Array(htmlToYjsState('<p></p>')));
+
+    expect(yDocToHtml(doc)).toContain('<p>');
   });
 });
