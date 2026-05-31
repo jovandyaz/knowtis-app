@@ -40,6 +40,7 @@ const envSchemaBase = z.object({
     .transform((v) => v === 'true'),
   AI_RPM_LIMIT: z.coerce.number().default(15),
   AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
+  VERCEL_BLOB_READ_WRITE_TOKEN: z.string().optional(),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
