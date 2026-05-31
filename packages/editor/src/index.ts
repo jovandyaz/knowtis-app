@@ -21,6 +21,18 @@ export type {
 } from './extensions/ai-block/AIBlockNode';
 export { SlashCommands } from './extensions/slash-commands';
 export type { SlashCommandsOptions } from './extensions/slash-commands';
+export { ImageNode } from './extensions/image/ImageNode';
+export type { ImageAttributes } from './extensions/image/ImageNode';
+export {
+  ImageUpload,
+  extractImageFiles,
+  ACCEPTED_IMAGE_TYPES,
+} from './extensions/image/image-upload';
+export type {
+  ImageUploadProvider,
+  ImageUploadOptions,
+  UploadedImageResult,
+} from './extensions/image/image-upload';
 
 export { CollaborationIndicator } from './components/CollaborationIndicator';
 export { CollaborativeCursors } from './components/CollaborativeCursors';
