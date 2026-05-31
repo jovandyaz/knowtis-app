@@ -9,11 +9,13 @@ export interface CachedResult {
 export interface AICache {
   isCacheable(action: string): boolean;
   get(
+    userId: string,
     action: string,
     model: string,
     prompt: string
   ): Promise<CachedResult | null>;
   set(
+    userId: string,
     action: string,
     model: string,
     prompt: string,
