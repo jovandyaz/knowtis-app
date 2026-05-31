@@ -384,6 +384,13 @@
     },
     "contentGuard": {
       "emptyNote": "Write some content in your note first."
+    },
+    "image": {
+      "unavailable": "Image unavailable",
+      "editAlt": "Edit alt text",
+      "delete": "Delete image",
+      "altPlaceholder": "Alt text (accessibility)",
+      "captionPlaceholder": "Write a caption…"
     }
   },
   "profile": {

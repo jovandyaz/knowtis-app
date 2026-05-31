@@ -384,6 +384,13 @@
     },
     "contentGuard": {
       "emptyNote": "Escribe contenido en tu nota antes de usar esta función."
+    },
+    "image": {
+      "unavailable": "Imagen no disponible",
+      "editAlt": "Editar texto alternativo",
+      "delete": "Eliminar imagen",
+      "altPlaceholder": "Texto alternativo (accesibilidad)",
+      "captionPlaceholder": "Escribe un pie de foto…"
     }
   },
   "profile": {
