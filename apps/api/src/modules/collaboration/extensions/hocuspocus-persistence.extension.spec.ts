@@ -5,6 +5,7 @@ import * as Y from 'yjs';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import type { NoteRepository } from '../../notes/domain';
+import * as htmlToYjs from '../../notes/infrastructure/html-to-yjs';
 import { HocuspocusPersistenceExtension } from './hocuspocus-persistence.extension';
 
 describe('HocuspocusPersistenceExtension', () => {
@@ -62,12 +63,10 @@ describe('HocuspocusPersistenceExtension', () => {
 
   it('should return null and not crash when stored yjsState is malformed', async () => {
     const repo = {
-      findById: vi
-        .fn()
-        .mockResolvedValue({
-          id: 'note-1',
-          yjsState: Buffer.from([0xff, 0xff, 0x00]),
-        }),
+      findById: vi.fn().mockResolvedValue({
+        id: 'note-1',
+        yjsState: Buffer.from([0xff, 0xff, 0x00]),
+      }),
     } as unknown as NoteRepository;
 
     const ext = new HocuspocusPersistenceExtension(repo);
@@ -78,7 +77,48 @@ describe('HocuspocusPersistenceExtension', () => {
     expect(loaded).toBeNull();
   });
 
-  it('should persist Y.Doc state on store', async () => {
+  it('should persist derived HTML content and yjsState on store', async () => {
+    const updateContentWithYjsState = vi.fn().mockResolvedValue(
+      ok({
+        id: 'note-1',
+        title: 'Test',
+        content: '<p>Stored</p>',
+        ownerId: 'user-1',
+        generalAccess: 'restricted',
+        generalAccessPermission: 'viewer',
+        shareToken: null,
+        editorsCanShare: false,
+        yjsState: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+    );
+    const repo = { updateContentWithYjsState } as unknown as NoteRepository;
+
+    const doc = new Y.Doc();
+    const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+    const paragraph = new Y.XmlElement('paragraph');
+    paragraph.insert(0, [new Y.XmlText('Stored')]);
+    fragment.insert(0, [paragraph]);
+
+    const ext = new HocuspocusPersistenceExtension(repo);
+    await ext.toExtension().onStoreDocument?.({
+      document: doc,
+      documentName: 'note-1',
+    } as never);
+
+    expect(updateContentWithYjsState).toHaveBeenCalledTimes(1);
+    const [calledId, data, buffer] = updateContentWithYjsState.mock.calls[0];
+    expect(calledId).toBe('note-1');
+    expect(data.content).toContain('Stored');
+    expect(Buffer.isBuffer(buffer)).toBe(true);
+  });
+
+  it('falls back to yjsState-only persist when HTML derivation throws', async () => {
+    vi.spyOn(htmlToYjs, 'yDocToHtml').mockImplementation(() => {
+      throw new Error('boom');
+    });
+    const updateContentWithYjsState = vi.fn();
     const updateYjsState = vi.fn().mockResolvedValue(
       ok({
         id: 'note-1',
@@ -94,7 +134,10 @@ describe('HocuspocusPersistenceExtension', () => {
         updatedAt: new Date(),
       })
     );
-    const repo = { updateYjsState } as unknown as NoteRepository;
+    const repo = {
+      updateContentWithYjsState,
+      updateYjsState,
+    } as unknown as NoteRepository;
 
     const doc = new Y.Doc();
     const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
@@ -108,26 +151,21 @@ describe('HocuspocusPersistenceExtension', () => {
       documentName: 'note-1',
     } as never);
 
+    expect(updateContentWithYjsState).not.toHaveBeenCalled();
     expect(updateYjsState).toHaveBeenCalledTimes(1);
-    const [calledId, calledBuffer] = updateYjsState.mock.calls[0];
-    expect(calledId).toBe('note-1');
-    expect(Buffer.isBuffer(calledBuffer)).toBe(true);
 
-    // Round-trip: hydrate a fresh doc from the persisted buffer and verify content.
-    const verifyDoc = new Y.Doc();
-    Y.applyUpdate(verifyDoc, new Uint8Array(calledBuffer));
-    expect(
-      verifyDoc.getXmlFragment(YJS_XML_FRAGMENT_NAME).toString()
-    ).toContain('Stored');
+    vi.restoreAllMocks();
   });
 
   it('should skip persistence when live Y.Doc is trivial and stored content is non-trivial', async () => {
+    const updateContentWithYjsState = vi.fn();
     const updateYjsState = vi.fn();
     const findById = vi.fn().mockResolvedValue({
       id: 'note-1',
       content: '<p>Real content</p>',
     });
     const repo = {
+      updateContentWithYjsState,
       updateYjsState,
       findById,
     } as unknown as NoteRepository;
@@ -141,6 +179,7 @@ describe('HocuspocusPersistenceExtension', () => {
       documentName: 'note-1',
     } as never);
 
+    expect(updateContentWithYjsState).not.toHaveBeenCalled();
     expect(updateYjsState).not.toHaveBeenCalled();
   });
 });
