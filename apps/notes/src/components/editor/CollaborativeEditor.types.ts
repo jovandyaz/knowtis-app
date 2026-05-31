@@ -22,6 +22,7 @@ export interface CollaborativeEditorProps {
 }
 
 export interface InternalEditorProps {
+  noteId: string;
   yDoc: Y.Doc;
   yXmlFragment: Y.XmlFragment;
   awareness: Awareness | null;

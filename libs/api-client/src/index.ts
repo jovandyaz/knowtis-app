@@ -46,3 +46,9 @@ export {
   type ReviewCardInput,
   type SubmitQuizInput,
 } from './lib/artifacts.api';
+
+export {
+  imagesApi,
+  type UploadImageArgs,
+  type UploadImageResponse,
+} from './lib/images.api';

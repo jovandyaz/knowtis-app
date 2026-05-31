@@ -2,5 +2,8 @@
   "name": "@knowtis/api",
   "version": "0.0.1",
   "private": true,
-  "type": "commonjs"
+  "type": "commonjs",
+  "dependencies": {
+    "@vercel/blob": "^2.4.0"
+  }
 }

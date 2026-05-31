@@ -380,10 +380,21 @@
       "taskList": "Lista de tareas",
       "taskListDesc": "Crear una lista con casillas de verificación",
       "diagram": "Diagrama",
-      "diagramDesc": "Insertar un diagrama Mermaid"
+      "diagramDesc": "Insertar un diagrama Mermaid",
+      "image": "Imagen",
+      "imageDesc": "Subir una imagen"
     },
     "contentGuard": {
       "emptyNote": "Escribe contenido en tu nota antes de usar esta función."
+    },
+    "image": {
+      "unavailable": "Imagen no disponible",
+      "editAlt": "Editar texto alternativo",
+      "delete": "Eliminar imagen",
+      "altPlaceholder": "Texto alternativo (accesibilidad)",
+      "captionPlaceholder": "Escribe un pie de foto…",
+      "uploadError": "No se pudo subir la imagen",
+      "uploading": "Subiendo imagen…"
     }
   },
   "profile": {

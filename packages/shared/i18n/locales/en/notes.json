@@ -380,10 +380,21 @@
       "taskList": "Task list",
       "taskListDesc": "Create a checklist with checkboxes",
       "diagram": "Diagram",
-      "diagramDesc": "Insert a Mermaid diagram"
+      "diagramDesc": "Insert a Mermaid diagram",
+      "image": "Image",
+      "imageDesc": "Upload an image"
     },
     "contentGuard": {
       "emptyNote": "Write some content in your note first."
+    },
+    "image": {
+      "unavailable": "Image unavailable",
+      "editAlt": "Edit alt text",
+      "delete": "Delete image",
+      "altPlaceholder": "Alt text (accessibility)",
+      "captionPlaceholder": "Write a caption…",
+      "uploadError": "Could not upload the image",
+      "uploading": "Uploading image…"
     }
   },
   "profile": {
