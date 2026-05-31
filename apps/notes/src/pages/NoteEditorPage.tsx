@@ -224,6 +224,10 @@ function NoteEditor({
   const contentRef = useRef(initialContent);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
+  const isLiveCollabRef = useRef(false);
+  const handleLiveCollaborationChange = useCallback((isLive: boolean) => {
+    isLiveCollabRef.current = isLive;
+  }, []);
 
   const debouncedUpdateNote = useDebouncedCallback(
     (updates: { title?: string; content?: string }) => {
@@ -305,7 +309,11 @@ function NoteEditor({
       }
       contentRef.current = newContent;
       setContent(newContent);
-      debouncedUpdateNote({ content: newContent });
+      if (!isLiveCollabRef.current) {
+        // Live CRDT already holds these edits and persists them via Hocuspocus
+        // onStoreDocument; a REST content write would echo back and reset the caret.
+        debouncedUpdateNote({ content: newContent });
+      }
       deriveAutoTitle(newContent);
     },
     [canEdit, debouncedUpdateNote, deriveAutoTitle]
@@ -393,6 +401,7 @@ function NoteEditor({
         localFirst={isNewNote}
         onEditorReady={handleEditorReady}
         onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
+        onLiveCollaborationChange={handleLiveCollaborationChange}
       />
 
       {showVoiceNote && (

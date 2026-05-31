@@ -19,6 +19,10 @@ export interface CollaborativeEditorProps {
   onVoiceNote?: (() => void) | undefined;
   /** When true, disables WebSocket collaboration and skips the provider init delay */
   localFirst?: boolean | undefined;
+  /** Fires when live WS collaboration becomes (or stops being) the source of
+   *  truth — connected AND synced. The page uses it to suppress the redundant
+   *  REST content autosave that otherwise echoes back and resets the caret. */
+  onLiveCollaborationChange?: ((isLive: boolean) => void) | undefined;
 }
 
 export interface InternalEditorProps {
