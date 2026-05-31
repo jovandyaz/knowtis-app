@@ -12,6 +12,8 @@ export interface CompletionResult {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly model: string;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
 }
 
 export interface StreamCompletionResult {
@@ -19,6 +21,8 @@ export interface StreamCompletionResult {
   readonly usage: PromiseLike<{
     promptTokens: number;
     completionTokens: number;
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
   }>;
 }
 

@@ -114,6 +114,8 @@ export class StreamTextHandler {
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
           model: context.model,
+          cacheReadTokens: actualUsage.cacheReadTokens,
+          cacheWriteTokens: actualUsage.cacheWriteTokens,
         },
         getModelPricing(context.model)
       );

@@ -41,4 +41,33 @@ describe('TokenUsage', () => {
     });
     expect(usage.costUsd).toBe(0);
   });
+
+  it('should bill cache-read tokens at the discounted rate', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 100,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 800,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.00234, 8);
+  });
+
+  it('should bill cache-write tokens at the premium rate', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheWriteTokens: 1000,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.00375, 8);
+  });
+
+  it('should be backward compatible when no cache tokens are provided', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 500,
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+    expect(usage.costUsd).toBeCloseTo(0.0105, 8);
+  });
 });
