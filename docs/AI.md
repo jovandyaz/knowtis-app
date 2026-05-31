@@ -326,23 +326,24 @@ Non-Anthropic models receive the system prompt as a plain string (no caching met
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
 
-| Variable                       | Required | Default                               | Description                                  |
-| ------------------------------ | -------- | ------------------------------------- | -------------------------------------------- |
-| `ANTHROPIC_API_KEY`            | No       | —                                     | Anthropic API key (validated at runtime)     |
-| `OPENAI_API_KEY`               | No       | —                                     | OpenAI API key (Whisper transcription)       |
-| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`  | Model for most actions                       |
-| `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001` | Model for `ghost-text`                       |
-| `AI_FALLBACK_MODEL`            | No       | `anthropic:claude-haiku-4-5-20251001` | Fallback on provider error                   |
-| `AI_DAILY_TOKEN_LIMIT`         | No       | `100000`                              | Per-user daily token cap                     |
-| `AI_DAILY_COST_LIMIT_USD`      | No       | `1.0`                                 | Per-user daily cost cap (USD)                |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT` | No       | `0.33`                                | Fraction of daily limits for anonymous users |
-| `AI_MAX_RETRIES`               | No       | `3`                                   | Provider retry count                         |
-| `AI_TIMEOUT_MS`                | No       | `30000`                               | Total request timeout (ms), REST + streaming |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`   | No       | `10000`                               | Per-chunk timeout (ms)                       |
-| `AI_CACHE_ENABLED`             | No       | `true`                                | Enable response cache                        |
-| `AI_CACHE_TTL_SECONDS`         | No       | `3600`                                | Cache TTL (seconds)                          |
-| `AI_RPM_LIMIT`                 | No       | `15`                                  | Max requests per minute per user             |
-| `AI_MAX_CONCURRENT_STREAMS`    | No       | `2`                                   | Max simultaneous AI streams per user         |
+| Variable                       | Required | Default                               | Description                                             |
+| ------------------------------ | -------- | ------------------------------------- | ------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`            | No       | —                                     | Anthropic API key (validated at runtime)                |
+| `OPENAI_API_KEY`               | No       | —                                     | OpenAI API key (Whisper transcription)                  |
+| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`  | Model for most actions                                  |
+| `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001` | Model for `ghost-text`                                  |
+| `AI_FALLBACK_MODEL`            | No       | `anthropic:claude-haiku-4-5-20251001` | Fallback on provider error                              |
+| `AI_DAILY_TOKEN_LIMIT`         | No       | `100000`                              | Per-user daily token cap                                |
+| `AI_DAILY_COST_LIMIT_USD`      | No       | `1.0`                                 | Per-user daily cost cap (USD)                           |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT` | No       | `0.33`                                | Fraction of daily limits for anonymous users            |
+| `AI_MAX_RETRIES`               | No       | `3`                                   | Provider retry count                                    |
+| `AI_TIMEOUT_MS`                | No       | `30000`                               | Total request timeout (ms) — REST completions only      |
+| `AI_STREAM_MAX_MS`             | No       | `180000`                              | Total streaming cap (ms); generous for long generations |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`   | No       | `10000`                               | Per-chunk (stall) timeout for streaming (ms)            |
+| `AI_CACHE_ENABLED`             | No       | `true`                                | Enable response cache                                   |
+| `AI_CACHE_TTL_SECONDS`         | No       | `3600`                                | Cache TTL (seconds)                                     |
+| `AI_RPM_LIMIT`                 | No       | `15`                                  | Max requests per minute per user                        |
+| `AI_MAX_CONCURRENT_STREAMS`    | No       | `2`                                   | Max simultaneous AI streams per user                    |
 
 ### Feature Flags (DB-backed)
 

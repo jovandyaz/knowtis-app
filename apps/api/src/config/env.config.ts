@@ -33,6 +33,7 @@ const envSchemaBase = z.object({
   AI_MAX_RETRIES: z.coerce.number().default(3),
   AI_FALLBACK_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
+  AI_STREAM_MAX_MS: z.coerce.number().default(180000),
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
   AI_CACHE_TTL_SECONDS: z.coerce.number().default(3600),
   AI_CACHE_ENABLED: z
