@@ -174,7 +174,15 @@
       "retry": "Reintentar"
     },
     "errors": {
-      "generic": "Algo salió mal. Inténtalo de nuevo."
+      "generic": "Algo salió mal. Inténtalo de nuevo.",
+      "rateLimited": "Has alcanzado tu límite de uso de IA. Inténtalo más tarde.",
+      "provider": "El servicio de IA no está disponible temporalmente. Reinténtalo.",
+      "connection": "No se pudo conectar con el servicio de IA. Verifica tu conexión y reinténtalo.",
+      "featureDisabled": "Las funciones de IA están deshabilitadas actualmente.",
+      "auth": "Tu sesión expiró. Vuelve a iniciar sesión.",
+      "validation": "No se pudo procesar esa solicitud. Ajusta tu entrada.",
+      "injection": "Tu entrada fue marcada y no se pudo procesar.",
+      "timeout": "La solicitud de IA agotó el tiempo de espera. Reinténtalo."
     },
     "groups": {
       "ai": "IA",

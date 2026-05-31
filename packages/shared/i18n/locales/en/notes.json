@@ -174,7 +174,15 @@
       "retry": "Retry"
     },
     "errors": {
-      "generic": "Something went wrong. Please try again."
+      "generic": "Something went wrong. Please try again.",
+      "rateLimited": "You've reached your AI usage limit. Try again later.",
+      "provider": "The AI service is temporarily unavailable. Please retry.",
+      "connection": "Couldn't reach the AI service. Check your connection and retry.",
+      "featureDisabled": "AI features are currently disabled.",
+      "auth": "Your session expired. Please sign in again.",
+      "validation": "That request couldn't be processed. Please adjust your input.",
+      "injection": "Your input was flagged and couldn't be processed.",
+      "timeout": "The AI request timed out. Please retry."
     },
     "groups": {
       "ai": "AI",
