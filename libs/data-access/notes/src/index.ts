@@ -10,3 +10,5 @@ export {
   useNoteByToken,
   notesQueryKeys,
 } from './notes.hooks';
+
+export { useUploadImage } from './image-upload.hooks';
