@@ -1,3 +1,4 @@
+import type { Editor } from '@tiptap/core';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -24,6 +25,14 @@ export type ImageUploadProvider = (
 export interface ImageUploadOptions {
   provider: ImageUploadProvider | null;
   onError: (error: unknown) => void;
+}
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    imageUpload: {
+      uploadImageFile: (file: File) => ReturnType;
+    };
+  }
 }
 
 export function extractImageFiles(files: ArrayLike<File>): File[] {
@@ -57,6 +66,60 @@ const matchesId =
   (spec: PlaceholderSpec): boolean =>
     spec.id === id;
 
+function startUpload(
+  editor: Editor,
+  options: ImageUploadOptions,
+  file: File,
+  pos: number
+): void {
+  if (!options.provider) {
+    return;
+  }
+  const id = Symbol('upload');
+  const controller = new AbortController();
+
+  const tr = editor.state.tr.setMeta(imageUploadKey, {
+    add: { id, pos },
+  } satisfies PlaceholderMeta);
+  editor.view.dispatch(tr);
+
+  options
+    .provider(file, controller.signal)
+    .then((result) => {
+      const decos = imageUploadKey.getState(editor.state);
+      const found = decos?.find(undefined, undefined, matchesId(id));
+      const at = found && found.length ? found[0].from : null;
+
+      const cleanup = editor.state.tr.setMeta(imageUploadKey, {
+        remove: { id },
+      } satisfies PlaceholderMeta);
+      editor.view.dispatch(cleanup);
+
+      if (at === null) {
+        return;
+      }
+      editor
+        .chain()
+        .insertContentAt(at, {
+          type: 'image',
+          attrs: {
+            src: result.src,
+            alt: result.alt,
+            width: result.width,
+            height: result.height,
+          },
+        })
+        .run();
+    })
+    .catch((error: unknown) => {
+      const cleanup = editor.state.tr.setMeta(imageUploadKey, {
+        remove: { id },
+      } satisfies PlaceholderMeta);
+      editor.view.dispatch(cleanup);
+      options.onError(error);
+    });
+}
+
 export const ImageUpload = Extension.create<ImageUploadOptions>({
   name: 'imageUpload',
 
@@ -67,58 +130,23 @@ export const ImageUpload = Extension.create<ImageUploadOptions>({
     };
   },
 
+  addCommands() {
+    return {
+      uploadImageFile: (file: File) => () => {
+        startUpload(
+          this.editor,
+          this.options,
+          file,
+          this.editor.state.selection.from
+        );
+        return true;
+      },
+    };
+  },
+
   addProseMirrorPlugins() {
     const editor = this.editor;
     const options = this.options;
-
-    const startUpload = (file: File, pos: number) => {
-      if (!options.provider) {
-        return;
-      }
-      const id = Symbol('upload');
-      const controller = new AbortController();
-
-      const tr = editor.state.tr.setMeta(imageUploadKey, {
-        add: { id, pos },
-      } satisfies PlaceholderMeta);
-      editor.view.dispatch(tr);
-
-      options
-        .provider(file, controller.signal)
-        .then((result) => {
-          const decos = imageUploadKey.getState(editor.state);
-          const found = decos?.find(undefined, undefined, matchesId(id));
-          const at = found && found.length ? found[0].from : null;
-
-          const cleanup = editor.state.tr.setMeta(imageUploadKey, {
-            remove: { id },
-          } satisfies PlaceholderMeta);
-          editor.view.dispatch(cleanup);
-
-          if (at === null) {
-            return;
-          }
-          editor
-            .chain()
-            .insertContentAt(at, {
-              type: 'image',
-              attrs: {
-                src: result.src,
-                alt: result.alt,
-                width: result.width,
-                height: result.height,
-              },
-            })
-            .run();
-        })
-        .catch((error: unknown) => {
-          const cleanup = editor.state.tr.setMeta(imageUploadKey, {
-            remove: { id },
-          } satisfies PlaceholderMeta);
-          editor.view.dispatch(cleanup);
-          options.onError(error);
-        });
-    };
 
     return [
       new Plugin<DecorationSet>({
@@ -164,7 +192,7 @@ export const ImageUpload = Extension.create<ImageUploadOptions>({
             }
             event.preventDefault();
             const pos = view.state.selection.from;
-            images.forEach((file) => startUpload(file, pos));
+            images.forEach((file) => startUpload(editor, options, file, pos));
             return true;
           },
           handleDrop(view, event) {
@@ -179,7 +207,7 @@ export const ImageUpload = Extension.create<ImageUploadOptions>({
               top: (event as DragEvent).clientY,
             });
             const pos = coords?.pos ?? view.state.selection.from;
-            images.forEach((file) => startUpload(file, pos));
+            images.forEach((file) => startUpload(editor, options, file, pos));
             return true;
           },
         },

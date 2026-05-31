@@ -47,13 +47,18 @@ export interface ToolbarTableConfig {
   type: 'table-insert';
 }
 
+export interface ToolbarImageConfig {
+  type: 'image-button';
+}
+
 export type ToolbarItemConfig =
   | ToolbarToolConfig
   | ToolbarSeparatorConfig
   | ToolbarHeadingConfig
   | ToolbarLinkConfig
   | ToolbarHighlightConfig
-  | ToolbarTableConfig;
+  | ToolbarTableConfig
+  | ToolbarImageConfig;
 
 export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
   { type: 'heading-dropdown' },
@@ -142,6 +147,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     hideOnMobile: true,
   },
   { type: 'table-insert' },
+  { type: 'image-button' },
   {
     icon: Minus,
     label: 'Horizontal Rule',
