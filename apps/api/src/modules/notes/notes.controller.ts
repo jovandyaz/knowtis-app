@@ -8,20 +8,27 @@ import {
   Body,
   Controller,
   Delete,
+  FileTypeValidator,
   Get,
   HttpCode,
   HttpException,
   HttpStatus,
+  MaxFileSizeValidator,
   Param,
+  ParseFilePipe,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiBody,
+  ApiConsumes,
   ApiOperation,
   ApiParam,
   ApiResponse,
@@ -54,6 +61,7 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { UploadImageHandler } from './application/commands/upload-image.handler';
 import { NoteErrorCodes, type NoteDomainError } from './domain';
 import {
   CreateNoteDto,
@@ -61,7 +69,9 @@ import {
   ShareNoteDto,
   UpdateNoteDto,
 } from './dto';
+import { UploadImageDto } from './dto/upload-image.dto';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
+import { sanitizeFilename } from './infrastructure/filename.util';
 import { NOTE_UPDATE_THROTTLE } from './notes.constants';
 
 const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
@@ -148,7 +158,8 @@ export class NotesController {
     private readonly shareNoteHandler: ShareNoteHandler,
     private readonly revokeAccessHandler: RevokeAccessHandler,
     private readonly getCollaboratorsHandler: GetCollaboratorsHandler,
-    private readonly getNoteByTokenHandler: GetNoteByTokenHandler
+    private readonly getNoteByTokenHandler: GetNoteByTokenHandler,
+    private readonly uploadImageHandler: UploadImageHandler
   ) {}
 
   @ApiOperation({
@@ -421,6 +432,74 @@ export class NotesController {
       noteId: id,
       ownerId: user.id,
       targetUserId: userId,
+    });
+    return unwrapOrThrow(result);
+  }
+
+  @ApiOperation({ summary: 'Upload an image to a note' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['file'],
+      properties: {
+        file: { type: 'string', format: 'binary' },
+        width: { type: 'integer' },
+        height: { type: 'integer' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Uploaded image metadata',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', format: 'uuid' },
+        url: {
+          type: 'string',
+          example:
+            'https://<store>.public.blob.vercel-storage.com/notes/<id>/photo-abc.webp',
+        },
+        width: { type: 'integer', nullable: true },
+        height: { type: 'integer', nullable: true },
+      },
+    },
+  })
+  @ApiBadRequest('invalid image file (type or size)')
+  @ApiAuthErrors('insufficient permissions on this note')
+  @ApiNotFound('note does not exist')
+  @Post(':id/images')
+  @Throttle(NOTE_UPDATE_THROTTLE)
+  @RequirePermission('update', SUBJECTS.Note)
+  @RequireMcpScope('write')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadImage(
+    @Param('id', ParseUUIDPipe) noteId: string,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
+          new FileTypeValidator({
+            fileType: /^image\/(png|jpe?g|gif|webp)$/,
+            skipMagicNumbersValidation: true,
+          }),
+        ],
+      })
+    )
+    file: Express.Multer.File,
+    @Body() dto: UploadImageDto,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.uploadImageHandler.execute({
+      noteId,
+      userId: user.id,
+      filename: sanitizeFilename(file.originalname),
+      data: file.buffer,
+      contentType: file.mimetype,
+      size: file.size,
+      ...(dto.width !== undefined && { width: dto.width }),
+      ...(dto.height !== undefined && { height: dto.height }),
     });
     return unwrapOrThrow(result);
   }
