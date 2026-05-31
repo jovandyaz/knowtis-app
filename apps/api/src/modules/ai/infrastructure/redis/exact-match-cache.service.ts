@@ -29,14 +29,20 @@ export class ExactMatchCacheService implements AICache {
     return CACHEABLE_ACTIONS.has(action);
   }
 
-  private buildKey(action: string, model: string, prompt: string): string {
+  private buildKey(
+    userId: string,
+    action: string,
+    model: string,
+    prompt: string
+  ): string {
     const hash = createHash('sha256')
-      .update(`${action}:${model}:${prompt}`)
+      .update(`${userId}:${action}:${model}:${prompt}`)
       .digest('hex');
     return `ai:cache:${hash}`;
   }
 
   async get(
+    userId: string,
     action: string,
     model: string,
     prompt: string
@@ -46,7 +52,7 @@ export class ExactMatchCacheService implements AICache {
     }
 
     try {
-      const key = this.buildKey(action, model, prompt);
+      const key = this.buildKey(userId, action, model, prompt);
       const cached = await this.redis.client.get(key);
       if (!cached) {
         return null;
@@ -61,6 +67,7 @@ export class ExactMatchCacheService implements AICache {
   }
 
   async set(
+    userId: string,
     action: string,
     model: string,
     prompt: string,
@@ -71,7 +78,7 @@ export class ExactMatchCacheService implements AICache {
     }
 
     try {
-      const key = this.buildKey(action, model, prompt);
+      const key = this.buildKey(userId, action, model, prompt);
       const ttl = this.configService.get('AI_CACHE_TTL_SECONDS');
       await this.redis.client.set(key, JSON.stringify(result), 'EX', ttl);
       this.logger.debug({ event: 'ai.cache.set', action, model });

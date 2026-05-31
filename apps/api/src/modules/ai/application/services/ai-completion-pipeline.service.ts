@@ -154,7 +154,12 @@ export class AICompletionPipeline {
     });
 
     if (this.cache?.isCacheable(action)) {
-      const cached = await this.cache.get(action, model, userPrompt);
+      const cached = await this.cache.get(
+        input.userId,
+        action,
+        model,
+        userPrompt
+      );
       if (cached) {
         this.logger.log({
           event: 'ai.request.complete',
@@ -211,7 +216,7 @@ export class AICompletionPipeline {
       result.text
     ) {
       this.cache
-        .set(context.action, context.model, context.userPrompt, {
+        .set(input.userId, context.action, context.model, context.userPrompt, {
           text: result.text,
           model: result.model,
           inputTokens: result.inputTokens,

@@ -42,6 +42,7 @@ describe('ExactMatchCacheService', () => {
 
   it('should return null on cache miss', async () => {
     const result = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'model-1',
       'prompt text'
@@ -59,18 +60,54 @@ describe('ExactMatchCacheService', () => {
     };
 
     await service.set(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'anthropic:claude-sonnet-4-20250514',
       'prompt text',
       cached
     );
     const result = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'anthropic:claude-sonnet-4-20250514',
       'prompt text'
     );
 
     expect(result).toEqual(cached);
+  });
+
+  it('should not serve one user cached result to another user', async () => {
+    const cached: CachedResult = {
+      text: 'Private summary',
+      model: 'model-1',
+      inputTokens: 10,
+      outputTokens: 5,
+      costUsd: 0.001,
+    };
+
+    await service.set(
+      'user-A',
+      AI_ACTION.SUMMARIZE,
+      'model-1',
+      'identical prompt',
+      cached
+    );
+
+    const sameUser = await service.get(
+      'user-A',
+      AI_ACTION.SUMMARIZE,
+      'model-1',
+      'identical prompt'
+    );
+    const otherUser = await service.get(
+      'user-B',
+      AI_ACTION.SUMMARIZE,
+      'model-1',
+      'identical prompt'
+    );
+
+    expect(sameUser).toEqual(cached);
+    expect(otherUser).toBeNull();
   });
 
   it('should return null when cache is disabled', async () => {
@@ -81,7 +118,7 @@ describe('ExactMatchCacheService', () => {
       return 3600;
     });
 
-    await service.set(AI_ACTION.SUMMARIZE, 'model-1', 'prompt text', {
+    await service.set('user-1', AI_ACTION.SUMMARIZE, 'model-1', 'prompt text', {
       text: 'result',
       model: 'model-1',
       inputTokens: 10,
@@ -91,6 +128,7 @@ describe('ExactMatchCacheService', () => {
 
     expect(store.size).toBe(0);
     const result = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'model-1',
       'prompt text'
@@ -103,6 +141,7 @@ describe('ExactMatchCacheService', () => {
       new Error('Redis down')
     );
     const result = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'model-1',
       'prompt text'
@@ -119,13 +158,21 @@ describe('ExactMatchCacheService', () => {
       costUsd: 0.001,
     };
 
-    await service.set(AI_ACTION.SUMMARIZE, 'model-1', 'prompt A', cached);
+    await service.set(
+      'user-1',
+      AI_ACTION.SUMMARIZE,
+      'model-1',
+      'prompt A',
+      cached
+    );
     const resultA = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'model-1',
       'prompt A'
     );
     const resultB = await service.get(
+      'user-1',
       AI_ACTION.SUMMARIZE,
       'model-1',
       'prompt B'
