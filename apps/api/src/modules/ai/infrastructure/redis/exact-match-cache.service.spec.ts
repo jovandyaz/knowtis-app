@@ -5,10 +5,10 @@ import { AI_ACTION } from '@knowtis/shared-types';
 import type { CachedResult } from '../../domain/ports/ai-cache.port';
 import { createMockConfig } from '../../testing/create-mock-config';
 import type { AIRedisProvider } from './ai-redis.provider';
-import { SemanticCacheService } from './semantic-cache.service';
+import { ExactMatchCacheService } from './exact-match-cache.service';
 
-describe('SemanticCacheService', () => {
-  let service: SemanticCacheService;
+describe('ExactMatchCacheService', () => {
+  let service: ExactMatchCacheService;
   let mockRedis: AIRedisProvider;
   let mockConfig: ReturnType<typeof createMockConfig>;
   const store = new Map<string, string>();
@@ -28,7 +28,7 @@ describe('SemanticCacheService', () => {
 
     mockConfig = createMockConfig();
 
-    service = new SemanticCacheService(mockRedis, mockConfig);
+    service = new ExactMatchCacheService(mockRedis, mockConfig);
   });
 
   it('should identify cacheable actions', () => {

@@ -40,7 +40,7 @@ apps/api/src/modules/ai/
 ├── infrastructure/
 │   ├── persistence/         # DrizzleAIUsageRepository, DrizzleAIConfigRepository
 │   ├── providers/           # AISDKProvider, AIStructuredOutputSDKProvider (Vercel AI SDK)
-│   └── redis/               # AIRedisProvider, RedisRateLimitService, SemanticCacheService
+│   └── redis/               # AIRedisProvider, RedisRateLimitService, ExactMatchCacheService
 └── testing/                 # createMockConfig helper
 
 apps/notes/src/components/editor/ai/
@@ -77,7 +77,7 @@ AIGateway / AIController
     → AIOrchestrator (model selection, prompt building)
     → AIRateLimitService (check + record)
     → AICompletionProvider port ← AISDKProvider
-    → AICache port             ← SemanticCacheService
+    → AICache port             ← ExactMatchCacheService
     → AIUsageRepository port   ← DrizzleAIUsageRepository
     → RateLimitProvider port   ← RedisRateLimitService
 ```
@@ -90,7 +90,7 @@ AIGateway / AIController
 | `AI_STRUCTURED_OUTPUT_PROVIDER` | `AIStructuredOutputProvider` | `AIStructuredOutputSDKProvider` |
 | `AI_USAGE_REPOSITORY`           | `AIUsageRepository`          | `DrizzleAIUsageRepository`      |
 | `RATE_LIMIT_PROVIDER`           | `RateLimitProvider`          | `RedisRateLimitService`         |
-| `AI_CACHE`                      | `AICache`                    | `SemanticCacheService`          |
+| `AI_CACHE`                      | `AICache`                    | `ExactMatchCacheService`        |
 | `AI_CONFIG_REPOSITORY`          | `AIConfigRepository`         | `DrizzleAIConfigRepository`     |
 
 ---
@@ -151,13 +151,13 @@ User action (BubbleMenu / SlashCommand / GhostText)
       estimateTokenCount()                  # rough token estimate
       AIRateLimitService.checkLimit()       # RPM (Redis) + daily tokens/cost
       AIOrchestrator.selectModel()          # haiku if ghost-text, sonnet otherwise
-      SemanticCacheService.get()            # hash(action:model:prompt) lookup
+      ExactMatchCacheService.get()            # hash(action:model:prompt) lookup
         if hit → emit ai:chunk + ai:done → done
       AISDKProvider.streamCompletion()
       for each chunk → emit 'ai:chunk'
       await usage from provider
       AIRateLimitService.recordUsage()      # PG write + Redis correction
-      SemanticCacheService.set()            # cache if cacheable action
+      ExactMatchCacheService.set()            # cache if cacheable action
       emit 'ai:done' { usage }
 ```
 
@@ -238,7 +238,7 @@ Per-user daily limits enforced by `AIRateLimitService`.
 
 ## Response Caching
 
-`SemanticCacheService` caches responses using a SHA-256 hash of `action:model:prompt` as the Redis key.
+`ExactMatchCacheService` caches responses using a SHA-256 hash of `action:model:prompt` as the Redis key.
 
 **Cacheable actions:** `summarize`, `translate`, `outline`, `action-items`
 

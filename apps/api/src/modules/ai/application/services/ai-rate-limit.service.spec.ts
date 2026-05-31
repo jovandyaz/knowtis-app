@@ -32,6 +32,21 @@ describe('AIRateLimitService', () => {
     expect(result.allowed).toBe(true);
   });
 
+  it('should apply a stricter daily token limit for anonymous users', async () => {
+    vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+      totalInputTokens: 40000,
+      totalOutputTokens: 0,
+      totalCostUsd: 0.01,
+      requestCount: 1,
+    });
+
+    const authed = await service.checkLimit('user-123', 1000);
+    expect(authed.allowed).toBe(true);
+
+    const anonymous = await service.checkLimit('anon-123', 1000, true);
+    expect(anonymous.allowed).toBe(false);
+  });
+
   it('should deny request when token limit exceeded', async () => {
     vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
       totalInputTokens: 99000,
@@ -125,6 +140,50 @@ describe('AIRateLimitService', () => {
 
       const result = await service.checkLimit('user-123', 1000);
       expect(result.allowed).toBe(true);
+    });
+
+    it('should forward scaled limits to the provider for anonymous users', async () => {
+      vi.spyOn(mockRateLimitProvider, 'checkRpm').mockResolvedValue({
+        allowed: true,
+        currentTokens: 0,
+        currentCostUsd: 0,
+      });
+      const checkAndIncrement = vi
+        .spyOn(mockRateLimitProvider, 'checkAndIncrement')
+        .mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        });
+
+      await service.checkLimit('anon-1', 1000, true);
+
+      expect(checkAndIncrement).toHaveBeenCalledWith('anon-1', 1000, {
+        tokenLimit: 33000,
+        costLimit: 0.33,
+      });
+    });
+
+    it('should forward full limits to the provider for authenticated users', async () => {
+      vi.spyOn(mockRateLimitProvider, 'checkRpm').mockResolvedValue({
+        allowed: true,
+        currentTokens: 0,
+        currentCostUsd: 0,
+      });
+      const checkAndIncrement = vi
+        .spyOn(mockRateLimitProvider, 'checkAndIncrement')
+        .mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        });
+
+      await service.checkLimit('user-123', 1000);
+
+      expect(checkAndIncrement).toHaveBeenCalledWith('user-123', 1000, {
+        tokenLimit: 100000,
+        costLimit: 1.0,
+      });
     });
   });
 });

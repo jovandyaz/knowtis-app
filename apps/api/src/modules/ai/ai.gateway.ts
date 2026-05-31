@@ -40,13 +40,7 @@ interface AuthenticatedAISocket extends Socket {
   };
 }
 
-@WebSocketGateway({
-  namespace: '/ai',
-  cors: {
-    origin: process.env['FRONTEND_URL'] || 'http://localhost:4200',
-    credentials: true,
-  },
-})
+@WebSocketGateway({ namespace: '/ai' })
 export class AIGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {

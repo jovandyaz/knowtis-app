@@ -10,6 +10,7 @@ import {
 import {
   RATE_LIMIT_PROVIDER,
   type RateLimitProvider,
+  type RateLimits,
 } from '../../domain/ports/rate-limit.port';
 
 interface RateLimitResult {
@@ -32,8 +33,11 @@ export class AIRateLimitService {
 
   async checkLimit(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    isAnonymous = false
   ): Promise<RateLimitResult> {
+    const limits = this.effectiveLimits(isAnonymous);
+
     if (this.rateLimitProvider) {
       try {
         const rpmCheck = await this.rateLimitProvider.checkRpm(userId);
@@ -52,7 +56,8 @@ export class AIRateLimitService {
       try {
         const result = await this.rateLimitProvider.checkAndIncrement(
           userId,
-          estimatedTokens
+          estimatedTokens,
+          limits
         );
         return {
           allowed: result.allowed,
@@ -66,7 +71,20 @@ export class AIRateLimitService {
       }
     }
 
-    return this.checkLimitViaPg(userId, estimatedTokens);
+    return this.checkLimitViaPg(userId, estimatedTokens, limits);
+  }
+
+  private effectiveLimits(isAnonymous: boolean): RateLimits {
+    const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
+    const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
+    if (!isAnonymous) {
+      return { tokenLimit, costLimit };
+    }
+    const pct = this.configService.get('AI_ANONYMOUS_DAILY_LIMIT_PCT');
+    return {
+      tokenLimit: Math.floor(tokenLimit * pct),
+      costLimit: costLimit * pct,
+    };
   }
 
   async recordUsage(
@@ -90,10 +108,10 @@ export class AIRateLimitService {
 
   private async checkLimitViaPg(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    limits: RateLimits
   ): Promise<RateLimitResult> {
-    const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
-    const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
+    const { tokenLimit, costLimit } = limits;
 
     const usage = await this.usageRepository.getDailyUsage(userId);
     const totalTokens =

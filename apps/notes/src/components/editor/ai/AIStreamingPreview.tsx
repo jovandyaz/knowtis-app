@@ -35,6 +35,7 @@ export function AIStreamingPreview({
 
   return (
     <div
+      aria-busy={status === 'streaming'}
       className={cn(
         'rounded-xl border border-primary/20 border-t-2 border-t-primary/30 bg-popover/95 shadow-[0_0_30px_-8px] shadow-primary/25 backdrop-blur-xl',
         'animate-in fade-in slide-in-from-top-2 duration-200'
@@ -42,7 +43,10 @@ export function AIStreamingPreview({
       style={width ? { width: `${width}px` } : { width: 420, maxWidth: '90vw' }}
     >
       {(status === 'streaming' || status === 'done') && (
-        <div className="relative max-h-52 overflow-y-auto overflow-hidden px-4 pt-3 pb-2 text-sm text-foreground">
+        <div
+          aria-live="polite"
+          className="relative max-h-52 overflow-y-auto overflow-hidden px-4 pt-3 pb-2 text-sm text-foreground"
+        >
           {status === 'streaming' && (
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-popover/80 via-transparent to-transparent" />
           )}
@@ -57,7 +61,7 @@ export function AIStreamingPreview({
       )}
 
       {status === 'error' && (
-        <div className="px-4 pt-3 pb-2 text-sm text-destructive">
+        <div role="alert" className="px-4 pt-3 pb-2 text-sm text-destructive">
           {error?.message ?? t('ai.errors.generic')}
         </div>
       )}

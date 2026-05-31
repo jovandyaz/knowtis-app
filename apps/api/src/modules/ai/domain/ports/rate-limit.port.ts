@@ -5,10 +5,16 @@ export interface RateLimitCheckResult {
   readonly currentCostUsd: number;
 }
 
+export interface RateLimits {
+  readonly tokenLimit: number;
+  readonly costLimit: number;
+}
+
 export interface RateLimitProvider {
   checkAndIncrement(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    limits: RateLimits
   ): Promise<RateLimitCheckResult>;
 
   checkRpm(userId: string): Promise<RateLimitCheckResult>;

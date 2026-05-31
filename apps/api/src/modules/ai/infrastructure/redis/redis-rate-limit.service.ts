@@ -5,6 +5,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import type {
   RateLimitCheckResult,
   RateLimitProvider,
+  RateLimits,
 } from '../../domain/ports/rate-limit.port';
 import { AI_REDIS, AIRedisProvider } from './ai-redis.provider';
 
@@ -89,8 +90,11 @@ export class RedisRateLimitService implements RateLimitProvider {
 
   async checkAndIncrement(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    limits: RateLimits
   ): Promise<RateLimitCheckResult> {
+    const { tokenLimit, costLimit } = limits;
+
     const today = new Date().toISOString().slice(0, 10);
     const tokenKey = `ai:ratelimit:${userId}:tokens:${today}`;
     const costKey = `ai:ratelimit:${userId}:cost:${today}`;
@@ -101,8 +105,8 @@ export class RedisRateLimitService implements RateLimitProvider {
       tokenKey,
       costKey,
       estimatedTokens,
-      this.configService.get('AI_DAILY_TOKEN_LIMIT'),
-      this.configService.get('AI_DAILY_COST_LIMIT_USD'),
+      tokenLimit,
+      costLimit,
       KEY_TTL_SECONDS
     )) as [number, number, string];
 
@@ -111,8 +115,6 @@ export class RedisRateLimitService implements RateLimitProvider {
     const currentCostUsd = parseFloat(result[2]);
 
     if (!allowed) {
-      const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
-      const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
       const reason =
         currentCostUsd >= costLimit
           ? `Daily cost limit exceeded ($${currentCostUsd.toFixed(2)}/$${costLimit.toFixed(2)})`
