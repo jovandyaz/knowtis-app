@@ -9,6 +9,7 @@ import {
 
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
+import { yDocToHtml } from '../../notes/infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../notes/infrastructure/trivial-html';
 
 @Injectable()
@@ -72,15 +73,37 @@ export class HocuspocusPersistenceExtension {
           }
         }
 
-        const state = Y.encodeStateAsUpdate(document);
-        const result = await noteRepository.updateYjsState(
-          documentName,
-          Buffer.from(state)
-        );
+        const buffer = Buffer.from(Y.encodeStateAsUpdate(document));
 
+        let html: string;
+        try {
+          html = yDocToHtml(document);
+        } catch (error) {
+          // Never drop the edit: if HTML derivation fails, persist yjsState only.
+          logger.warn(
+            `yDocToHtml failed for note ${documentName}, persisting yjsState only`,
+            error instanceof Error ? error.stack : error
+          );
+          const fallback = await noteRepository.updateYjsState(
+            documentName,
+            buffer
+          );
+          if (fallback.isErr()) {
+            logger.error(
+              `Failed to persist Y.Doc state for note ${documentName}: ${fallback.error.message}`
+            );
+          }
+          return;
+        }
+
+        const result = await noteRepository.updateContentWithYjsState(
+          documentName,
+          { content: html },
+          buffer
+        );
         if (result.isErr()) {
           logger.error(
-            `Failed to persist Y.Doc state for note ${documentName}: ${result.error.message}`
+            `Failed to persist content+yjsState for note ${documentName}: ${result.error.message}`
           );
         }
       },
