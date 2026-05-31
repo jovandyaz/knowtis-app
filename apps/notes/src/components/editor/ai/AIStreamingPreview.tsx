@@ -13,6 +13,8 @@ import { Streamdown } from 'streamdown';
 
 import { Button, cn } from '@knowtis/design-system';
 
+import { aiErrorMessageKey } from './ai-error-messages';
+
 interface AIStreamingPreviewProps {
   width?: number;
   onReplace: (text: string) => void;
@@ -62,7 +64,13 @@ export function AIStreamingPreview({
 
       {status === 'error' && (
         <div role="alert" className="px-4 pt-3 pb-2 text-sm text-destructive">
-          {error?.message ?? t('ai.errors.generic')}
+          {t(aiErrorMessageKey(error?.code ?? ''))}
+        </div>
+      )}
+
+      {status === 'timeout' && (
+        <div role="alert" className="px-4 pt-3 pb-2 text-sm text-destructive">
+          {t('ai.errors.timeout')}
         </div>
       )}
 
@@ -137,7 +145,7 @@ export function AIStreamingPreview({
           </div>
         )}
 
-        {status === 'error' && (
+        {(status === 'error' || status === 'timeout') && (
           <div className="flex items-center gap-1 rounded-full bg-muted/50 p-1">
             <Button
               variant="ghost"
