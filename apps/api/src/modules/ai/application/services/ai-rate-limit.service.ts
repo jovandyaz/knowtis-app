@@ -10,6 +10,7 @@ import {
 import {
   RATE_LIMIT_PROVIDER,
   type RateLimitProvider,
+  type RateLimits,
 } from '../../domain/ports/rate-limit.port';
 
 interface RateLimitResult {
@@ -73,10 +74,7 @@ export class AIRateLimitService {
     return this.checkLimitViaPg(userId, estimatedTokens, limits);
   }
 
-  private effectiveLimits(isAnonymous: boolean): {
-    tokenLimit: number;
-    costLimit: number;
-  } {
+  private effectiveLimits(isAnonymous: boolean): RateLimits {
     const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
     const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
     if (!isAnonymous) {
@@ -111,7 +109,7 @@ export class AIRateLimitService {
   private async checkLimitViaPg(
     userId: string,
     estimatedTokens: number,
-    limits: { tokenLimit: number; costLimit: number }
+    limits: RateLimits
   ): Promise<RateLimitResult> {
     const { tokenLimit, costLimit } = limits;
 

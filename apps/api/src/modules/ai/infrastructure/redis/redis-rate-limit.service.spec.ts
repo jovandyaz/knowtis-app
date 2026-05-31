@@ -62,7 +62,10 @@ describe('RedisRateLimitService', () => {
     it('should allow request when under daily limits', async () => {
       vi.spyOn(mockRedis.client, 'eval').mockResolvedValue([1, 5000, '0.05']);
 
-      const result = await service.checkAndIncrement('user-123', 1000);
+      const result = await service.checkAndIncrement('user-123', 1000, {
+        tokenLimit: 100000,
+        costLimit: 1.0,
+      });
 
       expect(result.allowed).toBe(true);
       expect(result.currentTokens).toBe(5000);
@@ -72,7 +75,10 @@ describe('RedisRateLimitService', () => {
     it('should deny request when daily token limit exceeded', async () => {
       vi.spyOn(mockRedis.client, 'eval').mockResolvedValue([0, 100000, '0.50']);
 
-      const result = await service.checkAndIncrement('user-123', 2000);
+      const result = await service.checkAndIncrement('user-123', 2000, {
+        tokenLimit: 100000,
+        costLimit: 1.0,
+      });
 
       expect(result.allowed).toBe(false);
       expect(result.reason).toContain('Daily token limit exceeded');

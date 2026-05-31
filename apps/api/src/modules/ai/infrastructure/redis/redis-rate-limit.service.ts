@@ -5,6 +5,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import type {
   RateLimitCheckResult,
   RateLimitProvider,
+  RateLimits,
 } from '../../domain/ports/rate-limit.port';
 import { AI_REDIS, AIRedisProvider } from './ai-redis.provider';
 
@@ -90,14 +91,9 @@ export class RedisRateLimitService implements RateLimitProvider {
   async checkAndIncrement(
     userId: string,
     estimatedTokens: number,
-    limits?: { tokenLimit: number; costLimit: number }
+    limits: RateLimits
   ): Promise<RateLimitCheckResult> {
-    const tokenLimit = limits
-      ? limits.tokenLimit
-      : this.configService.get('AI_DAILY_TOKEN_LIMIT');
-    const costLimit = limits
-      ? limits.costLimit
-      : this.configService.get('AI_DAILY_COST_LIMIT_USD');
+    const { tokenLimit, costLimit } = limits;
 
     const today = new Date().toISOString().slice(0, 10);
     const tokenKey = `ai:ratelimit:${userId}:tokens:${today}`;

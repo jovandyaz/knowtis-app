@@ -170,6 +170,47 @@ describe('AISDKProvider', () => {
     );
   });
 
+  it('should forward only totalMs when chunkMs is absent', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    provider.streamCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      timeout: { totalMs: 30000 },
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ timeout: { totalMs: 30000 } })
+    );
+  });
+
+  it('should forward only chunkMs when totalMs is absent', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    provider.streamCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      timeout: { chunkMs: 10000 },
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ timeout: { chunkMs: 10000 } })
+    );
+  });
+
+  it('should not pass a timeout when none is provided', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    provider.streamCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.not.objectContaining({ timeout: expect.anything() })
+    );
+  });
+
   it('should stream a completion via registry', async () => {
     const streamResult = provider.streamCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
