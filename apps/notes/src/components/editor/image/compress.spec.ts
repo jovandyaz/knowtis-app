@@ -18,4 +18,16 @@ describe('computeTargetSize', () => {
       height: MAX_DIMENSION,
     });
   });
+  it('leaves an image at exactly the max dimension unchanged', () => {
+    expect(computeTargetSize(MAX_DIMENSION, 900)).toEqual({
+      width: MAX_DIMENSION,
+      height: 900,
+    });
+  });
+  it('scales a square image proportionally', () => {
+    expect(computeTargetSize(3200, 3200)).toEqual({
+      width: MAX_DIMENSION,
+      height: MAX_DIMENSION,
+    });
+  });
 });

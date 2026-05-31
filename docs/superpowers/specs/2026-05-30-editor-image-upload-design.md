@@ -48,7 +48,7 @@ to collaborators via the existing Yjs/Hocuspocus pipeline.
 POST /api/v1/notes/:noteId/images   (httpClient auto-detects FormData, injects JWT)
       │
       ▼
-[NestJS UploadsController]
+[NestJS NotesController (POST :id/images)]
   - JwtAuthGuard + PoliciesGuard → require write access to :noteId
   - ParseFilePipe (MaxFileSize, FileType image/*)
   - @vercel/blob put(path, buffer, { access:'public', addRandomSuffix:true })
@@ -83,7 +83,7 @@ New folder `packages/editor/src/extensions/image/`:
 - Upload logic is injected via an **`imageUploadProvider`** option (same pattern
   as `aiBlockProvider` / `ghostTextProvider`) so the editor package stays
   decoupled from `api-client`. The provider signature:
-  `(file: File, signal: AbortSignal, onProgress: (pct:number)=>void) => Promise<{url; width; height; alt}>`.
+  `(file: File, signal: AbortSignal) => Promise<{src; width; height; alt}>`.
 
 ### Frontend — wiring (`apps/notes`)
 
@@ -112,9 +112,10 @@ New folder `packages/editor/src/extensions/image/`:
 
 ### Backend — NestJS (`apps/api`)
 
-New module `apps/api/src/modules/uploads/` matching the DDD layout:
+Inside the existing **notes module** (cohesive with notes; avoids a circular
+dependency for permission checks and delete-cleanup), following the DDD layout:
 
-- **`uploads.controller.ts`** — `POST /notes/:noteId/images`
+- **`NotesController` — `POST /notes/:id/images`** (new endpoint on the existing controller)
   - Guards: `JwtAuthGuard`, `PoliciesGuard` with `@RequirePermission('update', SUBJECTS.Note)`; verify the user can write `:noteId` (reuse the notes permission repository / `hasAccess`).
   - `@UseInterceptors(FileInterceptor('file'))` + `ParseFilePipe`
     (`MaxFileSizeValidator` ~10 MB, `FileTypeValidator /^image\/(png|jpe?g|gif|webp)$/`) — same shape as `ai.controller.ts` voice-note.

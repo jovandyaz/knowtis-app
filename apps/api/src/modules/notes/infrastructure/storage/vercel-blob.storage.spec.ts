@@ -15,7 +15,9 @@ vi.mock('@vercel/blob', () => ({
 function makeStorage(token: string | undefined) {
   const config = {
     getOrThrow: (key: string) => {
-      if (key === 'VERCEL_BLOB_READ_WRITE_TOKEN' && token) {return token;}
+      if (key === 'VERCEL_BLOB_READ_WRITE_TOKEN' && token) {
+        return token;
+      }
       throw new Error(`Missing ${key}`);
     },
   } as unknown as ConfigService<EnvConfig, true>;
@@ -74,5 +76,15 @@ describe('VercelBlobStorage', () => {
     const storage = makeStorage('t');
     await storage.delete([]);
     expect(del).not.toHaveBeenCalled();
+  });
+
+  it('forwards pathnames and token to del()', async () => {
+    del.mockResolvedValue(undefined);
+    const storage = makeStorage('vercel_blob_token');
+    await storage.delete(['notes/n1/a.webp', 'notes/n1/b.webp']);
+    expect(del).toHaveBeenCalledWith(
+      ['notes/n1/a.webp', 'notes/n1/b.webp'],
+      expect.objectContaining({ token: 'vercel_blob_token' })
+    );
   });
 });
