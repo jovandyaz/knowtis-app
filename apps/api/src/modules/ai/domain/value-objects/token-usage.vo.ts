@@ -27,8 +27,9 @@ export class TokenUsage {
 
   static create(input: TokenUsageInput, pricing?: ModelPricing): TokenUsage {
     const resolvedPricing = pricing ?? getModelPricing(input.model);
-    const cacheRead = input.cacheReadTokens ?? 0;
-    const cacheWrite = input.cacheWriteTokens ?? 0;
+    const isAnthropic = input.model.startsWith('anthropic:');
+    const cacheRead = isAnthropic ? (input.cacheReadTokens ?? 0) : 0;
+    const cacheWrite = isAnthropic ? (input.cacheWriteTokens ?? 0) : 0;
     const nonCached = Math.max(0, input.inputTokens - cacheRead - cacheWrite);
     const costUsd = resolvedPricing
       ? (nonCached * resolvedPricing.input +

@@ -70,4 +70,37 @@ describe('TokenUsage', () => {
     });
     expect(usage.costUsd).toBeCloseTo(0.0105, 8);
   });
+
+  it('should bill mixed cache-read and cache-write tokens in one request', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 500,
+      cacheWriteTokens: 300,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.001875, 8);
+  });
+
+  it('should ignore cache tokens for non-Anthropic models', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'google:gemini-2.0-flash',
+      cacheReadTokens: 800,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.0001, 8);
+  });
+
+  it('should never produce negative cost when cache tokens exceed input tokens', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 100,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 80,
+      cacheWriteTokens: 80,
+    });
+    expect(usage.costUsd).toBeGreaterThanOrEqual(0);
+    expect(usage.costUsd).toBeCloseTo(0.000324, 8);
+  });
 });
