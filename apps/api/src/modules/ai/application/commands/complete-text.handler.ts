@@ -83,6 +83,8 @@ export class CompleteTextHandler {
           inputTokens: result.inputTokens,
           outputTokens: result.outputTokens,
           model: result.model,
+          cacheReadTokens: result.cacheReadTokens,
+          cacheWriteTokens: result.cacheWriteTokens,
         },
         getModelPricing(result.model)
       );

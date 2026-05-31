@@ -41,4 +41,66 @@ describe('TokenUsage', () => {
     });
     expect(usage.costUsd).toBe(0);
   });
+
+  it('should bill cache-read tokens at the discounted rate', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 100,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 800,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.00234, 8);
+  });
+
+  it('should bill cache-write tokens at the premium rate', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheWriteTokens: 1000,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.00375, 8);
+  });
+
+  it('should be backward compatible when no cache tokens are provided', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 500,
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+    expect(usage.costUsd).toBeCloseTo(0.0105, 8);
+  });
+
+  it('should bill mixed cache-read and cache-write tokens in one request', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 500,
+      cacheWriteTokens: 300,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.001875, 8);
+  });
+
+  it('should ignore cache tokens for non-Anthropic models', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 1000,
+      outputTokens: 0,
+      model: 'google:gemini-2.0-flash',
+      cacheReadTokens: 800,
+    });
+    expect(usage.costUsd).toBeCloseTo(0.0001, 8);
+  });
+
+  it('should never produce negative cost when cache tokens exceed input tokens', () => {
+    const usage = TokenUsage.create({
+      inputTokens: 100,
+      outputTokens: 0,
+      model: 'anthropic:claude-sonnet-4-20250514',
+      cacheReadTokens: 80,
+      cacheWriteTokens: 80,
+    });
+    expect(usage.costUsd).toBeGreaterThanOrEqual(0);
+    expect(usage.costUsd).toBeCloseTo(0.000324, 8);
+  });
 });

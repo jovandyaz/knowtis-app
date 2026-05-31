@@ -1,9 +1,16 @@
-import { getModelPricing, type ModelPricing } from '../constants/model-pricing';
+import {
+  ANTHROPIC_CACHE_READ_MULTIPLIER,
+  ANTHROPIC_CACHE_WRITE_MULTIPLIER,
+  getModelPricing,
+  type ModelPricing,
+} from '../constants/model-pricing';
 
 interface TokenUsageInput {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly model: string;
+  readonly cacheReadTokens?: number | undefined;
+  readonly cacheWriteTokens?: number | undefined;
 }
 
 export class TokenUsage {
@@ -20,9 +27,18 @@ export class TokenUsage {
 
   static create(input: TokenUsageInput, pricing?: ModelPricing): TokenUsage {
     const resolvedPricing = pricing ?? getModelPricing(input.model);
+    const isAnthropic = input.model.startsWith('anthropic:');
+    const cacheRead = isAnthropic ? (input.cacheReadTokens ?? 0) : 0;
+    const cacheWrite = isAnthropic ? (input.cacheWriteTokens ?? 0) : 0;
+    const nonCached = Math.max(0, input.inputTokens - cacheRead - cacheWrite);
     const costUsd = resolvedPricing
-      ? (input.inputTokens * resolvedPricing.input) / 1_000_000 +
-        (input.outputTokens * resolvedPricing.output) / 1_000_000
+      ? (nonCached * resolvedPricing.input +
+          cacheRead * resolvedPricing.input * ANTHROPIC_CACHE_READ_MULTIPLIER +
+          cacheWrite *
+            resolvedPricing.input *
+            ANTHROPIC_CACHE_WRITE_MULTIPLIER +
+          input.outputTokens * resolvedPricing.output) /
+        1_000_000
       : 0;
     return new TokenUsage(
       input.inputTokens,

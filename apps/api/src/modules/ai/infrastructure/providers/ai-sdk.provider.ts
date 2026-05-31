@@ -122,6 +122,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       inputTokens: result.usage.inputTokens ?? 0,
       outputTokens: result.usage.outputTokens ?? 0,
       model: options.model,
+      cacheReadTokens: result.usage.inputTokenDetails?.cacheReadTokens ?? 0,
+      cacheWriteTokens: result.usage.inputTokenDetails?.cacheWriteTokens ?? 0,
     };
   }
 
@@ -134,6 +136,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     const usageDeferred = createDeferred<{
       promptTokens: number;
       completionTokens: number;
+      cacheReadTokens?: number;
+      cacheWriteTokens?: number;
     }>();
 
     const openStream = (model: string) =>
@@ -180,6 +184,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       usageDeferred.resolve({
         promptTokens: u.inputTokens ?? 0,
         completionTokens: u.outputTokens ?? 0,
+        cacheReadTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
+        cacheWriteTokens: u.inputTokenDetails?.cacheWriteTokens ?? 0,
       });
     }
 
