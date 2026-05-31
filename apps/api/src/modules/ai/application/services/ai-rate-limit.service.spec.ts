@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import type { RateLimitProvider } from '../../domain/ports/rate-limit.port';
@@ -77,6 +77,61 @@ describe('AIRateLimitService', () => {
     );
     expect(result.reason).not.toMatch(/\d+\/\d+/);
     expect(result.reason).not.toMatch(/\$/);
+  });
+
+  describe('PG-fallback RPM limit (no Redis provider)', () => {
+    const RPM_LIMIT = 15;
+    const START = 1_700_000_000_000;
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(START);
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0,
+        requestCount: 0,
+      });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should deny once the per-minute request limit is exceeded', async () => {
+      for (let i = 0; i < RPM_LIMIT; i++) {
+        const result = await service.checkLimit('user-rpm', 100);
+        expect(result.allowed).toBe(true);
+      }
+
+      const denied = await service.checkLimit('user-rpm', 100);
+      expect(denied.allowed).toBe(false);
+      expect(denied.reason).toMatch(/Too many requests/);
+    });
+
+    it('should reset the counter in a new minute', async () => {
+      for (let i = 0; i < RPM_LIMIT; i++) {
+        await service.checkLimit('user-rpm', 100);
+      }
+      const denied = await service.checkLimit('user-rpm', 100);
+      expect(denied.allowed).toBe(false);
+
+      vi.setSystemTime(START + 61_000);
+
+      const afterReset = await service.checkLimit('user-rpm', 100);
+      expect(afterReset.allowed).toBe(true);
+    });
+
+    it('should count requests per-user independently', async () => {
+      for (let i = 0; i < RPM_LIMIT; i++) {
+        await service.checkLimit('user-a', 100);
+      }
+      const deniedA = await service.checkLimit('user-a', 100);
+      expect(deniedA.allowed).toBe(false);
+
+      const allowedB = await service.checkLimit('user-b', 100);
+      expect(allowedB.allowed).toBe(true);
+    });
   });
 
   describe('with Redis rate limit provider (RPM)', () => {

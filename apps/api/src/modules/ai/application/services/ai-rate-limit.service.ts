@@ -22,6 +22,13 @@ interface RateLimitResult {
 export class AIRateLimitService {
   private readonly logger = new Logger(AIRateLimitService.name);
 
+  // In-memory, per-instance — a backstop for when Redis is down. If horizontally
+  // scaled, each instance enforces RPM independently (acceptable for a degraded path).
+  private readonly pgRpmCounters = new Map<
+    string,
+    { minute: number; count: number }
+  >();
+
   constructor(
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository,
@@ -106,11 +113,34 @@ export class AIRateLimitService {
     }
   }
 
+  private allowPgRpm(userId: string): boolean {
+    const minute = Math.floor(Date.now() / 60000);
+    const limit = this.configService.get('AI_RPM_LIMIT');
+    const entry = this.pgRpmCounters.get(userId);
+    if (!entry || entry.minute !== minute) {
+      this.pgRpmCounters.set(userId, { minute, count: 1 });
+      return true;
+    }
+    if (entry.count >= limit) {
+      return false;
+    }
+    entry.count += 1;
+    return true;
+  }
+
   private async checkLimitViaPg(
     userId: string,
     estimatedTokens: number,
     limits: RateLimits
   ): Promise<RateLimitResult> {
+    if (!this.allowPgRpm(userId)) {
+      this.logger.warn(`PG-fallback RPM limit exceeded for user ${userId}`);
+      return {
+        allowed: false,
+        reason: 'Too many requests. Please slow down and try again shortly.',
+      };
+    }
+
     const { tokenLimit, costLimit } = limits;
 
     const usage = await this.usageRepository.getDailyUsage(userId);
