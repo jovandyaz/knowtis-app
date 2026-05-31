@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Editor } from '@tiptap/react';
-import { Mic, Sparkles } from 'lucide-react';
+import { Image as ImageIcon, Mic, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import {
@@ -23,6 +23,7 @@ interface EditorToolbarProps {
   editor: Editor | null;
   onVoiceNote?: (() => void) | undefined;
   onAskAI?: (() => void) | undefined;
+  onAddImage?: (() => void) | undefined;
 }
 
 interface ToolbarButtonProps {
@@ -72,6 +73,7 @@ export const EditorToolbar = memo(function EditorToolbar({
   editor,
   onVoiceNote,
   onAskAI,
+  onAddImage,
 }: EditorToolbarProps) {
   const { t: tNotes } = useTranslation('notes');
 
@@ -138,6 +140,24 @@ export const EditorToolbar = memo(function EditorToolbar({
               return <HighlightPicker key="highlight" editor={editor} />;
             case 'table-insert':
               return <TableInsertButton key="table" editor={editor} />;
+            case 'image-button':
+              return onAddImage ? (
+                <Tooltip key="image">
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      onClick={onAddImage}
+                      aria-label={tNotes('ai.slash.image')}
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{tNotes('ai.slash.image')}</TooltipContent>
+                </Tooltip>
+              ) : null;
             default: {
               const _exhaustive: never = item;
               throw new Error(

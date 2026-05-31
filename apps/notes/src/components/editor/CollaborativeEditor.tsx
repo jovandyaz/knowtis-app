@@ -42,6 +42,7 @@ import type {
   CollaborativeEditorProps,
   InternalEditorProps,
 } from './CollaborativeEditor.types';
+import { openImagePicker } from './image/imagePicker';
 import { useEditorExtensions } from './useEditorExtensions';
 
 const EDITOR_PADDING = 'p-4 md:p-6';
@@ -74,6 +75,7 @@ function TypewriterPlaceholder({ texts }: { texts: string[] }) {
 }
 
 function InternalEditor({
+  noteId,
   yDoc,
   yXmlFragment,
   awareness,
@@ -104,6 +106,7 @@ function InternalEditor({
   }, [isSynced]);
 
   const extensions = useEditorExtensions(
+    noteId,
     yDoc,
     yXmlFragment,
     awareness,
@@ -190,6 +193,14 @@ function InternalEditor({
         editor={editor}
         onVoiceNote={onVoiceNote}
         onAskAI={aiEnabled ? handleAskAI : undefined}
+        onAddImage={
+          editable
+            ? () =>
+                openImagePicker((file) =>
+                  editor?.commands.uploadImageFile(file)
+                )
+            : undefined
+        }
       />
       <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (
@@ -322,6 +333,7 @@ export function CollaborativeEditor({
         )}
 
         <InternalEditor
+          noteId={noteId}
           yDoc={editorState.yDoc}
           yXmlFragment={editorState.yXmlFragment}
           awareness={editorState.awareness}

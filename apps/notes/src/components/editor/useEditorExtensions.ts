@@ -3,6 +3,8 @@ import { useMemo } from 'react';
 import { useAIStore } from '@/stores/ai.store';
 import Collaboration from '@tiptap/extension-collaboration';
 import type { AnyExtension } from '@tiptap/react';
+import i18next from 'i18next';
+import { toast } from 'sonner';
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
@@ -12,6 +14,8 @@ import {
   CollaborativeCursors,
   createBaseExtensions,
   GhostText,
+  ImageNode,
+  ImageUpload,
   SlashCommands,
 } from '@knowtis/editor';
 import { AI_ACTION } from '@knowtis/shared-types';
@@ -19,21 +23,33 @@ import { logger } from '@knowtis/shared-util';
 
 import { createAiClientProvider } from './ai/aiClientProvider';
 import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
+import { createImageUploadProvider } from './image/createImageUploadProvider';
 
 const ghostTextProvider = createAiClientProvider(AI_ACTION.GHOST_TEXT);
 const aiBlockProvider = createAiClientProvider(AI_ACTION.LEARN_TOPIC);
 
 export function useEditorExtensions(
+  noteId: string,
   yDoc: Y.Doc,
   yXmlFragment: Y.XmlFragment,
   awareness: Awareness | null,
   currentUser: CollaborativeUser
 ): AnyExtension[] {
   return useMemo(() => {
+    const imageUploadProvider = createImageUploadProvider(() => noteId);
+
     const extensions: AnyExtension[] = [
       ...createBaseExtensions({ disableHistory: true }),
       AIBlockNode.configure({
         provider: aiBlockProvider,
+      }),
+      ImageNode,
+      ImageUpload.configure({
+        provider: imageUploadProvider,
+        onError: (error) => {
+          logger.error('ImageUpload: provider failed', { error });
+          toast.error(i18next.t('ai.image.uploadError', { ns: 'notes' }));
+        },
       }),
       Collaboration.configure({
         document: yDoc,
@@ -70,5 +86,12 @@ export function useEditorExtensions(
     }
 
     return extensions;
-  }, [yDoc, yXmlFragment, awareness, currentUser.name, currentUser.color]);
+  }, [
+    noteId,
+    yDoc,
+    yXmlFragment,
+    awareness,
+    currentUser.name,
+    currentUser.color,
+  ]);
 }
