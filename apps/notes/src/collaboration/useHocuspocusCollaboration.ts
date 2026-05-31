@@ -9,6 +9,7 @@ import {
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
+import { createTokenRefreshPolicy } from '@knowtis/api-client';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -108,8 +109,7 @@ export function useHocuspocusCollaboration({
     // Short-circuits provider callbacks that fire after `provider.destroy()`.
     let disposed = false;
     // Per-provider so a fresh connection resets the retry budget.
-    let recoveryAttempted = false;
-    let recoveryInFlight = false;
+    const authPolicy = createTokenRefreshPolicy();
 
     const provider = new HocuspocusProvider({
       url,
@@ -133,7 +133,7 @@ export function useHocuspocusCollaboration({
           onEditDeniedRef.current?.();
         }
       },
-      onAuthenticationFailed: async ({ reason }) => {
+      onAuthenticationFailed: ({ reason }) => {
         if (disposed) {
           return;
         }
@@ -142,53 +142,22 @@ export function useHocuspocusCollaboration({
         });
         setStatus('authenticationFailed');
 
-        if (recoveryInFlight) {
-          return;
-        }
-
-        if (recoveryAttempted) {
-          provider.destroy();
-          onSessionExpiredRef.current?.();
-          return;
-        }
-
-        recoveryAttempted = true;
-
-        if (!onAuthRefreshRef.current) {
-          logger.warn(
-            'Auth failed and no onAuthRefresh callback configured; destroying provider',
-            { context: 'useHocuspocusCollaboration' }
-          );
-          provider.destroy();
-          onSessionExpiredRef.current?.();
-          return;
-        }
-
-        recoveryInFlight = true;
-        try {
-          const refreshed = await onAuthRefreshRef.current();
-          if (disposed) {
-            return;
-          }
-          if (!refreshed) {
+        void authPolicy.recover({
+          refresh: () => onAuthRefreshRef.current?.() ?? Promise.resolve(false),
+          // v4 auto-reconnect re-invokes getToken() on next onOpen; destroy would block it.
+          onRefreshed: () => {},
+          onExhausted: () => {
+            if (disposed) {
+              return;
+            }
             provider.destroy();
             onSessionExpiredRef.current?.();
-            return;
-          }
-          // v4 auto-reconnect re-invokes getToken() on next onOpen.
-          // provider.disconnect() would flip shouldConnect=false and block it.
-        } catch (error) {
-          logger.warn(`onAuthRefresh threw: ${String(error)}`, {
-            context: 'useHocuspocusCollaboration',
-          });
-          if (disposed) {
-            return;
-          }
-          provider.destroy();
-          onSessionExpiredRef.current?.();
-        } finally {
-          recoveryInFlight = false;
-        }
+          },
+          onError: (error) =>
+            logger.warn(`onAuthRefresh threw: ${String(error)}`, {
+              context: 'useHocuspocusCollaboration',
+            }),
+        });
       },
       onSynced: ({ state }) => {
         if (disposed) {
