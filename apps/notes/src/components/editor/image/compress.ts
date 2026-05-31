@@ -60,8 +60,10 @@ export async function compressImage(file: File): Promise<CompressedImage> {
     };
   }
 
+  let decoded = { width: 0, height: 0 };
   try {
     const img = await loadImage(file);
+    decoded = { width: img.naturalWidth, height: img.naturalHeight };
     const target = computeTargetSize(img.naturalWidth, img.naturalHeight);
     const canvas = document.createElement('canvas');
     canvas.width = target.width;
@@ -85,6 +87,11 @@ export async function compressImage(file: File): Promise<CompressedImage> {
       height: target.height,
     };
   } catch {
-    return { blob: file, filename: file.name, width: 0, height: 0 };
+    return {
+      blob: file,
+      filename: file.name,
+      width: decoded.width,
+      height: decoded.height,
+    };
   }
 }

@@ -393,7 +393,8 @@
       "delete": "Eliminar imagen",
       "altPlaceholder": "Texto alternativo (accesibilidad)",
       "captionPlaceholder": "Escribe un pie de foto…",
-      "uploadError": "No se pudo subir la imagen"
+      "uploadError": "No se pudo subir la imagen",
+      "uploading": "Subiendo imagen…"
     }
   },
   "profile": {

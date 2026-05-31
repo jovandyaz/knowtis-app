@@ -153,6 +153,11 @@ function InternalEditor({
       e ? isTrivialProseMirrorDoc(e.state.doc) : true,
   });
 
+  const handleAddImage = useCallback(
+    () => openImagePicker((file) => editor?.commands.uploadImageFile(file)),
+    [editor]
+  );
+
   useEffect(() => {
     if (!editor || !yXmlFragment || !initialContent) {
       return;
@@ -193,14 +198,7 @@ function InternalEditor({
         editor={editor}
         onVoiceNote={onVoiceNote}
         onAskAI={aiEnabled ? handleAskAI : undefined}
-        onAddImage={
-          editable
-            ? () =>
-                openImagePicker((file) =>
-                  editor?.commands.uploadImageFile(file)
-                )
-            : undefined
-        }
+        onAddImage={editable ? handleAddImage : undefined}
       />
       <div className={cn(EDITOR_CONTAINER_CLASSES, 'relative')}>
         {editor && aiEnabled && (

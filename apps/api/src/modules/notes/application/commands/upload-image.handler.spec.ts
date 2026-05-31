@@ -1,6 +1,6 @@
-import { UserId } from '@jovandyaz/auth/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { NoteErrorCodes } from '../../domain';
 import { UploadImageHandler } from './upload-image.handler';
 
 function setup(overrides: { ownerId?: string; hasAccess?: boolean } = {}) {
@@ -64,17 +64,14 @@ describe('UploadImageHandler', () => {
   });
 
   it('allows an editor with access', async () => {
-    const { handler, permRepo } = setup({
+    const { handler, storage, imageRepo } = setup({
       ownerId: 'someone',
       hasAccess: true,
     });
     const result = await handler.execute({ ...input, userId: 'editor' });
     expect(result.isOk()).toBe(true);
-    expect(permRepo.hasAccess).toHaveBeenCalledWith(
-      'n1',
-      UserId.fromTrusted('editor'),
-      'editor'
-    );
+    expect(storage.upload).toHaveBeenCalled();
+    expect(imageRepo.create).toHaveBeenCalled();
   });
 
   it('rejects a user without write access (no upload)', async () => {
@@ -84,6 +81,9 @@ describe('UploadImageHandler', () => {
     });
     const result = await handler.execute({ ...input, userId: 'intruder' });
     expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
+    }
     expect(storage.upload).not.toHaveBeenCalled();
   });
 
@@ -92,6 +92,9 @@ describe('UploadImageHandler', () => {
     noteRepo.findById.mockResolvedValue(null);
     const result = await handler.execute({ ...input, userId: 'owner' });
     expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.NOTE_NOT_FOUND);
+    }
   });
 
   it('deletes the uploaded blob when the DB insert fails (no orphan)', async () => {

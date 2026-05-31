@@ -29,8 +29,18 @@ describe('extractImageFiles', () => {
     expect(extractImageFiles([fileOfType('application/json')])).toEqual([]);
   });
 
-  it('exposes the accepted types for the file picker', () => {
-    expect(ACCEPTED_IMAGE_TYPES).toContain('image/png');
-    expect(ACCEPTED_IMAGE_TYPES).toContain('image/webp');
+  it('accepts every type in the allowlist', () => {
+    for (const type of ACCEPTED_IMAGE_TYPES) {
+      expect(extractImageFiles([fileOfType(type)])).toHaveLength(1);
+    }
+  });
+
+  it('exposes png, jpeg, gif and webp for the file picker', () => {
+    expect([...ACCEPTED_IMAGE_TYPES].sort()).toEqual([
+      'image/gif',
+      'image/jpeg',
+      'image/png',
+      'image/webp',
+    ]);
   });
 });

@@ -393,7 +393,8 @@
       "delete": "Delete image",
       "altPlaceholder": "Alt text (accessibility)",
       "captionPlaceholder": "Write a caption…",
-      "uploadError": "Could not upload the image"
+      "uploadError": "Could not upload the image",
+      "uploading": "Uploading image…"
     }
   },
   "profile": {

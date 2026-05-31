@@ -2,6 +2,7 @@ import type { Editor } from '@tiptap/core';
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import i18next from 'i18next';
 
 export const ACCEPTED_IMAGE_TYPES = [
   'image/png',
@@ -57,7 +58,7 @@ function createPlaceholder(): HTMLElement {
   el.className =
     'my-2 flex items-center gap-2 rounded-md border border-(--border) bg-(--muted) px-3 py-2 text-sm text-(--muted-foreground)';
   el.setAttribute('data-image-uploading', '');
-  el.textContent = 'Subiendo imagen…';
+  el.textContent = i18next.t('ai.image.uploading', { ns: 'notes' });
   return el;
 }
 
@@ -185,6 +186,9 @@ export const ImageUpload = Extension.create<ImageUploadOptions>({
             return imageUploadKey.getState(state);
           },
           handlePaste(view, event) {
+            if (!options.provider) {
+              return false;
+            }
             const files = event.clipboardData?.files;
             const images = files ? extractImageFiles(files) : [];
             if (images.length === 0) {
@@ -196,6 +200,9 @@ export const ImageUpload = Extension.create<ImageUploadOptions>({
             return true;
           },
           handleDrop(view, event) {
+            if (!options.provider) {
+              return false;
+            }
             const files = (event as DragEvent).dataTransfer?.files;
             const images = files ? extractImageFiles(files) : [];
             if (images.length === 0) {
