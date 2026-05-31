@@ -131,24 +131,69 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
   ): StreamCompletionResult {
     this.assertProviderKeyConfigured(options.model);
 
-    const result = streamText({
-      model: this.registry.languageModel(
-        options.model as `${string}:${string}`
-      ),
-      ...this.buildSystemParam(options.model, options.system),
-      messages: [{ role: 'user', content: prompt }],
-      maxOutputTokens: options.maxTokens ?? 2048,
-      temperature: options.temperature ?? 0.7,
-      maxRetries: options.maxRetries ?? 3,
-      ...this.buildTimeoutParam(options.timeout),
-    });
+    const usageDeferred = createDeferred<{
+      promptTokens: number;
+      completionTokens: number;
+    }>();
 
-    return {
-      textStream: result.textStream,
-      usage: result.usage.then((u) => ({
+    const openStream = (model: string) =>
+      streamText({
+        model: this.registry.languageModel(model as `${string}:${string}`),
+        ...this.buildSystemParam(model, options.system),
+        messages: [{ role: 'user', content: prompt }],
+        maxOutputTokens: options.maxTokens ?? 2048,
+        temperature: options.temperature ?? 0.7,
+        maxRetries: options.maxRetries ?? 3,
+        ...this.buildTimeoutParam(options.timeout),
+      });
+
+    const logger = this.logger;
+    const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
+    const primary = openStream(options.model);
+
+    async function* generate(): AsyncGenerator<string> {
+      let result = primary;
+      let emitted = false;
+      try {
+        for await (const chunk of result.textStream) {
+          emitted = true;
+          yield chunk;
+        }
+      } catch (error) {
+        if (emitted || !fallbackModel || fallbackModel === options.model) {
+          usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
+          throw error;
+        }
+        logger.warn({
+          event: 'ai.provider.stream_fallback',
+          primaryModel: options.model,
+          fallbackModel,
+          provider: options.model.split(':')[0],
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
+        result = openStream(fallbackModel);
+        for await (const chunk of result.textStream) {
+          yield chunk;
+        }
+      }
+      const u = await result.usage;
+      usageDeferred.resolve({
         promptTokens: u.inputTokens ?? 0,
         completionTokens: u.outputTokens ?? 0,
-      })),
-    };
+      });
+    }
+
+    return { textStream: generate(), usage: usageDeferred.promise };
   }
+}
+
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((res) => {
+    resolve = res;
+  });
+  return { promise, resolve };
 }
