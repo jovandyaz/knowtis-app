@@ -12,13 +12,18 @@ import {
   ShareNoteHandler,
   UpdateNoteHandler,
 } from './application';
+import { UploadImageHandler } from './application/commands/upload-image.handler';
 import {
   NOTE_READ_REPOSITORY,
   NOTE_REPOSITORY,
   NOTE_WRITE_REPOSITORY,
   PERMISSION_REPOSITORY,
 } from './domain';
+import { IMAGE_STORAGE } from './domain/ports/image-storage.port';
+import { NOTE_IMAGE_REPOSITORY } from './domain/ports/note-image.repository';
 import { DrizzleNoteRepository } from './infrastructure';
+import { DrizzleNoteImageRepository } from './infrastructure/persistence/drizzle-note-image.repository';
+import { VercelBlobStorage } from './infrastructure/storage/vercel-blob.storage';
 import { NotesController } from './notes.controller';
 
 @Module({
@@ -50,6 +55,9 @@ import { NotesController } from './notes.controller';
     ShareNoteHandler,
     RevokeAccessHandler,
     GetCollaboratorsHandler,
+    UploadImageHandler,
+    { provide: IMAGE_STORAGE, useClass: VercelBlobStorage },
+    { provide: NOTE_IMAGE_REPOSITORY, useClass: DrizzleNoteImageRepository },
   ],
   exports: [
     GetNoteHandler,

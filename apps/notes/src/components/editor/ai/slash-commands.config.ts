@@ -5,6 +5,7 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Image as ImageIcon,
   List,
   ListOrdered,
   Quote,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+import { openImagePicker } from '../image/imagePicker';
 import {
   AI_MENU_CONTEXT,
   executeAIAction,
@@ -174,6 +176,18 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
           { type: 'paragraph' },
         ])
         .run();
+    },
+  },
+  {
+    id: 'image',
+    icon: ImageIcon,
+    labelKey: 'ai.slash.image',
+    descriptionKey: 'ai.slash.imageDesc',
+    group: 'formatting',
+    keywords: ['image', 'photo', 'picture', 'imagen', 'foto'],
+    action: (editor, range) => {
+      editor.chain().focus().deleteRange(range).run();
+      openImagePicker((file) => editor.commands.uploadImageFile(file));
     },
   },
 ];

@@ -37,7 +37,7 @@ import { AppService } from './app.service';
     ConfigModule.forRoot({
       isGlobal: true,
       validate: validateEnv,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
     }),
     ThrottlerModule.forRoot([
       {
