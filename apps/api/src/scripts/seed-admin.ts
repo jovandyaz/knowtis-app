@@ -16,7 +16,7 @@ const SALT_ROUNDS = 10;
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
     }),
     DatabaseModule,
   ],
