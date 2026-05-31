@@ -13,12 +13,19 @@ export {
   type NoteCollaborator,
 } from './lib/notes.api';
 
-export { aiClient } from './lib/ai.client';
+export { aiClient, AIClient } from './lib/ai.client';
 export type {
   AICompletePayload,
   AIErrorPayload,
   AIStreamHandle,
+  AuthRefreshHandler,
 } from './lib/ai.client';
+
+export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
+export type {
+  TokenRefreshPolicy,
+  TokenRefreshHandlers,
+} from './lib/token-refresh-policy';
 
 export {
   usersApi,

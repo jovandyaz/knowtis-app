@@ -31,17 +31,19 @@ export const authApi = createAuthApiAdapter({
   authStore,
 });
 
+function handleSessionExpired(): void {
+  performSessionLogout({
+    authStore,
+    tokenStorage,
+    redirect: () => {
+      window.location.href = '/login';
+    },
+  });
+}
+
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
-  onLogoutDetected: () => {
-    performSessionLogout({
-      authStore,
-      tokenStorage,
-      redirect: () => {
-        window.location.href = '/login';
-      },
-    });
-  },
+  onLogoutDetected: handleSessionExpired,
 });
 
 export { performSessionLogout } from './perform-session-logout';
@@ -67,3 +69,6 @@ export async function refreshAccessToken(): Promise<boolean> {
     return false;
   }
 }
+
+aiClient.setAuthRefreshHandler(refreshAccessToken);
+aiClient.setSessionExpiredHandler(handleSessionExpired);
