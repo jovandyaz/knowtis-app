@@ -248,6 +248,7 @@ export function CollaborativeEditor({
   onEditorReady,
   onVoiceNote,
   localFirst = false,
+  onLiveCollaborationChange,
 }: CollaborativeEditorProps) {
   const { t } = useTranslation('notes');
   const aiEnabled = useAIStore((s) => s.aiEnabled);
@@ -296,6 +297,10 @@ export function CollaborativeEditor({
     onAuthRefresh: refreshAccessToken,
     onSessionExpired: handleSessionExpired,
   });
+
+  useEffect(() => {
+    onLiveCollaborationChange?.(wsEnabled && isConnected && isSynced);
+  }, [wsEnabled, isConnected, isSynced, onLiveCollaborationChange]);
 
   const uniqueUsers = otherUsers.filter(
     (user, index, self) => index === self.findIndex((u) => u.name === user.name)
