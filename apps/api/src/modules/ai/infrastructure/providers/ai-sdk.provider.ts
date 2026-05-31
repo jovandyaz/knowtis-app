@@ -38,9 +38,13 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     } catch (error) {
       const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
       if (fallbackModel && fallbackModel !== options.model) {
-        this.logger.warn(
-          `Primary model ${options.model} failed, falling back to ${fallbackModel}`
-        );
+        this.logger.warn({
+          event: 'ai.provider.fallback',
+          primaryModel: options.model,
+          fallbackModel,
+          provider: options.model.split(':')[0],
+          reason: error instanceof Error ? error.message : 'unknown error',
+        });
         return await this.callGenerateText(prompt, {
           ...options,
           model: fallbackModel,
@@ -66,6 +70,20 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       };
     }
     return { system };
+  }
+
+  private buildTimeoutParam(timeout: CompletionOptions['timeout']) {
+    if (!timeout) {
+      return {};
+    }
+    const config: { totalMs?: number; chunkMs?: number } = {};
+    if (timeout.totalMs) {
+      config.totalMs = timeout.totalMs;
+    }
+    if (timeout.chunkMs) {
+      config.chunkMs = timeout.chunkMs;
+    }
+    return Object.keys(config).length > 0 ? { timeout: config } : {};
   }
 
   private assertProviderKeyConfigured(model: string): void {
@@ -96,9 +114,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       maxOutputTokens: options.maxTokens ?? 2048,
       temperature: options.temperature ?? 0.7,
       maxRetries: options.maxRetries ?? 3,
-      ...(options.timeout?.totalMs
-        ? { timeout: { totalMs: options.timeout.totalMs } }
-        : {}),
+      ...this.buildTimeoutParam(options.timeout),
     });
 
     return {
@@ -124,9 +140,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
       maxOutputTokens: options.maxTokens ?? 2048,
       temperature: options.temperature ?? 0.7,
       maxRetries: options.maxRetries ?? 3,
-      ...(options.timeout?.chunkMs
-        ? { timeout: { chunkMs: options.timeout.chunkMs } }
-        : {}),
+      ...this.buildTimeoutParam(options.timeout),
     });
 
     return {

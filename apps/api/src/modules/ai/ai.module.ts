@@ -34,8 +34,8 @@ import {
   AI_REDIS,
   AIRedisProvider,
 } from './infrastructure/redis/ai-redis.provider';
+import { ExactMatchCacheService } from './infrastructure/redis/exact-match-cache.service';
 import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.service';
-import { SemanticCacheService } from './infrastructure/redis/semantic-cache.service';
 
 @Module({
   imports: [
@@ -58,7 +58,7 @@ import { SemanticCacheService } from './infrastructure/redis/semantic-cache.serv
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
     { provide: AI_REDIS, useClass: AIRedisProvider },
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
-    { provide: AI_CACHE, useClass: SemanticCacheService },
+    { provide: AI_CACHE, useClass: ExactMatchCacheService },
     { provide: PROMPTS_DIR, useValue: join(__dirname, 'prompts') },
     AIConfigService,
     PromptLoaderService,

@@ -155,6 +155,21 @@ describe('AISDKProvider', () => {
     );
   });
 
+  it('should forward both totalMs and chunkMs timeouts to streamText', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+
+    provider.streamCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      timeout: { totalMs: 30000, chunkMs: 10000 },
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        timeout: { totalMs: 30000, chunkMs: 10000 },
+      })
+    );
+  });
+
   it('should stream a completion via registry', async () => {
     const streamResult = provider.streamCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',

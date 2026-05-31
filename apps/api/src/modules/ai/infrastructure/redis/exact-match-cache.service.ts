@@ -17,8 +17,8 @@ const CACHEABLE_ACTIONS: Set<string> = new Set([
 ]);
 
 @Injectable()
-export class SemanticCacheService implements AICache {
-  private readonly logger = new Logger(SemanticCacheService.name);
+export class ExactMatchCacheService implements AICache {
+  private readonly logger = new Logger(ExactMatchCacheService.name);
 
   constructor(
     @Inject(AI_REDIS) private readonly redis: AIRedisProvider,

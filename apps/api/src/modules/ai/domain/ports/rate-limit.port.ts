@@ -8,7 +8,8 @@ export interface RateLimitCheckResult {
 export interface RateLimitProvider {
   checkAndIncrement(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    limits?: { tokenLimit: number; costLimit: number }
   ): Promise<RateLimitCheckResult>;
 
   checkRpm(userId: string): Promise<RateLimitCheckResult>;

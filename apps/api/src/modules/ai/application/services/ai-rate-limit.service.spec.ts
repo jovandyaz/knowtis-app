@@ -32,6 +32,21 @@ describe('AIRateLimitService', () => {
     expect(result.allowed).toBe(true);
   });
 
+  it('should apply a stricter daily token limit for anonymous users', async () => {
+    vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+      totalInputTokens: 40000,
+      totalOutputTokens: 0,
+      totalCostUsd: 0.01,
+      requestCount: 1,
+    });
+
+    const authed = await service.checkLimit('user-123', 1000);
+    expect(authed.allowed).toBe(true);
+
+    const anonymous = await service.checkLimit('anon-123', 1000, true);
+    expect(anonymous.allowed).toBe(false);
+  });
+
   it('should deny request when token limit exceeded', async () => {
     vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
       totalInputTokens: 99000,

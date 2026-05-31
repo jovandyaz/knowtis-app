@@ -112,7 +112,8 @@ export class AICompletionPipeline {
     const estimatedTokens = estimateTokenCount(input.content);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens
+      estimatedTokens,
+      input.isAnonymous ?? false
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({

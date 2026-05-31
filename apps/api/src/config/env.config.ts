@@ -29,6 +29,7 @@ const envSchemaBase = z.object({
   AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
+  AI_ANONYMOUS_DAILY_LIMIT_PCT: z.coerce.number().min(0).max(1).default(0.33),
   AI_MAX_RETRIES: z.coerce.number().default(3),
   AI_FALLBACK_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
