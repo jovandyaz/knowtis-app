@@ -59,11 +59,25 @@ describe('KeywordRetrievalAdapter', () => {
     expect(found).toBeNull();
   });
 
-  it('returns empty when the userId is invalid (cannot brand)', async () => {
+  it('returns empty without hitting the repo when the userId cannot be branded', async () => {
     const repo = makeRepo([]);
     const adapter = new KeywordRetrievalAdapter(repo);
 
-    const hits = await adapter.search('not-a-uuid', 'x');
+    const hits = await adapter.search('', 'x');
+
     expect(hits).toEqual([]);
+    expect(repo.findAccessibleByUser).not.toHaveBeenCalled();
+  });
+
+  it('caps search results to avoid flooding the model', async () => {
+    const rows = Array.from({ length: 25 }, (_, i) => ({
+      note: note(`id-${i}`, `Note ${i}`),
+    }));
+    const repo = makeRepo(rows);
+    const adapter = new KeywordRetrievalAdapter(repo);
+
+    const hits = await adapter.search(USER, 'note');
+
+    expect(hits).toHaveLength(20);
   });
 });
