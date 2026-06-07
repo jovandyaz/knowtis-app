@@ -38,6 +38,7 @@ export interface UpdateNoteInput {
   readonly generalAccessPermission?: PermissionLevel;
   readonly editorsCanShare?: boolean;
   readonly force?: boolean;
+  readonly skipYjsState?: boolean;
 }
 
 interface PersistUpdateResult {
@@ -112,7 +113,12 @@ export class UpdateNoteHandler {
       ...this.resolveShareToken(input, note),
     };
 
-    return this.persistUpdate(input.noteId, updateData, input.content);
+    return this.persistUpdate(
+      input.noteId,
+      updateData,
+      input.content,
+      input.skipYjsState
+    );
   }
 
   private async executeEditorUpdate(
@@ -138,17 +144,27 @@ export class UpdateNoteHandler {
     return this.persistUpdate(
       input.noteId,
       pickDefined(input, [...CONTENT_FIELDS]),
-      input.content
+      input.content,
+      input.skipYjsState
     );
   }
 
   private async persistUpdate(
     noteId: string,
     updateData: UpdateNoteData,
-    content: string | undefined
+    content: string | undefined,
+    skipYjsState: boolean | undefined
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     if (content === undefined) {
       const result = await this.noteRepository.update(noteId, updateData);
+      return result.map((entity) => ({ entity }));
+    }
+
+    if (skipYjsState) {
+      const result = await this.noteRepository.update(noteId, {
+        ...updateData,
+        content,
+      });
       return result.map((entity) => ({ entity }));
     }
 

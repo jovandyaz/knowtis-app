@@ -318,6 +318,7 @@ export class NotesController {
       ...pickDefined(dto, [
         'title',
         'content',
+        'skipYjsState',
         'generalAccess',
         'generalAccessPermission',
         'editorsCanShare',

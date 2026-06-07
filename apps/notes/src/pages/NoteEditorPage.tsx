@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 import { SaveStatusIndicator } from '@knowtis/editor';
-import { useDebouncedCallback } from '@knowtis/shared-hooks';
+import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import type {
   GeneralAccessLevel,
   NoteAccessLevel,
@@ -229,27 +229,27 @@ function NoteEditor({
     isLiveCollabRef.current = isLive;
   }, []);
 
-  const debouncedUpdateNote = useDebouncedCallback(
-    (updates: { title?: string; content?: string }) => {
-      pendingUpdateRef.current = true;
-      setIsPendingUpdate(true);
-      updateNote.mutate(
-        { id: noteId, input: updates },
-        {
-          onSuccess: () => {
-            setLastSaved(new Date());
-            pendingUpdateRef.current = false;
-            setIsPendingUpdate(false);
-          },
-          onError: () => {
-            pendingUpdateRef.current = false;
-            setIsPendingUpdate(false);
-          },
-        }
-      );
-    },
-    DEBOUNCE_DELAYS.AUTO_SAVE
-  );
+  const debouncedUpdateNote = useDebouncedMerge<{
+    title: string;
+    content: string;
+  }>((updates) => {
+    pendingUpdateRef.current = true;
+    setIsPendingUpdate(true);
+    updateNote.mutate(
+      { id: noteId, input: updates, skipYjsState: true },
+      {
+        onSuccess: () => {
+          setLastSaved(new Date());
+          pendingUpdateRef.current = false;
+          setIsPendingUpdate(false);
+        },
+        onError: () => {
+          pendingUpdateRef.current = false;
+          setIsPendingUpdate(false);
+        },
+      }
+    );
+  }, DEBOUNCE_DELAYS.AUTO_SAVE);
 
   const defaultTitle = t('sidebar.untitled');
   const {

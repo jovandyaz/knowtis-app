@@ -69,6 +69,15 @@ export class UpdateNoteDto {
   content?: string;
 
   @ApiPropertyOptional({
+    description:
+      'Editor fallback: persist content to the column without regenerating yjsState from HTML (the live Y.Doc owns the CRDT state)',
+    example: true,
+  })
+  @IsBoolean()
+  @IsOptional()
+  skipYjsState?: boolean;
+
+  @ApiPropertyOptional({
     description: 'General access level for the note',
     enum: [...GENERAL_ACCESS_LEVELS],
     example: 'restricted',

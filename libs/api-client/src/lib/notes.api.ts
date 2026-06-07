@@ -61,8 +61,15 @@ export const notesApi = {
     return httpClient.post<Note>('/notes', input);
   },
 
-  async update(id: string, input: UpdateNoteInput): Promise<Note> {
-    return httpClient.patch<Note>(`/notes/${id}`, input);
+  async update(
+    id: string,
+    input: UpdateNoteInput,
+    options?: { skipYjsState?: boolean | undefined }
+  ): Promise<Note> {
+    const body = options?.skipYjsState
+      ? { ...input, skipYjsState: true }
+      : input;
+    return httpClient.patch<Note>(`/notes/${id}`, body);
   },
 
   async delete(id: string): Promise<{ success: boolean }> {
