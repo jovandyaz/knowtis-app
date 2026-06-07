@@ -57,8 +57,15 @@ export function useUpdateNote() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateNoteInput }) =>
-      notesApi.update(id, input),
+    mutationFn: ({
+      id,
+      input,
+      skipYjsState,
+    }: {
+      id: string;
+      input: UpdateNoteInput;
+      skipYjsState?: boolean;
+    }) => notesApi.update(id, input, { skipYjsState }),
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.detail(id) });
 

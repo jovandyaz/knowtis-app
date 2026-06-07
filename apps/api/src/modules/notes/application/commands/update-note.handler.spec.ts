@@ -175,6 +175,31 @@ describe('UpdateNoteHandler', () => {
     expect((bufferArg as Buffer).byteLength).toBeGreaterThan(0);
   });
 
+  it('should persist content to the column without regenerating yjsState when skipYjsState is set', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({ ...mockNote, content: '<p>Editor content</p>' })
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p>Editor content</p>',
+      skipYjsState: true,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      'note-1',
+      expect.objectContaining({ content: '<p>Editor content</p>' })
+    );
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+
+    const emitted = vi.mocked(mockEventEmitter.emit).mock
+      .calls[0]?.[1] as NoteUpdatedEvent;
+    expect(emitted.yjsState).toBeUndefined();
+  });
+
   it('should take atomic transactional path when owner updates content', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
