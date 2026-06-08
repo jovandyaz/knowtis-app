@@ -184,6 +184,23 @@
       "injection": "Tu entrada fue marcada y no se pudo procesar.",
       "timeout": "La solicitud de IA agotó el tiempo de espera. Reinténtalo."
     },
+    "copilot": {
+      "tab": "Copilot",
+      "title": "Copilot",
+      "placeholder": "Pregunta sobre tus notas…",
+      "send": "Enviar",
+      "composerHint": "Enter envía · Shift+Enter salto de línea",
+      "newConversation": "Nueva conversación",
+      "thinking": "Pensando…",
+      "sources": "Fuentes",
+      "empty": {
+        "title": "Pregúntale a tus notas",
+        "suggestions": "\"resume mis notas de bio\", \"¿qué dije sobre X?\""
+      },
+      "estudio": {
+        "noNote": "Abre una nota para usar las herramientas de estudio."
+      }
+    },
     "groups": {
       "ai": "IA",
       "artifacts": "Herramientas de Estudio",
