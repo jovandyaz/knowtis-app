@@ -29,6 +29,7 @@ interface ProposedMutationProps {
   readonly payload: MutationPayload;
   readonly summary: string;
   readonly previewHtml?: string;
+  // Target note updatedAt as ISO string at propose time; compared via toISOString() at commit (optimistic concurrency).
   readonly baseVersion?: string;
 }
 
@@ -44,12 +45,17 @@ export class ProposedMutation {
   private constructor(props: ProposedMutationProps) {
     this.id = props.id;
     this.kind = props.kind;
-    if (props.targetNoteId !== undefined)
-      {this.targetNoteId = props.targetNoteId;}
+    if (props.targetNoteId !== undefined) {
+      this.targetNoteId = props.targetNoteId;
+    }
     this.payload = props.payload;
     this.summary = props.summary;
-    if (props.previewHtml !== undefined) {this.previewHtml = props.previewHtml;}
-    if (props.baseVersion !== undefined) {this.baseVersion = props.baseVersion;}
+    if (props.previewHtml !== undefined) {
+      this.previewHtml = props.previewHtml;
+    }
+    if (props.baseVersion !== undefined) {
+      this.baseVersion = props.baseVersion;
+    }
     Object.freeze(this);
   }
 

@@ -67,7 +67,9 @@ export class AgentToolsFactory {
           contentMarkdown: z
             .string()
             .max(20000)
-            .describe('The note body in Markdown'),
+            .describe(
+              'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes). Tables, images and raw HTML are not supported.'
+            ),
         }),
         execute: async ({ title, contentMarkdown }) => {
           const r = await this.proposalBuilder.buildCreate(
@@ -83,11 +85,24 @@ export class AgentToolsFactory {
       proposeUpdateNote: tool({
         description:
           'Propose editing an existing note (title and/or content). Does NOT edit it — the user must confirm. noteId must come from searchNotes/getNote.',
-        inputSchema: z.object({
-          noteId: z.string().uuid().describe('The note id to edit'),
-          title: z.string().min(1).max(200).optional(),
-          contentMarkdown: z.string().max(20000).optional(),
-        }),
+        inputSchema: z
+          .object({
+            noteId: z.string().uuid().describe('The note id to edit'),
+            title: z.string().min(1).max(200).optional(),
+            contentMarkdown: z
+              .string()
+              .max(20000)
+              .describe(
+                'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes). Tables, images and raw HTML are not supported.'
+              )
+              .optional(),
+          })
+          .refine(
+            (v) => v.title !== undefined || v.contentMarkdown !== undefined,
+            {
+              message: 'Provide a title or contentMarkdown to update',
+            }
+          ),
         execute: async ({ noteId, title, contentMarkdown }) => {
           const r = await this.proposalBuilder.buildUpdate(userId, noteId, {
             ...(title !== undefined && { title }),

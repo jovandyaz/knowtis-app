@@ -10,13 +10,16 @@ function makeMutation(id: string) {
     payload: { title: 'GTD', contentHtml: '<p>x</p>' },
     summary: 'Create note "GTD"',
   });
-  if (r.isErr()) {throw new Error('setup');}
+  if (r.isErr()) {
+    throw new Error('setup');
+  }
   return r.value;
 }
 
 function makeRedis(initial: Record<string, string> = {}) {
   const map = new Map(Object.entries(initial));
   return {
+    map,
     client: {
       set: vi.fn(async (k: string, v: string) => {
         map.set(k, v);
@@ -24,6 +27,25 @@ function makeRedis(initial: Record<string, string> = {}) {
       }),
       get: vi.fn(async (k: string) => map.get(k) ?? null),
       del: vi.fn(async (k: string) => (map.delete(k) ? 1 : 0)),
+      eval: vi.fn(
+        async (
+          _script: string,
+          _numKeys: number,
+          key: string,
+          userId: string
+        ) => {
+          const v = map.get(key);
+          if (!v) {
+            return null;
+          }
+          const parsed = JSON.parse(v) as { userId: string };
+          if (parsed.userId !== userId) {
+            return 'MISMATCH';
+          }
+          map.delete(key);
+          return v;
+        }
+      ),
     },
   };
 }
@@ -63,7 +85,7 @@ describe('RedisPendingMutationStore', () => {
     const taken = await store.take(m.id, 'u1');
 
     expect(taken?.mutation.id).toBe(m.id);
-    expect(redis.client.del).toHaveBeenCalledWith(`agent:proposal:${m.id}`);
+    expect(redis.map.has(`agent:proposal:${m.id}`)).toBe(false);
   });
 
   it('take returns null for a different user (and does not delete)', async () => {
@@ -79,7 +101,10 @@ describe('RedisPendingMutationStore', () => {
     const taken = await store.take(m.id, 'attacker');
 
     expect(taken).toBeNull();
-    expect(redis.client.del).not.toHaveBeenCalled();
+    expect(redis.map.has(`agent:proposal:${m.id}`)).toBe(true);
+
+    const byOwner = await store.take(m.id, 'u1');
+    expect(byOwner?.mutation.id).toBe(m.id);
   });
 
   it('take returns null when the key is missing (expired)', async () => {

@@ -36,5 +36,5 @@ export function markdownToSafeHtml(markdown: string): string {
     allowedSchemes: ['http', 'https', 'mailto'],
     disallowedTagsMode: 'discard',
   });
-  return sanitized.replace(/javascript:/gi, '').trim();
+  return sanitized.trim();
 }

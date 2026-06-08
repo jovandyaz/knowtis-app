@@ -18,8 +18,6 @@ export const AgentErrors = {
     ),
   proposalExpired: () =>
     make('AGENT_PROPOSAL_EXPIRED', 'This proposal expired; ask again'),
-  proposalNotFound: () =>
-    make('AGENT_PROPOSAL_NOT_FOUND', 'Proposal not found'),
   permissionDenied: () =>
     make('AGENT_PERMISSION_DENIED', 'You cannot perform this action'),
   sanitizeRejected: () =>

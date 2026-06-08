@@ -31,6 +31,9 @@ export class MutationProposalBuilder {
     contentMarkdown: string
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
     const contentHtml = markdownToSafeHtml(contentMarkdown);
+    if (contentMarkdown.trim() && !contentHtml) {
+      return err(AgentErrors.sanitizeRejected());
+    }
     return ProposedMutation.create({
       id: randomUUID(),
       kind: 'create',
@@ -45,15 +48,25 @@ export class MutationProposalBuilder {
     noteId: string,
     input: UpdateProposalInput
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
+    if (input.title === undefined && input.contentMarkdown === undefined) {
+      return err(
+        AgentErrors.invalidProposal('update requires a title or content change')
+      );
+    }
     const note = await this.retrieval.getById(userId, noteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
+    let contentHtml: string | undefined;
+    if (input.contentMarkdown !== undefined) {
+      contentHtml = markdownToSafeHtml(input.contentMarkdown);
+      if (input.contentMarkdown.trim() && !contentHtml) {
+        return err(AgentErrors.sanitizeRejected());
+      }
+    }
     const payload: UpdateMutationPayload = {
       ...(input.title !== undefined && { title: input.title }),
-      ...(input.contentMarkdown !== undefined && {
-        contentHtml: markdownToSafeHtml(input.contentMarkdown),
-      }),
+      ...(contentHtml !== undefined && { contentHtml }),
     };
     const parts: string[] = [];
     if (input.title !== undefined) {

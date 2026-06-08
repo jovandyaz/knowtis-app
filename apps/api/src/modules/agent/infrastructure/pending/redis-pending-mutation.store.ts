@@ -30,6 +30,16 @@ interface SerializedRecord {
 
 @Injectable()
 export class RedisPendingMutationStore implements PendingMutationStore {
+  private static readonly TAKE_SCRIPT = `
+local v = redis.call('GET', KEYS[1])
+if not v then return false end
+local ok, parsed = pcall(cjson.decode, v)
+if not ok then return false end
+if parsed.userId ~= ARGV[1] then return 'MISMATCH' end
+redis.call('DEL', KEYS[1])
+return v
+`;
+
   private readonly ttl: number;
 
   constructor(
@@ -71,15 +81,16 @@ export class RedisPendingMutationStore implements PendingMutationStore {
     proposalId: string,
     userId: string
   ): Promise<PendingMutationRecord | null> {
-    const raw = await this.redis.client.get(`${KEY_PREFIX}${proposalId}`);
-    if (!raw) {
+    const res = (await this.redis.client.eval(
+      RedisPendingMutationStore.TAKE_SCRIPT,
+      1,
+      `${KEY_PREFIX}${proposalId}`,
+      userId
+    )) as string | 'MISMATCH' | null;
+    if (!res || res === 'MISMATCH') {
       return null;
     }
-    const parsed = JSON.parse(raw) as SerializedRecord;
-    if (parsed.userId !== userId) {
-      return null;
-    }
-    await this.redis.client.del(`${KEY_PREFIX}${proposalId}`);
+    const parsed = JSON.parse(res) as SerializedRecord;
     const rebuilt = ProposedMutation.create(parsed.mutation);
     if (rebuilt.isErr()) {
       return null;

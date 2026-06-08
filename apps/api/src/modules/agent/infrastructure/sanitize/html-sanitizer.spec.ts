@@ -15,9 +15,16 @@ describe('markdownToSafeHtml', () => {
     expect(html).not.toContain('alert(1)</script>');
   });
 
-  it('drops javascript: links', () => {
-    const html = markdownToSafeHtml('[x](javascript:alert(1))');
-    expect(html).not.toContain('javascript:');
+  it('neutralizes javascript: link hrefs but keeps visible text', () => {
+    const html = markdownToSafeHtml('[click](javascript:alert(1))');
+    expect(html).toContain('click');
+    expect(html).not.toMatch(/href="javascript:/i);
+  });
+
+  it('preserves the literal word "javascript:" in prose', () => {
+    expect(markdownToSafeHtml('Use the javascript: scheme')).toContain(
+      'javascript:'
+    );
   });
 
   it('returns empty string for empty/whitespace input', () => {

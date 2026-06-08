@@ -57,6 +57,18 @@ describe('MutationProposalBuilder', () => {
     expect(r.isErr()).toBe(true);
   });
 
+  it('rejects create when content sanitizes to empty', async () => {
+    const builder = new MutationProposalBuilder(makeRetrieval());
+    const r = await builder.buildCreate(USER, 'X', '[ref]: http://example.com');
+    expect(r.isErr()).toBe(true);
+  });
+
+  it('rejects an update with no changes', async () => {
+    const builder = new MutationProposalBuilder(makeRetrieval());
+    const r = await builder.buildUpdate(USER, 'note-1', {});
+    expect(r.isErr()).toBe(true);
+  });
+
   it('builds a share proposal', async () => {
     const builder = new MutationProposalBuilder(makeRetrieval());
     const r = await builder.buildShare(USER, 'note-1', 'a@b.com', 'editor');
