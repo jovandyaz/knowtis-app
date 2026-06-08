@@ -86,3 +86,4 @@ docs/superpowers/
 
 # Playwright MCP artifacts
 .playwright-mcp/
+.superpowers/
