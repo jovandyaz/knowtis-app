@@ -1,3 +1,4 @@
+import { ROUTES } from '@/config';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
@@ -23,7 +24,7 @@ describe('AgentSourceChips', () => {
     await user.click(screen.getByRole('button', { name: /Productividad/ }));
 
     expect(navigate).toHaveBeenCalledWith({
-      to: '/notes/$noteId',
+      to: ROUTES.NOTE,
       params: { noteId: 'n1' },
     });
   });

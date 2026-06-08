@@ -40,7 +40,9 @@ export function AgentCopilotPanel() {
           <AgentEmptyState />
         </div>
       ) : (
-        <AgentMessageList messages={messages} status={status} />
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <AgentMessageList messages={messages} status={status} />
+        </div>
       )}
 
       {status === 'error' && (

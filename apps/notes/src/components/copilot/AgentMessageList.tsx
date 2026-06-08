@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import type { AgentChatMessage } from '@/stores/agent.store';
+import type { AgentChatMessage, AgentStatus } from '@/stores/agent.store';
 
 import { AgentMessage } from './AgentMessage';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
@@ -10,7 +10,7 @@ export function AgentMessageList({
   status,
 }: {
   messages: AgentChatMessage[];
-  status: 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
+  status: AgentStatus;
 }) {
   const endRef = useRef<HTMLDivElement>(null);
   const lastAssistant = messages.at(-1);

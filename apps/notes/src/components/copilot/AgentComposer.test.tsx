@@ -37,4 +37,14 @@ describe('AgentComposer', () => {
     render(<AgentComposer onSend={vi.fn()} disabled={true} />);
     expect(screen.getByRole('button')).toBeDisabled();
   });
+
+  it('does not send on Enter while disabled', async () => {
+    const onSend = vi.fn();
+    const user = userEvent.setup();
+    render(<AgentComposer onSend={onSend} disabled={true} />);
+
+    await user.type(screen.getByRole('textbox'), 'hi{Enter}');
+
+    expect(onSend).not.toHaveBeenCalled();
+  });
 });

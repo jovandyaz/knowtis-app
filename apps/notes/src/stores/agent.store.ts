@@ -8,7 +8,7 @@ import {
   type AgentWireMessage,
 } from '@knowtis/api-client';
 
-type AgentStatus = 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
+export type AgentStatus = 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
 
 export interface AgentChatMessage {
   id: string;

@@ -22,6 +22,7 @@ export function AgentComposer({ onSend, disabled }: AgentComposerProps) {
     }
     onSend(text);
     setValue('');
+    ref.current?.focus();
   };
 
   return (
