@@ -17,7 +17,7 @@ export class AgentToolsFactory {
     return {
       searchNotes: tool({
         description:
-          "Search the user's notes by keyword. Returns matching notes as {id, title}. Use this to find notes before answering questions about them.",
+          "Search the user's notes by keyword. Returns matching notes as {id, title, updatedAt, isOwner, isSharedWithMe (owned by someone else and shared with you), isPubliclyShared (you exposed it via link/token)}. Use this to find notes before answering questions about them.",
         inputSchema: z.object({
           query: z
             .string()
@@ -28,7 +28,7 @@ export class AgentToolsFactory {
       }),
       getNote: tool({
         description:
-          'Fetch the full content of one note by its id. Only ids returned by searchNotes are valid. Returns {id, title, content} or a not-found marker.',
+          'Fetch the full content of one note by its id. Only ids returned by searchNotes are valid. Returns {id, title, content, createdAt, updatedAt, isOwner, isSharedWithMe, isPubliclyShared} or a not-found marker.',
         inputSchema: z.object({
           noteId: z.string().uuid().describe('The note id from searchNotes'),
         }),
@@ -36,6 +36,26 @@ export class AgentToolsFactory {
           const note = await this.retrieval.getById(userId, noteId);
           return note ?? { error: 'Note not found or not accessible.' };
         },
+      }),
+      listRecentNotes: tool({
+        description:
+          "List the user's most recently updated notes (returns {id, title, updatedAt, isOwner, isSharedWithMe, isPubliclyShared}, newest first). Use for questions about recent/latest notes or what the user worked on recently.",
+        inputSchema: z.object({
+          limit: z
+            .number()
+            .int()
+            .min(1)
+            .max(20)
+            .default(5)
+            .describe('How many recent notes to return'),
+        }),
+        execute: async ({ limit }) => this.retrieval.listRecent(userId, limit),
+      }),
+      getNotesOverview: tool({
+        description:
+          "Get counts of the user's notes: total accessible, owned by the user, and shared-with-the-user. Use for 'how many notes do I have' style questions.",
+        inputSchema: z.object({}),
+        execute: async () => this.retrieval.overview(userId),
       }),
     };
   }
