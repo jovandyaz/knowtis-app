@@ -20,6 +20,7 @@ import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';
 import { DatabaseModule } from '../database';
 import { AdminModule } from '../modules/admin/admin.module';
+import { AgentModule } from '../modules/agent/agent.module';
 import { AIModule } from '../modules/ai';
 import { ArtifactsModule } from '../modules/artifacts';
 import { AuthModule } from '../modules/auth';
@@ -70,6 +71,7 @@ import { AppService } from './app.service';
       inject: [ConfigService],
     }),
     AdminModule,
+    AgentModule,
     AIModule,
     ArtifactsModule,
     AuthModule,
