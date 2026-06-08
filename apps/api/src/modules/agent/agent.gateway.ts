@@ -148,7 +148,16 @@ export class AgentGateway
         },
         {
           onChunk: (text) => client.emit('agent:chunk', { text }),
-          onDone: (usage) => client.emit('agent:done', { usage }),
+          onDone: (usage) =>
+            client.emit('agent:done', {
+              usage: {
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+                model: usage.model,
+                costUsd: usage.costUsd,
+              },
+              sources: usage.sources,
+            }),
           onError: (error) => {
             if (!controller.signal.aborted) {
               client.emit('agent:error', error);

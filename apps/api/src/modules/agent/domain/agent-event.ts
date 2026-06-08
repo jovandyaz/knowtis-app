@@ -6,7 +6,16 @@ export interface AgentTurnUsage {
   readonly model: string;
 }
 
+export interface AgentSource {
+  readonly id: string;
+  readonly title: string;
+}
+
 export type AgentEvent =
   | { readonly type: 'chunk'; readonly text: string }
-  | { readonly type: 'done'; readonly usage: AgentTurnUsage }
+  | {
+      readonly type: 'done';
+      readonly usage: AgentTurnUsage;
+      readonly sources: readonly AgentSource[];
+    }
   | { readonly type: 'error'; readonly error: AIDomainError };

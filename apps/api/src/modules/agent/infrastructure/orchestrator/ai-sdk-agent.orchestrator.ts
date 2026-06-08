@@ -6,13 +6,27 @@ import type { ProviderRegistryProvider } from 'ai';
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { buildProviderRegistry } from '../../../ai/infrastructure/providers/provider-registry';
-import type { AgentEvent } from '../../domain/agent-event';
+import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
 import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 import { AgentToolsFactory } from './agent-tools.factory';
+
+// Structural subset of ai's DynamicToolResult; avoids depending on a non-stable SDK type.
+interface StepToolResult {
+  readonly toolName: string;
+  readonly output: unknown;
+}
+
+function isSourceNote(value: unknown): value is { id: string; title: string } {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.id === 'string' && typeof record.title === 'string';
+}
 
 @Injectable()
 export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
@@ -33,6 +47,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
   }
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
+    const sources = new Map<string, AgentSource>();
     let result;
     try {
       result = streamText({
@@ -46,6 +61,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         })),
         tools: this.toolsFactory.build(input.userId),
         stopWhen: stepCountIs(input.maxSteps),
+        onStepFinish: ({ toolResults }) =>
+          this.collectSources(toolResults, sources),
         ...(input.signal ? { abortSignal: input.signal } : {}),
       });
     } catch (error) {
@@ -67,6 +84,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
           outputTokens: usage.outputTokens ?? 0,
           model: input.model,
         },
+        sources: [...sources.values()],
       };
     } catch (error) {
       if (input.signal?.aborted) {
@@ -79,6 +97,21 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         error: error instanceof Error ? error.message : 'unknown',
       });
       yield { type: 'error', error: this.toError(error) };
+    }
+  }
+
+  private collectSources(
+    toolResults: readonly StepToolResult[],
+    sink: Map<string, AgentSource>
+  ): void {
+    for (const result of toolResults) {
+      if (result.toolName !== 'getNote' || !isSourceNote(result.output)) {
+        continue;
+      }
+      const { id, title } = result.output;
+      if (!sink.has(id)) {
+        sink.set(id, { id, title });
+      }
     }
   }
 

@@ -45,6 +45,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
           outputTokens: 5,
           model: 'anthropic:claude-sonnet-4-20250514',
         },
+        sources: [],
       },
     ]
   );
@@ -120,6 +121,39 @@ describe('RunAgentTurnHandler', () => {
 
     expect(error).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('forwards sources on done', async () => {
+    const { rateLimit, aiConfig, config } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [{ id: 'n1', title: 'Productividad' }],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const done = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn() }
+    );
+
+    expect(done).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sources: [{ id: 'n1', title: 'Productividad' }],
+      })
     );
   });
 });

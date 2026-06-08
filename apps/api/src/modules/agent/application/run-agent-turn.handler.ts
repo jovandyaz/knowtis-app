@@ -7,6 +7,7 @@ import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.
 import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
+import type { AgentSource } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import {
   AGENT_ORCHESTRATOR,
@@ -26,6 +27,7 @@ export interface RunAgentTurnCallbacks {
     outputTokens: number;
     model: string;
     costUsd: number;
+    sources: readonly AgentSource[];
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
 }
@@ -103,6 +105,7 @@ export class RunAgentTurnHandler {
               outputTokens: event.usage.outputTokens,
               model: event.usage.model,
               costUsd: usage.costUsd,
+              sources: event.sources,
             });
             break;
           }
