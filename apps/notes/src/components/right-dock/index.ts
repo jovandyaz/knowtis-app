@@ -1,0 +1,1 @@
+export { RightDock } from './RightDock';

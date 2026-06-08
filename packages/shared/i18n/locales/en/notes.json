@@ -187,6 +187,7 @@
     "copilot": {
       "tab": "Copilot",
       "title": "Copilot",
+      "dockLabel": "Note tools",
       "placeholder": "Ask about your notes…",
       "send": "Send",
       "composerHint": "Enter to send · Shift+Enter for a new line",

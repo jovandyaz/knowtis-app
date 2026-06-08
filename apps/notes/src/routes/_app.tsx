@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -9,31 +9,47 @@ import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal'
 import {
   ArtifactGeneratorDialog,
   ArtifactMobileFAB,
-  ArtifactSidebar,
   ArtifactSidebarToggle,
 } from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
+import { RightDock } from '@/components/right-dock';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { ROUTES } from '@/config';
 import { useAIStore } from '@/stores/ai.store';
 import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
+import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
-function ArtifactSidebarLayout() {
+function RightDockLayout() {
   const noteId = useArtifactSidebarStore((s) => s.activeNoteId);
-  if (!noteId) {
-    return null;
-  }
-  return <ArtifactSidebar noteId={noteId} />;
+  const { data: artifacts } = useArtifacts(noteId ?? undefined);
+  const open = useRightDockStore((s) => s.open);
+  const autoShownRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (
+      noteId &&
+      artifacts &&
+      artifacts.length > 0 &&
+      !autoShownRef.current.has(noteId) &&
+      !useRightDockStore.getState().isOpen
+    ) {
+      autoShownRef.current.add(noteId);
+      open('estudio');
+    }
+  }, [noteId, artifacts, open]);
+
+  return <RightDock noteId={noteId} />;
 }
 
 function ArtifactGeneratorDialogLayout() {
@@ -140,7 +156,7 @@ function AppLayout() {
             <Outlet />
           </div>
         </div>
-        {aiEnabled && <ArtifactSidebarLayout />}
+        {aiEnabled && <RightDockLayout />}
       </main>
       {aiEnabled && <ArtifactGeneratorDialogLayout />}
     </div>

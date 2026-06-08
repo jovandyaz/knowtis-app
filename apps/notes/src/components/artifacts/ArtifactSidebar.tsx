@@ -1,187 +1,20 @@
-import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
-import { ArrowLeft, PanelLeft, Sparkles } from 'lucide-react';
-
-import { useArtifacts } from '@knowtis/data-access-artifacts';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  ResizablePanel,
-} from '@knowtis/design-system';
-import { useMediaQuery } from '@knowtis/shared-hooks';
-import type { Artifact } from '@knowtis/shared-types';
-
-import {
-  SIDEBAR_COLLAPSE_THRESHOLD,
-  SIDEBAR_DEFAULT_WIDTH,
-  SIDEBAR_MAX_WIDTH,
-  SIDEBAR_MIN_WIDTH,
-} from './artifact-sidebar.constants';
-import { ArtifactGeneratorButton } from './ArtifactGenerator';
-import { ArtifactList } from './ArtifactList';
-import { ArtifactViewer } from './ArtifactViewer';
-
-interface ArtifactSidebarProps {
-  noteId: string;
-}
-
-function ArtifactPanelContent({
-  noteId,
-  onSelect,
-}: {
-  noteId: string;
-  onSelect: (artifact: Artifact) => void;
-}) {
-  const { t } = useTranslation('notes');
-
-  return (
-    <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-foreground">
-          {t('ai.artifacts.studyTools')}
-        </h2>
-        <ArtifactGeneratorButton />
-      </div>
-      <ArtifactList noteId={noteId} onSelect={onSelect} />
-    </div>
-  );
-}
-
-export function ArtifactSidebar({ noteId }: ArtifactSidebarProps) {
-  const { t } = useTranslation('notes');
-  const { data: artifacts } = useArtifacts(noteId);
-  const open = useArtifactSidebarStore((s) => s.open);
-  const setOpen = useArtifactSidebarStore((s) => s.setOpen);
-  const autoShow = useArtifactSidebarStore((s) => s.autoShow);
-  const isDesktop = useMediaQuery('(min-width: 768px)');
-  const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(
-    null
-  );
-  const [prevNoteId, setPrevNoteId] = useState(noteId);
-
-  if (noteId !== prevNoteId) {
-    setPrevNoteId(noteId);
-    setSelectedArtifact(null);
-  }
-
-  const handleCollapse = useCallback(() => setOpen(false), [setOpen]);
-
-  useEffect(() => {
-    if (artifacts && artifacts.length > 0) {
-      autoShow();
-    }
-  }, [artifacts, autoShow]);
-
-  if (isDesktop) {
-    return (
-      <ResizablePanel
-        side="right"
-        defaultWidth={SIDEBAR_DEFAULT_WIDTH}
-        minWidth={SIDEBAR_MIN_WIDTH}
-        maxWidth={SIDEBAR_MAX_WIDTH}
-        collapseThreshold={SIDEBAR_COLLAPSE_THRESHOLD}
-        isOpen={open}
-        onCollapse={handleCollapse}
-        handleAriaLabel={t('ai.artifacts.sidebar.resizePanel', 'Resize panel')}
-        className="border-l border-border bg-background"
-      >
-        <div className="overflow-y-auto h-full min-w-0">
-          {selectedArtifact ? (
-            <div className="p-4 space-y-4">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedArtifact(null)}
-                  className="p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label={t('ai.artifacts.sidebar.back')}
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-                <h2 className="text-sm font-semibold text-foreground truncate flex-1">
-                  {selectedArtifact.title}
-                </h2>
-              </div>
-              <ArtifactViewer artifact={selectedArtifact} />
-            </div>
-          ) : (
-            <ArtifactPanelContent
-              noteId={noteId}
-              onSelect={setSelectedArtifact}
-            />
-          )}
-        </div>
-      </ResizablePanel>
-    );
-  }
-
-  if (!open) {
-    return null;
-  }
-
-  return (
-    <>
-      <Dialog
-        open={open && !selectedArtifact}
-        onOpenChange={(isOpen) => {
-          if (!isOpen) {
-            setOpen(false);
-          }
-        }}
-      >
-        <DialogContent className="max-w-full">
-          <DialogHeader className="sr-only">
-            <DialogTitle>{t('ai.artifacts.studyTools')}</DialogTitle>
-          </DialogHeader>
-          <ArtifactPanelContent
-            noteId={noteId}
-            onSelect={setSelectedArtifact}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {selectedArtifact && (
-        <Dialog
-          open={!!selectedArtifact}
-          onOpenChange={(isOpen) => {
-            if (!isOpen) {
-              setSelectedArtifact(null);
-              setOpen(false);
-            }
-          }}
-        >
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto max-md:max-h-[95vh] max-md:min-h-[80vh]">
-            <button
-              type="button"
-              onClick={() => setSelectedArtifact(null)}
-              className="absolute left-4 top-4 p-1 rounded-md text-muted-foreground hover:text-foreground transition-colors z-10"
-              aria-label={t('ai.artifacts.sidebar.back')}
-            >
-              <ArrowLeft className="h-4 w-4" />
-            </button>
-            <DialogHeader>
-              <DialogTitle>{selectedArtifact.title}</DialogTitle>
-            </DialogHeader>
-            <ArtifactViewer artifact={selectedArtifact} />
-          </DialogContent>
-        </Dialog>
-      )}
-    </>
-  );
-}
+import { useRightDockStore } from '@/stores/right-dock.store';
+import { PanelLeft, Sparkles } from 'lucide-react';
 
 export function ArtifactSidebarToggle() {
   const { t } = useTranslation('notes');
-  const open = useArtifactSidebarStore((s) => s.open);
-  const toggle = useArtifactSidebarStore((s) => s.toggle);
+  const isOpen = useRightDockStore((s) => s.isOpen);
+  const activeTab = useRightDockStore((s) => s.activeTab);
+  const toggle = useRightDockStore((s) => s.toggle);
+  const open = isOpen && activeTab === 'estudio';
 
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={() => toggle('estudio')}
       className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
       aria-label={
         open
@@ -196,7 +29,7 @@ export function ArtifactSidebarToggle() {
 
 export function ArtifactMobileFAB() {
   const { t } = useTranslation('notes');
-  const toggle = useArtifactSidebarStore((s) => s.toggle);
+  const open = useRightDockStore((s) => s.open);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
 
   if (!activeNoteId) {
@@ -206,7 +39,7 @@ export function ArtifactMobileFAB() {
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={() => open('estudio')}
       className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
       aria-label={t('ai.artifacts.sidebar.studyTools')}
     >
