@@ -114,6 +114,9 @@ export class RunAgentTurnHandler {
             });
             break;
           }
+          case 'proposal':
+          case 'committed':
+            break;
           default: {
             const _exhaustive: never = event;
             throw new Error(`Unhandled agent event: ${String(_exhaustive)}`);

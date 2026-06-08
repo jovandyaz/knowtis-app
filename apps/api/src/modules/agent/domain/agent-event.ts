@@ -1,4 +1,5 @@
 import type { AIDomainError } from '../../ai/domain/errors/ai.errors';
+import type { ProposedMutation } from './proposed-mutation';
 
 export interface AgentTurnUsage {
   readonly inputTokens: number;
@@ -11,6 +12,12 @@ export interface AgentSource {
   readonly title: string;
 }
 
+export interface AgentCommitResult {
+  readonly noteId: string;
+  readonly title: string;
+  readonly kind: 'create' | 'update' | 'share';
+}
+
 export type AgentEvent =
   | { readonly type: 'chunk'; readonly text: string }
   | {
@@ -18,4 +25,9 @@ export type AgentEvent =
       readonly usage: AgentTurnUsage;
       readonly sources: readonly AgentSource[];
     }
-  | { readonly type: 'error'; readonly error: AIDomainError };
+  | { readonly type: 'proposal'; readonly proposal: ProposedMutation }
+  | { readonly type: 'committed'; readonly result: AgentCommitResult }
+  | {
+      readonly type: 'error';
+      readonly error: AIDomainError | { code: string; message: string };
+    };
