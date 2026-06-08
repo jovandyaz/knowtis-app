@@ -10,6 +10,7 @@ import {
   WebSocketGateway,
   WebSocketServer,
   type OnGatewayConnection,
+  type OnGatewayDisconnect,
   type OnGatewayInit,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
@@ -40,10 +41,13 @@ interface AuthenticatedAgentSocket extends Socket {
 }
 
 @WebSocketGateway({ namespace: '/agent' })
-export class AgentGateway implements OnGatewayInit, OnGatewayConnection {
+export class AgentGateway
+  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
+{
   private readonly logger = new Logger(AgentGateway.name);
   private readonly activeTurns = new Map<string, AbortController>();
   private readonly userTurnCount = new Map<string, number>();
+  private readonly clientTurns = new Map<string, Set<string>>();
   private readonly maxConcurrentTurns: number;
 
   @WebSocketServer()
@@ -92,6 +96,10 @@ export class AgentGateway implements OnGatewayInit, OnGatewayConnection {
     }
   }
 
+  handleDisconnect(client: AuthenticatedAgentSocket): void {
+    this.abortClientTurns(client.id);
+  }
+
   @SubscribeMessage('agent:message')
   async handleMessage(
     @ConnectedSocket() client: AuthenticatedAgentSocket,
@@ -115,8 +123,7 @@ export class AgentGateway implements OnGatewayInit, OnGatewayConnection {
       return;
     }
 
-    const current = this.userTurnCount.get(userId) ?? 0;
-    if (current >= this.maxConcurrentTurns) {
+    if ((this.userTurnCount.get(userId) ?? 0) >= this.maxConcurrentTurns) {
       client.emit(
         'agent:error',
         AIErrors.rateLimitExceeded(
@@ -128,8 +135,7 @@ export class AgentGateway implements OnGatewayInit, OnGatewayConnection {
 
     const turnId = randomUUID();
     const controller = new AbortController();
-    this.activeTurns.set(turnId, controller);
-    this.userTurnCount.set(userId, current + 1);
+    this.acquireTurnSlot(userId, client.id, turnId, controller);
 
     try {
       await this.runAgentTurn.execute(
@@ -150,21 +156,57 @@ export class AgentGateway implements OnGatewayInit, OnGatewayConnection {
         controller.signal
       );
     } finally {
-      this.activeTurns.delete(turnId);
-      const count = this.userTurnCount.get(userId) ?? 0;
-      if (count <= 1) {
-        this.userTurnCount.delete(userId);
-      } else {
-        this.userTurnCount.set(userId, count - 1);
-      }
+      this.releaseTurnSlot(userId, client.id, turnId);
     }
   }
 
   @SubscribeMessage('agent:cancel')
   handleCancel(@ConnectedSocket() client: AuthenticatedAgentSocket): void {
-    for (const [, controller] of this.activeTurns) {
-      controller.abort();
-    }
+    this.abortClientTurns(client.id);
     this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
+  }
+
+  private acquireTurnSlot(
+    userId: string,
+    clientId: string,
+    turnId: string,
+    controller: AbortController
+  ): void {
+    this.activeTurns.set(turnId, controller);
+    this.userTurnCount.set(userId, (this.userTurnCount.get(userId) ?? 0) + 1);
+    const clientSet = this.clientTurns.get(clientId) ?? new Set();
+    clientSet.add(turnId);
+    this.clientTurns.set(clientId, clientSet);
+  }
+
+  private releaseTurnSlot(
+    userId: string,
+    clientId: string,
+    turnId: string
+  ): void {
+    this.activeTurns.delete(turnId);
+    const clientSet = this.clientTurns.get(clientId);
+    if (clientSet) {
+      clientSet.delete(turnId);
+      if (clientSet.size === 0) {
+        this.clientTurns.delete(clientId);
+      }
+    }
+    const count = this.userTurnCount.get(userId) ?? 0;
+    if (count <= 1) {
+      this.userTurnCount.delete(userId);
+    } else {
+      this.userTurnCount.set(userId, count - 1);
+    }
+  }
+
+  private abortClientTurns(clientId: string): void {
+    const turnIds = this.clientTurns.get(clientId);
+    if (!turnIds) {
+      return;
+    }
+    for (const turnId of turnIds) {
+      this.activeTurns.get(turnId)?.abort();
+    }
   }
 }

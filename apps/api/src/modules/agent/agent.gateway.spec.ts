@@ -19,9 +19,9 @@ function makeGateway(handler: Partial<RunAgentTurnHandler> = {}) {
   );
 }
 
-function makeClient(userId?: string) {
+function makeClient(userId?: string, id = 'c1') {
   return {
-    id: 'c1',
+    id,
     data: userId ? { userId } : {},
     emit: vi.fn(),
   };
@@ -65,5 +65,35 @@ describe('AgentGateway', () => {
 
     expect(execute).toHaveBeenCalledOnce();
     expect(execute.mock.calls[0][0]).toMatchObject({ userId: 'u1' });
+  });
+
+  it('cancel aborts only the requesting client’s turns', async () => {
+    const signals: Record<string, AbortSignal | undefined> = {};
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const execute = vi.fn(
+      async (input: { userId: string }, _cb, signal: AbortSignal) => {
+        signals[input.userId] = signal;
+        await gate;
+      }
+    );
+    const gateway = makeGateway({ execute } as Partial<RunAgentTurnHandler>);
+    const clientA = makeClient('userA', 'A');
+    const clientB = makeClient('userB', 'B');
+    const msg = { messages: [{ role: 'user', content: 'hi' }] };
+
+    const turnA = gateway.handleMessage(clientA as never, msg);
+    const turnB = gateway.handleMessage(clientB as never, msg);
+    await Promise.resolve();
+
+    gateway.handleCancel(clientA as never);
+
+    expect(signals['userA']?.aborted).toBe(true);
+    expect(signals['userB']?.aborted).toBe(false);
+
+    release();
+    await Promise.all([turnA, turnB]);
   });
 });
