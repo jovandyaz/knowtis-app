@@ -6,11 +6,13 @@ import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../../domain/ports/retrieval.port';
+import { MutationProposalBuilder } from './mutation-proposal.builder';
 
 @Injectable()
 export class AgentToolsFactory {
   constructor(
-    @Inject(RETRIEVAL_PORT) private readonly retrieval: RetrievalPort
+    @Inject(RETRIEVAL_PORT) private readonly retrieval: RetrievalPort,
+    private readonly proposalBuilder: MutationProposalBuilder
   ) {}
 
   build(userId: string) {
@@ -56,6 +58,68 @@ export class AgentToolsFactory {
           "Get counts of the user's notes: total accessible, owned by the user, and shared-with-the-user. Use for 'how many notes do I have' style questions.",
         inputSchema: z.object({}),
         execute: async () => this.retrieval.overview(userId),
+      }),
+      proposeCreateNote: tool({
+        description:
+          'Propose creating a new note. Does NOT create it — the user must confirm. Use when the user asks to create/draft a note.',
+        inputSchema: z.object({
+          title: z.string().min(1).max(200).describe('The note title'),
+          contentMarkdown: z
+            .string()
+            .max(20000)
+            .describe('The note body in Markdown'),
+        }),
+        execute: async ({ title, contentMarkdown }) => {
+          const r = await this.proposalBuilder.buildCreate(
+            userId,
+            title,
+            contentMarkdown
+          );
+          return r.isOk()
+            ? { __proposal: r.value }
+            : { error: r.error.message };
+        },
+      }),
+      proposeUpdateNote: tool({
+        description:
+          'Propose editing an existing note (title and/or content). Does NOT edit it — the user must confirm. noteId must come from searchNotes/getNote.',
+        inputSchema: z.object({
+          noteId: z.string().uuid().describe('The note id to edit'),
+          title: z.string().min(1).max(200).optional(),
+          contentMarkdown: z.string().max(20000).optional(),
+        }),
+        execute: async ({ noteId, title, contentMarkdown }) => {
+          const r = await this.proposalBuilder.buildUpdate(userId, noteId, {
+            ...(title !== undefined && { title }),
+            ...(contentMarkdown !== undefined && { contentMarkdown }),
+          });
+          return r.isOk()
+            ? { __proposal: r.value }
+            : { error: r.error.message };
+        },
+      }),
+      proposeShareNote: tool({
+        description:
+          'Propose sharing a note with another user by email. Does NOT share it — the user must confirm. noteId must come from searchNotes/getNote.',
+        inputSchema: z.object({
+          noteId: z.string().uuid(),
+          targetEmail: z
+            .string()
+            .email()
+            .describe('Email of the person to share with'),
+          permission: z.enum(['viewer', 'editor']).default('viewer'),
+        }),
+        execute: async ({ noteId, targetEmail, permission }) => {
+          const r = await this.proposalBuilder.buildShare(
+            userId,
+            noteId,
+            targetEmail,
+            permission
+          );
+          return r.isOk()
+            ? { __proposal: r.value }
+            : { error: r.error.message };
+        },
       }),
     };
   }

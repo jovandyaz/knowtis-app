@@ -30,21 +30,34 @@ function makeRetrieval(over: Partial<RetrievalPort> = {}): RetrievalPort {
   };
 }
 
+function makeBuilder() {
+  return { buildCreate: vi.fn(), buildUpdate: vi.fn(), buildShare: vi.fn() };
+}
+
 describe('AgentToolsFactory', () => {
   it('builds searchNotes, getNote, listRecentNotes, and getNotesOverview tools bound to the userId', () => {
-    const factory = new AgentToolsFactory(makeRetrieval());
+    const factory = new AgentToolsFactory(
+      makeRetrieval(),
+      makeBuilder() as never
+    );
     const tools = factory.build(USER);
     expect(Object.keys(tools).sort()).toEqual([
       'getNote',
       'getNotesOverview',
       'listRecentNotes',
+      'proposeCreateNote',
+      'proposeShareNote',
+      'proposeUpdateNote',
       'searchNotes',
     ]);
   });
 
   it('searchNotes executes against the retrieval port with the bound user', async () => {
     const retrieval = makeRetrieval();
-    const tools = new AgentToolsFactory(retrieval).build(USER);
+    const tools = new AgentToolsFactory(
+      retrieval,
+      makeBuilder() as never
+    ).build(USER);
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const result = await tools.searchNotes.execute!(
@@ -60,7 +73,10 @@ describe('AgentToolsFactory', () => {
     const retrieval = makeRetrieval({
       getById: vi.fn().mockResolvedValue(null),
     });
-    const tools = new AgentToolsFactory(retrieval).build(USER);
+    const tools = new AgentToolsFactory(
+      retrieval,
+      makeBuilder() as never
+    ).build(USER);
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const result = await tools.getNote.execute!(
@@ -73,7 +89,10 @@ describe('AgentToolsFactory', () => {
 
   it('listRecentNotes delegates to retrieval.listRecent with bound userId and limit', async () => {
     const retrieval = makeRetrieval();
-    const tools = new AgentToolsFactory(retrieval).build(USER);
+    const tools = new AgentToolsFactory(
+      retrieval,
+      makeBuilder() as never
+    ).build(USER);
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const result = await tools.listRecentNotes.execute!(
@@ -87,12 +106,38 @@ describe('AgentToolsFactory', () => {
 
   it('getNotesOverview delegates to retrieval.overview with bound userId', async () => {
     const retrieval = makeRetrieval();
-    const tools = new AgentToolsFactory(retrieval).build(USER);
+    const tools = new AgentToolsFactory(
+      retrieval,
+      makeBuilder() as never
+    ).build(USER);
 
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
     const result = await tools.getNotesOverview.execute!({}, {} as never);
 
     expect(retrieval.overview).toHaveBeenCalledWith(USER);
     expect(result).toEqual({ total: 5, owned: 3, sharedWithMe: 2 });
+  });
+
+  it('proposeCreateNote returns a proposal marker', async () => {
+    const builder = {
+      buildCreate: vi.fn().mockResolvedValue({
+        isOk: () => true,
+        isErr: () => false,
+        value: { id: 'p1', kind: 'create' },
+      }),
+      buildUpdate: vi.fn(),
+      buildShare: vi.fn(),
+    };
+    const tools = new AgentToolsFactory(
+      makeRetrieval(),
+      builder as never
+    ).build(USER);
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const result = await tools.proposeCreateNote.execute!(
+      { title: 'GTD', contentMarkdown: '# hi' },
+      {} as never
+    );
+    expect(result).toEqual({ __proposal: { id: 'p1', kind: 'create' } });
+    expect(builder.buildCreate).toHaveBeenCalledWith(USER, 'GTD', '# hi');
   });
 });
