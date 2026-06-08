@@ -184,6 +184,24 @@
       "injection": "Your input was flagged and couldn't be processed.",
       "timeout": "The AI request timed out. Please retry."
     },
+    "copilot": {
+      "tab": "Copilot",
+      "title": "Copilot",
+      "dockLabel": "Note tools",
+      "placeholder": "Ask about your notes…",
+      "send": "Send",
+      "composerHint": "Enter to send · Shift+Enter for a new line",
+      "newConversation": "New conversation",
+      "thinking": "Thinking…",
+      "sources": "Sources",
+      "empty": {
+        "title": "Ask your notes",
+        "suggestions": "\"summarize my bio notes\", \"what did I say about X?\""
+      },
+      "estudio": {
+        "noNote": "Open a note to use study tools."
+      }
+    },
     "groups": {
       "ai": "AI",
       "artifacts": "Study Tools",

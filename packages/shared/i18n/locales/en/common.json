@@ -24,7 +24,8 @@
     "toggleMenu": "Toggle menu",
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
-    "resizeSidebar": "Resize sidebar"
+    "resizeSidebar": "Resize sidebar",
+    "copilot": "Copilot"
   },
   "states": {
     "loading": "Loading...",

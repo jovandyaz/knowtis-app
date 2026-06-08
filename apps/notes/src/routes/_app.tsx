@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -6,34 +6,50 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import {
-  ArtifactGeneratorDialog,
-  ArtifactMobileFAB,
-  ArtifactSidebar,
-  ArtifactSidebarToggle,
-} from '@/components/artifacts';
+import { ArtifactGeneratorDialog } from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
+import {
+  CopilotMobileFAB,
+  RightDock,
+  RightDockToggle,
+} from '@/components/right-dock';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { ROUTES } from '@/config';
 import { useAIStore } from '@/stores/ai.store';
 import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
+import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
-function ArtifactSidebarLayout() {
+function RightDockLayout() {
   const noteId = useArtifactSidebarStore((s) => s.activeNoteId);
-  if (!noteId) {
-    return null;
-  }
-  return <ArtifactSidebar noteId={noteId} />;
+  const { data: artifacts } = useArtifacts(noteId ?? undefined);
+  const open = useRightDockStore((s) => s.open);
+  const autoShownRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (
+      noteId &&
+      artifacts &&
+      artifacts.length > 0 &&
+      !autoShownRef.current.has(noteId) &&
+      !useRightDockStore.getState().isOpen
+    ) {
+      autoShownRef.current.add(noteId);
+      open('estudio');
+    }
+  }, [noteId, artifacts, open]);
+
+  return <RightDock noteId={noteId} />;
 }
 
 function ArtifactGeneratorDialogLayout() {
@@ -72,10 +88,22 @@ function AppLayout() {
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
-  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
   const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
+  const toggleDock = useRightDockStore((s) => s.toggle);
+
+  useEffect(() => {
+    const isMac = /Mac/i.test(navigator.userAgent);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        toggleDock('copilot');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [toggleDock]);
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
@@ -105,7 +133,7 @@ function AppLayout() {
       {!isAnonymous && <SettingsModal />}
       <AnonymousLimitModal open={showLimitModal} onClose={closeLimitModal} />
       <BottomNav />
-      {aiEnabled && <ArtifactMobileFAB />}
+      {aiEnabled && <CopilotMobileFAB />}
 
       <main
         className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0"
@@ -133,14 +161,14 @@ function AppLayout() {
                 id="note-controls-portal"
                 className="flex items-center gap-1"
               />
-              {activeNoteId && aiEnabled && <ArtifactSidebarToggle />}
+              {aiEnabled && <RightDockToggle />}
             </div>
           </div>
           <div className="flex-1 min-h-0 p-4 md:px-8 md:pt-3 md:pb-8 w-full overflow-y-auto">
             <Outlet />
           </div>
         </div>
-        {aiEnabled && <ArtifactSidebarLayout />}
+        {aiEnabled && <RightDockLayout />}
       </main>
       {aiEnabled && <ArtifactGeneratorDialogLayout />}
     </div>

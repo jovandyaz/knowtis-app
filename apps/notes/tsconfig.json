@@ -20,6 +20,9 @@
       "@knowtis/data-access-feature-flags": [
         "libs/data-access/feature-flags/src/index.ts"
       ],
+      "@knowtis/data-access-mcp-keys": [
+        "libs/data-access/mcp-keys/src/index.ts"
+      ],
       "@knowtis/authorization": ["libs/authorization/src/index.ts"],
       "@jovandyaz/permissions-core": ["packages/permissions/src/index.ts"],
       "@jovandyaz/permissions-react": [

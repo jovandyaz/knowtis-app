@@ -21,6 +21,16 @@ export type {
   AuthRefreshHandler,
 } from './lib/ai.client';
 
+export { agentClient, AgentClient } from './lib/agent.client';
+export type {
+  AgentWireMessage,
+  AgentSource,
+  AgentChunkPayload,
+  AgentDonePayload,
+  AgentErrorPayload,
+  AgentStreamHandle,
+} from './lib/agent.client';
+
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
 export type {
   TokenRefreshPolicy,

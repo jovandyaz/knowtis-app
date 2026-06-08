@@ -4,7 +4,7 @@ import {
   createTokenStorage,
 } from '@jovandyaz/auth-react';
 
-import { aiClient, httpClient } from '@knowtis/api-client';
+import { agentClient, aiClient, httpClient } from '@knowtis/api-client';
 
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
@@ -24,6 +24,7 @@ export const authStore = createAuthStore({
 
 setCollaborationTokenStorage(tokenStorage);
 aiClient.setTokenProvider(tokenStorage);
+agentClient.setTokenProvider(tokenStorage);
 
 export const authApi = createAuthApiAdapter({
   httpClient,
@@ -72,3 +73,5 @@ export async function refreshAccessToken(): Promise<boolean> {
 
 aiClient.setAuthRefreshHandler(refreshAccessToken);
 aiClient.setSessionExpiredHandler(handleSessionExpired);
+agentClient.setAuthRefreshHandler(refreshAccessToken);
+agentClient.setSessionExpiredHandler(handleSessionExpired);
