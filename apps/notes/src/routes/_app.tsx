@@ -6,14 +6,14 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
-import {
-  ArtifactGeneratorDialog,
-  ArtifactSidebarToggle,
-  CopilotMobileFAB,
-} from '@/components/artifacts';
+import { ArtifactGeneratorDialog } from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { RightDock } from '@/components/right-dock';
+import {
+  CopilotMobileFAB,
+  RightDock,
+  RightDockToggle,
+} from '@/components/right-dock';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { ROUTES } from '@/config';
 import { useAIStore } from '@/stores/ai.store';
@@ -22,12 +22,11 @@ import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
-import { PanelLeft, Sparkles } from 'lucide-react';
+import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
-import { cn } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
@@ -61,31 +60,6 @@ function ArtifactGeneratorDialogLayout() {
   return <ArtifactGeneratorDialog noteId={noteId} />;
 }
 
-function CopilotToggle() {
-  const { t } = useTranslation('common');
-  const isOpen = useRightDockStore((s) => s.isOpen);
-  const activeTab = useRightDockStore((s) => s.activeTab);
-  const toggle = useRightDockStore((s) => s.toggle);
-  const active = isOpen && activeTab === 'copilot';
-
-  return (
-    <button
-      type="button"
-      onClick={() => toggle('copilot')}
-      aria-label={t('labels.copilot', 'Copilot')}
-      aria-pressed={active}
-      className={cn(
-        'p-1.5 rounded-md transition-colors cursor-pointer',
-        active
-          ? 'text-(--primary)'
-          : 'text-(--muted-foreground)/40 hover:text-(--muted-foreground)'
-      )}
-    >
-      <Sparkles className="h-4 w-4" />
-    </button>
-  );
-}
-
 export const Route = createFileRoute('/_app')({
   beforeLoad: async ({ location }) => {
     try {
@@ -114,7 +88,6 @@ function AppLayout() {
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
-  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
   const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
@@ -188,8 +161,7 @@ function AppLayout() {
                 id="note-controls-portal"
                 className="flex items-center gap-1"
               />
-              {aiEnabled && <CopilotToggle />}
-              {activeNoteId && aiEnabled && <ArtifactSidebarToggle />}
+              {aiEnabled && <RightDockToggle />}
             </div>
           </div>
           <div className="flex-1 min-h-0 p-4 md:px-8 md:pt-3 md:pb-8 w-full overflow-y-auto">
