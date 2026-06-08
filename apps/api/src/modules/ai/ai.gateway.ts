@@ -69,13 +69,6 @@ export class AIGateway
   }
 
   async handleConnection(client: AuthenticatedAISocket): Promise<void> {
-    const aiEnabled = await this.featureFlagsService.isEnabled('ai_enabled');
-    if (!aiEnabled) {
-      client.emit('ai:error', AIErrors.featureDisabled());
-      client.disconnect();
-      return;
-    }
-
     const token =
       (client.handshake.auth?.['token'] as string | undefined) ??
       client.handshake.headers?.['authorization']?.replace('Bearer ', '');
@@ -86,6 +79,8 @@ export class AIGateway
       return;
     }
 
+    // Verify + set userId synchronously BEFORE the async flag check below, so a
+    // message emitted on the same tick as `connect` can't race ahead of it.
     try {
       const payload = this.jwtService.verify<{
         sub: string;
@@ -109,6 +104,12 @@ export class AIGateway
         'ai:error',
         AIErrors.authRequired('Invalid authentication token')
       );
+      client.disconnect();
+      return;
+    }
+
+    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+      client.emit('ai:error', AIErrors.featureDisabled());
       client.disconnect();
     }
   }

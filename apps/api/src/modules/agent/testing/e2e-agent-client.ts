@@ -23,14 +23,9 @@ const watchdog = setTimeout(() => {
 
 socket.on('connect', () => {
   process.stdout.write('connected; sending turn...\n\n');
-  // Settle delay: the gateway sets userId in an async handleConnection, so a
-  // message emitted on the same tick can race ahead of it. The real UI will
-  // gate on a ready signal; this harness just waits briefly.
-  setTimeout(() => {
-    socket.emit('agent:message', {
-      messages: [{ role: 'user', content: PROMPT }],
-    });
-  }, 600);
+  socket.emit('agent:message', {
+    messages: [{ role: 'user', content: PROMPT }],
+  });
 });
 socket.on('agent:chunk', ({ text }: { text: string }) =>
   process.stdout.write(text)

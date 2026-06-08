@@ -67,12 +67,6 @@ export class AgentGateway
   }
 
   async handleConnection(client: AuthenticatedAgentSocket): Promise<void> {
-    const aiEnabled = await this.featureFlagsService.isEnabled('ai_enabled');
-    if (!aiEnabled) {
-      client.emit('agent:error', AIErrors.featureDisabled());
-      client.disconnect();
-      return;
-    }
     const token =
       (client.handshake.auth?.['token'] as string | undefined) ??
       client.handshake.headers?.['authorization']?.replace('Bearer ', '');
@@ -81,6 +75,8 @@ export class AgentGateway
       client.disconnect();
       return;
     }
+    // Verify + set userId synchronously BEFORE the async flag check below, so a
+    // message emitted on the same tick as `connect` can't race ahead of it.
     try {
       const payload = this.jwtService.verify<{
         sub: string;
@@ -92,6 +88,12 @@ export class AgentGateway
       }
     } catch {
       client.emit('agent:error', AIErrors.authRequired('Invalid token'));
+      client.disconnect();
+      return;
+    }
+
+    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+      client.emit('agent:error', AIErrors.featureDisabled());
       client.disconnect();
     }
   }
