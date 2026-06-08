@@ -9,8 +9,10 @@ import { buildProviderRegistry } from '../../../ai/infrastructure/providers/prov
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type {
   AgentOrchestrator,
+  AgentResumeContext,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
+import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 import { AgentToolsFactory } from './agent-tools.factory';
 
@@ -18,6 +20,23 @@ import { AgentToolsFactory } from './agent-tools.factory';
 interface StepToolResult {
   readonly toolName: string;
   readonly output: unknown;
+}
+
+export function extractProposal(
+  toolResults: readonly { toolName: string; output: unknown }[]
+): ProposedMutation | null {
+  for (const r of toolResults) {
+    const out = r.output;
+    if (
+      typeof out === 'object' &&
+      out !== null &&
+      '__proposal' in out &&
+      (out as { __proposal: unknown }).__proposal instanceof ProposedMutation
+    ) {
+      return (out as { __proposal: ProposedMutation }).__proposal;
+    }
+  }
+  return null;
 }
 
 function isSourceNote(value: unknown): value is { id: string; title: string } {
@@ -48,21 +67,27 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
     const sources = new Map<string, AgentSource>();
+    let captured: ProposedMutation | null = null;
     let result;
     try {
       result = streamText({
         model: this.registry.languageModel(
           input.model as `${string}:${string}`
         ),
-        system: this.buildSystemPrompt(input.noteId),
+        system: this.buildSystemPrompt(input.noteId, input.resume),
         messages: input.messages.map((m) => ({
           role: m.role,
           content: m.content,
         })),
         tools: this.toolsFactory.build(input.userId),
         stopWhen: stepCountIs(input.maxSteps),
-        onStepFinish: ({ toolResults }) =>
-          this.collectSources(toolResults, sources),
+        onStepFinish: ({ toolResults }) => {
+          this.collectSources(toolResults, sources);
+          const proposal = extractProposal(toolResults);
+          if (proposal) {
+            captured = proposal;
+          }
+        },
         ...(input.signal ? { abortSignal: input.signal } : {}),
       });
     } catch (error) {
@@ -75,6 +100,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         if (delta) {
           yield { type: 'chunk', text: delta };
         }
+      }
+      if (captured) {
+        yield { type: 'proposal', proposal: captured };
+        return;
       }
       const usage = await result.totalUsage;
       yield {
@@ -100,11 +129,18 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     }
   }
 
-  private buildSystemPrompt(noteId?: string): string {
-    if (!noteId) {
-      return AGENT_SYSTEM_PROMPT;
+  private buildSystemPrompt(
+    noteId?: string,
+    resume?: AgentResumeContext
+  ): string {
+    let prompt = AGENT_SYSTEM_PROMPT;
+    if (noteId) {
+      prompt += `\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
     }
-    return `${AGENT_SYSTEM_PROMPT}\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
+    if (resume) {
+      prompt += `\n\nA "${resume.toolName}" action was just resolved: ${resume.outcome}. Briefly confirm this to the user in their language. Do not call any tool.`;
+    }
+    return prompt;
   }
 
   private collectSources(
