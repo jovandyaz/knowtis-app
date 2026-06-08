@@ -24,7 +24,8 @@
     "toggleMenu": "Alternar menú",
     "expandSidebar": "Expandir barra lateral",
     "collapseSidebar": "Contraer barra lateral",
-    "resizeSidebar": "Redimensionar barra lateral"
+    "resizeSidebar": "Redimensionar barra lateral",
+    "copilot": "Copilot"
   },
   "states": {
     "loading": "Cargando...",
