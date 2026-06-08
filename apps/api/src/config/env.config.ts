@@ -44,6 +44,12 @@ const envSchemaBase = z.object({
   AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
   AI_AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),
   AI_AGENT_MAX_MS: z.coerce.number().int().min(1000).default(120000),
+  AI_AGENT_PROPOSAL_TTL_SECONDS: z.coerce
+    .number()
+    .int()
+    .min(60)
+    .max(3600)
+    .default(600),
   VERCEL_BLOB_READ_WRITE_TOKEN: z.string().optional(),
 });
 
