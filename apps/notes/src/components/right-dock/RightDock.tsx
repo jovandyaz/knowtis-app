@@ -16,6 +16,7 @@ import {
 } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 
+import { AgentCopilotPanel } from '../copilot';
 import { StudyToolsTab } from './StudyToolsTab';
 
 const DOCK_DEFAULT_WIDTH = 360;
@@ -69,18 +70,26 @@ function DockBody({ noteId }: { noteId: string | null }) {
     <div className="flex h-full flex-col min-w-0">
       <TabBar />
       <div
-        id={`right-dock-panel-${activeTab}`}
+        id="right-dock-panel-copilot"
         role="tabpanel"
-        aria-labelledby={`right-dock-tab-${activeTab}`}
-        className="flex-1 overflow-y-auto min-h-0"
-      >
-        {activeTab === 'estudio' ? (
-          <StudyToolsTab noteId={noteId} />
-        ) : (
-          <div className="flex h-full items-center justify-center p-6 text-sm text-muted-foreground">
-            Copilot
-          </div>
+        aria-labelledby="right-dock-tab-copilot"
+        className={cn(
+          'flex-1 overflow-hidden min-h-0',
+          activeTab !== 'copilot' && 'hidden'
         )}
+      >
+        <AgentCopilotPanel />
+      </div>
+      <div
+        id="right-dock-panel-estudio"
+        role="tabpanel"
+        aria-labelledby="right-dock-tab-estudio"
+        className={cn(
+          'flex-1 min-h-0 overflow-y-auto',
+          activeTab !== 'estudio' && 'hidden'
+        )}
+      >
+        <StudyToolsTab noteId={noteId} />
       </div>
     </div>
   );
@@ -89,6 +98,7 @@ function DockBody({ noteId }: { noteId: string | null }) {
 export function RightDock({ noteId }: { noteId: string | null }) {
   const { t } = useTranslation('notes');
   const isOpen = useRightDockStore((s) => s.isOpen);
+  const activeTab = useRightDockStore((s) => s.activeTab);
   const close = useRightDockStore((s) => s.close);
   const isDesktop = useMediaQuery('(min-width: 768px)');
 
@@ -118,7 +128,11 @@ export function RightDock({ noteId }: { noteId: string | null }) {
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
       <DialogContent className="max-w-full h-[90vh] p-0">
         <DialogHeader className="sr-only">
-          <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
+          <DialogTitle>
+            {activeTab === 'copilot'
+              ? t('ai.copilot.tab')
+              : t('ai.artifacts.studyTools')}
+          </DialogTitle>
         </DialogHeader>
         <DockBody noteId={noteId} />
       </DialogContent>

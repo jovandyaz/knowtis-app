@@ -1,4 +1,4 @@
-export { ArtifactMobileFAB, ArtifactSidebarToggle } from './ArtifactSidebar';
+export { CopilotMobileFAB, ArtifactSidebarToggle } from './ArtifactSidebar';
 export {
   ArtifactGeneratorButton,
   ArtifactGeneratorDialog,

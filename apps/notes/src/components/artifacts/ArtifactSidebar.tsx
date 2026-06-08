@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 
-import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { PanelLeft, Sparkles } from 'lucide-react';
 
@@ -27,21 +26,16 @@ export function ArtifactSidebarToggle() {
   );
 }
 
-export function ArtifactMobileFAB() {
-  const { t } = useTranslation('notes');
+export function CopilotMobileFAB() {
+  const { t } = useTranslation('common');
   const open = useRightDockStore((s) => s.open);
-  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
-
-  if (!activeNoteId) {
-    return null;
-  }
 
   return (
     <button
       type="button"
-      onClick={() => open('estudio')}
+      onClick={() => open('copilot')}
       className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
-      aria-label={t('ai.artifacts.sidebar.studyTools')}
+      aria-label={t('labels.copilot', 'Copilot')}
     >
       <Sparkles className="h-5 w-5" />
     </button>

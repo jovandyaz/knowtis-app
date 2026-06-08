@@ -8,8 +8,8 @@ import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import {
   ArtifactGeneratorDialog,
-  ArtifactMobileFAB,
   ArtifactSidebarToggle,
+  CopilotMobileFAB,
 } from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -22,11 +22,12 @@ import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { cn } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
@@ -58,6 +59,31 @@ function ArtifactGeneratorDialogLayout() {
     return null;
   }
   return <ArtifactGeneratorDialog noteId={noteId} />;
+}
+
+function CopilotToggle() {
+  const { t } = useTranslation('common');
+  const isOpen = useRightDockStore((s) => s.isOpen);
+  const activeTab = useRightDockStore((s) => s.activeTab);
+  const toggle = useRightDockStore((s) => s.toggle);
+  const active = isOpen && activeTab === 'copilot';
+
+  return (
+    <button
+      type="button"
+      onClick={() => toggle('copilot')}
+      aria-label={t('labels.copilot', 'Copilot')}
+      aria-pressed={active}
+      className={cn(
+        'p-1.5 rounded-md transition-colors cursor-pointer',
+        active
+          ? 'text-(--primary)'
+          : 'text-(--muted-foreground)/40 hover:text-(--muted-foreground)'
+      )}
+    >
+      <Sparkles className="h-4 w-4" />
+    </button>
+  );
 }
 
 export const Route = createFileRoute('/_app')({
@@ -92,6 +118,19 @@ function AppLayout() {
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
   const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
+  const toggleDock = useRightDockStore((s) => s.toggle);
+
+  useEffect(() => {
+    const isMac = /Mac/i.test(navigator.userAgent);
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        toggleDock('copilot');
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [toggleDock]);
 
   useEffect(() => {
     setSidebarCollapsed(isAnonymous);
@@ -121,7 +160,7 @@ function AppLayout() {
       {!isAnonymous && <SettingsModal />}
       <AnonymousLimitModal open={showLimitModal} onClose={closeLimitModal} />
       <BottomNav />
-      {aiEnabled && <ArtifactMobileFAB />}
+      {aiEnabled && <CopilotMobileFAB />}
 
       <main
         className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0"
@@ -149,6 +188,7 @@ function AppLayout() {
                 id="note-controls-portal"
                 className="flex items-center gap-1"
               />
+              {aiEnabled && <CopilotToggle />}
               {activeNoteId && aiEnabled && <ArtifactSidebarToggle />}
             </div>
           </div>
