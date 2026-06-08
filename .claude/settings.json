@@ -2,8 +2,12 @@
   "hooks": {
     "PostToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|Write|MultiEdit",
         "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-comments.mjs\""
+          },
           {
             "type": "command",
             "command": "npx tsc --noEmit 2>&1 | head -20 || true"
