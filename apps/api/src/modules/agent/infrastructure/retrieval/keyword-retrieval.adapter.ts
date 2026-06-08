@@ -1,12 +1,18 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import type { NoteEntity } from '../../../notes/domain/entities/note.entity';
 import {
   NOTE_READ_REPOSITORY,
   type NoteReadRepository,
 } from '../../../notes/domain/ports/note-read.repository';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type { AgentNote, NoteHit } from '../../domain/retrieval';
+import type {
+  AgentNote,
+  NoteHit,
+  NoteMeta,
+  NotesOverview,
+} from '../../domain/retrieval';
 
 const MAX_SEARCH_HITS = 20;
 
@@ -28,9 +34,11 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       branded,
       query
     );
-    return rows
-      .slice(0, MAX_SEARCH_HITS)
-      .map(({ note }) => ({ id: note.id, title: note.title }));
+    return rows.slice(0, MAX_SEARCH_HITS).map(({ note }) => ({
+      id: note.id,
+      title: note.title,
+      ...this.toMeta(note, userId),
+    }));
   }
 
   async getById(userId: string, noteId: string): Promise<AgentNote | null> {
@@ -49,6 +57,47 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       id: match.note.id,
       title: match.note.title,
       content: match.note.content,
+      createdAt: match.note.createdAt.toISOString(),
+      ...this.toMeta(match.note, userId),
+    };
+  }
+
+  async listRecent(userId: string, limit: number): Promise<NoteHit[]> {
+    const branded = this.brandUser(userId, 'listRecent');
+    if (!branded) {
+      return [];
+    }
+    const clampedLimit = Math.min(Math.max(limit, 1), MAX_SEARCH_HITS);
+    const rows = await this.noteReadRepository.findAccessibleByUser(branded);
+    return rows
+      .slice()
+      .sort((a, b) => b.note.updatedAt.getTime() - a.note.updatedAt.getTime())
+      .slice(0, clampedLimit)
+      .map(({ note }) => ({
+        id: note.id,
+        title: note.title,
+        ...this.toMeta(note, userId),
+      }));
+  }
+
+  async overview(userId: string): Promise<NotesOverview> {
+    const branded = this.brandUser(userId, 'overview');
+    if (!branded) {
+      return { total: 0, owned: 0, sharedWithMe: 0 };
+    }
+    const rows = await this.noteReadRepository.findAccessibleByUser(branded);
+    const total = rows.length;
+    const owned = rows.filter((r) => r.note.ownerId === userId).length;
+    return { total, owned, sharedWithMe: total - owned };
+  }
+
+  private toMeta(note: NoteEntity, userId: string): NoteMeta {
+    return {
+      updatedAt: note.updatedAt.toISOString(),
+      isOwner: note.ownerId === userId,
+      isSharedWithMe: note.ownerId !== userId,
+      isPubliclyShared:
+        note.generalAccess !== 'restricted' || note.shareToken !== null,
     };
   }
 
