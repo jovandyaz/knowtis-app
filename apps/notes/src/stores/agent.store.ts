@@ -25,7 +25,7 @@ interface AgentState {
   status: AgentStatus;
   error: AgentErrorPayload | null;
   _streamHandle: AgentStreamHandle | null;
-  sendMessage: (text: string) => void;
+  sendMessage: (text: string, noteId?: string) => void;
   newConversation: () => void;
   cancel: () => void;
   retryLast: () => void;
@@ -90,31 +90,39 @@ export const useAgentStore = create<AgentState>((set, get) => {
     }, AGENT_STREAM_INACTIVITY_MS);
   };
 
-  const run = (history: AgentWireMessage[], assistantId: string) => {
+  const run = (
+    history: AgentWireMessage[],
+    assistantId: string,
+    noteId?: string
+  ) => {
     activeAssistantId = assistantId;
-    const handle = agentClient.sendMessage(history, {
-      onChunk: ({ text }) => {
-        armInactivityTimer();
-        chunkBuffer += text;
-        scheduleFlush();
+    const handle = agentClient.sendMessage(
+      history,
+      {
+        onChunk: ({ text }) => {
+          armInactivityTimer();
+          chunkBuffer += text;
+          scheduleFlush();
+        },
+        onDone: ({ sources }) => {
+          clearInactivityTimer();
+          flushChunks();
+          set((s) => ({
+            status: 'done',
+            _streamHandle: null,
+            messages: s.messages.map((m) =>
+              m.id === assistantId ? { ...m, sources } : m
+            ),
+          }));
+        },
+        onError: (error) => {
+          clearInactivityTimer();
+          flushChunks();
+          set({ status: 'error', error, _streamHandle: null });
+        },
       },
-      onDone: ({ sources }) => {
-        clearInactivityTimer();
-        flushChunks();
-        set((s) => ({
-          status: 'done',
-          _streamHandle: null,
-          messages: s.messages.map((m) =>
-            m.id === assistantId ? { ...m, sources } : m
-          ),
-        }));
-      },
-      onError: (error) => {
-        clearInactivityTimer();
-        flushChunks();
-        set({ status: 'error', error, _streamHandle: null });
-      },
-    });
+      noteId
+    );
     armInactivityTimer();
     set({ _streamHandle: handle });
   };
@@ -125,7 +133,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     error: null,
     _streamHandle: null,
 
-    sendMessage: (text) => {
+    sendMessage: (text, noteId) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
@@ -162,7 +170,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         _streamHandle: null,
       });
 
-      run(history, assistantMessage.id);
+      run(history, assistantMessage.id, noteId);
     },
 
     newConversation: () => {

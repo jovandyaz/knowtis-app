@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { streamText } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -85,6 +86,31 @@ describe('AiSdkAgentOrchestrator', () => {
     );
     expect(done).toBeDefined();
     expect(done?.sources).toEqual([{ id: 'n1', title: 'Productividad' }]);
+  });
+
+  it('injects current-note context into the system prompt when noteId is given', async () => {
+    const config = {
+      get: vi.fn(() => ''),
+    } as unknown as ConfigService<EnvConfig, true>;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'resume esta nota' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+        noteId: 'note-xyz',
+      })
+    );
+
+    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].system;
+    expect(system).toContain('note-xyz');
   });
 
   it('yields a single error event (and does not throw) when the model is invalid', async () => {

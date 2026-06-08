@@ -81,4 +81,17 @@ describe('AgentClient', () => {
     handle.cancel();
     expect(emit).toHaveBeenCalledWith('agent:cancel');
   });
+
+  it('includes the current noteId in agent:message when provided', () => {
+    const client = makeClient();
+    client.sendMessage(
+      MESSAGES,
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      'note-123'
+    );
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      messages: MESSAGES,
+      noteId: 'note-123',
+    });
+  });
 });

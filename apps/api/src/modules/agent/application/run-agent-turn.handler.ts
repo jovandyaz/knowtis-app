@@ -18,6 +18,7 @@ interface RunAgentTurnInput {
   readonly userId: string;
   readonly messages: readonly AgentMessage[];
   readonly isAnonymous?: boolean;
+  readonly noteId?: string;
 }
 
 export interface RunAgentTurnCallbacks {
@@ -72,6 +73,7 @@ export class RunAgentTurnHandler {
         messages: input.messages,
         model,
         maxSteps,
+        ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(signal ? { signal } : {}),
       })) {
         switch (event.type) {

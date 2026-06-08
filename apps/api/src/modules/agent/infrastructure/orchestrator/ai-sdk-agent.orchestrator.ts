@@ -54,7 +54,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         model: this.registry.languageModel(
           input.model as `${string}:${string}`
         ),
-        system: AGENT_SYSTEM_PROMPT,
+        system: this.buildSystemPrompt(input.noteId),
         messages: input.messages.map((m) => ({
           role: m.role,
           content: m.content,
@@ -98,6 +98,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
       });
       yield { type: 'error', error: this.toError(error) };
     }
+  }
+
+  private buildSystemPrompt(noteId?: string): string {
+    if (!noteId) {
+      return AGENT_SYSTEM_PROMPT;
+    }
+    return `${AGENT_SYSTEM_PROMPT}\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
   }
 
   private collectSources(

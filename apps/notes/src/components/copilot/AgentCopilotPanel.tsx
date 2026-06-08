@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { useAgentStore } from '@/stores/agent.store';
+import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { RotateCcw } from 'lucide-react';
 
 import { Button } from '@knowtis/design-system';
@@ -18,6 +19,7 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const newConversation = useAgentStore((s) => s.newConversation);
   const retryLast = useAgentStore((s) => s.retryLast);
+  const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
 
   return (
     <div className="flex h-full flex-col min-h-0">
@@ -70,7 +72,10 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      <AgentComposer onSend={sendMessage} disabled={status === 'streaming'} />
+      <AgentComposer
+        onSend={(text) => sendMessage(text, activeNoteId ?? undefined)}
+        disabled={status === 'streaming'}
+      />
     </div>
   );
 }

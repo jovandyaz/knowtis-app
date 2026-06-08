@@ -34,6 +34,7 @@ const agentMessagePayloadSchema = z.object({
     .refine((m) => m[m.length - 1]?.role === 'user', {
       message: 'last message must be from the user',
     }),
+  noteId: z.string().uuid().optional(),
 });
 
 interface AuthenticatedAgentSocket extends Socket {
@@ -145,6 +146,7 @@ export class AgentGateway
           userId,
           messages: parsed.data.messages,
           ...(client.data.isAnonymous && { isAnonymous: true }),
+          ...(parsed.data.noteId && { noteId: parsed.data.noteId }),
         },
         {
           onChunk: (text) => client.emit('agent:chunk', { text }),

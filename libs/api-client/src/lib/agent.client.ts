@@ -65,6 +65,7 @@ export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
   private pendingMessages: AgentWireMessage[] | null = null;
+  private pendingNoteId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
   private readonly wsUrl: string | undefined;
@@ -104,7 +105,8 @@ export class AgentClient {
 
   sendMessage(
     messages: AgentWireMessage[],
-    callbacks: AgentStreamCallbacks
+    callbacks: AgentStreamCallbacks,
+    noteId?: string
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -113,6 +115,7 @@ export class AgentClient {
 
     this.activeCallbacks = callbacks;
     this.pendingMessages = messages;
+    this.pendingNoteId = noteId;
     this.authPolicy.reset();
 
     if (this.tokenProvider.getAccessToken()) {
@@ -171,7 +174,10 @@ export class AgentClient {
       this.failRequest(callbacks, CONNECTION_ERROR);
       return;
     }
-    this.socket.emit('agent:message', { messages });
+    this.socket.emit('agent:message', {
+      messages,
+      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+    });
   }
 
   private failRequest(
