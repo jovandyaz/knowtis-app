@@ -31,4 +31,11 @@ describe('useRightDockStore', () => {
     expect(useRightDockStore.getState().isOpen).toBe(false);
     expect(useRightDockStore.getState().activeTab).toBe('estudio');
   });
+
+  it('toggle when closed opens the dock on the given tab', () => {
+    useRightDockStore.setState({ isOpen: false, activeTab: 'estudio' });
+    useRightDockStore.getState().toggle('copilot');
+    expect(useRightDockStore.getState().isOpen).toBe(true);
+    expect(useRightDockStore.getState().activeTab).toBe('copilot');
+  });
 });

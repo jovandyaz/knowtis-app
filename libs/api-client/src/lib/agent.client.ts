@@ -116,6 +116,7 @@ export class AgentClient {
     this.activeCallbacks = callbacks;
     this.pendingMessages = messages;
     this.pendingNoteId = noteId;
+    this.reconnectAttempts = 0;
     this.authPolicy.reset();
 
     if (this.tokenProvider.getAccessToken()) {

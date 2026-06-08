@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -45,6 +45,14 @@ describe('AgentComposer', () => {
 
     await user.type(screen.getByRole('textbox'), 'hi{Enter}');
 
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('does not send on Enter while IME composition is active', () => {
+    const onSend = vi.fn();
+    render(<AgentComposer onSend={onSend} disabled={false} />);
+    const box = screen.getByRole('textbox');
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
     expect(onSend).not.toHaveBeenCalled();
   });
 });

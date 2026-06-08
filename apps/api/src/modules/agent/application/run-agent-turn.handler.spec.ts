@@ -157,6 +157,35 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('forwards empty sources array on done', async () => {
+    const { rateLimit, aiConfig, config } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const done = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn() }
+    );
+
+    expect(done).toHaveBeenCalledWith(expect.objectContaining({ sources: [] }));
+  });
+
   it('calls onError and does not record usage when orchestrator throws synchronously', async () => {
     const { rateLimit, aiConfig, config } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {

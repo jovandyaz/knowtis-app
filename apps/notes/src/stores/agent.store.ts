@@ -37,6 +37,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
   let chunkBuffer = '';
   let activeAssistantId: string | null = null;
+  // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
+  let streamVersion = 0;
+  let lastNoteId: string | undefined;
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   // Closure (not store state): arming/clearing per chunk must not re-render.
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -96,15 +99,22 @@ export const useAgentStore = create<AgentState>((set, get) => {
     noteId?: string
   ) => {
     activeAssistantId = assistantId;
+    const version = streamVersion;
     const handle = agentClient.sendMessage(
       history,
       {
         onChunk: ({ text }) => {
+          if (version !== streamVersion) {
+            return;
+          }
           armInactivityTimer();
           chunkBuffer += text;
           scheduleFlush();
         },
         onDone: ({ sources }) => {
+          if (version !== streamVersion) {
+            return;
+          }
           clearInactivityTimer();
           flushChunks();
           set((s) => ({
@@ -116,6 +126,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
         onError: (error) => {
+          if (version !== streamVersion) {
+            return;
+          }
           clearInactivityTimer();
           flushChunks();
           set({ status: 'error', error, _streamHandle: null });
@@ -142,6 +155,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (current.status === 'streaming' && current._streamHandle) {
         current._streamHandle.cancel();
       }
+      streamVersion++;
+      lastNoteId = noteId;
       clearInactivityTimer();
       discardChunks();
 
@@ -175,6 +190,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
     newConversation: () => {
       get()._streamHandle?.cancel();
+      streamVersion++;
       clearInactivityTimer();
       discardChunks();
       activeAssistantId = null;
@@ -183,6 +199,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
     cancel: () => {
       get()._streamHandle?.cancel();
+      streamVersion++;
       clearInactivityTimer();
       flushChunks();
       activeAssistantId = null;
@@ -203,7 +220,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       }
       const text = messages[lastUserIdx].content;
       set({ messages: messages.slice(0, lastUserIdx) });
-      get().sendMessage(text);
+      get().sendMessage(text, lastNoteId);
     },
   };
 });
