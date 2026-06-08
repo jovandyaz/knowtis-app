@@ -52,6 +52,9 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
+    if (signal?.aborted) {
+      return;
+    }
     const estimatedTokens = this.estimateTokens(input.messages);
     const limit = await this.rateLimit.checkLimit(
       input.userId,

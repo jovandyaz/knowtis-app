@@ -156,4 +156,120 @@ describe('RunAgentTurnHandler', () => {
       })
     );
   });
+
+  it('calls onError and does not record usage when orchestrator throws synchronously', async () => {
+    const { rateLimit, aiConfig, config } = makeDeps({});
+    const throwingOrchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('orchestrator failed');
+        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const handler = new RunAgentTurnHandler(
+      throwingOrchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('calls onDone with usage and never calls onChunk when orchestrator yields only done', async () => {
+    const { rateLimit, aiConfig, config } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 4,
+          outputTokens: 2,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk, onDone, onError: vi.fn() }
+    );
+
+    expect(onChunk).not.toHaveBeenCalled();
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 4, outputTokens: 2 })
+    );
+  });
+
+  it('returns immediately without calling orchestrator when signal is pre-aborted', async () => {
+    const { rateLimit, aiConfig, config, orchestrator } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const onChunk = vi.fn();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk, onDone, onError },
+      controller.signal
+    );
+
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(onChunk).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('calls onError with providerError when onChunk throws inside the for-await loop', async () => {
+    const { rateLimit, aiConfig, config } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'boom' },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: () => {
+          throw new Error('chunk handler failed');
+        },
+        onDone: vi.fn(),
+        onError,
+      }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
 });

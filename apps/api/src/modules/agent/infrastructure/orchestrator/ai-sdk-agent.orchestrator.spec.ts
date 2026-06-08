@@ -140,4 +140,67 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'error' });
   });
+
+  it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    const events = await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'hi' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+      })
+    );
+
+    const chunk = events.find((e) => (e as { type: string }).type === 'chunk');
+    const done = events.find(
+      (
+        e
+      ): e is {
+        type: 'done';
+        usage: { inputTokens: number; outputTokens: number; model: string };
+        sources: unknown[];
+      } => (e as { type: string }).type === 'done'
+    );
+
+    expect(chunk).toMatchObject({ type: 'chunk', text: 'Hello' });
+    expect(done).toBeDefined();
+    expect(done?.usage.inputTokens).toBe(3);
+    expect(done?.usage.outputTokens).toBe(2);
+    expect(done?.usage.model).toBe('anthropic:claude-sonnet-4-20250514');
+  });
+
+  it('passes the userId to toolsFactory.build', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'user-42',
+        messages: [{ role: 'user', content: 'hi' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+      })
+    );
+
+    expect(tools.build).toHaveBeenCalledWith('user-42');
+  });
 });

@@ -21,6 +21,12 @@ const watchdog = setTimeout(() => {
   finish(1);
 }, 120000);
 
+socket.on('connect_error', (err: Error) => {
+  clearTimeout(watchdog);
+  process.stdout.write(`\n[connection failed] ${err.message}\n`);
+  finish(1);
+});
+
 socket.on('connect', () => {
   process.stdout.write('connected; sending turn...\n\n');
   socket.emit('agent:message', {
