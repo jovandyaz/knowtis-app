@@ -34,7 +34,7 @@ export class RejectMutationHandler {
     const reason = input.reason?.trim();
     return ok({
       toolName: record.toolName,
-      outcome: `The user rejected the proposal${reason ? `: "${reason}"` : ''}. Acknowledge and offer to adjust.`,
+      outcome: `The user DECLINED it and nothing was changed${reason ? ` (their reason: "${reason}")` : ''}. Confirm you will not proceed and offer to adjust if they want.`,
     });
   }
 }

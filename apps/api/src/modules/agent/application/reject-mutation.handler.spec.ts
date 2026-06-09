@@ -28,7 +28,7 @@ describe('RejectMutationHandler', () => {
     expect(r.isOk()).toBe(true);
     if (r.isOk()) {
       expect(r.value.toolName).toBe('proposeCreateNote');
-      expect(r.value.outcome).toContain('rejected');
+      expect(r.value.outcome).toContain('DECLINED');
       expect(r.value.outcome).toContain('too long');
     }
     expect(store.take).toHaveBeenCalledWith('p1', 'u1');

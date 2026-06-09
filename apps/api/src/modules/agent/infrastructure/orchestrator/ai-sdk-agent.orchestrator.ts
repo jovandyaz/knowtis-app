@@ -140,7 +140,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
       prompt += `\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
     }
     if (resume) {
-      prompt += `\n\nA "${resume.toolName}" action was just resolved: ${resume.outcome}. Briefly confirm this to the user in their language. Do not call any tool.`;
+      prompt += `\n\nThe "${resume.toolName}" action you proposed was just resolved: ${resume.outcome}\nTell the user this outcome briefly in their language. Do NOT re-propose, re-pitch, or restate the action as a new proposal, and do not call any tool.`;
     }
     return prompt;
   }
