@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -40,6 +40,7 @@ redis.call('DEL', KEYS[1])
 return v
 `;
 
+  private readonly logger = new Logger(RedisPendingMutationStore.name);
   private readonly ttl: number;
 
   constructor(
@@ -93,7 +94,10 @@ return v
     let parsed: SerializedRecord;
     try {
       parsed = JSON.parse(res) as SerializedRecord;
-    } catch {
+    } catch (error) {
+      this.logger.warn(
+        `Failed to parse pending mutation ${proposalId}: ${error instanceof Error ? error.message : 'unknown'}`
+      );
       return null;
     }
     const rebuilt = ProposedMutation.create(parsed.mutation);

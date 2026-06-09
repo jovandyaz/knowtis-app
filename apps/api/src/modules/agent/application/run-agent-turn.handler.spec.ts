@@ -505,4 +505,34 @@ describe('RunAgentTurnHandler', () => {
       expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
     );
   });
+
+  it('resumeTurn returns immediately when signal is pre-aborted', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError },
+      controller.signal
+    );
+
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
 });
