@@ -200,6 +200,20 @@
       },
       "estudio": {
         "noNote": "Open a note to use study tools."
+      },
+      "proposal": {
+        "createTitle": "Create note",
+        "updateTitle": "Edit note",
+        "shareTitle": "Share note",
+        "approveCreate": "Create",
+        "approveUpdate": "Apply",
+        "approveShare": "Share",
+        "reject": "Dismiss",
+        "rejectCancel": "Cancel",
+        "rejectConfirm": "Send",
+        "reasonPlaceholder": "Why? (optional)",
+        "viewer": "Viewer",
+        "editor": "Editor"
       }
     },
     "groups": {

@@ -200,6 +200,20 @@
       },
       "estudio": {
         "noNote": "Abre una nota para usar las herramientas de estudio."
+      },
+      "proposal": {
+        "createTitle": "Crear nota",
+        "updateTitle": "Editar nota",
+        "shareTitle": "Compartir nota",
+        "approveCreate": "Crear",
+        "approveUpdate": "Aplicar",
+        "approveShare": "Compartir",
+        "reject": "Descartar",
+        "rejectCancel": "Cancelar",
+        "rejectConfirm": "Enviar",
+        "reasonPlaceholder": "¿Por qué? (opcional)",
+        "viewer": "Lector",
+        "editor": "Editor"
       }
     },
     "groups": {
