@@ -87,6 +87,7 @@ export class StreamTextHandler {
             totalMs: this.configService.get('AI_STREAM_MAX_MS'),
             chunkMs: this.configService.get('AI_STREAM_CHUNK_TIMEOUT_MS'),
           },
+          ...(signal ? { signal } : {}),
         }
       );
 
@@ -140,6 +141,15 @@ export class StreamTextHandler {
         costUsd: usage.costUsd,
       });
     } catch (error) {
+      if (signal?.aborted) {
+        this.logger.log({
+          event: 'ai.request.cancelled',
+          requestId: context.requestId,
+          userId: input.userId,
+          latencyMs: Date.now() - context.startTime,
+        });
+        return;
+      }
       this.logger.error({
         event: 'ai.request.error',
         requestId: context.requestId,

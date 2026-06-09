@@ -8,7 +8,7 @@ vi.mock('ai', () => ({
     text: 'Generated text',
     usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
   }),
-  streamText: vi.fn().mockReturnValue({
+  streamText: vi.fn().mockImplementation(() => ({
     textStream: (async function* () {
       yield 'Hello';
       yield ' world';
@@ -18,7 +18,7 @@ vi.mock('ai', () => ({
       outputTokens: 30,
       totalTokens: 110,
     }),
-  }),
+  })),
   createProviderRegistry: vi.fn().mockReturnValue({
     languageModel: vi.fn().mockReturnValue('mock-model'),
   }),
@@ -282,6 +282,115 @@ describe('AISDKProvider', () => {
       })()
     ).rejects.toThrow('mid-stream failure');
     expect(received).toEqual(['partial']);
+    expect(streamText).toHaveBeenCalledTimes(1);
+  });
+
+  it('should settle usage when the consumer breaks out of the stream', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    streamText.mockReturnValueOnce({
+      textStream: (async function* () {
+        yield 'first';
+        await new Promise(() => undefined);
+      })(),
+      usage: Promise.resolve({ inputTokens: 12, outputTokens: 3 }),
+    } as unknown as ReturnType<typeof streamText>);
+
+    const stream = provider.streamCompletion('p', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    for await (const chunk of stream.textStream) {
+      expect(chunk).toBe('first');
+      break;
+    }
+
+    const usage = await stream.usage;
+    expect(usage.promptTokens).toBe(12);
+    expect(usage.completionTokens).toBe(3);
+  });
+
+  it('should settle usage with zeros when the SDK never resolves it after a break', async () => {
+    vi.useFakeTimers();
+    try {
+      const { streamText } = vi.mocked(await import('ai'));
+      streamText.mockClear();
+
+      streamText.mockReturnValueOnce({
+        textStream: (async function* () {
+          yield 'first';
+          await new Promise(() => undefined);
+        })(),
+        usage: new Promise(() => undefined),
+      } as unknown as ReturnType<typeof streamText>);
+
+      const stream = provider.streamCompletion('p', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+      });
+
+      for await (const chunk of stream.textStream) {
+        expect(chunk).toBe('first');
+        break;
+      }
+
+      await vi.advanceTimersByTimeAsync(2000);
+      const usage = await stream.usage;
+      expect(usage.promptTokens).toBe(0);
+      expect(usage.completionTokens).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should forward the abort signal to streamText', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    const controller = new AbortController();
+    provider.streamCompletion('p', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      signal: controller.signal,
+    });
+
+    expect(streamText).toHaveBeenCalledWith(
+      expect.objectContaining({ abortSignal: controller.signal })
+    );
+  });
+
+  it('should not fall back to another model when the stream was aborted', async () => {
+    const { streamText } = vi.mocked(await import('ai'));
+    streamText.mockClear();
+
+    const controller = new AbortController();
+    streamText.mockReturnValueOnce({
+      // eslint-disable-next-line require-yield -- mock: stream aborted before first chunk
+      textStream: (async function* () {
+        controller.abort();
+        throw new Error('aborted');
+      })(),
+      usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
+    } as unknown as ReturnType<typeof streamText>);
+
+    const fallbackProvider = new AISDKProvider(
+      createMockConfig({
+        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+      })
+    );
+    fallbackProvider.onModuleInit();
+
+    const stream = fallbackProvider.streamCompletion('p', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      signal: controller.signal,
+    });
+
+    await expect(
+      (async () => {
+        for await (const chunk of stream.textStream) {
+          void chunk;
+        }
+      })()
+    ).rejects.toThrow('aborted');
     expect(streamText).toHaveBeenCalledTimes(1);
   });
 
