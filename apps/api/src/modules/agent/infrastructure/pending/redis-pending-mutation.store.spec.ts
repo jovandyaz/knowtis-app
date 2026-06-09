@@ -112,4 +112,21 @@ describe('RedisPendingMutationStore', () => {
     const store = new RedisPendingMutationStore(redis as never, cfg);
     expect(await store.take('missing', 'u1')).toBeNull();
   });
+
+  it('take returns null when the script returns unparseable JSON', async () => {
+    const redis = { client: { eval: vi.fn().mockResolvedValue('not-json{') } };
+    const store = new RedisPendingMutationStore(redis as never, cfg);
+    expect(await store.take('bad', 'u1')).toBeNull();
+  });
+
+  it('take returns null when the stored mutation shape is invalid', async () => {
+    const corrupt = JSON.stringify({
+      userId: 'u1',
+      toolName: 'proposeCreateNote',
+      mutation: { id: 'x', kind: 'update', payload: {}, summary: '' },
+    });
+    const redis = { client: { eval: vi.fn().mockResolvedValue(corrupt) } };
+    const store = new RedisPendingMutationStore(redis as never, cfg);
+    expect(await store.take('invalid', 'u1')).toBeNull();
+  });
 });

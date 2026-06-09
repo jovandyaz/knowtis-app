@@ -12,4 +12,18 @@ describe('AgentErrors', () => {
   it('builds a proposal-expired error', () => {
     expect(AgentErrors.proposalExpired().code).toBe('AGENT_PROPOSAL_EXPIRED');
   });
+
+  it('keeps the stale-note code and a non-blank message for unusual identifiers', () => {
+    for (const id of ['', '   ', 'not-a-uuid']) {
+      const e = AgentErrors.staleNote(id);
+      expect(e.code).toBe('AGENT_STALE_NOTE');
+      expect(e.message.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it('embeds the reason in an invalid-proposal error', () => {
+    const e = AgentErrors.invalidProposal('summary is required');
+    expect(e.code).toBe('AGENT_INVALID_PROPOSAL');
+    expect(e.message).toContain('summary is required');
+  });
 });

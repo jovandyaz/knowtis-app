@@ -262,6 +262,15 @@ export class AgentGateway
     },
     outcome: { toolName: string; outcome: string }
   ): Promise<void> {
+    if ((this.userTurnCount.get(userId) ?? 0) >= this.maxConcurrentTurns) {
+      client.emit(
+        'agent:error',
+        AIErrors.rateLimitExceeded(
+          `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
+        )
+      );
+      return;
+    }
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {

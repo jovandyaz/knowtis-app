@@ -41,5 +41,8 @@ describe('RejectMutationHandler', () => {
       userId: 'u1',
     });
     expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    }
   });
 });

@@ -207,4 +207,18 @@ describe('agent.store proposals', () => {
       'too long'
     );
   });
+
+  it('approveProposal is a no-op without a pending proposal', () => {
+    useAgentStore.setState({ pendingProposal: null, status: 'idle' });
+    useAgentStore.getState().approveProposal();
+    expect(vi.mocked(agentClient.approve)).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().status).toBe('idle');
+  });
+
+  it('rejectProposal is a no-op without a pending proposal', () => {
+    useAgentStore.setState({ pendingProposal: null, status: 'idle' });
+    useAgentStore.getState().rejectProposal('reason');
+    expect(vi.mocked(agentClient.reject)).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().status).toBe('idle');
+  });
 });

@@ -7,7 +7,21 @@ import type { AIRateLimitService } from '../../ai/application/services/ai-rate-l
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
+import { ProposedMutation } from '../domain/proposed-mutation';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
+
+function makeProposal(id: string): ProposedMutation {
+  const r = ProposedMutation.create({
+    id,
+    kind: 'create',
+    payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+    summary: 'Create GTD',
+  });
+  if (r.isErr()) {
+    throw new Error('proposal setup failed');
+  }
+  return r.value;
+}
 
 const USER = '11111111-1111-1111-1111-111111111111';
 
@@ -318,6 +332,173 @@ describe('RunAgentTurnHandler', () => {
         onError,
         onProposal: vi.fn(),
       }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('records usage, persists the proposal, and calls onProposal on a proposal event', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const proposal = makeProposal('22222222-2222-2222-2222-222222222222');
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onProposal = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'create a note' }] },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onProposal }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
+    expect(pendingStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER, toolName: 'proposeCreateNote' })
+    );
+    expect(onProposal).toHaveBeenCalledWith(proposal);
+  });
+
+  it('resumeTurn streams the acknowledgment and records usage on done', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'Done' },
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 2,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 2, outputTokens: 1 })
+    );
+    expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
+  });
+
+  it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({ allowed: false });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onError = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_RATE_LIMIT_EXCEEDED' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('resumeTurn ends the turn via onDone when the orchestrator unexpectedly yields a proposal', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ costUsd: 0 })
+    );
+  });
+
+  it('resumeTurn calls onError when the orchestrator throws', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const throwingOrchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('resume failed');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const handler = new RunAgentTurnHandler(
+      throwingOrchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onError = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError }
     );
 
     expect(onError).toHaveBeenCalledWith(

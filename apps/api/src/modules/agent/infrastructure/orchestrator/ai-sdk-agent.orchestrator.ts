@@ -15,7 +15,6 @@ import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 import { AgentToolsFactory } from './agent-tools.factory';
 
-// Structural subset of ai's DynamicToolResult; avoids depending on a non-stable SDK type.
 interface StepToolResult {
   readonly toolName: string;
   readonly output: unknown;
@@ -113,18 +112,19 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
           yield { type: 'chunk', text: delta };
         }
       }
+      const usage = await result.totalUsage;
+      const turnUsage = {
+        inputTokens: usage.inputTokens ?? 0,
+        outputTokens: usage.outputTokens ?? 0,
+        model: input.model,
+      };
       if (captured) {
-        yield { type: 'proposal', proposal: captured };
+        yield { type: 'proposal', proposal: captured, usage: turnUsage };
         return;
       }
-      const usage = await result.totalUsage;
       yield {
         type: 'done',
-        usage: {
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          model: input.model,
-        },
+        usage: turnUsage,
         sources: [...sources.values()],
       };
     } catch (error) {

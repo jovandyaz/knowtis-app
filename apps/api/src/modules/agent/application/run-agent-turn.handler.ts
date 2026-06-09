@@ -7,7 +7,7 @@ import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.
 import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
-import type { AgentSource } from '../domain/agent-event';
+import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import {
   AGENT_ORCHESTRATOR,
@@ -99,33 +99,22 @@ export class RunAgentTurnHandler {
             callbacks.onError(event.error);
             break;
           case 'done': {
-            const usage = TokenUsage.create(
-              {
-                inputTokens: event.usage.inputTokens,
-                outputTokens: event.usage.outputTokens,
-                model: event.usage.model,
-              },
-              getModelPricing(event.usage.model)
-            );
-            await this.rateLimit.recordUsage({
-              userId: input.userId,
-              action: 'agent',
-              inputTokens: event.usage.inputTokens,
-              outputTokens: event.usage.outputTokens,
-              model: event.usage.model,
-              costUsd: usage.costUsd,
+            const costUsd = await this.recordUsage(
+              input.userId,
               estimatedTokens,
-            });
+              event.usage
+            );
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
               model: event.usage.model,
-              costUsd: usage.costUsd,
+              costUsd,
               sources: event.sources,
             });
             break;
           }
           case 'proposal':
+            await this.recordUsage(input.userId, estimatedTokens, event.usage);
             await this.pendingStore.save({
               userId: input.userId,
               mutation: event.proposal,
@@ -169,51 +158,70 @@ export class RunAgentTurnHandler {
       return;
     }
     const estimatedTokens = this.estimateTokens(input.messages);
+    const limit = await this.rateLimit.checkLimit(
+      input.userId,
+      estimatedTokens,
+      input.isAnonymous ?? false
+    );
+    if (!limit.allowed) {
+      callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
+      return;
+    }
     const model = await this.aiConfig.getDefaultModel();
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    for await (const event of this.orchestrator.run({
-      userId: input.userId,
-      messages: input.messages,
-      model,
-      maxSteps,
-      ...(input.noteId ? { noteId: input.noteId } : {}),
-      ...(signal ? { signal } : {}),
-      resume: input.resume,
-    })) {
-      switch (event.type) {
-        case 'chunk':
-          callbacks.onChunk(event.text);
-          break;
-        case 'error':
-          callbacks.onError(event.error);
-          return;
-        case 'done': {
-          await this.finishResume(
-            input.userId,
-            estimatedTokens,
-            event,
-            callbacks.onDone
-          );
-          return;
-        }
-        // Write-tools are disabled on resume, so a proposal/committed event
-        // cannot occur; treat any unexpected event as end-of-turn so the
-        // composer never hangs waiting for done.
-        case 'proposal':
-        case 'committed':
-          callbacks.onDone({
-            inputTokens: 0,
-            outputTokens: 0,
-            model,
-            costUsd: 0,
-            sources: [],
-          });
-          return;
-        default: {
-          const _exhaustive: never = event;
-          throw new Error(`Unhandled agent event: ${String(_exhaustive)}`);
+    let lastError: { code: string; message: string } | null = null;
+    try {
+      for await (const event of this.orchestrator.run({
+        userId: input.userId,
+        messages: input.messages,
+        model,
+        maxSteps,
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(signal ? { signal } : {}),
+        resume: input.resume,
+      })) {
+        switch (event.type) {
+          case 'chunk':
+            callbacks.onChunk(event.text);
+            break;
+          case 'error':
+            lastError = event.error;
+            callbacks.onError(event.error);
+            return;
+          case 'done': {
+            await this.finishResume(
+              input.userId,
+              estimatedTokens,
+              event,
+              callbacks.onDone
+            );
+            return;
+          }
+          case 'proposal':
+          case 'committed':
+            callbacks.onDone({
+              inputTokens: 0,
+              outputTokens: 0,
+              model,
+              costUsd: 0,
+              sources: [],
+            });
+            return;
+          default: {
+            const _exhaustive: never = event;
+            throw new Error(`Unhandled agent event: ${String(_exhaustive)}`);
+          }
         }
       }
+    } catch (error) {
+      if (lastError || signal?.aborted) {
+        return;
+      }
+      callbacks.onError(
+        AIErrors.providerError(
+          error instanceof Error ? error.message : 'Agent turn failed'
+        )
+      );
     }
   }
 
@@ -221,35 +229,48 @@ export class RunAgentTurnHandler {
     userId: string,
     estimatedTokens: number,
     event: {
-      usage: { inputTokens: number; outputTokens: number; model: string };
+      usage: AgentTurnUsage;
       sources: readonly AgentSource[];
     },
     onDone: RunAgentTurnCallbacks['onDone']
   ): Promise<void> {
-    const usage = TokenUsage.create(
-      {
-        inputTokens: event.usage.inputTokens,
-        outputTokens: event.usage.outputTokens,
-        model: event.usage.model,
-      },
-      getModelPricing(event.usage.model)
-    );
-    await this.rateLimit.recordUsage({
+    const costUsd = await this.recordUsage(
       userId,
-      action: 'agent',
-      inputTokens: event.usage.inputTokens,
-      outputTokens: event.usage.outputTokens,
-      model: event.usage.model,
-      costUsd: usage.costUsd,
       estimatedTokens,
-    });
+      event.usage
+    );
     onDone({
       inputTokens: event.usage.inputTokens,
       outputTokens: event.usage.outputTokens,
       model: event.usage.model,
-      costUsd: usage.costUsd,
+      costUsd,
       sources: event.sources,
     });
+  }
+
+  private async recordUsage(
+    userId: string,
+    estimatedTokens: number,
+    usage: AgentTurnUsage
+  ): Promise<number> {
+    const tokenUsage = TokenUsage.create(
+      {
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        model: usage.model,
+      },
+      getModelPricing(usage.model)
+    );
+    await this.rateLimit.recordUsage({
+      userId,
+      action: 'agent',
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      model: usage.model,
+      costUsd: tokenUsage.costUsd,
+      estimatedTokens,
+    });
+    return tokenUsage.costUsd;
   }
 
   private toolNameForKind(kind: MutationKind): string {

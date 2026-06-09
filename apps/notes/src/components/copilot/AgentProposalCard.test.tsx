@@ -23,11 +23,7 @@ describe('AgentProposalCard', () => {
         onReject={vi.fn()}
       />
     );
-    expect(
-      screen.getAllByText(
-        /Create note|Crear nota|createTitle|proposal\.createTitle/i
-      ).length
-    ).toBeGreaterThan(0);
+    expect(screen.getByText('Create note "GTD"')).toBeInTheDocument();
     await userEvent.click(
       screen.getByRole('button', {
         name: /create|apply|approve|crear|aplicar|approveCreate/i,
@@ -56,5 +52,27 @@ describe('AgentProposalCard', () => {
       screen.getByRole('button', { name: /send|confirm|enviar|rejectConfirm/i })
     );
     expect(onReject).toHaveBeenCalledWith('too long');
+  });
+
+  it('calls onReject with undefined when reason is whitespace-only', async () => {
+    const onReject = vi.fn();
+    render(
+      <AgentProposalCard
+        proposal={proposal}
+        onApprove={vi.fn()}
+        onReject={onReject}
+      />
+    );
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: /dismiss|reject|descartar|rechazar|proposal\.reject$/i,
+      })
+    );
+    const reason = screen.getByRole('textbox');
+    await userEvent.type(reason, '   ');
+    await userEvent.click(
+      screen.getByRole('button', { name: /send|confirm|enviar|rejectConfirm/i })
+    );
+    expect(onReject).toHaveBeenCalledWith(undefined);
   });
 });

@@ -381,4 +381,20 @@ describe('AgentGateway', () => {
     );
     expect(approveExecute).not.toHaveBeenCalled();
   });
+
+  it('rejects a reject with an invalid proposalId', async () => {
+    const rejectExecute = vi.fn();
+    const gateway = makeGateway({ reject: { execute: rejectExecute } });
+    const client = makeClient('u1');
+
+    await gateway.handleReject(client as never, {
+      ...approvePayload('not-a-uuid'),
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(rejectExecute).not.toHaveBeenCalled();
+  });
 });

@@ -27,6 +27,35 @@ describe('ProposedMutation', () => {
     expect(result.isErr()).toBe(true);
   });
 
+  it('rejects an empty or whitespace-only summary', () => {
+    for (const summary of ['', '   ']) {
+      const result = ProposedMutation.create({
+        id: '11111111-1111-1111-1111-111111111111',
+        kind: 'create',
+        payload: { title: 'x', contentHtml: '<p>x</p>' },
+        summary,
+      });
+      expect(result.isErr()).toBe(true);
+    }
+  });
+
+  it('creates a valid share proposal with a targetNoteId', () => {
+    const result = ProposedMutation.create({
+      id: '11111111-1111-1111-1111-111111111111',
+      kind: 'share',
+      targetNoteId: '22222222-2222-2222-2222-222222222222',
+      payload: { targetEmail: 'user@example.com', permission: 'viewer' },
+      summary: 'Share with user',
+    });
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.kind).toBe('share');
+      expect(result.value.targetNoteId).toBe(
+        '22222222-2222-2222-2222-222222222222'
+      );
+    }
+  });
+
   it('is immutable (frozen)', () => {
     const result = ProposedMutation.create({
       id: '11111111-1111-1111-1111-111111111111',

@@ -233,6 +233,8 @@ describe('AiSdkAgentOrchestrator', () => {
 
     expect(tools.buildReadOnly).toHaveBeenCalledWith('u1');
     expect(tools.build).not.toHaveBeenCalled();
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(JSON.stringify(opts?.messages)).toContain('created');
   });
 });
 
@@ -256,6 +258,17 @@ describe('extractProposal', () => {
   it('returns null when no proposal present', () => {
     expect(
       extractProposal([{ toolName: 'getNote', output: { id: 'n' } }])
+    ).toBeNull();
+  });
+
+  it('returns null when __proposal is not a ProposedMutation instance', () => {
+    expect(
+      extractProposal([
+        {
+          toolName: 'proposeCreateNote',
+          output: { __proposal: { id: 'fake', kind: 'create' } },
+        },
+      ])
     ).toBeNull();
   });
 });

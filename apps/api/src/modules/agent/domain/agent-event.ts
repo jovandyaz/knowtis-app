@@ -25,7 +25,11 @@ export type AgentEvent =
       readonly usage: AgentTurnUsage;
       readonly sources: readonly AgentSource[];
     }
-  | { readonly type: 'proposal'; readonly proposal: ProposedMutation }
+  | {
+      readonly type: 'proposal';
+      readonly proposal: ProposedMutation;
+      readonly usage: AgentTurnUsage;
+    }
   | { readonly type: 'committed'; readonly result: AgentCommitResult }
   | {
       readonly type: 'error';

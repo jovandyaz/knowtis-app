@@ -16,7 +16,7 @@ process.stdin.on('end', () => {
 
   const input = payload?.tool_input ?? {};
   const file = input.file_path ?? '';
-  if (!/\.(ts|tsx)$/.test(file) || /\.(spec|test)\.tsx?$/.test(file)) {
+  if (!/\.(ts|tsx|js|jsx)$/.test(file) || /\.(spec|test)\.[tj]sx?$/.test(file)) {
     process.exit(0);
   }
 

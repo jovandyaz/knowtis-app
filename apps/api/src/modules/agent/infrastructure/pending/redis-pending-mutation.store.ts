@@ -90,7 +90,12 @@ return v
     if (!res || res === 'MISMATCH') {
       return null;
     }
-    const parsed = JSON.parse(res) as SerializedRecord;
+    let parsed: SerializedRecord;
+    try {
+      parsed = JSON.parse(res) as SerializedRecord;
+    } catch {
+      return null;
+    }
     const rebuilt = ProposedMutation.create(parsed.mutation);
     if (rebuilt.isErr()) {
       return null;
