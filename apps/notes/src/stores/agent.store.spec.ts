@@ -4,19 +4,25 @@ import { agentClient } from '@knowtis/api-client';
 import type {
   AgentDonePayload,
   AgentErrorPayload,
+  AgentProposalPayload,
   AgentStreamHandle,
 } from '@knowtis/api-client';
 
 import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
 
 vi.mock('@knowtis/api-client', () => ({
-  agentClient: { sendMessage: vi.fn() },
+  agentClient: {
+    sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
+    approve: vi.fn(),
+    reject: vi.fn(),
+  },
 }));
 
 interface Cbs {
   onChunk: (p: { text: string }) => void;
   onDone: (p: AgentDonePayload) => void;
   onError: (p: AgentErrorPayload) => void;
+  onProposal?: (p: AgentProposalPayload) => void;
 }
 
 function capture(): {
@@ -149,5 +155,70 @@ describe('useAgentStore', () => {
     expect(messages[0].content).toBe('hello');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
     expect(sent).toEqual([{ role: 'user', content: 'hello' }]);
+  });
+});
+
+describe('agent.store proposals', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('approveProposal calls the client and returns to streaming', () => {
+    useAgentStore.setState({
+      pendingProposal: {
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      },
+      status: 'pendingProposal',
+    });
+    useAgentStore.getState().approveProposal();
+    expect(vi.mocked(agentClient.approve)).toHaveBeenCalledWith('p1');
+    expect(useAgentStore.getState().status).toBe('streaming');
+    expect(useAgentStore.getState().pendingProposal).toBeNull();
+  });
+
+  it('rejectProposal forwards the reason', () => {
+    useAgentStore.setState({
+      pendingProposal: {
+        id: 'p1',
+        kind: 'update',
+        targetNoteId: 'n1',
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      },
+      status: 'pendingProposal',
+    });
+    useAgentStore.getState().rejectProposal('too long');
+    expect(vi.mocked(agentClient.reject)).toHaveBeenCalledWith(
+      'p1',
+      'too long'
+    );
+  });
+
+  it('approveProposal is a no-op without a pending proposal', () => {
+    useAgentStore.setState({ pendingProposal: null, status: 'idle' });
+    useAgentStore.getState().approveProposal();
+    expect(vi.mocked(agentClient.approve)).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().status).toBe('idle');
+  });
+
+  it('rejectProposal is a no-op without a pending proposal', () => {
+    useAgentStore.setState({ pendingProposal: null, status: 'idle' });
+    useAgentStore.getState().rejectProposal('reason');
+    expect(vi.mocked(agentClient.reject)).not.toHaveBeenCalled();
+    expect(useAgentStore.getState().status).toBe('idle');
   });
 });

@@ -182,7 +182,14 @@
       "auth": "Tu sesión expiró. Vuelve a iniciar sesión.",
       "validation": "No se pudo procesar esa solicitud. Ajusta tu entrada.",
       "injection": "Tu entrada fue marcada y no se pudo procesar.",
-      "timeout": "La solicitud de IA agotó el tiempo de espera. Reinténtalo."
+      "timeout": "La solicitud de IA agotó el tiempo de espera. Reinténtalo.",
+      "staleNote": "La nota cambió — pídemelo de nuevo.",
+      "proposalExpired": "La propuesta expiró — pídemelo otra vez.",
+      "permissionDenied": "No tienes permiso para hacer eso.",
+      "sanitizeRejected": "El contenido fue rechazado por razones de seguridad.",
+      "targetUserNotFound": "Ese usuario no fue encontrado.",
+      "noteNotFound": "La nota ya no existe.",
+      "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo."
     },
     "copilot": {
       "tab": "Copilot",
@@ -200,6 +207,20 @@
       },
       "estudio": {
         "noNote": "Abre una nota para usar las herramientas de estudio."
+      },
+      "proposal": {
+        "createTitle": "Crear nota",
+        "updateTitle": "Editar nota",
+        "shareTitle": "Compartir nota",
+        "approveCreate": "Crear",
+        "approveUpdate": "Aplicar",
+        "approveShare": "Compartir",
+        "reject": "Descartar",
+        "rejectCancel": "Cancelar",
+        "rejectConfirm": "Enviar",
+        "reasonPlaceholder": "¿Por qué? (opcional)",
+        "viewer": "Lector",
+        "editor": "Editor"
       }
     },
     "groups": {

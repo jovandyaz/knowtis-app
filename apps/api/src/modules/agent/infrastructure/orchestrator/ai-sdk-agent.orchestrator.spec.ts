@@ -3,8 +3,12 @@ import { streamText } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AgentToolsFactory } from './agent-tools.factory';
-import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
+import {
+  AiSdkAgentOrchestrator,
+  extractProposal,
+} from './ai-sdk-agent.orchestrator';
 
 vi.mock('ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ai')>();
@@ -202,5 +206,69 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     expect(tools.build).toHaveBeenCalledWith('user-42');
+  });
+
+  it('uses the read-only tool set when resuming a turn', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+      buildReadOnly: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'ok' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      })
+    );
+
+    expect(tools.buildReadOnly).toHaveBeenCalledWith('u1');
+    expect(tools.build).not.toHaveBeenCalled();
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(JSON.stringify(opts?.messages)).toContain('created');
+  });
+});
+
+describe('extractProposal', () => {
+  it('returns the proposal from a __proposal tool result', () => {
+    const m = ProposedMutation.create({
+      id: 'p1',
+      kind: 'create',
+      payload: { title: 'x', contentHtml: '<p>x</p>' },
+      summary: 's',
+    });
+    if (m.isErr()) {
+      throw new Error('setup');
+    }
+    const found = extractProposal([
+      { toolName: 'proposeCreateNote', output: { __proposal: m.value } },
+    ]);
+    expect(found?.id).toBe('p1');
+  });
+
+  it('returns null when no proposal present', () => {
+    expect(
+      extractProposal([{ toolName: 'getNote', output: { id: 'n' } }])
+    ).toBeNull();
+  });
+
+  it('returns null when __proposal is not a ProposedMutation instance', () => {
+    expect(
+      extractProposal([
+        {
+          toolName: 'proposeCreateNote',
+          output: { __proposal: { id: 'fake', kind: 'create' } },
+        },
+      ])
+    ).toBeNull();
   });
 });

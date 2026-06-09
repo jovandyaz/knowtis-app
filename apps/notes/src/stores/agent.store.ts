@@ -8,7 +8,22 @@ import {
   type AgentWireMessage,
 } from '@knowtis/api-client';
 
-export type AgentStatus = 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
+export type AgentStatus =
+  | 'idle'
+  | 'streaming'
+  | 'pendingProposal'
+  | 'done'
+  | 'error'
+  | 'timeout';
+
+export interface PendingProposal {
+  id: string;
+  kind: 'create' | 'update' | 'share';
+  targetNoteId: string | null;
+  summary: string;
+  previewHtml: string | null;
+  payload: Record<string, unknown>;
+}
 
 export interface AgentChatMessage {
   id: string;
@@ -24,11 +39,14 @@ interface AgentState {
   messages: AgentChatMessage[];
   status: AgentStatus;
   error: AgentErrorPayload | null;
+  pendingProposal: PendingProposal | null;
   _streamHandle: AgentStreamHandle | null;
   sendMessage: (text: string, noteId?: string) => void;
   newConversation: () => void;
   cancel: () => void;
   retryLast: () => void;
+  approveProposal: () => void;
+  rejectProposal: (reason?: string) => void;
 }
 
 export const useAgentStore = create<AgentState>((set, get) => {
@@ -133,6 +151,26 @@ export const useAgentStore = create<AgentState>((set, get) => {
           flushChunks();
           set({ status: 'error', error, _streamHandle: null });
         },
+        onProposal: (proposal) => {
+          if (version !== streamVersion) {
+            return;
+          }
+          clearInactivityTimer();
+          flushChunks();
+          set({ status: 'pendingProposal', pendingProposal: proposal });
+        },
+        onCommitted: ({ result }) => {
+          if (version !== streamVersion) {
+            return;
+          }
+          const id = activeAssistantId;
+          set((s) => ({
+            pendingProposal: null,
+            messages: s.messages.map((m) =>
+              m.id === id ? { ...m, content: `✓ ${result.title}\n\n` } : m
+            ),
+          }));
+        },
       },
       noteId
     );
@@ -144,6 +182,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     messages: [],
     status: 'idle',
     error: null,
+    pendingProposal: null,
     _streamHandle: null,
 
     sendMessage: (text, noteId) => {
@@ -194,7 +233,13 @@ export const useAgentStore = create<AgentState>((set, get) => {
       clearInactivityTimer();
       discardChunks();
       activeAssistantId = null;
-      set({ messages: [], status: 'idle', error: null, _streamHandle: null });
+      set({
+        messages: [],
+        status: 'idle',
+        error: null,
+        pendingProposal: null,
+        _streamHandle: null,
+      });
     },
 
     cancel: () => {
@@ -203,7 +248,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       clearInactivityTimer();
       flushChunks();
       activeAssistantId = null;
-      set({ status: 'idle', _streamHandle: null });
+      set({ status: 'idle', pendingProposal: null, _streamHandle: null });
     },
 
     retryLast: () => {
@@ -221,6 +266,46 @@ export const useAgentStore = create<AgentState>((set, get) => {
       const text = messages[lastUserIdx].content;
       set({ messages: messages.slice(0, lastUserIdx) });
       get().sendMessage(text, lastNoteId);
+    },
+
+    approveProposal: () => {
+      const p = get().pendingProposal;
+      if (!p) {
+        return;
+      }
+      const assistant: AgentChatMessage = {
+        id: nextId(),
+        role: 'assistant',
+        content: '',
+      };
+      activeAssistantId = assistant.id;
+      set((s) => ({
+        status: 'streaming',
+        pendingProposal: null,
+        messages: [...s.messages, assistant],
+      }));
+      armInactivityTimer();
+      agentClient.approve(p.id);
+    },
+
+    rejectProposal: (reason) => {
+      const p = get().pendingProposal;
+      if (!p) {
+        return;
+      }
+      const assistant: AgentChatMessage = {
+        id: nextId(),
+        role: 'assistant',
+        content: '',
+      };
+      activeAssistantId = assistant.id;
+      set((s) => ({
+        status: 'streaming',
+        pendingProposal: null,
+        messages: [...s.messages, assistant],
+      }));
+      armInactivityTimer();
+      agentClient.reject(p.id, reason);
     },
   };
 });

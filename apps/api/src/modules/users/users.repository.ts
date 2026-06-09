@@ -8,9 +8,10 @@ import {
   type Database,
   type NewUser,
 } from '../../database';
+import type { UserReadRepository } from './domain/ports/user-read.repository';
 
 @Injectable()
-export class UsersRepository {
+export class UsersRepository implements UserReadRepository {
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database

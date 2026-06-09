@@ -19,7 +19,12 @@ import { z } from 'zod';
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
-import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import { ApproveMutationHandler } from './application/approve-mutation.handler';
+import { RejectMutationHandler } from './application/reject-mutation.handler';
+import {
+  RunAgentTurnHandler,
+  type RunAgentTurnCallbacks,
+} from './application/run-agent-turn.handler';
 
 const agentMessagePayloadSchema = z.object({
   messages: z
@@ -35,6 +40,16 @@ const agentMessagePayloadSchema = z.object({
       message: 'last message must be from the user',
     }),
   noteId: z.string().uuid().optional(),
+});
+
+const agentApprovePayloadSchema = z.object({
+  proposalId: z.string().uuid(),
+  messages: agentMessagePayloadSchema.shape.messages,
+  noteId: z.string().uuid().optional(),
+});
+
+const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
+  reason: z.string().max(1000).optional(),
 });
 
 interface AuthenticatedAgentSocket extends Socket {
@@ -56,6 +71,8 @@ export class AgentGateway
 
   constructor(
     private readonly runAgentTurn: RunAgentTurnHandler,
+    private readonly approveMutation: ApproveMutationHandler,
+    private readonly rejectMutation: RejectMutationHandler,
     private readonly jwtService: JwtService,
     private readonly featureFlagsService: FeatureFlagsService,
     configService: ConfigService<EnvConfig, true>
@@ -136,12 +153,8 @@ export class AgentGateway
       return;
     }
 
-    const turnId = randomUUID();
-    const controller = new AbortController();
-    this.acquireTurnSlot(userId, client.id, turnId, controller);
-
-    try {
-      await this.runAgentTurn.execute(
+    await this.runInTurnSlot(client, userId, (controller) =>
+      this.runAgentTurn.execute(
         {
           userId,
           messages: parsed.data.messages,
@@ -149,34 +162,166 @@ export class AgentGateway
           ...(parsed.data.noteId && { noteId: parsed.data.noteId }),
         },
         {
-          onChunk: (text) => client.emit('agent:chunk', { text }),
-          onDone: (usage) =>
-            client.emit('agent:done', {
-              usage: {
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                model: usage.model,
-                costUsd: usage.costUsd,
-              },
-              sources: usage.sources,
+          ...this.baseCallbacks(client, controller),
+          onProposal: (proposal) =>
+            client.emit('agent:proposal', {
+              id: proposal.id,
+              kind: proposal.kind,
+              targetNoteId: proposal.targetNoteId ?? null,
+              summary: proposal.summary,
+              previewHtml: proposal.previewHtml ?? null,
+              payload: proposal.payload,
             }),
-          onError: (error) => {
-            if (!controller.signal.aborted) {
-              client.emit('agent:error', error);
-            }
-          },
         },
         controller.signal
-      );
-    } finally {
-      this.releaseTurnSlot(userId, client.id, turnId);
-    }
+      )
+    );
   }
 
   @SubscribeMessage('agent:cancel')
   handleCancel(@ConnectedSocket() client: AuthenticatedAgentSocket): void {
     this.abortClientTurns(client.id);
     this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
+  }
+
+  @SubscribeMessage('agent:approve')
+  async handleApprove(
+    @ConnectedSocket() client: AuthenticatedAgentSocket,
+    @MessageBody() payload: unknown
+  ): Promise<void> {
+    const userId = client.data?.userId;
+    if (!userId) {
+      client.emit('agent:error', AIErrors.authRequired());
+      return;
+    }
+    const parsed = agentApprovePayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      client.emit(
+        'agent:error',
+        AIErrors.validationError('invalid approve payload')
+      );
+      return;
+    }
+    const res = await this.approveMutation.execute({
+      proposalId: parsed.data.proposalId,
+      userId,
+    });
+    if (res.isErr()) {
+      client.emit('agent:error', {
+        code: res.error.code,
+        message: res.error.message,
+      });
+      return;
+    }
+    client.emit('agent:committed', {
+      proposalId: parsed.data.proposalId,
+      result: res.value.result,
+    });
+    await this.resumeAfter(client, userId, parsed.data, res.value);
+  }
+
+  @SubscribeMessage('agent:reject')
+  async handleReject(
+    @ConnectedSocket() client: AuthenticatedAgentSocket,
+    @MessageBody() payload: unknown
+  ): Promise<void> {
+    const userId = client.data?.userId;
+    if (!userId) {
+      client.emit('agent:error', AIErrors.authRequired());
+      return;
+    }
+    const parsed = agentRejectPayloadSchema.safeParse(payload);
+    if (!parsed.success) {
+      client.emit(
+        'agent:error',
+        AIErrors.validationError('invalid reject payload')
+      );
+      return;
+    }
+    const res = await this.rejectMutation.execute({
+      proposalId: parsed.data.proposalId,
+      userId,
+      ...(parsed.data.reason && { reason: parsed.data.reason }),
+    });
+    if (res.isErr()) {
+      client.emit('agent:error', {
+        code: res.error.code,
+        message: res.error.message,
+      });
+      return;
+    }
+    await this.resumeAfter(client, userId, parsed.data, res.value);
+  }
+
+  private async resumeAfter(
+    client: AuthenticatedAgentSocket,
+    userId: string,
+    data: {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+      noteId?: string | undefined;
+    },
+    outcome: { toolName: string; outcome: string }
+  ): Promise<void> {
+    if ((this.userTurnCount.get(userId) ?? 0) >= this.maxConcurrentTurns) {
+      client.emit(
+        'agent:error',
+        AIErrors.rateLimitExceeded(
+          `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
+        )
+      );
+      return;
+    }
+    await this.runInTurnSlot(client, userId, (controller) =>
+      this.runAgentTurn.resumeTurn(
+        {
+          userId,
+          messages: data.messages,
+          ...(data.noteId && { noteId: data.noteId }),
+          resume: outcome,
+        },
+        this.baseCallbacks(client, controller),
+        controller.signal
+      )
+    );
+  }
+
+  private async runInTurnSlot(
+    client: AuthenticatedAgentSocket,
+    userId: string,
+    body: (controller: AbortController) => Promise<void>
+  ): Promise<void> {
+    const turnId = randomUUID();
+    const controller = new AbortController();
+    this.acquireTurnSlot(userId, client.id, turnId, controller);
+    try {
+      await body(controller);
+    } finally {
+      this.releaseTurnSlot(userId, client.id, turnId);
+    }
+  }
+
+  private baseCallbacks(
+    client: AuthenticatedAgentSocket,
+    controller: AbortController
+  ): Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'> {
+    return {
+      onChunk: (text) => client.emit('agent:chunk', { text }),
+      onDone: (usage) =>
+        client.emit('agent:done', {
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            model: usage.model,
+            costUsd: usage.costUsd,
+          },
+          sources: usage.sources,
+        }),
+      onError: (error) => {
+        if (!controller.signal.aborted) {
+          client.emit('agent:error', error);
+        }
+      },
+    };
   }
 
   private acquireTurnSlot(

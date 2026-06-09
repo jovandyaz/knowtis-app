@@ -39,10 +39,30 @@ export interface AgentErrorPayload {
   message: string;
 }
 
+export interface AgentProposalPayload {
+  id: string;
+  kind: 'create' | 'update' | 'share';
+  targetNoteId: string | null;
+  summary: string;
+  previewHtml: string | null;
+  payload: Record<string, unknown>;
+}
+
+export interface AgentCommittedPayload {
+  proposalId: string;
+  result: {
+    noteId: string;
+    title: string;
+    kind: 'create' | 'update' | 'share';
+  };
+}
+
 interface AgentStreamCallbacks {
   onChunk: (payload: AgentChunkPayload) => void;
   onDone: (payload: AgentDonePayload) => void;
   onError: (payload: AgentErrorPayload) => void;
+  onProposal?: (payload: AgentProposalPayload) => void;
+  onCommitted?: (payload: AgentCommittedPayload) => void;
 }
 
 export interface AgentStreamHandle {
@@ -262,6 +282,14 @@ export class AgentClient {
       this.pendingMessages = null;
     });
 
+    this.socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+      this.activeCallbacks?.onProposal?.(payload);
+    });
+
+    this.socket.on('agent:committed', (payload: AgentCommittedPayload) => {
+      this.activeCallbacks?.onCommitted?.(payload);
+    });
+
     this.socket.on('agent:error', (payload: AgentErrorPayload) => {
       if (this.canRecoverFromAuthError(payload)) {
         void this.authPolicy.recover(
@@ -273,6 +301,25 @@ export class AgentClient {
       if (this.activeCallbacks) {
         this.failRequest(this.activeCallbacks, payload);
       }
+    });
+  }
+
+  approve(proposalId: string): void {
+    if (!this.pendingMessages) {return;}
+    this.socket?.emit('agent:approve', {
+      proposalId,
+      messages: this.pendingMessages,
+      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+    });
+  }
+
+  reject(proposalId: string, reason?: string): void {
+    if (!this.pendingMessages) {return;}
+    this.socket?.emit('agent:reject', {
+      proposalId,
+      messages: this.pendingMessages,
+      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+      ...(reason ? { reason } : {}),
     });
   }
 

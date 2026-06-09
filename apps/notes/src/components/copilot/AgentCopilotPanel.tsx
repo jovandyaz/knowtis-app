@@ -10,6 +10,7 @@ import { aiErrorMessageKey } from '../editor/ai/ai-error-messages';
 import { AgentComposer } from './AgentComposer';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
+import { AgentProposalCard } from './AgentProposalCard';
 
 export function AgentCopilotPanel() {
   const { t } = useTranslation('notes');
@@ -19,6 +20,9 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const newConversation = useAgentStore((s) => s.newConversation);
   const retryLast = useAgentStore((s) => s.retryLast);
+  const pendingProposal = useAgentStore((s) => s.pendingProposal);
+  const approveProposal = useAgentStore((s) => s.approveProposal);
+  const rejectProposal = useAgentStore((s) => s.rejectProposal);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
 
   return (
@@ -72,9 +76,19 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
+      {pendingProposal && (
+        <div className="px-3 pb-2">
+          <AgentProposalCard
+            proposal={pendingProposal}
+            onApprove={approveProposal}
+            onReject={rejectProposal}
+          />
+        </div>
+      )}
+
       <AgentComposer
         onSend={(text) => sendMessage(text, activeNoteId ?? undefined)}
-        disabled={status === 'streaming'}
+        disabled={status === 'streaming' || status === 'pendingProposal'}
       />
     </div>
   );
