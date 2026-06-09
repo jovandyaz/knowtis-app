@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../config/env.config';
@@ -247,5 +248,137 @@ describe('AgentGateway', () => {
       expect.objectContaining({ code: 'AUTH_REQUIRED' })
     );
     expect(client.disconnect).toHaveBeenCalled();
+  });
+
+  const approvePayload = (
+    proposalId = 'd4816ca2-7965-46ea-b828-3ecfe32428be'
+  ) => ({
+    proposalId,
+    messages: [{ role: 'user', content: 'do it' }],
+  });
+
+  it('approve commits then resumes the turn', async () => {
+    const approveExecute = vi.fn().mockResolvedValue(
+      ok({
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+        outcome: 'created the note "GTD"',
+        toolName: 'proposeCreateNote',
+      })
+    );
+    const resumeTurn = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({
+      approve: { execute: approveExecute },
+      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:committed',
+      expect.objectContaining({
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+      })
+    );
+    expect(resumeTurn).toHaveBeenCalledOnce();
+    expect(resumeTurn.mock.calls[0][0]).toMatchObject({
+      userId: 'u1',
+      resume: { toolName: 'proposeCreateNote' },
+    });
+  });
+
+  it('approve error neither commits nor resumes', async () => {
+    const approveExecute = vi
+      .fn()
+      .mockResolvedValue(
+        err({ code: 'AGENT_PROPOSAL_EXPIRED', message: 'expired' })
+      );
+    const resumeTurn = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({
+      approve: { execute: approveExecute },
+      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AGENT_PROPOSAL_EXPIRED' })
+    );
+    expect(client.emit).not.toHaveBeenCalledWith(
+      'agent:committed',
+      expect.anything()
+    );
+    expect(resumeTurn).not.toHaveBeenCalled();
+  });
+
+  it('reject discards the proposal then resumes with the reason', async () => {
+    const rejectExecute = vi.fn().mockResolvedValue(
+      ok({
+        outcome: 'The user rejected the proposal',
+        toolName: 'proposeCreateNote',
+      })
+    );
+    const resumeTurn = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({
+      reject: { execute: rejectExecute },
+      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleReject(client as never, {
+      ...approvePayload(),
+      reason: 'too long',
+    });
+
+    expect(rejectExecute).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u1', reason: 'too long' })
+    );
+    expect(client.emit).not.toHaveBeenCalledWith(
+      'agent:committed',
+      expect.anything()
+    );
+    expect(resumeTurn).toHaveBeenCalledOnce();
+  });
+
+  it('rejects an unauthenticated approve', async () => {
+    const gateway = makeGateway();
+    const client = makeClient();
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AUTH_REQUIRED' })
+    );
+  });
+
+  it('rejects an unauthenticated reject', async () => {
+    const gateway = makeGateway();
+    const client = makeClient();
+
+    await gateway.handleReject(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AUTH_REQUIRED' })
+    );
+  });
+
+  it('rejects an approve with an invalid proposalId', async () => {
+    const approveExecute = vi.fn();
+    const gateway = makeGateway({ approve: { execute: approveExecute } });
+    const client = makeClient('u1');
+
+    await gateway.handleApprove(client as never, {
+      ...approvePayload('not-a-uuid'),
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(approveExecute).not.toHaveBeenCalled();
   });
 });

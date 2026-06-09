@@ -24,4 +24,6 @@ export const AgentErrors = {
     make('AGENT_SANITIZE_REJECTED', 'Generated content could not be sanitized'),
   noteNotFound: (noteId: string) =>
     make('AGENT_NOTE_NOT_FOUND', `Note ${noteId} not found or not accessible`),
+  targetUserNotFound: (email: string) =>
+    make('AGENT_TARGET_USER_NOT_FOUND', `No user found for ${email}`),
 } as const;

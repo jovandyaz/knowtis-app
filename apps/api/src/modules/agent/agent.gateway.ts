@@ -21,7 +21,10 @@ import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
-import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
+import {
+  RunAgentTurnHandler,
+  type RunAgentTurnCallbacks,
+} from './application/run-agent-turn.handler';
 
 const agentMessagePayloadSchema = z.object({
   messages: z
@@ -150,12 +153,8 @@ export class AgentGateway
       return;
     }
 
-    const turnId = randomUUID();
-    const controller = new AbortController();
-    this.acquireTurnSlot(userId, client.id, turnId, controller);
-
-    try {
-      await this.runAgentTurn.execute(
+    await this.runInTurnSlot(client, userId, (controller) =>
+      this.runAgentTurn.execute(
         {
           userId,
           messages: parsed.data.messages,
@@ -163,22 +162,7 @@ export class AgentGateway
           ...(parsed.data.noteId && { noteId: parsed.data.noteId }),
         },
         {
-          onChunk: (text) => client.emit('agent:chunk', { text }),
-          onDone: (usage) =>
-            client.emit('agent:done', {
-              usage: {
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                model: usage.model,
-                costUsd: usage.costUsd,
-              },
-              sources: usage.sources,
-            }),
-          onError: (error) => {
-            if (!controller.signal.aborted) {
-              client.emit('agent:error', error);
-            }
-          },
+          ...this.baseCallbacks(client, controller),
           onProposal: (proposal) =>
             client.emit('agent:proposal', {
               id: proposal.id,
@@ -190,10 +174,8 @@ export class AgentGateway
             }),
         },
         controller.signal
-      );
-    } finally {
-      this.releaseTurnSlot(userId, client.id, turnId);
-    }
+      )
+    );
   }
 
   @SubscribeMessage('agent:cancel')
@@ -280,40 +262,57 @@ export class AgentGateway
     },
     outcome: { toolName: string; outcome: string }
   ): Promise<void> {
-    const turnId = randomUUID();
-    const controller = new AbortController();
-    this.acquireTurnSlot(userId, client.id, turnId, controller);
-    try {
-      await this.runAgentTurn.resumeTurn(
+    await this.runInTurnSlot(client, userId, (controller) =>
+      this.runAgentTurn.resumeTurn(
         {
           userId,
           messages: data.messages,
           ...(data.noteId && { noteId: data.noteId }),
           resume: outcome,
         },
-        {
-          onChunk: (text) => client.emit('agent:chunk', { text }),
-          onDone: (usage) =>
-            client.emit('agent:done', {
-              usage: {
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                model: usage.model,
-                costUsd: usage.costUsd,
-              },
-              sources: usage.sources,
-            }),
-          onError: (error) => {
-            if (!controller.signal.aborted) {
-              client.emit('agent:error', error);
-            }
-          },
-        },
+        this.baseCallbacks(client, controller),
         controller.signal
-      );
+      )
+    );
+  }
+
+  private async runInTurnSlot(
+    client: AuthenticatedAgentSocket,
+    userId: string,
+    body: (controller: AbortController) => Promise<void>
+  ): Promise<void> {
+    const turnId = randomUUID();
+    const controller = new AbortController();
+    this.acquireTurnSlot(userId, client.id, turnId, controller);
+    try {
+      await body(controller);
     } finally {
       this.releaseTurnSlot(userId, client.id, turnId);
     }
+  }
+
+  private baseCallbacks(
+    client: AuthenticatedAgentSocket,
+    controller: AbortController
+  ): Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'> {
+    return {
+      onChunk: (text) => client.emit('agent:chunk', { text }),
+      onDone: (usage) =>
+        client.emit('agent:done', {
+          usage: {
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            model: usage.model,
+            costUsd: usage.costUsd,
+          },
+          sources: usage.sources,
+        }),
+      onError: (error) => {
+        if (!controller.signal.aborted) {
+          client.emit('agent:error', error);
+        }
+      },
+    };
   }
 
   private acquireTurnSlot(

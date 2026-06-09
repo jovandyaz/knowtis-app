@@ -165,6 +165,10 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
     signal?: AbortSignal
   ): Promise<void> {
+    if (signal?.aborted) {
+      return;
+    }
+    const estimatedTokens = this.estimateTokens(input.messages);
     const model = await this.aiConfig.getDefaultModel();
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
     for await (const event of this.orchestrator.run({
@@ -176,20 +180,76 @@ export class RunAgentTurnHandler {
       ...(signal ? { signal } : {}),
       resume: input.resume,
     })) {
-      if (event.type === 'chunk') {
-        callbacks.onChunk(event.text);
-      } else if (event.type === 'error') {
-        callbacks.onError(event.error);
-      } else if (event.type === 'done') {
-        callbacks.onDone({
-          inputTokens: event.usage.inputTokens,
-          outputTokens: event.usage.outputTokens,
-          model: event.usage.model,
-          costUsd: 0,
-          sources: event.sources,
-        });
+      switch (event.type) {
+        case 'chunk':
+          callbacks.onChunk(event.text);
+          break;
+        case 'error':
+          callbacks.onError(event.error);
+          return;
+        case 'done': {
+          await this.finishResume(
+            input.userId,
+            estimatedTokens,
+            event,
+            callbacks.onDone
+          );
+          return;
+        }
+        // Write-tools are disabled on resume, so a proposal/committed event
+        // cannot occur; treat any unexpected event as end-of-turn so the
+        // composer never hangs waiting for done.
+        case 'proposal':
+        case 'committed':
+          callbacks.onDone({
+            inputTokens: 0,
+            outputTokens: 0,
+            model,
+            costUsd: 0,
+            sources: [],
+          });
+          return;
+        default: {
+          const _exhaustive: never = event;
+          throw new Error(`Unhandled agent event: ${String(_exhaustive)}`);
+        }
       }
     }
+  }
+
+  private async finishResume(
+    userId: string,
+    estimatedTokens: number,
+    event: {
+      usage: { inputTokens: number; outputTokens: number; model: string };
+      sources: readonly AgentSource[];
+    },
+    onDone: RunAgentTurnCallbacks['onDone']
+  ): Promise<void> {
+    const usage = TokenUsage.create(
+      {
+        inputTokens: event.usage.inputTokens,
+        outputTokens: event.usage.outputTokens,
+        model: event.usage.model,
+      },
+      getModelPricing(event.usage.model)
+    );
+    await this.rateLimit.recordUsage({
+      userId,
+      action: 'agent',
+      inputTokens: event.usage.inputTokens,
+      outputTokens: event.usage.outputTokens,
+      model: event.usage.model,
+      costUsd: usage.costUsd,
+      estimatedTokens,
+    });
+    onDone({
+      inputTokens: event.usage.inputTokens,
+      outputTokens: event.usage.outputTokens,
+      model: event.usage.model,
+      costUsd: usage.costUsd,
+      sources: event.sources,
+    });
   }
 
   private toolNameForKind(kind: MutationKind): string {

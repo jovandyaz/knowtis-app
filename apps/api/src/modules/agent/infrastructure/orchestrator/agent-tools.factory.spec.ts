@@ -52,6 +52,20 @@ describe('AgentToolsFactory', () => {
     ]);
   });
 
+  it('buildReadOnly returns exactly the four read tools with no propose tools', () => {
+    const factory = new AgentToolsFactory(
+      makeRetrieval(),
+      makeBuilder() as never
+    );
+    const tools = factory.buildReadOnly(USER);
+    expect(Object.keys(tools).sort()).toEqual([
+      'getNote',
+      'getNotesOverview',
+      'listRecentNotes',
+      'searchNotes',
+    ]);
+  });
+
   it('searchNotes executes against the retrieval port with the bound user', async () => {
     const retrieval = makeRetrieval();
     const tools = new AgentToolsFactory(

@@ -10,7 +10,9 @@ function rec() {
     payload: { title: 'GTD', contentHtml: '<p>x</p>' },
     summary: 's',
   });
-  if (r.isErr()) throw new Error('setup');
+  if (r.isErr()) {
+    throw new Error('setup');
+  }
   return { userId: 'u1', toolName: 'proposeCreateNote', mutation: r.value };
 }
 

@@ -79,7 +79,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
           role: m.role,
           content: m.content,
         })),
-        tools: this.toolsFactory.build(input.userId),
+        tools: input.resume
+          ? this.toolsFactory.buildReadOnly(input.userId)
+          : this.toolsFactory.build(input.userId),
         stopWhen: stepCountIs(input.maxSteps),
         onStepFinish: ({ toolResults }) => {
           this.collectSources(toolResults, sources);

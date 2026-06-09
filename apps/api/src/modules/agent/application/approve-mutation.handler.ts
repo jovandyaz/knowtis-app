@@ -39,7 +39,8 @@ export interface ApproveMutationOutput {
 @Injectable()
 export class ApproveMutationHandler {
   constructor(
-    @Inject(PENDING_MUTATION_STORE) private readonly store: PendingMutationStore,
+    @Inject(PENDING_MUTATION_STORE)
+    private readonly store: PendingMutationStore,
     private readonly createHandler: CreateNoteHandler,
     private readonly updateHandler: UpdateNoteHandler,
     private readonly shareHandler: ShareNoteHandler,
@@ -63,23 +64,24 @@ export class ApproveMutationHandler {
     return this.commitOnExisting(input.userId, m, record.toolName);
   }
 
-  private can(
-    userId: string,
-    action: 'create' | 'update' | 'share',
-    subject: { id: string; ownerId: string; generalAccess: string }
-  ): boolean {
+  private canCreate(userId: string): boolean {
     const ability = this.abilityFactory.createAbility({
       user: { id: userId },
       permissionContext: { sharedNotes: [] },
     });
-    return ability.can(action, { __typename: SUBJECTS.Note, ...subject });
+    return ability.can('create', {
+      __typename: SUBJECTS.Note,
+      id: '',
+      ownerId: userId,
+      generalAccess: 'restricted',
+    });
   }
 
   private async commitCreate(
     userId: string,
     m: ProposedMutation
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
-    if (!this.can(userId, 'create', { id: '', ownerId: userId, generalAccess: 'restricted' })) {
+    if (!this.canCreate(userId)) {
       return err(AgentErrors.permissionDenied());
     }
     const payload = m.payload as CreateMutationPayload;
@@ -109,20 +111,11 @@ export class ApproveMutationHandler {
     if (!note) {
       return err(AgentErrors.noteNotFound(noteId));
     }
-    if (
-      !this.can(userId, m.kind === 'share' ? 'share' : 'update', {
-        id: note.id,
-        ownerId: note.ownerId,
-        generalAccess: note.generalAccess,
-      })
-    ) {
-      return err(AgentErrors.permissionDenied());
-    }
-    if (m.baseVersion && note.updatedAt.toISOString() !== m.baseVersion) {
-      return err(AgentErrors.staleNote(noteId));
-    }
 
     if (m.kind === 'update') {
+      if (m.baseVersion && note.updatedAt.toISOString() !== m.baseVersion) {
+        return err(AgentErrors.staleNote(noteId));
+      }
       const payload = m.payload as UpdateMutationPayload;
       const res = await this.updateHandler.execute({
         noteId,
@@ -136,7 +129,11 @@ export class ApproveMutationHandler {
         return err(AgentErrors.permissionDenied());
       }
       return ok({
-        result: { noteId: res.value.id, title: res.value.title, kind: 'update' },
+        result: {
+          noteId: res.value.id,
+          title: res.value.title,
+          kind: 'update',
+        },
         outcome: `updated the note "${res.value.title}"`,
         toolName,
       });
@@ -145,7 +142,7 @@ export class ApproveMutationHandler {
     const share = m.payload as ShareMutationPayload;
     const target = await this.userRepo.findByEmail(share.targetEmail);
     if (!target) {
-      return err(AgentErrors.noteNotFound(share.targetEmail));
+      return err(AgentErrors.targetUserNotFound(share.targetEmail));
     }
     const res = await this.shareHandler.execute({
       noteId,

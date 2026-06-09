@@ -15,7 +15,7 @@ export class AgentToolsFactory {
     private readonly proposalBuilder: MutationProposalBuilder
   ) {}
 
-  build(userId: string) {
+  buildReadOnly(userId: string) {
     return {
       searchNotes: tool({
         description:
@@ -59,6 +59,12 @@ export class AgentToolsFactory {
         inputSchema: z.object({}),
         execute: async () => this.retrieval.overview(userId),
       }),
+    };
+  }
+
+  build(userId: string) {
+    return {
+      ...this.buildReadOnly(userId),
       proposeCreateNote: tool({
         description:
           'Propose creating a new note. Does NOT create it — the user must confirm. Use when the user asks to create/draft a note.',

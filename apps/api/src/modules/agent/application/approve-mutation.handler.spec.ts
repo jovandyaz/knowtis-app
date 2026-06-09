@@ -1,6 +1,7 @@
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 
@@ -11,20 +12,38 @@ function createProposal() {
     payload: { title: 'GTD', contentHtml: '<p>x</p>' },
     summary: 's',
   });
-  if (r.isErr()) throw new Error('setup');
+  if (r.isErr()) {
+    throw new Error('setup');
+  }
   return r.value;
 }
 
-function updateProposal(baseVersion: string) {
+function updateProposal(baseVersion?: string) {
   const r = ProposedMutation.create({
     id: 'p2',
     kind: 'update',
     targetNoteId: 'note-1',
     payload: { title: 'New' },
     summary: 's',
-    baseVersion,
+    ...(baseVersion ? { baseVersion } : {}),
   });
-  if (r.isErr()) throw new Error('setup');
+  if (r.isErr()) {
+    throw new Error('setup');
+  }
+  return r.value;
+}
+
+function shareProposal() {
+  const r = ProposedMutation.create({
+    id: 'p3',
+    kind: 'share',
+    targetNoteId: 'note-1',
+    payload: { targetEmail: 'bob@example.com', permission: 'viewer' },
+    summary: 's',
+  });
+  if (r.isErr()) {
+    throw new Error('setup');
+  }
   return r.value;
 }
 
@@ -39,15 +58,20 @@ function deps(over: Record<string, unknown> = {}) {
       save: vi.fn(),
     },
     createHandler: {
-      execute: vi.fn().mockResolvedValue(
-        ok({ id: 'n1', title: 'GTD', ownerId: 'u1', generalAccess: 'restricted' })
-      ),
+      execute: vi
+        .fn()
+        .mockResolvedValue(
+          ok({
+            id: 'n1',
+            title: 'GTD',
+            ownerId: 'u1',
+            generalAccess: 'restricted',
+          })
+        ),
     },
     updateHandler: { execute: vi.fn() },
     shareHandler: { execute: vi.fn() },
-    abilityFactory: {
-      createAbility: () => ({ can: () => true, cannot: () => false }),
-    },
+    abilityFactory: new AppAbilityFactory(),
     noteRepo: { findById: vi.fn() },
     userRepo: { findByEmail: vi.fn() },
     ...over,
@@ -91,7 +115,9 @@ describe('ApproveMutationHandler', () => {
     });
     const r = await make(d).execute({ proposalId: 'gone', userId: 'u1' });
     expect(r.isErr()).toBe(true);
-    if (r.isErr()) expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    }
   });
 
   it('fails when the user lacks permission', async () => {
@@ -102,7 +128,9 @@ describe('ApproveMutationHandler', () => {
     });
     const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
     expect(r.isErr()).toBe(true);
-    if (r.isErr()) expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+    }
   });
 
   it('rejects an update when the note changed since the proposal (stale)', async () => {
@@ -127,7 +155,149 @@ describe('ApproveMutationHandler', () => {
     });
     const r = await make(d).execute({ proposalId: 'p2', userId: 'u1' });
     expect(r.isErr()).toBe(true);
-    if (r.isErr()) expect(r.error.code).toBe('AGENT_STALE_NOTE');
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_STALE_NOTE');
+    }
     expect(d.updateHandler.execute).not.toHaveBeenCalled();
+  });
+
+  it('commits an update proposal via the update handler', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeUpdateNote',
+          mutation: updateProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Old',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      updateHandler: {
+        execute: vi.fn().mockResolvedValue(ok({ id: 'note-1', title: 'New' })),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p2', userId: 'u1' });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      expect(r.value.result).toEqual({
+        noteId: 'note-1',
+        title: 'New',
+        kind: 'update',
+      });
+    }
+    expect(d.updateHandler.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ noteId: 'note-1', userId: 'u1', title: 'New' })
+    );
+  });
+
+  it('maps an update handler authz error to permissionDenied', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeUpdateNote',
+          mutation: updateProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Old',
+          ownerId: 'owner',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      updateHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(
+            err({ code: 'PERMISSION_DENIED', message: 'denied' })
+          ),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p2', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+    }
+  });
+
+  it('commits a share proposal to the resolved target user', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Shared',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      userRepo: {
+        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
+      },
+      shareHandler: {
+        execute: vi.fn().mockResolvedValue(ok({ id: 'perm-1' })),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+    expect(r.isOk()).toBe(true);
+    if (r.isOk()) {
+      expect(r.value.result.kind).toBe('share');
+    }
+    expect(d.shareHandler.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        noteId: 'note-1',
+        userId: 'u1',
+        targetUserId: 'target',
+        permission: 'viewer',
+      })
+    );
+  });
+
+  it('fails a share when the target email has no user', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Shared',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      userRepo: { findByEmail: vi.fn().mockResolvedValue(null) },
+    });
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_TARGET_USER_NOT_FOUND');
+    }
   });
 });

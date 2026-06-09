@@ -207,6 +207,33 @@ describe('AiSdkAgentOrchestrator', () => {
 
     expect(tools.build).toHaveBeenCalledWith('user-42');
   });
+
+  it('uses the read-only tool set when resuming a turn', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+      buildReadOnly: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'ok' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      })
+    );
+
+    expect(tools.buildReadOnly).toHaveBeenCalledWith('u1');
+    expect(tools.build).not.toHaveBeenCalled();
+  });
 });
 
 describe('extractProposal', () => {
