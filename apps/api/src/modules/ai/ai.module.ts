@@ -78,6 +78,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     AIOrchestrator,
     AIRateLimitService,
     AI_STRUCTURED_OUTPUT_PROVIDER,
+    AI_REDIS,
   ],
 })
 export class AIModule {}
