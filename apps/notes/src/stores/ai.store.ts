@@ -7,6 +7,8 @@ import {
   type AIStreamHandle,
 } from '@knowtis/api-client';
 
+import { createChunkBuffer } from './chunk-buffer';
+
 type AIStatus = 'idle' | 'streaming' | 'done' | 'error' | 'timeout';
 
 interface SelectionRange {
@@ -34,57 +36,17 @@ interface AIState {
 }
 
 export const useAIStore = create<AIState>((set, get) => {
-  let chunkBuffer = '';
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  // Kept in closure (not store state) so arming/clearing it per chunk doesn't
-  // trigger a store update — that would re-render subscribers and defeat the
-  // chunk batching below.
-  let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const clearFlushTimer = () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-  };
-
-  const flushChunks = () => {
-    clearFlushTimer();
-    if (chunkBuffer) {
-      const buffered = chunkBuffer;
-      chunkBuffer = '';
-      set((s) => ({ streamedText: s.streamedText + buffered }));
-    }
-  };
-
-  const discardChunks = () => {
-    clearFlushTimer();
-    chunkBuffer = '';
-  };
-
-  const scheduleFlush = () => {
-    if (!flushTimer) {
-      flushTimer = setTimeout(flushChunks, CHUNK_FLUSH_MS);
-    }
-  };
-
-  const clearInactivityTimer = () => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-      inactivityTimer = null;
-    }
-  };
-
-  // Inactivity timeout — resets per chunk so long generations aren't cut.
-  const armInactivityTimer = () => {
-    clearInactivityTimer();
-    inactivityTimer = setTimeout(() => {
-      inactivityTimer = null;
-      flushChunks();
+  const buffer = createChunkBuffer({
+    flushMs: CHUNK_FLUSH_MS,
+    inactivityMs: STREAM_INACTIVITY_MS,
+    onFlush: (text) => {
+      set((s) => ({ streamedText: s.streamedText + text }));
+    },
+    onInactivity: () => {
       get()._streamHandle?.cancel();
       set({ status: 'timeout', _streamHandle: null });
-    }, STREAM_INACTIVITY_MS);
-  };
+    },
+  });
 
   return {
     status: 'idle',
@@ -101,8 +63,8 @@ export const useAIStore = create<AIState>((set, get) => {
         current._streamHandle.cancel();
       }
 
-      clearInactivityTimer();
-      discardChunks();
+      buffer.clearInactivityTimer();
+      buffer.discard();
 
       set({
         status: 'streaming',
@@ -114,23 +76,24 @@ export const useAIStore = create<AIState>((set, get) => {
 
       const handle = aiClient.stream(payload, {
         onChunk: ({ text }) => {
-          armInactivityTimer();
-          chunkBuffer += text;
-          scheduleFlush();
+          buffer.push(text);
         },
         onDone: () => {
-          clearInactivityTimer();
-          flushChunks();
+          buffer.clearInactivityTimer();
+          buffer.flush();
           set({ status: 'done', _streamHandle: null });
         },
         onError: (error) => {
-          clearInactivityTimer();
-          flushChunks();
+          buffer.clearInactivityTimer();
+          buffer.flush();
           set({ status: 'error', error, _streamHandle: null });
         },
       });
 
-      armInactivityTimer();
+      if (get().status !== 'streaming') {
+        return;
+      }
+      buffer.armInactivityTimer();
       set({ _streamHandle: handle });
     },
 
@@ -152,8 +115,8 @@ export const useAIStore = create<AIState>((set, get) => {
     cancelStream: () => {
       const { _streamHandle } = get();
       _streamHandle?.cancel();
-      clearInactivityTimer();
-      discardChunks();
+      buffer.clearInactivityTimer();
+      buffer.discard();
       set({
         status: 'idle',
         streamedText: '',
@@ -164,8 +127,8 @@ export const useAIStore = create<AIState>((set, get) => {
     },
 
     reset: () => {
-      clearInactivityTimer();
-      discardChunks();
+      buffer.clearInactivityTimer();
+      buffer.discard();
       set({
         status: 'idle',
         streamedText: '',

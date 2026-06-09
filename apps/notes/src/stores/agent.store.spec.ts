@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentClient } from '@knowtis/api-client';
 import type {
+  AgentCommittedPayload,
   AgentDonePayload,
   AgentErrorPayload,
   AgentProposalPayload,
@@ -13,8 +14,8 @@ import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
 vi.mock('@knowtis/api-client', () => ({
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
-    approve: vi.fn(),
-    reject: vi.fn(),
+    approve: vi.fn(() => true),
+    reject: vi.fn(() => true),
   },
 }));
 
@@ -23,6 +24,7 @@ interface Cbs {
   onDone: (p: AgentDonePayload) => void;
   onError: (p: AgentErrorPayload) => void;
   onProposal?: (p: AgentProposalPayload) => void;
+  onCommitted?: (p: AgentCommittedPayload) => void;
 }
 
 function capture(): {
@@ -175,10 +177,128 @@ describe('useAgentStore', () => {
   });
 });
 
+describe('agent.store wire history', () => {
+  const USAGE = { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 };
+  const PROPOSAL: AgentProposalPayload = {
+    id: 'p1',
+    kind: 'create',
+    targetNoteId: null,
+    summary: 'Create "My Note"',
+    previewHtml: null,
+    payload: {},
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    vi.mocked(agentClient.approve).mockReturnValue(true);
+    vi.mocked(agentClient.reject).mockReturnValue(true);
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('preserves streamed prose and the commit marker after a committed proposal', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.getState().approveProposal();
+    get().onChunk({ text: 'Done, your note is ready.' });
+    vi.advanceTimersByTime(50);
+    get().onCommitted?.({
+      proposalId: 'p1',
+      result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+    });
+    get().onDone({ usage: USAGE, sources: [], knownNotes: [] });
+
+    useAgentStore.getState().sendMessage('what did you just do?');
+
+    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
+    const turn = sent?.find(
+      (m) => m.role === 'assistant' && m.content.includes('Done, your note')
+    );
+    expect(turn).toBeDefined();
+    expect(turn?.content).toContain('[created note "My Note"]');
+    expect(turn?.content).not.toContain('✓');
+  });
+
+  it('keeps committed turns with no prose in history via synthesized content', () => {
+    capture();
+    useAgentStore.setState({
+      messages: [
+        { id: 'u1', role: 'user', content: 'create it' },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: '',
+          committed: { kind: 'create', title: 'My Note' },
+        },
+      ],
+      status: 'done',
+    });
+
+    useAgentStore.getState().sendMessage('next');
+
+    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
+    expect(sent).toEqual([
+      { role: 'user', content: 'create it' },
+      { role: 'assistant', content: '[created note "My Note"]' },
+      { role: 'user', content: 'next' },
+    ]);
+  });
+
+  it('keeps proposal-only turns in history with synthesized content', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.getState().rejectProposal('no');
+    get().onChunk({ text: 'Okay, discarded.' });
+    vi.advanceTimersByTime(50);
+    get().onDone({ usage: USAGE, sources: [], knownNotes: [] });
+
+    useAgentStore.getState().sendMessage('next');
+
+    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
+    expect(sent).toContainEqual({
+      role: 'assistant',
+      content: '[proposed: Create "My Note"]',
+    });
+  });
+
+  it('appends a sources digest to assistant turns in the wire history', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('what do my notes say?');
+    get().onChunk({ text: 'They say X.' });
+    vi.advanceTimersByTime(50);
+    get().onDone({
+      usage: USAGE,
+      sources: [
+        { id: 'n1', title: 'Productividad' },
+        { id: 'n2', title: 'Ideas' },
+      ],
+      knownNotes: [],
+    });
+
+    useAgentStore.getState().sendMessage('more');
+
+    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
+    expect(sent?.[1]).toEqual({
+      role: 'assistant',
+      content: 'They say X.\n[sources: "Productividad" (n1), "Ideas" (n2)]',
+    });
+  });
+});
+
 describe('agent.store proposals', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
+    vi.mocked(agentClient.approve).mockReturnValue(true);
+    vi.mocked(agentClient.reject).mockReturnValue(true);
     useAgentStore.getState().newConversation();
   });
 
@@ -223,6 +343,46 @@ describe('agent.store proposals', () => {
       'p1',
       'too long'
     );
+  });
+
+  it('approveProposal fails fast when the client has no pending request', () => {
+    vi.mocked(agentClient.approve).mockReturnValue(false);
+    useAgentStore.setState({
+      pendingProposal: {
+        id: 'p1',
+        kind: 'create',
+        targetNoteId: null,
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      },
+      status: 'pendingProposal',
+    });
+    useAgentStore.getState().approveProposal();
+    const { status, error, pendingProposal } = useAgentStore.getState();
+    expect(status).toBe('error');
+    expect(error?.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    expect(pendingProposal).toBeNull();
+  });
+
+  it('rejectProposal fails fast when the client has no pending request', () => {
+    vi.mocked(agentClient.reject).mockReturnValue(false);
+    useAgentStore.setState({
+      pendingProposal: {
+        id: 'p1',
+        kind: 'update',
+        targetNoteId: 'n1',
+        summary: 's',
+        previewHtml: null,
+        payload: {},
+      },
+      status: 'pendingProposal',
+    });
+    useAgentStore.getState().rejectProposal('reason');
+    const { status, error, pendingProposal } = useAgentStore.getState();
+    expect(status).toBe('error');
+    expect(error?.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    expect(pendingProposal).toBeNull();
   });
 
   it('approveProposal is a no-op without a pending proposal', () => {

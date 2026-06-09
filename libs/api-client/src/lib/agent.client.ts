@@ -7,6 +7,7 @@ import {
   createTokenRefreshPolicy,
   type TokenRefreshPolicy,
 } from './token-refresh-policy';
+import { deriveWsBaseUrl } from './ws-url';
 
 export interface AgentWireMessage {
   role: 'user' | 'assistant';
@@ -224,9 +225,10 @@ export class AgentClient {
       return this.wsUrl;
     }
 
+    const apiUrl = import.meta.env?.['VITE_API_URL'];
     const baseUrl =
       import.meta.env?.['VITE_WS_URL'] ||
-      import.meta.env?.['VITE_API_URL']?.replace('/api', '') ||
+      (apiUrl && deriveWsBaseUrl(apiUrl)) ||
       'http://localhost:3333';
 
     return `${baseUrl}/agent`;
@@ -276,6 +278,7 @@ export class AgentClient {
         if (this.activeCallbacks) {
           this.failRequest(this.activeCallbacks, CONNECTION_ERROR);
         }
+        this.teardownSocket();
       }
     });
 
@@ -311,11 +314,12 @@ export class AgentClient {
     });
   }
 
-  approve(proposalId: string): void {
-    if (!this.pendingMessages) {
-      return;
+  /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
+  approve(proposalId: string): boolean {
+    if (!this.pendingMessages || !this.socket) {
+      return false;
     }
-    this.socket?.emit('agent:approve', {
+    this.socket.emit('agent:approve', {
       proposalId,
       messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
@@ -323,13 +327,15 @@ export class AgentClient {
         ? { knownNotes: this.pendingKnownNotes }
         : {}),
     });
+    return true;
   }
 
-  reject(proposalId: string, reason?: string): void {
-    if (!this.pendingMessages) {
-      return;
+  /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
+  reject(proposalId: string, reason?: string): boolean {
+    if (!this.pendingMessages || !this.socket) {
+      return false;
     }
-    this.socket?.emit('agent:reject', {
+    this.socket.emit('agent:reject', {
       proposalId,
       messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
@@ -338,6 +344,7 @@ export class AgentClient {
         : {}),
       ...(reason ? { reason } : {}),
     });
+    return true;
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {

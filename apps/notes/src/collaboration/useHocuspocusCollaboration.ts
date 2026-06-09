@@ -9,7 +9,7 @@ import {
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
-import { createTokenRefreshPolicy } from '@knowtis/api-client';
+import { createTokenRefreshPolicy, deriveWsBaseUrl } from '@knowtis/api-client';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -196,7 +196,7 @@ export function getCollaborationServerUrl(): string {
   if (typeof wsUrl === 'string' && wsUrl.length > 0) {
     base = wsUrl;
   } else if (typeof apiUrl === 'string' && apiUrl.length > 0) {
-    base = apiUrl.replace(/\/api(?:\/v\d+)?\/?$/, '');
+    base = deriveWsBaseUrl(apiUrl);
   } else {
     base = 'http://localhost:3333';
   }

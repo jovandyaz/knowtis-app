@@ -222,4 +222,22 @@ describe('AIClient', () => {
     expect(callbacks.onChunk).toHaveBeenCalledWith({ text: 'partial' });
     expect(callbacks.onDone).toHaveBeenCalledWith({ usage });
   });
+
+  it('tears down the socket after exhausting reconnect attempts', async () => {
+    const callbacks = createCallbacks();
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+
+    for (let i = 0; i < 5; i++) {
+      fake.trigger('connect_error', new Error('refused'));
+    }
+
+    expect(callbacks.onError).toHaveBeenCalled();
+    expect(fake.socket.disconnect).toHaveBeenCalled();
+  });
 });

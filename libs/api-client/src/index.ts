@@ -33,6 +33,8 @@ export type {
   AgentCommittedPayload,
 } from './lib/agent.client';
 
+export { deriveWsBaseUrl } from './lib/ws-url';
+
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
 export type {
   TokenRefreshPolicy,

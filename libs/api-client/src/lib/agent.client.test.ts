@@ -124,6 +124,49 @@ describe('AgentClient', () => {
       noteId: 'note-123',
     });
   });
+
+  it('approve returns true and emits while a request is pending', () => {
+    const client = makeClient();
+    client.sendMessage(MESSAGES, {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(client.approve('p1')).toBe(true);
+    expect(emit).toHaveBeenCalledWith('agent:approve', {
+      proposalId: 'p1',
+      messages: MESSAGES,
+    });
+  });
+
+  it('approve returns false without emitting once the request completed', () => {
+    const client = makeClient();
+    client.sendMessage(MESSAGES, {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+    });
+    emit.mockClear();
+    expect(client.approve('p1')).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('reject returns false without emitting after cancel cleared the pending request', () => {
+    const client = makeClient();
+    const handle = client.sendMessage(MESSAGES, {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    handle.cancel();
+    emit.mockClear();
+    expect(client.reject('p1', 'no')).toBe(false);
+    expect(emit).not.toHaveBeenCalled();
+  });
 });
 
 describe('AgentClient – auth/transport failure paths', () => {
@@ -238,5 +281,26 @@ describe('AgentClient – auth/transport failure paths', () => {
       code: 'CONNECTION_FAILED',
       message: 'Failed to connect to agent server',
     });
+  });
+
+  it('tears down the socket after exhausting reconnect attempts', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage(MESSAGES, callbacks);
+    await flush();
+
+    for (let i = 0; i < 5; i++) {
+      fake.trigger('connect_error', new Error('refused'));
+    }
+
+    expect(fake.socket.disconnect).toHaveBeenCalled();
   });
 });

@@ -8,6 +8,7 @@ import {
   createTokenRefreshPolicy,
   type TokenRefreshPolicy,
 } from './token-refresh-policy';
+import { deriveWsBaseUrl } from './ws-url';
 
 export interface AICompletePayload {
   action: AIAction;
@@ -187,9 +188,10 @@ export class AIClient {
       return this.wsUrl;
     }
 
+    const apiUrl = import.meta.env?.['VITE_API_URL'];
     const baseUrl =
       import.meta.env?.['VITE_WS_URL'] ||
-      import.meta.env?.['VITE_API_URL']?.replace('/api', '') ||
+      (apiUrl && deriveWsBaseUrl(apiUrl)) ||
       'http://localhost:3333';
 
     return `${baseUrl}/ai`;
@@ -240,6 +242,7 @@ export class AIClient {
         if (this.activeCallbacks) {
           this.failRequest(this.activeCallbacks, CONNECTION_ERROR);
         }
+        this.teardownSocket();
       }
     });
 

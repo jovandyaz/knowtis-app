@@ -8,6 +8,8 @@ import {
   type AgentWireMessage,
 } from '@knowtis/api-client';
 
+import { createChunkBuffer } from './chunk-buffer';
+
 export type AgentStatus =
   | 'idle'
   | 'streaming'
@@ -30,10 +32,44 @@ export interface AgentChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: AgentSource[];
+  proposal?: { kind: PendingProposal['kind']; summary: string };
+  committed?: { kind: PendingProposal['kind']; title: string };
 }
 
 export const AGENT_STREAM_INACTIVITY_MS = 45000;
 const CHUNK_FLUSH_MS = 50;
+
+const PROPOSAL_EXPIRED_ERROR: AgentErrorPayload = {
+  code: 'AGENT_PROPOSAL_EXPIRED',
+  message: 'The proposal can no longer be resumed',
+};
+
+const COMMIT_VERB: Record<PendingProposal['kind'], string> = {
+  create: 'created',
+  update: 'updated',
+  share: 'shared',
+};
+
+const MAX_WIRE_SOURCES = 5;
+
+function toWireContent(m: AgentChatMessage): string {
+  let content = m.content;
+  if (m.committed) {
+    const marker = `[${COMMIT_VERB[m.committed.kind]} note "${m.committed.title}"]`;
+    const prose = content.replaceAll(`✓ ${m.committed.title}`, '').trim();
+    content = prose ? `${prose}\n${marker}` : marker;
+  } else if (content.trim().length === 0 && m.proposal) {
+    content = `[proposed: ${m.proposal.summary}]`;
+  }
+  if (m.sources?.length) {
+    const digest = m.sources
+      .slice(0, MAX_WIRE_SOURCES)
+      .map((s) => `"${s.title}" (${s.id})`)
+      .join(', ');
+    content = `${content}\n[sources: ${digest}]`;
+  }
+  return content;
+}
 
 interface AgentState {
   messages: AgentChatMessage[];
@@ -53,64 +89,31 @@ export const useAgentStore = create<AgentState>((set, get) => {
   let seq = 0;
   const nextId = () => `m${++seq}`;
 
-  let chunkBuffer = '';
   let activeAssistantId: string | null = null;
   // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
   let knownNotes: AgentSource[] = [];
-  let flushTimer: ReturnType<typeof setTimeout> | null = null;
-  // Closure (not store state): arming/clearing per chunk must not re-render.
-  let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
 
-  const clearFlushTimer = () => {
-    if (flushTimer) {
-      clearTimeout(flushTimer);
-      flushTimer = null;
-    }
-  };
-
-  const flushChunks = () => {
-    clearFlushTimer();
-    if (chunkBuffer && activeAssistantId) {
-      const buffered = chunkBuffer;
+  const buffer = createChunkBuffer({
+    flushMs: CHUNK_FLUSH_MS,
+    inactivityMs: AGENT_STREAM_INACTIVITY_MS,
+    onFlush: (text) => {
       const id = activeAssistantId;
-      chunkBuffer = '';
+      if (!id) {
+        return;
+      }
       set((s) => ({
         messages: s.messages.map((m) =>
-          m.id === id ? { ...m, content: m.content + buffered } : m
+          m.id === id ? { ...m, content: m.content + text } : m
         ),
       }));
-    }
-  };
-
-  const discardChunks = () => {
-    clearFlushTimer();
-    chunkBuffer = '';
-  };
-
-  const scheduleFlush = () => {
-    if (!flushTimer) {
-      flushTimer = setTimeout(flushChunks, CHUNK_FLUSH_MS);
-    }
-  };
-
-  const clearInactivityTimer = () => {
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-      inactivityTimer = null;
-    }
-  };
-
-  const armInactivityTimer = () => {
-    clearInactivityTimer();
-    inactivityTimer = setTimeout(() => {
-      inactivityTimer = null;
-      flushChunks();
+    },
+    onInactivity: () => {
       get()._streamHandle?.cancel();
       set({ status: 'timeout', _streamHandle: null });
-    }, AGENT_STREAM_INACTIVITY_MS);
-  };
+    },
+  });
 
   const run = (
     history: AgentWireMessage[],
@@ -126,22 +129,21 @@ export const useAgentStore = create<AgentState>((set, get) => {
           if (version !== streamVersion) {
             return;
           }
-          armInactivityTimer();
-          chunkBuffer += text;
-          scheduleFlush();
+          buffer.push(text);
         },
         onDone: ({ sources, knownNotes: turnKnownNotes }) => {
           if (version !== streamVersion) {
             return;
           }
           knownNotes = turnKnownNotes;
-          clearInactivityTimer();
-          flushChunks();
+          buffer.clearInactivityTimer();
+          buffer.flush();
+          const id = activeAssistantId;
           set((s) => ({
             status: 'done',
             _streamHandle: null,
             messages: s.messages.map((m) =>
-              m.id === assistantId ? { ...m, sources } : m
+              m.id === id ? { ...m, sources } : m
             ),
           }));
         },
@@ -149,27 +151,51 @@ export const useAgentStore = create<AgentState>((set, get) => {
           if (version !== streamVersion) {
             return;
           }
-          clearInactivityTimer();
-          flushChunks();
+          buffer.clearInactivityTimer();
+          buffer.flush();
           set({ status: 'error', error, _streamHandle: null });
         },
         onProposal: (proposal) => {
           if (version !== streamVersion) {
             return;
           }
-          clearInactivityTimer();
-          flushChunks();
-          set({ status: 'pendingProposal', pendingProposal: proposal });
+          buffer.clearInactivityTimer();
+          buffer.flush();
+          const id = activeAssistantId;
+          set((s) => ({
+            status: 'pendingProposal',
+            pendingProposal: proposal,
+            messages: s.messages.map((m) =>
+              m.id === id
+                ? {
+                    ...m,
+                    proposal: {
+                      kind: proposal.kind,
+                      summary: proposal.summary,
+                    },
+                  }
+                : m
+            ),
+          }));
         },
         onCommitted: ({ result }) => {
           if (version !== streamVersion) {
             return;
           }
+          buffer.flush();
           const id = activeAssistantId;
           set((s) => ({
             pendingProposal: null,
             messages: s.messages.map((m) =>
-              m.id === id ? { ...m, content: `✓ ${result.title}\n\n` } : m
+              m.id === id
+                ? {
+                    ...m,
+                    content: m.content
+                      ? `${m.content}\n\n✓ ${result.title}\n\n`
+                      : `✓ ${result.title}\n\n`,
+                    committed: { kind: result.kind, title: result.title },
+                  }
+                : m
             ),
           }));
         },
@@ -177,7 +203,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
       noteId,
       knownNotes
     );
-    armInactivityTimer();
+    if (get().status !== 'streaming') {
+      return;
+    }
+    buffer.armInactivityTimer();
     set({ _streamHandle: handle });
   };
 
@@ -199,13 +228,13 @@ export const useAgentStore = create<AgentState>((set, get) => {
       }
       streamVersion++;
       lastNoteId = noteId;
-      clearInactivityTimer();
-      discardChunks();
+      buffer.clearInactivityTimer();
+      buffer.discard();
 
       const history: AgentWireMessage[] = [
         ...current.messages
-          .filter((m) => m.content.trim().length > 0)
-          .map((m) => ({ role: m.role, content: m.content })),
+          .map((m) => ({ role: m.role, content: toWireContent(m) }))
+          .filter((m) => m.content.trim().length > 0),
         { role: 'user', content: trimmed },
       ];
 
@@ -233,8 +262,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
     newConversation: () => {
       get()._streamHandle?.cancel();
       streamVersion++;
-      clearInactivityTimer();
-      discardChunks();
+      buffer.clearInactivityTimer();
+      buffer.discard();
       activeAssistantId = null;
       knownNotes = [];
       set({
@@ -249,8 +278,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
     cancel: () => {
       get()._streamHandle?.cancel();
       streamVersion++;
-      clearInactivityTimer();
-      flushChunks();
+      buffer.clearInactivityTimer();
+      buffer.flush();
       activeAssistantId = null;
       set({ status: 'idle', pendingProposal: null, _streamHandle: null });
     },
@@ -277,24 +306,12 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (!p) {
         return;
       }
-      const assistant: AgentChatMessage = {
-        id: nextId(),
-        role: 'assistant',
-        content: '',
-      };
-      activeAssistantId = assistant.id;
-      set((s) => ({
-        status: 'streaming',
-        pendingProposal: null,
-        messages: [...s.messages, assistant],
-      }));
-      armInactivityTimer();
-      agentClient.approve(p.id);
-    },
-
-    rejectProposal: (reason) => {
-      const p = get().pendingProposal;
-      if (!p) {
+      if (!agentClient.approve(p.id)) {
+        set({
+          status: 'error',
+          error: PROPOSAL_EXPIRED_ERROR,
+          pendingProposal: null,
+        });
         return;
       }
       const assistant: AgentChatMessage = {
@@ -308,8 +325,34 @@ export const useAgentStore = create<AgentState>((set, get) => {
         pendingProposal: null,
         messages: [...s.messages, assistant],
       }));
-      armInactivityTimer();
-      agentClient.reject(p.id, reason);
+      buffer.armInactivityTimer();
+    },
+
+    rejectProposal: (reason) => {
+      const p = get().pendingProposal;
+      if (!p) {
+        return;
+      }
+      if (!agentClient.reject(p.id, reason)) {
+        set({
+          status: 'error',
+          error: PROPOSAL_EXPIRED_ERROR,
+          pendingProposal: null,
+        });
+        return;
+      }
+      const assistant: AgentChatMessage = {
+        id: nextId(),
+        role: 'assistant',
+        content: '',
+      };
+      activeAssistantId = assistant.id;
+      set((s) => ({
+        status: 'streaming',
+        pendingProposal: null,
+        messages: [...s.messages, assistant],
+      }));
+      buffer.armInactivityTimer();
     },
   };
 });
