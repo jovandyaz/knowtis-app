@@ -6,6 +6,7 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
+import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
 const USER = '11111111-1111-1111-1111-111111111111';
@@ -49,17 +50,23 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
       },
     ]
   );
-  return { rateLimit, aiConfig, config, orchestrator };
+  const pendingStore = {
+    save: vi.fn().mockResolvedValue(undefined),
+    take: vi.fn().mockResolvedValue(null),
+  } as unknown as PendingMutationStore;
+  return { rateLimit, aiConfig, config, orchestrator, pendingStore };
 }
 
 describe('RunAgentTurnHandler', () => {
   it('streams chunks then done, and records usage', async () => {
-    const { rateLimit, aiConfig, config, orchestrator } = makeDeps({});
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -67,7 +74,12 @@ describe('RunAgentTurnHandler', () => {
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: (t) => chunks.push(t), onDone: done, onError: error }
+      {
+        onChunk: (t) => chunks.push(t),
+        onDone: done,
+        onError: error,
+        onProposal: vi.fn(),
+      }
     );
 
     expect(chunks).toEqual(['Hi']);
@@ -79,20 +91,22 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('denies and never calls the orchestrator when rate-limited', async () => {
-    const { rateLimit, aiConfig, config, orchestrator } = makeDeps({
-      allowed: false,
-    });
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({
+        allowed: false,
+      });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const error = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: error }
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: error, onProposal: vi.fn() }
     );
 
     expect(error).toHaveBeenCalledWith(
@@ -102,7 +116,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards an orchestrator error event to onError', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'error', error: { code: 'AI_PROVIDER_ERROR', message: 'boom' } },
     ]);
@@ -110,13 +124,14 @@ describe('RunAgentTurnHandler', () => {
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const error = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: error }
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: error, onProposal: vi.fn() }
     );
 
     expect(error).toHaveBeenCalledWith(
@@ -125,7 +140,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards sources on done', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -141,13 +156,14 @@ describe('RunAgentTurnHandler', () => {
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const done = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: vi.fn(), onDone: done, onError: vi.fn() }
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
     );
 
     expect(done).toHaveBeenCalledWith(
@@ -158,7 +174,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards empty sources array on done', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -174,20 +190,21 @@ describe('RunAgentTurnHandler', () => {
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const done = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: vi.fn(), onDone: done, onError: vi.fn() }
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
     );
 
     expect(done).toHaveBeenCalledWith(expect.objectContaining({ sources: [] }));
   });
 
   it('calls onError and does not record usage when orchestrator throws synchronously', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('orchestrator failed');
@@ -199,13 +216,14 @@ describe('RunAgentTurnHandler', () => {
       throwingOrchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const onError = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError }
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
     );
 
     expect(onError).toHaveBeenCalledWith(
@@ -215,7 +233,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('calls onDone with usage and never calls onChunk when orchestrator yields only done', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -231,14 +249,15 @@ describe('RunAgentTurnHandler', () => {
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk, onDone, onError: vi.fn() }
+      { onChunk, onDone, onError: vi.fn(), onProposal: vi.fn() }
     );
 
     expect(onChunk).not.toHaveBeenCalled();
@@ -248,12 +267,14 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('returns immediately without calling orchestrator when signal is pre-aborted', async () => {
-    const { rateLimit, aiConfig, config, orchestrator } = makeDeps({});
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const controller = new AbortController();
     controller.abort();
@@ -263,7 +284,7 @@ describe('RunAgentTurnHandler', () => {
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
-      { onChunk, onDone, onError },
+      { onChunk, onDone, onError, onProposal: vi.fn() },
       controller.signal
     );
 
@@ -274,7 +295,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('calls onError with providerError when onChunk throws inside the for-await loop', async () => {
-    const { rateLimit, aiConfig, config } = makeDeps({});
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'chunk', text: 'boom' },
     ]);
@@ -282,7 +303,8 @@ describe('RunAgentTurnHandler', () => {
       orchestrator,
       rateLimit,
       aiConfig,
-      config
+      config,
+      pendingStore
     );
     const onError = vi.fn();
 
@@ -294,6 +316,7 @@ describe('RunAgentTurnHandler', () => {
         },
         onDone: vi.fn(),
         onError,
+        onProposal: vi.fn(),
       }
     );
 

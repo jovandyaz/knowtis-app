@@ -13,6 +13,14 @@ import {
   AGENT_ORCHESTRATOR,
   type AgentOrchestrator,
 } from '../domain/ports/agent-orchestrator.port';
+import {
+  PENDING_MUTATION_STORE,
+  type PendingMutationStore,
+} from '../domain/ports/pending-mutation.store';
+import type {
+  MutationKind,
+  ProposedMutation,
+} from '../domain/proposed-mutation';
 
 interface RunAgentTurnInput {
   readonly userId: string;
@@ -31,6 +39,7 @@ export interface RunAgentTurnCallbacks {
     sources: readonly AgentSource[];
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
+  readonly onProposal: (proposal: ProposedMutation) => void;
 }
 
 const CHARS_PER_TOKEN = 4;
@@ -44,7 +53,9 @@ export class RunAgentTurnHandler {
     private readonly orchestrator: AgentOrchestrator,
     private readonly rateLimit: AIRateLimitService,
     private readonly aiConfig: AIConfigService,
-    private readonly configService: ConfigService<EnvConfig, true>
+    private readonly configService: ConfigService<EnvConfig, true>,
+    @Inject(PENDING_MUTATION_STORE)
+    private readonly pendingStore: PendingMutationStore
   ) {}
 
   async execute(
@@ -115,6 +126,13 @@ export class RunAgentTurnHandler {
             break;
           }
           case 'proposal':
+            await this.pendingStore.save({
+              userId: input.userId,
+              mutation: event.proposal,
+              toolName: this.toolNameForKind(event.proposal.kind),
+            });
+            callbacks.onProposal(event.proposal);
+            break;
           case 'committed':
             break;
           default: {
@@ -138,6 +156,48 @@ export class RunAgentTurnHandler {
         )
       );
     }
+  }
+
+  async resumeTurn(
+    input: RunAgentTurnInput & {
+      resume: { toolName: string; outcome: string };
+    },
+    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const model = await this.aiConfig.getDefaultModel();
+    const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    for await (const event of this.orchestrator.run({
+      userId: input.userId,
+      messages: input.messages,
+      model,
+      maxSteps,
+      ...(input.noteId ? { noteId: input.noteId } : {}),
+      ...(signal ? { signal } : {}),
+      resume: input.resume,
+    })) {
+      if (event.type === 'chunk') {
+        callbacks.onChunk(event.text);
+      } else if (event.type === 'error') {
+        callbacks.onError(event.error);
+      } else if (event.type === 'done') {
+        callbacks.onDone({
+          inputTokens: event.usage.inputTokens,
+          outputTokens: event.usage.outputTokens,
+          model: event.usage.model,
+          costUsd: 0,
+          sources: event.sources,
+        });
+      }
+    }
+  }
+
+  private toolNameForKind(kind: MutationKind): string {
+    return kind === 'create'
+      ? 'proposeCreateNote'
+      : kind === 'update'
+        ? 'proposeUpdateNote'
+        : 'proposeShareNote';
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {
