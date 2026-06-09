@@ -30,15 +30,23 @@ export class LangfuseTracingService
       this.logger.log('Langfuse tracing disabled (keys not configured)');
       return;
     }
-    this.spanProcessor = new LangfuseSpanProcessor({
-      publicKey,
-      secretKey,
-      baseUrl: this.configService.get('LANGFUSE_BASE_URL'),
-      environment: this.configService.get('NODE_ENV'),
-    });
-    this.sdk = new NodeSDK({ spanProcessors: [this.spanProcessor] });
-    this.sdk.start();
-    this.logger.log('Langfuse tracing enabled');
+    try {
+      this.spanProcessor = new LangfuseSpanProcessor({
+        publicKey,
+        secretKey,
+        baseUrl: this.configService.get('LANGFUSE_BASE_URL'),
+        environment: this.configService.get('NODE_ENV'),
+      });
+      this.sdk = new NodeSDK({ spanProcessors: [this.spanProcessor] });
+      this.sdk.start();
+      this.logger.log('Langfuse tracing enabled');
+    } catch (error) {
+      this.logger.warn(
+        `Langfuse initialization failed: ${error instanceof Error ? error.message : 'unknown'}`
+      );
+      this.sdk = undefined;
+      this.spanProcessor = undefined;
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {

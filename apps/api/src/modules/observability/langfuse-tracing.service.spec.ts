@@ -36,6 +36,22 @@ describe('LangfuseTracingService', () => {
     expect(sdkStart).not.toHaveBeenCalled();
   });
 
+  it('does not start the SDK when only the public key is present', () => {
+    makeService({
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      NODE_ENV: 'test',
+    }).onApplicationBootstrap();
+    expect(sdkStart).not.toHaveBeenCalled();
+  });
+
+  it('does not start the SDK when only the secret key is present', () => {
+    makeService({
+      LANGFUSE_SECRET_KEY: 'sk',
+      NODE_ENV: 'test',
+    }).onApplicationBootstrap();
+    expect(sdkStart).not.toHaveBeenCalled();
+  });
+
   it('starts the SDK and flushes on shutdown when keys are present', async () => {
     const service = makeService({
       LANGFUSE_PUBLIC_KEY: 'pk',
@@ -55,5 +71,31 @@ describe('LangfuseTracingService', () => {
   it('shutdown is a no-op when the SDK was never started', async () => {
     await makeService({ NODE_ENV: 'test' }).onApplicationShutdown();
     expect(sdkShutdown).not.toHaveBeenCalled();
+  });
+
+  it('swallows and logs errors raised during shutdown', async () => {
+    sdkShutdown.mockRejectedValueOnce(new Error('shutdown failed'));
+    const service = makeService({
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      LANGFUSE_SECRET_KEY: 'sk',
+      NODE_ENV: 'test',
+    });
+
+    service.onApplicationBootstrap();
+    await expect(service.onApplicationShutdown()).resolves.toBeUndefined();
+    expect(sdkShutdown).toHaveBeenCalledOnce();
+  });
+
+  it('keeps bootstrap non-fatal when the SDK fails to start', () => {
+    sdkStart.mockImplementationOnce(() => {
+      throw new Error('start failed');
+    });
+    const service = makeService({
+      LANGFUSE_PUBLIC_KEY: 'pk',
+      LANGFUSE_SECRET_KEY: 'sk',
+      NODE_ENV: 'test',
+    });
+
+    expect(() => service.onApplicationBootstrap()).not.toThrow();
   });
 });
