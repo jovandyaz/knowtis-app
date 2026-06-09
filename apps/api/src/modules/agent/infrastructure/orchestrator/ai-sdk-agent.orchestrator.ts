@@ -9,7 +9,6 @@ import { buildProviderRegistry } from '../../../ai/infrastructure/providers/prov
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type {
   AgentOrchestrator,
-  AgentResumeContext,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
 import { ProposedMutation } from '../../domain/proposed-mutation';
@@ -74,11 +73,22 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         model: this.registry.languageModel(
           input.model as `${string}:${string}`
         ),
-        system: this.buildSystemPrompt(input.noteId, input.resume),
-        messages: input.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        })),
+        system: this.buildSystemPrompt(input.noteId),
+        messages: input.resume
+          ? [
+              ...input.messages.map((m) => ({
+                role: m.role,
+                content: m.content,
+              })),
+              {
+                role: 'user' as const,
+                content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
+              },
+            ]
+          : input.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
         tools: input.resume
           ? this.toolsFactory.buildReadOnly(input.userId)
           : this.toolsFactory.build(input.userId),
@@ -131,18 +141,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     }
   }
 
-  private buildSystemPrompt(
-    noteId?: string,
-    resume?: AgentResumeContext
-  ): string {
-    let prompt = AGENT_SYSTEM_PROMPT;
-    if (noteId) {
-      prompt += `\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
+  private buildSystemPrompt(noteId?: string): string {
+    if (!noteId) {
+      return AGENT_SYSTEM_PROMPT;
     }
-    if (resume) {
-      prompt += `\n\nThe "${resume.toolName}" action you proposed was just resolved: ${resume.outcome}\nTell the user this outcome briefly in their language. Do NOT re-propose, re-pitch, or restate the action as a new proposal, and do not call any tool.`;
-    }
-    return prompt;
+    return `${AGENT_SYSTEM_PROMPT}\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
   }
 
   private collectSources(
