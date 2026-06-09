@@ -60,6 +60,9 @@ import { NotesController } from './notes.controller';
     { provide: NOTE_IMAGE_REPOSITORY, useClass: DrizzleNoteImageRepository },
   ],
   exports: [
+    CreateNoteHandler,
+    UpdateNoteHandler,
+    ShareNoteHandler,
     GetNoteHandler,
     GetNoteByTokenHandler,
     NOTE_REPOSITORY,
