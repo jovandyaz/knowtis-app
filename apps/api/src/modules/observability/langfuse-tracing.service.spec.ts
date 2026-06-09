@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -74,6 +75,9 @@ describe('LangfuseTracingService', () => {
   });
 
   it('swallows and logs errors raised during shutdown', async () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     sdkShutdown.mockRejectedValueOnce(new Error('shutdown failed'));
     const service = makeService({
       LANGFUSE_PUBLIC_KEY: 'pk',
@@ -84,9 +88,14 @@ describe('LangfuseTracingService', () => {
     service.onApplicationBootstrap();
     await expect(service.onApplicationShutdown()).resolves.toBeUndefined();
     expect(sdkShutdown).toHaveBeenCalledOnce();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
   });
 
-  it('keeps bootstrap non-fatal when the SDK fails to start', () => {
+  it('logs a warning and stays non-fatal when the SDK fails to start', () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     sdkStart.mockImplementationOnce(() => {
       throw new Error('start failed');
     });
@@ -97,5 +106,7 @@ describe('LangfuseTracingService', () => {
     });
 
     expect(() => service.onApplicationBootstrap()).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledOnce();
+    warnSpy.mockRestore();
   });
 });
