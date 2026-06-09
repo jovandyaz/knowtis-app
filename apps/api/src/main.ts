@@ -80,6 +80,8 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
+  app.enableShutdownHooks();
+
   const port = configService.get<number>('PORT') || 3333;
   await app.listen(port);
 
