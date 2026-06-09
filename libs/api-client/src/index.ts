@@ -29,6 +29,8 @@ export type {
   AgentDonePayload,
   AgentErrorPayload,
   AgentStreamHandle,
+  AgentProposalPayload,
+  AgentCommittedPayload,
 } from './lib/agent.client';
 
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
