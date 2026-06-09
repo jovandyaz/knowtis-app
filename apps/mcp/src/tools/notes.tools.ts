@@ -20,12 +20,11 @@ export function registerNotesTools(
         .string()
         .optional()
         .describe('Search query to filter notes by title or content'),
-      limit: z.number().optional().default(20).describe('Max notes to return'),
     },
     wrapToolHandler(
       'list-notes',
       authService,
-      (token, { search, limit }) => notesApi.list(token, search, limit),
+      (token, { search }) => notesApi.list(token, search),
       defaultApiKey
     )
   );
