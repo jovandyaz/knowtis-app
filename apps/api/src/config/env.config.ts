@@ -51,6 +51,9 @@ const envSchemaBase = z.object({
     .max(3600)
     .default(600),
   VERCEL_BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  LANGFUSE_PUBLIC_KEY: z.string().optional(),
+  LANGFUSE_SECRET_KEY: z.string().optional(),
+  LANGFUSE_BASE_URL: z.url().default('https://cloud.langfuse.com'),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {

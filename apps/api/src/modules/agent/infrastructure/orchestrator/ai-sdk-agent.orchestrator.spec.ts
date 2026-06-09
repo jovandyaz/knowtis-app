@@ -208,6 +208,66 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(tools.build).toHaveBeenCalledWith('user-42');
   });
 
+  it('enables AI SDK telemetry with an agent-turn functionId', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'hi' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+      })
+    );
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.experimental_telemetry).toMatchObject({
+      isEnabled: true,
+      functionId: 'agent-turn',
+      metadata: { userId: 'u1', environment: '' },
+    });
+    expect(opts?.experimental_telemetry?.metadata).not.toHaveProperty('tags');
+  });
+
+  it('tags telemetry metadata with resume when resuming a turn', async () => {
+    const config = {
+      get: vi.fn(() => 'development'),
+    } as unknown as ConfigService<EnvConfig, true>;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+      buildReadOnly: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'ok' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      })
+    );
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.experimental_telemetry?.metadata).toMatchObject({
+      userId: 'u1',
+      environment: 'development',
+      tags: ['resume'],
+    });
+  });
+
   it('uses the read-only tool set when resuming a turn', async () => {
     const config = { get: vi.fn(() => '') } as unknown as ConfigService<
       EnvConfig,

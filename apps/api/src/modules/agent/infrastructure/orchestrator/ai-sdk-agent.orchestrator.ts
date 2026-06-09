@@ -99,6 +99,15 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
             captured = proposal;
           }
         },
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: 'agent-turn',
+          metadata: {
+            userId: input.userId,
+            environment: this.configService.get('NODE_ENV'),
+            ...(input.resume ? { tags: ['resume'] } : {}),
+          },
+        },
         ...(input.signal ? { abortSignal: input.signal } : {}),
       });
     } catch (error) {
