@@ -61,6 +61,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
+        knownNotes: [],
       },
     ]
   );
@@ -164,6 +165,7 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [{ id: 'n1', title: 'Productividad' }],
+        knownNotes: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -198,6 +200,7 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
+        knownNotes: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -215,6 +218,48 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(done).toHaveBeenCalledWith(expect.objectContaining({ sources: [] }));
+  });
+
+  it('threads knownNotes to the orchestrator and forwards them from done', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+        knownNotes: [{ id: 'n1', title: 'GTD' }],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const done = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'hi' }],
+        knownNotes: [{ id: 'prev', title: 'Earlier' }],
+      },
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        knownNotes: [{ id: 'prev', title: 'Earlier' }],
+      })
+    );
+    expect(done).toHaveBeenCalledWith(
+      expect.objectContaining({ knownNotes: [{ id: 'n1', title: 'GTD' }] })
+    );
   });
 
   it('calls onError and does not record usage when orchestrator throws synchronously', async () => {
@@ -257,6 +302,7 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
+        knownNotes: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -386,6 +432,7 @@ describe('RunAgentTurnHandler', () => {
           model: 'anthropic:claude-sonnet-4-20250514',
         },
         sources: [],
+        knownNotes: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(

@@ -24,6 +24,7 @@ export type AgentEvent =
       readonly type: 'done';
       readonly usage: AgentTurnUsage;
       readonly sources: readonly AgentSource[];
+      readonly knownNotes: readonly AgentSource[];
     }
   | {
       readonly type: 'proposal';

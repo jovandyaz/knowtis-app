@@ -27,6 +27,7 @@ interface RunAgentTurnInput {
   readonly messages: readonly AgentMessage[];
   readonly isAnonymous?: boolean;
   readonly noteId?: string;
+  readonly knownNotes?: readonly AgentSource[];
 }
 
 export interface RunAgentTurnCallbacks {
@@ -37,6 +38,7 @@ export interface RunAgentTurnCallbacks {
     model: string;
     costUsd: number;
     sources: readonly AgentSource[];
+    knownNotes: readonly AgentSource[];
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
@@ -88,6 +90,7 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(signal ? { signal } : {}),
       })) {
         switch (event.type) {
@@ -110,6 +113,7 @@ export class RunAgentTurnHandler {
               model: event.usage.model,
               costUsd,
               sources: event.sources,
+              knownNotes: event.knownNotes,
             });
             break;
           }
@@ -177,6 +181,7 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(signal ? { signal } : {}),
         resume: input.resume,
       })) {
@@ -205,6 +210,7 @@ export class RunAgentTurnHandler {
               model,
               costUsd: 0,
               sources: [],
+              knownNotes: [],
             });
             return;
           default: {
@@ -231,6 +237,7 @@ export class RunAgentTurnHandler {
     event: {
       usage: AgentTurnUsage;
       sources: readonly AgentSource[];
+      knownNotes: readonly AgentSource[];
     },
     onDone: RunAgentTurnCallbacks['onDone']
   ): Promise<void> {
@@ -245,6 +252,7 @@ export class RunAgentTurnHandler {
       model: event.usage.model,
       costUsd,
       sources: event.sources,
+      knownNotes: event.knownNotes,
     });
   }
 

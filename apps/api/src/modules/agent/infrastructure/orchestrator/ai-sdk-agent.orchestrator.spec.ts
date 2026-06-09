@@ -268,6 +268,45 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  it('injects incoming knownNotes into the system prompt and returns the merged set on done', async () => {
+    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
+      EnvConfig,
+      true
+    >;
+    const tools = {
+      build: vi.fn().mockReturnValue({}),
+    } as unknown as AgentToolsFactory;
+
+    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+    orchestrator.onModuleInit();
+
+    const events = await collect(
+      orchestrator.run({
+        userId: 'u1',
+        messages: [{ role: 'user', content: 'resume esa nota' }],
+        model: 'anthropic:claude-sonnet-4-20250514',
+        maxSteps: 4,
+        knownNotes: [{ id: 'prev-id', title: 'Earlier note' }],
+      })
+    );
+
+    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].system;
+    expect(system).toContain('Earlier note');
+    expect(system).toContain('prev-id');
+
+    const done = events.find(
+      (e): e is { type: 'done'; knownNotes: { id: string; title: string }[] } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.knownNotes).toEqual(
+      expect.arrayContaining([
+        { id: 'prev-id', title: 'Earlier note' },
+        { id: 'n1', title: 'Productividad' },
+        { id: 'sx', title: 'ignored' },
+      ])
+    );
+  });
+
   it('uses the read-only tool set when resuming a turn', async () => {
     const config = { get: vi.fn(() => '') } as unknown as ConfigService<
       EnvConfig,

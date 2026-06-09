@@ -32,6 +32,7 @@ interface AgentUsagePayload {
 export interface AgentDonePayload {
   usage: AgentUsagePayload;
   sources: AgentSource[];
+  knownNotes: AgentSource[];
 }
 
 export interface AgentErrorPayload {
@@ -86,6 +87,7 @@ export class AgentClient {
   private activeCallbacks: AgentStreamCallbacks | null = null;
   private pendingMessages: AgentWireMessage[] | null = null;
   private pendingNoteId: string | undefined;
+  private pendingKnownNotes: AgentSource[] | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
   private readonly wsUrl: string | undefined;
@@ -126,7 +128,8 @@ export class AgentClient {
   sendMessage(
     messages: AgentWireMessage[],
     callbacks: AgentStreamCallbacks,
-    noteId?: string
+    noteId?: string,
+    knownNotes?: AgentSource[]
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -136,6 +139,7 @@ export class AgentClient {
     this.activeCallbacks = callbacks;
     this.pendingMessages = messages;
     this.pendingNoteId = noteId;
+    this.pendingKnownNotes = knownNotes;
     this.reconnectAttempts = 0;
     this.authPolicy.reset();
 
@@ -198,6 +202,9 @@ export class AgentClient {
     this.socket.emit('agent:message', {
       messages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+      ...(this.pendingKnownNotes?.length
+        ? { knownNotes: this.pendingKnownNotes }
+        : {}),
     });
   }
 
@@ -305,20 +312,30 @@ export class AgentClient {
   }
 
   approve(proposalId: string): void {
-    if (!this.pendingMessages) {return;}
+    if (!this.pendingMessages) {
+      return;
+    }
     this.socket?.emit('agent:approve', {
       proposalId,
       messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+      ...(this.pendingKnownNotes?.length
+        ? { knownNotes: this.pendingKnownNotes }
+        : {}),
     });
   }
 
   reject(proposalId: string, reason?: string): void {
-    if (!this.pendingMessages) {return;}
+    if (!this.pendingMessages) {
+      return;
+    }
     this.socket?.emit('agent:reject', {
       proposalId,
       messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+      ...(this.pendingKnownNotes?.length
+        ? { knownNotes: this.pendingKnownNotes }
+        : {}),
       ...(reason ? { reason } : {}),
     });
   }

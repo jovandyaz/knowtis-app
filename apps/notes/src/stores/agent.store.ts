@@ -58,6 +58,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
   // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
+  let knownNotes: AgentSource[] = [];
   let flushTimer: ReturnType<typeof setTimeout> | null = null;
   // Closure (not store state): arming/clearing per chunk must not re-render.
   let inactivityTimer: ReturnType<typeof setTimeout> | null = null;
@@ -129,10 +130,11 @@ export const useAgentStore = create<AgentState>((set, get) => {
           chunkBuffer += text;
           scheduleFlush();
         },
-        onDone: ({ sources }) => {
+        onDone: ({ sources, knownNotes: turnKnownNotes }) => {
           if (version !== streamVersion) {
             return;
           }
+          knownNotes = turnKnownNotes;
           clearInactivityTimer();
           flushChunks();
           set((s) => ({
@@ -172,7 +174,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
       },
-      noteId
+      noteId,
+      knownNotes
     );
     armInactivityTimer();
     set({ _streamHandle: handle });
@@ -233,6 +236,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       clearInactivityTimer();
       discardChunks();
       activeAssistantId = null;
+      knownNotes = [];
       set({
         messages: [],
         status: 'idle',

@@ -65,6 +65,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
     const sources = new Map<string, AgentSource>();
+    const knownNotes = new Map<string, AgentSource>();
+    for (const note of input.knownNotes ?? []) {
+      knownNotes.set(note.id, note);
+    }
     let captured: ProposedMutation | null = null;
     let result;
     try {
@@ -72,7 +76,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         model: this.registry.languageModel(
           input.model as `${string}:${string}`
         ),
-        system: this.buildSystemPrompt(input.noteId),
+        system: this.buildSystemPrompt(input.noteId, input.knownNotes),
         messages: input.resume
           ? [
               ...input.messages.map((m) => ({
@@ -94,6 +98,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         stopWhen: stepCountIs(input.maxSteps),
         onStepFinish: ({ toolResults }) => {
           this.collectSources(toolResults, sources);
+          this.collectKnownNotes(toolResults, knownNotes);
           const proposal = extractProposal(toolResults);
           if (proposal) {
             captured = proposal;
@@ -135,6 +140,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         type: 'done',
         usage: turnUsage,
         sources: [...sources.values()],
+        knownNotes: [...knownNotes.values()],
       };
     } catch (error) {
       if (input.signal?.aborted) {
@@ -150,11 +156,21 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     }
   }
 
-  private buildSystemPrompt(noteId?: string): string {
-    if (!noteId) {
-      return AGENT_SYSTEM_PROMPT;
+  private buildSystemPrompt(
+    noteId?: string,
+    knownNotes?: readonly AgentSource[]
+  ): string {
+    let prompt = AGENT_SYSTEM_PROMPT;
+    if (noteId) {
+      prompt += `\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
     }
-    return `${AGENT_SYSTEM_PROMPT}\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
+    if (knownNotes && knownNotes.length > 0) {
+      const list = knownNotes
+        .map((n) => `- "${n.title}" (id: ${n.id})`)
+        .join('\n');
+      prompt += `\n\nNotes already identified earlier in this conversation. When the user refers to one of these (by this title or a close paraphrase), call getNote with its id directly — do NOT call searchNotes for them:\n${list}`;
+    }
+    return prompt;
   }
 
   private collectSources(
@@ -168,6 +184,21 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
       const { id, title } = result.output;
       if (!sink.has(id)) {
         sink.set(id, { id, title });
+      }
+    }
+  }
+
+  private collectKnownNotes(
+    toolResults: readonly StepToolResult[],
+    sink: Map<string, AgentSource>
+  ): void {
+    for (const result of toolResults) {
+      const output = result.output;
+      const items = Array.isArray(output) ? output : [output];
+      for (const item of items) {
+        if (isSourceNote(item)) {
+          sink.set(item.id, { id: item.id, title: item.title });
+        }
       }
     }
   }
