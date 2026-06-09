@@ -5,16 +5,22 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EnvConfig } from '../../config/env.config';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AgentGateway } from './agent.gateway';
+import type { ApproveMutationHandler } from './application/approve-mutation.handler';
+import type { RejectMutationHandler } from './application/reject-mutation.handler';
 import type { RunAgentTurnHandler } from './application/run-agent-turn.handler';
 
 interface MakeGatewayOptions {
   handler?: Partial<RunAgentTurnHandler>;
+  approve?: Partial<ApproveMutationHandler>;
+  reject?: Partial<RejectMutationHandler>;
   jwt?: Partial<JwtService>;
   featureFlags?: Partial<FeatureFlagsService>;
 }
 
 function makeGateway({
   handler = {},
+  approve = {},
+  reject = {},
   jwt = {},
   featureFlags = {},
 }: MakeGatewayOptions = {}) {
@@ -23,6 +29,8 @@ function makeGateway({
   } as unknown as ConfigService<EnvConfig, true>;
   return new AgentGateway(
     { execute: vi.fn(), ...handler } as unknown as RunAgentTurnHandler,
+    { execute: vi.fn(), ...approve } as unknown as ApproveMutationHandler,
+    { execute: vi.fn(), ...reject } as unknown as RejectMutationHandler,
     jwt as unknown as JwtService,
     featureFlags as unknown as FeatureFlagsService,
     config
