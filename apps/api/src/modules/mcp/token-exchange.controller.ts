@@ -11,11 +11,13 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { ApiBody, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, users, type Database } from '../../database';
 import { TokenExchangeDto } from './dto/token-exchange.dto';
 import { McpKeysService } from './mcp-keys.service';
+import { TOKEN_SOURCE_MCP } from './mcp-token';
 
 const tokenExchangeResultSchema = {
   type: 'object' as const,
@@ -59,21 +61,22 @@ export class TokenExchangeController {
     description: 'Unauthorized — invalid, expired, or revoked API key',
   })
   @Post()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
   @HttpCode(HttpStatus.OK)
   async exchange(@Body() dto: TokenExchangeDto) {
     const prefix = dto.apiKey.slice(0, 24);
     const keyRecord = await this.mcpKeysService.findByPrefix(prefix);
 
     if (!keyRecord) {
-      throw new UnauthorizedException('Invalid API key');
+      throw this.deny('key_not_found', prefix);
     }
 
     if (!McpKeysService.verifyKey(dto.apiKey, keyRecord.keyHash)) {
-      throw new UnauthorizedException('Invalid API key');
+      throw this.deny('key_hash_mismatch', prefix);
     }
 
     if (keyRecord.expiresAt && keyRecord.expiresAt < new Date()) {
-      throw new UnauthorizedException('API key expired');
+      throw this.deny('key_expired', prefix);
     }
 
     const [user] = await this.db
@@ -83,14 +86,14 @@ export class TokenExchangeController {
       .limit(1);
 
     if (!user) {
-      throw new UnauthorizedException('User not found');
+      throw this.deny('user_not_found', prefix);
     }
 
     const accessToken = await this.jwtService.signAsync(
       {
         sub: user.id,
         email: user.email,
-        source: 'mcp',
+        source: TOKEN_SOURCE_MCP,
         scopes: keyRecord.scopes,
       },
       {
@@ -112,5 +115,14 @@ export class TokenExchangeController {
       expiresIn: 900,
       scopes: keyRecord.scopes,
     };
+  }
+
+  private deny(reason: string, prefix: string): UnauthorizedException {
+    this.logger.warn({
+      event: 'mcp.token_exchange.denied',
+      reason,
+      prefix,
+    });
+    return new UnauthorizedException('Invalid API key');
   }
 }

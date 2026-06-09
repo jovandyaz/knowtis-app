@@ -1,4 +1,4 @@
-import { UnauthorizedException } from '@nestjs/common';
+import { Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { describe, expect, it, vi } from 'vitest';
@@ -95,56 +95,6 @@ describe('TokenExchangeController', () => {
     );
   });
 
-  it('should reject when key prefix is not found', async () => {
-    const { controller } = createController({
-      findByPrefix: vi.fn().mockResolvedValue(null),
-    });
-
-    await expect(
-      controller.exchange({ apiKey: 'invalid_key_prefix_xxxxxxxx' })
-    ).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('should reject when key hash does not match', async () => {
-    const { record } = createMockKeyRecord();
-
-    const { controller } = createController({
-      findByPrefix: vi.fn().mockResolvedValue(record),
-    });
-
-    await expect(
-      controller.exchange({ apiKey: record.keyPrefix + '_wrong_secret' })
-    ).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('should reject when API key is expired', async () => {
-    const pastDate = new Date('2020-01-01');
-    const { record, fullKey } = createMockKeyRecord({
-      expiresAt: pastDate,
-    });
-
-    const { controller } = createController({
-      findByPrefix: vi.fn().mockResolvedValue(record),
-    });
-
-    await expect(controller.exchange({ apiKey: fullKey })).rejects.toThrow(
-      UnauthorizedException
-    );
-  });
-
-  it('should reject when user is not found', async () => {
-    const { record, fullKey } = createMockKeyRecord();
-
-    const { controller } = createController({
-      findByPrefix: vi.fn().mockResolvedValue(record),
-      dbSelect: [],
-    });
-
-    await expect(controller.exchange({ apiKey: fullKey })).rejects.toThrow(
-      UnauthorizedException
-    );
-  });
-
   it('should embed scopes in JWT for write,share keys', async () => {
     const { record, fullKey } = createMockKeyRecord({
       scopes: 'read,write,share',
@@ -176,6 +126,89 @@ describe('TokenExchangeController', () => {
     await controller.exchange({ apiKey: fullKey });
 
     expect(updateLastUsed).toHaveBeenCalledWith(record.id);
+  });
+
+  describe('generic failure responses', () => {
+    const expectGenericUnauthorized = async (run: () => Promise<unknown>) => {
+      const error = await run().then(
+        () => null,
+        (e: unknown) => e
+      );
+      if (!(error instanceof UnauthorizedException)) {
+        throw new Error('Expected UnauthorizedException');
+      }
+      expect(error.message).toBe('Invalid API key');
+    };
+
+    it('should return the same generic error when prefix is unknown', async () => {
+      const { controller } = createController({
+        findByPrefix: vi.fn().mockResolvedValue(null),
+      });
+
+      await expectGenericUnauthorized(() =>
+        controller.exchange({ apiKey: 'invalid_key_prefix_xxxxxxxx' })
+      );
+    });
+
+    it('should return the same generic error when hash mismatches', async () => {
+      const { record } = createMockKeyRecord();
+      const { controller } = createController({
+        findByPrefix: vi.fn().mockResolvedValue(record),
+      });
+
+      await expectGenericUnauthorized(() =>
+        controller.exchange({ apiKey: record.keyPrefix + '_wrong_secret' })
+      );
+    });
+
+    it('should return the same generic error when key is expired', async () => {
+      const { record, fullKey } = createMockKeyRecord({
+        expiresAt: new Date('2020-01-01'),
+      });
+      const { controller } = createController({
+        findByPrefix: vi.fn().mockResolvedValue(record),
+      });
+
+      await expectGenericUnauthorized(() =>
+        controller.exchange({ apiKey: fullKey })
+      );
+    });
+
+    it('should return the same generic error when user is missing', async () => {
+      const { record, fullKey } = createMockKeyRecord();
+      const { controller } = createController({
+        findByPrefix: vi.fn().mockResolvedValue(record),
+        dbSelect: [],
+      });
+
+      await expectGenericUnauthorized(() =>
+        controller.exchange({ apiKey: fullKey })
+      );
+    });
+
+    it('should log the real denial reason at warn level', async () => {
+      const warnSpy = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      try {
+        const { controller } = createController({
+          findByPrefix: vi.fn().mockResolvedValue(null),
+        });
+
+        await expect(
+          controller.exchange({ apiKey: 'invalid_key_prefix_xxxxxxxx' })
+        ).rejects.toThrow(UnauthorizedException);
+
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            event: 'mcp.token_exchange.denied',
+            reason: 'key_not_found',
+          })
+        );
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
   });
 
   describe('key verification (static methods)', () => {

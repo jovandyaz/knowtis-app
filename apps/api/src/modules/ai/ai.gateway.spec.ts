@@ -23,7 +23,9 @@ function createMockAISocket(overrides: Record<string, unknown> = {}) {
 function createMockConfigService(maxConcurrentStreams = 2) {
   return {
     get: vi.fn((key: string) => {
-      if (key === 'AI_MAX_CONCURRENT_STREAMS') {return maxConcurrentStreams;}
+      if (key === 'AI_MAX_CONCURRENT_STREAMS') {
+        return maxConcurrentStreams;
+      }
       return undefined;
     }),
   } as unknown as ConfigService<Record<string, unknown>, true>;
@@ -60,7 +62,9 @@ function createBlockingExecute() {
       return capturedCallbacks;
     },
     resolveAll() {
-      for (const resolve of pending) {resolve();}
+      for (const resolve of pending) {
+        resolve();
+      }
       pending.length = 0;
     },
   };
@@ -134,6 +138,26 @@ describe('AIGateway', () => {
         expect.objectContaining({ code: 'AUTH_REQUIRED' })
       );
       expect(client.disconnect).toHaveBeenCalled();
+    });
+
+    it('should disconnect MCP-source tokens', async () => {
+      vi.spyOn(mockJwtService, 'verify').mockReturnValue({
+        sub: 'user-123',
+        source: 'mcp',
+      } as never);
+
+      const client = createMockAISocket({
+        handshake: { auth: { token: 'mcp-jwt' }, headers: {} },
+      });
+
+      await gateway.handleConnection(client);
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AUTH_REQUIRED' })
+      );
+      expect(client.disconnect).toHaveBeenCalled();
+      expect(client.data).not.toHaveProperty('userId');
     });
 
     it('should disconnect when AI is disabled', async () => {
