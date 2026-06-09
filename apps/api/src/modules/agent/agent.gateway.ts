@@ -26,6 +26,16 @@ import {
   type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
 
+const knownNotesSchema = z
+  .array(
+    z.object({
+      id: z.string().uuid(),
+      title: z.string().max(500),
+    })
+  )
+  .max(100)
+  .optional();
+
 const agentMessagePayloadSchema = z.object({
   messages: z
     .array(
@@ -40,12 +50,14 @@ const agentMessagePayloadSchema = z.object({
       message: 'last message must be from the user',
     }),
   noteId: z.string().uuid().optional(),
+  knownNotes: knownNotesSchema,
 });
 
 const agentApprovePayloadSchema = z.object({
   proposalId: z.string().uuid(),
   messages: agentMessagePayloadSchema.shape.messages,
   noteId: z.string().uuid().optional(),
+  knownNotes: knownNotesSchema,
 });
 
 const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
@@ -160,6 +172,9 @@ export class AgentGateway
           messages: parsed.data.messages,
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(parsed.data.noteId && { noteId: parsed.data.noteId }),
+          ...(parsed.data.knownNotes && {
+            knownNotes: parsed.data.knownNotes,
+          }),
         },
         {
           ...this.baseCallbacks(client, controller),
@@ -259,6 +274,7 @@ export class AgentGateway
     data: {
       messages: { role: 'user' | 'assistant'; content: string }[];
       noteId?: string | undefined;
+      knownNotes?: { id: string; title: string }[] | undefined;
     },
     outcome: { toolName: string; outcome: string }
   ): Promise<void> {
@@ -277,6 +293,7 @@ export class AgentGateway
           userId,
           messages: data.messages,
           ...(data.noteId && { noteId: data.noteId }),
+          ...(data.knownNotes && { knownNotes: data.knownNotes }),
           resume: outcome,
         },
         this.baseCallbacks(client, controller),
@@ -315,6 +332,7 @@ export class AgentGateway
             costUsd: usage.costUsd,
           },
           sources: usage.sources,
+          knownNotes: usage.knownNotes,
         }),
       onError: (error) => {
         if (!controller.signal.aborted) {

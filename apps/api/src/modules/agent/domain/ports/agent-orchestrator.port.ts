@@ -1,4 +1,4 @@
-import type { AgentEvent } from '../agent-event';
+import type { AgentEvent, AgentSource } from '../agent-event';
 import type { AgentMessage } from '../agent-message';
 
 export interface AgentResumeContext {
@@ -14,6 +14,7 @@ export interface AgentRunInput {
   readonly noteId?: string;
   readonly signal?: AbortSignal;
   readonly resume?: AgentResumeContext;
+  readonly knownNotes?: readonly AgentSource[];
 }
 
 export interface AgentOrchestrator {

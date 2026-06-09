@@ -87,6 +87,7 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [{ id: 'n1', title: 'Productividad' }],
+      knownNotes: [],
     });
     const { status, messages } = useAgentStore.getState();
     expect(status).toBe('done');
@@ -119,6 +120,7 @@ describe('useAgentStore', () => {
     get().onDone({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      knownNotes: [],
     });
     useAgentStore.getState().sendMessage('second');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls[1][0];
@@ -127,6 +129,21 @@ describe('useAgentStore', () => {
       { role: 'assistant', content: 'answer' },
       { role: 'user', content: 'second' },
     ]);
+  });
+
+  it('threads received knownNotes into the next send', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('first');
+    get().onChunk({ text: 'answer' });
+    vi.advanceTimersByTime(50);
+    get().onDone({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [{ id: 'n1', title: 'GTD' }],
+    });
+    useAgentStore.getState().sendMessage('second');
+    const knownNotesArg = vi.mocked(agentClient.sendMessage).mock.calls[1][3];
+    expect(knownNotesArg).toEqual([{ id: 'n1', title: 'GTD' }]);
   });
 
   it('cancel keeps partial content and returns to idle', () => {
