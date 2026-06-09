@@ -148,6 +148,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
         maxOutputTokens: options.maxTokens ?? 2048,
         temperature: options.temperature ?? 0.7,
         maxRetries: options.maxRetries ?? 3,
+        ...(options.signal ? { abortSignal: options.signal } : {}),
         ...this.buildTimeoutParam(options.timeout),
       });
 
@@ -155,43 +156,69 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
     const primary = openStream(options.model);
 
+    // Consumers that break out of the stream trigger generator.return(), which
+    // skips any code after the loop — usage must settle in `finally`, with a
+    // timer guaranteeing the deferred resolves even if the SDK never settles it.
+    const settleUsage = (result: ReturnType<typeof openStream>) => {
+      const fallbackTimer = setTimeout(() => {
+        usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
+      }, USAGE_SETTLE_GRACE_MS);
+      fallbackTimer.unref();
+      void Promise.resolve(result.usage)
+        .then((u) => {
+          usageDeferred.resolve({
+            promptTokens: u.inputTokens ?? 0,
+            completionTokens: u.outputTokens ?? 0,
+            cacheReadTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
+            cacheWriteTokens: u.inputTokenDetails?.cacheWriteTokens ?? 0,
+          });
+        })
+        .catch(() => {
+          usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
+        })
+        .finally(() => clearTimeout(fallbackTimer));
+    };
+
     async function* generate(): AsyncGenerator<string> {
       let result = primary;
       let emitted = false;
       try {
-        for await (const chunk of result.textStream) {
-          emitted = true;
-          yield chunk;
+        try {
+          for await (const chunk of result.textStream) {
+            emitted = true;
+            yield chunk;
+          }
+        } catch (error) {
+          if (
+            emitted ||
+            !fallbackModel ||
+            fallbackModel === options.model ||
+            options.signal?.aborted
+          ) {
+            throw error;
+          }
+          logger.warn({
+            event: 'ai.provider.stream_fallback',
+            primaryModel: options.model,
+            fallbackModel,
+            provider: options.model.split(':')[0],
+            reason: error instanceof Error ? error.message : 'unknown error',
+          });
+          result = openStream(fallbackModel);
+          for await (const chunk of result.textStream) {
+            yield chunk;
+          }
         }
-      } catch (error) {
-        if (emitted || !fallbackModel || fallbackModel === options.model) {
-          usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
-          throw error;
-        }
-        logger.warn({
-          event: 'ai.provider.stream_fallback',
-          primaryModel: options.model,
-          fallbackModel,
-          provider: options.model.split(':')[0],
-          reason: error instanceof Error ? error.message : 'unknown error',
-        });
-        result = openStream(fallbackModel);
-        for await (const chunk of result.textStream) {
-          yield chunk;
-        }
+      } finally {
+        settleUsage(result);
       }
-      const u = await result.usage;
-      usageDeferred.resolve({
-        promptTokens: u.inputTokens ?? 0,
-        completionTokens: u.outputTokens ?? 0,
-        cacheReadTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
-        cacheWriteTokens: u.inputTokenDetails?.cacheWriteTokens ?? 0,
-      });
     }
 
     return { textStream: generate(), usage: usageDeferred.promise };
   }
 }
+
+const USAGE_SETTLE_GRACE_MS = 2000;
 
 function createDeferred<T>(): {
   promise: Promise<T>;

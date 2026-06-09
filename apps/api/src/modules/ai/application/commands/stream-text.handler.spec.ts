@@ -212,6 +212,10 @@ describe('StreamTextHandler', () => {
     );
 
     expect(collectedChunks).toEqual(['First']);
+    expect(mockProvider.streamCompletion).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: controller.signal })
+    );
   });
 
   it('should build translate prompt correctly', async () => {

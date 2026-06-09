@@ -5,6 +5,7 @@ export interface CompletionOptions {
   readonly temperature?: number;
   readonly maxRetries?: number;
   readonly timeout?: { totalMs?: number; chunkMs?: number };
+  readonly signal?: AbortSignal;
 }
 
 export interface CompletionResult {
@@ -18,6 +19,7 @@ export interface CompletionResult {
 
 export interface StreamCompletionResult {
   readonly textStream: AsyncIterable<string>;
+  /** Settles only once textStream consumption starts; do not await without iterating. */
   readonly usage: PromiseLike<{
     promptTokens: number;
     completionTokens: number;
