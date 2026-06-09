@@ -16,17 +16,10 @@ export class NotesApi {
     this.client = client;
   }
 
-  async list(
-    token: string,
-    search?: string,
-    limit?: number
-  ): Promise<NoteResponse[]> {
+  async list(token: string, search?: string): Promise<NoteResponse[]> {
     const params = new URLSearchParams();
     if (search) {
       params.set('search', search);
-    }
-    if (limit) {
-      params.set('limit', String(limit));
     }
     const query = params.toString();
     return this.client.get(`/api/v1/notes${query ? `?${query}` : ''}`, token);
