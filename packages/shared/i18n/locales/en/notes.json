@@ -182,7 +182,14 @@
       "auth": "Your session expired. Please sign in again.",
       "validation": "That request couldn't be processed. Please adjust your input.",
       "injection": "Your input was flagged and couldn't be processed.",
-      "timeout": "The AI request timed out. Please retry."
+      "timeout": "The AI request timed out. Please retry.",
+      "staleNote": "The note changed — ask me again.",
+      "proposalExpired": "That request expired — ask again.",
+      "permissionDenied": "You don't have permission to do that.",
+      "sanitizeRejected": "The content was rejected for safety reasons.",
+      "targetUserNotFound": "That user wasn't found.",
+      "noteNotFound": "The note no longer exists.",
+      "invalidProposal": "That request couldn't be processed. Please try again."
     },
     "copilot": {
       "tab": "Copilot",

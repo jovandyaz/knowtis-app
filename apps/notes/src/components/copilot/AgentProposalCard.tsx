@@ -6,14 +6,13 @@ import DOMPurify from 'dompurify';
 import {
   ArrowUp,
   FilePlus2,
-  Loader2,
   PencilLine,
   UserPlus,
   type LucideIcon,
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
-import { Badge, cn, Textarea } from '@knowtis/design-system';
+import { Badge, Textarea } from '@knowtis/design-system';
 
 import {
   Confirmation,
@@ -63,23 +62,16 @@ export function AgentProposalCard({
   const { t } = useTranslation('notes');
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const meta = KIND_META[proposal.kind];
   const Icon = meta.icon;
   const payload = proposal.payload as ProposalPayloadView;
 
-  const approve = () => {
-    setSubmitting(true);
-    onApprove();
-  };
-  const confirmReject = () => {
-    setSubmitting(true);
-    onReject(reason.trim() || undefined);
-  };
+  const approve = () => onApprove();
+  const confirmReject = () => onReject(reason.trim() || undefined);
 
   return (
-    <Confirmation>
+    <Confirmation role="group" aria-label={t(meta.titleKey)}>
       <div className="flex flex-col gap-3 p-3">
         <div className="flex items-start gap-2.5">
           <span className="grid size-7 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
@@ -138,13 +130,11 @@ export function AgentProposalCard({
                 placeholder={t('ai.copilot.proposal.reasonPlaceholder')}
                 aria-label={t('ai.copilot.proposal.reasonPlaceholder')}
                 rows={2}
-                disabled={submitting}
                 className="min-h-14 resize-none text-xs"
               />
               <ConfirmationActions>
                 <ConfirmationAction
                   variant="ghost"
-                  disabled={submitting}
                   onClick={() => {
                     setRejecting(false);
                     setReason('');
@@ -152,19 +142,9 @@ export function AgentProposalCard({
                 >
                   {t('ai.copilot.proposal.rejectCancel')}
                 </ConfirmationAction>
-                <ConfirmationAction
-                  variant="secondary"
-                  disabled={submitting}
-                  onClick={confirmReject}
-                >
-                  {submitting ? (
-                    <Loader2 className="size-3.5 animate-spin" />
-                  ) : (
-                    <>
-                      {t('ai.copilot.proposal.rejectConfirm')}
-                      <ArrowUp className="ml-1 size-3.5" />
-                    </>
-                  )}
+                <ConfirmationAction variant="secondary" onClick={confirmReject}>
+                  {t('ai.copilot.proposal.rejectConfirm')}
+                  <ArrowUp className="ml-1 size-3.5" />
                 </ConfirmationAction>
               </ConfirmationActions>
             </motion.div>
@@ -172,21 +152,12 @@ export function AgentProposalCard({
             <ConfirmationActions key="actions">
               <ConfirmationAction
                 variant="ghost"
-                disabled={submitting}
                 onClick={() => setRejecting(true)}
               >
                 {t('ai.copilot.proposal.reject')}
               </ConfirmationAction>
-              <ConfirmationAction
-                className={cn('min-w-20', submitting && 'pointer-events-none')}
-                disabled={submitting}
-                onClick={approve}
-              >
-                {submitting ? (
-                  <Loader2 className="size-3.5 animate-spin" />
-                ) : (
-                  t(meta.approveKey)
-                )}
+              <ConfirmationAction className="min-w-20" onClick={approve}>
+                {t(meta.approveKey)}
               </ConfirmationAction>
             </ConfirmationActions>
           )}

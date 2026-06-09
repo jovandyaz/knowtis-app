@@ -152,23 +152,23 @@ export const useAgentStore = create<AgentState>((set, get) => {
           set({ status: 'error', error, _streamHandle: null });
         },
         onProposal: (proposal) => {
-          if (version !== streamVersion) {return;}
+          if (version !== streamVersion) {
+            return;
+          }
           clearInactivityTimer();
           flushChunks();
           set({ status: 'pendingProposal', pendingProposal: proposal });
         },
         onCommitted: ({ result }) => {
-          if (version !== streamVersion) {return;}
+          if (version !== streamVersion) {
+            return;
+          }
+          const id = activeAssistantId;
           set((s) => ({
             pendingProposal: null,
-            messages: [
-              ...s.messages,
-              {
-                id: nextId(),
-                role: 'assistant',
-                content: `✓ ${result.kind === 'create' ? 'Created' : result.kind === 'update' ? 'Updated' : 'Shared'} "${result.title}"`,
-              },
-            ],
+            messages: s.messages.map((m) =>
+              m.id === id ? { ...m, content: `✓ ${result.title}\n\n` } : m
+            ),
           }));
         },
       },
@@ -270,7 +270,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
     approveProposal: () => {
       const p = get().pendingProposal;
-      if (!p) {return;}
+      if (!p) {
+        return;
+      }
       const assistant: AgentChatMessage = {
         id: nextId(),
         role: 'assistant',
@@ -288,7 +290,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
 
     rejectProposal: (reason) => {
       const p = get().pendingProposal;
-      if (!p) {return;}
+      if (!p) {
+        return;
+      }
       const assistant: AgentChatMessage = {
         id: nextId(),
         role: 'assistant',
