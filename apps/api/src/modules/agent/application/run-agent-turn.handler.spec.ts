@@ -912,7 +912,7 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
-  it('does not block when an injection appears only in older history', async () => {
+  it('drops an injected older message from the context without failing the turn', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
     const handler = new RunAgentTurnHandler(
@@ -939,6 +939,69 @@ describe('RunAgentTurnHandler', () => {
 
     expect(onError).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledOnce();
+    const ranMessages = vi.mocked(orchestrator.run).mock.calls[0][0].messages;
+    expect(ranMessages.map((m) => m.content)).toEqual([
+      'ok, summarize my latest note',
+    ]);
+  });
+
+  it('rejects a fresh user message that exceeds the length cap', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        messages: [{ role: 'user', content: 'x'.repeat(50_001) }],
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_INVALID_INPUT' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('drops an oversized older message instead of failing the turn', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        messages: [
+          { role: 'user', content: 'y'.repeat(50_001) },
+          { role: 'assistant', content: 'Noted.' },
+          { role: 'user', content: 'summarize my latest note' },
+        ],
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    const ranMessages = vi.mocked(orchestrator.run).mock.calls[0][0].messages;
+    expect(ranMessages.map((m) => m.content)).toEqual([
+      'summarize my latest note',
+    ]);
   });
 
   it('blocks an injected resume turn before running the orchestrator', async () => {
