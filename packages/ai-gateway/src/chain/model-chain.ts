@@ -97,7 +97,19 @@ export async function* streamWithChain<THandle, TChunk>(
     for (let i = 0; i < candidates.length; i++) {
       const model = candidates[i];
       const isLast = i === candidates.length - 1;
-      active = context.open(model, { isLast });
+      try {
+        active = context.open(model, { isLast });
+      } catch (error) {
+        if (isAbortError(error)) {
+          throw error;
+        }
+        context.cooldown?.recordFailure(providerOf(model));
+        logChainStep(context.logger, model, candidates[i + 1], error);
+        if (isLast) {
+          throw error;
+        }
+        continue;
+      }
       let emitted = false;
       try {
         for await (const chunk of context.chunks(active)) {

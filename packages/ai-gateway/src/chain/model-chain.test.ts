@@ -257,6 +257,55 @@ describe('streamWithChain', () => {
     expect(settled).toEqual([GPT]);
   });
 
+  it('falls to the next candidate when open throws synchronously', async () => {
+    const cooldown = {
+      isCooling: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+    };
+    const settled: string[] = [];
+    const received: string[] = [];
+    const stream = streamWithChain<AsyncGenerator<string>, string>({
+      candidates: [SONNET, GPT],
+      logger,
+      cooldown,
+      open: (model) => {
+        if (model === SONNET) {
+          throw new Error('provider not configured');
+        }
+        return chunksOf('fallback');
+      },
+      chunks: (h) => h,
+      onSettle: () => settled.push('settled'),
+    });
+    for await (const chunk of stream) {
+      received.push(chunk);
+    }
+    expect(received).toEqual(['fallback']);
+    expect(cooldown.recordFailure).toHaveBeenCalledWith('anthropic');
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith('openai');
+    expect(settled).toEqual(['settled']);
+  });
+
+  it('rethrows when open throws synchronously on the last candidate', async () => {
+    const settled: string[] = [];
+    const stream = streamWithChain<string, string>({
+      candidates: [SONNET, GPT],
+      logger,
+      open: () => {
+        throw new Error('provider not configured');
+      },
+      chunks: () => chunksOf(),
+      onSettle: (active) => settled.push(active),
+    });
+    await expect(async () => {
+      for await (const chunk of stream) {
+        void chunk;
+      }
+    }).rejects.toThrow('provider not configured');
+    expect(settled).toEqual([]);
+  });
+
   it('passes isLast so callers can decide throw-vs-degrade on the final model', async () => {
     const infos: boolean[] = [];
     const stream = streamWithChain<AsyncGenerator<string>, string>({
