@@ -14,7 +14,11 @@ export type SocketAuthFailureReason =
   | 'mcp_token';
 
 export type SocketAuthResult =
-  | { readonly ok: true; readonly userId: string }
+  | {
+      readonly ok: true;
+      readonly userId: string;
+      readonly tokenExpiresAtMs?: number;
+    }
   | { readonly ok: false; readonly reason: SocketAuthFailureReason };
 
 const FAILURE_MESSAGES: Record<SocketAuthFailureReason, string | undefined> = {
@@ -52,8 +56,8 @@ export function authenticateSocket(
   }
   try {
     const payload = jwtService.verify<
-      { sub: string; isAnonymous?: boolean } & McpTokenClaims
-    >(token);
+      { sub: string; isAnonymous?: boolean; exp?: number } & McpTokenClaims
+    >(token, { algorithms: ['HS256'] });
     if (payload.source === TOKEN_SOURCE_MCP) {
       logger.warn({
         event: `${eventPrefix}.client.mcp_token_rejected`,
@@ -71,7 +75,13 @@ export function authenticateSocket(
       clientId: client.id,
       userId: payload.sub,
     });
-    return { ok: true, userId: payload.sub };
+    return {
+      ok: true,
+      userId: payload.sub,
+      ...(typeof payload.exp === 'number' && {
+        tokenExpiresAtMs: payload.exp * 1000,
+      }),
+    };
   } catch {
     logger.warn({
       event: `${eventPrefix}.client.auth_failed`,

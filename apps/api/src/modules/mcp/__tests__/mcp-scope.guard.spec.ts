@@ -155,7 +155,7 @@ describe('McpScopeGuard', () => {
     );
   });
 
-  it('should verify the token signature with the configured secret', async () => {
+  it('should verify the token signature with the configured secret pinned to HS256', async () => {
     const { guard, context, verifyAsync } = createGuard({
       scopeMetadata: 'read',
       token: 'mcp-jwt',
@@ -166,6 +166,7 @@ describe('McpScopeGuard', () => {
 
     expect(verifyAsync).toHaveBeenCalledWith('mcp-jwt', {
       secret: 'test-secret',
+      algorithms: ['HS256'],
     });
   });
 

@@ -12,12 +12,17 @@ import { StreamTextHandler } from './application/commands/stream-text.handler';
 function createMockAISocket(overrides: Record<string, unknown> = {}) {
   return {
     id: 'socket-1',
+    connected: true,
     data: {} as Record<string, unknown>,
     emit: vi.fn(),
     disconnect: vi.fn(),
     handshake: { auth: {}, headers: {} },
     ...overrides,
   } as unknown as Parameters<AIGateway['handleConnection']>[0];
+}
+
+function flushAsync() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function createMockConfigService(maxConcurrentStreams = 2) {
@@ -105,9 +110,87 @@ describe('AIGateway', () => {
 
       await gateway.handleConnection(client);
 
-      expect(mockJwtService.verify).toHaveBeenCalledWith('valid-jwt');
+      expect(mockJwtService.verify).toHaveBeenCalledWith('valid-jwt', {
+        algorithms: ['HS256'],
+      });
       expect(client.data.userId).toBe('user-123');
       expect(client.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('should disconnect the client when the verified token expiry passes', async () => {
+      vi.useFakeTimers();
+      try {
+        const exp = Math.floor((Date.now() + 60_000) / 1000);
+        vi.spyOn(mockJwtService, 'verify').mockReturnValue({
+          sub: 'user-123',
+          exp,
+        } as never);
+        const client = createMockAISocket({
+          handshake: { auth: { token: 'valid-jwt' }, headers: {} },
+        });
+
+        await gateway.handleConnection(client);
+        expect(client.disconnect).not.toHaveBeenCalled();
+
+        vi.advanceTimersByTime(60_000 + 5_000 + 1_000);
+
+        expect(client.emit).toHaveBeenCalledWith(
+          'ai:error',
+          expect.objectContaining({ code: 'AUTH_REQUIRED' })
+        );
+        expect(client.disconnect).toHaveBeenCalledWith(true);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should not arm the expiry timer when the client disconnects during the flag check', async () => {
+      vi.useFakeTimers();
+      try {
+        const exp = Math.floor((Date.now() + 60_000) / 1000);
+        vi.spyOn(mockJwtService, 'verify').mockReturnValue({
+          sub: 'user-123',
+          exp,
+        } as never);
+        const client = createMockAISocket({
+          handshake: { auth: { token: 'valid-jwt' }, headers: {} },
+        });
+        vi.mocked(mockFeatureFlags.isEnabled).mockImplementation(async () => {
+          (client as unknown as { connected: boolean }).connected = false;
+          return true;
+        });
+
+        await gateway.handleConnection(client);
+
+        vi.advanceTimersByTime(120_000);
+
+        expect(client.disconnect).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should clear the expiry timer when the client disconnects early', async () => {
+      vi.useFakeTimers();
+      try {
+        const exp = Math.floor((Date.now() + 60_000) / 1000);
+        vi.spyOn(mockJwtService, 'verify').mockReturnValue({
+          sub: 'user-123',
+          exp,
+        } as never);
+        const client = createMockAISocket({
+          handshake: { auth: { token: 'valid-jwt' }, headers: {} },
+        });
+
+        await gateway.handleConnection(client);
+        gateway.handleDisconnect(client);
+
+        vi.advanceTimersByTime(120_000);
+
+        expect(client.disconnect).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('should disconnect when no token provided', async () => {
@@ -215,6 +298,23 @@ describe('AIGateway', () => {
       expect(client.emit).toHaveBeenCalledWith(
         'ai:error',
         expect.objectContaining({ code: 'VALIDATION_ERROR' })
+      );
+      expect(mockStreamHandler.execute).not.toHaveBeenCalled();
+    });
+
+    it('should emit featureDisabled and not start a stream when the flag turns off after connect', async () => {
+      vi.mocked(mockFeatureFlags.isEnabled).mockResolvedValue(false);
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some note content to summarize',
+      });
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'ai:error',
+        expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })
       );
       expect(mockStreamHandler.execute).not.toHaveBeenCalled();
     });
@@ -405,6 +505,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
+      await flushAsync();
 
       const signal = blocking.fn.mock.calls[0]?.[2] as AbortSignal;
       expect(signal?.aborted).toBe(false);
@@ -431,6 +532,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'First request',
       });
+      await flushAsync();
 
       singleStreamGateway.handleCancel(client);
       await p1;
@@ -442,6 +544,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'Second request after cancel',
       });
+      await flushAsync();
 
       expect(blocking.fn).toHaveBeenCalledTimes(2);
       blocking.resolveAll();
@@ -466,6 +569,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'Some content',
       });
+      await flushAsync();
 
       const signal = blocking.fn.mock.calls[0]?.[2] as AbortSignal;
 
@@ -497,6 +601,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'Tab 2 request',
       });
+      await flushAsync();
 
       expect(blocking.fn).toHaveBeenCalledTimes(2);
 
@@ -512,6 +617,7 @@ describe('AIGateway', () => {
         action: AI_ACTION.SUMMARIZE,
         content: 'Tab 3 request',
       });
+      await flushAsync();
 
       expect(blocking.fn).toHaveBeenCalledTimes(3);
 

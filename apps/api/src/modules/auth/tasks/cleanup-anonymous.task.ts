@@ -1,8 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { and, eq, lt } from 'drizzle-orm';
+import { and, eq, gt, lt, notExists } from 'drizzle-orm';
+import { QueryBuilder } from 'drizzle-orm/pg-core';
 
 import { DATABASE_CONNECTION, type Database } from '../../../database';
+import { sessions } from '../../../database/schema/sessions.schema';
 import { users } from '../../../database/schema/users.schema';
 
 @Injectable()
@@ -17,16 +19,37 @@ export class CleanupAnonymousTask {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handleCleanup() {
-    const cutoff = new Date();
+    const now = new Date();
+    const cutoff = new Date(now);
     cutoff.setDate(cutoff.getDate() - CleanupAnonymousTask.MAX_AGE_DAYS);
 
-    const result = await this.db
-      .delete(users)
-      .where(and(eq(users.isAnonymous, true), lt(users.createdAt, cutoff)))
-      .returning({ id: users.id });
+    const liveSessions = new QueryBuilder()
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(and(eq(sessions.userId, users.id), gt(sessions.expiresAt, now)));
 
-    if (result.length > 0) {
-      this.logger.log(`Cleaned up ${result.length} abandoned anonymous users`);
+    try {
+      const result = await this.db
+        .delete(users)
+        .where(
+          and(
+            eq(users.isAnonymous, true),
+            lt(users.createdAt, cutoff),
+            notExists(liveSessions)
+          )
+        )
+        .returning({ id: users.id });
+
+      if (result.length > 0) {
+        this.logger.log(
+          `Cleaned up ${result.length} abandoned anonymous users`
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        'Anonymous user cleanup failed',
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      );
     }
   }
 }

@@ -8,7 +8,12 @@ import { McpKeysService } from './mcp-keys.service';
 import { TokenExchangeController } from './token-exchange.controller';
 
 @Module({
-  imports: [JwtModule.register({})],
+  imports: [
+    JwtModule.register({
+      signOptions: { algorithm: 'HS256' },
+      verifyOptions: { algorithms: ['HS256'] },
+    }),
+  ],
   controllers: [McpKeysController, TokenExchangeController],
   providers: [
     McpKeysService,

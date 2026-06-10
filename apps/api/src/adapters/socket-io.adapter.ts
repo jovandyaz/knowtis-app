@@ -5,7 +5,7 @@ import type { Server, ServerOptions } from 'socket.io';
 export class SocketIoAdapter extends IoAdapter {
   constructor(
     app: INestApplication,
-    private readonly corsOrigin: string
+    private readonly corsOrigins: string[]
   ) {
     super(app);
   }
@@ -14,7 +14,7 @@ export class SocketIoAdapter extends IoAdapter {
     const server = super.createIOServer(port, {
       ...options,
       cors: {
-        origin: this.corsOrigin,
+        origin: this.corsOrigins,
         credentials: true,
       },
     });

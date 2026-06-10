@@ -60,7 +60,7 @@ import {
   UpdateNoteHandler,
 } from './application';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
-import { NoteErrorCodes } from './domain';
+import { NoteErrorCodes, toNoteView } from './domain';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -262,7 +262,7 @@ export class NotesController {
       ownerId: user.id,
       ...(dto.content ? { content: dto.content } : {}),
     });
-    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+    return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -306,7 +306,7 @@ export class NotesController {
         'editorsCanShare',
       ]),
     });
-    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+    return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({

@@ -155,3 +155,14 @@ export class RefreshTokenDto {
   @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
   refreshToken?: string;
 }
+
+export class AnonymousSessionDto {
+  @ApiProperty({
+    description:
+      'Previously issued anonymous JWT; when valid, the same anonymous identity is reused',
+    required: false,
+  })
+  @IsOptional()
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  anonymousToken?: string;
+}

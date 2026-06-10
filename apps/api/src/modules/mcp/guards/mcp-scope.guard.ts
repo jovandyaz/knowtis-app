@@ -40,6 +40,7 @@ export class McpScopeGuard implements CanActivate {
     try {
       payload = await this.jwtService.verifyAsync<McpTokenClaims>(token, {
         secret: this.jwtSecret,
+        algorithms: ['HS256'],
       });
     } catch {
       // Unverifiable tokens (including raw API keys) are rejected by JwtAuthGuard.

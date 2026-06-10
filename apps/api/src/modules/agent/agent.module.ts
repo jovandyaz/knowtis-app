@@ -31,6 +31,7 @@ import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retr
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow('JWT_SECRET'),
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
   ],

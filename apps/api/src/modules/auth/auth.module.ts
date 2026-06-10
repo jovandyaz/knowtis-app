@@ -2,7 +2,7 @@ import { AuthNestjsModule } from '@jovandyaz/auth-nestjs';
 import { AuthEmailService } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 
 import { UsersModule } from '../users';
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
@@ -22,13 +22,19 @@ const configService = new ConfigService();
 @Module({
   imports: [
     UsersModule,
-    JwtModule.register({}),
+    JwtModule.register({
+      signOptions: { algorithm: 'HS256' },
+      verifyOptions: { algorithms: ['HS256'] },
+    }),
     AuthNestjsModule.register({
       imports: [UsersModule],
       tokenConfig: {
         accessTokenSecret: configService.getOrThrow('JWT_SECRET'),
         refreshTokenSecret: configService.getOrThrow('JWT_REFRESH_SECRET'),
-        accessTokenExpiresIn: configService.get('JWT_EXPIRES_IN', '15m'),
+        accessTokenExpiresIn: configService.get<JwtSignOptions['expiresIn']>(
+          'JWT_EXPIRES_IN',
+          '15m'
+        ),
         refreshTokenExpiresIn: configService.get(
           'JWT_REFRESH_EXPIRES_IN',
           '7d'

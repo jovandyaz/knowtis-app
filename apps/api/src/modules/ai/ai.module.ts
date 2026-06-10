@@ -44,6 +44,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow('JWT_SECRET'),
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
   ],

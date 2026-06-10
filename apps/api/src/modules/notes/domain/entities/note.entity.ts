@@ -22,6 +22,21 @@ export interface NoteEntity {
 
 export type NoteView = Omit<NoteEntity, 'yjsState'>;
 
+export function toNoteView(entity: NoteEntity): NoteView {
+  return {
+    id: entity.id,
+    title: entity.title,
+    content: entity.content,
+    ownerId: entity.ownerId,
+    generalAccess: entity.generalAccess,
+    generalAccessPermission: entity.generalAccessPermission,
+    shareToken: entity.shareToken,
+    editorsCanShare: entity.editorsCanShare,
+    createdAt: entity.createdAt,
+    updatedAt: entity.updatedAt,
+  };
+}
+
 export interface NoteSummary {
   readonly id: string;
   readonly title: string;

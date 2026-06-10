@@ -4,7 +4,7 @@ import {
   type Provider,
   type Type,
 } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
+import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
 import {
@@ -34,7 +34,7 @@ import { LocalStrategy } from './strategies/local.strategy';
 export interface TokenConfig {
   readonly accessTokenSecret: string;
   readonly refreshTokenSecret: string;
-  readonly accessTokenExpiresIn?: string;
+  readonly accessTokenExpiresIn?: JwtSignOptions['expiresIn'];
   readonly refreshTokenExpiresIn?: string;
 }
 
@@ -127,9 +127,10 @@ export class AuthNestjsModule {
         JwtModule.register({
           secret: options.tokenConfig.accessTokenSecret,
           signOptions: {
-            expiresIn: (options.tokenConfig.accessTokenExpiresIn ??
-              '15m') as any,
+            algorithm: 'HS256',
+            expiresIn: options.tokenConfig.accessTokenExpiresIn ?? '15m',
           },
+          verifyOptions: { algorithms: ['HS256'] },
         }),
       ],
       providers,

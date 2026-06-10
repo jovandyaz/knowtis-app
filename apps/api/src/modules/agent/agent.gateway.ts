@@ -25,6 +25,7 @@ import {
   socketAuthFailureMessage,
   type AuthenticatedSocket,
 } from '../websocket/socket-auth';
+import { SocketExpiryTimers } from '../websocket/socket-expiry';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import {
@@ -76,6 +77,7 @@ export class AgentGateway
 {
   private readonly logger = new Logger(AgentGateway.name);
   private readonly turns: ConcurrencySlotTracker;
+  private readonly expiryTimers = new SocketExpiryTimers();
   private readonly maxConcurrentTurns: number;
 
   @WebSocketServer()
@@ -118,9 +120,17 @@ export class AgentGateway
       client.disconnect();
       return;
     }
+
+    if (client.connected && auth.tokenExpiresAtMs !== undefined) {
+      this.expiryTimers.arm(client.id, auth.tokenExpiresAtMs, () => {
+        client.emit('agent:error', AIErrors.authRequired('Token expired'));
+        client.disconnect(true);
+      });
+    }
   }
 
   handleDisconnect(client: AuthenticatedSocket): void {
+    this.expiryTimers.clear(client.id);
     const hadActiveTurns = this.turns.hasActiveSlots(client.id);
     this.turns.abortAllForClient(client.id);
     this.logger.log({
@@ -139,6 +149,9 @@ export class AgentGateway
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('agent:error', AIErrors.authRequired());
+      return;
+    }
+    if (!(await this.ensureAiEnabled(client))) {
       return;
     }
     const parsed = agentMessagePayloadSchema.safeParse(payload);
@@ -199,6 +212,9 @@ export class AgentGateway
       client.emit('agent:error', AIErrors.authRequired());
       return;
     }
+    if (!(await this.ensureAiEnabled(client))) {
+      return;
+    }
     const parsed = agentApprovePayloadSchema.safeParse(payload);
     if (!parsed.success) {
       client.emit(
@@ -235,6 +251,9 @@ export class AgentGateway
       client.emit('agent:error', AIErrors.authRequired());
       return;
     }
+    if (!(await this.ensureAiEnabled(client))) {
+      return;
+    }
     const parsed = agentRejectPayloadSchema.safeParse(payload);
     if (!parsed.success) {
       client.emit(
@@ -256,6 +275,14 @@ export class AgentGateway
       return;
     }
     await this.resumeAfter(client, userId, parsed.data, res.value);
+  }
+
+  private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {
+    if (await this.featureFlagsService.isEnabled('ai_enabled')) {
+      return true;
+    }
+    client.emit('agent:error', AIErrors.featureDisabled());
+    return false;
   }
 
   private async resumeAfter(

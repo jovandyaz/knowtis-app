@@ -78,6 +78,7 @@ export class RefreshTokensHandler {
         email: payload.email,
         userAgent: session.userAgent ?? undefined,
         ipAddress: session.ipAddress ?? undefined,
+        ...(payload.isAnonymous && { isAnonymous: true }),
       }
     );
     if (tokensResult.isErr()) {

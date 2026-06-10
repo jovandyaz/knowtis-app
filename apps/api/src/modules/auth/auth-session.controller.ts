@@ -26,13 +26,12 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { JwtService } from '@nestjs/jwt';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
-import { LoginDto, RegisterDto } from './dto/auth.dto';
+import { AnonymousSessionDto, LoginDto, RegisterDto } from './dto/auth.dto';
 import type { RefreshTokenDto } from './dto/auth.dto';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import {
@@ -58,8 +57,7 @@ export class AuthSessionController {
     private readonly logoutHandler: LogoutUserHandler,
     private readonly anonymousAuthService: AnonymousAuthService,
     private readonly anonymousDataMigration: DrizzleAnonymousDataMigrationRepository,
-    private readonly jwtService: JwtService,
-    private readonly configService: ConfigService
+    configService: ConfigService
   ) {
     const isProduction = configService.get('NODE_ENV') === 'production';
     const frontendUrl = configService.get<string>('FRONTEND_URL') ?? '';
@@ -76,8 +74,18 @@ export class AuthSessionController {
   @Throttle({ default: { limit: 3, ttl: 60000 } })
   @Post('anonymous')
   @HttpCode(HttpStatus.CREATED)
-  async createAnonymousSession() {
-    return this.anonymousAuthService.createAnonymousSession();
+  async createAnonymousSession(
+    @Body() dto: AnonymousSessionDto,
+    @Res({ passthrough: true }) res: Response
+  ) {
+    const session = await this.anonymousAuthService.createAnonymousSession(
+      dto.anonymousToken
+    );
+
+    clearLegacyHostOnlyCookie(res, this.cookieConfig);
+    setRefreshTokenCookie(res, session.refreshToken, this.cookieConfig);
+
+    return { user: session.user, accessToken: session.accessToken };
   }
 
   @ApiOperation({ summary: 'Login with email and password' })
@@ -220,13 +228,12 @@ export class AuthSessionController {
     anonymousToken: string,
     registeredUserId: string
   ): Promise<void> {
-    const payload = await this.jwtService
-      .verifyAsync<{ sub: string; isAnonymous?: boolean }>(anonymousToken, {
-        secret: this.configService.getOrThrow('JWT_SECRET'),
-      })
-      .catch(() => null);
+    const verified = await this.anonymousAuthService.verifyMigrationProof(
+      anonymousToken,
+      anonymousUserId
+    );
 
-    if (!payload || payload.sub !== anonymousUserId || !payload.isAnonymous) {
+    if (!verified) {
       throw new ForbiddenException(
         'Invalid anonymous token: cannot verify ownership of anonymous session'
       );

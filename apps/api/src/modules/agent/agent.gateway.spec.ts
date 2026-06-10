@@ -23,7 +23,7 @@ function makeGateway({
   approve = {},
   reject = {},
   jwt = {},
-  featureFlags = {},
+  featureFlags,
 }: MakeGatewayOptions = {}) {
   const config = {
     get: vi.fn(() => 2),
@@ -33,14 +33,21 @@ function makeGateway({
     { execute: vi.fn(), ...approve } as unknown as ApproveMutationHandler,
     { execute: vi.fn(), ...reject } as unknown as RejectMutationHandler,
     jwt as unknown as JwtService,
-    featureFlags as unknown as FeatureFlagsService,
+    (featureFlags ?? {
+      isEnabled: vi.fn().mockResolvedValue(true),
+    }) as unknown as FeatureFlagsService,
     config
   );
+}
+
+function flushAsync() {
+  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function makeClient(userId?: string, id = 'c1', token?: string) {
   return {
     id,
+    connected: true,
     data: userId ? { userId } : {},
     emit: vi.fn(),
     disconnect: vi.fn(),
@@ -109,7 +116,7 @@ describe('AgentGateway', () => {
 
     const turnA = gateway.handleMessage(clientA as never, msg);
     const turnB = gateway.handleMessage(clientB as never, msg);
-    await Promise.resolve();
+    await flushAsync();
 
     gateway.handleCancel(clientA as never);
 
@@ -201,8 +208,7 @@ describe('AgentGateway', () => {
 
     const turn1 = gateway.handleMessage(client as never, msg);
     const turn2 = gateway.handleMessage(client as never, msg);
-    await Promise.resolve();
-    await Promise.resolve();
+    await flushAsync();
 
     const clientRejected = makeClient('u1', 'c2');
     await gateway.handleMessage(clientRejected as never, msg);
@@ -229,6 +235,107 @@ describe('AgentGateway', () => {
       expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })
     );
     expect(client.disconnect).toHaveBeenCalled();
+  });
+
+  it('emits featureDisabled and does not start a turn when the flag turns off after connect', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const featureFlags = { isEnabled: vi.fn().mockResolvedValue(false) };
+    const gateway = makeGateway({ handler: { execute }, featureFlags });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('emits featureDisabled and does not commit an approve when the flag is off', async () => {
+    const approveExecute = vi.fn();
+    const featureFlags = { isEnabled: vi.fn().mockResolvedValue(false) };
+    const gateway = makeGateway({
+      approve: { execute: approveExecute },
+      featureFlags,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AI_FEATURE_DISABLED' })
+    );
+    expect(approveExecute).not.toHaveBeenCalled();
+  });
+
+  it('disconnects the client when the verified token expiry passes', async () => {
+    vi.useFakeTimers();
+    try {
+      const exp = Math.floor((Date.now() + 60_000) / 1000);
+      const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1', exp }) };
+      const gateway = makeGateway({ jwt });
+      const client = makeClient(undefined, 'c1', 'valid-token');
+
+      await gateway.handleConnection(client as never);
+      expect(client.disconnect).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(60_000 + 5_000 + 1_000);
+
+      expect(client.emit).toHaveBeenCalledWith(
+        'agent:error',
+        expect.objectContaining({ code: 'AUTH_REQUIRED' })
+      );
+      expect(client.disconnect).toHaveBeenCalledWith(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not arm the expiry timer when the client disconnects during the flag check', async () => {
+    vi.useFakeTimers();
+    try {
+      const exp = Math.floor((Date.now() + 60_000) / 1000);
+      const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1', exp }) };
+      const client = makeClient(undefined, 'c1', 'valid-token');
+      const featureFlags = {
+        isEnabled: vi.fn().mockImplementation(async () => {
+          client.connected = false;
+          return true;
+        }),
+      };
+      const gateway = makeGateway({ jwt, featureFlags });
+
+      await gateway.handleConnection(client as never);
+
+      vi.advanceTimersByTime(120_000);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('clears the expiry timer when the client disconnects early', async () => {
+    vi.useFakeTimers();
+    try {
+      const exp = Math.floor((Date.now() + 60_000) / 1000);
+      const jwt = { verify: vi.fn().mockReturnValue({ sub: 'u1', exp }) };
+      const gateway = makeGateway({ jwt });
+      const client = makeClient(undefined, 'c1', 'valid-token');
+
+      await gateway.handleConnection(client as never);
+      gateway.handleDisconnect(client as never);
+
+      vi.advanceTimersByTime(120_000);
+
+      expect(client.disconnect).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('disconnects and emits AUTH_REQUIRED for MCP-source tokens', async () => {

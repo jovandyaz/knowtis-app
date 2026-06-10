@@ -63,6 +63,7 @@ export type {
 
 export { RefreshTokensHandler } from './lib/handlers/refresh-tokens.handler';
 export { LogoutUserHandler } from './lib/handlers/logout-user.handler';
+export { createSessionWithTokens } from './lib/handlers/shared/create-session';
 
 export { ForgotPasswordHandler } from './lib/handlers/forgot-password.handler';
 export type { ForgotPasswordInput } from './lib/handlers/forgot-password.handler';

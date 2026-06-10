@@ -18,6 +18,7 @@ import { NoteUpdatedListener } from './listeners/note-updated.listener';
       inject: [ConfigService],
       useFactory: (configService: ConfigService) => ({
         secret: configService.getOrThrow('JWT_SECRET'),
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
   ],

@@ -9,6 +9,7 @@ import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
+import { buildAllowedOrigins } from './config/cors-origins';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
 
 async function bootstrap() {
@@ -38,17 +39,16 @@ async function bootstrap() {
 
   const frontendUrl =
     configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
-  const allowedOrigins = [
-    frontendUrl,
-    'http://localhost:4200',
-    'http://localhost:4040',
-  ];
+  const allowedOrigins = buildAllowedOrigins(
+    configService.get<string>('NODE_ENV') ?? 'development',
+    frontendUrl
+  );
   app.enableCors({
     origin: allowedOrigins,
     credentials: true,
   });
 
-  app.useWebSocketAdapter(new SocketIoAdapter(app, allowedOrigins[0]));
+  app.useWebSocketAdapter(new SocketIoAdapter(app, allowedOrigins));
 
   app.useGlobalFilters(
     new GlobalExceptionFilter(),
@@ -105,4 +105,11 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  Logger.error(
+    'API bootstrap failed',
+    error instanceof Error ? error.stack : String(error),
+    'Bootstrap'
+  );
+  process.exit(1);
+});

@@ -276,6 +276,13 @@ export class AIController {
     },
   })
   @ApiAuthErrors('AI feature is disabled')
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — admin role required',
+  })
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @RequireFeatureFlag('ai_enabled')
+  @Roles('admin')
   @Get('config')
   async getConfig(): Promise<Record<string, string>> {
     return this.aiConfigService.getAllConfig();

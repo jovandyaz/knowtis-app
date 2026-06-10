@@ -33,10 +33,12 @@ export class JwtTokenService implements TokenService {
         this.jwtService.signAsync(payload, {
           secret: this.configService.getOrThrow('JWT_SECRET'),
           expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
+          algorithm: 'HS256',
         }),
         this.jwtService.signAsync(payload, {
           secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
           expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '7d'),
+          algorithm: 'HS256',
         }),
       ]);
 
@@ -52,6 +54,7 @@ export class JwtTokenService implements TokenService {
     try {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
+        algorithms: ['HS256'],
       });
 
       return ok({

@@ -26,6 +26,7 @@ import {
   socketAuthFailureMessage,
   type AuthenticatedSocket,
 } from '../websocket/socket-auth';
+import { SocketExpiryTimers } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
 import { SUPPORTED_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
@@ -45,6 +46,7 @@ export class AIGateway
 {
   private readonly logger = new Logger(AIGateway.name);
   private readonly streams: ConcurrencySlotTracker;
+  private readonly expiryTimers = new SocketExpiryTimers();
   private readonly maxConcurrentStreams: number;
 
   @WebSocketServer()
@@ -80,9 +82,17 @@ export class AIGateway
       client.disconnect();
       return;
     }
+
+    if (client.connected && auth.tokenExpiresAtMs !== undefined) {
+      this.expiryTimers.arm(client.id, auth.tokenExpiresAtMs, () => {
+        client.emit('ai:error', AIErrors.authRequired('Token expired'));
+        client.disconnect(true);
+      });
+    }
   }
 
   handleDisconnect(client: AuthenticatedSocket): void {
+    this.expiryTimers.clear(client.id);
     const hadActiveStreams = this.streams.hasActiveSlots(client.id);
     this.streams.abortAllForClient(client.id);
 
@@ -102,6 +112,11 @@ export class AIGateway
     const userId = client.data?.userId;
     if (!userId) {
       client.emit('ai:error', AIErrors.authRequired());
+      return;
+    }
+
+    if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
+      client.emit('ai:error', AIErrors.featureDisabled());
       return;
     }
 

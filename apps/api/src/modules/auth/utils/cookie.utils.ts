@@ -1,4 +1,7 @@
+import { Logger } from '@nestjs/common';
 import type { Response } from 'express';
+
+const logger = new Logger('CookieUtils');
 
 export const REFRESH_TOKEN_COOKIE_NAME = 'rid';
 
@@ -17,7 +20,9 @@ export function deriveCookieDomain(frontendUrl: string): string | undefined {
       return `.${parts.slice(-2).join('.')}`;
     }
   } catch (error) {
-    console.warn(`deriveCookieDomain: invalid URL "${frontendUrl}"`, error);
+    logger.warn(
+      `deriveCookieDomain: invalid URL "${frontendUrl}": ${error instanceof Error ? error.message : String(error)}`
+    );
   }
   return undefined;
 }
@@ -54,7 +59,9 @@ export function clearLegacyHostOnlyCookie(
   res: Response,
   config: CookieConfig
 ): void {
-  if (!config.domain) {return;}
+  if (!config.domain) {
+    return;
+  }
 
   res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
     httpOnly: true,

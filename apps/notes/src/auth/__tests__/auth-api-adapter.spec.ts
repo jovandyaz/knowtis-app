@@ -4,8 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { IHttpClient } from '@knowtis/api-client';
 
+import { createAnonymousSession } from '../anonymous-session';
 import { createAuthApiAdapter } from '../auth-api-adapter';
 import { ANON_STORAGE_KEY } from '../constants';
+
+vi.mock('../anonymous-session', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, createAnonymousSession: vi.fn() };
+});
 
 function seedAnonymousSession(
   payload: unknown,
@@ -15,11 +21,22 @@ function seedAnonymousSession(
   localStorage.setItem(ANON_STORAGE_KEY, value);
 }
 
-const VALID_ANON_PAYLOAD = {
+const VALID_ANON_MARKER = {
   userId: 'anon-1',
-  accessToken: 'anon-jwt',
   expiresAt: Date.now() + 60_000,
 };
+
+function makeAnonymousContext(
+  tokenStorage: TokenStorage,
+  authStore: AuthStoreInstance,
+  token = 'anon-jwt'
+): void {
+  seedAnonymousSession(VALID_ANON_MARKER);
+  vi.mocked(tokenStorage.getAccessToken).mockReturnValue(token);
+  authStore.getState().user = { isAnonymous: true } as ReturnType<
+    AuthStoreInstance['getState']
+  >['user'];
+}
 
 function createMockHttpClient() {
   const mock = {
@@ -122,8 +139,8 @@ describe('createAuthApiAdapter', () => {
       expect(result).toBe(AUTH_RESPONSE);
     });
 
-    it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
-      seedAnonymousSession(VALID_ANON_PAYLOAD);
+    it('forwards anonymousUserId + the in-memory anonymousToken when an anonymous session exists, then clears it', async () => {
+      makeAnonymousContext(tokenStorage, authStore);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
         httpClient,
@@ -165,11 +182,8 @@ describe('createAuthApiAdapter', () => {
       );
     });
 
-    it('does not forward anonymous fields when stored session is missing required fields', async () => {
-      seedAnonymousSession({
-        userId: 'anon-1',
-        expiresAt: Date.now() + 60_000,
-      });
+    it('does not forward anonymous fields when there is no in-memory anonymous token', async () => {
+      seedAnonymousSession(VALID_ANON_MARKER);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
         httpClient,
@@ -186,10 +200,10 @@ describe('createAuthApiAdapter', () => {
       );
     });
 
-    it('does not forward anonymous fields when stored session is expired', async () => {
+    it('does not forward anonymous fields when the stored marker is expired', async () => {
+      makeAnonymousContext(tokenStorage, authStore);
       seedAnonymousSession({
         userId: 'anon-1',
-        accessToken: 'anon-jwt',
         expiresAt: Date.now() - 1_000,
       });
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
@@ -233,8 +247,8 @@ describe('createAuthApiAdapter', () => {
       expect(result).toBe(AUTH_RESPONSE);
     });
 
-    it('forwards anonymousUserId + anonymousToken when a stored anonymous session exists, then clears it', async () => {
-      seedAnonymousSession(VALID_ANON_PAYLOAD);
+    it('forwards anonymousUserId + the in-memory anonymousToken when an anonymous session exists, then clears it', async () => {
+      makeAnonymousContext(tokenStorage, authStore);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
         httpClient,
@@ -262,7 +276,7 @@ describe('createAuthApiAdapter', () => {
       expect(localStorage.getItem(ANON_STORAGE_KEY)).toBeNull();
     });
 
-    it('does not forward anonymous fields when stored session is malformed, missing fields, or expired', async () => {
+    it('does not forward anonymous fields when the marker is malformed, expired, or no in-memory token exists', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       httpClient.post.mockResolvedValue(AUTH_RESPONSE);
       const adapter = createAuthApiAdapter({
@@ -281,10 +295,7 @@ describe('createAuthApiAdapter', () => {
         baseExpected
       );
 
-      seedAnonymousSession({
-        userId: 'anon-1',
-        expiresAt: Date.now() + 60_000,
-      });
+      seedAnonymousSession(VALID_ANON_MARKER);
       await adapter.register(baseInput);
       expect(httpClient.post).toHaveBeenLastCalledWith(
         '/auth/register',
@@ -292,9 +303,9 @@ describe('createAuthApiAdapter', () => {
         baseExpected
       );
 
+      makeAnonymousContext(tokenStorage, authStore);
       seedAnonymousSession({
         userId: 'anon-1',
-        accessToken: 'anon-jwt',
         expiresAt: Date.now() - 1_000,
       });
       await adapter.register(baseInput);
@@ -465,6 +476,47 @@ describe('createAuthApiAdapter', () => {
       const result = await callback();
 
       expect(result).toBe('new-at');
+    });
+
+    it('refreshes an anonymous session via the refresh cookie', async () => {
+      httpClient.post.mockResolvedValue(AUTH_TOKENS);
+      authStore.getState().user = { isAnonymous: true } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
+      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
+
+      const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
+      const result = await callback();
+
+      expect(result).toBe('new-at');
+      expect(httpClient.post).toHaveBeenCalledWith(
+        '/auth/refresh',
+        {},
+        { skipAuth: true }
+      );
+    });
+
+    it('creates a new anonymous session when the anonymous refresh fails', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      httpClient.post.mockRejectedValue(new Error('401'));
+      vi.mocked(createAnonymousSession).mockResolvedValue({
+        user: { id: 'anon-2', name: 'Anonymous', isAnonymous: true },
+        accessToken: 'replacement-at',
+      });
+      authStore.getState().user = { isAnonymous: true } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
+      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
+
+      const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
+      const result = await callback();
+
+      expect(result).toBe('replacement-at');
+      expect(createAnonymousSession).toHaveBeenCalledWith(
+        tokenStorage,
+        authStore
+      );
+      expect(authStore.getState().logout).not.toHaveBeenCalled();
     });
 
     it('clears store, redirects to login and returns null on refresh failure for non-anonymous user', async () => {

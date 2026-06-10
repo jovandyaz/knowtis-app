@@ -16,6 +16,10 @@ import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
 import type { NoteEntity } from '../../notes/domain/entities/note.entity';
 import { UsersService } from '../../users/users.service';
+import {
+  MAX_TIMER_DELAY_MS,
+  TOKEN_EXPIRY_GRACE_MS,
+} from '../../websocket/socket-expiry';
 
 type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
 
@@ -23,11 +27,13 @@ interface JwtPayload extends McpTokenClaims {
   sub: string;
   email: string;
   isAnonymous?: boolean;
+  exp?: number;
 }
 
 export interface HocuspocusAuthContext {
   user: AuthUser;
   noteId: string;
+  tokenExpiresAtMs?: number;
 }
 
 @Injectable()
@@ -45,6 +51,7 @@ export class HocuspocusAuthExtension {
     // Bind once so Hocuspocus' callbacks (which lose `this`) can still reach
     // the instance methods + injected dependencies.
     const authenticate = this.authenticate.bind(this);
+    const armExpiryDisconnect = this.armExpiryDisconnect.bind(this);
 
     return {
       priority: 100,
@@ -63,7 +70,38 @@ export class HocuspocusAuthExtension {
           requestParameters,
         });
       },
+
+      async connected({ context, connection }) {
+        armExpiryDisconnect(context, connection);
+      },
     };
+  }
+
+  private armExpiryDisconnect(
+    context: HocuspocusAuthContext,
+    connection: {
+      close: (event?: { code: number; reason: string }) => void;
+      onClose: (callback: () => void) => unknown;
+    }
+  ): void {
+    if (context.tokenExpiresAtMs === undefined) {
+      return;
+    }
+    const delay = context.tokenExpiresAtMs + TOKEN_EXPIRY_GRACE_MS - Date.now();
+    if (delay > MAX_TIMER_DELAY_MS) {
+      return;
+    }
+    const timer = setTimeout(
+      () => {
+        this.logger.log(
+          `Closing collaboration connection for note ${context.noteId}: token expired`
+        );
+        connection.close({ code: 4401, reason: 'Token expired' });
+      },
+      Math.max(delay, 0)
+    );
+    timer.unref?.();
+    connection.onClose(() => clearTimeout(timer));
   }
 
   private async authenticate(params: {
@@ -74,7 +112,10 @@ export class HocuspocusAuthExtension {
   }): Promise<HocuspocusAuthContext> {
     const { token, documentName, connectionConfig, requestParameters } = params;
 
-    const user = await this.loadAuthenticatedUser(token, documentName);
+    const { user, tokenExpiresAtMs } = await this.loadAuthenticatedUser(
+      token,
+      documentName
+    );
 
     let note: NoteEntity;
     let rawPermissions: Awaited<
@@ -111,20 +152,26 @@ export class HocuspocusAuthExtension {
     const ability = defineAbilityFor(authUser, { sharedNotes });
     this.enforcePermissions(ability, note, connectionConfig);
 
-    return { user: authUser, noteId: documentName };
+    return {
+      user: authUser,
+      noteId: documentName,
+      ...(tokenExpiresAtMs !== undefined && { tokenExpiresAtMs }),
+    };
   }
 
   private async loadAuthenticatedUser(
     token: string,
     documentName: string
-  ): Promise<AuthenticatedUser> {
+  ): Promise<{ user: AuthenticatedUser; tokenExpiresAtMs?: number }> {
     if (!token) {
       throw new Error('Authentication required');
     }
 
     let payload: JwtPayload;
     try {
-      payload = this.jwtService.verify<JwtPayload>(token);
+      payload = this.jwtService.verify<JwtPayload>(token, {
+        algorithms: ['HS256'],
+      });
     } catch (error) {
       this.logger.warn(
         `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
@@ -152,7 +199,12 @@ export class HocuspocusAuthExtension {
     if (!user) {
       throw new Error('Invalid token');
     }
-    return user;
+    return {
+      user,
+      ...(typeof payload.exp === 'number' && {
+        tokenExpiresAtMs: payload.exp * 1000,
+      }),
+    };
   }
 
   private async loadNote(documentName: string): Promise<NoteEntity> {

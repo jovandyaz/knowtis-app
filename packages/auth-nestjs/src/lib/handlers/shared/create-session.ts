@@ -15,6 +15,7 @@ interface CreateSessionParams {
   email: string;
   userAgent?: string | undefined;
   ipAddress?: string | undefined;
+  isAnonymous?: boolean | undefined;
 }
 
 export async function createSessionWithTokens(
@@ -23,7 +24,8 @@ export async function createSessionWithTokens(
 ): Promise<Result<AuthTokens, AuthDomainError>> {
   const tokensResult = await deps.tokenService.generateTokens(
     UserId.fromTrusted(params.userId),
-    params.email
+    params.email,
+    params.isAnonymous ? { isAnonymous: true } : undefined
   );
   if (tokensResult.isErr()) {
     return err(tokensResult.error);

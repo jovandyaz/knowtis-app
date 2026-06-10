@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { CookieConfig } from '../cookie.utils';
@@ -35,14 +36,18 @@ describe('deriveCookieDomain', () => {
   });
 
   it('should return undefined for invalid URL', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     expect(deriveCookieDomain('not-a-url')).toBeUndefined();
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
 
   it('should return undefined for empty string', () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     expect(deriveCookieDomain('')).toBeUndefined();
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();

@@ -248,6 +248,157 @@ describe('HocuspocusAuthExtension', () => {
     expect(payload.connectionConfig.readOnly).toBe(false);
   });
 
+  it('should verify tokens pinned to the HS256 algorithm', async () => {
+    const verify = vi
+      .fn()
+      .mockReturnValue({ sub: 'user-1', email: 'u@example.com' });
+    const note = {
+      id: 'note-1',
+      ownerId: 'user-1',
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
+    };
+    const ext = new HocuspocusAuthExtension(
+      { verify } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
+      } as never,
+      {
+        findById: vi.fn().mockResolvedValue(note),
+        findPermissionsByNote: vi.fn().mockResolvedValue([]),
+      } as unknown as NoteRepository
+    );
+
+    await ext.toExtension().onAuthenticate?.(buildPayload('token') as never);
+
+    expect(verify).toHaveBeenCalledWith('token', { algorithms: ['HS256'] });
+  });
+
+  it('should expose the token expiry in the connection context', async () => {
+    const exp = Math.floor((Date.now() + 60_000) / 1000);
+    const note = {
+      id: 'note-1',
+      ownerId: 'user-1',
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
+    };
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'user-1', email: 'u@example.com', exp }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
+      } as never,
+      {
+        findById: vi.fn().mockResolvedValue(note),
+        findPermissionsByNote: vi.fn().mockResolvedValue([]),
+      } as unknown as NoteRepository
+    );
+
+    const context = await ext
+      .toExtension()
+      .onAuthenticate?.(buildPayload('token') as never);
+
+    expect(context).toMatchObject({ tokenExpiresAtMs: exp * 1000 });
+  });
+
+  describe('connected hook token expiry', () => {
+    function makeConnection() {
+      const closeCallbacks: Array<() => void> = [];
+      return {
+        close: vi.fn(() => {
+          for (const cb of closeCallbacks) {
+            cb();
+          }
+        }),
+        onClose: vi.fn((cb: () => void) => {
+          closeCallbacks.push(cb);
+        }),
+      };
+    }
+
+    function makeExtension() {
+      return new HocuspocusAuthExtension(
+        { verify: vi.fn() } as never,
+        { findById: vi.fn() } as never,
+        { findById: vi.fn() } as unknown as NoteRepository
+      );
+    }
+
+    it('closes the connection when the token expiry passes', async () => {
+      vi.useFakeTimers();
+      try {
+        const connection = makeConnection();
+        const context = {
+          user: { id: 'user-1', isAnonymous: false },
+          noteId: 'note-1',
+          tokenExpiresAtMs: Date.now() + 60_000,
+        };
+
+        await makeExtension()
+          .toExtension()
+          .connected?.({ context, connection } as never);
+
+        vi.advanceTimersByTime(60_000 + 5_000 + 1_000);
+
+        expect(connection.close).toHaveBeenCalledWith(
+          expect.objectContaining({ code: 4401 })
+        );
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('clears the timer when the connection closes before expiry', async () => {
+      vi.useFakeTimers();
+      try {
+        const connection = makeConnection();
+        const context = {
+          user: { id: 'user-1', isAnonymous: false },
+          noteId: 'note-1',
+          tokenExpiresAtMs: Date.now() + 60_000,
+        };
+
+        await makeExtension()
+          .toExtension()
+          .connected?.({ context, connection } as never);
+
+        const closeCallback = connection.onClose.mock.calls[0]?.[0];
+        closeCallback?.();
+
+        vi.advanceTimersByTime(120_000);
+
+        expect(connection.close).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('does not arm a timer when the context has no expiry', async () => {
+      vi.useFakeTimers();
+      try {
+        const connection = makeConnection();
+        const context = {
+          user: { id: 'user-1', isAnonymous: false },
+          noteId: 'note-1',
+        };
+
+        await makeExtension()
+          .toExtension()
+          .connected?.({ context, connection } as never);
+
+        expect(vi.getTimerCount()).toBe(0);
+        expect(connection.onClose).not.toHaveBeenCalled();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
   it('should ignore share token when it does not match the note', async () => {
     const note = {
       id: 'note-1',
