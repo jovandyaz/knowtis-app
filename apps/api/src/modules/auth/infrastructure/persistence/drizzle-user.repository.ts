@@ -33,7 +33,7 @@ export class DrizzleUserRepository implements UserRepository {
   async findById(id: UserId): Promise<UserEntity | null> {
     try {
       const user = await this.usersService.findById(id.value);
-      return this.mapToEntity(user);
+      return user ? this.mapToEntity(user) : null;
     } catch (error) {
       this.logger.error(
         `Failed to find user by id ${id.value}`,
@@ -65,7 +65,16 @@ export class DrizzleUserRepository implements UserRepository {
     passwordHash: string
   ): Promise<Result<void, AuthDomainError>> {
     try {
-      await this.usersService.updatePasswordHash(userId.value, passwordHash);
+      const user = await this.usersService.updatePasswordHash(
+        userId.value,
+        passwordHash
+      );
+      if (!user) {
+        this.logger.error(
+          `Failed to update password hash for user ${userId.value}: user not found`
+        );
+        return err(AuthErrors.internalError('User not found'));
+      }
       return ok(undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
@@ -80,7 +89,13 @@ export class DrizzleUserRepository implements UserRepository {
     userId: UserId
   ): Promise<Result<void, AuthDomainError>> {
     try {
-      await this.usersService.markEmailVerified(userId.value);
+      const user = await this.usersService.markEmailVerified(userId.value);
+      if (!user) {
+        this.logger.error(
+          `Failed to mark email verified for user ${userId.value}: user not found`
+        );
+        return err(AuthErrors.internalError('User not found'));
+      }
       return ok(undefined);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

@@ -1,4 +1,5 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
+import type { I18nService } from 'nestjs-i18n';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIMetricsService } from '../../ai/application/services/ai-metrics.service';
@@ -37,7 +38,8 @@ describe('AdminController', () => {
 
     controller = new AdminController(
       usersService as unknown as UsersService,
-      aiMetricsService as unknown as AIMetricsService
+      aiMetricsService as unknown as AIMetricsService,
+      { t: vi.fn().mockReturnValue('User not found') } as unknown as I18nService
     );
   });
 
@@ -84,6 +86,14 @@ describe('AdminController', () => {
       ).rejects.toThrow(BadRequestException);
 
       expect(usersService.updateRole).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException when the user does not exist', async () => {
+      usersService.updateRole.mockResolvedValue(null);
+
+      await expect(
+        controller.updateUserRole('missing-uuid', { role: 'admin' }, ADMIN_USER)
+      ).rejects.toThrow(NotFoundException);
     });
   });
 

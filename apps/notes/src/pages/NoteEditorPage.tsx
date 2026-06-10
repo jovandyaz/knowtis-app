@@ -1,39 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
 
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
-import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
-import { ShareDialog } from '@/components/notes/ShareDialog';
+import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
+import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
-import {
-  ACCESS_BADGE_CONFIG,
-  canPerformNoteAction,
-  DEBOUNCE_DELAYS,
-} from '@/lib';
+import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import type { Editor } from '@tiptap/react';
-import { ArrowLeft, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import {
-  Badge,
-  Button,
-  ErrorState,
-  Input,
-  LoadingState,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@knowtis/design-system';
-import { SaveStatusIndicator } from '@knowtis/editor';
+import { ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import type {
   GeneralAccessLevel,
@@ -52,155 +36,6 @@ interface NoteEditorProps {
   editorsCanShare: boolean;
 }
 
-interface MobileEditorHeaderProps {
-  accessLevel: NoteAccessLevel;
-  editorsCanShare: boolean;
-  onShareClick: () => void;
-  onBack: () => void;
-}
-
-function MobileEditorHeader({
-  accessLevel,
-  editorsCanShare,
-  onShareClick,
-  onBack,
-}: MobileEditorHeaderProps) {
-  const { t } = useTranslation('notes');
-
-  return (
-    <>
-      <FloatingActionButton
-        icon={ArrowLeft}
-        position="left"
-        onClick={onBack}
-        aria-label={t('editor.back')}
-      />
-      {canPerformNoteAction(accessLevel, 'share', { editorsCanShare }) && (
-        <FloatingActionButton
-          icon={Share2}
-          position="right"
-          onClick={onShareClick}
-          aria-label={t('editor.share')}
-        />
-      )}
-
-      <div className="h-14 md:hidden" />
-    </>
-  );
-}
-
-interface NoteControlsPortalProps {
-  accessLevel: NoteAccessLevel;
-  editorsCanShare: boolean;
-  canEdit: boolean;
-  isSaving: boolean;
-  hasSaved: boolean;
-  shareDialogOpen: boolean;
-  onShareDialogOpenChange: (open: boolean) => void;
-  noteId: string;
-  noteTitle: string;
-  generalAccess: GeneralAccessLevel;
-  generalAccessPermission: PermissionLevel;
-  shareToken: string | null;
-}
-
-function NoteControlsPortal({
-  accessLevel,
-  editorsCanShare,
-  canEdit,
-  isSaving,
-  hasSaved,
-  shareDialogOpen,
-  onShareDialogOpenChange,
-  noteId,
-  noteTitle,
-  generalAccess,
-  generalAccessPermission,
-  shareToken,
-}: NoteControlsPortalProps) {
-  const { t } = useTranslation('notes');
-  const { t: tCommon } = useTranslation('common');
-  const badgeConfig = ACCESS_BADGE_CONFIG[accessLevel];
-  const showBadge = accessLevel !== 'owner';
-  const canShare = canPerformNoteAction(accessLevel, 'share', {
-    editorsCanShare,
-  });
-
-  const portalTarget = document.getElementById('note-controls-portal');
-  if (!portalTarget) {
-    return null;
-  }
-
-  return createPortal(
-    <>
-      {showBadge && (
-        <Badge variant={badgeConfig.variant}>{badgeConfig.label}</Badge>
-      )}
-
-      {canEdit &&
-        (isSaving ? (
-          <SaveStatusIndicator
-            status="saving"
-            label={tCommon('states.saving')}
-            className="text-xs text-(--muted-foreground)"
-            transient
-          />
-        ) : hasSaved ? (
-          <SaveStatusIndicator
-            status="saved"
-            label={tCommon('states.saved')}
-            className="text-xs text-(--muted-foreground)"
-            transient
-          />
-        ) : null)}
-
-      {canShare && (
-        <>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
-                onClick={() => onShareDialogOpenChange(true)}
-              >
-                <Share2 className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent
-              hidden={shareDialogOpen}
-              onPointerDownOutside={(e) => e.preventDefault()}
-            >
-              {t('editor.share')}
-            </TooltipContent>
-          </Tooltip>
-          <ShareDialog
-            open={shareDialogOpen}
-            onOpenChange={(open) => {
-              onShareDialogOpenChange(open);
-              if (!open) {
-                requestAnimationFrame(() => {
-                  if (document.activeElement instanceof HTMLElement) {
-                    document.activeElement.blur();
-                  }
-                });
-              }
-            }}
-            noteId={noteId}
-            noteTitle={noteTitle}
-            generalAccess={generalAccess}
-            generalAccessPermission={generalAccessPermission}
-            shareToken={shareToken}
-            editorsCanShare={editorsCanShare}
-            accessLevel={accessLevel}
-          />
-        </>
-      )}
-    </>,
-    portalTarget
-  );
-}
-
 function NoteEditor({
   noteId,
   initialTitle,
@@ -215,7 +50,6 @@ function NoteEditor({
   const navigate = useNavigate();
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
-  const [content, setContent] = useState(initialContent);
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
@@ -308,7 +142,6 @@ function NoteEditor({
         return;
       }
       contentRef.current = newContent;
-      setContent(newContent);
       if (!isLiveCollabRef.current) {
         // Live CRDT already holds these edits and persists them via Hocuspocus
         // onStoreDocument; a REST content write would echo back and reset the caret.
@@ -367,18 +200,19 @@ function NoteEditor({
       />
 
       <NoteControlsPortal
-        accessLevel={accessLevel}
-        editorsCanShare={editorsCanShare}
-        canEdit={canEdit}
+        note={{
+          id: noteId,
+          title,
+          accessLevel,
+          editorsCanShare,
+          generalAccess,
+          generalAccessPermission,
+          shareToken,
+        }}
         isSaving={isSaving}
         hasSaved={!!lastSaved}
         shareDialogOpen={isShareDialogOpen}
         onShareDialogOpenChange={setIsShareDialogOpen}
-        noteId={noteId}
-        noteTitle={title}
-        generalAccess={generalAccess}
-        generalAccessPermission={generalAccessPermission}
-        shareToken={shareToken}
       />
 
       <div className="mb-4">
@@ -394,7 +228,7 @@ function NoteEditor({
 
       <CollaborativeEditor
         noteId={noteId}
-        initialContent={content}
+        initialContent={initialContent}
         onUpdate={handleContentChange}
         editable={canEdit}
         autoFocus={canEdit && isNewNote}

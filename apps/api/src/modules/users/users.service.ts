@@ -1,6 +1,5 @@
 import type { UserRole } from '@jovandyaz/auth';
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { I18nService } from 'nestjs-i18n';
+import { Injectable } from '@nestjs/common';
 
 import { UsersRepository } from './users.repository';
 
@@ -22,17 +21,10 @@ export interface UpdateUserData {
 
 @Injectable()
 export class UsersService {
-  constructor(
-    private readonly usersRepository: UsersRepository,
-    private readonly i18n: I18nService
-  ) {}
+  constructor(private readonly usersRepository: UsersRepository) {}
 
   async findById(id: string) {
-    const user = await this.usersRepository.findById(id);
-    if (!user) {
-      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
-    }
-    return user;
+    return this.usersRepository.findById(id);
   }
 
   async findByEmail(email: string) {
@@ -59,35 +51,15 @@ export class UsersService {
   }
 
   async update(id: string, data: UpdateUserData) {
-    const user = await this.usersRepository.update(id, data);
-
-    if (!user) {
-      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
-    }
-
-    return user;
+    return this.usersRepository.update(id, data);
   }
 
   async updatePasswordHash(id: string, passwordHash: string) {
-    const user = await this.usersRepository.update(id, { passwordHash });
-
-    if (!user) {
-      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
-    }
-
-    return user;
+    return this.usersRepository.update(id, { passwordHash });
   }
 
   async markEmailVerified(id: string) {
-    const user = await this.usersRepository.update(id, {
-      emailVerifiedAt: new Date(),
-    });
-
-    if (!user) {
-      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
-    }
-
-    return user;
+    return this.usersRepository.update(id, { emailVerifiedAt: new Date() });
   }
 
   async findAll() {
@@ -95,14 +67,12 @@ export class UsersService {
   }
 
   async updateRole(id: string, role: UserRole) {
-    const user = await this.usersRepository.updateRole(id, role);
-    if (!user) {
-      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
-    }
-    return user;
+    return this.usersRepository.updateRole(id, role);
   }
 
-  sanitizeUser(user: Awaited<ReturnType<typeof this.findById>>) {
+  sanitizeUser(
+    user: NonNullable<Awaited<ReturnType<UsersRepository['findById']>>>
+  ) {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { passwordHash, ...sanitized } = user;
     return sanitized;

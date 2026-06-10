@@ -11,6 +11,7 @@ import { AgentComposer } from './AgentComposer';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
+import { RetryBanner } from './RetryBanner';
 
 export function AgentCopilotPanel() {
   const { t } = useTranslation('notes');
@@ -52,28 +53,13 @@ export function AgentCopilotPanel() {
       )}
 
       {status === 'error' && (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
-          {t(aiErrorMessageKey(error?.code ?? ''))}{' '}
-          <button
-            type="button"
-            onClick={retryLast}
-            className="underline underline-offset-2"
-          >
-            {t('ai.preview.retry')}
-          </button>
-        </div>
+        <RetryBanner
+          message={t(aiErrorMessageKey(error?.code ?? ''))}
+          onRetry={retryLast}
+        />
       )}
       {status === 'timeout' && (
-        <div role="alert" className="px-3 py-2 text-xs text-destructive">
-          {t('ai.errors.timeout')}{' '}
-          <button
-            type="button"
-            onClick={retryLast}
-            className="underline underline-offset-2"
-          >
-            {t('ai.preview.retry')}
-          </button>
-        </div>
+        <RetryBanner message={t('ai.errors.timeout')} onRetry={retryLast} />
       )}
 
       {pendingProposal && (

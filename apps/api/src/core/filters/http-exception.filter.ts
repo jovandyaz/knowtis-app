@@ -62,10 +62,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
     }
 
     if (status >= 500) {
+      const detail = Array.isArray(message) ? message.join(', ') : message;
       this.logger.error(
-        `${request.method} ${request.url} - ${status}`,
+        `${request.method} ${request.url} - ${status}: ${detail}`,
         exception instanceof Error ? exception.stack : undefined
       );
+      message = 'Internal server error';
+      error = 'Internal Server Error';
+      code = undefined;
+      errors = undefined;
     }
 
     const errorResponse: ErrorResponse = {

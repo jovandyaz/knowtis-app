@@ -5,6 +5,7 @@ import {
   Body,
   Controller,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -21,6 +22,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { I18nService } from 'nestjs-i18n';
 
 import { AIMetricsService } from '../ai/application/services/ai-metrics.service';
 import type { MetricsPeriod } from '../ai/domain/ports/ai-usage.repository';
@@ -45,7 +47,8 @@ function isMetricsPeriod(value: string): value is MetricsPeriod {
 export class AdminController {
   constructor(
     private readonly usersService: UsersService,
-    private readonly aiMetricsService: AIMetricsService
+    private readonly aiMetricsService: AIMetricsService,
+    private readonly i18n: I18nService
   ) {}
 
   @ApiOperation({
@@ -113,7 +116,11 @@ export class AdminController {
     if (id === currentUser.id) {
       throw new BadRequestException('Cannot change your own role');
     }
-    return this.usersService.updateRole(id, dto.role);
+    const updated = await this.usersService.updateRole(id, dto.role);
+    if (!updated) {
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
+    }
+    return updated;
   }
 
   @ApiOperation({

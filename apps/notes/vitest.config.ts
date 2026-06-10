@@ -57,6 +57,15 @@ export default defineConfig({
         __dirname,
         '../../packages/shared/i18n/src/index.ts'
       ),
+      '@knowtis/editor-schema': resolve(
+        __dirname,
+        '../../packages/editor-schema/src/index.ts'
+      ),
+      '@knowtis/editor': resolve(
+        __dirname,
+        '../../packages/editor/src/index.ts'
+      ),
+      '@knowtis/crdt': resolve(__dirname, '../../packages/crdt/src/index.ts'),
     },
   },
 });

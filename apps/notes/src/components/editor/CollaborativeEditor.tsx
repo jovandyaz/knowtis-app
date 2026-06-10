@@ -302,10 +302,6 @@ export function CollaborativeEditor({
     onLiveCollaborationChange?.(wsEnabled && isConnected && isSynced);
   }, [wsEnabled, isConnected, isSynced, onLiveCollaborationChange]);
 
-  const uniqueUsers = otherUsers.filter(
-    (user, index, self) => index === self.findIndex((u) => u.name === user.name)
-  );
-
   if (!editorState.isReady) {
     return (
       <div className={cn('relative', className)}>
@@ -331,9 +327,7 @@ export function CollaborativeEditor({
           </div>
         )}
 
-        {uniqueUsers.length > 0 && (
-          <CollaborationIndicator users={uniqueUsers} />
-        )}
+        {otherUsers.length > 0 && <CollaborationIndicator users={otherUsers} />}
 
         <InternalEditor
           noteId={noteId}

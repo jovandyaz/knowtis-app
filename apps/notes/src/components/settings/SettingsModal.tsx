@@ -5,7 +5,7 @@ import { useSettingsStore } from '@/stores/settings.store';
 import type { SettingsSection } from '@/stores/settings.store';
 import { Settings } from 'lucide-react';
 
-import { Dialog, DialogContent } from '@knowtis/design-system';
+import { Dialog, DialogContent, DialogTitle } from '@knowtis/design-system';
 
 import { SectionHeader } from './SectionHeader';
 import { AccountSection } from './sections/AccountSection';
@@ -53,9 +53,9 @@ export function SettingsModal() {
       <DialogContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 md:h-[80vh] md:max-w-3xl">
         <div className="flex shrink-0 items-center gap-2 border-b border-(--border) px-6 py-4">
           <Settings className="h-4 w-4 text-(--muted-foreground)" />
-          <h2 className="text-sm font-semibold text-(--foreground)">
+          <DialogTitle className="text-sm tracking-normal text-(--foreground)">
             {t('settings.title')}
-          </h2>
+          </DialogTitle>
         </div>
 
         <div className="flex min-h-0 flex-1 flex-col sm:flex-row">

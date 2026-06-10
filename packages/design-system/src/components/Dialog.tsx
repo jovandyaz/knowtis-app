@@ -4,6 +4,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -22,7 +23,15 @@ interface DialogContextValue {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  titleId: string;
+  descriptionId: string;
+  titlePresent: boolean;
+  descriptionPresent: boolean;
+  setTitlePresent: (present: boolean) => void;
+  setDescriptionPresent: (present: boolean) => void;
 }
+
+const openDialogStack: symbol[] = [];
 
 const DialogContext = createContext<DialogContextValue | null>(null);
 
@@ -42,7 +51,11 @@ interface DialogProps {
 
 function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const [titlePresent, setTitlePresent] = useState(false);
+  const [descriptionPresent, setDescriptionPresent] = useState(false);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const titleId = useId();
+  const descriptionId = useId();
 
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
@@ -59,7 +72,17 @@ function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
 
   return (
     <DialogContext.Provider
-      value={{ open, onOpenChange: handleOpenChange, triggerRef }}
+      value={{
+        open,
+        onOpenChange: handleOpenChange,
+        triggerRef,
+        titleId,
+        descriptionId,
+        titlePresent,
+        descriptionPresent,
+        setTitlePresent,
+        setDescriptionPresent,
+      }}
     >
       {children}
     </DialogContext.Provider>
@@ -154,9 +177,18 @@ interface DialogContentProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 function DialogContent({ className, children, ...props }: DialogContentProps) {
-  const { open, onOpenChange, triggerRef } = useDialogContext();
+  const {
+    open,
+    onOpenChange,
+    triggerRef,
+    titleId,
+    descriptionId,
+    titlePresent,
+    descriptionPresent,
+  } = useDialogContext();
   const contentRef = useRef<HTMLDivElement>(null);
   const previousActiveElement = useRef<Element | null>(null);
+  const escapeToken = useRef(Symbol('dialog-escape'));
 
   const getFocusableElements = useCallback(() => {
     if (!contentRef.current) {
@@ -171,12 +203,6 @@ function DialogContent({ className, children, ...props }: DialogContentProps) {
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onOpenChange(false);
-        return;
-      }
-
       if (e.key === 'Tab') {
         const focusableElements = getFocusableElements();
         if (focusableElements.length === 0) {
@@ -196,8 +222,34 @@ function DialogContent({ className, children, ...props }: DialogContentProps) {
         }
       }
     },
-    [getFocusableElements, onOpenChange]
+    [getFocusableElements]
   );
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const token = escapeToken.current;
+    openDialogStack.push(token);
+    const handleEscape = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== 'Escape') {
+        return;
+      }
+      if (openDialogStack[openDialogStack.length - 1] !== token) {
+        return;
+      }
+      e.preventDefault();
+      onOpenChange(false);
+    };
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      const index = openDialogStack.indexOf(token);
+      if (index !== -1) {
+        openDialogStack.splice(index, 1);
+      }
+    };
+  }, [open, onOpenChange]);
 
   useEffect(() => {
     if (open) {
@@ -239,6 +291,8 @@ function DialogContent({ className, children, ...props }: DialogContentProps) {
         ref={contentRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={titlePresent ? titleId : undefined}
+        aria-describedby={descriptionPresent ? descriptionId : undefined}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         className={cn(
@@ -295,31 +349,39 @@ function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 function DialogTitle({
   className,
-  id,
   ...props
-}: HTMLAttributes<HTMLHeadingElement>) {
+}: Omit<HTMLAttributes<HTMLHeadingElement>, 'id'>) {
+  const { titleId, setTitlePresent } = useDialogContext();
+  useEffect(() => {
+    setTitlePresent(true);
+    return () => setTitlePresent(false);
+  }, [setTitlePresent]);
   return (
     <h2
-      id={id}
+      {...props}
+      id={titleId}
       className={cn(
         'text-lg font-semibold leading-none tracking-tight',
         className
       )}
-      {...props}
     />
   );
 }
 
 function DialogDescription({
   className,
-  id,
   ...props
-}: HTMLAttributes<HTMLParagraphElement>) {
+}: Omit<HTMLAttributes<HTMLParagraphElement>, 'id'>) {
+  const { descriptionId, setDescriptionPresent } = useDialogContext();
+  useEffect(() => {
+    setDescriptionPresent(true);
+    return () => setDescriptionPresent(false);
+  }, [setDescriptionPresent]);
   return (
     <p
-      id={id}
-      className={cn('text-sm text-(--muted-foreground)', className)}
       {...props}
+      id={descriptionId}
+      className={cn('text-sm text-(--muted-foreground)', className)}
     />
   );
 }
