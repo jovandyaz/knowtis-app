@@ -18,3 +18,20 @@ export {
   type TokenCostInput,
 } from './catalog/compute-token-cost';
 export { MODEL_PRICES_SNAPSHOT } from './catalog/model-prices.snapshot';
+export {
+  executeWithChain,
+  isAbortError,
+  providerOf,
+  resolveChainCandidates,
+  streamWithChain,
+  type ChainAttemptInfo,
+  type ChainContext,
+  type ChainResolutionInput,
+  type StreamChainContext,
+} from './chain/model-chain';
+export {
+  ProviderCooldownTracker,
+  type CooldownConfig,
+  type ProviderCooldown,
+  type ProviderHealthSnapshot,
+} from './chain/provider-cooldown.tracker';
