@@ -26,7 +26,29 @@ describe('VoiceTranscriptionService', () => {
     service = new VoiceTranscriptionService(mockConfig);
   });
 
-  it('should return ok with transcribed text on success', async () => {
+  it('should reject a non-openai transcription model at construction', () => {
+    const config = createMockConfig({
+      OPENAI_API_KEY: 'test-key',
+      AI_TRANSCRIPTION_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+    });
+    expect(() => new VoiceTranscriptionService(config)).toThrow(
+      /only 'openai:<model>' transcription is available/
+    );
+  });
+
+  it('should return err(PROVIDER_ERROR) when OPENAI_API_KEY is missing', async () => {
+    const keyless = new VoiceTranscriptionService(
+      createMockConfig({ OPENAI_API_KEY: '' })
+    );
+
+    const result = await keyless.transcribe(Buffer.from('fake-audio-data'));
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe(AIErrorCodes.PROVIDER_ERROR);
+    expect(mockTranscribe).not.toHaveBeenCalled();
+  });
+
+  it('should return ok with text and duration on success', async () => {
     const audioBuffer = Buffer.from('fake-audio-data');
     mockTranscribe.mockResolvedValue({
       text: 'Hello, world!',
@@ -41,10 +63,14 @@ describe('VoiceTranscriptionService', () => {
     const result = await service.transcribe(audioBuffer);
 
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBe('Hello, world!');
+    expect(result._unsafeUnwrap()).toEqual({
+      text: 'Hello, world!',
+      durationInSeconds: 1.5,
+    });
     expect(mockTranscribe).toHaveBeenCalledWith({
       model: 'mock-transcription:whisper-1',
       audio: audioBuffer,
+      abortSignal: expect.any(AbortSignal),
     });
   });
 
@@ -63,10 +89,11 @@ describe('VoiceTranscriptionService', () => {
     const result = await service.transcribe(audioBuffer, 'es');
 
     expect(result.isOk()).toBe(true);
-    expect(result._unsafeUnwrap()).toBe('Hola, mundo!');
+    expect(result._unsafeUnwrap().text).toBe('Hola, mundo!');
     expect(mockTranscribe).toHaveBeenCalledWith({
       model: 'mock-transcription:whisper-1',
       audio: audioBuffer,
+      abortSignal: expect.any(AbortSignal),
       providerOptions: { openai: { language: 'es' } },
     });
   });
