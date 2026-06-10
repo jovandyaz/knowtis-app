@@ -3,12 +3,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
-const { languageModel } = vi.hoisted(() => ({
-  languageModel: vi.fn().mockReturnValue('mock-model'),
-}));
+const { languageModel, gatewayLanguageModel, createGateway } = vi.hoisted(
+  () => {
+    const gatewayLanguageModel = vi.fn().mockReturnValue('mock-gateway-model');
+    return {
+      languageModel: vi.fn().mockReturnValue('mock-model'),
+      gatewayLanguageModel,
+      createGateway: vi.fn(() => ({ languageModel: gatewayLanguageModel })),
+    };
+  }
+);
 
 vi.mock('ai', () => ({
   createProviderRegistry: vi.fn(() => ({ languageModel })),
+  createGateway,
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -98,5 +106,56 @@ describe('ProviderRegistryFactory', () => {
       'google',
       'openai',
     ]);
+  });
+
+  describe('gateway mode', () => {
+    it('should create the gateway provider with the configured API key', () => {
+      createGateway.mockClear();
+
+      makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(createGateway).toHaveBeenCalledWith({ apiKey: 'gw-key' });
+    });
+
+    it('should resolve model ids through the gateway in slash format', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      const model = factory.languageModel('anthropic:claude-sonnet-4-20250514');
+
+      expect(model).toBe('mock-gateway-model');
+      expect(gatewayLanguageModel).toHaveBeenCalledWith(
+        'anthropic/claude-sonnet-4-20250514'
+      );
+    });
+
+    it('should not require direct provider API keys', () => {
+      const factory = makeFactory({
+        AI_GATEWAY_API_KEY: 'gw-key',
+        ANTHROPIC_API_KEY: '',
+        OPENAI_API_KEY: '',
+      });
+
+      expect(factory.languageModel('anthropic:claude-sonnet-4-20250514')).toBe(
+        'mock-gateway-model'
+      );
+      expect(factory.languageModel('openai:gpt-5')).toBe('mock-gateway-model');
+    });
+
+    it('should reject model ids without a provider prefix', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(() => factory.languageModel('claude-sonnet-4-20250514')).toThrow(
+        "must use the 'provider:model' format"
+      );
+    });
+
+    it('should not build the direct-SDK registry', async () => {
+      const { createProviderRegistry } = vi.mocked(await import('ai'));
+      createProviderRegistry.mockClear();
+
+      makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(createProviderRegistry).not.toHaveBeenCalled();
+    });
   });
 });

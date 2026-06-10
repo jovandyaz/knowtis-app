@@ -308,6 +308,21 @@ After updating a config value, the in-memory cache is invalidated and the new mo
 
 ---
 
+## Vercel AI Gateway
+
+`ProviderRegistryFactory` (`apps/api/src/modules/ai/infrastructure/providers/provider-registry.factory.ts`) is the single place that resolves model ids to language models. It runs in one of two modes, selected at startup:
+
+- **Gateway mode** — when `AI_GATEWAY_API_KEY` is set, all provider traffic routes through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway). Colon-format ids (`anthropic:claude-sonnet-4-20250514`) are translated internally to the gateway's slash format (`anthropic/claude-sonnet-4-20250514`). Direct provider keys (`ANTHROPIC_API_KEY`, etc.) are not required — the gateway holds provider credentials. Streaming, tool calling, and `providerOptions` pass through unchanged.
+- **Direct mode** — when `AI_GATEWAY_API_KEY` is absent, the factory builds the direct-SDK registry (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`) exactly as before. This is the default for local development and the rollback path in production.
+
+The rest of the system always uses colon-format model ids; the mode switch is invisible to callers. Malformed ids (missing the `provider:` prefix) throw `ProviderNotConfiguredError` in both modes.
+
+Create a gateway key in the Vercel dashboard: **AI Gateway → API Keys**.
+
+The app-side model fallback (`AI_FALLBACK_MODEL`, `model-fallback.ts`) stays active in both modes — it retries with a different _model_ on failure. The gateway adds _provider-level_ resilience (rerouting the same model across upstream providers) on top of it.
+
+---
+
 ## Anthropic Prompt Caching
 
 System prompts are automatically cached by Anthropic using `cacheControl: { type: 'ephemeral' }` via Vercel AI SDK `providerOptions`. This is applied only for Anthropic models (prefix `anthropic:`).
@@ -328,6 +343,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 | Variable                       | Required | Default                               | Description                                             |
 | ------------------------------ | -------- | ------------------------------------- | ------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`           | No       | —                                     | Vercel AI Gateway key; enables gateway mode when set    |
 | `ANTHROPIC_API_KEY`            | No       | —                                     | Anthropic API key (validated at runtime)                |
 | `OPENAI_API_KEY`               | No       | —                                     | OpenAI API key (Whisper transcription)                  |
 | `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`  | Model for most actions                                  |

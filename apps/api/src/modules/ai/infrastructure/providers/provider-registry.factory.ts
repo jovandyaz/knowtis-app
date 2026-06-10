@@ -3,7 +3,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { createProviderRegistry } from 'ai';
+import { createGateway, createProviderRegistry } from 'ai';
 import type { LanguageModel, ProviderRegistryProvider } from 'ai';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -21,13 +21,24 @@ function isQualifiedModelId(modelId: string): modelId is QualifiedModelId {
   return modelId.includes(':');
 }
 
+function toGatewayModelId(modelId: QualifiedModelId): string {
+  return modelId.replace(':', '/');
+}
+
 @Injectable()
 export class ProviderRegistryFactory implements OnModuleInit {
   private registry!: ProviderRegistryProvider;
+  private gateway?: ReturnType<typeof createGateway>;
 
   constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
 
   onModuleInit(): void {
+    const gatewayApiKey =
+      this.configService.get('AI_GATEWAY_API_KEY') || undefined;
+    if (gatewayApiKey) {
+      this.gateway = createGateway({ apiKey: gatewayApiKey });
+      return;
+    }
     const googleApiKey =
       this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined;
     const openaiApiKey = this.configService.get('OPENAI_API_KEY') || undefined;
@@ -42,13 +53,22 @@ export class ProviderRegistryFactory implements OnModuleInit {
     });
   }
 
+  /**
+   * Resolves a 'provider:model' id to a language model. Routes through the
+   * Vercel AI Gateway when AI_GATEWAY_API_KEY is set, otherwise through the
+   * direct-SDK registry; throws ProviderNotConfiguredError on malformed ids
+   * or (direct mode only) missing provider keys.
+   */
   languageModel(modelId: string): LanguageModel {
-    this.assertProviderKeyConfigured(modelId);
     if (!isQualifiedModelId(modelId)) {
       throw new ProviderNotConfiguredError(
         `Model id '${modelId}' must use the 'provider:model' format`
       );
     }
+    if (this.gateway) {
+      return this.gateway.languageModel(toGatewayModelId(modelId));
+    }
+    this.assertProviderKeyConfigured(modelId);
     return this.registry.languageModel(modelId);
   }
 
