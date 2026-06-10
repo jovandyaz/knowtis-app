@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import type { RateLimitProvider } from '../../domain/ports/rate-limit.port';
+import type { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AIRateLimitService } from './ai-rate-limit.service';
 
@@ -289,6 +290,94 @@ describe('AIRateLimitService', () => {
         tokenLimit: 100000,
         costLimit: 1.0,
       });
+    });
+  });
+
+  describe('budget warning', () => {
+    let alerts: { notify: ReturnType<typeof vi.fn> };
+    let warningService: AIRateLimitService;
+
+    beforeEach(() => {
+      alerts = { notify: vi.fn() };
+      warningService = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        undefined,
+        alerts as unknown as WebhookAlertService
+      );
+      vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    const usageRecord = {
+      userId: 'user-123',
+      action: 'summarize',
+      model: 'anthropic:claude-sonnet-4-20250514',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 0.01,
+      estimatedTokens: 150,
+    };
+
+    it('should emit a warning and webhook once when usage crosses 80% of the daily budget', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 60000,
+        totalOutputTokens: 25000,
+        totalCostUsd: 0.3,
+        requestCount: 10,
+      });
+
+      await warningService.recordUsage(usageRecord);
+      await warningService.recordUsage(usageRecord);
+
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+      expect(alerts.notify).toHaveBeenCalledWith(
+        'budget.warning',
+        expect.objectContaining({
+          userId: 'user-123',
+          totalTokens: 85000,
+          tokenLimit: 100000,
+        })
+      );
+    });
+
+    it('should warn when the cost budget crosses the threshold even if tokens are low', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 1000,
+        totalOutputTokens: 500,
+        totalCostUsd: 0.85,
+        requestCount: 10,
+      });
+
+      await warningService.recordUsage(usageRecord);
+
+      expect(alerts.notify).toHaveBeenCalledWith(
+        'budget.warning',
+        expect.objectContaining({ costUsd: 0.85, costLimit: 1.0 })
+      );
+    });
+
+    it('should stay silent below the threshold', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 10000,
+        totalOutputTokens: 5000,
+        totalCostUsd: 0.1,
+        requestCount: 3,
+      });
+
+      await warningService.recordUsage(usageRecord);
+
+      expect(alerts.notify).not.toHaveBeenCalled();
+    });
+
+    it('should never fail recordUsage when the budget check throws', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockRejectedValue(
+        new Error('db down')
+      );
+
+      await expect(
+        warningService.recordUsage(usageRecord)
+      ).resolves.toBeUndefined();
+      expect(alerts.notify).not.toHaveBeenCalled();
     });
   });
 });
