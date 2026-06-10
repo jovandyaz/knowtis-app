@@ -59,7 +59,7 @@ describe('AIModel', () => {
     }
   });
 
-  it('should reject transcription-only models for completions', () => {
+  it('should fail for unsupported model whisper-1', () => {
     const result = AIModel.create('openai:whisper-1', catalog);
     expect(result.isErr()).toBe(true);
   });

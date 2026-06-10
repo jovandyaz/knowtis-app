@@ -20,7 +20,11 @@ export class TokenUsage {
     return this.inputTokens + this.outputTokens;
   }
 
-  static create(input: TokenUsageInput, pricing?: ModelPricing): TokenUsage {
+  /** Pass the catalog's pricing lookup result; undefined (unknown model) records costUsd=0 — the catalog adapter logs the miss. */
+  static create(
+    input: TokenUsageInput,
+    pricing: ModelPricing | undefined
+  ): TokenUsage {
     const isAnthropic = input.model.startsWith('anthropic:');
     const costUsd = pricing
       ? computeTokenCostUsd(
