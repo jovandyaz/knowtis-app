@@ -23,6 +23,7 @@
     "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
+      "@knowtis/ai-gateway": ["packages/ai-gateway/src/index.ts"],
       "@knowtis/design-system": ["packages/design-system/src/index.ts"],
       "@knowtis/editor-schema": ["packages/editor-schema/src/index.ts"],
       "@knowtis/shared-hooks": ["packages/shared/hooks/src/index.ts"],
