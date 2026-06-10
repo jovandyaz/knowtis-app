@@ -30,6 +30,7 @@ import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
+import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
 import {
   AI_REDIS,
   AIRedisProvider,
@@ -50,6 +51,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
   ],
   controllers: [AIController],
   providers: [
+    ProviderRegistryFactory,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,
@@ -74,6 +76,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     AIGateway,
   ],
   exports: [
+    ProviderRegistryFactory,
     AIConfigService,
     AIMetricsService,
     AIOrchestrator,

@@ -1,11 +1,15 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { stepCountIs, streamText } from 'ai';
-import type { ProviderRegistryProvider } from 'ai';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
-import { buildProviderRegistry } from '../../../ai/infrastructure/providers/provider-registry';
+import {
+  hasModelFallback,
+  isAbortError,
+  streamWithModelFallback,
+} from '../../../ai/infrastructure/providers/model-fallback';
+import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type {
   AgentEvent,
   AgentSource,
@@ -40,24 +44,46 @@ function isSourceNote(value: unknown): value is { id: string; title: string } {
 }
 
 @Injectable()
-export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
+export class AiSdkAgentOrchestrator implements AgentOrchestrator {
   private readonly logger = new Logger(AiSdkAgentOrchestrator.name);
-  private registry!: ProviderRegistryProvider;
 
   constructor(
     private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly toolsFactory: AgentToolsFactory
+    private readonly toolsFactory: AgentToolsFactory,
+    private readonly providerRegistry: ProviderRegistryFactory
   ) {}
 
-  onModuleInit(): void {
-    this.registry = buildProviderRegistry({
-      googleApiKey:
-        this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined,
-      openaiApiKey: this.configService.get('OPENAI_API_KEY') || undefined,
+  async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
+    const timeoutSignal = AbortSignal.timeout(
+      this.configService.get('AI_AGENT_MAX_MS')
+    );
+    const abortSignal = input.signal
+      ? AbortSignal.any([input.signal, timeoutSignal])
+      : timeoutSignal;
+    const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
+
+    yield* streamWithModelFallback({
+      primaryModel: input.model,
+      fallbackModel,
+      logger: this.logger,
+      primary: this.runTurn(input, input.model, abortSignal, timeoutSignal, {
+        throwOnFreshFailure: hasModelFallback(input.model, fallbackModel),
+      }),
+      open: (model) =>
+        this.runTurn(input, model, abortSignal, timeoutSignal, {
+          throwOnFreshFailure: false,
+        }),
+      chunks: (turn) => turn,
     });
   }
 
-  async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
+  private async *runTurn(
+    input: AgentRunInput,
+    model: string,
+    abortSignal: AbortSignal,
+    timeoutSignal: AbortSignal,
+    options: { throwOnFreshFailure: boolean }
+  ): AsyncGenerator<AgentEvent> {
     const sources = new Map<string, AgentSource>();
     const knownNotes = new Map<string, AgentSource>();
     for (const note of input.knownNotes ?? []) {
@@ -65,18 +91,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     }
     const collector = new ProposalCollector();
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
-    const timeoutSignal = AbortSignal.timeout(
-      this.configService.get('AI_AGENT_MAX_MS')
-    );
-    const abortSignal = input.signal
-      ? AbortSignal.any([input.signal, timeoutSignal])
-      : timeoutSignal;
+    let progressed = false;
     let result;
     try {
       result = streamText({
-        model: this.registry.languageModel(
-          input.model as `${string}:${string}`
-        ),
+        model: this.providerRegistry.languageModel(model),
         system: this.buildSystemPrompt(input.noteId, input.knownNotes),
         messages: input.resume
           ? [
@@ -102,6 +121,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         temperature: AGENT_TEMPERATURE,
         abortSignal,
         onStepFinish: ({ toolResults, usage }) => {
+          progressed = true;
           this.collectSources(toolResults, sources);
           this.collectKnownNotes(toolResults, knownNotes);
           stepUsage.inputTokens += usage?.inputTokens ?? 0;
@@ -118,6 +138,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         },
       });
     } catch (error) {
+      if (options.throwOnFreshFailure && !isAbortError(error)) {
+        throw error;
+      }
       yield { type: 'error', error: this.toError(error) };
       return;
     }
@@ -125,11 +148,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     try {
       for await (const delta of result.textStream) {
         if (delta) {
+          progressed = true;
           yield { type: 'chunk', text: delta };
         }
       }
       const interrupted = this.interruptionEvent(
         input,
+        model,
         timeoutSignal,
         stepUsage
       );
@@ -141,7 +166,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
       const turnUsage = {
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,
-        model: input.model,
+        model,
       };
       const captured = collector.captured;
       if (captured) {
@@ -157,6 +182,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     } catch (error) {
       const interrupted = this.interruptionEvent(
         input,
+        model,
         timeoutSignal,
         stepUsage
       );
@@ -164,16 +190,19 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         yield interrupted;
         return;
       }
+      if (options.throwOnFreshFailure && !progressed && !isAbortError(error)) {
+        throw error;
+      }
       this.logger.error({
         event: 'agent.run.error',
         userId: input.userId,
-        model: input.model,
+        model,
         error: error instanceof Error ? error.message : 'unknown',
       });
       yield {
         type: 'error',
         error: this.toError(error),
-        usage: this.bestEffortUsage(input.model, stepUsage),
+        usage: this.bestEffortUsage(model, stepUsage),
       };
     }
   }
@@ -182,26 +211,27 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
   // abort/timeout must rely on the per-step accumulator instead of awaiting it.
   private interruptionEvent(
     input: AgentRunInput,
+    model: string,
     timeoutSignal: AbortSignal,
     stepUsage: StepUsageAccumulator
   ): AgentEvent | undefined {
     if (input.signal?.aborted) {
       return {
         type: 'aborted',
-        usage: this.bestEffortUsage(input.model, stepUsage),
+        usage: this.bestEffortUsage(model, stepUsage),
       };
     }
     if (timeoutSignal.aborted) {
       this.logger.warn({
         event: 'agent.turn.timeout',
         userId: input.userId,
-        model: input.model,
+        model,
         maxMs: this.configService.get('AI_AGENT_MAX_MS'),
       });
       return {
         type: 'error',
         error: AIErrors.providerError('Agent turn timed out'),
-        usage: this.bestEffortUsage(input.model, stepUsage),
+        usage: this.bestEffortUsage(model, stepUsage),
       };
     }
     return undefined;

@@ -3,6 +3,7 @@ import { streamText } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AgentToolsFactory } from './agent-tools.factory';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
@@ -51,6 +52,7 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
+const FALLBACK = 'anthropic:claude-haiku-4-5-20251001';
 
 const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
 
@@ -59,6 +61,7 @@ function makeConfig(
 ): ConfigService<EnvConfig, true> {
   const values: Record<string, unknown> = {
     NODE_ENV: '',
+    ANTHROPIC_API_KEY: 'test-anthropic-key',
     GOOGLE_GENERATIVE_AI_API_KEY: '',
     OPENAI_API_KEY: '',
     AI_AGENT_MAX_MS: 120000,
@@ -83,9 +86,9 @@ function makeOrchestrator(
   config = makeConfig(),
   tools = makeTools()
 ): AiSdkAgentOrchestrator {
-  const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-  orchestrator.onModuleInit();
-  return orchestrator;
+  const registry = new ProviderRegistryFactory(config);
+  registry.onModuleInit();
+  return new AiSdkAgentOrchestrator(config, tools, registry);
 }
 
 function collect(iter: AsyncIterable<unknown>) {
@@ -248,16 +251,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('injects incoming knownNotes into the system prompt and returns the merged set on done', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(
       orchestrator.run({
@@ -464,5 +458,137 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(last.error.code).toBe('AI_PROVIDER_ERROR');
     expect(last.error.message).toContain('timed out');
     expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
+  });
+
+  it('retries the whole turn on AI_FALLBACK_MODEL when the primary stream fails before any progress', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new Error('primary down')),
+        }),
+      },
+      totalUsage: new Promise(() => {}),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    const retryModel = streamTextMock.mock.calls.at(-1)?.[0].model as {
+      modelId: string;
+    };
+    expect(retryModel.modelId).toBe('claude-haiku-4-5-20251001');
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { model: FALLBACK },
+    });
+  });
+
+  it('retries the turn on AI_FALLBACK_MODEL when streamText throws synchronously', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => {
+      throw new Error('sync boom');
+    });
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('does not retry on AI_FALLBACK_MODEL once a tool step has finished', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        textStream: {
+          [Symbol.asyncIterator]: () => ({
+            next: () => {
+              opts.onStepFinish?.({
+                toolResults: [],
+                usage: { inputTokens: 2, outputTokens: 0 },
+              });
+              return Promise.reject(new Error('mid-turn failure'));
+            },
+          }),
+        },
+        totalUsage: new Promise(() => {}),
+      })
+    );
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+      usage: { inputTokens: 2, outputTokens: 0, model: MODEL },
+    });
+  });
+
+  it('does not fall back when the caller aborts before the first chunk', async () => {
+    streamTextMock.mockClear();
+    const controller = new AbortController();
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: {
+        [Symbol.asyncIterator]: () => ({
+          next: () => {
+            controller.abort();
+            return Promise.reject(new DOMException('aborted', 'AbortError'));
+          },
+        }),
+      },
+      totalUsage: new Promise(() => {}),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toEqual({
+      type: 'aborted',
+      usage: { inputTokens: 0, outputTokens: 0, model: MODEL },
+    });
+  });
+
+  it('does not fall back when AI_FALLBACK_MODEL equals the requested model', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      textStream: {
+        [Symbol.asyncIterator]: () => ({
+          next: () => Promise.reject(new Error('primary down')),
+        }),
+      },
+      totalUsage: new Promise(() => {}),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_MODEL: MODEL })
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+    });
   });
 });

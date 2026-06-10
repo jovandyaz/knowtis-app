@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AISDKProvider } from './ai-sdk.provider';
+import { ProviderRegistryFactory } from './provider-registry.factory';
 
 vi.mock('ai', () => ({
   generateText: vi.fn().mockResolvedValue({
@@ -32,14 +33,19 @@ vi.mock('@ai-sdk/openai', () => ({
   createOpenAI: vi.fn().mockReturnValue('mock-openai'),
 }));
 
+function createProvider(
+  config = createMockConfig({ OPENAI_API_KEY: 'test-openai-key' })
+) {
+  const registry = new ProviderRegistryFactory(config);
+  registry.onModuleInit();
+  return new AISDKProvider(config, registry);
+}
+
 describe('AISDKProvider', () => {
   let provider: AISDKProvider;
 
   beforeEach(() => {
-    const mockConfig = createMockConfig();
-
-    provider = new AISDKProvider(mockConfig);
-    provider.onModuleInit();
+    provider = createProvider();
   });
 
   it('should generate a completion via registry', async () => {
@@ -65,8 +71,7 @@ describe('AISDKProvider', () => {
       AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
     });
 
-    const fallbackProvider = new AISDKProvider(fallbackConfig);
-    fallbackProvider.onModuleInit();
+    const fallbackProvider = createProvider(fallbackConfig);
 
     const result = await fallbackProvider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -84,8 +89,7 @@ describe('AISDKProvider', () => {
       AI_FALLBACK_MODEL: 'anthropic:claude-sonnet-4-20250514',
     });
 
-    const sameModelProvider = new AISDKProvider(sameModelConfig);
-    sameModelProvider.onModuleInit();
+    const sameModelProvider = createProvider(sameModelConfig);
 
     await expect(
       sameModelProvider.generateCompletion('test prompt', {
@@ -230,12 +234,11 @@ describe('AISDKProvider', () => {
         usage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
       } as unknown as ReturnType<typeof streamText>);
 
-    const fallbackProvider = new AISDKProvider(
+    const fallbackProvider = createProvider(
       createMockConfig({
         AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
       })
     );
-    fallbackProvider.onModuleInit();
 
     const stream = fallbackProvider.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -262,12 +265,11 @@ describe('AISDKProvider', () => {
       usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
     } as unknown as ReturnType<typeof streamText>);
 
-    const provider2 = new AISDKProvider(
+    const provider2 = createProvider(
       createMockConfig({
         AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
       })
     );
-    provider2.onModuleInit();
 
     const stream = provider2.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -372,12 +374,11 @@ describe('AISDKProvider', () => {
       usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
     } as unknown as ReturnType<typeof streamText>);
 
-    const fallbackProvider = new AISDKProvider(
+    const fallbackProvider = createProvider(
       createMockConfig({
         AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
       })
     );
-    fallbackProvider.onModuleInit();
 
     const stream = fallbackProvider.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',

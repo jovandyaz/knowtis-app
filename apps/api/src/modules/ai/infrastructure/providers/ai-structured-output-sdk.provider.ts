@@ -1,7 +1,6 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
-import type { ProviderRegistryProvider } from 'ai';
 import type { ZodType } from 'zod';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -10,40 +9,45 @@ import type {
   StructuredOutputOptions,
   StructuredOutputResult,
 } from '../../domain/ports/ai-structured-output.port';
-import { buildProviderRegistry } from './provider-registry';
+import { withModelFallback } from './model-fallback';
+import { ProviderRegistryFactory } from './provider-registry.factory';
 
 @Injectable()
-export class AIStructuredOutputSDKProvider
-  implements AIStructuredOutputProvider, OnModuleInit
-{
-  private registry!: ProviderRegistryProvider;
+export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider {
+  private readonly logger = new Logger(AIStructuredOutputSDKProvider.name);
 
-  constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
-
-  onModuleInit() {
-    this.registry = buildProviderRegistry({
-      googleApiKey:
-        this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined,
-      openaiApiKey: this.configService.get('OPENAI_API_KEY') || undefined,
-    });
-  }
+  constructor(
+    private readonly configService: ConfigService<EnvConfig, true>,
+    private readonly providerRegistry: ProviderRegistryFactory
+  ) {}
 
   async generateStructuredOutput<T>(
     prompt: string,
     schema: ZodType<T>,
     options: StructuredOutputOptions
   ): Promise<StructuredOutputResult<T>> {
-    if (
-      options.model.startsWith('anthropic:') &&
-      !this.configService.get('ANTHROPIC_API_KEY')
-    ) {
-      throw new Error('ANTHROPIC_API_KEY is not configured');
-    }
+    const timeoutSignal = options.timeoutMs
+      ? AbortSignal.timeout(options.timeoutMs)
+      : undefined;
+    return withModelFallback(
+      (model) =>
+        this.callGenerate(prompt, schema, { ...options, model }, timeoutSignal),
+      {
+        primaryModel: options.model,
+        fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+        logger: this.logger,
+      }
+    );
+  }
 
+  private async callGenerate<T>(
+    prompt: string,
+    schema: ZodType<T>,
+    options: StructuredOutputOptions,
+    timeoutSignal: AbortSignal | undefined
+  ): Promise<StructuredOutputResult<T>> {
     const result = await generateText({
-      model: this.registry.languageModel(
-        options.model as `${string}:${string}`
-      ),
+      model: this.providerRegistry.languageModel(options.model),
       ...(options.system ? { system: options.system } : {}),
       prompt,
       output: Output.object({ schema }),
@@ -51,9 +55,7 @@ export class AIStructuredOutputSDKProvider
       ...(options.maxOutputTokens
         ? { maxOutputTokens: options.maxOutputTokens }
         : {}),
-      ...(options.timeoutMs
-        ? { abortSignal: AbortSignal.timeout(options.timeoutMs) }
-        : {}),
+      ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
     });
 
     return {

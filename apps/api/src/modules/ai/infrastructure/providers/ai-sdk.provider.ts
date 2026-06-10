@@ -1,7 +1,6 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { generateText, streamText } from 'ai';
-import type { ProviderRegistryProvider } from 'ai';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import type {
@@ -10,48 +9,30 @@ import type {
   CompletionResult,
   StreamCompletionResult,
 } from '../../domain/ports/ai-provider.port';
-import { buildProviderRegistry } from './provider-registry';
+import { streamWithModelFallback, withModelFallback } from './model-fallback';
+import { ProviderRegistryFactory } from './provider-registry.factory';
 
 @Injectable()
-export class AISDKProvider implements AICompletionProvider, OnModuleInit {
+export class AISDKProvider implements AICompletionProvider {
   private readonly logger = new Logger(AISDKProvider.name);
-  private registry!: ProviderRegistryProvider;
 
-  constructor(private readonly configService: ConfigService<EnvConfig, true>) {}
-
-  onModuleInit() {
-    this.registry = buildProviderRegistry({
-      googleApiKey:
-        this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined,
-      openaiApiKey: this.configService.get('OPENAI_API_KEY') || undefined,
-    });
-  }
+  constructor(
+    private readonly configService: ConfigService<EnvConfig, true>,
+    private readonly providerRegistry: ProviderRegistryFactory
+  ) {}
 
   async generateCompletion(
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
-    this.assertProviderKeyConfigured(options.model);
-
-    try {
-      return await this.callGenerateText(prompt, options);
-    } catch (error) {
-      const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
-      if (fallbackModel && fallbackModel !== options.model) {
-        this.logger.warn({
-          event: 'ai.provider.fallback',
-          primaryModel: options.model,
-          fallbackModel,
-          provider: options.model.split(':')[0],
-          reason: error instanceof Error ? error.message : 'unknown error',
-        });
-        return await this.callGenerateText(prompt, {
-          ...options,
-          model: fallbackModel,
-        });
+    return withModelFallback(
+      (model) => this.callGenerateText(prompt, { ...options, model }),
+      {
+        primaryModel: options.model,
+        fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+        logger: this.logger,
       }
-      throw error;
-    }
+    );
   }
 
   private buildSystemParam(model: string, system: string | undefined) {
@@ -86,29 +67,12 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     return Object.keys(config).length > 0 ? { timeout: config } : {};
   }
 
-  private assertProviderKeyConfigured(model: string): void {
-    if (
-      model.startsWith('anthropic:') &&
-      !this.configService.get('ANTHROPIC_API_KEY')
-    ) {
-      throw new Error('ANTHROPIC_API_KEY is not configured');
-    }
-    if (
-      model.startsWith('google:') &&
-      !this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY')
-    ) {
-      throw new Error('GOOGLE_GENERATIVE_AI_API_KEY is not configured');
-    }
-  }
-
   private async callGenerateText(
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
     const result = await generateText({
-      model: this.registry.languageModel(
-        options.model as `${string}:${string}`
-      ),
+      model: this.providerRegistry.languageModel(options.model),
       ...this.buildSystemParam(options.model, options.system),
       messages: [{ role: 'user', content: prompt }],
       maxOutputTokens: options.maxTokens ?? 2048,
@@ -131,8 +95,6 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     prompt: string,
     options: CompletionOptions
   ): StreamCompletionResult {
-    this.assertProviderKeyConfigured(options.model);
-
     const usageDeferred = createDeferred<{
       promptTokens: number;
       completionTokens: number;
@@ -142,7 +104,7 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
 
     const openStream = (model: string) =>
       streamText({
-        model: this.registry.languageModel(model as `${string}:${string}`),
+        model: this.providerRegistry.languageModel(model),
         ...this.buildSystemParam(model, options.system),
         messages: [{ role: 'user', content: prompt }],
         maxOutputTokens: options.maxTokens ?? 2048,
@@ -151,10 +113,6 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
         ...(options.signal ? { abortSignal: options.signal } : {}),
         ...this.buildTimeoutParam(options.timeout),
       });
-
-    const logger = this.logger;
-    const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
-    const primary = openStream(options.model);
 
     // Consumer breaks trigger generator.return(), skipping post-loop code, so
     // usage settles in finally; the timer covers an SDK that never settles it.
@@ -178,42 +136,18 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
         .finally(() => clearTimeout(fallbackTimer));
     };
 
-    async function* generate(): AsyncGenerator<string> {
-      let result = primary;
-      let emitted = false;
-      try {
-        try {
-          for await (const chunk of result.textStream) {
-            emitted = true;
-            yield chunk;
-          }
-        } catch (error) {
-          if (
-            emitted ||
-            !fallbackModel ||
-            fallbackModel === options.model ||
-            options.signal?.aborted
-          ) {
-            throw error;
-          }
-          logger.warn({
-            event: 'ai.provider.stream_fallback',
-            primaryModel: options.model,
-            fallbackModel,
-            provider: options.model.split(':')[0],
-            reason: error instanceof Error ? error.message : 'unknown error',
-          });
-          result = openStream(fallbackModel);
-          for await (const chunk of result.textStream) {
-            yield chunk;
-          }
-        }
-      } finally {
-        settleUsage(result);
-      }
-    }
+    const textStream = streamWithModelFallback({
+      primaryModel: options.model,
+      fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+      logger: this.logger,
+      primary: openStream(options.model),
+      open: openStream,
+      chunks: (result) => result.textStream,
+      isAborted: () => options.signal?.aborted ?? false,
+      onSettle: settleUsage,
+    });
 
-    return { textStream: generate(), usage: usageDeferred.promise };
+    return { textStream, usage: usageDeferred.promise };
   }
 }
 

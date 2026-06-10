@@ -12,11 +12,7 @@ import {
 const CACHE_PREFIX = 'ai:config:';
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
-const ALLOWED_KEYS = new Set([
-  'ai_default_model',
-  'ai_fast_model',
-  'ai_fallback_model',
-]);
+const ALLOWED_KEYS = new Set(['ai_default_model', 'ai_fast_model']);
 
 @Injectable()
 export class AIConfigService {
@@ -36,10 +32,6 @@ export class AIConfigService {
 
   async getFastModel(): Promise<string> {
     return this.getConfigValue('ai_fast_model', 'AI_FAST_MODEL');
-  }
-
-  async getFallbackModel(): Promise<string> {
-    return this.getConfigValue('ai_fallback_model', 'AI_FALLBACK_MODEL');
   }
 
   async setConfig(
