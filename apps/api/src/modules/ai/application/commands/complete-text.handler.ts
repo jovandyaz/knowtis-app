@@ -78,6 +78,13 @@ export class CompleteTextHandler {
           system: context.systemPrompt,
           maxRetries: this.configService.get('AI_MAX_RETRIES'),
           timeout: { totalMs: this.configService.get('AI_TIMEOUT_MS') },
+          telemetry: {
+            functionId: `completion:${context.action}`,
+            metadata: {
+              userId: input.userId,
+              environment: this.configService.get('NODE_ENV'),
+            },
+          },
         }
       );
 

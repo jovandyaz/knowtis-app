@@ -53,6 +53,19 @@ export class AISDKProvider implements AICompletionProvider {
     return { system };
   }
 
+  private buildTelemetryParam(telemetry: CompletionOptions['telemetry']) {
+    if (!telemetry) {
+      return {};
+    }
+    return {
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: telemetry.functionId,
+        metadata: telemetry.metadata,
+      },
+    };
+  }
+
   private buildTimeoutParam(timeout: CompletionOptions['timeout']) {
     if (!timeout) {
       return {};
@@ -79,6 +92,7 @@ export class AISDKProvider implements AICompletionProvider {
       temperature: options.temperature ?? 0.7,
       maxRetries: options.maxRetries ?? 3,
       ...this.buildTimeoutParam(options.timeout),
+      ...this.buildTelemetryParam(options.telemetry),
     });
 
     return {
@@ -114,6 +128,7 @@ export class AISDKProvider implements AICompletionProvider {
         maxRetries: options.maxRetries ?? 3,
         ...(options.signal ? { abortSignal: options.signal } : {}),
         ...this.buildTimeoutParam(options.timeout),
+        ...this.buildTelemetryParam(options.telemetry),
       });
       activeModel = model;
       return result;

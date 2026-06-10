@@ -1,11 +1,14 @@
 import type { ZodType } from 'zod';
 
+import type { AITelemetryContext } from './ai-provider.port';
+
 export interface StructuredOutputOptions {
   readonly model: string;
   readonly system?: string;
   readonly maxRetries?: number;
   readonly maxOutputTokens?: number;
   readonly timeoutMs?: number;
+  readonly telemetry?: AITelemetryContext;
 }
 
 export interface StructuredOutputResult<T> {

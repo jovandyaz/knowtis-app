@@ -6,6 +6,7 @@ import type { EnvConfig } from '../../../config/env.config';
 type TypedConfigService = ConfigService<EnvConfig, true>;
 
 const DEFAULT_AI_CONFIG: Record<string, unknown> = {
+  NODE_ENV: 'test',
   AI_DEFAULT_MODEL: 'anthropic:claude-sonnet-4-20250514',
   AI_FAST_MODEL: 'anthropic:claude-haiku-4-5-20251001',
   AI_FALLBACK_CHAIN:

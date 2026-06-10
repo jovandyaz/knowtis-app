@@ -185,6 +185,27 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('should pass telemetry context with the action and user', async () => {
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    expect(mockProvider.streamCompletion).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        telemetry: {
+          functionId: 'completion:summarize',
+          metadata: { userId: 'user-123', environment: 'test' },
+        },
+      })
+    );
+  });
+
   it('should call onError for invalid action', async () => {
     await handler.execute(
       { userId: 'user-123', action: 'invalid', content: 'Some content' },

@@ -125,6 +125,46 @@ describe('AISDKProvider', () => {
     );
   });
 
+  it('should forward telemetry context to streamText and generateText', async () => {
+    const { streamText, generateText } = vi.mocked(await import('ai'));
+    const telemetry = {
+      functionId: 'completion:summarize',
+      metadata: { userId: 'user-1', environment: 'test' },
+    };
+
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        telemetry,
+      })
+    );
+    await provider.generateCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      telemetry,
+    });
+
+    const expected = expect.objectContaining({
+      experimental_telemetry: {
+        isEnabled: true,
+        functionId: 'completion:summarize',
+        metadata: { userId: 'user-1', environment: 'test' },
+      },
+    });
+    expect(streamText).toHaveBeenCalledWith(expected);
+    expect(generateText).toHaveBeenCalledWith(expected);
+  });
+
+  it('should omit telemetry from the SDK call when not provided', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+
+    await provider.generateCompletion('test prompt', {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    const lastCall = vi.mocked(generateText).mock.calls.at(-1)?.[0];
+    expect(lastCall).not.toHaveProperty('experimental_telemetry');
+  });
+
   it('should pass plain system string for non-Anthropic models', async () => {
     const { streamText } = vi.mocked(await import('ai'));
 

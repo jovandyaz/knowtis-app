@@ -7,6 +7,7 @@ import type { AIOrchestrator } from '../../../ai/application/services/ai-orchest
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
+import { createMockConfig } from '../../../ai/testing/create-mock-config';
 import { createTestCatalog } from '../../../ai/testing/create-test-catalog';
 import { ArtifactErrorCodes } from '../../domain/errors';
 import type {
@@ -81,7 +82,8 @@ describe('GenerateArtifactHandler', () => {
       structuredOutput as unknown as AIStructuredOutputProvider,
       orchestrator as unknown as AIOrchestrator,
       rateLimitService as unknown as AIRateLimitService,
-      createTestCatalog()
+      createTestCatalog(),
+      createMockConfig()
     );
 
     handler = new GenerateArtifactHandler(
@@ -166,6 +168,60 @@ describe('GenerateArtifactHandler', () => {
         title: 'Flashcards: Test Note',
         content: flashcardContent,
       });
+    });
+
+    it('should pass telemetry context with the artifact action and user', async () => {
+      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
+      orchestrator.getSystemPrompt.mockReturnValue('system');
+      structuredOutput.generateStructuredOutput.mockResolvedValue({
+        object: { cards: [] },
+        inputTokens: 10,
+        outputTokens: 5,
+        model: MOCK_MODEL,
+      });
+      rateLimitService.recordUsage.mockResolvedValue(undefined);
+      repository.create.mockResolvedValue(ok(createMockArtifactEntity()));
+
+      await handler.execute(baseInput);
+
+      expect(structuredOutput.generateStructuredOutput).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Object),
+        expect.objectContaining({
+          telemetry: {
+            functionId: `artifact:${AI_ACTION.GENERATE_FLASHCARDS}`,
+            metadata: { userId: MOCK_USER_ID, environment: 'test' },
+          },
+        })
+      );
+    });
+
+    it('should not block note content that contains injection-like phrasing', async () => {
+      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
+      orchestrator.getSystemPrompt.mockReturnValue('system');
+      structuredOutput.generateStructuredOutput.mockResolvedValue({
+        object: { cards: [] },
+        inputTokens: 10,
+        outputTokens: 5,
+        model: MOCK_MODEL,
+      });
+      rateLimitService.recordUsage.mockResolvedValue(undefined);
+      repository.create.mockResolvedValue(ok(createMockArtifactEntity()));
+
+      const result = await handler.execute({
+        ...baseInput,
+        noteContent:
+          '<p>My security notes: attackers write "ignore all previous instructions" to attempt prompt injection.</p>',
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(structuredOutput.generateStructuredOutput).toHaveBeenCalledOnce();
     });
 
     it('should record usage as fire-and-forget', async () => {

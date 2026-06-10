@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
+import type { EnvConfig } from '../../../../config/env.config';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
@@ -47,7 +49,8 @@ export class AIGenerationPipeline {
     private readonly orchestrator: AIOrchestrator,
     private readonly rateLimitService: AIRateLimitService,
     @Inject(MODEL_CATALOG)
-    private readonly modelCatalog: ModelCatalog
+    private readonly modelCatalog: ModelCatalog,
+    private readonly configService: ConfigService<EnvConfig, true>
   ) {}
 
   async execute<T>(
@@ -102,6 +105,13 @@ export class AIGenerationPipeline {
           system: systemPrompt,
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           timeoutMs: GENERATION_TIMEOUT_MS,
+          telemetry: {
+            functionId: `artifact:${request.action}`,
+            metadata: {
+              userId: request.userId,
+              environment: this.configService.get('NODE_ENV'),
+            },
+          },
         }
       );
 
