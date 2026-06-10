@@ -7,11 +7,11 @@ import {
   NOTE_READ_REPOSITORY,
   NoteErrors,
   type NoteDomainError,
-  type NoteEntityWithOwner,
   type NoteReadRepository,
+  type NoteViewWithOwner,
 } from '../../domain';
 
-export type NoteByTokenResult = NoteEntityWithOwner & {
+export type NoteByTokenResult = NoteViewWithOwner & {
   readonly accessLevel: NoteAccessLevel;
 };
 

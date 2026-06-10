@@ -6,6 +6,7 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import { detectPromptInjection } from '../../ai/domain/services/prompt-guard';
 import { estimateTokenCount } from '../../ai/domain/services/token-estimator';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
@@ -62,6 +63,7 @@ interface TurnLoopPolicy {
 }
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
+const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 
 @Injectable()
 export class RunAgentTurnHandler {
@@ -152,7 +154,16 @@ export class RunAgentTurnHandler {
     if (signal?.aborted) {
       return;
     }
-    const estimatedTokens = this.estimateTokens(input.messages);
+    const messages = this.trimHistory(input.messages);
+    const lastUserMessage = messages.findLast((m) => m.role === 'user');
+    if (
+      lastUserMessage &&
+      !detectPromptInjection(lastUserMessage.content).safe
+    ) {
+      callbacks.onError(AIErrors.promptInjectionDetected());
+      return;
+    }
+    const estimatedTokens = this.estimateTokens(messages);
     const limit = await this.rateLimit.checkLimit(
       input.userId,
       estimatedTokens,
@@ -176,7 +187,7 @@ export class RunAgentTurnHandler {
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
-        messages: input.messages,
+        messages,
         model,
         maxSteps,
         ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -328,6 +339,25 @@ export class RunAgentTurnHandler {
       : kind === 'update'
         ? 'proposeUpdateNote'
         : 'proposeShareNote';
+  }
+
+  private trimHistory(
+    messages: readonly AgentMessage[]
+  ): readonly AgentMessage[] {
+    const kept: AgentMessage[] = [];
+    let usedTokens = 0;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const tokens = estimateTokenCount(messages[i].content);
+      if (kept.length > 0 && usedTokens + tokens > AGENT_HISTORY_TOKEN_BUDGET) {
+        break;
+      }
+      kept.unshift(messages[i]);
+      usedTokens += tokens;
+    }
+    while (kept.length > 1 && kept[0].role !== 'user') {
+      kept.shift();
+    }
+    return kept;
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {

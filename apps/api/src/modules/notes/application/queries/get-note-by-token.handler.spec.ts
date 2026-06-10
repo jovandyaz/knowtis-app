@@ -4,12 +4,12 @@ import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
 import {
   NoteErrorCodes,
-  type NoteEntityWithOwner,
   type NoteReadRepository,
+  type NoteViewWithOwner,
 } from '../../domain';
 import { GetNoteByTokenHandler } from './get-note-by-token.handler';
 
-const mockNote: NoteEntityWithOwner = {
+const mockNote: NoteViewWithOwner = {
   id: 'note-1',
   title: 'Test Note',
   content: 'content',
@@ -18,7 +18,6 @@ const mockNote: NoteEntityWithOwner = {
   generalAccessPermission: PERMISSION.VIEWER,
   shareToken: 'valid-token-abc123',
   editorsCanShare: false,
-  yjsState: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   owner: { id: 'user-1', name: 'Test Owner', avatarUrl: null },
@@ -35,6 +34,9 @@ describe('GetNoteByTokenHandler', () => {
       findByOwner: vi.fn(),
       findAccessibleByUser: vi.fn(),
       findByShareToken: vi.fn(),
+      findByIdForUser: vi.fn(),
+      findAccessibleSummariesByUser: vi.fn(),
+      countAccessibleByUser: vi.fn(),
     };
     handler = new GetNoteByTokenHandler(noteReadRepo);
   });
@@ -53,7 +55,7 @@ describe('GetNoteByTokenHandler', () => {
   });
 
   it('should return editor access level when generalAccessPermission is editor', async () => {
-    const editorNote: NoteEntityWithOwner = {
+    const editorNote: NoteViewWithOwner = {
       ...mockNote,
       generalAccessPermission: PERMISSION.EDITOR,
     };

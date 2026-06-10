@@ -1,7 +1,16 @@
 import type { notes } from '../../../../database';
-import type { NoteEntity } from '../../domain';
+import type { NoteEntity, NoteView } from '../../domain';
+
+type NoteViewRecord = Omit<typeof notes.$inferSelect, 'yjsState'>;
 
 export function mapToNoteEntity(record: typeof notes.$inferSelect): NoteEntity {
+  return {
+    ...mapToNoteView(record),
+    yjsState: record.yjsState as Buffer | null,
+  };
+}
+
+export function mapToNoteView(record: NoteViewRecord): NoteView {
   return {
     id: record.id,
     title: record.title,
@@ -11,7 +20,6 @@ export function mapToNoteEntity(record: typeof notes.$inferSelect): NoteEntity {
     generalAccessPermission: record.generalAccessPermission,
     shareToken: record.shareToken,
     editorsCanShare: record.editorsCanShare,
-    yjsState: record.yjsState as Buffer | null,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

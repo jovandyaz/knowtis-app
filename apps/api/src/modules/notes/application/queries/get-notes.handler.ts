@@ -7,8 +7,8 @@ import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
 import {
   NOTE_REPOSITORY,
   type NoteDomainError,
-  type NoteEntity,
   type NoteRepository,
+  type NoteView,
 } from '../../domain';
 
 export interface GetNotesInput {
@@ -16,7 +16,7 @@ export interface GetNotesInput {
   readonly search?: string;
 }
 
-export type AccessibleNote = NoteEntity & {
+export type AccessibleNote = NoteView & {
   accessLevel: NoteAccessLevel;
 };
 

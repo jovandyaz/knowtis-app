@@ -12,8 +12,8 @@ import {
   NOTE_REPOSITORY,
   NoteErrors,
   type NoteDomainError,
-  type NoteEntity,
   type NoteRepository,
+  type NoteViewWithOwner,
 } from '../../domain';
 
 export interface GetNoteInput {
@@ -21,7 +21,7 @@ export interface GetNoteInput {
   readonly userId: string;
 }
 
-export type NoteWithAccess = NoteEntity & {
+export type NoteWithAccess = NoteViewWithOwner & {
   accessLevel: NoteAccessLevel;
 };
 

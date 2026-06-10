@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ACCESS } from '@knowtis/shared-types';
 
-import type { NoteEntity, NoteRepository } from '../../domain';
+import type { NoteRepository, NoteView } from '../../domain';
 import { GetNotesHandler } from './get-notes.handler';
 
-function createMockNote(overrides: Partial<NoteEntity> = {}): NoteEntity {
+function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
   return {
     id: 'note-1',
     title: 'Test Note',
@@ -15,7 +15,6 @@ function createMockNote(overrides: Partial<NoteEntity> = {}): NoteEntity {
     generalAccessPermission: 'viewer',
     shareToken: null,
     editorsCanShare: false,
-    yjsState: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -35,6 +34,9 @@ describe('GetNotesHandler', () => {
       findByOwner: vi.fn(),
       findAccessibleByUser: vi.fn(),
       findByShareToken: vi.fn(),
+      findByIdForUser: vi.fn(),
+      findAccessibleSummariesByUser: vi.fn(),
+      countAccessibleByUser: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),
@@ -118,6 +120,20 @@ describe('GetNotesHandler', () => {
       expect(result.value).toHaveLength(2);
       expect(result.value[0].accessLevel).toBe(ACCESS.OWNER);
       expect(result.value[1].accessLevel).toBe(ACCESS.EDITOR);
+    }
+  });
+
+  it('should not expose yjsState on list items', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
+      { note: createMockNote({ ownerId: VALID_UUID }) },
+    ]);
+
+    const result = await handler.execute({ userId: VALID_UUID });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value[0]).not.toHaveProperty('yjsState');
+      expect(result.value[0]).toHaveProperty('content');
     }
   });
 

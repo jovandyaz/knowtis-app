@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { markdownToSafeHtml } from './html-sanitizer';
+import { htmlToPlainText, markdownToSafeHtml } from './html-sanitizer';
 
 describe('markdownToSafeHtml', () => {
   it('renders basic markdown to html', () => {
@@ -29,5 +29,43 @@ describe('markdownToSafeHtml', () => {
 
   it('returns empty string for empty/whitespace input', () => {
     expect(markdownToSafeHtml('   ')).toBe('');
+  });
+});
+
+describe('htmlToPlainText', () => {
+  it('strips tags keeping the text content', () => {
+    expect(htmlToPlainText('<p>do <strong>it</strong> now</p>')).toBe(
+      'do it now'
+    );
+  });
+
+  it('separates block elements with line breaks', () => {
+    expect(htmlToPlainText('<p>first</p><p>second</p>')).toBe('first\nsecond');
+    expect(htmlToPlainText('<ul><li>one</li><li>two</li></ul>')).toBe(
+      'one\ntwo'
+    );
+  });
+
+  it('treats <br> as a line break', () => {
+    expect(htmlToPlainText('<p>line one<br>line two</p>')).toBe(
+      'line one\nline two'
+    );
+  });
+
+  it('decodes common html entities', () => {
+    expect(
+      htmlToPlainText('<p>Tom &amp; Jerry &lt;3 &quot;cats&quot;</p>')
+    ).toBe('Tom & Jerry <3 "cats"');
+  });
+
+  it('drops script content entirely', () => {
+    expect(htmlToPlainText('<p>safe</p><script>alert(1)</script>')).toBe(
+      'safe'
+    );
+  });
+
+  it('returns empty string for empty or whitespace input', () => {
+    expect(htmlToPlainText('')).toBe('');
+    expect(htmlToPlainText('  \n ')).toBe('');
   });
 });

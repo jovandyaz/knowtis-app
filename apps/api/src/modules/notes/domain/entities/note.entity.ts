@@ -20,12 +20,24 @@ export interface NoteEntity {
   readonly updatedAt: Date;
 }
 
+export type NoteView = Omit<NoteEntity, 'yjsState'>;
+
+export interface NoteSummary {
+  readonly id: string;
+  readonly title: string;
+  readonly ownerId: string;
+  readonly generalAccess: string;
+  readonly shareToken: string | null;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
 export interface NoteOwner {
   readonly id: string;
   readonly name: string;
   readonly avatarUrl: string | null;
 }
 
-export interface NoteEntityWithOwner extends NoteEntity {
+export interface NoteViewWithOwner extends NoteView {
   readonly owner: NoteOwner;
 }

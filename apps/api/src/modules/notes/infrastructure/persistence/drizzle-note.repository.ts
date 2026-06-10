@@ -6,13 +6,16 @@ import type { PermissionLevel as PermissionLevelType } from '@knowtis/shared-typ
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import type {
+  AccessibleNotesCount,
   CreateNoteData,
   CreatePermissionData,
   NoteDomainError,
   NoteEntity,
-  NoteEntityWithOwner,
   NotePermissionEntity,
   NoteRepository,
+  NoteSummary,
+  NoteView,
+  NoteViewWithOwner,
   UpdateNoteContentData,
   UpdateNoteData,
 } from '../../domain';
@@ -39,8 +42,12 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.readRepo.findById(id);
   }
 
-  findByIdWithOwner(id: string): Promise<NoteEntityWithOwner | null> {
+  findByIdWithOwner(id: string): Promise<NoteViewWithOwner | null> {
     return this.readRepo.findByIdWithOwner(id);
+  }
+
+  findByIdForUser(noteId: string, userId: UserId): Promise<NoteView | null> {
+    return this.readRepo.findByIdForUser(noteId, userId);
   }
 
   findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]> {
@@ -50,11 +57,22 @@ export class DrizzleNoteRepository implements NoteRepository {
   findAccessibleByUser(
     userId: UserId,
     search?: string
-  ): Promise<{ note: NoteEntity; permission?: string }[]> {
+  ): Promise<{ note: NoteView; permission?: string }[]> {
     return this.readRepo.findAccessibleByUser(userId, search);
   }
 
-  findByShareToken(token: string): Promise<NoteEntityWithOwner | null> {
+  findAccessibleSummariesByUser(
+    userId: UserId,
+    search?: string
+  ): Promise<NoteSummary[]> {
+    return this.readRepo.findAccessibleSummariesByUser(userId, search);
+  }
+
+  countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
+    return this.readRepo.countAccessibleByUser(userId);
+  }
+
+  findByShareToken(token: string): Promise<NoteViewWithOwner | null> {
     return this.readRepo.findByShareToken(token);
   }
 

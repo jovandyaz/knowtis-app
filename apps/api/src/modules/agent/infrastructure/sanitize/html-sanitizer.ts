@@ -38,3 +38,33 @@ export function markdownToSafeHtml(markdown: string): string {
   });
   return sanitized.trim();
 }
+
+const BLOCK_BOUNDARY_PATTERN =
+  /<\/(?:p|div|li|ul|ol|h[1-6]|blockquote|pre|table|tr|td|th)>|<br\s*\/?>/gi;
+
+const ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&',
+  '&lt;': '<',
+  '&gt;': '>',
+  '&quot;': '"',
+  '&#39;': "'",
+};
+
+export function htmlToPlainText(html: string): string {
+  if (!html.trim()) {
+    return '';
+  }
+  const withBreaks = html.replace(BLOCK_BOUNDARY_PATTERN, '$&\n');
+  const stripped = sanitizeHtml(withBreaks, {
+    allowedTags: [],
+    allowedAttributes: {},
+  });
+  const decoded = stripped.replace(
+    /&(?:amp|lt|gt|quot|#39);/g,
+    (entity) => ENTITY_MAP[entity] ?? entity
+  );
+  return decoded
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{2,}/g, '\n')
+    .trim();
+}
