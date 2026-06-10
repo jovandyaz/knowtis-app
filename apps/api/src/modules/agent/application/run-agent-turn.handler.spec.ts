@@ -2,10 +2,11 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { estimateTokenCount } from '@knowtis/ai-gateway';
+
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
-import { estimateTokenCount } from '../../ai/domain/services/token-estimator';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';

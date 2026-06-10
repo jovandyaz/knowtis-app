@@ -2,14 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
+import { estimateTokenCount, sanitizeContent } from '@knowtis/ai-gateway';
 import {
   AI_ACTION,
   type ArtifactContent,
   type ArtifactType,
 } from '@knowtis/shared-types';
 
-import { sanitizeContent } from '../../../ai/domain/services/input-sanitizer';
-import { estimateTokenCount } from '../../../ai/domain/services/token-estimator';
 import type { SupportedAIAction } from '../../../ai/domain/value-objects/ai-action.vo';
 import { ArtifactErrors, type ArtifactDomainError } from '../../domain/errors';
 import {
