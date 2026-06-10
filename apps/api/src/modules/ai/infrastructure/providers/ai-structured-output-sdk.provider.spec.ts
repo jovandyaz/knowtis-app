@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
 import { createMockConfig } from '../../testing/create-mock-config';
+import { createTestChain } from '../../testing/create-test-chain';
 import { AIStructuredOutputSDKProvider } from './ai-structured-output-sdk.provider';
-import { ProviderRegistryFactory } from './provider-registry.factory';
 
 const { languageModel } = vi.hoisted(() => ({
   languageModel: vi.fn().mockReturnValue('mock-model'),
@@ -30,9 +30,8 @@ vi.mock('@ai-sdk/openai', () => ({
 const schema = z.object({ answer: z.number() });
 
 function createProvider(config = createMockConfig()) {
-  const registry = new ProviderRegistryFactory(config);
-  registry.onModuleInit();
-  return new AIStructuredOutputSDKProvider(config, registry);
+  const { registry, chain } = createTestChain(config);
+  return new AIStructuredOutputSDKProvider(registry, chain);
 }
 
 describe('AIStructuredOutputSDKProvider', () => {
@@ -92,13 +91,11 @@ describe('AIStructuredOutputSDKProvider', () => {
     expect(generateText).toHaveBeenCalledTimes(1);
   });
 
-  it('should rethrow when the fallback model equals the primary', async () => {
+  it('should rethrow when the chain has no other candidates', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockRejectedValueOnce(new Error('down'));
     const provider = createProvider(
-      createMockConfig({
-        AI_FALLBACK_MODEL: 'anthropic:claude-sonnet-4-20250514',
-      })
+      createMockConfig({ AI_FALLBACK_CHAIN: '' })
     );
 
     await expect(
@@ -111,7 +108,7 @@ describe('AIStructuredOutputSDKProvider', () => {
 
   it('should throw when an anthropic model is requested without ANTHROPIC_API_KEY', async () => {
     const provider = createProvider(
-      createMockConfig({ ANTHROPIC_API_KEY: '', AI_FALLBACK_MODEL: '' })
+      createMockConfig({ ANTHROPIC_API_KEY: '', AI_FALLBACK_CHAIN: '' })
     );
 
     await expect(

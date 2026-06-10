@@ -3,7 +3,7 @@ import { streamText } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AgentToolsFactory } from './agent-tools.factory';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
@@ -67,6 +67,10 @@ function makeConfig(
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
     AI_MAX_RETRIES: 3,
+    AI_FALLBACK_CHAIN:
+      'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash',
+    AI_COOLDOWN_ALLOWED_FAILS: 3,
+    AI_COOLDOWN_SECONDS: 120,
     ...over,
   };
   return {
@@ -86,9 +90,8 @@ function makeOrchestrator(
   config = makeConfig(),
   tools = makeTools()
 ): AiSdkAgentOrchestrator {
-  const registry = new ProviderRegistryFactory(config);
-  registry.onModuleInit();
-  return new AiSdkAgentOrchestrator(config, tools, registry);
+  const { registry, chain } = createTestChain(config);
+  return new AiSdkAgentOrchestrator(config, tools, registry, chain);
 }
 
 function collect(iter: AsyncIterable<unknown>) {
@@ -137,8 +140,10 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(system).toContain('note-xyz');
   });
 
-  it('yields a single error event (and does not throw) when the model is invalid', async () => {
-    const orchestrator = makeOrchestrator();
+  it('yields a single error event (and does not throw) when the model is invalid and the chain is empty', async () => {
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_FALLBACK_CHAIN: '' })
+    );
 
     const events = await collect(
       orchestrator.run({ ...baseInput, model: 'nonexistent:model' })
@@ -146,6 +151,16 @@ describe('AiSdkAgentOrchestrator', () => {
 
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({ type: 'error' });
+  });
+
+  it('falls through the chain when the requested model has no provider', async () => {
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, model: 'nonexistent:model' })
+    );
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
   it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
@@ -460,7 +475,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
   });
 
-  it('retries the whole turn on AI_FALLBACK_MODEL when the primary stream fails before any progress', async () => {
+  it('retries the whole turn on the next chain model when the primary stream fails before any progress', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
       textStream: {
@@ -470,9 +485,7 @@ describe('AiSdkAgentOrchestrator', () => {
       },
       totalUsage: new Promise(() => {}),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
-    );
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -488,14 +501,12 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
-  it('retries the turn on AI_FALLBACK_MODEL when streamText throws synchronously', async () => {
+  it('retries the turn on the next chain model when streamText throws synchronously', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => {
       throw new Error('sync boom');
     });
-    const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
-    );
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -503,7 +514,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
-  it('does not retry on AI_FALLBACK_MODEL once a tool step has finished', async () => {
+  it('does not retry on the chain once a tool step has finished', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
@@ -526,9 +537,7 @@ describe('AiSdkAgentOrchestrator', () => {
         totalUsage: new Promise(() => {}),
       })
     );
-    const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
-    );
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(orchestrator.run(baseInput));
 
@@ -554,9 +563,7 @@ describe('AiSdkAgentOrchestrator', () => {
       },
       totalUsage: new Promise(() => {}),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_MODEL: FALLBACK })
-    );
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(
       orchestrator.run({ ...baseInput, signal: controller.signal })
@@ -569,7 +576,7 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
-  it('does not fall back when AI_FALLBACK_MODEL equals the requested model', async () => {
+  it('does not fall back when the chain has no other candidates', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
       textStream: {
@@ -580,7 +587,7 @@ describe('AiSdkAgentOrchestrator', () => {
       totalUsage: new Promise(() => {}),
     }));
     const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_MODEL: MODEL })
+      makeConfig({ AI_FALLBACK_CHAIN: '' })
     );
 
     const events = await collect(orchestrator.run(baseInput));

@@ -12,6 +12,8 @@ export interface StructuredOutputResult<T> {
   readonly object: T;
   readonly inputTokens: number;
   readonly outputTokens: number;
+  /** Model that actually served the request — may differ from the requested one after chain fallback. */
+  readonly model: string;
 }
 
 export interface AIStructuredOutputProvider {

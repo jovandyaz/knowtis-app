@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createMockConfig } from '../../testing/create-mock-config';
+import { createTestChain } from '../../testing/create-test-chain';
 import { AISDKProvider } from './ai-sdk.provider';
-import { ProviderRegistryFactory } from './provider-registry.factory';
 
 vi.mock('ai', () => ({
   generateText: vi.fn().mockResolvedValue({
@@ -36,9 +36,14 @@ vi.mock('@ai-sdk/openai', () => ({
 function createProvider(
   config = createMockConfig({ OPENAI_API_KEY: 'test-openai-key' })
 ) {
-  const registry = new ProviderRegistryFactory(config);
-  registry.onModuleInit();
-  return new AISDKProvider(config, registry);
+  const { registry, chain } = createTestChain(config);
+  return new AISDKProvider(registry, chain);
+}
+
+async function drain(stream: { textStream: AsyncIterable<string> }) {
+  for await (const chunk of stream.textStream) {
+    void chunk;
+  }
 }
 
 describe('AISDKProvider', () => {
@@ -57,7 +62,7 @@ describe('AISDKProvider', () => {
     expect(result.outputTokens).toBe(50);
   });
 
-  it('should fallback to AI_FALLBACK_MODEL when primary fails', async () => {
+  it('should fall back through the chain when the primary fails', async () => {
     const { generateText } = await import('ai');
     const mockedGenerateText = vi.mocked(generateText);
     mockedGenerateText
@@ -67,11 +72,7 @@ describe('AISDKProvider', () => {
         usage: { inputTokens: 50, outputTokens: 20 },
       } as Awaited<ReturnType<typeof generateText>>);
 
-    const fallbackConfig = createMockConfig({
-      AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-    });
-
-    const fallbackProvider = createProvider(fallbackConfig);
+    const fallbackProvider = createProvider();
 
     const result = await fallbackProvider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -80,16 +81,17 @@ describe('AISDKProvider', () => {
     expect(result.model).toBe('anthropic:claude-haiku-4-5-20251001');
   });
 
-  it('should throw when primary fails and fallback is same model', async () => {
+  it('should throw when the chain has no other candidates', async () => {
     const { generateText } = await import('ai');
     const mockedGenerateText = vi.mocked(generateText);
     mockedGenerateText.mockRejectedValueOnce(new Error('Model unavailable'));
 
-    const sameModelConfig = createMockConfig({
-      AI_FALLBACK_MODEL: 'anthropic:claude-sonnet-4-20250514',
-    });
-
-    const sameModelProvider = createProvider(sameModelConfig);
+    const sameModelProvider = createProvider(
+      createMockConfig({
+        OPENAI_API_KEY: 'test-openai-key',
+        AI_FALLBACK_CHAIN: '',
+      })
+    );
 
     await expect(
       sameModelProvider.generateCompletion('test prompt', {
@@ -101,10 +103,12 @@ describe('AISDKProvider', () => {
   it('should add Anthropic cache control to system prompt for streaming', async () => {
     const { streamText } = vi.mocked(await import('ai'));
 
-    provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-      system: 'You are a helpful assistant.',
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        system: 'You are a helpful assistant.',
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -124,10 +128,12 @@ describe('AISDKProvider', () => {
   it('should pass plain system string for non-Anthropic models', async () => {
     const { streamText } = vi.mocked(await import('ai'));
 
-    provider.streamCompletion('test prompt', {
-      model: 'openai:gpt-4o',
-      system: 'You are a helpful assistant.',
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'openai:gpt-4o',
+        system: 'You are a helpful assistant.',
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -162,10 +168,12 @@ describe('AISDKProvider', () => {
   it('should forward both totalMs and chunkMs timeouts to streamText', async () => {
     const { streamText } = vi.mocked(await import('ai'));
 
-    provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-      timeout: { totalMs: 30000, chunkMs: 10000 },
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        timeout: { totalMs: 30000, chunkMs: 10000 },
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -178,10 +186,12 @@ describe('AISDKProvider', () => {
     const { streamText } = vi.mocked(await import('ai'));
     streamText.mockClear();
 
-    provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-      timeout: { totalMs: 30000 },
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        timeout: { totalMs: 30000 },
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({ timeout: { totalMs: 30000 } })
@@ -192,10 +202,12 @@ describe('AISDKProvider', () => {
     const { streamText } = vi.mocked(await import('ai'));
     streamText.mockClear();
 
-    provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-      timeout: { chunkMs: 10000 },
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        timeout: { chunkMs: 10000 },
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({ timeout: { chunkMs: 10000 } })
@@ -206,16 +218,18 @@ describe('AISDKProvider', () => {
     const { streamText } = vi.mocked(await import('ai'));
     streamText.mockClear();
 
-    provider.streamCompletion('test prompt', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-    });
+    await drain(
+      provider.streamCompletion('test prompt', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.not.objectContaining({ timeout: expect.anything() })
     );
   });
 
-  it('should fall back to AI_FALLBACK_MODEL when the stream fails before the first chunk', async () => {
+  it('should fall back through the chain when the stream fails before the first chunk', async () => {
     const { streamText } = vi.mocked(await import('ai'));
     streamText.mockClear();
 
@@ -234,11 +248,7 @@ describe('AISDKProvider', () => {
         usage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
       } as unknown as ReturnType<typeof streamText>);
 
-    const fallbackProvider = createProvider(
-      createMockConfig({
-        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-      })
-    );
+    const fallbackProvider = createProvider();
 
     const stream = fallbackProvider.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -265,11 +275,7 @@ describe('AISDKProvider', () => {
       usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
     } as unknown as ReturnType<typeof streamText>);
 
-    const provider2 = createProvider(
-      createMockConfig({
-        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-      })
-    );
+    const provider2 = createProvider();
 
     const stream = provider2.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -350,10 +356,12 @@ describe('AISDKProvider', () => {
     streamText.mockClear();
 
     const controller = new AbortController();
-    provider.streamCompletion('p', {
-      model: 'anthropic:claude-sonnet-4-20250514',
-      signal: controller.signal,
-    });
+    await drain(
+      provider.streamCompletion('p', {
+        model: 'anthropic:claude-sonnet-4-20250514',
+        signal: controller.signal,
+      })
+    );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({ abortSignal: controller.signal })
@@ -374,11 +382,7 @@ describe('AISDKProvider', () => {
       usage: Promise.resolve({ inputTokens: 0, outputTokens: 0 }),
     } as unknown as ReturnType<typeof streamText>);
 
-    const fallbackProvider = createProvider(
-      createMockConfig({
-        AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-      })
-    );
+    const fallbackProvider = createProvider();
 
     const stream = fallbackProvider.streamCompletion('p', {
       model: 'anthropic:claude-sonnet-4-20250514',

@@ -113,15 +113,16 @@ export class StreamTextHandler {
       }
 
       const actualUsage = await streamResult.usage;
+      const servedModel = actualUsage.model;
       const usage = TokenUsage.create(
         {
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
-          model: context.model,
+          model: servedModel,
           cacheReadTokens: actualUsage.cacheReadTokens,
           cacheWriteTokens: actualUsage.cacheWriteTokens,
         },
-        this.modelCatalog.getPricing(context.model)
+        this.modelCatalog.getPricing(servedModel)
       );
 
       this.pipeline.recordCompletion(
@@ -130,7 +131,7 @@ export class StreamTextHandler {
         {
           inputTokens: actualUsage.promptTokens,
           outputTokens: actualUsage.completionTokens,
-          model: context.model,
+          model: servedModel,
           costUsd: usage.costUsd,
           text: collectedChunks.join(''),
         },
@@ -140,7 +141,7 @@ export class StreamTextHandler {
       callbacks.onDone({
         inputTokens: actualUsage.promptTokens,
         outputTokens: actualUsage.completionTokens,
-        model: context.model,
+        model: servedModel,
         costUsd: usage.costUsd,
       });
     } catch (error) {

@@ -55,7 +55,11 @@ describe('StreamTextHandler', () => {
       generateCompletion: vi.fn(),
       streamCompletion: vi.fn().mockReturnValue({
         textStream: createAsyncStream(['Hello', ' world']),
-        usage: Promise.resolve({ promptTokens: 80, completionTokens: 30 }),
+        usage: Promise.resolve({
+          promptTokens: 80,
+          completionTokens: 30,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        }),
       }),
     };
 
@@ -217,7 +221,11 @@ describe('StreamTextHandler', () => {
         yield 'Second';
         yield 'Third';
       })(),
-      usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+      usage: Promise.resolve({
+        promptTokens: 10,
+        completionTokens: 5,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
     });
 
     await handler.execute(
@@ -259,7 +267,11 @@ describe('StreamTextHandler', () => {
 
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
       textStream: createAsyncStream(spanishChunks),
-      usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+      usage: Promise.resolve({
+        promptTokens: 10,
+        completionTokens: 5,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
     });
 
     await handler.execute(
@@ -314,7 +326,11 @@ describe('StreamTextHandler', () => {
 
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
       textStream: createAsyncStream(chunks),
-      usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+      usage: Promise.resolve({
+        promptTokens: 10,
+        completionTokens: 5,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
     });
 
     const received: string[] = [];
@@ -368,7 +384,11 @@ describe('StreamTextHandler', () => {
   it('should build tone prompt correctly', async () => {
     vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
       textStream: createAsyncStream(['Rewritten']),
-      usage: Promise.resolve({ promptTokens: 10, completionTokens: 5 }),
+      usage: Promise.resolve({
+        promptTokens: 10,
+        completionTokens: 5,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
     });
 
     await handler.execute(

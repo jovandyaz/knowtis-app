@@ -33,6 +33,7 @@ import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
+import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
 import {
   AI_REDIS,
@@ -55,6 +56,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
   controllers: [AIController],
   providers: [
     ProviderRegistryFactory,
+    FallbackChainService,
     { provide: MODEL_CATALOG, useClass: ModelCatalogAdapter },
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
@@ -81,6 +83,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
   ],
   exports: [
     ProviderRegistryFactory,
+    FallbackChainService,
     MODEL_CATALOG,
     AIConfigService,
     AIMetricsService,

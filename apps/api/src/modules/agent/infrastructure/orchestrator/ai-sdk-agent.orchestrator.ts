@@ -2,13 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { stepCountIs, streamText } from 'ai';
 
+import { isAbortError, streamWithChain } from '@knowtis/ai-gateway';
+
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
-import {
-  hasModelFallback,
-  isAbortError,
-  streamWithModelFallback,
-} from '../../../ai/infrastructure/providers/model-fallback';
+import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type {
   AgentEvent,
@@ -50,7 +48,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
   constructor(
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly toolsFactory: AgentToolsFactory,
-    private readonly providerRegistry: ProviderRegistryFactory
+    private readonly providerRegistry: ProviderRegistryFactory,
+    private readonly fallbackChain: FallbackChainService
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
@@ -60,20 +59,17 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     const abortSignal = input.signal
       ? AbortSignal.any([input.signal, timeoutSignal])
       : timeoutSignal;
-    const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
 
-    yield* streamWithModelFallback({
-      primaryModel: input.model,
-      fallbackModel,
+    yield* streamWithChain({
+      candidates: this.fallbackChain.candidatesFor(input.model),
+      cooldown: this.fallbackChain.cooldown,
       logger: this.logger,
-      primary: this.runTurn(input, input.model, abortSignal, timeoutSignal, {
-        throwOnFreshFailure: hasModelFallback(input.model, fallbackModel),
-      }),
-      open: (model) =>
+      open: (model, info) =>
         this.runTurn(input, model, abortSignal, timeoutSignal, {
-          throwOnFreshFailure: false,
+          throwOnFreshFailure: !info.isLast,
         }),
       chunks: (turn) => turn,
+      isAborted: () => abortSignal.aborted,
     });
   }
 

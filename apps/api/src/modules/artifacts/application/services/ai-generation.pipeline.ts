@@ -105,17 +105,17 @@ export class AIGenerationPipeline {
         }
       );
 
-      const { inputTokens, outputTokens } = result;
+      const { inputTokens, outputTokens, model: servedModel } = result;
       const usage = TokenUsage.create(
-        { inputTokens, outputTokens, model },
-        this.modelCatalog.getPricing(model)
+        { inputTokens, outputTokens, model: servedModel },
+        this.modelCatalog.getPricing(servedModel)
       );
 
       this.rateLimitService
         .recordUsage({
           userId: request.userId,
           action: request.action,
-          model,
+          model: servedModel,
           estimatedTokens: request.estimatedTokens,
           inputTokens,
           outputTokens,

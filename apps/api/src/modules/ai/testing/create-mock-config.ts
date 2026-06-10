@@ -8,7 +8,10 @@ type TypedConfigService = ConfigService<EnvConfig, true>;
 const DEFAULT_AI_CONFIG: Record<string, unknown> = {
   AI_DEFAULT_MODEL: 'anthropic:claude-sonnet-4-20250514',
   AI_FAST_MODEL: 'anthropic:claude-haiku-4-5-20251001',
-  AI_FALLBACK_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+  AI_FALLBACK_CHAIN:
+    'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash',
+  AI_COOLDOWN_ALLOWED_FAILS: 3,
+  AI_COOLDOWN_SECONDS: 120,
   AI_DAILY_TOKEN_LIMIT: 100000,
   AI_DAILY_COST_LIMIT_USD: 1.0,
   AI_ANONYMOUS_DAILY_LIMIT_PCT: 0.33,

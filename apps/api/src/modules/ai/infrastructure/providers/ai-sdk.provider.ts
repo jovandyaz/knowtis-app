@@ -1,15 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { generateText, streamText } from 'ai';
 
-import type { EnvConfig } from '../../../../config/env.config';
+import { executeWithChain, streamWithChain } from '@knowtis/ai-gateway';
+
 import type {
   AICompletionProvider,
   CompletionOptions,
   CompletionResult,
   StreamCompletionResult,
 } from '../../domain/ports/ai-provider.port';
-import { streamWithModelFallback, withModelFallback } from './model-fallback';
+import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
 @Injectable()
@@ -17,19 +17,19 @@ export class AISDKProvider implements AICompletionProvider {
   private readonly logger = new Logger(AISDKProvider.name);
 
   constructor(
-    private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly providerRegistry: ProviderRegistryFactory
+    private readonly providerRegistry: ProviderRegistryFactory,
+    private readonly fallbackChain: FallbackChainService
   ) {}
 
   async generateCompletion(
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
-    return withModelFallback(
+    return executeWithChain(
       (model) => this.callGenerateText(prompt, { ...options, model }),
       {
-        primaryModel: options.model,
-        fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+        candidates: this.fallbackChain.candidatesFor(options.model),
+        cooldown: this.fallbackChain.cooldown,
         logger: this.logger,
       }
     );
@@ -100,10 +100,13 @@ export class AISDKProvider implements AICompletionProvider {
       completionTokens: number;
       cacheReadTokens?: number;
       cacheWriteTokens?: number;
+      model: string;
     }>();
 
-    const openStream = (model: string) =>
-      streamText({
+    let activeModel = options.model;
+    const openStream = (model: string) => {
+      activeModel = model;
+      return streamText({
         model: this.providerRegistry.languageModel(model),
         ...this.buildSystemParam(model, options.system),
         messages: [{ role: 'user', content: prompt }],
@@ -113,12 +116,14 @@ export class AISDKProvider implements AICompletionProvider {
         ...(options.signal ? { abortSignal: options.signal } : {}),
         ...this.buildTimeoutParam(options.timeout),
       });
+    };
 
     // Consumer breaks trigger generator.return(), skipping post-loop code, so
     // usage settles in finally; the timer covers an SDK that never settles it.
     const settleUsage = (result: ReturnType<typeof openStream>) => {
+      const model = activeModel;
       const fallbackTimer = setTimeout(() => {
-        usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
+        usageDeferred.resolve({ promptTokens: 0, completionTokens: 0, model });
       }, USAGE_SETTLE_GRACE_MS);
       fallbackTimer.unref();
       void Promise.resolve(result.usage)
@@ -128,19 +133,23 @@ export class AISDKProvider implements AICompletionProvider {
             completionTokens: u.outputTokens ?? 0,
             cacheReadTokens: u.inputTokenDetails?.cacheReadTokens ?? 0,
             cacheWriteTokens: u.inputTokenDetails?.cacheWriteTokens ?? 0,
+            model,
           });
         })
         .catch(() => {
-          usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });
+          usageDeferred.resolve({
+            promptTokens: 0,
+            completionTokens: 0,
+            model,
+          });
         })
         .finally(() => clearTimeout(fallbackTimer));
     };
 
-    const textStream = streamWithModelFallback({
-      primaryModel: options.model,
-      fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+    const textStream = streamWithChain({
+      candidates: this.fallbackChain.candidatesFor(options.model),
+      cooldown: this.fallbackChain.cooldown,
       logger: this.logger,
-      primary: openStream(options.model),
       open: openStream,
       chunks: (result) => result.textStream,
       isAborted: () => options.signal?.aborted ?? false,
