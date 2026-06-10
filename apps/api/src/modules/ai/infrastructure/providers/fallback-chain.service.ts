@@ -4,12 +4,23 @@ import { ConfigService } from '@nestjs/config';
 import {
   MODEL_CATALOG,
   ProviderCooldownTracker,
+  providerOf,
   resolveChainCandidates,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
+
+export interface ProviderHealth {
+  readonly configured: boolean;
+  readonly cooling: boolean;
+  readonly failureCount: number;
+  readonly lastFailureAt: string | null;
+  readonly lastSuccessAt: string | null;
+  readonly cooldownEndsAt: string | null;
+}
 
 /**
  * Resolves the ordered model candidates for a request: primary first, then
@@ -28,7 +39,8 @@ export class FallbackChainService implements OnModuleInit {
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly providerRegistry: ProviderRegistryFactory,
     @Inject(MODEL_CATALOG)
-    private readonly modelCatalog: ModelCatalog
+    private readonly modelCatalog: ModelCatalog,
+    private readonly alerts: WebhookAlertService
   ) {
     this.cooldown = new ProviderCooldownTracker(
       {
@@ -36,7 +48,12 @@ export class FallbackChainService implements OnModuleInit {
         cooldownSeconds: this.configService.get('AI_COOLDOWN_SECONDS'),
       },
       {
-        warn: (payload) => this.logger.warn(payload),
+        warn: (payload) => {
+          this.logger.warn(payload);
+          if (payload['event'] === 'ai.provider.cooldown_start') {
+            this.alerts.notify('cooldown_start', payload);
+          }
+        },
         error: (payload) => this.logger.error(payload),
       }
     );
@@ -68,4 +85,33 @@ export class FallbackChainService implements OnModuleInit {
       cooldown: this.cooldown,
     });
   }
+
+  /** Passive per-provider health from the cooldown tracker — no probes, no token spend. */
+  healthSnapshot(): Record<string, ProviderHealth> {
+    const providers = new Set<string>([
+      ...this.chain.map(providerOf),
+      providerOf(this.configService.get('AI_DEFAULT_MODEL')),
+      providerOf(this.configService.get('AI_FAST_MODEL')),
+    ]);
+    const cooldownState = this.cooldown.snapshot();
+    const result: Record<string, ProviderHealth> = {};
+    for (const provider of providers) {
+      const state = cooldownState[provider];
+      result[provider] = {
+        configured: this.providerRegistry.isModelAvailable(
+          `${provider}:health-check`
+        ),
+        cooling: state?.cooling ?? false,
+        failureCount: state?.failureCount ?? 0,
+        lastFailureAt: toIsoOrNull(state?.lastFailureAt),
+        lastSuccessAt: toIsoOrNull(state?.lastSuccessAt),
+        cooldownEndsAt: toIsoOrNull(state?.cooldownEndsAt),
+      };
+    }
+    return result;
+  }
+}
+
+function toIsoOrNull(epochMs: number | undefined): string | null {
+  return epochMs === undefined ? null : new Date(epochMs).toISOString();
 }
