@@ -91,6 +91,13 @@ export class StreamTextHandler {
             chunkMs: this.configService.get('AI_STREAM_CHUNK_TIMEOUT_MS'),
           },
           ...(signal ? { signal } : {}),
+          telemetry: {
+            functionId: `completion:${context.action}`,
+            metadata: {
+              userId: input.userId,
+              environment: this.configService.get('NODE_ENV'),
+            },
+          },
         }
       );
 

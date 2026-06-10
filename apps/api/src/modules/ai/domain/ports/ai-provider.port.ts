@@ -1,3 +1,9 @@
+export interface AITelemetryContext {
+  /** Span identifier in tracing backends, e.g. 'completion:summarize'. */
+  readonly functionId: string;
+  readonly metadata: Record<string, string>;
+}
+
 export interface CompletionOptions {
   readonly model: string;
   readonly system?: string;
@@ -6,6 +12,7 @@ export interface CompletionOptions {
   readonly maxRetries?: number;
   readonly timeout?: { totalMs?: number; chunkMs?: number };
   readonly signal?: AbortSignal;
+  readonly telemetry?: AITelemetryContext;
 }
 
 export interface CompletionResult {

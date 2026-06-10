@@ -56,6 +56,15 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
         ? { maxOutputTokens: options.maxOutputTokens }
         : {}),
       ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
+      ...(options.telemetry
+        ? {
+            experimental_telemetry: {
+              isEnabled: true,
+              functionId: options.telemetry.functionId,
+              metadata: options.telemetry.metadata,
+            },
+          }
+        : {}),
     });
 
     return {

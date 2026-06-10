@@ -60,6 +60,29 @@ describe('AIStructuredOutputSDKProvider', () => {
     );
   });
 
+  it('should forward telemetry context to generateText', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider();
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      telemetry: {
+        functionId: 'artifact:generate_quiz',
+        metadata: { userId: 'user-1', environment: 'test' },
+      },
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        experimental_telemetry: {
+          isEnabled: true,
+          functionId: 'artifact:generate_quiz',
+          metadata: { userId: 'user-1', environment: 'test' },
+        },
+      })
+    );
+  });
+
   it('should retry with AI_FALLBACK_MODEL when the primary fails', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockRejectedValueOnce(new Error('primary down'));
