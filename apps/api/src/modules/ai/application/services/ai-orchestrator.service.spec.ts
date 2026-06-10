@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import { SUPPORTED_AI_ACTIONS } from '../../domain/value-objects/ai-action.vo';
+import { createTestCatalog } from '../../testing/create-test-catalog';
 import type { AIConfigService } from './ai-config.service';
 import { AIOrchestrator } from './ai-orchestrator.service';
 import { PromptLoaderService } from './prompt-loader.service';
@@ -44,7 +45,11 @@ describe('AIOrchestrator', () => {
       join(__dirname, '../../prompts')
     );
     promptLoader.onModuleInit();
-    orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
+    orchestrator = new AIOrchestrator(
+      mockAIConfigService,
+      promptLoader,
+      createTestCatalog()
+    );
   });
 
   it('should route ghost-text to fast model', async () => {
@@ -80,7 +85,11 @@ describe('AIOrchestrator', () => {
       join(__dirname, '../../prompts')
     );
     promptLoader.onModuleInit();
-    const orch = new AIOrchestrator(badAIConfigService, promptLoader);
+    const orch = new AIOrchestrator(
+      badAIConfigService,
+      promptLoader,
+      createTestCatalog()
+    );
     const result = await orch.selectModel(AI_ACTION.SUMMARIZE);
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('AI_INVALID_MODEL');

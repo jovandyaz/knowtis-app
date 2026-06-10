@@ -2,8 +2,9 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+
 import type { EnvConfig } from '../../../../config/env.config';
-import { getModelPricing } from '../../domain/constants/model-pricing';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import {
   AI_COMPLETION_PROVIDER,
@@ -36,6 +37,8 @@ export class CompleteTextHandler {
   constructor(
     @Inject(AI_COMPLETION_PROVIDER)
     private readonly aiProvider: AICompletionProvider,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog,
     private readonly pipeline: AICompletionPipeline,
     private readonly configService: ConfigService<EnvConfig, true>
   ) {}
@@ -86,7 +89,7 @@ export class CompleteTextHandler {
           cacheReadTokens: result.cacheReadTokens,
           cacheWriteTokens: result.cacheWriteTokens,
         },
-        getModelPricing(result.model)
+        this.modelCatalog.getPricing(result.model)
       );
 
       this.pipeline.recordCompletion(context, input, {

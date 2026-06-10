@@ -7,6 +7,7 @@ import type { AIOrchestrator } from '../../../ai/application/services/ai-orchest
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
+import { createTestCatalog } from '../../../ai/testing/create-test-catalog';
 import { ArtifactErrorCodes } from '../../domain/errors';
 import type {
   ArtifactEntity,
@@ -79,7 +80,8 @@ describe('GenerateArtifactHandler', () => {
     pipeline = new AIGenerationPipeline(
       structuredOutput as unknown as AIStructuredOutputProvider,
       orchestrator as unknown as AIOrchestrator,
-      rateLimitService as unknown as AIRateLimitService
+      rateLimitService as unknown as AIRateLimitService,
+      createTestCatalog()
     );
 
     handler = new GenerateArtifactHandler(
@@ -114,7 +116,9 @@ describe('GenerateArtifactHandler', () => {
       });
 
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
       orchestrator.getSystemPrompt.mockReturnValue(
         'You are a study assistant.'
       );
@@ -169,7 +173,9 @@ describe('GenerateArtifactHandler', () => {
       };
 
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockResolvedValue({
         object: flashcardContent,
@@ -234,7 +240,9 @@ describe('GenerateArtifactHandler', () => {
   describe('AI provider error', () => {
     it('should return a generic generation error without leaking the provider message', async () => {
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockRejectedValue(
         new Error('Provider unavailable: api key sk-secret rejected')
@@ -269,7 +277,9 @@ describe('GenerateArtifactHandler', () => {
 
     it('should still accept content at the limit boundary', async () => {
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
-      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockResolvedValue({
         object: { cards: [] },

@@ -4,10 +4,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { getModelPricing } from '../../domain/constants/model-pricing';
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from '../../domain/ports/ai-structured-output.port';
 import type { AIStructuredOutputProvider } from '../../domain/ports/ai-structured-output.port';
@@ -44,6 +44,8 @@ export class VoiceNoteHandler {
     private readonly orchestrator: AIOrchestrator,
     private readonly rateLimitService: AIRateLimitService,
     private readonly configService: ConfigService<EnvConfig, true>,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog,
     @Inject(AI_STRUCTURED_OUTPUT_PROVIDER)
     private readonly structuredOutputProvider: AIStructuredOutputProvider
   ) {}
@@ -165,7 +167,7 @@ export class VoiceNoteHandler {
 
       const usage = TokenUsage.create(
         { inputTokens, outputTokens, model },
-        getModelPricing(model)
+        this.modelCatalog.getPricing(model)
       );
 
       this.rateLimitService

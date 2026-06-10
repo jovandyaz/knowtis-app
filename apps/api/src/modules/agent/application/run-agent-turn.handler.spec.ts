@@ -7,6 +7,7 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
@@ -89,7 +90,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -123,7 +125,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const error = vi.fn();
 
@@ -148,7 +151,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const error = vi.fn();
 
@@ -181,7 +185,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const done = vi.fn();
 
@@ -216,7 +221,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const done = vi.fn();
 
@@ -247,7 +253,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const done = vi.fn();
 
@@ -284,7 +291,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -318,7 +326,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -342,7 +351,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const controller = new AbortController();
     controller.abort();
@@ -372,7 +382,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -412,7 +423,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onProposal = vi.fn();
 
@@ -448,7 +460,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onDone = vi.fn();
 
@@ -475,7 +488,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -515,7 +529,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onDone = vi.fn();
 
@@ -559,7 +574,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -585,7 +601,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const controller = new AbortController();
     controller.abort();
@@ -617,7 +634,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -650,7 +668,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -685,7 +704,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -719,7 +739,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
 
     await handler.execute(
@@ -743,7 +764,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
 
     await handler.execute(
@@ -768,7 +790,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -802,7 +825,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -834,7 +858,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const hugeMessage = { role: 'user' as const, content: 'x '.repeat(13000) };
 
@@ -861,7 +886,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -894,7 +920,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -922,7 +949,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 
@@ -943,10 +971,7 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
-  it('warns when recorded usage reports a model missing from the pricing table', async () => {
-    const warnSpy = vi
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
+  it('records zero cost when the catalog has no pricing for the model', async () => {
     const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
@@ -965,44 +990,27 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
+    const onDone = vi.fn();
 
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
       {
         onChunk: vi.fn(),
-        onDone: vi.fn(),
+        onDone,
         onError: vi.fn(),
         onProposal: vi.fn(),
       }
     );
 
-    expect(warnSpy).toHaveBeenCalledWith(
+    expect(onDone).toHaveBeenCalledWith(
       expect.objectContaining({
-        event: 'agent.pricing.missing',
         model: 'anthropic:claude-drifted-model',
+        costUsd: 0,
       })
     );
-
-    await handler.execute(
-      { userId: USER, messages: [{ role: 'user', content: 'hi again' }] },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    const pricingWarns = warnSpy.mock.calls.filter(
-      ([arg]) =>
-        typeof arg === 'object' &&
-        arg !== null &&
-        'event' in arg &&
-        (arg as { event: string }).event === 'agent.pricing.missing'
-    );
-    expect(pricingWarns).toHaveLength(1);
   });
 
   it('releases the rate-limit reservation when a turn ends with zero usage', async () => {
@@ -1022,7 +1030,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
 
     await handler.execute(
@@ -1052,7 +1061,8 @@ describe('RunAgentTurnHandler', () => {
       rateLimit,
       aiConfig,
       config,
-      pendingStore
+      pendingStore,
+      createTestCatalog()
     );
     const onError = vi.fn();
 

@@ -6,6 +6,7 @@ import { AIErrorCodes } from '../../../domain/errors/ai.errors';
 import type { AIStructuredOutputProvider } from '../../../domain/ports/ai-structured-output.port';
 import type { AIUsageRepository } from '../../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../../testing/create-mock-config';
+import { createTestCatalog } from '../../../testing/create-test-catalog';
 import type { AIConfigService } from '../../services/ai-config.service';
 import { AIOrchestrator } from '../../services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../services/ai-rate-limit.service';
@@ -62,7 +63,11 @@ describe('VoiceNoteHandler', () => {
       join(__dirname, '../../../prompts')
     );
     promptLoader.onModuleInit();
-    const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
+    const orchestrator = new AIOrchestrator(
+      mockAIConfigService,
+      promptLoader,
+      createTestCatalog()
+    );
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
 
     handler = new VoiceNoteHandler(
@@ -70,6 +75,7 @@ describe('VoiceNoteHandler', () => {
       orchestrator,
       rateLimitService,
       mockConfig,
+      createTestCatalog(),
       mockStructuredOutputProvider
     );
   });

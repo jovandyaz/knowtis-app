@@ -41,6 +41,10 @@ const envSchemaBase = z.object({
     .string()
     .default('true')
     .transform((v) => v === 'true'),
+  AI_PRICING_REFRESH_ENABLED: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
   AI_RPM_LIMIT: z.coerce.number().default(15),
   AI_MAX_CONCURRENT_STREAMS: z.coerce.number().default(2),
   AI_AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),

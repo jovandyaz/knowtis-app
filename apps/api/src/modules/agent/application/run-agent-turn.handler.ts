@@ -1,12 +1,16 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { detectPromptInjection, estimateTokenCount } from '@knowtis/ai-gateway';
+import {
+  detectPromptInjection,
+  estimateTokenCount,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
-import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
@@ -68,7 +72,6 @@ const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 @Injectable()
 export class RunAgentTurnHandler {
   private readonly logger = new Logger(RunAgentTurnHandler.name);
-  private readonly missingPricingWarned = new Set<string>();
 
   constructor(
     @Inject(AGENT_ORCHESTRATOR)
@@ -77,7 +80,9 @@ export class RunAgentTurnHandler {
     private readonly aiConfig: AIConfigService,
     private readonly configService: ConfigService<EnvConfig, true>,
     @Inject(PENDING_MUTATION_STORE)
-    private readonly pendingStore: PendingMutationStore
+    private readonly pendingStore: PendingMutationStore,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog
   ) {}
 
   async execute(
@@ -175,7 +180,7 @@ export class RunAgentTurnHandler {
     }
 
     const model = await this.aiConfig.getDefaultModel();
-    const modelResult = AIModel.create(model);
+    const modelResult = AIModel.create(model, this.modelCatalog);
     if (modelResult.isErr()) {
       await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
       callbacks.onError(modelResult.error);
@@ -234,7 +239,7 @@ export class RunAgentTurnHandler {
                   outputTokens: event.usage.outputTokens,
                   model: event.usage.model,
                 },
-                getModelPricing(event.usage.model)
+                this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
             callbacks.onDone({
@@ -305,14 +310,7 @@ export class RunAgentTurnHandler {
     estimatedTokens: number,
     usage: AgentTurnUsage
   ): Promise<number> {
-    const pricing = getModelPricing(usage.model);
-    if (!pricing && !this.missingPricingWarned.has(usage.model)) {
-      this.missingPricingWarned.add(usage.model);
-      this.logger.warn({
-        event: 'agent.pricing.missing',
-        model: usage.model,
-      });
-    }
+    const pricing = this.modelCatalog.getPricing(usage.model);
     const tokenUsage = TokenUsage.create(
       {
         inputTokens: usage.inputTokens,

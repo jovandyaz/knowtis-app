@@ -4,9 +4,10 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
+import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
-import { getModelPricing } from '../../../ai/domain/constants/model-pricing';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
   type AIStructuredOutputProvider,
@@ -44,7 +45,9 @@ export class AIGenerationPipeline {
     @Inject(AI_STRUCTURED_OUTPUT_PROVIDER)
     private readonly structuredOutput: AIStructuredOutputProvider,
     private readonly orchestrator: AIOrchestrator,
-    private readonly rateLimitService: AIRateLimitService
+    private readonly rateLimitService: AIRateLimitService,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog
   ) {}
 
   async execute<T>(
@@ -105,7 +108,7 @@ export class AIGenerationPipeline {
       const { inputTokens, outputTokens } = result;
       const usage = TokenUsage.create(
         { inputTokens, outputTokens, model },
-        getModelPricing(model)
+        this.modelCatalog.getPricing(model)
       );
 
       this.rateLimitService
