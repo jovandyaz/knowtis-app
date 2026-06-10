@@ -28,6 +28,7 @@ import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
+import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
@@ -56,6 +57,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
   controllers: [AIController],
   providers: [
     ProviderRegistryFactory,
+    WebhookAlertService,
     FallbackChainService,
     { provide: MODEL_CATALOG, useClass: ModelCatalogAdapter },
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },

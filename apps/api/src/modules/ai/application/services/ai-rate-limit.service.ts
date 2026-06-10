@@ -12,6 +12,11 @@ import {
   type RateLimitProvider,
   type RateLimits,
 } from '../../domain/ports/rate-limit.port';
+import { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
+import {
+  AI_REDIS,
+  AIRedisProvider,
+} from '../../infrastructure/redis/ai-redis.provider';
 
 interface RateLimitResult {
   readonly allowed: boolean;
@@ -19,6 +24,8 @@ interface RateLimitResult {
 }
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
+const BUDGET_WARNING_THRESHOLD = 0.8;
+const BUDGET_FLAG_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
 export class AIRateLimitService {
@@ -31,13 +38,21 @@ export class AIRateLimitService {
     { minute: number; count: number }
   >();
 
+  // Per-instance fallback for the once-a-day budget warning when Redis is down.
+  private readonly budgetWarnedOn = new Map<string, string>();
+
   constructor(
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
     @Optional()
     @Inject(RATE_LIMIT_PROVIDER)
-    private readonly rateLimitProvider?: RateLimitProvider
+    private readonly rateLimitProvider?: RateLimitProvider,
+    @Optional()
+    private readonly alerts?: WebhookAlertService,
+    @Optional()
+    @Inject(AI_REDIS)
+    private readonly aiRedis?: AIRedisProvider
   ) {}
 
   async checkLimit(
@@ -127,6 +142,62 @@ export class AIRateLimitService {
         this.logger.warn('Redis usage correction failed', error);
       }
     }
+
+    await this.maybeWarnBudget(params.userId);
+  }
+
+  private async maybeWarnBudget(userId: string): Promise<void> {
+    try {
+      const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
+      const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');
+      const usage = await this.usageRepository.getDailyUsage(userId);
+      const totalTokens = usage.totalInputTokens + usage.totalOutputTokens;
+      const overTokenThreshold =
+        totalTokens >= tokenLimit * BUDGET_WARNING_THRESHOLD;
+      const overCostThreshold =
+        usage.totalCostUsd >= costLimit * BUDGET_WARNING_THRESHOLD;
+      if (!overTokenThreshold && !overCostThreshold) {
+        return;
+      }
+      if (!(await this.claimBudgetWarningFlag(userId))) {
+        return;
+      }
+      const payload = {
+        userId,
+        totalTokens,
+        tokenLimit,
+        costUsd: usage.totalCostUsd,
+        costLimit,
+      };
+      this.logger.warn({ event: 'ai.budget.warning', ...payload });
+      this.alerts?.notify('budget.warning', payload);
+    } catch (error) {
+      this.logger.warn('Budget warning check failed', error);
+    }
+  }
+
+  private async claimBudgetWarningFlag(userId: string): Promise<boolean> {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const redis = this.aiRedis?.client;
+    if (redis) {
+      try {
+        const claimed = await redis.set(
+          `ai:budget-warned:${userId}:${dayKey}`,
+          '1',
+          'EX',
+          BUDGET_FLAG_TTL_SECONDS,
+          'NX'
+        );
+        return claimed === 'OK';
+      } catch (error) {
+        this.logger.warn('Budget flag via Redis failed, using memory', error);
+      }
+    }
+    if (this.budgetWarnedOn.get(userId) === dayKey) {
+      return false;
+    }
+    this.budgetWarnedOn.set(userId, dayKey);
+    return true;
   }
 
   private allowPgRpm(userId: string): boolean {
