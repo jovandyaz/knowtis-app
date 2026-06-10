@@ -44,6 +44,21 @@ export interface RunAgentTurnCallbacks {
   readonly onProposal: (proposal: ProposedMutation) => void;
 }
 
+type TurnEventOutcome = 'continue' | 'stop';
+
+interface TurnLoopContext {
+  readonly estimatedTokens: number;
+  readonly model: string;
+}
+
+interface TurnLoopPolicy {
+  readonly onProposal: (
+    event: { proposal: ProposedMutation; usage: AgentTurnUsage },
+    ctx: TurnLoopContext
+  ) => Promise<TurnEventOutcome>;
+  readonly onCommitted: (ctx: TurnLoopContext) => TurnEventOutcome;
+}
+
 const CHARS_PER_TOKEN = 4;
 
 @Injectable()
@@ -65,6 +80,52 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
+    return this.runLoop(input, undefined, callbacks, signal, {
+      onProposal: async (event, ctx) => {
+        await this.recordUsage(input.userId, ctx.estimatedTokens, event.usage);
+        await this.pendingStore.save({
+          userId: input.userId,
+          mutation: event.proposal,
+          toolName: this.toolNameForKind(event.proposal.kind),
+        });
+        callbacks.onProposal(event.proposal);
+        return 'continue';
+      },
+      onCommitted: () => 'continue',
+    });
+  }
+
+  async resumeTurn(
+    input: RunAgentTurnInput & {
+      resume: { toolName: string; outcome: string };
+    },
+    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const endTurn = (ctx: TurnLoopContext): TurnEventOutcome => {
+      callbacks.onDone({
+        inputTokens: 0,
+        outputTokens: 0,
+        model: ctx.model,
+        costUsd: 0,
+        sources: [],
+        knownNotes: [],
+      });
+      return 'stop';
+    };
+    return this.runLoop(input, input.resume, callbacks, signal, {
+      onProposal: async (_event, ctx) => endTurn(ctx),
+      onCommitted: endTurn,
+    });
+  }
+
+  private async runLoop(
+    input: RunAgentTurnInput,
+    resume: { toolName: string; outcome: string } | undefined,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
+    signal: AbortSignal | undefined,
+    policy: TurnLoopPolicy
+  ): Promise<void> {
     if (signal?.aborted) {
       return;
     }
@@ -81,8 +142,8 @@ export class RunAgentTurnHandler {
 
     const model = await this.aiConfig.getDefaultModel();
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    const ctx: TurnLoopContext = { estimatedTokens, model };
 
-    let lastError: { code: string; message: string } | null = null;
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
@@ -92,15 +153,15 @@ export class RunAgentTurnHandler {
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(signal ? { signal } : {}),
+        ...(resume ? { resume } : {}),
       })) {
         switch (event.type) {
           case 'chunk':
             callbacks.onChunk(event.text);
             break;
           case 'error':
-            lastError = event.error;
             callbacks.onError(event.error);
-            break;
+            return;
           case 'done': {
             const costUsd = await this.recordUsage(
               input.userId,
@@ -115,18 +176,17 @@ export class RunAgentTurnHandler {
               sources: event.sources,
               knownNotes: event.knownNotes,
             });
-            break;
+            return;
           }
           case 'proposal':
-            await this.recordUsage(input.userId, estimatedTokens, event.usage);
-            await this.pendingStore.save({
-              userId: input.userId,
-              mutation: event.proposal,
-              toolName: this.toolNameForKind(event.proposal.kind),
-            });
-            callbacks.onProposal(event.proposal);
+            if ((await policy.onProposal(event, ctx)) === 'stop') {
+              return;
+            }
             break;
           case 'committed':
+            if (policy.onCommitted(ctx) === 'stop') {
+              return;
+            }
             break;
           default: {
             const _exhaustive: never = event;
@@ -135,7 +195,7 @@ export class RunAgentTurnHandler {
         }
       }
     } catch (error) {
-      if (lastError) {
+      if (signal?.aborted) {
         return;
       }
       this.logger.error({
@@ -149,111 +209,6 @@ export class RunAgentTurnHandler {
         )
       );
     }
-  }
-
-  async resumeTurn(
-    input: RunAgentTurnInput & {
-      resume: { toolName: string; outcome: string };
-    },
-    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
-    signal?: AbortSignal
-  ): Promise<void> {
-    if (signal?.aborted) {
-      return;
-    }
-    const estimatedTokens = this.estimateTokens(input.messages);
-    const limit = await this.rateLimit.checkLimit(
-      input.userId,
-      estimatedTokens,
-      input.isAnonymous ?? false
-    );
-    if (!limit.allowed) {
-      callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
-      return;
-    }
-    const model = await this.aiConfig.getDefaultModel();
-    const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    let lastError: { code: string; message: string } | null = null;
-    try {
-      for await (const event of this.orchestrator.run({
-        userId: input.userId,
-        messages: input.messages,
-        model,
-        maxSteps,
-        ...(input.noteId ? { noteId: input.noteId } : {}),
-        ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
-        ...(signal ? { signal } : {}),
-        resume: input.resume,
-      })) {
-        switch (event.type) {
-          case 'chunk':
-            callbacks.onChunk(event.text);
-            break;
-          case 'error':
-            lastError = event.error;
-            callbacks.onError(event.error);
-            return;
-          case 'done': {
-            await this.finishResume(
-              input.userId,
-              estimatedTokens,
-              event,
-              callbacks.onDone
-            );
-            return;
-          }
-          case 'proposal':
-          case 'committed':
-            callbacks.onDone({
-              inputTokens: 0,
-              outputTokens: 0,
-              model,
-              costUsd: 0,
-              sources: [],
-              knownNotes: [],
-            });
-            return;
-          default: {
-            const _exhaustive: never = event;
-            throw new Error(`Unhandled agent event: ${String(_exhaustive)}`);
-          }
-        }
-      }
-    } catch (error) {
-      if (lastError || signal?.aborted) {
-        return;
-      }
-      callbacks.onError(
-        AIErrors.providerError(
-          error instanceof Error ? error.message : 'Agent turn failed'
-        )
-      );
-    }
-  }
-
-  private async finishResume(
-    userId: string,
-    estimatedTokens: number,
-    event: {
-      usage: AgentTurnUsage;
-      sources: readonly AgentSource[];
-      knownNotes: readonly AgentSource[];
-    },
-    onDone: RunAgentTurnCallbacks['onDone']
-  ): Promise<void> {
-    const costUsd = await this.recordUsage(
-      userId,
-      estimatedTokens,
-      event.usage
-    );
-    onDone({
-      inputTokens: event.usage.inputTokens,
-      outputTokens: event.usage.outputTokens,
-      model: event.usage.model,
-      costUsd,
-      sources: event.sources,
-      knownNotes: event.knownNotes,
-    });
   }
 
   private async recordUsage(

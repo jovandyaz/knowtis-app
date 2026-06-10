@@ -43,9 +43,11 @@ describe('MutationProposalBuilder', () => {
       contentMarkdown: '## New',
     });
     expect(r.isOk()).toBe(true);
-    if (r.isOk()) {
+    if (r.isOk() && r.value.kind === 'update') {
       expect(r.value.targetNoteId).toBe('note-1');
       expect(r.value.baseVersion).toBe('2024-02-01T00:00:00.000Z');
+    } else {
+      throw new Error('expected an update proposal');
     }
   });
 

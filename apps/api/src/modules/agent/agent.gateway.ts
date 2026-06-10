@@ -13,13 +13,18 @@ import {
   type OnGatewayDisconnect,
   type OnGatewayInit,
 } from '@nestjs/websockets';
-import type { Server, Socket } from 'socket.io';
+import type { Server } from 'socket.io';
 import { z } from 'zod';
 
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
-import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp/mcp-token';
+import { ConcurrencySlotTracker } from '../websocket/concurrency-slot-tracker';
+import {
+  authenticateSocket,
+  socketAuthFailureMessage,
+  type AuthenticatedSocket,
+} from '../websocket/socket-auth';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import {
@@ -65,18 +70,12 @@ const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
   reason: z.string().max(1000).optional(),
 });
 
-interface AuthenticatedAgentSocket extends Socket {
-  data: { userId?: string; isAnonymous?: boolean };
-}
-
 @WebSocketGateway({ namespace: '/agent' })
 export class AgentGateway
   implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(AgentGateway.name);
-  private readonly activeTurns = new Map<string, AbortController>();
-  private readonly userTurnCount = new Map<string, number>();
-  private readonly clientTurns = new Map<string, Set<string>>();
+  private readonly turns: ConcurrencySlotTracker;
   private readonly maxConcurrentTurns: number;
 
   @WebSocketServer()
@@ -91,46 +90,25 @@ export class AgentGateway
     configService: ConfigService<EnvConfig, true>
   ) {
     this.maxConcurrentTurns = configService.get('AI_MAX_CONCURRENT_STREAMS');
+    this.turns = new ConcurrencySlotTracker(this.maxConcurrentTurns);
   }
 
   afterInit(): void {
     this.logger.log('Agent WebSocket Gateway initialized');
   }
 
-  async handleConnection(client: AuthenticatedAgentSocket): Promise<void> {
-    const token =
-      (client.handshake.auth?.['token'] as string | undefined) ??
-      client.handshake.headers?.['authorization']?.replace('Bearer ', '');
-    if (!token) {
-      client.emit('agent:error', AIErrors.authRequired());
-      client.disconnect();
-      return;
-    }
-    // Verify + set userId synchronously BEFORE the async flag check below, so a
-    // message emitted on the same tick as `connect` can't race ahead of it.
-    try {
-      const payload = this.jwtService.verify<
-        { sub: string; isAnonymous?: boolean } & McpTokenClaims
-      >(token);
-      if (payload.source === TOKEN_SOURCE_MCP) {
-        this.logger.warn({
-          event: 'agent.client.mcp_token_rejected',
-          clientId: client.id,
-          userId: payload.sub,
-        });
-        client.emit(
-          'agent:error',
-          AIErrors.authRequired('MCP tokens are not allowed on this namespace')
-        );
-        client.disconnect();
-        return;
-      }
-      client.data.userId = payload.sub;
-      if (payload.isAnonymous) {
-        client.data.isAnonymous = true;
-      }
-    } catch {
-      client.emit('agent:error', AIErrors.authRequired('Invalid token'));
+  async handleConnection(client: AuthenticatedSocket): Promise<void> {
+    const auth = authenticateSocket(
+      client,
+      this.jwtService,
+      this.logger,
+      'agent'
+    );
+    if (!auth.ok) {
+      client.emit(
+        'agent:error',
+        AIErrors.authRequired(socketAuthFailureMessage(auth.reason))
+      );
       client.disconnect();
       return;
     }
@@ -138,16 +116,24 @@ export class AgentGateway
     if (!(await this.featureFlagsService.isEnabled('ai_enabled'))) {
       client.emit('agent:error', AIErrors.featureDisabled());
       client.disconnect();
+      return;
     }
   }
 
-  handleDisconnect(client: AuthenticatedAgentSocket): void {
-    this.abortClientTurns(client.id);
+  handleDisconnect(client: AuthenticatedSocket): void {
+    const hadActiveTurns = this.turns.hasActiveSlots(client.id);
+    this.turns.abortAllForClient(client.id);
+    this.logger.log({
+      event: 'agent.client.disconnected',
+      clientId: client.id,
+      userId: client.data?.userId,
+      hadActiveTurns,
+    });
   }
 
   @SubscribeMessage('agent:message')
   async handleMessage(
-    @ConnectedSocket() client: AuthenticatedAgentSocket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: unknown
   ): Promise<void> {
     const userId = client.data?.userId;
@@ -163,16 +149,6 @@ export class AgentGateway
           parsed.error.issues
             .map((i) => `${i.path.join('.')}: ${i.message}`)
             .join('; ')
-        )
-      );
-      return;
-    }
-
-    if ((this.userTurnCount.get(userId) ?? 0) >= this.maxConcurrentTurns) {
-      client.emit(
-        'agent:error',
-        AIErrors.rateLimitExceeded(
-          `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
         )
       );
       return;
@@ -195,7 +171,8 @@ export class AgentGateway
             client.emit('agent:proposal', {
               id: proposal.id,
               kind: proposal.kind,
-              targetNoteId: proposal.targetNoteId ?? null,
+              targetNoteId:
+                proposal.kind === 'create' ? null : proposal.targetNoteId,
               summary: proposal.summary,
               previewHtml: proposal.previewHtml ?? null,
               payload: proposal.payload,
@@ -207,14 +184,14 @@ export class AgentGateway
   }
 
   @SubscribeMessage('agent:cancel')
-  handleCancel(@ConnectedSocket() client: AuthenticatedAgentSocket): void {
-    this.abortClientTurns(client.id);
+  handleCancel(@ConnectedSocket() client: AuthenticatedSocket): void {
+    this.turns.abortAllForClient(client.id);
     this.logger.debug(`Client ${client.id} cancelled agent turn(s)`);
   }
 
   @SubscribeMessage('agent:approve')
   async handleApprove(
-    @ConnectedSocket() client: AuthenticatedAgentSocket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: unknown
   ): Promise<void> {
     const userId = client.data?.userId;
@@ -250,7 +227,7 @@ export class AgentGateway
 
   @SubscribeMessage('agent:reject')
   async handleReject(
-    @ConnectedSocket() client: AuthenticatedAgentSocket,
+    @ConnectedSocket() client: AuthenticatedSocket,
     @MessageBody() payload: unknown
   ): Promise<void> {
     const userId = client.data?.userId;
@@ -282,7 +259,7 @@ export class AgentGateway
   }
 
   private async resumeAfter(
-    client: AuthenticatedAgentSocket,
+    client: AuthenticatedSocket,
     userId: string,
     data: {
       messages: { role: 'user' | 'assistant'; content: string }[];
@@ -291,15 +268,6 @@ export class AgentGateway
     },
     outcome: { toolName: string; outcome: string }
   ): Promise<void> {
-    if ((this.userTurnCount.get(userId) ?? 0) >= this.maxConcurrentTurns) {
-      client.emit(
-        'agent:error',
-        AIErrors.rateLimitExceeded(
-          `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
-        )
-      );
-      return;
-    }
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {
@@ -316,22 +284,30 @@ export class AgentGateway
   }
 
   private async runInTurnSlot(
-    client: AuthenticatedAgentSocket,
+    client: AuthenticatedSocket,
     userId: string,
     body: (controller: AbortController) => Promise<void>
   ): Promise<void> {
     const turnId = randomUUID();
     const controller = new AbortController();
-    this.acquireTurnSlot(userId, client.id, turnId, controller);
+    if (!this.turns.acquire(userId, client.id, turnId, controller)) {
+      client.emit(
+        'agent:error',
+        AIErrors.rateLimitExceeded(
+          `Maximum ${this.maxConcurrentTurns} concurrent agent turns allowed.`
+        )
+      );
+      return;
+    }
     try {
       await body(controller);
     } finally {
-      this.releaseTurnSlot(userId, client.id, turnId);
+      this.turns.release(userId, client.id, turnId);
     }
   }
 
   private baseCallbacks(
-    client: AuthenticatedAgentSocket,
+    client: AuthenticatedSocket,
     controller: AbortController
   ): Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'> {
     return {
@@ -353,49 +329,5 @@ export class AgentGateway
         }
       },
     };
-  }
-
-  private acquireTurnSlot(
-    userId: string,
-    clientId: string,
-    turnId: string,
-    controller: AbortController
-  ): void {
-    this.activeTurns.set(turnId, controller);
-    this.userTurnCount.set(userId, (this.userTurnCount.get(userId) ?? 0) + 1);
-    const clientSet = this.clientTurns.get(clientId) ?? new Set();
-    clientSet.add(turnId);
-    this.clientTurns.set(clientId, clientSet);
-  }
-
-  private releaseTurnSlot(
-    userId: string,
-    clientId: string,
-    turnId: string
-  ): void {
-    this.activeTurns.delete(turnId);
-    const clientSet = this.clientTurns.get(clientId);
-    if (clientSet) {
-      clientSet.delete(turnId);
-      if (clientSet.size === 0) {
-        this.clientTurns.delete(clientId);
-      }
-    }
-    const count = this.userTurnCount.get(userId) ?? 0;
-    if (count <= 1) {
-      this.userTurnCount.delete(userId);
-    } else {
-      this.userTurnCount.set(userId, count - 1);
-    }
-  }
-
-  private abortClientTurns(clientId: string): void {
-    const turnIds = this.clientTurns.get(clientId);
-    if (!turnIds) {
-      return;
-    }
-    for (const turnId of turnIds) {
-      this.activeTurns.get(turnId)?.abort();
-    }
   }
 }

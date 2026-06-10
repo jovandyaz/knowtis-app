@@ -57,7 +57,7 @@ return v
       mutation: {
         id: record.mutation.id,
         kind: record.mutation.kind,
-        ...(record.mutation.targetNoteId && {
+        ...(record.mutation.kind !== 'create' && {
           targetNoteId: record.mutation.targetNoteId,
         }),
         payload: record.mutation.payload,

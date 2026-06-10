@@ -20,6 +20,11 @@ export const AgentErrors = {
     make('AGENT_PROPOSAL_EXPIRED', 'This proposal expired; ask again'),
   permissionDenied: () =>
     make('AGENT_PERMISSION_DENIED', 'You cannot perform this action'),
+  commitFailed: (code: string, message: string) =>
+    make(
+      'AGENT_COMMIT_FAILED',
+      `Could not apply the change (${code}): ${message}`
+    ),
   sanitizeRejected: () =>
     make('AGENT_SANITIZE_REJECTED', 'Generated content could not be sanitized'),
   noteNotFound: (noteId: string) =>

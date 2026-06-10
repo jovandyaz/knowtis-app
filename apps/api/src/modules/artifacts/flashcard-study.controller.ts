@@ -13,14 +13,15 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { unwrapOrThrow } from '../../core/http';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import {
   GetFlashcardProgressHandler,
   GetStudySessionHandler,
   ReviewCardHandler,
 } from './application';
+import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
 import { ReviewCardDto } from './dto';
-import { unwrapOrThrow } from './helpers';
 
 @ApiTags('Artifacts - Flashcard Study')
 @ApiBearerAuth()
@@ -65,6 +66,6 @@ export class FlashcardStudyController {
       cardIndex: dto.cardIndex,
       quality: dto.quality,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 }

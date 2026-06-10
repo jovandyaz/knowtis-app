@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
@@ -7,6 +7,7 @@ import { AppAbilityFactory } from '../../authorization/ability.factory';
 import { CreateNoteHandler } from '../../notes/application/commands/create-note.handler';
 import { ShareNoteHandler } from '../../notes/application/commands/share-note.handler';
 import { UpdateNoteHandler } from '../../notes/application/commands/update-note.handler';
+import { NoteErrorCodes } from '../../notes/domain';
 import { NOTE_REPOSITORY, type NoteRepository } from '../../notes/domain/ports';
 import {
   USER_READ_REPOSITORY,
@@ -19,10 +20,10 @@ import {
   type PendingMutationStore,
 } from '../domain/ports/pending-mutation.store';
 import type {
-  CreateMutationPayload,
+  CreateProposedMutation,
   ProposedMutation,
-  ShareMutationPayload,
-  UpdateMutationPayload,
+  ShareProposedMutation,
+  UpdateProposedMutation,
 } from '../domain/proposed-mutation';
 
 export interface ApproveMutationInput {
@@ -38,6 +39,8 @@ export interface ApproveMutationOutput {
 
 @Injectable()
 export class ApproveMutationHandler {
+  private readonly logger = new Logger(ApproveMutationHandler.name);
+
   constructor(
     @Inject(PENDING_MUTATION_STORE)
     private readonly store: PendingMutationStore,
@@ -58,10 +61,22 @@ export class ApproveMutationHandler {
     }
     const m = record.mutation;
 
-    if (m.kind === 'create') {
-      return this.commitCreate(input.userId, m);
+    switch (m.kind) {
+      case 'create':
+        return this.commitCreate(input.userId, m);
+      case 'update':
+        return this.commitUpdate(input.userId, m, record.toolName);
+      case 'share':
+        return this.commitShare(input.userId, m, record.toolName);
+      default: {
+        const _exhaustive: never = m;
+        return err(
+          AgentErrors.invalidProposal(
+            `unknown mutation kind: ${String(_exhaustive)}`
+          )
+        );
+      }
     }
-    return this.commitOnExisting(input.userId, m, record.toolName);
   }
 
   private canCreate(userId: string): boolean {
@@ -79,19 +94,18 @@ export class ApproveMutationHandler {
 
   private async commitCreate(
     userId: string,
-    m: ProposedMutation
+    m: CreateProposedMutation
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
     if (!this.canCreate(userId)) {
       return err(AgentErrors.permissionDenied());
     }
-    const payload = m.payload as CreateMutationPayload;
     const res = await this.createHandler.execute({
-      title: payload.title,
-      content: payload.contentHtml,
+      title: m.payload.title,
+      content: m.payload.contentHtml,
       ownerId: userId,
     });
     if (res.isErr()) {
-      return err(AgentErrors.permissionDenied());
+      return err(this.mapCommitError(m, res.error));
     }
     const note = res.value;
     return ok({
@@ -101,62 +115,82 @@ export class ApproveMutationHandler {
     });
   }
 
-  private async commitOnExisting(
+  private async commitUpdate(
     userId: string,
-    m: ProposedMutation,
+    m: UpdateProposedMutation,
     toolName: string
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
-    const noteId = m.targetNoteId as string;
-    const note = await this.noteRepo.findById(noteId);
+    const note = await this.noteRepo.findById(m.targetNoteId);
     if (!note) {
-      return err(AgentErrors.noteNotFound(noteId));
+      return err(AgentErrors.noteNotFound(m.targetNoteId));
     }
-
-    if (m.kind === 'update') {
-      if (m.baseVersion && note.updatedAt.toISOString() !== m.baseVersion) {
-        return err(AgentErrors.staleNote(noteId));
-      }
-      const payload = m.payload as UpdateMutationPayload;
-      const res = await this.updateHandler.execute({
-        noteId,
-        userId,
-        ...(payload.title !== undefined && { title: payload.title }),
-        ...(payload.contentHtml !== undefined && {
-          content: payload.contentHtml,
-        }),
-      });
-      if (res.isErr()) {
-        return err(AgentErrors.permissionDenied());
-      }
-      return ok({
-        result: {
-          noteId: res.value.id,
-          title: res.value.title,
-          kind: 'update',
-        },
-        outcome: `updated the note "${res.value.title}"`,
-        toolName,
-      });
+    if (m.baseVersion && note.updatedAt.toISOString() !== m.baseVersion) {
+      return err(AgentErrors.staleNote(m.targetNoteId));
     }
-
-    const share = m.payload as ShareMutationPayload;
-    const target = await this.userRepo.findByEmail(share.targetEmail);
-    if (!target) {
-      return err(AgentErrors.targetUserNotFound(share.targetEmail));
-    }
-    const res = await this.shareHandler.execute({
-      noteId,
+    const res = await this.updateHandler.execute({
+      noteId: m.targetNoteId,
       userId,
-      targetUserId: target.id,
-      permission: share.permission,
+      ...(m.payload.title !== undefined && { title: m.payload.title }),
+      ...(m.payload.contentHtml !== undefined && {
+        content: m.payload.contentHtml,
+      }),
     });
     if (res.isErr()) {
-      return err(AgentErrors.permissionDenied());
+      return err(this.mapCommitError(m, res.error));
     }
     return ok({
-      result: { noteId, title: note.title, kind: 'share' },
-      outcome: `shared "${note.title}" with ${share.targetEmail} as ${share.permission}`,
+      result: {
+        noteId: res.value.id,
+        title: res.value.title,
+        kind: 'update',
+      },
+      outcome: `updated the note "${res.value.title}"`,
       toolName,
     });
+  }
+
+  private async commitShare(
+    userId: string,
+    m: ShareProposedMutation,
+    toolName: string
+  ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+    const note = await this.noteRepo.findById(m.targetNoteId);
+    if (!note) {
+      return err(AgentErrors.noteNotFound(m.targetNoteId));
+    }
+    const target = await this.userRepo.findByEmail(m.payload.targetEmail);
+    if (!target) {
+      return err(AgentErrors.targetUserNotFound(m.payload.targetEmail));
+    }
+    const res = await this.shareHandler.execute({
+      noteId: m.targetNoteId,
+      userId,
+      targetUserId: target.id,
+      permission: m.payload.permission,
+    });
+    if (res.isErr()) {
+      return err(this.mapCommitError(m, res.error));
+    }
+    return ok({
+      result: { noteId: m.targetNoteId, title: note.title, kind: 'share' },
+      outcome: `shared "${note.title}" with ${m.payload.targetEmail} as ${m.payload.permission}`,
+      toolName,
+    });
+  }
+
+  private mapCommitError(
+    m: ProposedMutation,
+    error: { code: string; message: string }
+  ): AgentDomainError {
+    this.logger.warn({
+      event: 'agent.commit.failed',
+      proposalId: m.id,
+      kind: m.kind,
+      code: error.code,
+    });
+    if (error.code === NoteErrorCodes.PERMISSION_DENIED) {
+      return AgentErrors.permissionDenied();
+    }
+    return AgentErrors.commitFailed(error.code, error.message);
   }
 }

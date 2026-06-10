@@ -18,6 +18,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { unwrapOrThrow } from '../../core/http';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
 import { NoteErrorCodes } from '../notes/domain/errors/note.errors';
@@ -28,8 +29,8 @@ import {
   GetArtifactsHandler,
   LearnTopicHandler,
 } from './application';
+import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
 import { ArtifactsQueryDto, GenerateArtifactDto, LearnTopicDto } from './dto';
-import { unwrapOrThrow } from './helpers';
 
 @ApiTags('Artifacts')
 @ApiBearerAuth()
@@ -77,7 +78,7 @@ export class ArtifactsController {
       type: dto.type,
     });
 
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Generate educational content about a topic' })
@@ -90,7 +91,7 @@ export class ArtifactsController {
       userId: user.id,
       topic: dto.topic,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'List artifacts for the authenticated user' })
@@ -103,7 +104,7 @@ export class ArtifactsController {
       userId: user.id,
       ...(query.noteId ? { noteId: query.noteId } : {}),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Get a single artifact by ID' })
@@ -116,7 +117,7 @@ export class ArtifactsController {
       artifactId: id,
       userId: user.id,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Delete an artifact' })
@@ -130,6 +131,6 @@ export class ArtifactsController {
       artifactId: id,
       userId: user.id,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 }

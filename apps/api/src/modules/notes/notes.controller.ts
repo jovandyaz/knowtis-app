@@ -11,7 +11,6 @@ import {
   FileTypeValidator,
   Get,
   HttpCode,
-  HttpException,
   HttpStatus,
   MaxFileSizeValidator,
   Param,
@@ -36,11 +35,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
-import type { Result } from 'neverthrow';
 
 import { SUBJECTS } from '@knowtis/authorization';
 import { pickDefined } from '@knowtis/shared-util';
 
+import { unwrapOrThrow } from '../../core/http';
 import {
   ApiAuthErrors,
   ApiBadRequest,
@@ -61,7 +60,7 @@ import {
   UpdateNoteHandler,
 } from './application';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
-import { NoteErrorCodes, type NoteDomainError } from './domain';
+import { NoteErrorCodes } from './domain';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -83,22 +82,6 @@ const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.CONTENT_OVERWRITE_REFUSED]: HttpStatus.CONFLICT,
   [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
-
-function unwrapOrThrow<T>(result: Result<T, NoteDomainError>): T {
-  if (result.isErr()) {
-    const status =
-      NOTE_ERROR_STATUS_MAP[result.error.code] ?? HttpStatus.BAD_REQUEST;
-    throw new HttpException(
-      {
-        statusCode: status,
-        error: result.error.code,
-        message: result.error.message,
-      },
-      status
-    );
-  }
-  return result.value;
-}
 
 const noteProperties = {
   id: { type: 'string', format: 'uuid' },
@@ -195,7 +178,7 @@ export class NotesController {
       userId: user.id,
       ...(query.search ? { search: query.search } : {}),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -219,7 +202,7 @@ export class NotesController {
   @Public()
   async getNoteByToken(@Param('token') token: string) {
     const result = await this.getNoteByTokenHandler.execute(token);
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -252,7 +235,7 @@ export class NotesController {
       noteId: id,
       userId: user.id,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -279,7 +262,7 @@ export class NotesController {
       ownerId: user.id,
       ...(dto.content ? { content: dto.content } : {}),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -323,7 +306,7 @@ export class NotesController {
         'editorsCanShare',
       ]),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -352,7 +335,7 @@ export class NotesController {
       noteId: id,
       userId: user.id,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -396,7 +379,7 @@ export class NotesController {
       targetUserId: dto.userId,
       permission: dto.permission,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -433,7 +416,7 @@ export class NotesController {
       ownerId: user.id,
       targetUserId: userId,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Upload an image to a note' })
@@ -501,7 +484,7 @@ export class NotesController {
       ...(dto.width !== undefined && { width: dto.width }),
       ...(dto.height !== undefined && { height: dto.height }),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
@@ -557,6 +540,6 @@ export class NotesController {
       noteId: id,
       userId: user.id,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 }

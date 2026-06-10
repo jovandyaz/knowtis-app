@@ -11,30 +11,13 @@ import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
-import { ProposedMutation } from '../../domain/proposed-mutation';
 import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 import { AgentToolsFactory } from './agent-tools.factory';
+import { ProposalCollector } from './proposal-collector';
 
 interface StepToolResult {
   readonly toolName: string;
   readonly output: unknown;
-}
-
-export function extractProposal(
-  toolResults: readonly { toolName: string; output: unknown }[]
-): ProposedMutation | null {
-  for (const r of toolResults) {
-    const out = r.output;
-    if (
-      typeof out === 'object' &&
-      out !== null &&
-      '__proposal' in out &&
-      (out as { __proposal: unknown }).__proposal instanceof ProposedMutation
-    ) {
-      return (out as { __proposal: ProposedMutation }).__proposal;
-    }
-  }
-  return null;
 }
 
 function isSourceNote(value: unknown): value is { id: string; title: string } {
@@ -69,7 +52,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
     for (const note of input.knownNotes ?? []) {
       knownNotes.set(note.id, note);
     }
-    let captured: ProposedMutation | null = null;
+    const collector = new ProposalCollector();
     let result;
     try {
       result = streamText({
@@ -94,15 +77,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
             })),
         tools: input.resume
           ? this.toolsFactory.buildReadOnly(input.userId)
-          : this.toolsFactory.build(input.userId),
+          : this.toolsFactory.build(input.userId, collector),
         stopWhen: stepCountIs(input.maxSteps),
         onStepFinish: ({ toolResults }) => {
           this.collectSources(toolResults, sources);
           this.collectKnownNotes(toolResults, knownNotes);
-          const proposal = extractProposal(toolResults);
-          if (proposal) {
-            captured = proposal;
-          }
         },
         experimental_telemetry: {
           isEnabled: true,
@@ -132,6 +111,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         outputTokens: usage.outputTokens ?? 0,
         model: input.model,
       };
+      const captured = collector.captured;
       if (captured) {
         yield { type: 'proposal', proposal: captured, usage: turnUsage };
         return;

@@ -6,7 +6,6 @@ import {
   Controller,
   FileTypeValidator,
   Get,
-  HttpException,
   HttpStatus,
   Inject,
   MaxFileSizeValidator,
@@ -29,15 +28,15 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import type { Result } from 'neverthrow';
 
+import { unwrapOrThrow } from '../../core/http';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import { AIConfigService } from './application/services/ai-config.service';
-import { AIErrorCodes, type AIDomainError } from './domain/errors/ai.errors';
+import { AIErrorCodes } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
@@ -105,22 +104,6 @@ const metricsSummarySchema = {
   },
 };
 
-function unwrapOrThrow<T>(result: Result<T, AIDomainError>): T {
-  if (result.isErr()) {
-    const status =
-      AI_ERROR_STATUS_MAP[result.error.code] ?? HttpStatus.BAD_REQUEST;
-    throw new HttpException(
-      {
-        statusCode: status,
-        error: result.error.code,
-        message: result.error.message,
-      },
-      status
-    );
-  }
-  return result.value;
-}
-
 @ApiTags('AI')
 @ApiBearerAuth()
 @Controller('ai')
@@ -169,7 +152,7 @@ export class AIController {
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
       ...(user.isAnonymous && { isAnonymous: true }),
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Create a structured note from voice recording' })
@@ -228,7 +211,7 @@ export class AIController {
       ...(dto.language !== undefined && { language: dto.language }),
     });
 
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({

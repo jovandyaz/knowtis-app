@@ -13,13 +13,14 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { unwrapOrThrow } from '../../core/http';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import {
   GetQuizAttemptsHandler,
   SubmitQuizAttemptHandler,
 } from './application';
+import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
 import { SubmitQuizDto } from './dto';
-import { unwrapOrThrow } from './helpers';
 
 @ApiTags('Artifacts - Quiz')
 @ApiBearerAuth()
@@ -44,7 +45,7 @@ export class QuizController {
       userId: user.id,
       answers: dto.answers,
     });
-    return unwrapOrThrow(result);
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({ summary: 'Get quiz attempt history' })

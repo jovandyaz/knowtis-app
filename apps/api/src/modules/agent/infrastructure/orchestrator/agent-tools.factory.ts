@@ -6,7 +6,9 @@ import {
   RETRIEVAL_PORT,
   type RetrievalPort,
 } from '../../domain/ports/retrieval.port';
+import type { ProposedMutation } from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from './mutation-proposal.builder';
+import type { ProposalCollector } from './proposal-collector';
 
 @Injectable()
 export class AgentToolsFactory {
@@ -62,7 +64,7 @@ export class AgentToolsFactory {
     };
   }
 
-  build(userId: string) {
+  build(userId: string, collector: ProposalCollector) {
     return {
       ...this.buildReadOnly(userId),
       proposeCreateNote: tool({
@@ -84,7 +86,7 @@ export class AgentToolsFactory {
             contentMarkdown
           );
           return r.isOk()
-            ? { __proposal: r.value }
+            ? this.captureProposal(collector, r.value)
             : { error: r.error.message };
         },
       }),
@@ -115,7 +117,7 @@ export class AgentToolsFactory {
             ...(contentMarkdown !== undefined && { contentMarkdown }),
           });
           return r.isOk()
-            ? { __proposal: r.value }
+            ? this.captureProposal(collector, r.value)
             : { error: r.error.message };
         },
       }),
@@ -138,10 +140,18 @@ export class AgentToolsFactory {
             permission
           );
           return r.isOk()
-            ? { __proposal: r.value }
+            ? this.captureProposal(collector, r.value)
             : { error: r.error.message };
         },
       }),
     };
+  }
+
+  private captureProposal(
+    collector: ProposalCollector,
+    proposal: ProposedMutation
+  ): { ok: true; proposalId: string; summary: string } {
+    collector.capture(proposal);
+    return { ok: true, proposalId: proposal.id, summary: proposal.summary };
   }
 }

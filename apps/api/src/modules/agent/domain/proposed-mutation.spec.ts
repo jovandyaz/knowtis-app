@@ -13,7 +13,7 @@ describe('ProposedMutation', () => {
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
       expect(result.value.kind).toBe('create');
-      expect(result.value.targetNoteId).toBeUndefined();
+      expect(result.value).not.toHaveProperty('targetNoteId');
     }
   });
 
@@ -48,11 +48,12 @@ describe('ProposedMutation', () => {
       summary: 'Share with user',
     });
     expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value.kind).toBe('share');
+    if (result.isOk() && result.value.kind === 'share') {
       expect(result.value.targetNoteId).toBe(
         '22222222-2222-2222-2222-222222222222'
       );
+    } else {
+      throw new Error('expected a share proposal');
     }
   });
 

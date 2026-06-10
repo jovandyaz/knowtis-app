@@ -58,16 +58,14 @@ function deps(over: Record<string, unknown> = {}) {
       save: vi.fn(),
     },
     createHandler: {
-      execute: vi
-        .fn()
-        .mockResolvedValue(
-          ok({
-            id: 'n1',
-            title: 'GTD',
-            ownerId: 'u1',
-            generalAccess: 'restricted',
-          })
-        ),
+      execute: vi.fn().mockResolvedValue(
+        ok({
+          id: 'n1',
+          title: 'GTD',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+        })
+      ),
     },
     updateHandler: { execute: vi.fn() },
     shareHandler: { execute: vi.fn() },
@@ -229,6 +227,97 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_PERMISSION_DENIED');
+    }
+  });
+
+  it('surfaces a non-permission downstream error as AGENT_COMMIT_FAILED on update', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeUpdateNote',
+          mutation: updateProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Old',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      updateHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(
+            err({ code: 'NOTE_NOT_FOUND', message: 'note vanished' })
+          ),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p2', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
+      expect(r.error.code).not.toBe('AGENT_PERMISSION_DENIED');
+      expect(r.error.message).toContain('note vanished');
+    }
+  });
+
+  it('surfaces an invalid-title create error as AGENT_COMMIT_FAILED', async () => {
+    const d = deps({
+      createHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(
+            err({ code: 'INVALID_TITLE', message: 'title too long' })
+          ),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p1', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
+      expect(r.error.message).toContain('title too long');
+    }
+  });
+
+  it('surfaces a non-permission share error as AGENT_COMMIT_FAILED', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Shared',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      userRepo: {
+        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
+      },
+      shareHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(
+            err({ code: 'INVALID_PERMISSION', message: 'bad permission' })
+          ),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
     }
   });
 
