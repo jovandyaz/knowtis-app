@@ -1,10 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 
+import { sanitizeContent } from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { AIDomainError } from '../../domain/errors/ai.errors';
-import { sanitizeContent } from '../../domain/services/input-sanitizer';
 import type { SupportedAIAction } from '../../domain/value-objects/ai-action.vo';
 import { AIModel } from '../../domain/value-objects/ai-model.vo';
 import { AIConfigService } from './ai-config.service';

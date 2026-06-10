@@ -1,10 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import { estimateTokenCount, sanitizeContent } from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
-import { sanitizeContent } from '../../../ai/domain/services/input-sanitizer';
-import { estimateTokenCount } from '../../../ai/domain/services/token-estimator';
 import { ArtifactErrors, type ArtifactDomainError } from '../../domain/errors';
 import { learnTopicOutputSchema } from '../../domain/schemas/artifact-output.schemas';
 import { AIGenerationPipeline } from '../services/ai-generation.pipeline';

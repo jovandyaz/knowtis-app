@@ -3,14 +3,14 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import { detectPromptInjection, estimateTokenCount } from '@knowtis/ai-gateway';
+
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import {
   AI_CACHE,
   type AICache,
   type CachedResult,
 } from '../../domain/ports/ai-cache.port';
-import { detectPromptInjection } from '../../domain/services/prompt-guard';
-import { estimateTokenCount } from '../../domain/services/token-estimator';
 import type { SupportedAIAction } from '../../domain/value-objects/ai-action.vo';
 import { AIAction } from '../../domain/value-objects/ai-action.vo';
 import { AIOrchestrator } from './ai-orchestrator.service';

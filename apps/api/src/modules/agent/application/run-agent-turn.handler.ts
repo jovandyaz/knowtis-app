@@ -1,13 +1,13 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { detectPromptInjection, estimateTokenCount } from '@knowtis/ai-gateway';
+
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
-import { detectPromptInjection } from '../../ai/domain/services/prompt-guard';
-import { estimateTokenCount } from '../../ai/domain/services/token-estimator';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
