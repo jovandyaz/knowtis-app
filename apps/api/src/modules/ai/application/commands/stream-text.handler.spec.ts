@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
+import type { AICache } from '../../domain/ports/ai-cache.port';
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../testing/create-mock-config';
@@ -70,6 +71,10 @@ describe('StreamTextHandler', () => {
       getGlobalMetricsSummary: vi.fn(),
     };
 
+    handler = buildHandler();
+  });
+
+  function buildHandler(cache?: AICache): StreamTextHandler {
     const mockConfig = createMockConfig();
 
     const mockAIConfigService = {
@@ -91,9 +96,13 @@ describe('StreamTextHandler', () => {
     promptLoader.onModuleInit();
     const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    const pipeline = new AICompletionPipeline(orchestrator, rateLimitService);
-    handler = new StreamTextHandler(mockProvider, pipeline, mockConfig);
-  });
+    const pipeline = new AICompletionPipeline(
+      orchestrator,
+      rateLimitService,
+      cache
+    );
+    return new StreamTextHandler(mockProvider, pipeline, mockConfig);
+  }
 
   it('should stream chunks and call onDone with usage', async () => {
     await handler.execute(
@@ -311,6 +320,39 @@ describe('StreamTextHandler', () => {
 
     expect(received).toEqual(chunks);
     expect(received.join('')).toBe('Hello world! 🌍');
+  });
+
+  it('should record zero cost for a cache hit while keeping token counts', async () => {
+    const cache = {
+      isCacheable: vi.fn().mockReturnValue(true),
+      get: vi.fn().mockResolvedValue({
+        text: 'cached summary',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 10,
+        outputTokens: 5,
+        costUsd: 0.5,
+      }),
+      set: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AICache;
+    const cachedHandler = buildHandler(cache);
+
+    await cachedHandler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    expect(collectedChunks).toEqual(['cached summary']);
+    expect(doneResult!.costUsd).toBe(0);
+    expect(doneResult!.inputTokens).toBe(10);
+    expect(doneResult!.outputTokens).toBe(5);
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 10, outputTokens: 5, costUsd: 0 })
+    );
+    expect(mockProvider.streamCompletion).not.toHaveBeenCalled();
   });
 
   it('should build tone prompt correctly', async () => {

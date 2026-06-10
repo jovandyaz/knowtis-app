@@ -4,6 +4,8 @@ export interface StructuredOutputOptions {
   readonly model: string;
   readonly system?: string;
   readonly maxRetries?: number;
+  readonly maxOutputTokens?: number;
+  readonly timeoutMs?: number;
 }
 
 export interface StructuredOutputResult<T> {

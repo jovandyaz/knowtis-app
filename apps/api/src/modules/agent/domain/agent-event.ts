@@ -32,7 +32,9 @@ export type AgentEvent =
       readonly usage: AgentTurnUsage;
     }
   | { readonly type: 'committed'; readonly result: AgentCommitResult }
+  | { readonly type: 'aborted'; readonly usage: AgentTurnUsage }
   | {
       readonly type: 'error';
       readonly error: AIDomainError | { code: string; message: string };
+      readonly usage?: AgentTurnUsage;
     };

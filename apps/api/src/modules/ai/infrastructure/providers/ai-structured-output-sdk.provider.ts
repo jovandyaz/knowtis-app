@@ -48,6 +48,12 @@ export class AIStructuredOutputSDKProvider
       prompt,
       output: Output.object({ schema }),
       maxRetries: options.maxRetries ?? 3,
+      ...(options.maxOutputTokens
+        ? { maxOutputTokens: options.maxOutputTokens }
+        : {}),
+      ...(options.timeoutMs
+        ? { abortSignal: AbortSignal.timeout(options.timeoutMs) }
+        : {}),
     });
 
     return {

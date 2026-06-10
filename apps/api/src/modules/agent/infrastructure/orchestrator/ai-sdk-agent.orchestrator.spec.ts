@@ -50,6 +50,44 @@ vi.mock('ai', async (importOriginal) => {
   };
 });
 
+const MODEL = 'anthropic:claude-sonnet-4-20250514';
+
+const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
+
+function makeConfig(
+  over: Record<string, unknown> = {}
+): ConfigService<EnvConfig, true> {
+  const values: Record<string, unknown> = {
+    NODE_ENV: '',
+    GOOGLE_GENERATIVE_AI_API_KEY: '',
+    OPENAI_API_KEY: '',
+    AI_AGENT_MAX_MS: 120000,
+    AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
+    AI_MAX_RETRIES: 3,
+    ...over,
+  };
+  return {
+    get: vi.fn((key: string) => values[key]),
+  } as unknown as ConfigService<EnvConfig, true>;
+}
+
+function makeTools(over: Record<string, unknown> = {}): AgentToolsFactory {
+  return {
+    build: vi.fn().mockReturnValue({}),
+    buildReadOnly: vi.fn().mockReturnValue({}),
+    ...over,
+  } as unknown as AgentToolsFactory;
+}
+
+function makeOrchestrator(
+  config = makeConfig(),
+  tools = makeTools()
+): AiSdkAgentOrchestrator {
+  const orchestrator = new AiSdkAgentOrchestrator(config, tools);
+  orchestrator.onModuleInit();
+  return orchestrator;
+}
+
 function collect(iter: AsyncIterable<unknown>) {
   return (async () => {
     const out = [] as unknown[];
@@ -60,27 +98,18 @@ function collect(iter: AsyncIterable<unknown>) {
   })();
 }
 
+const baseInput = {
+  userId: 'u1',
+  messages: [{ role: 'user' as const, content: 'hi' }],
+  model: MODEL,
+  maxSteps: 4,
+};
+
 describe('AiSdkAgentOrchestrator', () => {
   it('collects deduped getNote sources and emits them on done', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
+    const orchestrator = makeOrchestrator();
 
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
-
-    const events = await collect(
-      orchestrator.run({
-        userId: 'u1',
-        messages: [{ role: 'user', content: 'hi' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
-      })
-    );
+    const events = await collect(orchestrator.run(baseInput));
 
     const done = events.find(
       (e): e is { type: 'done'; sources: { id: string; title: string }[] } =>
@@ -91,22 +120,12 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('injects current-note context into the system prompt when noteId is given', async () => {
-    const config = {
-      get: vi.fn(() => ''),
-    } as unknown as ConfigService<EnvConfig, true>;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    const orchestrator = makeOrchestrator();
 
     await collect(
       orchestrator.run({
-        userId: 'u1',
+        ...baseInput,
         messages: [{ role: 'user', content: 'resume esta nota' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
         noteId: 'note-xyz',
       })
     );
@@ -116,27 +135,10 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('yields a single error event (and does not throw) when the model is invalid', async () => {
-    const config = {
-      get: vi.fn((k: string) =>
-        k === 'GOOGLE_GENERATIVE_AI_API_KEY' || k === 'OPENAI_API_KEY'
-          ? ''
-          : undefined
-      ),
-    } as unknown as ConfigService<EnvConfig, true>;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(
-      orchestrator.run({
-        userId: 'u1',
-        messages: [{ role: 'user', content: 'hi' }],
-        model: 'nonexistent:model',
-        maxSteps: 4,
-      })
+      orchestrator.run({ ...baseInput, model: 'nonexistent:model' })
     );
 
     expect(events).toHaveLength(1);
@@ -144,25 +146,9 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
+    const orchestrator = makeOrchestrator();
 
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
-
-    const events = await collect(
-      orchestrator.run({
-        userId: 'u1',
-        messages: [{ role: 'user', content: 'hi' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
-      })
-    );
+    const events = await collect(orchestrator.run(baseInput));
 
     const chunk = events.find((e) => (e as { type: string }).type === 'chunk');
     const done = events.find(
@@ -179,29 +165,14 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(done).toBeDefined();
     expect(done?.usage.inputTokens).toBe(3);
     expect(done?.usage.outputTokens).toBe(2);
-    expect(done?.usage.model).toBe('anthropic:claude-sonnet-4-20250514');
+    expect(done?.usage.model).toBe(MODEL);
   });
 
   it('passes the userId to toolsFactory.build', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
+    const tools = makeTools();
+    const orchestrator = makeOrchestrator(makeConfig(), tools);
 
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
-
-    await collect(
-      orchestrator.run({
-        userId: 'user-42',
-        messages: [{ role: 'user', content: 'hi' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
-      })
-    );
+    await collect(orchestrator.run({ ...baseInput, userId: 'user-42' }));
 
     expect(tools.build).toHaveBeenCalledWith('user-42', expect.anything());
   });
@@ -216,26 +187,18 @@ describe('AiSdkAgentOrchestrator', () => {
     if (m.isErr()) {
       throw new Error('setup');
     }
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
+    const tools = makeTools({
       build: vi.fn((_userId: string, collector: ProposalCollector) => {
         collector.capture(m.value);
         return {};
       }),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    });
+    const orchestrator = makeOrchestrator(makeConfig(), tools);
 
     const events = await collect(
       orchestrator.run({
-        userId: 'u1',
+        ...baseInput,
         messages: [{ role: 'user', content: 'create a note' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
       })
     );
 
@@ -250,25 +213,9 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('enables AI SDK telemetry with an agent-turn functionId', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
+    const orchestrator = makeOrchestrator();
 
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
-
-    await collect(
-      orchestrator.run({
-        userId: 'u1',
-        messages: [{ role: 'user', content: 'hi' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
-      })
-    );
+    await collect(orchestrator.run(baseInput));
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
     expect(opts?.experimental_telemetry).toMatchObject({
@@ -280,23 +227,14 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('tags telemetry metadata with resume when resuming a turn', async () => {
-    const config = {
-      get: vi.fn(() => 'development'),
-    } as unknown as ConfigService<EnvConfig, true>;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-      buildReadOnly: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    const orchestrator = makeOrchestrator(
+      makeConfig({ NODE_ENV: 'development' })
+    );
 
     await collect(
       orchestrator.run({
-        userId: 'u1',
+        ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
         resume: { toolName: 'proposeCreateNote', outcome: 'created' },
       })
     );
@@ -349,24 +287,13 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('uses the read-only tool set when resuming a turn', async () => {
-    const config = { get: vi.fn(() => '') } as unknown as ConfigService<
-      EnvConfig,
-      true
-    >;
-    const tools = {
-      build: vi.fn().mockReturnValue({}),
-      buildReadOnly: vi.fn().mockReturnValue({}),
-    } as unknown as AgentToolsFactory;
-
-    const orchestrator = new AiSdkAgentOrchestrator(config, tools);
-    orchestrator.onModuleInit();
+    const tools = makeTools();
+    const orchestrator = makeOrchestrator(makeConfig(), tools);
 
     await collect(
       orchestrator.run({
-        userId: 'u1',
+        ...baseInput,
         messages: [{ role: 'user', content: 'ok' }],
-        model: 'anthropic:claude-sonnet-4-20250514',
-        maxSteps: 4,
         resume: { toolName: 'proposeCreateNote', outcome: 'created' },
       })
     );
@@ -375,5 +302,167 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(tools.build).not.toHaveBeenCalled();
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
     expect(JSON.stringify(opts?.messages)).toContain('created');
+  });
+
+  it('passes a timeout-combined abort signal, output cap, retries, and temperature to streamText', async () => {
+    const orchestrator = makeOrchestrator();
+    const controller = new AbortController();
+
+    await collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.maxOutputTokens).toBe(4096);
+    expect(opts?.maxRetries).toBe(3);
+    expect(opts?.temperature).toBe(0.7);
+    expect(opts?.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(opts?.abortSignal?.aborted).toBe(false);
+    controller.abort();
+    expect(opts?.abortSignal?.aborted).toBe(true);
+  });
+
+  it('passes the timeout abort signal even without a caller signal', async () => {
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.abortSignal).toBeInstanceOf(AbortSignal);
+    expect(opts?.abortSignal?.aborted).toBe(false);
+  });
+
+  it('yields an aborted event with accumulated step usage when the caller aborts mid-stream', async () => {
+    const controller = new AbortController();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        textStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 5, outputTokens: 2 },
+          });
+          yield 'partial';
+          controller.abort();
+          throw new DOMException('aborted', 'AbortError');
+        })(),
+        totalUsage: new Promise(() => {}),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'partial' });
+    expect(events.at(-1)).toEqual({
+      type: 'aborted',
+      usage: { inputTokens: 5, outputTokens: 2, model: MODEL },
+    });
+  });
+
+  it('yields aborted (not done) when the stream ends gracefully after the caller aborts', async () => {
+    const controller = new AbortController();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        textStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 4, outputTokens: 1 },
+          });
+          yield 'partial';
+          controller.abort();
+        })(),
+        totalUsage: new Promise(() => {}),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+
+    expect(events.at(-1)).toEqual({
+      type: 'aborted',
+      usage: { inputTokens: 4, outputTokens: 1, model: MODEL },
+    });
+    expect(
+      events.find((e) => (e as { type: string }).type === 'done')
+    ).toBeUndefined();
+  });
+
+  it('yields an error event carrying best-effort usage when the stream fails mid-turn', async () => {
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        textStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 5, outputTokens: 2 },
+          });
+          yield 'partial';
+          throw new Error('boom');
+        })(),
+        totalUsage: new Promise(() => {}),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+      usage: { inputTokens: 5, outputTokens: 2, model: MODEL },
+    });
+  });
+
+  it('converts a turn-timeout abort into an error event with usage', async () => {
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        textStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 3, outputTokens: 1 },
+          });
+          yield 'x';
+          await new Promise((resolve) => setTimeout(resolve, 30));
+          throw new DOMException('aborted', 'AbortError');
+        })(),
+        totalUsage: new Promise(() => {}),
+      })
+    );
+    const orchestrator = makeOrchestrator(makeConfig({ AI_AGENT_MAX_MS: 5 }));
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const last = events.at(-1) as {
+      type: string;
+      error: { code: string; message: string };
+      usage: { inputTokens: number; outputTokens: number };
+    };
+    expect(last.type).toBe('error');
+    expect(last.error.code).toBe('AI_PROVIDER_ERROR');
+    expect(last.error.message).toContain('timed out');
+    expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
   });
 });

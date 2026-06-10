@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_ACTION } from '@knowtis/shared-types';
 
+import type { AICache } from '../../domain/ports/ai-cache.port';
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../testing/create-mock-config';
@@ -43,6 +44,10 @@ describe('CompleteTextHandler', () => {
       getGlobalMetricsSummary: vi.fn(),
     };
 
+    handler = buildHandler();
+  });
+
+  function buildHandler(cache?: AICache): CompleteTextHandler {
     const mockConfig = createMockConfig();
 
     const mockAIConfigService = {
@@ -64,8 +69,42 @@ describe('CompleteTextHandler', () => {
     promptLoader.onModuleInit();
     const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    const pipeline = new AICompletionPipeline(orchestrator, rateLimitService);
-    handler = new CompleteTextHandler(mockProvider, pipeline, mockConfig);
+    const pipeline = new AICompletionPipeline(
+      orchestrator,
+      rateLimitService,
+      cache
+    );
+    return new CompleteTextHandler(mockProvider, pipeline, mockConfig);
+  }
+
+  it('should record zero cost for a cache hit while keeping token counts', async () => {
+    const cache = {
+      isCacheable: vi.fn().mockReturnValue(true),
+      get: vi.fn().mockResolvedValue({
+        text: 'cached summary',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 10,
+        outputTokens: 5,
+        costUsd: 0.5,
+      }),
+      set: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AICache;
+    const cachedHandler = buildHandler(cache);
+
+    const result = await cachedHandler.execute({
+      userId: 'user-123',
+      action: AI_ACTION.SUMMARIZE,
+      content: 'Some content',
+    });
+
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.text).toBe('cached summary');
+    }
+    expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 10, outputTokens: 5, costUsd: 0 })
+    );
+    expect(mockProvider.generateCompletion).not.toHaveBeenCalled();
   });
 
   it('should generate a completion and record usage', async () => {

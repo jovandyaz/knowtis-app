@@ -147,10 +147,12 @@ describe('GenerateArtifactHandler', () => {
       expect(structuredOutput.generateStructuredOutput).toHaveBeenCalledWith(
         expect.any(String),
         expect.any(Object),
-        {
+        expect.objectContaining({
           model: MOCK_MODEL,
           system: 'You are a study assistant.',
-        }
+          maxOutputTokens: expect.any(Number),
+          timeoutMs: expect.any(Number),
+        })
       );
       expect(repository.create).toHaveBeenCalledWith({
         type: 'flashcard_deck',
@@ -230,12 +232,12 @@ describe('GenerateArtifactHandler', () => {
   });
 
   describe('AI provider error', () => {
-    it('should return a generation failed error when the provider throws', async () => {
+    it('should return a generic generation error without leaking the provider message', async () => {
       rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
       orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
       orchestrator.getSystemPrompt.mockReturnValue('prompt');
       structuredOutput.generateStructuredOutput.mockRejectedValue(
-        new Error('Provider unavailable')
+        new Error('Provider unavailable: api key sk-secret rejected')
       );
 
       const result = await handler.execute(baseInput);
@@ -243,8 +245,46 @@ describe('GenerateArtifactHandler', () => {
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
         expect(result.error.code).toBe(ArtifactErrorCodes.GENERATION_FAILED);
-        expect(result.error.message).toContain('Provider unavailable');
+        expect(result.error.message).not.toContain('Provider unavailable');
+        expect(result.error.message).not.toContain('sk-secret');
+        expect(result.error.message).toContain('try again');
       }
+    });
+  });
+
+  describe('oversized content', () => {
+    it('should reject oversized note content before consuming rate limit or calling the provider', async () => {
+      const result = await handler.execute({
+        ...baseInput,
+        noteContent: 'a'.repeat(48_001),
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(ArtifactErrorCodes.CONTENT_TOO_LARGE);
+      }
+      expect(rateLimitService.checkLimit).not.toHaveBeenCalled();
+      expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
+    });
+
+    it('should still accept content at the limit boundary', async () => {
+      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      orchestrator.selectModel.mockResolvedValue(AIModel.create(MOCK_MODEL));
+      orchestrator.getSystemPrompt.mockReturnValue('prompt');
+      structuredOutput.generateStructuredOutput.mockResolvedValue({
+        object: { cards: [] },
+        inputTokens: 1,
+        outputTokens: 1,
+      });
+      rateLimitService.recordUsage.mockResolvedValue(undefined);
+      repository.create.mockResolvedValue(ok(createMockArtifactEntity()));
+
+      const result = await handler.execute({
+        ...baseInput,
+        noteContent: 'a'.repeat(48_000),
+      });
+
+      expect(result.isOk()).toBe(true);
     });
   });
 });

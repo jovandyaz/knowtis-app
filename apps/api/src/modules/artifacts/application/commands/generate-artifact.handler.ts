@@ -54,6 +54,8 @@ const TITLE_PREFIX_MAP: Record<ArtifactType, string> = {
   mind_map: 'Mind Map',
 };
 
+const MAX_CONTENT_CHARS = 48_000;
+
 @Injectable()
 export class GenerateArtifactHandler {
   constructor(
@@ -69,6 +71,10 @@ export class GenerateArtifactHandler {
 
     if (!sanitizedContent) {
       return err(ArtifactErrors.emptyContent());
+    }
+
+    if (sanitizedContent.length > MAX_CONTENT_CHARS) {
+      return err(ArtifactErrors.contentTooLarge(MAX_CONTENT_CHARS));
     }
 
     const action = ACTION_MAP[input.type];

@@ -18,6 +18,8 @@ interface RateLimitResult {
   readonly reason?: string;
 }
 
+const PG_RPM_SWEEP_THRESHOLD = 1000;
+
 @Injectable()
 export class AIRateLimitService {
   private readonly logger = new Logger(AIRateLimitService.name);
@@ -94,6 +96,20 @@ export class AIRateLimitService {
     };
   }
 
+  async releaseReservation(
+    userId: string,
+    estimatedTokens: number
+  ): Promise<void> {
+    if (!this.rateLimitProvider) {
+      return;
+    }
+    try {
+      await this.rateLimitProvider.correctUsage(userId, estimatedTokens, 0, 0);
+    } catch (error) {
+      this.logger.warn('Redis reservation release failed', error);
+    }
+  }
+
   async recordUsage(
     params: RecordUsageInput & { readonly estimatedTokens: number }
   ): Promise<void> {
@@ -118,6 +134,9 @@ export class AIRateLimitService {
     const limit = this.configService.get('AI_RPM_LIMIT');
     const entry = this.pgRpmCounters.get(userId);
     if (!entry || entry.minute !== minute) {
+      if (this.pgRpmCounters.size >= PG_RPM_SWEEP_THRESHOLD) {
+        this.sweepStalePgRpmCounters(minute);
+      }
       this.pgRpmCounters.set(userId, { minute, count: 1 });
       return true;
     }
@@ -126,6 +145,14 @@ export class AIRateLimitService {
     }
     entry.count += 1;
     return true;
+  }
+
+  private sweepStalePgRpmCounters(currentMinute: number): void {
+    for (const [userId, entry] of this.pgRpmCounters) {
+      if (entry.minute !== currentMinute) {
+        this.pgRpmCounters.delete(userId);
+      }
+    }
   }
 
   private async checkLimitViaPg(

@@ -132,6 +132,34 @@ describe('AIRateLimitService', () => {
       const allowedB = await service.checkLimit('user-b', 100);
       expect(allowedB.allowed).toBe(true);
     });
+
+    it('should evict stale entries once the counter map exceeds the sweep threshold', async () => {
+      for (let i = 0; i < 1000; i++) {
+        await service.checkLimit(`user-${i}`, 100);
+      }
+      const counters = service['pgRpmCounters'];
+      expect(counters.size).toBe(1000);
+
+      vi.setSystemTime(START + 61_000);
+      const result = await service.checkLimit('fresh-user', 100);
+
+      expect(result.allowed).toBe(true);
+      expect(counters.size).toBe(1);
+      expect(counters.has('fresh-user')).toBe(true);
+    });
+
+    it('should keep current-minute entries when sweeping', async () => {
+      for (let i = 0; i < 1000; i++) {
+        await service.checkLimit(`stale-${i}`, 100);
+      }
+      vi.setSystemTime(START + 61_000);
+      await service.checkLimit('active-1', 100);
+      await service.checkLimit('active-2', 100);
+
+      const counters = service['pgRpmCounters'];
+      expect(counters.has('active-1')).toBe(true);
+      expect(counters.has('active-2')).toBe(true);
+    });
   });
 
   describe('with Redis rate limit provider (RPM)', () => {
@@ -149,6 +177,28 @@ describe('AIRateLimitService', () => {
         mockConfig,
         mockRateLimitProvider
       );
+    });
+
+    it('should release a reservation by correcting usage to zero', async () => {
+      await service.releaseReservation('user-123', 1700);
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-123',
+        1700,
+        0,
+        0
+      );
+      expect(mockUsageRepo.recordUsage).not.toHaveBeenCalled();
+    });
+
+    it('should swallow provider failures when releasing a reservation', async () => {
+      vi.spyOn(mockRateLimitProvider, 'correctUsage').mockRejectedValue(
+        new Error('redis down')
+      );
+
+      await expect(
+        service.releaseReservation('user-123', 1700)
+      ).resolves.toBeUndefined();
     });
 
     it('should allow request when under RPM limit', async () => {

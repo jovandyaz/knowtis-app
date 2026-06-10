@@ -31,6 +31,11 @@ export interface GenerationResult<T> {
   outputTokens: number;
 }
 
+const GENERATION_MAX_OUTPUT_TOKENS = 8192;
+const GENERATION_TIMEOUT_MS = 60_000;
+const GENERATION_FAILED_MESSAGE =
+  'The AI provider could not generate this artifact. Please try again.';
+
 @Injectable()
 export class AIGenerationPipeline {
   private readonly logger = new Logger(AIGenerationPipeline.name);
@@ -89,7 +94,12 @@ export class AIGenerationPipeline {
       const result = await this.structuredOutput.generateStructuredOutput(
         request.prompt,
         request.schema as ZodType,
-        { model, system: systemPrompt }
+        {
+          model,
+          system: systemPrompt,
+          maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
+          timeoutMs: GENERATION_TIMEOUT_MS,
+        }
       );
 
       const { inputTokens, outputTokens } = result;
@@ -147,11 +157,7 @@ export class AIGenerationPipeline {
         ...request.logContext,
       });
 
-      return err(
-        ArtifactErrors.generationFailed(
-          error instanceof Error ? error.message : 'Unknown error'
-        )
-      );
+      return err(ArtifactErrors.generationFailed(GENERATION_FAILED_MESSAGE));
     }
   }
 }

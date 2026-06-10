@@ -6,6 +6,8 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { getModelPricing } from '../../ai/domain/constants/model-pricing';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import { estimateTokenCount } from '../../ai/domain/services/token-estimator';
+import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
@@ -59,11 +61,12 @@ interface TurnLoopPolicy {
   readonly onCommitted: (ctx: TurnLoopContext) => TurnEventOutcome;
 }
 
-const CHARS_PER_TOKEN = 4;
+const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 
 @Injectable()
 export class RunAgentTurnHandler {
   private readonly logger = new Logger(RunAgentTurnHandler.name);
+  private readonly missingPricingWarned = new Set<string>();
 
   constructor(
     @Inject(AGENT_ORCHESTRATOR)
@@ -89,7 +92,7 @@ export class RunAgentTurnHandler {
           toolName: this.toolNameForKind(event.proposal.kind),
         });
         callbacks.onProposal(event.proposal);
-        return 'continue';
+        return 'stop';
       },
       onCommitted: () => 'continue',
     });
@@ -102,20 +105,40 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
     signal?: AbortSignal
   ): Promise<void> {
-    const endTurn = (ctx: TurnLoopContext): TurnEventOutcome => {
-      callbacks.onDone({
-        inputTokens: 0,
-        outputTokens: 0,
-        model: ctx.model,
-        costUsd: 0,
-        sources: [],
-        knownNotes: [],
-      });
-      return 'stop';
-    };
     return this.runLoop(input, input.resume, callbacks, signal, {
-      onProposal: async (_event, ctx) => endTurn(ctx),
-      onCommitted: endTurn,
+      onProposal: async (event, ctx) => {
+        this.logger.warn({
+          event: 'agent.resume.proposal_dropped',
+          userId: input.userId,
+          proposalId: event.proposal.id,
+          summary: event.proposal.summary,
+        });
+        const costUsd = await this.recordUsage(
+          input.userId,
+          ctx.estimatedTokens,
+          event.usage
+        );
+        callbacks.onDone({
+          inputTokens: event.usage.inputTokens,
+          outputTokens: event.usage.outputTokens,
+          model: event.usage.model,
+          costUsd,
+          sources: [],
+          knownNotes: [],
+        });
+        return 'stop';
+      },
+      onCommitted: (ctx) => {
+        callbacks.onDone({
+          inputTokens: 0,
+          outputTokens: 0,
+          model: ctx.model,
+          costUsd: 0,
+          sources: [],
+          knownNotes: [],
+        });
+        return 'stop';
+      },
     });
   }
 
@@ -141,6 +164,12 @@ export class RunAgentTurnHandler {
     }
 
     const model = await this.aiConfig.getDefaultModel();
+    const modelResult = AIModel.create(model);
+    if (modelResult.isErr()) {
+      await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
+      callbacks.onError(modelResult.error);
+      return;
+    }
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
     const ctx: TurnLoopContext = { estimatedTokens, model };
 
@@ -160,14 +189,43 @@ export class RunAgentTurnHandler {
             callbacks.onChunk(event.text);
             break;
           case 'error':
+            await this.recordUsageSafe(
+              input.userId,
+              estimatedTokens,
+              event.usage ?? { inputTokens: 0, outputTokens: 0, model }
+            );
             callbacks.onError(event.error);
             return;
-          case 'done': {
-            const costUsd = await this.recordUsage(
+          case 'aborted':
+            await this.recordUsageSafe(
               input.userId,
               estimatedTokens,
               event.usage
             );
+            return;
+          case 'done': {
+            let costUsd: number;
+            try {
+              costUsd = await this.recordUsage(
+                input.userId,
+                estimatedTokens,
+                event.usage
+              );
+            } catch (error) {
+              this.logger.warn({
+                event: 'agent.usage.record_failed',
+                userId: input.userId,
+                error: error instanceof Error ? error.message : 'unknown',
+              });
+              costUsd = TokenUsage.create(
+                {
+                  inputTokens: event.usage.inputTokens,
+                  outputTokens: event.usage.outputTokens,
+                  model: event.usage.model,
+                },
+                getModelPricing(event.usage.model)
+              ).costUsd;
+            }
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -211,18 +269,46 @@ export class RunAgentTurnHandler {
     }
   }
 
+  private async recordUsageSafe(
+    userId: string,
+    estimatedTokens: number,
+    usage: AgentTurnUsage
+  ): Promise<void> {
+    if (usage.inputTokens + usage.outputTokens === 0) {
+      await this.rateLimit.releaseReservation(userId, estimatedTokens);
+      return;
+    }
+    try {
+      await this.recordUsage(userId, estimatedTokens, usage);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.usage.record_failed',
+        userId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
+  }
+
   private async recordUsage(
     userId: string,
     estimatedTokens: number,
     usage: AgentTurnUsage
   ): Promise<number> {
+    const pricing = getModelPricing(usage.model);
+    if (!pricing && !this.missingPricingWarned.has(usage.model)) {
+      this.missingPricingWarned.add(usage.model);
+      this.logger.warn({
+        event: 'agent.pricing.missing',
+        model: usage.model,
+      });
+    }
     const tokenUsage = TokenUsage.create(
       {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         model: usage.model,
       },
-      getModelPricing(usage.model)
+      pricing
     );
     await this.rateLimit.recordUsage({
       userId,
@@ -245,7 +331,7 @@ export class RunAgentTurnHandler {
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {
-    const chars = messages.reduce((sum, m) => sum + m.content.length, 0);
-    return Math.max(1, Math.ceil(chars / CHARS_PER_TOKEN));
+    const text = messages.map((m) => m.content).join('\n');
+    return estimateTokenCount(text) + AGENT_PROMPT_OVERHEAD_TOKENS;
   }
 }

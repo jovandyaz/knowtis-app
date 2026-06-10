@@ -156,9 +156,8 @@ export class AISDKProvider implements AICompletionProvider, OnModuleInit {
     const fallbackModel = this.configService.get('AI_FALLBACK_MODEL');
     const primary = openStream(options.model);
 
-    // Consumers that break out of the stream trigger generator.return(), which
-    // skips any code after the loop — usage must settle in `finally`, with a
-    // timer guaranteeing the deferred resolves even if the SDK never settles it.
+    // Consumer breaks trigger generator.return(), skipping post-loop code, so
+    // usage settles in finally; the timer covers an SDK that never settles it.
     const settleUsage = (result: ReturnType<typeof openStream>) => {
       const fallbackTimer = setTimeout(() => {
         usageDeferred.resolve({ promptTokens: 0, completionTokens: 0 });

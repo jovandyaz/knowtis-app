@@ -55,7 +55,7 @@ export class CompleteTextHandler {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
-        costUsd: data.costUsd,
+        costUsd: 0,
       });
       return ok({
         text: data.text,

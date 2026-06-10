@@ -1,9 +1,11 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { estimateTokenCount } from '../../ai/domain/services/token-estimator';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
@@ -39,6 +41,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
   const rateLimit = {
     checkLimit: vi.fn().mockResolvedValue({ allowed: over.allowed ?? true }),
     recordUsage: vi.fn().mockResolvedValue(undefined),
+    releaseReservation: vi.fn().mockResolvedValue(undefined),
   } as unknown as AIRateLimitService;
   const aiConfig = {
     getDefaultModel: vi
@@ -73,6 +76,10 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
 }
 
 describe('RunAgentTurnHandler', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('streams chunks then done, and records usage', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
@@ -486,15 +493,18 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).not.toHaveBeenCalled();
   });
 
-  it('resumeTurn ends the turn via onDone when the orchestrator unexpectedly yields a proposal', async () => {
+  it('resumeTurn records real usage and logs the dropped proposal when the orchestrator unexpectedly proposes', async () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
     const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'proposal',
         proposal: makeProposal('33333333-3333-3333-3333-333333333333'),
         usage: {
-          inputTokens: 1,
-          outputTokens: 1,
+          inputTokens: 7,
+          outputTokens: 3,
           model: 'anthropic:claude-sonnet-4-20250514',
         },
       },
@@ -518,7 +528,20 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(onDone).toHaveBeenCalledWith(
-      expect.objectContaining({ costUsd: 0 })
+      expect.objectContaining({
+        inputTokens: 7,
+        outputTokens: 3,
+        costUsd: expect.any(Number),
+      })
+    );
+    expect(onDone.mock.calls[0][0].costUsd).toBeGreaterThan(0);
+    expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
+    expect(pendingStore.save).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.resume.proposal_dropped',
+        proposalId: '33333333-3333-3333-3333-333333333333',
+      })
     );
   });
 
@@ -581,5 +604,283 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(onDone).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown default model before running the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const aiConfig = {
+      getDefaultModel: vi.fn().mockResolvedValue('custom:unpriced-model'),
+    } as unknown as AIConfigService;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_INVALID_MODEL' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('records best-effort usage when the turn is aborted mid-stream', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'partial' },
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 6,
+          outputTokens: 2,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onDone = vi.fn();
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone, onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 6, outputTokens: 2 })
+    );
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('records usage carried on an error event before reporting the error', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'error',
+        error: { code: 'AI_PROVIDER_ERROR', message: 'timed out' },
+        usage: {
+          inputTokens: 5,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 5, outputTokens: 1 })
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('does not record usage for an aborted turn that consumed no tokens', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('estimates tokens with the real tokenizer plus a fixed prompt-overhead margin', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const estimated = vi.mocked(rateLimit.checkLimit).mock.calls[0][1];
+    expect(estimated).toBe(estimateTokenCount('hi') + 1500);
+  });
+
+  it('warns when recorded usage reports a model missing from the pricing table', async () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          model: 'anthropic:claude-drifted-model',
+        },
+        sources: [],
+        knownNotes: [],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.pricing.missing',
+        model: 'anthropic:claude-drifted-model',
+      })
+    );
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi again' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const pricingWarns = warnSpy.mock.calls.filter(
+      ([arg]) =>
+        typeof arg === 'object' &&
+        arg !== null &&
+        'event' in arg &&
+        (arg as { event: string }).event === 'agent.pricing.missing'
+    );
+    expect(pricingWarns).toHaveLength(1);
+  });
+
+  it('releases the rate-limit reservation when a turn ends with zero usage', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number)
+    );
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('releases the rate-limit reservation when the configured model is invalid', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const aiConfig = {
+      getDefaultModel: vi.fn().mockResolvedValue('not-a-model'),
+    } as unknown as AIConfigService;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number)
+    );
   });
 });

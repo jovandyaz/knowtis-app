@@ -6,7 +6,11 @@ import type { ProviderRegistryProvider } from 'ai';
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { buildProviderRegistry } from '../../../ai/infrastructure/providers/provider-registry';
-import type { AgentEvent, AgentSource } from '../../domain/agent-event';
+import type {
+  AgentEvent,
+  AgentSource,
+  AgentTurnUsage,
+} from '../../domain/agent-event';
 import type {
   AgentOrchestrator,
   AgentRunInput,
@@ -19,6 +23,13 @@ interface StepToolResult {
   readonly toolName: string;
   readonly output: unknown;
 }
+
+interface StepUsageAccumulator {
+  inputTokens: number;
+  outputTokens: number;
+}
+
+const AGENT_TEMPERATURE = 0.7;
 
 function isSourceNote(value: unknown): value is { id: string; title: string } {
   if (typeof value !== 'object' || value === null) {
@@ -53,6 +64,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
       knownNotes.set(note.id, note);
     }
     const collector = new ProposalCollector();
+    const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
+    const timeoutSignal = AbortSignal.timeout(
+      this.configService.get('AI_AGENT_MAX_MS')
+    );
+    const abortSignal = input.signal
+      ? AbortSignal.any([input.signal, timeoutSignal])
+      : timeoutSignal;
     let result;
     try {
       result = streamText({
@@ -79,9 +97,15 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
           ? this.toolsFactory.buildReadOnly(input.userId)
           : this.toolsFactory.build(input.userId, collector),
         stopWhen: stepCountIs(input.maxSteps),
-        onStepFinish: ({ toolResults }) => {
+        maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
+        maxRetries: this.configService.get('AI_MAX_RETRIES'),
+        temperature: AGENT_TEMPERATURE,
+        abortSignal,
+        onStepFinish: ({ toolResults, usage }) => {
           this.collectSources(toolResults, sources);
           this.collectKnownNotes(toolResults, knownNotes);
+          stepUsage.inputTokens += usage?.inputTokens ?? 0;
+          stepUsage.outputTokens += usage?.outputTokens ?? 0;
         },
         experimental_telemetry: {
           isEnabled: true,
@@ -92,7 +116,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
             ...(input.resume ? { tags: ['resume'] } : {}),
           },
         },
-        ...(input.signal ? { abortSignal: input.signal } : {}),
       });
     } catch (error) {
       yield { type: 'error', error: this.toError(error) };
@@ -104,6 +127,15 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         if (delta) {
           yield { type: 'chunk', text: delta };
         }
+      }
+      const interrupted = this.interruptionEvent(
+        input,
+        timeoutSignal,
+        stepUsage
+      );
+      if (interrupted) {
+        yield interrupted;
+        return;
       }
       const usage = await result.totalUsage;
       const turnUsage = {
@@ -123,7 +155,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         knownNotes: [...knownNotes.values()],
       };
     } catch (error) {
-      if (input.signal?.aborted) {
+      const interrupted = this.interruptionEvent(
+        input,
+        timeoutSignal,
+        stepUsage
+      );
+      if (interrupted) {
+        yield interrupted;
         return;
       }
       this.logger.error({
@@ -132,8 +170,52 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator, OnModuleInit {
         model: input.model,
         error: error instanceof Error ? error.message : 'unknown',
       });
-      yield { type: 'error', error: this.toError(error) };
+      yield {
+        type: 'error',
+        error: this.toError(error),
+        usage: this.bestEffortUsage(input.model, stepUsage),
+      };
     }
+  }
+
+  // totalUsage never settles on an interrupted stream, so terminal events for
+  // abort/timeout must rely on the per-step accumulator instead of awaiting it.
+  private interruptionEvent(
+    input: AgentRunInput,
+    timeoutSignal: AbortSignal,
+    stepUsage: StepUsageAccumulator
+  ): AgentEvent | undefined {
+    if (input.signal?.aborted) {
+      return {
+        type: 'aborted',
+        usage: this.bestEffortUsage(input.model, stepUsage),
+      };
+    }
+    if (timeoutSignal.aborted) {
+      this.logger.warn({
+        event: 'agent.turn.timeout',
+        userId: input.userId,
+        model: input.model,
+        maxMs: this.configService.get('AI_AGENT_MAX_MS'),
+      });
+      return {
+        type: 'error',
+        error: AIErrors.providerError('Agent turn timed out'),
+        usage: this.bestEffortUsage(input.model, stepUsage),
+      };
+    }
+    return undefined;
+  }
+
+  private bestEffortUsage(
+    model: string,
+    stepUsage: StepUsageAccumulator
+  ): AgentTurnUsage {
+    return {
+      inputTokens: stepUsage.inputTokens,
+      outputTokens: stepUsage.outputTokens,
+      model,
+    };
   }
 
   private buildSystemPrompt(

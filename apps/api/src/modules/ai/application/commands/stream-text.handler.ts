@@ -62,14 +62,14 @@ export class StreamTextHandler {
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
-        costUsd: data.costUsd,
+        costUsd: 0,
       });
       callbacks.onChunk(data.text);
       callbacks.onDone({
         inputTokens: data.inputTokens,
         outputTokens: data.outputTokens,
         model: data.model,
-        costUsd: data.costUsd,
+        costUsd: 0,
       });
       return;
     }

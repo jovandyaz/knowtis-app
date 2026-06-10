@@ -9,6 +9,7 @@ export const ArtifactErrorCodes = {
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   GENERATION_FAILED: 'GENERATION_FAILED',
   EMPTY_CONTENT: 'EMPTY_CONTENT',
+  CONTENT_TOO_LARGE: 'CONTENT_TOO_LARGE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
@@ -42,6 +43,12 @@ export const ArtifactErrors = {
     createArtifactError(
       ArtifactErrorCodes.EMPTY_CONTENT,
       'Cannot generate artifact: the note has no content. Write some content first.'
+    ),
+
+  contentTooLarge: (maxChars: number) =>
+    createArtifactError(
+      ArtifactErrorCodes.CONTENT_TOO_LARGE,
+      `Note content is too large to generate an artifact (max ${maxChars} characters). Split the note into smaller ones and try again.`
     ),
 
   generationFailed: (reason: string) =>
