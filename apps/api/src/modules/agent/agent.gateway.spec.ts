@@ -231,6 +231,24 @@ describe('AgentGateway', () => {
     expect(client.disconnect).toHaveBeenCalled();
   });
 
+  it('disconnects and emits AUTH_REQUIRED for MCP-source tokens', async () => {
+    const jwt = {
+      verify: vi.fn().mockReturnValue({ sub: 'u1', source: 'mcp' }),
+    };
+    const featureFlags = { isEnabled: vi.fn().mockResolvedValue(true) };
+    const gateway = makeGateway({ jwt, featureFlags });
+    const client = makeClient(undefined, 'c1', 'mcp-token');
+
+    await gateway.handleConnection(client as never);
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'AUTH_REQUIRED' })
+    );
+    expect(client.disconnect).toHaveBeenCalled();
+    expect(client.data).not.toHaveProperty('userId');
+  });
+
   it('disconnects and emits AUTH_REQUIRED when JWT verification throws', async () => {
     const jwt = {
       verify: vi.fn().mockImplementation(() => {

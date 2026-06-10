@@ -49,7 +49,6 @@ import {
   ApiUnauthorized,
 } from '../../core/swagger';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
-import { McpScopeGuard } from '../mcp/guards/mcp-scope.guard';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -147,7 +146,7 @@ const noteWithOwnerSchema = {
 @ApiTags('Notes')
 @ApiBearerAuth()
 @Controller('notes')
-@UseGuards(JwtAuthGuard, PoliciesGuard, McpScopeGuard)
+@UseGuards(JwtAuthGuard, PoliciesGuard)
 export class NotesController {
   constructor(
     private readonly createNoteHandler: CreateNoteHandler,

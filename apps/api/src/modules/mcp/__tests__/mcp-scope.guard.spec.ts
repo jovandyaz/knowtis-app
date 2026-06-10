@@ -1,4 +1,5 @@
 import { ForbiddenException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { describe, expect, it, vi } from 'vitest';
@@ -9,7 +10,9 @@ import { McpScopeGuard } from '../guards/mcp-scope.guard';
 function createGuard(overrides: {
   scopeMetadata?: string;
   token?: string;
-  payload?: Record<string, unknown> | null;
+  payload?: Record<string, unknown>;
+  verifyRejects?: boolean;
+  contextType?: string;
 }) {
   const reflector = {
     getAllAndOverride: vi
@@ -17,13 +20,20 @@ function createGuard(overrides: {
       .mockReturnValue(overrides.scopeMetadata ?? undefined),
   } as unknown as Reflector;
 
-  const jwtService = {
-    decode: vi.fn().mockReturnValue(overrides.payload ?? null),
-  } as unknown as JwtService;
+  const verifyAsync = overrides.verifyRejects
+    ? vi.fn().mockRejectedValue(new Error('invalid signature'))
+    : vi.fn().mockResolvedValue(overrides.payload ?? {});
 
-  const guard = new McpScopeGuard(reflector, jwtService);
+  const jwtService = { verifyAsync } as unknown as JwtService;
+
+  const configService = {
+    getOrThrow: vi.fn().mockReturnValue('test-secret'),
+  } as unknown as ConfigService;
+
+  const guard = new McpScopeGuard(reflector, jwtService, configService);
 
   const context = {
+    getType: vi.fn().mockReturnValue(overrides.contextType ?? 'http'),
     getHandler: vi.fn(),
     getClass: vi.fn(),
     switchToHttp: vi.fn().mockReturnValue({
@@ -37,102 +47,147 @@ function createGuard(overrides: {
     }),
   };
 
-  return { guard, reflector, jwtService, context };
+  return { guard, reflector, jwtService, verifyAsync, context };
 }
 
 describe('McpScopeGuard', () => {
-  it('should pass when no scope metadata is set', () => {
-    const { guard, context } = createGuard({});
+  it('should pass when no Authorization header is present', async () => {
+    const { guard, context, verifyAsync } = createGuard({});
 
-    expect(guard.canActivate(context as never)).toBe(true);
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
+    expect(verifyAsync).not.toHaveBeenCalled();
   });
 
-  it('should pass when no Authorization header is present', () => {
-    const { guard, context } = createGuard({ scopeMetadata: 'read' });
-
-    expect(guard.canActivate(context as never)).toBe(true);
-  });
-
-  it('should pass for regular user JWT (no source claim)', () => {
+  it('should pass when token verification fails', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'read',
+      token: 'knk_raw-api-key-not-a-jwt',
+      verifyRejects: true,
+    });
+
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
+  });
+
+  it('should pass for regular user JWT without scope metadata', async () => {
+    const { guard, context } = createGuard({
       token: 'regular-jwt',
       payload: { sub: 'user-1', email: 'user@test.com' },
     });
 
-    expect(guard.canActivate(context as never)).toBe(true);
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
   });
 
-  it('should pass for MCP JWT with sufficient scope', () => {
-    const { guard, context } = createGuard({
-      scopeMetadata: 'read',
-      token: 'mcp-jwt',
-      payload: {
-        sub: 'user-1',
-        email: 'user@test.com',
-        source: 'mcp',
-        scopes: 'read,write',
-      },
-    });
-
-    expect(guard.canActivate(context as never)).toBe(true);
-  });
-
-  it('should throw ForbiddenException for MCP JWT with insufficient scope', () => {
+  it('should pass for regular user JWT regardless of scope metadata', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'write',
-      token: 'mcp-jwt',
-      payload: {
-        sub: 'user-1',
-        email: 'user@test.com',
-        source: 'mcp',
-        scopes: 'read',
-      },
+      token: 'regular-jwt',
+      payload: { sub: 'user-1', email: 'user@test.com' },
     });
 
-    expect(() => guard.canActivate(context as never)).toThrow(
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
+  });
+
+  it('should throw ForbiddenException for MCP JWT on a route without scope metadata', async () => {
+    const { guard, context } = createGuard({
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write,share' },
+    });
+
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
       ForbiddenException
     );
   });
 
-  it('should throw ForbiddenException for MCP JWT missing share scope', () => {
+  it('should pass for MCP JWT with sufficient scope', async () => {
+    const { guard, context } = createGuard({
+      scopeMetadata: 'read',
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write' },
+    });
+
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
+  });
+
+  it('should throw ForbiddenException for MCP JWT without scopes claim', async () => {
+    const { guard, context } = createGuard({
+      scopeMetadata: 'read',
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp' },
+    });
+
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      ForbiddenException
+    );
+  });
+
+  it('should throw ForbiddenException for MCP JWT with insufficient scope', async () => {
+    const { guard, context } = createGuard({
+      scopeMetadata: 'write',
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+    });
+
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      ForbiddenException
+    );
+  });
+
+  it('should throw ForbiddenException for MCP JWT missing share scope', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'share',
       token: 'mcp-jwt',
-      payload: {
-        sub: 'user-1',
-        email: 'user@test.com',
-        source: 'mcp',
-        scopes: 'read,write',
-      },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write' },
     });
 
-    expect(() => guard.canActivate(context as never)).toThrow(
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
       ForbiddenException
     );
   });
 
-  it('should include required scope in error message', () => {
+  it('should include required scope in error message', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'write',
       token: 'mcp-jwt',
-      payload: {
-        sub: 'user-1',
-        email: 'user@test.com',
-        source: 'mcp',
-        scopes: 'read',
-      },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
     });
 
-    expect(() => guard.canActivate(context as never)).toThrow("'write'");
+    await expect(guard.canActivate(context as never)).rejects.toThrow(
+      "'write'"
+    );
   });
 
-  it('should use reflector with correct metadata key', () => {
-    const { guard, reflector, context } = createGuard({
+  it('should verify the token signature with the configured secret', async () => {
+    const { guard, context, verifyAsync } = createGuard({
       scopeMetadata: 'read',
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
     });
 
-    guard.canActivate(context as never);
+    await guard.canActivate(context as never);
+
+    expect(verifyAsync).toHaveBeenCalledWith('mcp-jwt', {
+      secret: 'test-secret',
+    });
+  });
+
+  it('should pass for non-HTTP execution contexts', async () => {
+    const { guard, context, verifyAsync } = createGuard({
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      contextType: 'ws',
+    });
+
+    await expect(guard.canActivate(context as never)).resolves.toBe(true);
+    expect(verifyAsync).not.toHaveBeenCalled();
+  });
+
+  it('should use reflector with correct metadata key', async () => {
+    const { guard, reflector, context } = createGuard({
+      scopeMetadata: 'read',
+      token: 'mcp-jwt',
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+    });
+
+    await guard.canActivate(context as never);
 
     expect(reflector.getAllAndOverride).toHaveBeenCalledWith(MCP_SCOPE_KEY, [
       context.getHandler(),

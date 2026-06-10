@@ -19,6 +19,7 @@ import { z } from 'zod';
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp/mcp-token';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import {
@@ -108,10 +109,22 @@ export class AgentGateway
     // Verify + set userId synchronously BEFORE the async flag check below, so a
     // message emitted on the same tick as `connect` can't race ahead of it.
     try {
-      const payload = this.jwtService.verify<{
-        sub: string;
-        isAnonymous?: boolean;
-      }>(token);
+      const payload = this.jwtService.verify<
+        { sub: string; isAnonymous?: boolean } & McpTokenClaims
+      >(token);
+      if (payload.source === TOKEN_SOURCE_MCP) {
+        this.logger.warn({
+          event: 'agent.client.mcp_token_rejected',
+          clientId: client.id,
+          userId: payload.sub,
+        });
+        client.emit(
+          'agent:error',
+          AIErrors.authRequired('MCP tokens are not allowed on this namespace')
+        );
+        client.disconnect();
+        return;
+      }
       client.data.userId = payload.sub;
       if (payload.isAnonymous) {
         client.data.isAnonymous = true;

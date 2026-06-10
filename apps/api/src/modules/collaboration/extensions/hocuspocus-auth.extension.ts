@@ -11,6 +11,7 @@ import {
 } from '@knowtis/authorization';
 import { GENERAL_ACCESS, type PermissionLevel } from '@knowtis/shared-types';
 
+import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../../mcp/mcp-token';
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
 import type { NoteEntity } from '../../notes/domain/entities/note.entity';
@@ -18,7 +19,7 @@ import { UsersService } from '../../users/users.service';
 
 type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
 
-interface JwtPayload {
+interface JwtPayload extends McpTokenClaims {
   sub: string;
   email: string;
   isAnonymous?: boolean;
@@ -129,6 +130,13 @@ export class HocuspocusAuthExtension {
         `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
       );
       throw new Error('Invalid token');
+    }
+
+    if (payload.source === TOKEN_SOURCE_MCP) {
+      this.logger.warn(
+        `MCP token rejected for collaboration handshake on note ${documentName}`
+      );
+      throw new Error('Forbidden');
     }
 
     let user: AuthenticatedUser | null;

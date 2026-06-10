@@ -20,6 +20,7 @@ import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
+import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp/mcp-token';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
 import { SUPPORTED_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
@@ -82,10 +83,22 @@ export class AIGateway
     // Verify + set userId synchronously BEFORE the async flag check below, so a
     // message emitted on the same tick as `connect` can't race ahead of it.
     try {
-      const payload = this.jwtService.verify<{
-        sub: string;
-        isAnonymous?: boolean;
-      }>(token);
+      const payload = this.jwtService.verify<
+        { sub: string; isAnonymous?: boolean } & McpTokenClaims
+      >(token);
+      if (payload.source === TOKEN_SOURCE_MCP) {
+        this.logger.warn({
+          event: 'ai.client.mcp_token_rejected',
+          clientId: client.id,
+          userId: payload.sub,
+        });
+        client.emit(
+          'ai:error',
+          AIErrors.authRequired('MCP tokens are not allowed on this namespace')
+        );
+        client.disconnect();
+        return;
+      }
       client.data.userId = payload.sub;
       if (payload.isAnonymous) {
         client.data.isAnonymous = true;

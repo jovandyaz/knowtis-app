@@ -1,6 +1,7 @@
 import { Logger, VersioningType } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -11,7 +12,10 @@ import { AppModule } from './app/app.module';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Railway terminates TLS at a proxy; without this, req.ip is the proxy and
+  // per-IP rate limits become global.
+  app.set('trust proxy', 1);
   const configService = app.get(ConfigService);
   const isDevelopment = configService.get('NODE_ENV') === 'development';
 

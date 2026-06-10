@@ -110,6 +110,24 @@ describe('HocuspocusAuthExtension', () => {
     ).rejects.toThrow('Forbidden');
   });
 
+  it('should reject MCP-source tokens', async () => {
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi.fn().mockReturnValue({
+          sub: 'user-1',
+          email: 'u@example.com',
+          source: 'mcp',
+        }),
+      } as never,
+      { findById: vi.fn() } as never,
+      { findById: vi.fn() } as unknown as NoteRepository
+    );
+
+    await expect(
+      ext.toExtension().onAuthenticate?.(buildPayload('mcp-token') as never)
+    ).rejects.toThrow('Forbidden');
+  });
+
   it('should reject when token is invalid', async () => {
     const ext = new HocuspocusAuthExtension(
       {

@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 
-import { McpModule } from '../mcp/mcp.module';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -27,7 +26,6 @@ import { VercelBlobStorage } from './infrastructure/storage/vercel-blob.storage'
 import { NotesController } from './notes.controller';
 
 @Module({
-  imports: [McpModule],
   controllers: [NotesController],
   providers: [
     {
