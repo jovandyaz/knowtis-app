@@ -105,8 +105,7 @@ export class AISDKProvider implements AICompletionProvider {
 
     let activeModel = options.model;
     const openStream = (model: string) => {
-      activeModel = model;
-      return streamText({
+      const result = streamText({
         model: this.providerRegistry.languageModel(model),
         ...this.buildSystemParam(model, options.system),
         messages: [{ role: 'user', content: prompt }],
@@ -116,6 +115,8 @@ export class AISDKProvider implements AICompletionProvider {
         ...(options.signal ? { abortSignal: options.signal } : {}),
         ...this.buildTimeoutParam(options.timeout),
       });
+      activeModel = model;
+      return result;
     };
 
     // Consumer breaks trigger generator.return(), skipping post-loop code, so

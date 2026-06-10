@@ -142,6 +142,31 @@ describe('StreamTextHandler', () => {
     );
   });
 
+  it('should report and price the served model when the chain falls back', async () => {
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: createAsyncStream(['fallback answer']),
+      usage: Promise.resolve({
+        promptTokens: 80,
+        completionTokens: 30,
+        model: 'openai:gpt-4o-mini',
+      }),
+    });
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    expect(doneResult!.model).toBe('openai:gpt-4o-mini');
+    const recorded = vi.mocked(mockUsageRepo.recordUsage).mock.calls[0][0];
+    expect(recorded.model).toBe('openai:gpt-4o-mini');
+    expect(recorded.costUsd).toBeCloseTo(80 * 1.5e-7 + 30 * 6e-7, 10);
+  });
+
   it('should cap streaming with the generous stream timeout, not the REST timeout', async () => {
     await handler.execute(
       {
