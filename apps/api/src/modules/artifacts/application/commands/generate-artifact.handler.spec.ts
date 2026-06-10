@@ -126,6 +126,7 @@ describe('GenerateArtifactHandler', () => {
         object: flashcardContent,
         inputTokens: 100,
         outputTokens: 200,
+        model: MOCK_MODEL,
       });
       rateLimitService.recordUsage.mockResolvedValue(undefined);
       repository.create.mockResolvedValue(ok(mockEntity));
@@ -181,6 +182,7 @@ describe('GenerateArtifactHandler', () => {
         object: flashcardContent,
         inputTokens: 50,
         outputTokens: 100,
+        model: MOCK_MODEL,
       });
       rateLimitService.recordUsage.mockResolvedValue(undefined);
       repository.create.mockResolvedValue(
@@ -285,6 +287,7 @@ describe('GenerateArtifactHandler', () => {
         object: { cards: [] },
         inputTokens: 1,
         outputTokens: 1,
+        model: MOCK_MODEL,
       });
       rateLimitService.recordUsage.mockResolvedValue(undefined);
       repository.create.mockResolvedValue(ok(createMockArtifactEntity()));

@@ -1,15 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { generateText, Output } from 'ai';
 import type { ZodType } from 'zod';
 
-import type { EnvConfig } from '../../../../config/env.config';
+import { executeWithChain } from '@knowtis/ai-gateway';
+
 import type {
   AIStructuredOutputProvider,
   StructuredOutputOptions,
   StructuredOutputResult,
 } from '../../domain/ports/ai-structured-output.port';
-import { withModelFallback } from './model-fallback';
+import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
 @Injectable()
@@ -17,8 +17,8 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
   private readonly logger = new Logger(AIStructuredOutputSDKProvider.name);
 
   constructor(
-    private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly providerRegistry: ProviderRegistryFactory
+    private readonly providerRegistry: ProviderRegistryFactory,
+    private readonly fallbackChain: FallbackChainService
   ) {}
 
   async generateStructuredOutput<T>(
@@ -29,12 +29,12 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     const timeoutSignal = options.timeoutMs
       ? AbortSignal.timeout(options.timeoutMs)
       : undefined;
-    return withModelFallback(
+    return executeWithChain(
       (model) =>
         this.callGenerate(prompt, schema, { ...options, model }, timeoutSignal),
       {
-        primaryModel: options.model,
-        fallbackModel: this.configService.get('AI_FALLBACK_MODEL'),
+        candidates: this.fallbackChain.candidatesFor(options.model),
+        cooldown: this.fallbackChain.cooldown,
         logger: this.logger,
       }
     );
@@ -62,6 +62,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
       object: result.output as T,
       inputTokens: result.usage?.inputTokens ?? 0,
       outputTokens: result.usage?.outputTokens ?? 0,
+      model: options.model,
     };
   }
 }

@@ -25,6 +25,8 @@ export interface StreamCompletionResult {
     completionTokens: number;
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
+    /** Model that actually served the stream after chain fallback. */
+    model: string;
   }>;
 }
 

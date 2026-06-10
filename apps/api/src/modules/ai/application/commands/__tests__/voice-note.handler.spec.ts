@@ -99,6 +99,7 @@ describe('VoiceNoteHandler', () => {
       },
       inputTokens: 200,
       outputTokens: 80,
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
 
     const result = await handler.execute({
@@ -250,6 +251,7 @@ describe('VoiceNoteHandler', () => {
       },
       inputTokens: 100,
       outputTokens: 40,
+      model: 'anthropic:claude-sonnet-4-20250514',
     });
 
     const result = await handler.execute({

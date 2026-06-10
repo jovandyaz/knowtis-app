@@ -31,6 +31,12 @@ const TEST_PRICES = {
     input_cost_per_token: 0.00000125,
     output_cost_per_token: 0.00001,
   },
+  'gpt-4o-mini': {
+    litellm_provider: 'openai',
+    mode: 'chat',
+    input_cost_per_token: 1.5e-7,
+    output_cost_per_token: 6e-7,
+  },
   'whisper-1': {
     litellm_provider: 'openai',
     mode: 'audio_transcription',

@@ -32,7 +32,13 @@ const envSchemaBase = z.object({
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
   AI_ANONYMOUS_DAILY_LIMIT_PCT: z.coerce.number().min(0).max(1).default(0.33),
   AI_MAX_RETRIES: z.coerce.number().default(3),
-  AI_FALLBACK_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
+  AI_FALLBACK_CHAIN: z
+    .string()
+    .default(
+      'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash'
+    ),
+  AI_COOLDOWN_ALLOWED_FAILS: z.coerce.number().int().min(1).default(3),
+  AI_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(120),
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
   AI_STREAM_MAX_MS: z.coerce.number().default(180000),
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),

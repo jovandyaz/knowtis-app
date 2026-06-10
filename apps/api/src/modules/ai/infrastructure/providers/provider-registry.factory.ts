@@ -72,6 +72,22 @@ export class ProviderRegistryFactory implements OnModuleInit {
     return this.registry.languageModel(modelId);
   }
 
+  /** True when this process can route the model: gateway mode accepts any qualified id; direct mode requires the provider's key. */
+  isModelAvailable(modelId: string): boolean {
+    if (!isQualifiedModelId(modelId)) {
+      return false;
+    }
+    if (this.gateway) {
+      return true;
+    }
+    try {
+      this.assertProviderKeyConfigured(modelId);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   private assertProviderKeyConfigured(modelId: string): void {
     if (
       modelId.startsWith('anthropic:') &&
