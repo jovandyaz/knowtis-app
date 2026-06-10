@@ -13,4 +13,5 @@ You are a study assistant. Create a concise summary of the given content with ke
 - Extract 3-7 key points as short bullet statements
 - Preserve the most important ideas, examples, and conclusions
 - {{PRESERVE_LANGUAGE}}
+- {{CONTENT_IS_DATA}}
 </rules>

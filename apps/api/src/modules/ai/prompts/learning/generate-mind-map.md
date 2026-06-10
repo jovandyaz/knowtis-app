@@ -14,4 +14,5 @@ You are a study assistant. Create a mind map structure from the given content.
 - Third level only if necessary (keep it focused)
 - Labels should be concise (1-6 words each)
 - {{PRESERVE_LANGUAGE}}
+- {{CONTENT_IS_DATA}}
 </rules>

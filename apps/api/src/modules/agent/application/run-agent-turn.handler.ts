@@ -68,6 +68,7 @@ interface TurnLoopPolicy {
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+const MAX_USER_MESSAGE_CHARS = 50_000;
 
 @Injectable()
 export class RunAgentTurnHandler {
@@ -159,15 +160,32 @@ export class RunAgentTurnHandler {
     if (signal?.aborted) {
       return;
     }
-    const messages = this.trimHistory(input.messages);
-    const lastUserMessage = messages.findLast((m) => m.role === 'user');
-    if (
-      lastUserMessage &&
-      !detectPromptInjection(lastUserMessage.content).safe
-    ) {
-      callbacks.onError(AIErrors.promptInjectionDetected());
-      return;
+    const lastUserMessage = input.messages.findLast((m) => m.role === 'user');
+    if (lastUserMessage) {
+      if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
+        callbacks.onError(
+          AIErrors.invalidInput(
+            `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
+          )
+        );
+        return;
+      }
+      if (!detectPromptInjection(lastUserMessage.content).safe) {
+        callbacks.onError(AIErrors.promptInjectionDetected());
+        return;
+      }
     }
+    // Unsafe older messages are dropped instead of failing the turn: the
+    // client keeps rejected messages in its history, so a hard error here
+    // would permanently block the rest of the conversation.
+    const messages = this.trimHistory(
+      input.messages.filter(
+        (m) =>
+          m.role !== 'user' ||
+          m === lastUserMessage ||
+          this.isSafeHistoryMessage(m, input.userId)
+      )
+    );
     const estimatedTokens = this.estimateTokens(messages);
     const limit = await this.rateLimit.checkLimit(
       input.userId,
@@ -329,6 +347,20 @@ export class RunAgentTurnHandler {
       estimatedTokens,
     });
     return tokenUsage.costUsd;
+  }
+
+  private isSafeHistoryMessage(message: AgentMessage, userId: string): boolean {
+    const safe =
+      message.content.length <= MAX_USER_MESSAGE_CHARS &&
+      detectPromptInjection(message.content).safe;
+    if (!safe) {
+      this.logger.warn({
+        event: 'agent.history.message_dropped',
+        userId,
+        contentLength: message.content.length,
+      });
+    }
+    return safe;
   }
 
   private toolNameForKind(kind: MutationKind): string {

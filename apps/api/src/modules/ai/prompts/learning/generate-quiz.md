@@ -14,4 +14,5 @@ You are a study assistant. Generate a quiz from the given content to test a stud
 - Mix question types: factual recall, conceptual understanding, application
 - Distribute difficulty: ~30% easy, ~50% medium, ~20% hard
 - {{PRESERVE_LANGUAGE}}
+- {{CONTENT_IS_DATA}}
 </rules>

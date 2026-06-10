@@ -14,4 +14,5 @@ You are a study assistant. Generate flashcards from the given content to help a 
 - Vary question types: definitions, comparisons, examples, fill-in-the-blank
 - Assign difficulty based on concept complexity
 - {{PRESERVE_LANGUAGE}}
+- {{CONTENT_IS_DATA}}
 </rules>
