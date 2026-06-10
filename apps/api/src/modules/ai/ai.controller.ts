@@ -45,6 +45,10 @@ import {
 import { AICompleteDto } from './dto/ai.dto';
 import { SetAIConfigDto } from './dto/set-ai-config.dto';
 import { VoiceNoteDto } from './dto/voice-note.dto';
+import {
+  FallbackChainService,
+  type ProviderHealth,
+} from './infrastructure/providers/fallback-chain.service';
 
 const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.RATE_LIMIT_EXCEEDED]: HttpStatus.TOO_MANY_REQUESTS,
@@ -114,9 +118,63 @@ export class AIController {
     private readonly completeTextHandler: CompleteTextHandler,
     private readonly voiceNoteHandler: VoiceNoteHandler,
     private readonly aiConfigService: AIConfigService,
+    private readonly fallbackChain: FallbackChainService,
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository
   ) {}
+
+  @ApiOperation({
+    summary: 'Per-provider AI health',
+    description:
+      'Passive health snapshot from the provider cooldown tracker. No probes are sent and no tokens are spent.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Health snapshot per provider',
+    schema: {
+      type: 'object',
+      properties: {
+        providers: {
+          type: 'object',
+          additionalProperties: {
+            type: 'object',
+            properties: {
+              configured: { type: 'boolean', example: true },
+              cooling: { type: 'boolean', example: false },
+              failureCount: { type: 'number', example: 0 },
+              lastFailureAt: {
+                type: 'string',
+                nullable: true,
+                example: null,
+              },
+              lastSuccessAt: {
+                type: 'string',
+                nullable: true,
+                example: '2026-06-10T12:00:00.000Z',
+              },
+              cooldownEndsAt: {
+                type: 'string',
+                nullable: true,
+                example: null,
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiAuthErrors('AI feature is disabled')
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — admin role required',
+  })
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @RequireFeatureFlag('ai_enabled')
+  @Roles('admin')
+  @Get('health')
+  getHealth(): { providers: Record<string, ProviderHealth> } {
+    return { providers: this.fallbackChain.healthSnapshot() };
+  }
 
   @ApiOperation({
     summary: 'Complete text with AI',
