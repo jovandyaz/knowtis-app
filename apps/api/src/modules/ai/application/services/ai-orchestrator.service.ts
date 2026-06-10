@@ -1,7 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 
-import { sanitizeContent } from '@knowtis/ai-gateway';
+import {
+  MODEL_CATALOG,
+  sanitizeContent,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 import { AI_ACTION } from '@knowtis/shared-types';
 
 import type { AIDomainError } from '../../domain/errors/ai.errors';
@@ -16,7 +20,9 @@ const FAST_MODEL_ACTIONS = new Set<SupportedAIAction>([AI_ACTION.GHOST_TEXT]);
 export class AIOrchestrator {
   constructor(
     private readonly aiConfigService: AIConfigService,
-    private readonly promptLoader: PromptLoaderService
+    private readonly promptLoader: PromptLoaderService,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog
   ) {}
 
   async selectModel(
@@ -25,7 +31,7 @@ export class AIOrchestrator {
     const modelStr = FAST_MODEL_ACTIONS.has(action)
       ? await this.aiConfigService.getFastModel()
       : await this.aiConfigService.getDefaultModel();
-    return AIModel.create(modelStr);
+    return AIModel.create(modelStr, this.modelCatalog);
   }
 
   getSystemPrompt(action: SupportedAIAction): string {

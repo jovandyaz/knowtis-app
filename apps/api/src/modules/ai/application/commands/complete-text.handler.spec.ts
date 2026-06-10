@@ -8,6 +8,7 @@ import type { AICache } from '../../domain/ports/ai-cache.port';
 import type { AICompletionProvider } from '../../domain/ports/ai-provider.port';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import { createMockConfig } from '../../testing/create-mock-config';
+import { createTestCatalog } from '../../testing/create-test-catalog';
 import { AICompletionPipeline } from '../services/ai-completion-pipeline.service';
 import type { AIConfigService } from '../services/ai-config.service';
 import { AIOrchestrator } from '../services/ai-orchestrator.service';
@@ -67,14 +68,23 @@ describe('CompleteTextHandler', () => {
       join(__dirname, '../../prompts')
     );
     promptLoader.onModuleInit();
-    const orchestrator = new AIOrchestrator(mockAIConfigService, promptLoader);
+    const orchestrator = new AIOrchestrator(
+      mockAIConfigService,
+      promptLoader,
+      createTestCatalog()
+    );
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
     const pipeline = new AICompletionPipeline(
       orchestrator,
       rateLimitService,
       cache
     );
-    return new CompleteTextHandler(mockProvider, pipeline, mockConfig);
+    return new CompleteTextHandler(
+      mockProvider,
+      createTestCatalog(),
+      pipeline,
+      mockConfig
+    );
   }
 
   it('should record zero cost for a cache hit while keeping token counts', async () => {

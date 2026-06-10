@@ -1,39 +1,30 @@
 import { err, ok, type Result } from 'neverthrow';
 
+import type { ModelCatalog } from '@knowtis/ai-gateway';
+
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';
-
-export const SUPPORTED_MODELS = [
-  'anthropic:claude-sonnet-4-20250514',
-  'anthropic:claude-haiku-4-5-20251001',
-  'google:gemini-2.0-flash',
-  'google:gemini-2.5-pro',
-] as const;
-
-const FAST_MODELS = new Set<string>([
-  'anthropic:claude-haiku-4-5-20251001',
-  'google:gemini-2.0-flash',
-]);
-
-export type SupportedModel = (typeof SUPPORTED_MODELS)[number];
 
 export class AIModel {
   private constructor(
-    public readonly value: SupportedModel,
+    public readonly value: string,
     public readonly isFast: boolean
   ) {}
 
-  static create(model: string): Result<AIModel, AIDomainError> {
-    if (!model || !SUPPORTED_MODELS.includes(model as SupportedModel)) {
+  static create(
+    model: string,
+    catalog: ModelCatalog
+  ): Result<AIModel, AIDomainError> {
+    if (!model || !catalog.isSupported(model)) {
       return err(AIErrors.invalidModel(model));
     }
-    return ok(new AIModel(model as SupportedModel, FAST_MODELS.has(model)));
+    return ok(new AIModel(model, catalog.isFast(model)));
   }
 
   get provider(): string {
     return this.value.split(':')[0];
   }
 
-  toPrimitive(): SupportedModel {
+  toPrimitive(): string {
     return this.value;
   }
 }

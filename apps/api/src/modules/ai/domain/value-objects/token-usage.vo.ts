@@ -1,9 +1,4 @@
-import {
-  ANTHROPIC_CACHE_READ_MULTIPLIER,
-  ANTHROPIC_CACHE_WRITE_MULTIPLIER,
-  getModelPricing,
-  type ModelPricing,
-} from '../constants/model-pricing';
+import { computeTokenCostUsd, type ModelPricing } from '@knowtis/ai-gateway';
 
 interface TokenUsageInput {
   readonly inputTokens: number;
@@ -26,19 +21,17 @@ export class TokenUsage {
   }
 
   static create(input: TokenUsageInput, pricing?: ModelPricing): TokenUsage {
-    const resolvedPricing = pricing ?? getModelPricing(input.model);
     const isAnthropic = input.model.startsWith('anthropic:');
-    const cacheRead = isAnthropic ? (input.cacheReadTokens ?? 0) : 0;
-    const cacheWrite = isAnthropic ? (input.cacheWriteTokens ?? 0) : 0;
-    const nonCached = Math.max(0, input.inputTokens - cacheRead - cacheWrite);
-    const costUsd = resolvedPricing
-      ? (nonCached * resolvedPricing.input +
-          cacheRead * resolvedPricing.input * ANTHROPIC_CACHE_READ_MULTIPLIER +
-          cacheWrite *
-            resolvedPricing.input *
-            ANTHROPIC_CACHE_WRITE_MULTIPLIER +
-          input.outputTokens * resolvedPricing.output) /
-        1_000_000
+    const costUsd = pricing
+      ? computeTokenCostUsd(
+          {
+            inputTokens: input.inputTokens,
+            outputTokens: input.outputTokens,
+            cacheReadTokens: isAnthropic ? (input.cacheReadTokens ?? 0) : 0,
+            cacheWriteTokens: isAnthropic ? (input.cacheWriteTokens ?? 0) : 0,
+          },
+          pricing
+        )
       : 0;
     return new TokenUsage(
       input.inputTokens,
