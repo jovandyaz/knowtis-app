@@ -55,30 +55,35 @@ nx run <project> <target>  # Run specific task
 
 ```
 apps/
-├── api/           # NestJS backend (modules: auth, notes, users, collaboration)
+├── api/           # NestJS backend (modules: auth, notes, users, ai, agent, artifacts, collaboration, mcp)
 ├── mcp/           # MCP server for AI assistants (Hono, standalone)
 └── notes/         # React frontend (Vite, TanStack Router)
 
-libs/
+libs/              # App-specific libraries
 ├── api-client/           # HTTP/WebSocket client for frontend
-├── auth/                 # Auth API client, Zustand store + hooks
-├── data-access/
-│   ├── mcp-keys/         # MCP API keys React Query hooks + Zod schemas
-│   └── notes/            # Notes React Query hooks + Zod schemas
+├── authorization/        # CASL permission definitions (shared FE/BE)
+└── data-access/          # React Query hooks + Zod schemas per domain
+    ├── artifacts/ ├── feature-flags/ ├── mcp-keys/ ├── notes/ └── users/
+
+packages/          # Shared packages (framework-light, reusable)
+├── ai-gateway/           # Framework-free AI gateway core (injection guard, sanitizer, token estimator)
+├── auth/ auth-react/ auth-nestjs/   # Auth core + per-framework adapters
+├── crdt/                 # Yjs/CRDT helpers
 ├── design-system/        # Shared UI components + design tokens (Storybook)
+├── editor/ editor-schema/ # Tiptap editor + schema
+├── email/ email-nestjs/  # Email core + NestJS adapter
+├── permissions/ permissions-react/ permissions-nestjs/
 └── shared/
-    ├── hooks/            # Generic React hooks (useDebounce)
-    ├── types/            # Shared TypeScript types
-    └── util/             # Utility functions (logger, ID generator)
+    ├── hooks/ ├── i18n/ ├── types/ └── util/
 ```
 
 ### Dependency Flow
 
-Apps → data-access → api-client → shared. Libraries in `shared/` have no internal workspace dependencies.
+Apps → data-access → api-client → shared. Libraries in `shared/` have no internal workspace dependencies. `packages/ai-gateway` has zero workspace dependencies by design (extractable).
 
 ### Path Aliases
 
-Use `@knowtis/*` imports: `@knowtis/api-client`, `@knowtis/auth`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/design-system`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
+Use `@knowtis/*` imports (see `tsconfig.base.json` paths for the full list): `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-*`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
 
 ## Nx Guidelines
 

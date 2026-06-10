@@ -32,7 +32,6 @@ apps/api/src/modules/ai/
 │   ├── constants/           # Model pricing, system prompts
 │   ├── errors/              # AIErrors + AIErrorCodes
 │   ├── ports/               # AICompletionProvider, AIStructuredOutputProvider, AICache, AIUsageRepository, RateLimitProvider, AIConfigRepository
-│   ├── services/            # input-sanitizer, token-estimator, prompt-guard
 │   └── value-objects/       # AIAction, AIModel, TokenUsage
 ├── application/
 │   ├── commands/            # StreamTextHandler, CompleteTextHandler
@@ -42,6 +41,11 @@ apps/api/src/modules/ai/
 │   ├── providers/           # AISDKProvider, AIStructuredOutputSDKProvider (Vercel AI SDK)
 │   └── redis/               # AIRedisProvider, RedisRateLimitService, ExactMatchCacheService
 └── testing/                 # createMockConfig helper
+
+packages/ai-gateway/         # @knowtis/ai-gateway — framework-free gateway core
+├── src/guard/               # prompt-guard (injection detection), input-sanitizer
+├── src/tokens/              # token-estimator (gpt-tokenizer)
+└── src/logger.ts            # GatewayLogger interface (no NestJS dependency)
 
 apps/notes/src/components/editor/ai/
 ├── AIBubbleMenu.tsx           # Context menu on text selection
@@ -252,7 +256,7 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 ## Prompt Injection Defense
 
-`detectPromptInjection()` in `domain/services/prompt-guard.ts` checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
+`detectPromptInjection()` from `@knowtis/ai-gateway` (`packages/ai-gateway/src/guard/prompt-guard.ts`) checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
 
 **Detection categories:**
 

@@ -89,6 +89,7 @@ knowtis/
 │       └── users/           # Users hooks & schemas
 │
 └── packages/                # Shared packages (publishable)
+    ├── ai-gateway/          # Framework-free AI gateway core (guard, tokens)
     ├── design-system/       # UI components & tokens
     └── shared/              # Common utilities
         ├── hooks/           # Generic React hooks
@@ -104,6 +105,7 @@ knowtis/
 | **API Client**    | `libs/api-client`        | HTTP client, WebSocket client, API types        |
 | **Authorization** | `libs/authorization`     | CASL permission definitions (shared FE/BE)      |
 | **Data Access**   | `libs/data-access/*`     | Domain logic, Zustand stores, React Query hooks |
+| **AI Gateway**    | `packages/ai-gateway`    | AI gateway core: injection guard, tokens        |
 | **Design System** | `packages/design-system` | UI components, design tokens, styles            |
 | **Shared**        | `packages/shared/*`      | Hooks, i18n, utilities, TypeScript types        |
 
