@@ -92,6 +92,20 @@ describe('LiteLLMCatalog', () => {
     expect(catalog.isFast('anthropic:claude-sonnet-4-20250514')).toBe(false);
   });
 
+  it('drops negative pricing values from corrupted data', () => {
+    const corrupted = new LiteLLMCatalog({
+      'bad-model': {
+        litellm_provider: 'anthropic',
+        mode: 'chat',
+        input_cost_per_token: -0.001,
+        output_cost_per_token: 0.002,
+      },
+    });
+    const pricing = corrupted.getPricing('anthropic:bad-model');
+    expect(pricing?.inputCostPerToken).toBeUndefined();
+    expect(pricing?.outputCostPerToken).toBe(0.002);
+  });
+
   it('rejects updates that parse to zero entries', () => {
     const mutable = new LiteLLMCatalog(RAW);
     expect(mutable.update(null)).toBe(false);

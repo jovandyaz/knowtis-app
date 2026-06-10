@@ -58,6 +58,22 @@ describe('computeTokenCostUsd', () => {
     expect(cost).toBeCloseTo(500 * 3e-7, 10);
   });
 
+  it('clamps negative input tokens to zero', () => {
+    const cost = computeTokenCostUsd(
+      { inputTokens: -100, outputTokens: 500 },
+      SONNET
+    );
+    expect(cost).toBeCloseTo(500 * 0.000015, 10);
+  });
+
+  it('clamps negative output tokens to zero', () => {
+    const cost = computeTokenCostUsd(
+      { inputTokens: 1000, outputTokens: -500 },
+      SONNET
+    );
+    expect(cost).toBeCloseTo(1000 * 0.000003, 10);
+  });
+
   it('returns zero when the entry has no per-token rates', () => {
     expect(
       computeTokenCostUsd(

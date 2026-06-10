@@ -27,13 +27,15 @@ export function computeTokenCostUsd(
   const cacheWriteRate =
     pricing.cacheCreationInputTokenCost ??
     inputRate * CACHE_WRITE_FALLBACK_MULTIPLIER;
-  const cacheRead = input.cacheReadTokens ?? 0;
-  const cacheWrite = input.cacheWriteTokens ?? 0;
-  const nonCached = Math.max(0, input.inputTokens - cacheRead - cacheWrite);
+  const inputTokens = Math.max(0, input.inputTokens);
+  const outputTokens = Math.max(0, input.outputTokens);
+  const cacheRead = Math.max(0, input.cacheReadTokens ?? 0);
+  const cacheWrite = Math.max(0, input.cacheWriteTokens ?? 0);
+  const nonCached = Math.max(0, inputTokens - cacheRead - cacheWrite);
   return (
     nonCached * inputRate +
     cacheRead * cacheReadRate +
     cacheWrite * cacheWriteRate +
-    input.outputTokens * outputRate
+    outputTokens * outputRate
   );
 }
