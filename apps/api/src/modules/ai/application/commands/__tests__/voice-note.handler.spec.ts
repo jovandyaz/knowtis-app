@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIErrorCodes } from '../../../domain/errors/ai.errors';
@@ -81,13 +82,12 @@ describe('VoiceNoteHandler', () => {
   });
 
   it('should return structured note on successful transcription + structuring', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => true,
-      isErr: () => false,
-      value: 'Meeting notes: We decided to launch the product next week.',
-      _unsafeUnwrap: () =>
-        'Meeting notes: We decided to launch the product next week.',
-    } as never);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({
+        text: 'Meeting notes: We decided to launch the product next week.',
+        durationInSeconds: 120,
+      })
+    );
 
     vi.mocked(
       mockStructuredOutputProvider.generateStructuredOutput
@@ -122,15 +122,64 @@ describe('VoiceNoteHandler', () => {
     expect(mockUsageRepo.recordUsage).toHaveBeenCalledTimes(2);
   });
 
+  it('should price transcription from the catalog using the real audio duration', async () => {
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({ text: 'Catalog priced transcript.', durationInSeconds: 120 })
+    );
+
+    vi.mocked(
+      mockStructuredOutputProvider.generateStructuredOutput
+    ).mockResolvedValue({
+      object: { title: 'T', content: '<p>C</p>' },
+      inputTokens: 100,
+      outputTokens: 40,
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    await handler.execute({
+      userId: 'user-123',
+      audio: Buffer.from('fake-audio'),
+      mode: 'create-note',
+    });
+
+    const transcriptionUsage = vi
+      .mocked(mockUsageRepo.recordUsage)
+      .mock.calls.map(([usage]) => usage)
+      .find((usage) => usage.model === 'openai:whisper-1');
+    expect(transcriptionUsage).toBeDefined();
+    expect(transcriptionUsage!.costUsd).toBeCloseTo(120 * 0.0001, 10);
+  });
+
+  it('should fall back to a byte-based duration estimate when the provider omits it', async () => {
+    const audio = Buffer.alloc(120_000);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({ text: 'No duration reported.', durationInSeconds: undefined })
+    );
+
+    vi.mocked(
+      mockStructuredOutputProvider.generateStructuredOutput
+    ).mockRejectedValue(new Error('skip structuring'));
+
+    await handler.execute({
+      userId: 'user-123',
+      audio,
+      mode: 'create-note',
+    });
+
+    const transcriptionUsage = vi
+      .mocked(mockUsageRepo.recordUsage)
+      .mock.calls.map(([usage]) => usage)
+      .find((usage) => usage.model === 'openai:whisper-1');
+    expect(transcriptionUsage!.costUsd).toBeCloseTo(10 * 0.0001, 10);
+  });
+
   it('should return err(PROVIDER_ERROR) when transcription fails', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => false,
-      isErr: () => true,
-      error: {
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      err({
         code: AIErrorCodes.PROVIDER_ERROR,
         message: 'AI provider error: Whisper API failed',
-      },
-    } as never);
+      })
+    );
 
     const result = await handler.execute({
       userId: 'user-123',
@@ -165,12 +214,9 @@ describe('VoiceNoteHandler', () => {
   });
 
   it('should return err(INVALID_INPUT) when transcription is empty', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => true,
-      isErr: () => false,
-      value: '',
-      _unsafeUnwrap: () => '',
-    } as never);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({ text: '', durationInSeconds: 2 })
+    );
 
     const result = await handler.execute({
       userId: 'user-123',
@@ -185,12 +231,9 @@ describe('VoiceNoteHandler', () => {
   });
 
   it('should return err(INVALID_INPUT) when transcription is whitespace-only', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => true,
-      isErr: () => false,
-      value: '   \n  ',
-      _unsafeUnwrap: () => '   \n  ',
-    } as never);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({ text: '   \n  ', durationInSeconds: 2 })
+    );
 
     const result = await handler.execute({
       userId: 'user-123',
@@ -205,12 +248,12 @@ describe('VoiceNoteHandler', () => {
   });
 
   it('should fall back to raw transcript when structuring fails', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => true,
-      isErr: () => false,
-      value: 'Some raw voice transcription content.',
-      _unsafeUnwrap: () => 'Some raw voice transcription content.',
-    } as never);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({
+        text: 'Some raw voice transcription content.',
+        durationInSeconds: 30,
+      })
+    );
 
     vi.mocked(
       mockStructuredOutputProvider.generateStructuredOutput
@@ -235,12 +278,9 @@ describe('VoiceNoteHandler', () => {
   });
 
   it('should pass language to transcription service when provided', async () => {
-    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue({
-      isOk: () => true,
-      isErr: () => false,
-      value: 'Hola mundo.',
-      _unsafeUnwrap: () => 'Hola mundo.',
-    } as never);
+    vi.mocked(mockTranscriptionService.transcribe).mockResolvedValue(
+      ok({ text: 'Hola mundo.', durationInSeconds: 5 })
+    );
 
     vi.mocked(
       mockStructuredOutputProvider.generateStructuredOutput

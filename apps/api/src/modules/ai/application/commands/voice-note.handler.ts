@@ -30,8 +30,6 @@ export interface VoiceNoteOutput {
   readonly transcript: string;
 }
 
-const WHISPER_MODEL = 'openai:whisper-1';
-const WHISPER_COST_PER_SECOND = 0.006 / 60;
 const WEBM_BYTES_PER_SECOND = 12_000;
 const ESTIMATED_TOKENS_PER_SECOND = 25;
 
@@ -94,7 +92,7 @@ export class VoiceNoteHandler {
       return err(transcriptionResult.error);
     }
 
-    const transcript = transcriptionResult.value;
+    const { text: transcript, durationInSeconds } = transcriptionResult.value;
 
     if (!transcript.trim()) {
       this.logger.warn({
@@ -110,12 +108,17 @@ export class VoiceNoteHandler {
       );
     }
 
-    const whisperCostUsd = this.estimateWhisperCost(input.audio);
+    const transcriptionModel = this.configService.get('AI_TRANSCRIPTION_MODEL');
+    const billedSeconds =
+      durationInSeconds ?? this.estimateAudioDurationSeconds(input.audio);
+    const costPerSecond =
+      this.modelCatalog.getPricing(transcriptionModel)?.inputCostPerSecond ?? 0;
+    const whisperCostUsd = billedSeconds * costPerSecond;
     this.rateLimitService
       .recordUsage({
         userId: input.userId,
         action: AI_ACTION.VOICE_TRANSCRIPTION,
-        model: WHISPER_MODEL,
+        model: transcriptionModel,
         estimatedTokens,
         inputTokens: 0,
         outputTokens: 0,
@@ -135,6 +138,7 @@ export class VoiceNoteHandler {
       requestId,
       userId: input.userId,
       transcriptLength: transcript.length,
+      durationInSeconds: billedSeconds,
       whisperCostUsd,
       latencyMs: Date.now() - startTime,
     });
@@ -233,10 +237,6 @@ export class VoiceNoteHandler {
     return Math.ceil(
       this.estimateAudioDurationSeconds(audio) * ESTIMATED_TOKENS_PER_SECOND
     );
-  }
-
-  private estimateWhisperCost(audio: Buffer): number {
-    return this.estimateAudioDurationSeconds(audio) * WHISPER_COST_PER_SECOND;
   }
 
   private escapeHtml(text: string): string {
