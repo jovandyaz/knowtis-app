@@ -29,20 +29,23 @@ apps/api/src/modules/ai/
 ├── ai.module.ts
 ├── dto/                     # Request validation (class-validator)
 ├── domain/
-│   ├── constants/           # Model pricing, system prompts
 │   ├── errors/              # AIErrors + AIErrorCodes
 │   ├── ports/               # AICompletionProvider, AIStructuredOutputProvider, AICache, AIUsageRepository, RateLimitProvider, AIConfigRepository
 │   └── value-objects/       # AIAction, AIModel, TokenUsage
 ├── application/
-│   ├── commands/            # StreamTextHandler, CompleteTextHandler
-│   └── services/            # AIOrchestrator, AIRateLimitService, AIConfigService
+│   ├── commands/            # StreamTextHandler, CompleteTextHandler, VoiceNoteHandler
+│   └── services/            # AIOrchestrator, AIRateLimitService, AIConfigService, VoiceTranscriptionService
 ├── infrastructure/
+│   ├── alerting/            # WebhookAlertService (budget + cooldown alerts)
+│   ├── catalog/             # ModelCatalogAdapter (LiteLLM-backed pricing, boot refresh)
 │   ├── persistence/         # DrizzleAIUsageRepository, DrizzleAIConfigRepository
-│   ├── providers/           # AISDKProvider, AIStructuredOutputSDKProvider (Vercel AI SDK)
+│   ├── providers/           # AISDKProvider, AIStructuredOutputSDKProvider, FallbackChainService, ProviderRegistryFactory
 │   └── redis/               # AIRedisProvider, RedisRateLimitService, ExactMatchCacheService
-└── testing/                 # createMockConfig helper
+└── testing/                 # createMockConfig, createTestCatalog, createTestChain helpers
 
-packages/ai-gateway/         # @knowtis/ai-gateway — framework-free gateway core
+packages/ai-gateway/         # @knowtis/ai-gateway — framework-free gateway core (zero workspace deps)
+├── src/catalog/             # LiteLLMCatalog, computeTokenCostUsd, vendored pricing snapshot
+├── src/chain/               # executeWithChain / streamWithChain, ProviderCooldownTracker
 ├── src/guard/               # prompt-guard (injection detection), input-sanitizer
 ├── src/tokens/              # token-estimator (gpt-tokenizer)
 └── src/logger.ts            # GatewayLogger interface (no NestJS dependency)
@@ -96,6 +99,7 @@ AIGateway / AIController
 | `RATE_LIMIT_PROVIDER`           | `RateLimitProvider`          | `RedisRateLimitService`         |
 | `AI_CACHE`                      | `AICache`                    | `ExactMatchCacheService`        |
 | `AI_CONFIG_REPOSITORY`          | `AIConfigRepository`         | `DrizzleAIConfigRepository`     |
+| `MODEL_CATALOG`                 | `ModelCatalog`               | `ModelCatalogAdapter`           |
 
 ---
 
@@ -323,7 +327,52 @@ The rest of the system always uses colon-format model ids; the mode switch is in
 
 Create a gateway key in the Vercel dashboard: **AI Gateway → API Keys**.
 
-The app-side model fallback (`AI_FALLBACK_MODEL`, `model-fallback.ts`) stays active in both modes — it retries with a different _model_ on failure. The gateway adds _provider-level_ resilience (rerouting the same model across upstream providers) on top of it.
+The app-side cross-provider fallback chain (below) stays active in both modes — it switches to a different _model_ on failure. The gateway adds _transport-level_ resilience (rerouting the same model across upstream providers) underneath it; the skip-providers-without-keys behavior only applies in direct mode.
+
+---
+
+## Cross-Provider Fallback Chain
+
+`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the `AI_FALLBACK_CHAIN` (default `anthropic:claude-haiku-4-5-20251001 → openai:gpt-4o-mini → google:gemini-2.0-flash`), deduped. Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). The chain is validated against the model catalog at boot (fail-fast on unknown models).
+
+Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWithChain`):
+
+- A failed candidate advances to the next one; the error from the **last** candidate propagates.
+- Streams never switch models after the first emitted chunk — a mid-stream failure propagates instead.
+- Aborts (user cancel, timeout) never advance the chain.
+- Usage, cost, and the `model` reported to clients always reflect the model that **actually served** the request.
+- The copilot agent receives `isLast` per attempt so it can degrade gracefully only on the final candidate.
+
+**Circuit breaker:** `ProviderCooldownTracker` puts a provider in cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling providers are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
+
+Model availability is an injected function, so a future per-user key source (BYOK) can plug in without touching the chain.
+
+---
+
+## Model Catalog & Pricing
+
+Pricing and context-window data come from [LiteLLM's public pricing JSON](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) via `LiteLLMCatalog` (`@knowtis/ai-gateway`):
+
+- A vendored snapshot (`model-prices.snapshot.ts`, regenerated with `node tools/refresh-model-catalog.mjs`) ships with the package so the catalog works offline.
+- With `AI_PRICING_REFRESH_ENABLED=true`, `ModelCatalogAdapter` refreshes from the live JSON at boot (10s timeout, fail-soft to the snapshot).
+- `computeTokenCostUsd` prices each request from the served model's rates, including Anthropic cache read/write token rates. Voice transcription is priced per second of audio (`input_cost_per_second`, mode `audio_transcription`) using the real duration reported by the provider.
+- Unknown models record `costUsd = 0` and log `ai.pricing.unknown_model` once per model.
+
+---
+
+## Health & Alerting
+
+**`GET /api/v1/ai/health`** (admin-only, same guards as `GET /ai/config`) returns a passive per-provider snapshot from the cooldown tracker — `{configured, cooling, failureCount, lastFailureAt, lastSuccessAt, cooldownEndsAt}`. No probes are sent and no tokens are spent.
+
+**Budget warning:** when a user's daily usage crosses 80% of the token or USD budget, `ai.budget.warning` is logged once per user per day (Redis `SET NX` flag with 25h TTL; per-instance in-memory fallback when Redis is down).
+
+**Webhook:** if `AI_ALERT_WEBHOOK_URL` is set, `budget.warning` and `cooldown_start` events POST a JSON payload to it — fire-and-forget with a 5s timeout; failures are logged and never block the request.
+
+---
+
+## Telemetry (Langfuse)
+
+All four AI paths emit OpenTelemetry spans consumed by Langfuse (see `modules/observability`): the copilot agent (`agent-turn`), completions (`completion:<action>`), structured artifacts (`artifact:<action>`), and voice cost records. Spans carry `{userId, environment}` metadata. Telemetry is a no-op when Langfuse keys are not configured.
 
 ---
 
@@ -345,25 +394,31 @@ Non-Anthropic models receive the system prompt as a plain string (no caching met
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
 
-| Variable                       | Required | Default                               | Description                                             |
-| ------------------------------ | -------- | ------------------------------------- | ------------------------------------------------------- |
-| `AI_GATEWAY_API_KEY`           | No       | —                                     | Vercel AI Gateway key; enables gateway mode when set    |
-| `ANTHROPIC_API_KEY`            | No       | —                                     | Anthropic API key (validated at runtime)                |
-| `OPENAI_API_KEY`               | No       | —                                     | OpenAI API key (Whisper transcription)                  |
-| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`  | Model for most actions                                  |
-| `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001` | Model for `ghost-text`                                  |
-| `AI_FALLBACK_MODEL`            | No       | `anthropic:claude-haiku-4-5-20251001` | Fallback on provider error                              |
-| `AI_DAILY_TOKEN_LIMIT`         | No       | `100000`                              | Per-user daily token cap                                |
-| `AI_DAILY_COST_LIMIT_USD`      | No       | `1.0`                                 | Per-user daily cost cap (USD)                           |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT` | No       | `0.33`                                | Fraction of daily limits for anonymous users            |
-| `AI_MAX_RETRIES`               | No       | `3`                                   | Provider retry count                                    |
-| `AI_TIMEOUT_MS`                | No       | `30000`                               | Total request timeout (ms) — REST completions only      |
-| `AI_STREAM_MAX_MS`             | No       | `180000`                              | Total streaming cap (ms); generous for long generations |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`   | No       | `10000`                               | Per-chunk (stall) timeout for streaming (ms)            |
-| `AI_CACHE_ENABLED`             | No       | `true`                                | Enable response cache                                   |
-| `AI_CACHE_TTL_SECONDS`         | No       | `3600`                                | Cache TTL (seconds)                                     |
-| `AI_RPM_LIMIT`                 | No       | `15`                                  | Max requests per minute per user                        |
-| `AI_MAX_CONCURRENT_STREAMS`    | No       | `2`                                   | Max simultaneous AI streams per user                    |
+| Variable                       | Required | Default                                | Description                                             |
+| ------------------------------ | -------- | -------------------------------------- | ------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`           | No       | —                                      | Vercel AI Gateway key; enables gateway mode when set    |
+| `ANTHROPIC_API_KEY`            | No       | —                                      | Anthropic API key (validated at runtime)                |
+| `OPENAI_API_KEY`               | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | No       | —                                      | Google AI Studio key (chain fallback)                   |
+| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`   | Model for most actions                                  |
+| `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
+| `AI_FALLBACK_CHAIN`            | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
+| `AI_COOLDOWN_ALLOWED_FAILS`    | No       | `3`                                    | Failures per minute that start a provider cooldown      |
+| `AI_COOLDOWN_SECONDS`          | No       | `120`                                  | Provider cooldown duration (seconds)                    |
+| `AI_TRANSCRIPTION_MODEL`       | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)    |
+| `AI_PRICING_REFRESH_ENABLED`   | No       | `false`                                | Refresh model pricing from LiteLLM's JSON at boot       |
+| `AI_ALERT_WEBHOOK_URL`         | No       | —                                      | Webhook for `budget.warning` / `cooldown_start` alerts  |
+| `AI_DAILY_TOKEN_LIMIT`         | No       | `100000`                               | Per-user daily token cap                                |
+| `AI_DAILY_COST_LIMIT_USD`      | No       | `1.0`                                  | Per-user daily cost cap (USD)                           |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT` | No       | `0.33`                                 | Fraction of daily limits for anonymous users            |
+| `AI_MAX_RETRIES`               | No       | `3`                                    | Provider retry count                                    |
+| `AI_TIMEOUT_MS`                | No       | `30000`                                | Total request timeout (ms) — REST completions only      |
+| `AI_STREAM_MAX_MS`             | No       | `180000`                               | Total streaming cap (ms); generous for long generations |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`   | No       | `10000`                                | Per-chunk (stall) timeout for streaming (ms)            |
+| `AI_CACHE_ENABLED`             | No       | `true`                                 | Enable response cache                                   |
+| `AI_CACHE_TTL_SECONDS`         | No       | `3600`                                 | Cache TTL (seconds)                                     |
+| `AI_RPM_LIMIT`                 | No       | `15`                                   | Max requests per minute per user                        |
+| `AI_MAX_CONCURRENT_STREAMS`    | No       | `2`                                    | Max simultaneous AI streams per user                    |
 
 ### Feature Flags (DB-backed)
 
