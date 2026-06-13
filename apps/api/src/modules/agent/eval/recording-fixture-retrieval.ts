@@ -50,7 +50,10 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
 
   async listRecent(_userId: string, limit: number): Promise<NoteHit[]> {
     this.calls.push({ name: 'listRecentNotes', args: { limit } });
-    return this.notes.slice(0, limit).map(toHit);
+    return [...this.notes]
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, limit)
+      .map(toHit);
   }
 
   async overview(_userId: string): Promise<NotesOverview> {
