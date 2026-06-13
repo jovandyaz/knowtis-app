@@ -215,6 +215,7 @@
     "lefthook": "^2.0.13",
     "nx": "^22.3.3",
     "prettier": "^3.7.4",
+    "promptfoo": "^0.121.15",
     "storybook": "^10.1.10",
     "style-dictionary": "^5.1.1",
     "tslib": "^2.3.0",
