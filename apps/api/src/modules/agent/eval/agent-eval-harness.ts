@@ -37,7 +37,7 @@ export class AgentEvalHarness {
         ConfigModule.forRoot({
           isGlobal: true,
           validate: validateEnv,
-          envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
+          envFilePath: ['.env.local', '.env'],
         }),
         AgentModule,
       ],
