@@ -41,6 +41,7 @@ const envSchemaBase = z.object({
   AI_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(120),
   AI_TRANSCRIPTION_MODEL: z.string().default('openai:whisper-1'),
   AI_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  AI_EVAL_MODEL: z.string().optional(),
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
   AI_STREAM_MAX_MS: z.coerce.number().default(180000),
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),
