@@ -133,6 +133,13 @@
         "cwd": "apps/api"
       }
     },
+    "eval": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/modules/agent/eval/run-eval.ts",
+        "cwd": "apps/api"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

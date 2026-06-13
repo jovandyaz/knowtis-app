@@ -2,7 +2,6 @@ import 'reflect-metadata';
 
 import { config as loadEnv } from 'dotenv';
 
-import { AgentEvalHarness } from './agent-eval-harness';
 import { COPILOT_EVAL_CASES } from './cases';
 import { createCopilotProvider } from './copilot-provider';
 import {
@@ -11,8 +10,8 @@ import {
   runEvalSuite,
 } from './runtime/eval-runtime';
 
-loadEnv({ path: 'apps/api/.env.local' });
-loadEnv({ path: 'apps/api/.env' });
+loadEnv({ path: '.env.local' });
+loadEnv({ path: '.env' });
 
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-4-20250514';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5-20251001';
@@ -23,6 +22,7 @@ async function main(): Promise<void> {
   }
 
   const model = resolveEvalModel('AI_EVAL_MODEL', DEFAULT_AGENT_MODEL);
+  const { AgentEvalHarness } = await import('./agent-eval-harness');
   const harness = await AgentEvalHarness.boot();
   try {
     const provider = createCopilotProvider(harness, model);
