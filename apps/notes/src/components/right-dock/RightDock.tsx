@@ -19,9 +19,9 @@ import { useMediaQuery } from '@knowtis/shared-hooks';
 import { AgentCopilotPanel } from '../copilot';
 import { StudyToolsTab } from './StudyToolsTab';
 
-const DOCK_DEFAULT_WIDTH = 360;
 const DOCK_MIN_WIDTH = 300;
 const DOCK_MAX_WIDTH = 500;
+const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
 
 function TabBar() {
