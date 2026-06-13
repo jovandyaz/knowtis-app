@@ -54,6 +54,17 @@ describe('RecordingFixtureRetrieval', () => {
     ]);
   });
 
+  it('listRecent returns most-recent-first regardless of fixture order', async () => {
+    const older = NOTE_FIXTURE_SETS.recent[2];
+    const newer = NOTE_FIXTURE_SETS.recent[0];
+    const adapter = new RecordingFixtureRetrieval();
+    adapter.seed([older, newer]);
+
+    const hits = await adapter.listRecent(USER, 2);
+
+    expect(hits.map((h) => h.id)).toEqual([newer.id, older.id]);
+  });
+
   it('overview counts totals and records getNotesOverview', async () => {
     const adapter = new RecordingFixtureRetrieval();
     adapter.seed(NOTE_FIXTURE_SETS.recent);
