@@ -15,7 +15,7 @@ import { resolveFixtureSet } from './fixtures/note-sets';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 import { drainEvents, type EvalTranscript } from './transcript';
 
-const EVAL_USER_ID = '00000000-0000-4000-8000-0000000000ev';
+const EVAL_USER_ID = '00000000-0000-4000-8000-000000000e7a';
 
 const NOOP_PENDING_STORE = {
   save: () => Promise.resolve(),
