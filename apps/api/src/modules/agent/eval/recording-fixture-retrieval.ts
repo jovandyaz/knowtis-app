@@ -52,7 +52,7 @@ export class RecordingFixtureRetrieval implements RetrievalPort {
     this.calls.push({ name: 'listRecentNotes', args: { limit } });
     return [...this.notes]
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
-      .slice(0, limit)
+      .slice(0, Math.max(limit, 0))
       .map(toHit);
   }
 

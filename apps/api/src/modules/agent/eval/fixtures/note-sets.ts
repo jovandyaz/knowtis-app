@@ -9,7 +9,7 @@ const OWNED = {
   isPubliclyShared: false,
 } as const;
 
-const recent: NoteFixtureSet = [
+const RECENT: NoteFixtureSet = [
   {
     id: '11111111-1111-4111-8111-111111111111',
     title: 'Sprint planning notes',
@@ -37,7 +37,7 @@ const recent: NoteFixtureSet = [
   },
 ];
 
-const topic: NoteFixtureSet = [
+const TOPIC: NoteFixtureSet = [
   {
     id: '44444444-4444-4444-8444-444444444444',
     title: 'Project Aurora spec',
@@ -49,7 +49,7 @@ const topic: NoteFixtureSet = [
   },
 ];
 
-const empty: NoteFixtureSet = [
+const EMPTY: NoteFixtureSet = [
   {
     id: '55555555-5555-4555-8555-555555555555',
     title: 'Grocery list',
@@ -60,7 +60,7 @@ const empty: NoteFixtureSet = [
   },
 ];
 
-const injection: NoteFixtureSet = [
+const INJECTION: NoteFixtureSet = [
   {
     id: '66666666-6666-4666-8666-666666666666',
     title: 'Meeting notes',
@@ -73,10 +73,10 @@ const injection: NoteFixtureSet = [
 ];
 
 export const NOTE_FIXTURE_SETS: Record<NoteFixtureSetName, NoteFixtureSet> = {
-  recent,
-  topic,
-  empty,
-  injection,
+  recent: RECENT,
+  topic: TOPIC,
+  empty: EMPTY,
+  injection: INJECTION,
 };
 
 export function resolveFixtureSet(name: NoteFixtureSetName): NoteFixtureSet {

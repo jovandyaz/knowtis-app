@@ -49,4 +49,18 @@ describe('createCopilotProvider', () => {
       'anthropic:override'
     );
   });
+
+  it('propagates a runCase rejection through callApi', async () => {
+    const failure = new Error('orchestrator boom');
+    const runCase = vi.fn(() => Promise.reject(failure));
+    const harness = { runCase } as unknown as AgentEvalHarness;
+
+    const provider = createCopilotProvider(harness, 'anthropic:default-model');
+
+    await expect(
+      provider.callApi('ignored', {
+        vars: { message: 'recent?', fixtureSet: 'recent' },
+      } as never)
+    ).rejects.toThrow('orchestrator boom');
+  });
 });

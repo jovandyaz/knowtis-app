@@ -31,6 +31,27 @@ describe('asTranscript', () => {
     const t = transcript({ text: 'hi' });
     expect(asTranscript(JSON.stringify(t))).toEqual(t);
   });
+
+  it('returns an invalid-output transcript for malformed JSON instead of throwing', () => {
+    const result = asTranscript('{ not json');
+    expect(result.error?.code).toBe('INVALID_EVAL_OUTPUT');
+    expect(result.toolCalls).toEqual([]);
+    expect(result.sources).toEqual([]);
+  });
+
+  it('returns an invalid-output transcript for a wrong-shaped object', () => {
+    expect(asTranscript({ foo: 'bar' }).error?.code).toBe(
+      'INVALID_EVAL_OUTPUT'
+    );
+    expect(asTranscript(null).error?.code).toBe('INVALID_EVAL_OUTPUT');
+  });
+
+  it('lets predicates degrade to false on malformed output without throwing', () => {
+    expect(() => assertGrounding('{ not json')).not.toThrow();
+    expect(assertGrounding('{ not json')).toBe(false);
+    expect(assertRecencyToolSelection({ foo: 1 })).toBe(false);
+    expect(assertUpdateProposal(null)).toBe(false);
+  });
 });
 
 describe('predicates', () => {
