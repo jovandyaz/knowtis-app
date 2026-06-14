@@ -617,3 +617,42 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 4. If it should be cached, add it to `CACHEABLE_ACTIONS` in `apps/api/src/modules/ai/infrastructure/redis/semantic-cache.service.ts`
 5. Add it to the relevant UI config (`ai-actions.config.ts` for bubble menu, `slash-commands.config.ts` for slash commands)
 6. Add i18n keys in `packages/shared/i18n/locales/{en,es}/notes.json`
+
+---
+
+## Copilot Eval Harness
+
+An offline, opt-in regression harness for the copilot agent's prompt-driven behaviors
+(tool selection, grounding, no-hallucination, HITL, prompt-injection resistance). It boots the
+real `AgentModule`, drives `orchestrator.run()` against deterministic note fixtures with a live
+model, and asserts on the resulting transcript.
+
+### Run it
+
+```bash
+pnpm docker:up         # Postgres + Redis must be healthy (the full DI graph boots)
+pnpm nx run api:eval
+```
+
+- **Gated:** skips cleanly (the single test is skipped, exit 0) when `ANTHROPIC_API_KEY` is
+  unset. It is opt-in and excluded from CI and `nx affected` (paid + non-deterministic).
+- **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
+  harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
+- **Model:** drives `AI_DEFAULT_MODEL` (sonnet) by default; set `AI_EVAL_MODEL` to override
+  (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5-20251001` for cheaper local runs).
+
+### How it works
+
+- **Runner:** Vitest with `unplugin-swc` (`apps/api/vitest.eval.config.ts`), because SWC emits the
+  `emitDecoratorMetadata` that NestJS DI requires (esbuild/`tsx` does not). The config dedupes
+  `@nestjs/core`/`@nestjs/common` so `@Inject(Reflector)` resolves to one class identity.
+- **Boot:** `@nestjs/testing` compiles `AgentModule` plus the global infra it needs
+  (`ConfigModule`, `EventEmitterModule`, `I18nModule`, `DatabaseModule`), then `moduleRef.init()`
+  runs lifecycle hooks (e.g. `ProviderRegistryFactory` builds its registry).
+- **Determinism:** only two providers are overridden — `RETRIEVAL_PORT` (a fixture adapter that
+  serves fixed notes and records tool calls) and `PENDING_MUTATION_STORE` (a no-op).
+- **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
+  sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
+  injection resistance.
+- **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
+  `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
