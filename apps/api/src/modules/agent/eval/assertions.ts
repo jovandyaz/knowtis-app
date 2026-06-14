@@ -1,10 +1,31 @@
 import type { EvalTranscript } from './transcript';
 
+const INVALID_TRANSCRIPT: EvalTranscript = {
+  toolCalls: [],
+  text: '',
+  proposal: null,
+  sources: [],
+  error: { code: 'INVALID_EVAL_OUTPUT', message: 'output is not a transcript' },
+};
+
 export function asTranscript(output: unknown): EvalTranscript {
+  let parsed: unknown = output;
   if (typeof output === 'string') {
-    return JSON.parse(output) as EvalTranscript;
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      return INVALID_TRANSCRIPT;
+    }
   }
-  return output as EvalTranscript;
+  if (
+    typeof parsed !== 'object' ||
+    parsed === null ||
+    !Array.isArray((parsed as { toolCalls?: unknown }).toolCalls) ||
+    !Array.isArray((parsed as { sources?: unknown }).sources)
+  ) {
+    return INVALID_TRANSCRIPT;
+  }
+  return parsed as EvalTranscript;
 }
 
 function toolNames(t: EvalTranscript): string[] {

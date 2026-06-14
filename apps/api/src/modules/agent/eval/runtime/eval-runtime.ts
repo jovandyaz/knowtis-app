@@ -39,7 +39,8 @@ export function resolveEvalModel(envVar: string, fallback: string): string {
 }
 
 export function evalGateOpen(): boolean {
-  if (!process.env['ANTHROPIC_API_KEY']) {
+  const key = process.env['ANTHROPIC_API_KEY'];
+  if (!key || !key.trim()) {
     // eslint-disable-next-line no-console
     console.log('eval skipped: ANTHROPIC_API_KEY not set');
     return false;

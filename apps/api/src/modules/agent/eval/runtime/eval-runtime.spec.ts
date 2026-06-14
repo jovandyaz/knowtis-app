@@ -69,4 +69,12 @@ describe('evalGateOpen', () => {
       'eval skipped: ANTHROPIC_API_KEY not set'
     );
   });
+
+  it('treats a whitespace-only key as missing', () => {
+    process.env['ANTHROPIC_API_KEY'] = '   ';
+    expect(evalGateOpen()).toBe(false);
+    expect(logSpy).toHaveBeenCalledWith(
+      'eval skipped: ANTHROPIC_API_KEY not set'
+    );
+  });
 });

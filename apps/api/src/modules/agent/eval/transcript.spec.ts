@@ -71,4 +71,22 @@ describe('drainEvents', () => {
 
     expect(t.error).toEqual({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
   });
+
+  it('ignores committed and aborted events', async () => {
+    const t = await drainEvents(
+      scripted([
+        { type: 'chunk', text: 'hi' },
+        {
+          type: 'committed',
+          result: { noteId: 'n1', title: 'N1', kind: 'update' },
+        },
+        { type: 'aborted', usage: USAGE },
+      ])
+    );
+
+    expect(t.text).toBe('hi');
+    expect(t.proposal).toBeNull();
+    expect(t.sources).toEqual([]);
+    expect(t.error).toBeNull();
+  });
 });
