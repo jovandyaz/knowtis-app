@@ -186,10 +186,13 @@ export class AuthSessionController {
       throw new BadRequestException('Refresh token is required');
     }
 
+    // Drop any stale host-only cookie up front so a reuse error (which throws
+    // below) still heals a browser that is sending a duplicate refresh cookie.
+    clearLegacyHostOnlyCookie(res, this.cookieConfig);
+
     const result = await this.refreshHandler.execute(refreshToken);
     const data = unwrapOrThrow(result);
 
-    clearLegacyHostOnlyCookie(res, this.cookieConfig);
     setRefreshTokenCookie(res, data.refreshToken, this.cookieConfig);
 
     return { accessToken: data.accessToken };

@@ -8,7 +8,7 @@ import { ApiClientError, httpClient } from '@knowtis/api-client';
 
 import { ANON_STORAGE_KEY, AUTH_STORAGE_KEY } from './constants';
 import { SessionExpiredError } from './init-auth';
-import { refreshSessionTokens } from './session-refresh';
+import { refreshSessionTokens, withAuthRefreshLock } from './session-refresh';
 
 interface StoredAnonymousMarker {
   userId: string;
@@ -24,20 +24,12 @@ export interface AnonymousSessionResponse {
 type RestoreOutcome = 'restored' | 'rejected' | 'unavailable';
 
 const ANON_MARKER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const AUTH_REFRESH_LOCK = 'knowtis-auth-refresh';
 
 function isAuthRejection(error: unknown): boolean {
   return (
     ApiClientError.isApiClientError(error) &&
     (error.status === 401 || error.status === 403)
   );
-}
-
-function withAuthRefreshLock<T>(task: () => Promise<T>): Promise<T> {
-  if (typeof navigator !== 'undefined' && navigator.locks) {
-    return navigator.locks.request(AUTH_REFRESH_LOCK, task) as Promise<T>;
-  }
-  return task();
 }
 
 function wasPreviouslyRegistered(): boolean {
@@ -92,15 +84,12 @@ export async function initAnonymousSession(
 
   const stored = readStoredMarker();
   if (stored) {
-    const outcome = await withAuthRefreshLock(() =>
-      stored.legacyAccessToken
-        ? migrateLegacySession(
-            stored.legacyAccessToken,
-            tokenStorage,
-            authStore
-          )
-        : restoreSessionViaRefresh(stored, tokenStorage, authStore)
-    );
+    const legacyToken = stored.legacyAccessToken;
+    const outcome = legacyToken
+      ? await withAuthRefreshLock(() =>
+          migrateLegacySession(legacyToken, tokenStorage, authStore)
+        )
+      : await restoreSessionViaRefresh(stored, tokenStorage, authStore);
     if (outcome === 'restored') {
       return;
     }

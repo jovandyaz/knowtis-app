@@ -6,7 +6,7 @@ import type {
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, lt } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -32,6 +32,7 @@ export class DrizzleSessionRepository implements SessionRepository {
         .insert(sessions)
         .values({
           userId: data.userId,
+          familyId: data.familyId,
           refreshTokenHash: data.refreshTokenHash,
           userAgent: data.userAgent ?? null,
           ipAddress: data.ipAddress ?? null,
@@ -62,19 +63,38 @@ export class DrizzleSessionRepository implements SessionRepository {
     return this.mapToEntity(result[0]);
   }
 
+  async markRotated(id: string): Promise<void> {
+    await this.db
+      .update(sessions)
+      .set({ rotatedAt: new Date() })
+      .where(eq(sessions.id, id));
+  }
+
   async deleteById(id: string): Promise<void> {
     await this.db.delete(sessions).where(eq(sessions.id, id));
+  }
+
+  async deleteByFamilyId(familyId: string): Promise<void> {
+    await this.db.delete(sessions).where(eq(sessions.familyId, familyId));
   }
 
   async deleteAllByUserId(userId: string): Promise<void> {
     await this.db.delete(sessions).where(eq(sessions.userId, userId));
   }
 
+  async deleteRotatedBefore(cutoff: Date): Promise<void> {
+    await this.db
+      .delete(sessions)
+      .where(and(isNotNull(sessions.rotatedAt), lt(sessions.rotatedAt, cutoff)));
+  }
+
   private mapToEntity(session: typeof sessions.$inferSelect): SessionEntity {
     return {
       id: session.id,
       userId: session.userId,
+      familyId: session.familyId,
       refreshTokenHash: session.refreshTokenHash,
+      rotatedAt: session.rotatedAt,
       userAgent: session.userAgent,
       ipAddress: session.ipAddress,
       expiresAt: session.expiresAt,
