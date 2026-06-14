@@ -67,22 +67,28 @@ export class AgentEvalHarness {
       .useValue(NOOP_PENDING_STORE)
       .compile();
 
-    // ProviderRegistryFactory and other providers build their state in
-    // onModuleInit, so the orchestrator only works after lifecycle init.
-    await moduleRef.init();
+    try {
+      // ProviderRegistryFactory and other providers build their state in
+      // onModuleInit, so the orchestrator only works after lifecycle init.
+      await moduleRef.init();
 
-    const orchestrator = moduleRef.get<AgentOrchestrator>(AGENT_ORCHESTRATOR, {
-      strict: false,
-    });
-    const config = moduleRef.get<ConfigService<EnvConfig, true>>(
-      ConfigService,
-      {
-        strict: false,
-      }
-    );
-    const maxSteps = config.get('AI_AGENT_MAX_STEPS');
+      const orchestrator = moduleRef.get<AgentOrchestrator>(
+        AGENT_ORCHESTRATOR,
+        {
+          strict: false,
+        }
+      );
+      const config = moduleRef.get<ConfigService<EnvConfig, true>>(
+        ConfigService,
+        { strict: false }
+      );
+      const maxSteps = config.get('AI_AGENT_MAX_STEPS');
 
-    return new AgentEvalHarness(moduleRef, orchestrator, retrieval, maxSteps);
+      return new AgentEvalHarness(moduleRef, orchestrator, retrieval, maxSteps);
+    } catch (error) {
+      await moduleRef.close();
+      throw error;
+    }
   }
 
   async runCase(

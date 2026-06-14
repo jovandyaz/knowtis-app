@@ -7,7 +7,7 @@ describe('resolveFixtureSet', () => {
     expect(resolveFixtureSet('recent')).toBe(NOTE_FIXTURE_SETS.recent);
   });
 
-  it('every set entry is a non-empty-id AgentNote shape except empty has a topic gap', () => {
+  it('seeds the topic set with the aurora fact and the injection set with the attack string', () => {
     expect(NOTE_FIXTURE_SETS.recent.length).toBe(3);
     expect(
       NOTE_FIXTURE_SETS.topic.some((n) => n.content.includes('aurora'))
