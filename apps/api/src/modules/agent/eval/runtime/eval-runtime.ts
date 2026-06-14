@@ -47,7 +47,15 @@ export function evalGateOpen(): boolean {
   return true;
 }
 
-export async function runEvalSuite(suite: EvalSuiteConfig): Promise<void> {
+export interface EvalRunStats {
+  readonly successes: number;
+  readonly failures: number;
+  readonly errors: number;
+}
+
+export async function runEvalSuite(
+  suite: EvalSuiteConfig
+): Promise<EvalRunStats> {
   const promptfoo = (await import('promptfoo')).default;
   const record = await promptfoo.evaluate(
     suite as Parameters<typeof promptfoo.evaluate>[0],
@@ -66,7 +74,9 @@ export async function runEvalSuite(suite: EvalSuiteConfig): Promise<void> {
   );
   /* eslint-enable no-console */
 
-  if (summary.stats.failures > 0 || summary.stats.errors > 0) {
-    process.exit(1);
-  }
+  return {
+    successes: summary.stats.successes,
+    failures: summary.stats.failures,
+    errors: summary.stats.errors,
+  };
 }

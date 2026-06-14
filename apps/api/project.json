@@ -136,7 +136,7 @@
     "eval": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "tsx src/modules/agent/eval/run-eval.ts",
+        "command": "pnpm exec vitest run --config vitest.eval.config.ts",
         "cwd": "apps/api"
       }
     },
