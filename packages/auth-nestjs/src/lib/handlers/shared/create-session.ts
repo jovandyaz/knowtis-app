@@ -1,5 +1,6 @@
 import { hashToken, SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth/server';
 import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
+import { randomUUID } from 'node:crypto';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { SessionRepository } from '../../ports/session.repository';
@@ -16,16 +17,19 @@ interface CreateSessionParams {
   userAgent?: string | undefined;
   ipAddress?: string | undefined;
   isAnonymous?: boolean | undefined;
+  familyId?: string | undefined;
 }
 
 export async function createSessionWithTokens(
   deps: CreateSessionDeps,
   params: CreateSessionParams
 ): Promise<Result<AuthTokens, AuthDomainError>> {
+  const familyId = params.familyId ?? randomUUID();
+
   const tokensResult = await deps.tokenService.generateTokens(
     UserId.fromTrusted(params.userId),
     params.email,
-    params.isAnonymous ? { isAnonymous: true } : undefined
+    { familyId, ...(params.isAnonymous && { isAnonymous: true }) }
   );
   if (tokensResult.isErr()) {
     return err(tokensResult.error);
@@ -35,6 +39,7 @@ export async function createSessionWithTokens(
 
   const sessionResult = await deps.sessionRepository.create({
     userId: params.userId,
+    familyId,
     refreshTokenHash: hashToken(tokens.refreshToken),
     userAgent: params.userAgent,
     ipAddress: params.ipAddress,

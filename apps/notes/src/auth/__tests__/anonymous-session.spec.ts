@@ -313,7 +313,7 @@ describe('initAnonymousSession — demotion guard', () => {
     );
   });
 
-  it('serializes boot-time restores through the knowtis-auth-refresh web lock', async () => {
+  it('coalesces concurrent boot restores behind the knowtis-auth-refresh web lock', async () => {
     const events: string[] = [];
     let queue: Promise<unknown> = Promise.resolve();
     const request = vi.fn(
@@ -354,12 +354,12 @@ describe('initAnonymousSession — demotion guard', () => {
         initAnonymousSession(tokenStorage, store),
       ]);
 
-      expect(request).toHaveBeenCalledTimes(2);
       expect(request).toHaveBeenCalledWith(
         'knowtis-auth-refresh',
         expect.any(Function)
       );
-      expect(events).toEqual(['start', 'end', 'start', 'end']);
+      expect(vi.mocked(httpClient.post)).toHaveBeenCalledTimes(1);
+      expect(events).toEqual(['start', 'end']);
     } finally {
       restoreLocks();
     }

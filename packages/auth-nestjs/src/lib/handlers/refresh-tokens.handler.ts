@@ -2,6 +2,7 @@ import {
   AuthErrors,
   AuthEventName,
   hashToken,
+  REFRESH_TOKEN_GRACE_MS,
   TokenRefreshedEvent,
   UserId,
 } from '@jovandyaz/auth/server';
@@ -15,8 +16,11 @@ import {
   TOKEN_SERVICE,
   USER_REPOSITORY,
 } from '../constants';
-import type { SessionRepository } from '../ports/session.repository';
-import type { TokenService } from '../ports/token.service';
+import type {
+  SessionEntity,
+  SessionRepository,
+} from '../ports/session.repository';
+import type { JwtPayload, TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 import { createSessionWithTokens } from './shared/create-session';
 
@@ -48,16 +52,16 @@ export class RefreshTokensHandler {
       await this.sessionRepository.findByRefreshTokenHash(tokenHash);
 
     if (!session) {
-      this.logger.warn(
-        `Token reuse detected for user ${payload.sub}. Invalidating all sessions.`
-      );
-      await this.sessionRepository.deleteAllByUserId(payload.sub);
-      return err(AuthErrors.tokenReuseDetected(payload.sub));
+      return this.handleMissingSession(payload);
     }
 
     if (session.expiresAt < new Date()) {
       await this.sessionRepository.deleteById(session.id);
       return err(AuthErrors.sessionExpired());
+    }
+
+    if (session.rotatedAt) {
+      return this.handleRotatedSession(payload, session, session.rotatedAt);
     }
 
     const user = await this.userRepository.findById(userId);
@@ -66,8 +70,48 @@ export class RefreshTokensHandler {
       return err(AuthErrors.userNotFound(payload.sub));
     }
 
-    await this.sessionRepository.deleteById(session.id);
+    await this.sessionRepository.markRotated(session.id);
+    return this.issueRotatedTokens(payload, session);
+  }
 
+  private async handleMissingSession(
+    payload: JwtPayload
+  ): Promise<Result<AuthTokens, AuthDomainError>> {
+    // Revoke only the token's family, never every session the user owns. A
+    // legacy token (pre-rotation deploy) carries no family, so just reject it.
+    if (!payload.familyId) {
+      return err(AuthErrors.invalidRefreshToken());
+    }
+    this.logger.warn(
+      `Refresh token reuse (no session) for user ${payload.sub}. Invalidating family ${payload.familyId}.`
+    );
+    await this.sessionRepository.deleteByFamilyId(payload.familyId);
+    return err(AuthErrors.tokenReuseDetected(payload.sub));
+  }
+
+  private async handleRotatedSession(
+    payload: JwtPayload,
+    session: SessionEntity,
+    rotatedAt: Date
+  ): Promise<Result<AuthTokens, AuthDomainError>> {
+    const withinGrace =
+      Date.now() - rotatedAt.getTime() <= REFRESH_TOKEN_GRACE_MS;
+
+    if (withinGrace) {
+      return this.issueRotatedTokens(payload, session);
+    }
+
+    this.logger.warn(
+      `Refresh token reuse for user ${payload.sub}. Invalidating family ${session.familyId}.`
+    );
+    await this.sessionRepository.deleteByFamilyId(session.familyId);
+    return err(AuthErrors.tokenReuseDetected(payload.sub));
+  }
+
+  private async issueRotatedTokens(
+    payload: JwtPayload,
+    session: SessionEntity
+  ): Promise<Result<AuthTokens, AuthDomainError>> {
     const tokensResult = await createSessionWithTokens(
       {
         tokenService: this.tokenService,
@@ -76,6 +120,7 @@ export class RefreshTokensHandler {
       {
         userId: payload.sub,
         email: payload.email,
+        familyId: session.familyId,
         userAgent: session.userAgent ?? undefined,
         ipAddress: session.ipAddress ?? undefined,
         ...(payload.isAnonymous && { isAnonymous: true }),
@@ -85,13 +130,15 @@ export class RefreshTokensHandler {
       return err(tokensResult.error);
     }
 
-    const newTokens = tokensResult.value;
+    await this.sessionRepository.deleteRotatedBefore(
+      new Date(Date.now() - REFRESH_TOKEN_GRACE_MS)
+    );
 
     this.eventEmitter.emit(
       AuthEventName.TOKEN_REFRESH,
       new TokenRefreshedEvent(payload.sub, new Date())
     );
 
-    return ok(newTokens);
+    return ok(tokensResult.value);
   }
 }
