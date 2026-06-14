@@ -20,13 +20,14 @@ export class JwtTokenService implements TokenService {
   async generateTokens(
     userId: UserId,
     email: string,
-    options?: { isAnonymous?: boolean }
+    options?: { isAnonymous?: boolean; familyId?: string }
   ): Promise<Result<AuthTokens, AuthDomainError>> {
     try {
       const payload: JwtPayload = {
         sub: userId.value,
         email,
         ...(options?.isAnonymous && { isAnonymous: true }),
+        ...(options?.familyId && { familyId: options.familyId }),
       };
 
       const [accessToken, refreshToken] = await Promise.all([
@@ -61,6 +62,7 @@ export class JwtTokenService implements TokenService {
         sub: payload.sub,
         email: payload.email,
         ...(payload.isAnonymous && { isAnonymous: true }),
+        ...(payload.familyId && { familyId: payload.familyId }),
       });
     } catch {
       return err(AuthErrors.invalidRefreshToken());

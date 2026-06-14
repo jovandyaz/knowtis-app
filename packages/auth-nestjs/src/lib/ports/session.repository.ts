@@ -4,7 +4,9 @@ import type { Result } from 'neverthrow';
 export interface SessionEntity {
   readonly id: string;
   readonly userId: string;
+  readonly familyId: string;
   readonly refreshTokenHash: string;
+  readonly rotatedAt: Date | null;
   readonly userAgent: string | null;
   readonly ipAddress: string | null;
   readonly expiresAt: Date;
@@ -13,6 +15,7 @@ export interface SessionEntity {
 
 export interface CreateSessionData {
   readonly userId: string;
+  readonly familyId: string;
   readonly refreshTokenHash: string;
   readonly userAgent?: string | undefined;
   readonly ipAddress?: string | undefined;
@@ -24,6 +27,9 @@ export interface SessionRepository {
     data: CreateSessionData
   ): Promise<Result<SessionEntity, AuthDomainError>>;
   findByRefreshTokenHash(hash: string): Promise<SessionEntity | null>;
+  markRotated(id: string): Promise<void>;
   deleteById(id: string): Promise<void>;
+  deleteByFamilyId(familyId: string): Promise<void>;
   deleteAllByUserId(userId: string): Promise<void>;
+  deleteRotatedBefore(cutoff: Date): Promise<void>;
 }

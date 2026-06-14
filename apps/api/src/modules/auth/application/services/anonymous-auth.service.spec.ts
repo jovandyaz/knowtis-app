@@ -55,7 +55,7 @@ describe('AnonymousAuthService', () => {
     expect(tokenService.generateTokens).toHaveBeenCalledWith(
       expect.objectContaining({ value: 'new-anon' }),
       expect.any(String),
-      { isAnonymous: true }
+      expect.objectContaining({ isAnonymous: true })
     );
     expect(sessionRepository.create).toHaveBeenCalledOnce();
     expect(session).toEqual({

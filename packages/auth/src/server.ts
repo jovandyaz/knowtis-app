@@ -51,6 +51,7 @@ export type { SessionContext } from './lib/session/session.types';
 // Constants
 export {
   SESSION_EXPIRY_MS,
+  REFRESH_TOKEN_GRACE_MS,
   VERIFICATION_TOKEN_EXPIRY_MS,
   RESET_TOKEN_EXPIRY_MS,
 } from './lib/constants';
