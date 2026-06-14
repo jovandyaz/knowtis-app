@@ -1,7 +1,14 @@
+import * as path from 'node:path';
+
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
+import { I18nModule } from 'nestjs-i18n';
+
+import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
+import { DatabaseModule } from '../../../database';
 import { AgentModule } from '../agent.module';
 import type { AgentMessage } from '../domain/agent-message';
 import {
@@ -32,6 +39,9 @@ export class AgentEvalHarness {
 
   static async boot(): Promise<AgentEvalHarness> {
     const retrieval = new RecordingFixtureRetrieval();
+    // Replicates the global context AppModule provides and AgentModule's
+    // eagerly-instantiated controllers require, minus the side-effectful
+    // modules (Schedule timers, Throttler, Collaboration WS, i18n watcher).
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -39,6 +49,15 @@ export class AgentEvalHarness {
           validate: validateEnv,
           envFilePath: ['.env.local', '.env'],
         }),
+        EventEmitterModule.forRoot(),
+        I18nModule.forRoot({
+          fallbackLanguage: DEFAULT_LOCALE,
+          loaderOptions: {
+            path: path.join(__dirname, '../../../i18n'),
+            watch: false,
+          },
+        }),
+        DatabaseModule,
         AgentModule,
       ],
     })
@@ -48,8 +67,19 @@ export class AgentEvalHarness {
       .useValue(NOOP_PENDING_STORE)
       .compile();
 
-    const orchestrator = moduleRef.get<AgentOrchestrator>(AGENT_ORCHESTRATOR);
-    const config = moduleRef.get<ConfigService<EnvConfig, true>>(ConfigService);
+    // ProviderRegistryFactory and other providers build their state in
+    // onModuleInit, so the orchestrator only works after lifecycle init.
+    await moduleRef.init();
+
+    const orchestrator = moduleRef.get<AgentOrchestrator>(AGENT_ORCHESTRATOR, {
+      strict: false,
+    });
+    const config = moduleRef.get<ConfigService<EnvConfig, true>>(
+      ConfigService,
+      {
+        strict: false,
+      }
+    );
     const maxSteps = config.get('AI_AGENT_MAX_STEPS');
 
     return new AgentEvalHarness(moduleRef, orchestrator, retrieval, maxSteps);
