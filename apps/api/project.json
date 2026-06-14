@@ -104,6 +104,20 @@
         "cwd": "apps/api"
       }
     },
+    "db:migrate:run": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/database/migrate.ts",
+        "cwd": "apps/api"
+      }
+    },
+    "db:baseline": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/database/baseline.ts",
+        "cwd": "apps/api"
+      }
+    },
     "db:studio": {
       "executor": "nx:run-commands",
       "options": {

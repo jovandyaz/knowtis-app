@@ -35,6 +35,8 @@
     "tokens:build": "nx tokens:build design-system",
     "db:generate": "nx db:generate api",
     "db:migrate": "nx db:migrate api",
+    "db:migrate:run": "nx db:migrate:run api",
+    "db:baseline": "nx db:baseline api",
     "db:push": "nx db:push api",
     "db:studio": "nx db:studio api",
     "db:seed:admin": "nx seed-admin api",
