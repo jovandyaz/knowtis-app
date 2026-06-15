@@ -71,6 +71,13 @@
       "when": 1781500762687,
       "tag": "0009_last_pride",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1781548507478,
+      "tag": "0010_green_the_professor",
+      "breakpoints": true
     }
   ]
 }
