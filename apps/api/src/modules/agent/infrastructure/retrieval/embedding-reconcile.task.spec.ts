@@ -10,11 +10,16 @@ import type {
 import { EmbeddingReconcileTask } from './embedding-reconcile.task';
 import { embeddingInputHash } from './embedding-text';
 
-function makeTask(opts: { stale: StaleNote[]; lock?: boolean }): {
+function makeTask(opts: {
+  stale: StaleNote[];
+  lock?: boolean;
+  voyageKey?: string | undefined;
+}): {
   task: EmbeddingReconcileTask;
   repo: NoteEmbeddingRepository;
   embed: EmbeddingPort;
 } {
+  const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'test-key';
   const repo = {
     findStaleNotes: vi.fn(async () => opts.stale),
     upsert: vi.fn(async () => undefined),
@@ -31,7 +36,15 @@ function makeTask(opts: { stale: StaleNote[]; lock?: boolean }): {
     execute: vi.fn(async () => [{ locked: opts.lock ?? true }]),
   };
   const config = {
-    get: (k: string) => (k === 'AI_EMBEDDING_MODEL' ? 'voyage-4' : undefined),
+    get: (k: string) => {
+      if (k === 'AI_EMBEDDING_MODEL') {
+        return 'voyage-4';
+      }
+      if (k === 'VOYAGE_API_KEY') {
+        return voyageKey;
+      }
+      return undefined;
+    },
   } as unknown as ConfigService<EnvConfig, true>;
   const task = new EmbeddingReconcileTask(db as never, config, repo, embed);
   return { task, repo, embed };
@@ -62,6 +75,15 @@ describe('EmbeddingReconcileTask', () => {
     const { task, repo } = makeTask({
       stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
       lock: false,
+    });
+    await task.reconcile();
+    expect(repo.findStaleNotes).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when VOYAGE_API_KEY is not set', async () => {
+    const { task, repo } = makeTask({
+      stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
+      voyageKey: undefined,
     });
     await task.reconcile();
     expect(repo.findStaleNotes).not.toHaveBeenCalled();
