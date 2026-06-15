@@ -64,6 +64,13 @@
       "when": 1781410291372,
       "tag": "0008_session_rotation_family",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781500762687,
+      "tag": "0009_last_pride",
+      "breakpoints": true
     }
   ]
 }

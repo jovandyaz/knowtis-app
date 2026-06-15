@@ -676,24 +676,15 @@ The copilot agent's `searchNotes` tool can use a hybrid retriever — Postgres f
 | `VOYAGE_API_KEY`     | No       | —          | Voyage AI REST key. Without it the `agent_hybrid_retrieval` flag must stay off (search degrades to keyword-only and the reconcile cron is a no-op). |
 | `AI_EMBEDDING_MODEL` | No       | `voyage-4` | Voyage model used for embedding. Only `voyage-4` is validated in v1.                                                                                |
 
-### pgvector DDL runbook
+### Schema migration
 
-The `note_embeddings` table is **not** managed by Drizzle's `db:push` migration — it must be applied manually to both dev and prod databases before deploying the API build that imports the schema.
-
-Runbook file: `tools/sql/2026-06-14-note-embeddings.sql`
+The `note_embeddings` table ships as a Drizzle migration (`apps/api/drizzle/0009_last_pride.sql`) which prepends `CREATE EXTENSION IF NOT EXISTS vector;` before the `CREATE TABLE`. Like every schema change it is **applied automatically on deploy** by Railway's pre-deploy command (`pnpm exec tsx apps/api/src/database/migrate.ts`) — see [MIGRATIONS.md](MIGRATIONS.md). Apply it to your local dev DB with:
 
 ```bash
-# Apply to local dev DB
-set -a; . apps/api/.env; set +a
-psql "$DATABASE_URL" -f tools/sql/2026-06-14-note-embeddings.sql
-
-# Apply to prod (Railway) — run from Railway shell or via psql with the prod DATABASE_URL
-psql "$RAILWAY_DATABASE_URL" -f tools/sql/2026-06-14-note-embeddings.sql
+pnpm db:migrate:run
 ```
 
-The script is idempotent (`CREATE EXTENSION IF NOT EXISTS vector`, `CREATE TABLE IF NOT EXISTS`). Run it before the API deployment that references `note_embeddings`.
-
-**Local dev DB note:** the Docker Compose Postgres image must support pgvector. The project uses `pgvector/pgvector:pg16` — confirm `docker-compose.yml` references this image before applying the DDL.
+**Local dev DB note:** the Postgres image must support pgvector so the migration's `CREATE EXTENSION` succeeds. `docker-compose.yml` uses `pgvector/pgvector:pg16`. Railway's managed Postgres supports `CREATE EXTENSION vector`.
 
 ### Reconcile cron
 
@@ -708,13 +699,12 @@ The cron is a no-op when `VOYAGE_API_KEY` is absent — it returns immediately w
 
 ### Rollout order
 
-Apply these steps in sequence to avoid serving the flag before embeddings exist:
+The migration runs on deploy, so the table and `vector` extension are created automatically. To avoid serving the flag before embeddings exist:
 
-1. **Deploy API with flag off** — merge and deploy the build. The new code is live but hybrid is inactive.
-2. **Apply pgvector DDL** — run the runbook against prod (Railway DB). Verify with `\d note_embeddings`.
-3. **Set `VOYAGE_API_KEY`** — add the env var to the Railway service and redeploy (or update in-place). The reconcile cron will start populating `note_embeddings` automatically.
-4. **Wait for backfill** — monitor `note_embeddings` row count until it matches the total note count (or a representative majority). The cron processes 50 notes per 2-minute cycle.
-5. **Flip the flag on** — `PUT /api/v1/flags/agent_hybrid_retrieval` with `{ "enabled": true }`. The copilot's `searchNotes` now uses the hybrid path.
+1. **Deploy with flag off** — the pre-deploy migration creates `note_embeddings` (and the extension); hybrid stays inactive.
+2. **Set `VOYAGE_API_KEY`** on the Railway service. The reconcile cron starts populating `note_embeddings` automatically (it is a no-op until the key is present).
+3. **Wait for backfill** — monitor `note_embeddings` row count until it covers the corpus (the cron processes 50 notes per 2-minute cycle).
+4. **Flip the flag on** — `PUT /api/v1/flags/agent_hybrid_retrieval` with `{ "enabled": true }`. The copilot's `searchNotes` now uses the hybrid path.
 
 To roll back: set `agent_hybrid_retrieval` to `false`. Keyword search resumes instantly with no data loss.
 
