@@ -9,7 +9,7 @@ import type {
 
 const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings';
 const OUTPUT_DIMENSION = 1024;
-// TODO(verify): confirm voyage-4 price/1M tokens against Voyage pricing docs.
+// Published voyage-4-large rate (2026-01); cost logging is an approximate estimate.
 const PRICE_PER_1M_TOKENS_USD = 0.12;
 
 @Injectable()
@@ -53,6 +53,7 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort {
         output_dimension: OUTPUT_DIMENSION,
         output_dtype: 'float',
       }),
+      signal: AbortSignal.timeout(this.config.get('AI_TIMEOUT_MS')),
     });
 
     if (!response.ok) {

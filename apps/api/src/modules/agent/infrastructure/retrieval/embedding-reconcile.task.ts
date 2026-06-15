@@ -46,7 +46,11 @@ export class EmbeddingReconcileTask {
     }
     try {
       const model = this.config.get('AI_EMBEDDING_MODEL');
-      const stale = await this.repo.findStaleNotes(QUIET_SECONDS, BATCH_SIZE);
+      const stale = await this.repo.findStaleNotes(
+        model,
+        QUIET_SECONDS,
+        BATCH_SIZE
+      );
       for (const note of stale) {
         await this.reconcileNote(note, model);
       }
@@ -71,9 +75,14 @@ export class EmbeddingReconcileTask {
     }
     const text = buildEmbeddingText(note.title, note.content);
     const { embeddings } = await this.embed.embedDocuments([text]);
+    const embedding = embeddings[0];
+    if (!embedding) {
+      this.logger.warn(`Voyage returned no embedding for note ${note.noteId}`);
+      return;
+    }
     await this.repo.upsert({
       noteId: note.noteId,
-      embedding: embeddings[0],
+      embedding,
       model,
       inputHash: hash,
     });
