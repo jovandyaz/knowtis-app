@@ -10,6 +10,10 @@ import type { AIRateLimitService } from '../../ai/application/services/ai-rate-l
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
+import type {
+  ConversationMessageRow,
+  ConversationRepository,
+} from '../domain/ports/conversation.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
@@ -52,7 +56,13 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
   } as unknown as AIConfigService;
   const config = {
     get: vi.fn((k: string) =>
-      k === 'AI_AGENT_MAX_STEPS' ? 8 : k === 'AI_AGENT_MAX_MS' ? 120000 : 0
+      k === 'AI_AGENT_MAX_STEPS'
+        ? 8
+        : k === 'AI_AGENT_MAX_MS'
+          ? 120000
+          : k === 'AI_AGENT_HISTORY_LIMIT'
+            ? 40
+            : 0
     ),
   } as unknown as ConfigService<EnvConfig, true>;
   const orchestrator = orchestratorYielding(
@@ -77,6 +87,15 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
   return { rateLimit, aiConfig, config, orchestrator, pendingStore };
 }
 
+function makeConversations(history: ConversationMessageRow[] = []) {
+  return {
+    create: vi.fn().mockResolvedValue({ id: 'conv-1' }),
+    findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1', noteId: null }),
+    loadMessages: vi.fn().mockResolvedValue(history),
+    appendTurn: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ConversationRepository;
+}
+
 describe('RunAgentTurnHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -91,7 +110,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -126,7 +146,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const error = vi.fn();
 
@@ -152,7 +173,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const error = vi.fn();
 
@@ -186,7 +208,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const done = vi.fn();
 
@@ -222,7 +245,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const done = vi.fn();
 
@@ -254,7 +278,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const done = vi.fn();
 
@@ -292,7 +317,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -327,7 +353,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -352,7 +379,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const controller = new AbortController();
     controller.abort();
@@ -383,7 +411,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -424,7 +453,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onProposal = vi.fn();
 
@@ -461,7 +491,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onDone = vi.fn();
 
@@ -489,7 +520,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -530,7 +562,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onDone = vi.fn();
 
@@ -575,7 +608,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -602,7 +636,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const controller = new AbortController();
     controller.abort();
@@ -635,7 +670,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -669,7 +705,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -705,7 +742,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -740,7 +778,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
 
     await handler.execute(
@@ -765,7 +804,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
 
     await handler.execute(
@@ -791,7 +831,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -826,7 +867,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -859,7 +901,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const hugeMessage = { role: 'user' as const, content: 'x '.repeat(13000) };
 
@@ -887,7 +930,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -921,7 +965,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -954,7 +999,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -981,7 +1027,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -1013,7 +1060,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -1054,7 +1102,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onDone = vi.fn();
 
@@ -1094,7 +1143,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
 
     await handler.execute(
@@ -1125,7 +1175,8 @@ describe('RunAgentTurnHandler', () => {
       aiConfig,
       config,
       pendingStore,
-      createTestCatalog()
+      createTestCatalog(),
+      makeConversations()
     );
     const onError = vi.fn();
 
@@ -1139,5 +1190,200 @@ describe('RunAgentTurnHandler', () => {
       USER,
       expect.any(Number)
     );
+  });
+
+  it('creates a conversation, loads history, and persists the turn on done (new path)', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    const done = vi.fn();
+    await handler.execute(
+      { userId: USER, newMessage: { content: 'remember BLUE' } },
+      { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
+    );
+    expect(conversations.create).toHaveBeenCalledOnce();
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        userMessage: { content: 'remember BLUE' },
+        assistantMessage: expect.objectContaining({ content: 'Hi' }),
+      })
+    );
+    expect(done).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1' })
+    );
+  });
+
+  it('loads prior history and feeds it to the orchestrator (new path, existing conversation)', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations([
+      { role: 'user', content: 'my codeword is BLUE', sources: [] },
+      { role: 'assistant', content: 'Noted: BLUE', sources: [] },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        newMessage: { content: 'what is it?' },
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+    expect(conversations.create).not.toHaveBeenCalled();
+    const runArg = vi.mocked(orchestrator.run).mock.calls[0][0];
+    const contents = runArg.messages.map((m) => m.content);
+    expect(contents).toContain('my codeword is BLUE');
+    expect(contents[contents.length - 1]).toBe('what is it?');
+  });
+
+  it('rejects a foreign conversationId with a forbidden error (new path)', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    const error = vi.fn();
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'someone-elses',
+        newMessage: { content: 'hi' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: error, onProposal: vi.fn() }
+    );
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'forbidden' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
+  it('still serves the legacy messages[] path and does not persist', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    await handler.execute(
+      { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+    expect(conversations.appendTurn).not.toHaveBeenCalled();
+    expect(conversations.create).not.toHaveBeenCalled();
+  });
+
+  it('persists the preamble with empty sources on a proposal (new path)', async () => {
+    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const proposal = makeProposal('44444444-4444-4444-4444-444444444444');
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'I will create it.' },
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    const onProposal = vi.fn();
+
+    await handler.execute(
+      { userId: USER, newMessage: { content: 'create a note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onProposal }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        userMessage: { content: 'create a note' },
+        assistantMessage: { content: 'I will create it.', sources: [] },
+      })
+    );
+    expect(pendingStore.save).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1' })
+    );
+    expect(onProposal).toHaveBeenCalledWith(proposal);
+  });
+
+  it('completes the turn and still emits conversationId when persistence fails (new path)', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.appendTurn).mockRejectedValue(new Error('db down'));
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    const done = vi.fn();
+    const error = vi.fn();
+
+    await handler.execute(
+      { userId: USER, newMessage: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: done, onError: error, onProposal: vi.fn() }
+    );
+
+    expect(done).toHaveBeenCalledWith(
+      expect.objectContaining({ conversationId: 'conv-1' })
+    );
+    expect(error).not.toHaveBeenCalled();
   });
 });

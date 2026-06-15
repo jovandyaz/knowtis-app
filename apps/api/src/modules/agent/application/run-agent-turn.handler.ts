@@ -16,10 +16,15 @@ import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
+import { coalesceMessages } from '../domain/coalesce-messages';
 import {
   AGENT_ORCHESTRATOR,
   type AgentOrchestrator,
 } from '../domain/ports/agent-orchestrator.port';
+import {
+  CONVERSATION_REPOSITORY,
+  type ConversationRepository,
+} from '../domain/ports/conversation.repository';
 import {
   PENDING_MUTATION_STORE,
   type PendingMutationStore,
@@ -31,10 +36,12 @@ import type {
 
 interface RunAgentTurnInput {
   readonly userId: string;
-  readonly messages: readonly AgentMessage[];
+  readonly messages?: readonly AgentMessage[];
   readonly isAnonymous?: boolean;
   readonly noteId?: string;
   readonly knownNotes?: readonly AgentSource[];
+  readonly newMessage?: { content: string };
+  readonly conversationId?: string;
 }
 
 export interface RunAgentTurnCallbacks {
@@ -46,6 +53,7 @@ export interface RunAgentTurnCallbacks {
     costUsd: number;
     sources: readonly AgentSource[];
     knownNotes: readonly AgentSource[];
+    conversationId?: string;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
@@ -57,6 +65,13 @@ interface TurnLoopContext {
   readonly estimatedTokens: number;
   readonly model: string;
 }
+
+interface PersistenceContext {
+  readonly conversationId: string;
+  readonly userContent?: string;
+}
+
+const CONVERSATION_TITLE_MAX = 120;
 
 interface TurnLoopPolicy {
   readonly onProposal: (
@@ -83,7 +98,9 @@ export class RunAgentTurnHandler {
     @Inject(PENDING_MUTATION_STORE)
     private readonly pendingStore: PendingMutationStore,
     @Inject(MODEL_CATALOG)
-    private readonly modelCatalog: ModelCatalog
+    private readonly modelCatalog: ModelCatalog,
+    @Inject(CONVERSATION_REPOSITORY)
+    private readonly conversations: ConversationRepository
   ) {}
 
   async execute(
@@ -91,19 +108,142 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
-    return this.runLoop(input, undefined, callbacks, signal, {
+    if (input.newMessage) {
+      return this.executeWithMemory(input, callbacks, signal);
+    }
+    return this.runLoop(
+      input,
+      undefined,
+      callbacks,
+      signal,
+      this.executePolicy(input.userId, callbacks),
+      undefined
+    );
+  }
+
+  private executePolicy(
+    userId: string,
+    callbacks: RunAgentTurnCallbacks,
+    conversationId?: string
+  ): TurnLoopPolicy {
+    return {
       onProposal: async (event, ctx) => {
-        await this.recordUsage(input.userId, ctx.estimatedTokens, event.usage);
+        await this.recordUsage(userId, ctx.estimatedTokens, event.usage);
         await this.pendingStore.save({
-          userId: input.userId,
+          userId,
           mutation: event.proposal,
           toolName: this.toolNameForKind(event.proposal.kind),
+          ...(conversationId ? { conversationId } : {}),
         });
         callbacks.onProposal(event.proposal);
         return 'stop';
       },
       onCommitted: () => 'continue',
+    };
+  }
+
+  private async executeWithMemory(
+    input: RunAgentTurnInput,
+    callbacks: RunAgentTurnCallbacks,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const newMessage = input.newMessage;
+    if (!newMessage) {
+      return;
+    }
+    const conversationId = await this.resolveConversationId(input, newMessage);
+    if (!conversationId) {
+      callbacks.onError({
+        code: 'forbidden',
+        message: 'Conversation not found',
+      });
+      return;
+    }
+    const { history, knownNotes } =
+      await this.loadConversationContext(conversationId);
+    const messages = coalesceMessages([
+      ...history,
+      { role: 'user', content: newMessage.content },
+    ]);
+    const synthInput: RunAgentTurnInput = {
+      userId: input.userId,
+      messages,
+      ...(input.isAnonymous ? { isAnonymous: true } : {}),
+      ...(input.noteId ? { noteId: input.noteId } : {}),
+      knownNotes,
+    };
+    return this.runLoop(
+      synthInput,
+      undefined,
+      callbacks,
+      signal,
+      this.executePolicy(input.userId, callbacks, conversationId),
+      { conversationId, userContent: newMessage.content }
+    );
+  }
+
+  private async resolveConversationId(
+    input: RunAgentTurnInput,
+    newMessage: { content: string }
+  ): Promise<string | null> {
+    if (input.conversationId) {
+      const found = await this.conversations.findByIdForUser(
+        input.conversationId,
+        input.userId
+      );
+      return found ? found.id : null;
+    }
+    const created = await this.conversations.create({
+      userId: input.userId,
+      ...(input.noteId ? { noteId: input.noteId } : {}),
+      title: [...newMessage.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
     });
+    return created.id;
+  }
+
+  private async loadConversationContext(
+    conversationId: string
+  ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
+    const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
+    const rows = await this.conversations.loadMessages(conversationId, limit);
+    const history: AgentMessage[] = rows.map((r) => ({
+      role: r.role,
+      content: r.content,
+    }));
+    const seen = new Map<string, AgentSource>();
+    for (const r of rows) {
+      if (r.role !== 'assistant') {
+        continue;
+      }
+      for (const s of r.sources) {
+        if (!seen.has(s.id)) {
+          seen.set(s.id, s);
+        }
+      }
+    }
+    return { history, knownNotes: [...seen.values()] };
+  }
+
+  private async persistTurn(
+    persistence: PersistenceContext,
+    assistantText: string,
+    sources: readonly AgentSource[]
+  ): Promise<void> {
+    try {
+      await this.conversations.appendTurn({
+        conversationId: persistence.conversationId,
+        ...(persistence.userContent !== undefined
+          ? { userMessage: { content: persistence.userContent } }
+          : {}),
+        assistantMessage: { content: assistantText, sources },
+      });
+    } catch (error) {
+      this.logger.error({
+        event: 'agent.conversation.persist_failed',
+        conversationId: persistence.conversationId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+    }
   }
 
   async resumeTurn(
@@ -113,41 +253,48 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
     signal?: AbortSignal
   ): Promise<void> {
-    return this.runLoop(input, input.resume, callbacks, signal, {
-      onProposal: async (event, ctx) => {
-        this.logger.warn({
-          event: 'agent.resume.proposal_dropped',
-          userId: input.userId,
-          proposalId: event.proposal.id,
-          summary: event.proposal.summary,
-        });
-        const costUsd = await this.recordUsage(
-          input.userId,
-          ctx.estimatedTokens,
-          event.usage
-        );
-        callbacks.onDone({
-          inputTokens: event.usage.inputTokens,
-          outputTokens: event.usage.outputTokens,
-          model: event.usage.model,
-          costUsd,
-          sources: [],
-          knownNotes: [],
-        });
-        return 'stop';
+    return this.runLoop(
+      input,
+      input.resume,
+      callbacks,
+      signal,
+      {
+        onProposal: async (event, ctx) => {
+          this.logger.warn({
+            event: 'agent.resume.proposal_dropped',
+            userId: input.userId,
+            proposalId: event.proposal.id,
+            summary: event.proposal.summary,
+          });
+          const costUsd = await this.recordUsage(
+            input.userId,
+            ctx.estimatedTokens,
+            event.usage
+          );
+          callbacks.onDone({
+            inputTokens: event.usage.inputTokens,
+            outputTokens: event.usage.outputTokens,
+            model: event.usage.model,
+            costUsd,
+            sources: [],
+            knownNotes: [],
+          });
+          return 'stop';
+        },
+        onCommitted: (ctx) => {
+          callbacks.onDone({
+            inputTokens: 0,
+            outputTokens: 0,
+            model: ctx.model,
+            costUsd: 0,
+            sources: [],
+            knownNotes: [],
+          });
+          return 'stop';
+        },
       },
-      onCommitted: (ctx) => {
-        callbacks.onDone({
-          inputTokens: 0,
-          outputTokens: 0,
-          model: ctx.model,
-          costUsd: 0,
-          sources: [],
-          knownNotes: [],
-        });
-        return 'stop';
-      },
-    });
+      undefined
+    );
   }
 
   private async runLoop(
@@ -155,12 +302,14 @@ export class RunAgentTurnHandler {
     resume: { toolName: string; outcome: string } | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
     signal: AbortSignal | undefined,
-    policy: TurnLoopPolicy
+    policy: TurnLoopPolicy,
+    persistence: PersistenceContext | undefined
   ): Promise<void> {
     if (signal?.aborted) {
       return;
     }
-    const lastUserMessage = input.messages.findLast((m) => m.role === 'user');
+    const inputMessages = input.messages ?? [];
+    const lastUserMessage = inputMessages.findLast((m) => m.role === 'user');
     if (lastUserMessage) {
       if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
         callbacks.onError(
@@ -179,7 +328,7 @@ export class RunAgentTurnHandler {
     // client keeps rejected messages in its history, so a hard error here
     // would permanently block the rest of the conversation.
     const messages = this.trimHistory(
-      input.messages.filter(
+      inputMessages.filter(
         (m) =>
           m.role !== 'user' ||
           m === lastUserMessage ||
@@ -207,6 +356,7 @@ export class RunAgentTurnHandler {
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
     const ctx: TurnLoopContext = { estimatedTokens, model };
 
+    let assistantText = '';
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
@@ -220,6 +370,7 @@ export class RunAgentTurnHandler {
       })) {
         switch (event.type) {
           case 'chunk':
+            assistantText += event.text;
             callbacks.onChunk(event.text);
             break;
           case 'error':
@@ -260,6 +411,9 @@ export class RunAgentTurnHandler {
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
+            if (persistence) {
+              await this.persistTurn(persistence, assistantText, event.sources);
+            }
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -267,10 +421,17 @@ export class RunAgentTurnHandler {
               costUsd,
               sources: event.sources,
               knownNotes: event.knownNotes,
+              ...(persistence
+                ? { conversationId: persistence.conversationId }
+                : {}),
             });
             return;
           }
           case 'proposal':
+            if (persistence) {
+              // Proposal events carry no sources; the post-approval turn re-derives them.
+              await this.persistTurn(persistence, assistantText, []);
+            }
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
