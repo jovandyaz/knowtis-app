@@ -656,3 +656,68 @@ pnpm nx run api:eval
   injection resistance.
 - **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
   `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
+
+---
+
+## Hybrid Retrieval (A3)
+
+The copilot agent's `searchNotes` tool can use a hybrid retriever — Postgres full-text search (FTS) lexical leg fused with a pgvector exact-KNN vector leg via Reciprocal Rank Fusion (RRF) — instead of the default keyword-only path. Both legs are scoped to the user's accessible notes. Gated by the `agent_hybrid_retrieval` feature flag (default **off**).
+
+### Feature flag
+
+| Flag key                 | Default | Description                                                                              |
+| ------------------------ | ------- | ---------------------------------------------------------------------------------------- |
+| `agent_hybrid_retrieval` | off     | Enables hybrid FTS + vector search for the copilot. Toggle via `PUT /api/v1/flags/:key`. |
+
+### Environment variables
+
+| Variable             | Required | Default    | Description                                                                                                                                         |
+| -------------------- | -------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VOYAGE_API_KEY`     | No       | —          | Voyage AI REST key. Without it the `agent_hybrid_retrieval` flag must stay off (search degrades to keyword-only and the reconcile cron is a no-op). |
+| `AI_EMBEDDING_MODEL` | No       | `voyage-4` | Voyage model used for embedding. Only `voyage-4` is validated in v1.                                                                                |
+
+### pgvector DDL runbook
+
+The `note_embeddings` table is **not** managed by Drizzle's `db:push` migration — it must be applied manually to both dev and prod databases before deploying the API build that imports the schema.
+
+Runbook file: `tools/sql/2026-06-14-note-embeddings.sql`
+
+```bash
+# Apply to local dev DB
+set -a; . apps/api/.env; set +a
+psql "$DATABASE_URL" -f tools/sql/2026-06-14-note-embeddings.sql
+
+# Apply to prod (Railway) — run from Railway shell or via psql with the prod DATABASE_URL
+psql "$RAILWAY_DATABASE_URL" -f tools/sql/2026-06-14-note-embeddings.sql
+```
+
+The script is idempotent (`CREATE EXTENSION IF NOT EXISTS vector`, `CREATE TABLE IF NOT EXISTS`). Run it before the API deployment that references `note_embeddings`.
+
+**Local dev DB note:** the Docker Compose Postgres image must support pgvector. The project uses `pgvector/pgvector:pg16` — confirm `docker-compose.yml` references this image before applying the DDL.
+
+### Reconcile cron
+
+`EmbeddingReconcileTask` runs every 2 minutes as a `@Interval` task inside `AgentModule`. It:
+
+1. Acquires a Postgres advisory lock (key `778493001`) so only one API instance runs the batch.
+2. Finds notes whose embedding is missing or stale (updated more than 90 s ago, no quiet-period race).
+3. Computes a SHA-256 hash of `model + title + content`; skips embedding and only touches the row's `updated_at` if the hash matches (content unchanged).
+4. Calls Voyage `embedDocuments` in batches of 50 and upserts into `note_embeddings`.
+
+The cron is a no-op when `VOYAGE_API_KEY` is absent — it returns immediately without touching the DB.
+
+### Rollout order
+
+Apply these steps in sequence to avoid serving the flag before embeddings exist:
+
+1. **Deploy API with flag off** — merge and deploy the build. The new code is live but hybrid is inactive.
+2. **Apply pgvector DDL** — run the runbook against prod (Railway DB). Verify with `\d note_embeddings`.
+3. **Set `VOYAGE_API_KEY`** — add the env var to the Railway service and redeploy (or update in-place). The reconcile cron will start populating `note_embeddings` automatically.
+4. **Wait for backfill** — monitor `note_embeddings` row count until it matches the total note count (or a representative majority). The cron processes 50 notes per 2-minute cycle.
+5. **Flip the flag on** — `PUT /api/v1/flags/agent_hybrid_retrieval` with `{ "enabled": true }`. The copilot's `searchNotes` now uses the hybrid path.
+
+To roll back: set `agent_hybrid_retrieval` to `false`. Keyword search resumes instantly with no data loss.
+
+### Retrieval-quality eval
+
+`apps/api/src/modules/agent/eval/retrieval-quality.eval.ts` verifies cross-lingual and paraphrase retrieval quality against the real Voyage model and a live DB. Runs under `nx run api:eval` (same target as the copilot eval). Gated on `VOYAGE_API_KEY` — the suite skips cleanly when the key is absent.
