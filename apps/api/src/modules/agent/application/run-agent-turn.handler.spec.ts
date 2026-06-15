@@ -511,6 +511,45 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
   });
 
+  it('resume loads server history and persists the assistant-only turn', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations([
+      { role: 'user', content: 'rename it', sources: [] },
+      { role: 'assistant', content: "I'll rename it, confirm?", sources: [] },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        resume: { toolName: 'proposeUpdateNote', outcome: 'updated the note' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+    );
+
+    const runArg = vi.mocked(orchestrator.run).mock.calls[0][0];
+    expect(runArg.messages.map((m) => m.content)).toContain('rename it');
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        assistantMessage: expect.objectContaining({ content: 'Hi' }),
+      })
+    );
+    expect(
+      vi.mocked(conversations.appendTurn).mock.calls[0][0]
+    ).not.toHaveProperty('userMessage');
+  });
+
   it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({ allowed: false });

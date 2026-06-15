@@ -246,6 +246,47 @@ export class RunAgentTurnHandler {
     }
   }
 
+  private resumePolicy(
+    userId: string,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>
+  ): TurnLoopPolicy {
+    return {
+      onProposal: async (event, ctx) => {
+        this.logger.warn({
+          event: 'agent.resume.proposal_dropped',
+          userId,
+          proposalId: event.proposal.id,
+          summary: event.proposal.summary,
+        });
+        const costUsd = await this.recordUsage(
+          userId,
+          ctx.estimatedTokens,
+          event.usage
+        );
+        callbacks.onDone({
+          inputTokens: event.usage.inputTokens,
+          outputTokens: event.usage.outputTokens,
+          model: event.usage.model,
+          costUsd,
+          sources: [],
+          knownNotes: [],
+        });
+        return 'stop';
+      },
+      onCommitted: (ctx) => {
+        callbacks.onDone({
+          inputTokens: 0,
+          outputTokens: 0,
+          model: ctx.model,
+          costUsd: 0,
+          sources: [],
+          knownNotes: [],
+        });
+        return 'stop';
+      },
+    };
+  }
+
   async resumeTurn(
     input: RunAgentTurnInput & {
       resume: { toolName: string; outcome: string };
@@ -253,46 +294,45 @@ export class RunAgentTurnHandler {
     callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
     signal?: AbortSignal
   ): Promise<void> {
+    if (input.conversationId) {
+      const found = await this.conversations.findByIdForUser(
+        input.conversationId,
+        input.userId
+      );
+      if (!found) {
+        callbacks.onError({
+          code: 'forbidden',
+          message: 'Conversation not found',
+        });
+        return;
+      }
+      const { history, knownNotes } = await this.loadConversationContext(
+        input.conversationId
+      );
+      const synthInput: RunAgentTurnInput & {
+        resume: { toolName: string; outcome: string };
+      } = {
+        userId: input.userId,
+        messages: coalesceMessages(history),
+        knownNotes,
+        ...(input.noteId ? { noteId: input.noteId } : {}),
+        resume: input.resume,
+      };
+      return this.runLoop(
+        synthInput,
+        input.resume,
+        callbacks,
+        signal,
+        this.resumePolicy(input.userId, callbacks),
+        { conversationId: input.conversationId }
+      );
+    }
     return this.runLoop(
       input,
       input.resume,
       callbacks,
       signal,
-      {
-        onProposal: async (event, ctx) => {
-          this.logger.warn({
-            event: 'agent.resume.proposal_dropped',
-            userId: input.userId,
-            proposalId: event.proposal.id,
-            summary: event.proposal.summary,
-          });
-          const costUsd = await this.recordUsage(
-            input.userId,
-            ctx.estimatedTokens,
-            event.usage
-          );
-          callbacks.onDone({
-            inputTokens: event.usage.inputTokens,
-            outputTokens: event.usage.outputTokens,
-            model: event.usage.model,
-            costUsd,
-            sources: [],
-            knownNotes: [],
-          });
-          return 'stop';
-        },
-        onCommitted: (ctx) => {
-          callbacks.onDone({
-            inputTokens: 0,
-            outputTokens: 0,
-            model: ctx.model,
-            costUsd: 0,
-            sources: [],
-            knownNotes: [],
-          });
-          return 'stop';
-        },
-      },
+      this.resumePolicy(input.userId, callbacks),
       undefined
     );
   }
