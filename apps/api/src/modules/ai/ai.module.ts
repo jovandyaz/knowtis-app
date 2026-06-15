@@ -27,9 +27,11 @@ import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
 import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
+import { EMBEDDING_PORT } from './domain/ports/embedding.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
@@ -67,6 +69,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     },
     { provide: AI_CONFIG_REPOSITORY, useClass: DrizzleAIConfigRepository },
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
+    { provide: EMBEDDING_PORT, useClass: VoyageEmbeddingAdapter },
     { provide: AI_REDIS, useClass: AIRedisProvider },
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: ExactMatchCacheService },
@@ -93,6 +96,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     AIRateLimitService,
     AI_STRUCTURED_OUTPUT_PROVIDER,
     AI_REDIS,
+    EMBEDDING_PORT,
   ],
 })
 export class AIModule {}
