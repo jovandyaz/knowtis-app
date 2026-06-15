@@ -62,6 +62,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
     expect(stale.map((s) => s.noteId)).toContain(NOTE);
   });
 
+  it('excludes notes updated within the quiet period', async () => {
+    const stale = await repo.findStaleNotes('voyage-4', 3600, 200);
+    expect(stale.map((s) => s.noteId)).not.toContain(NOTE);
+  });
+
   it('upsert then findStaleNotes no longer reports it', async () => {
     await repo.upsert({
       noteId: NOTE,

@@ -117,5 +117,15 @@ describe.runIf(DB_AVAILABLE)(
       expect(ids).not.toContain(NOTE_OTHER); // access scoping
       expect(ids[0]).toBe(NOTE_NEAR); // nearest first
     });
+
+    it('returns no hits when the embedding model does not match', async () => {
+      const hits = await repo.findAccessibleNotesByEmbedding(
+        UserId.create(MINE)._unsafeUnwrap(),
+        vec(1),
+        'voyage-5',
+        10
+      );
+      expect(hits).toHaveLength(0);
+    });
   }
 );
