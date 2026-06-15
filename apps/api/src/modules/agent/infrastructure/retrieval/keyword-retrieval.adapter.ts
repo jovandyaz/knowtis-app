@@ -6,24 +6,13 @@ import {
   type NoteReadRepository,
 } from '../../../notes/domain/ports/note-read.repository';
 import type { RetrievalPort } from '../../domain/ports/retrieval.port';
-import type {
-  AgentNote,
-  NoteHit,
-  NoteMeta,
-  NotesOverview,
-} from '../../domain/retrieval';
+import type { AgentNote, NoteHit, NotesOverview } from '../../domain/retrieval';
 import { htmlToPlainText } from '../sanitize/html-sanitizer';
+import { toNoteHit } from './note-hit.mapper';
 
 const MAX_SEARCH_HITS = 20;
 const MAX_NOTE_CONTENT_CHARS = 10_000;
 const TRUNCATION_MARKER = '[truncated]';
-
-interface NoteMetaSource {
-  readonly ownerId: string;
-  readonly generalAccess: string;
-  readonly shareToken: string | null;
-  readonly updatedAt: Date;
-}
 
 @Injectable()
 export class KeywordRetrievalAdapter implements RetrievalPort {
@@ -44,11 +33,9 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
         branded,
         query
       );
-    return summaries.slice(0, MAX_SEARCH_HITS).map((note) => ({
-      id: note.id,
-      title: note.title,
-      ...this.toMeta(note, userId),
-    }));
+    return summaries
+      .slice(0, MAX_SEARCH_HITS)
+      .map((note) => toNoteHit(note, userId));
   }
 
   async getById(userId: string, noteId: string): Promise<AgentNote | null> {
@@ -61,11 +48,9 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       return null;
     }
     return {
-      id: note.id,
-      title: note.title,
+      ...toNoteHit(note, userId),
       content: this.toToolContent(note.content),
       createdAt: note.createdAt.toISOString(),
-      ...this.toMeta(note, userId),
     };
   }
 
@@ -77,11 +62,9 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
     const clampedLimit = Math.min(Math.max(limit, 1), MAX_SEARCH_HITS);
     const summaries =
       await this.noteReadRepository.findAccessibleSummariesByUser(branded);
-    return summaries.slice(0, clampedLimit).map((note) => ({
-      id: note.id,
-      title: note.title,
-      ...this.toMeta(note, userId),
-    }));
+    return summaries
+      .slice(0, clampedLimit)
+      .map((note) => toNoteHit(note, userId));
   }
 
   async overview(userId: string): Promise<NotesOverview> {
@@ -103,16 +86,6 @@ export class KeywordRetrievalAdapter implements RetrievalPort {
       .slice(0, MAX_NOTE_CONTENT_CHARS)
       .replace(/[\uD800-\uDBFF]$/, '');
     return `${cut}${TRUNCATION_MARKER}`;
-  }
-
-  private toMeta(note: NoteMetaSource, userId: string): NoteMeta {
-    return {
-      updatedAt: note.updatedAt.toISOString(),
-      isOwner: note.ownerId === userId,
-      isSharedWithMe: note.ownerId !== userId,
-      isPubliclyShared:
-        note.generalAccess !== 'restricted' || note.shareToken !== null,
-    };
   }
 
   private brandUser(userId: string, op: string): UserId | null {
