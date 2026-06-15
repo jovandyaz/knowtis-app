@@ -95,6 +95,86 @@ describe('AgentGateway', () => {
     expect(execute.mock.calls[0][0]).toMatchObject({ userId: 'u1' });
   });
 
+  it('routes the {message} payload to execute with a single message', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hello' },
+      conversationId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: { content: 'hello' },
+        conversationId: '11111111-1111-4111-8111-111111111111',
+      }),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('still routes the legacy {messages} payload', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      messages: [{ role: 'user', content: 'hi' }],
+    });
+
+    expect(execute).toHaveBeenCalledWith(
+      expect.objectContaining({ messages: [{ role: 'user', content: 'hi' }] }),
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('rejects a payload with neither message nor messages', async () => {
+    const gateway = makeGateway();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, { noteId: 'x' });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: expect.any(String) })
+    );
+  });
+
+  it('emits conversationId on agent:done when present', async () => {
+    const execute = vi.fn(
+      async (
+        _input: unknown,
+        cb: { onDone: (usage: unknown) => void }
+      ): Promise<void> => {
+        cb.onDone({
+          inputTokens: 1,
+          outputTokens: 1,
+          model: 'm',
+          costUsd: 0,
+          sources: [],
+          knownNotes: [],
+          conversationId: 'conv-9',
+        });
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:done',
+      expect.objectContaining({ conversationId: 'conv-9' })
+    );
+  });
+
   it("cancel aborts only the requesting client's turns", async () => {
     const signals: Record<string, AbortSignal | undefined> = {};
     let release!: () => void;

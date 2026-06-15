@@ -90,7 +90,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
 function makeConversations(history: ConversationMessageRow[] = []) {
   return {
     create: vi.fn().mockResolvedValue({ id: 'conv-1' }),
-    findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1', noteId: null }),
+    findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1' }),
     loadMessages: vi.fn().mockResolvedValue(history),
     appendTurn: vi.fn().mockResolvedValue(undefined),
   } as unknown as ConversationRepository;
@@ -548,6 +548,38 @@ describe('RunAgentTurnHandler', () => {
     expect(
       vi.mocked(conversations.appendTurn).mock.calls[0][0]
     ).not.toHaveProperty('userMessage');
+  });
+
+  it('resume rejects a foreign conversationId with forbidden and never runs the orchestrator', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations
+    );
+    const onError = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        conversationId: 'someone-elses',
+        resume: { toolName: 'proposeUpdateNote', outcome: 'updated the note' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'forbidden' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
   });
 
   it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
@@ -1231,7 +1263,7 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
-  it('creates a conversation, loads history, and persists the turn on done (new path)', async () => {
+  it('creates a conversation, loads history, and persists the turn on done (memory path)', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
     const conversations = makeConversations();
@@ -1246,7 +1278,7 @@ describe('RunAgentTurnHandler', () => {
     );
     const done = vi.fn();
     await handler.execute(
-      { userId: USER, newMessage: { content: 'remember BLUE' } },
+      { userId: USER, message: { content: 'remember BLUE' } },
       { onChunk: vi.fn(), onDone: done, onError: vi.fn(), onProposal: vi.fn() }
     );
     expect(conversations.create).toHaveBeenCalledOnce();
@@ -1262,7 +1294,7 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
-  it('loads prior history and feeds it to the orchestrator (new path, existing conversation)', async () => {
+  it('loads prior history and feeds it to the orchestrator (memory path, existing conversation)', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
     const conversations = makeConversations([
@@ -1282,7 +1314,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'conv-1',
-        newMessage: { content: 'what is it?' },
+        message: { content: 'what is it?' },
       },
       {
         onChunk: vi.fn(),
@@ -1298,7 +1330,7 @@ describe('RunAgentTurnHandler', () => {
     expect(contents[contents.length - 1]).toBe('what is it?');
   });
 
-  it('rejects a foreign conversationId with a forbidden error (new path)', async () => {
+  it('rejects a foreign conversationId with a forbidden error (memory path)', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
     const conversations = makeConversations();
@@ -1317,7 +1349,7 @@ describe('RunAgentTurnHandler', () => {
       {
         userId: USER,
         conversationId: 'someone-elses',
-        newMessage: { content: 'hi' },
+        message: { content: 'hi' },
       },
       { onChunk: vi.fn(), onDone: vi.fn(), onError: error, onProposal: vi.fn() }
     );
@@ -1353,7 +1385,7 @@ describe('RunAgentTurnHandler', () => {
     expect(conversations.create).not.toHaveBeenCalled();
   });
 
-  it('persists the preamble with empty sources on a proposal (new path)', async () => {
+  it('persists the preamble with empty sources on a proposal (memory path)', async () => {
     const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
     const proposal = makeProposal('44444444-4444-4444-4444-444444444444');
     const orchestrator = orchestratorYielding([
@@ -1381,7 +1413,7 @@ describe('RunAgentTurnHandler', () => {
     const onProposal = vi.fn();
 
     await handler.execute(
-      { userId: USER, newMessage: { content: 'create a note' } },
+      { userId: USER, message: { content: 'create a note' } },
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn(), onProposal }
     );
 
@@ -1398,7 +1430,7 @@ describe('RunAgentTurnHandler', () => {
     expect(onProposal).toHaveBeenCalledWith(proposal);
   });
 
-  it('completes the turn and still emits conversationId when persistence fails (new path)', async () => {
+  it('completes the turn and still emits conversationId when persistence fails (memory path)', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
     const conversations = makeConversations();
@@ -1416,7 +1448,7 @@ describe('RunAgentTurnHandler', () => {
     const error = vi.fn();
 
     await handler.execute(
-      { userId: USER, newMessage: { content: 'hi' } },
+      { userId: USER, message: { content: 'hi' } },
       { onChunk: vi.fn(), onDone: done, onError: error, onProposal: vi.fn() }
     );
 

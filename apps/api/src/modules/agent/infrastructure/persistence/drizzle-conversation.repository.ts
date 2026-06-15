@@ -37,9 +37,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
   async findByIdForUser(
     conversationId: string,
     userId: string
-  ): Promise<{ id: string; noteId: string | null } | null> {
+  ): Promise<{ id: string } | null> {
     const [row] = await this.db
-      .select({ id: conversations.id, noteId: conversations.noteId })
+      .select({ id: conversations.id })
       .from(conversations)
       .where(
         and(
