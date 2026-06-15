@@ -2,7 +2,6 @@ import { ConfigService } from '@nestjs/config';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import { VoyageEmbeddingAdapter } from './voyage-embedding.adapter';
 
 function makeConfig(
@@ -12,8 +11,6 @@ function makeConfig(
     get: (k: string) => values[k],
   } as unknown as ConfigService<EnvConfig, true>;
 }
-
-const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
 
 describe('VoyageEmbeddingAdapter', () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -40,8 +37,7 @@ describe('VoyageEmbeddingAdapter', () => {
   it('embedQuery sends input_type=query and returns the single vector', async () => {
     fetchSpy.mockResolvedValue(ok([[0.1, 0.2]], 3));
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' }),
-      usage
+      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
     );
 
     const vec = await adapter.embedQuery('hello');
@@ -66,8 +62,7 @@ describe('VoyageEmbeddingAdapter', () => {
       )
     );
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' }),
-      usage
+      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
     );
 
     const result = await adapter.embedDocuments(['a', 'b']);
@@ -85,8 +80,7 @@ describe('VoyageEmbeddingAdapter', () => {
 
   it('throws when VOYAGE_API_KEY is missing', async () => {
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ AI_EMBEDDING_MODEL: 'voyage-4' }),
-      usage
+      makeConfig({ AI_EMBEDDING_MODEL: 'voyage-4' })
     );
     await expect(adapter.embedQuery('x')).rejects.toThrow(/VOYAGE_API_KEY/);
   });
@@ -98,8 +92,7 @@ describe('VoyageEmbeddingAdapter', () => {
       text: () => Promise.resolve('rate limited'),
     } as unknown as Response);
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' }),
-      usage
+      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
     );
     await expect(adapter.embedQuery('x')).rejects.toThrow(/Voyage/);
   });
