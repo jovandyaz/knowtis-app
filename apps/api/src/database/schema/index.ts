@@ -10,3 +10,4 @@ export * from './artifacts.schema';
 export * from './ai-config.schema';
 export * from './note-images.schema';
 export * from './note-embeddings.schema';
+export * from './conversations.schema';
