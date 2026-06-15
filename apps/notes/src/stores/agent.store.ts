@@ -1,3 +1,4 @@
+import { queryClient } from '@/lib/query-client';
 import { create } from 'zustand';
 
 import {
@@ -6,6 +7,7 @@ import {
   type AgentSource,
   type AgentStreamHandle,
 } from '@knowtis/api-client';
+import { notesQueryKeys } from '@knowtis/data-access-notes';
 
 import { createChunkBuffer } from './chunk-buffer';
 
@@ -145,6 +147,12 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
         onCommitted: ({ result }) => {
+          void queryClient.invalidateQueries({
+            queryKey: notesQueryKeys.lists(),
+          });
+          void queryClient.invalidateQueries({
+            queryKey: notesQueryKeys.detail(result.noteId),
+          });
           if (version !== streamVersion) {
             return;
           }
