@@ -32,11 +32,13 @@ Railway runs a **pre-deploy command** (`railway.toml`) between build and release
 preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
 ```
 
-It runs `migrate()` against the service's `DATABASE_URL` before the new code
-serves traffic. A non-zero exit **aborts the deploy**, so the app never boots
-against an un-migrated schema. The same script powers CI and local runs, so
-behaviour is identical everywhere. It depends only on `drizzle-orm` + `postgres`
-(runtime deps) plus the committed `.sql` files.
+This is the **single source of truth** for applying migrations. It runs
+`migrate()` against the service's own `DATABASE_URL` — the same connection the app
+uses, so there is no risk of a CI secret drifting from the real database — and a
+non-zero exit **aborts the deploy**, so the app never boots against an un-migrated
+schema. It takes a Postgres advisory lock first, so overlapping deploys serialize
+instead of racing the journal. Run the exact same path locally with
+`pnpm db:migrate:run`.
 
 ## One-time bootstrap for an existing (push-managed) database
 
@@ -59,20 +61,8 @@ pnpm db:baseline 0007_worried_zaladane
 `baseline` reads the exact hashes/timestamps via Drizzle's `readMigrationFiles`,
 so the rows it inserts match what `migrate()` checks. It is idempotent.
 
-### Bootstrapping prod for the current release
-
-Prod is at `0007`; `0008_session_rotation_family` is not yet applied. Pick one:
-
-- **Recommended (fully automatic):**
-  ```bash
-  DATABASE_URL=<prod> pnpm db:baseline 0007_worried_zaladane
-  ```
-  Then deploy — the pre-deploy command applies `0008` automatically.
-- **Manual delta first:** apply `apps/api/drizzle/0008_session_rotation_family.sql`
-  with `psql`, then `DATABASE_URL=<prod> pnpm db:baseline` (records all, incl. 0008).
-
-After bootstrap, every future migration is applied automatically by the
-pre-deploy command — no manual steps.
+> Dev and prod are already tracked (migrate-managed), so the baseline above is
+> only needed when adopting a brand-new push-managed database.
 
 ## Zero-downtime changes
 
