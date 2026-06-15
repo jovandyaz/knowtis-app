@@ -21,6 +21,8 @@ import { MutationProposalBuilder } from './infrastructure/orchestrator/mutation-
 import { RedisPendingMutationStore } from './infrastructure/pending/redis-pending-mutation.store';
 import { DrizzleNoteEmbeddingRepository } from './infrastructure/retrieval/drizzle-note-embedding.repository';
 import { EmbeddingReconcileTask } from './infrastructure/retrieval/embedding-reconcile.task';
+import { FeatureFlaggedRetrievalAdapter } from './infrastructure/retrieval/feature-flagged-retrieval.adapter';
+import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
 import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retrieval.adapter';
 
 @Module({
@@ -39,7 +41,9 @@ import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retr
     }),
   ],
   providers: [
-    { provide: RETRIEVAL_PORT, useClass: KeywordRetrievalAdapter },
+    KeywordRetrievalAdapter,
+    HybridRetrievalAdapter,
+    { provide: RETRIEVAL_PORT, useClass: FeatureFlaggedRetrievalAdapter },
     { provide: AGENT_ORCHESTRATOR, useClass: AiSdkAgentOrchestrator },
     { provide: PENDING_MUTATION_STORE, useClass: RedisPendingMutationStore },
     {
