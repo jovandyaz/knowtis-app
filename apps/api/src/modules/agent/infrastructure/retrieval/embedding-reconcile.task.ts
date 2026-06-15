@@ -112,28 +112,11 @@ export class EmbeddingReconcileTask {
     chunk: PendingEmbedding[],
     model: string
   ): Promise<number> {
+    let embeddings: number[][];
     try {
-      const { embeddings } = await this.embed.embedDocuments(
+      ({ embeddings } = await this.embed.embedDocuments(
         chunk.map((c) => c.text)
-      );
-      let count = 0;
-      for (let i = 0; i < chunk.length; i++) {
-        const embedding = embeddings[i];
-        if (!embedding) {
-          this.logger.warn(
-            `Voyage returned no embedding for note ${chunk[i].noteId}`
-          );
-          continue;
-        }
-        await this.repo.upsert({
-          noteId: chunk[i].noteId,
-          embedding,
-          model,
-          inputHash: chunk[i].hash,
-        });
-        count++;
-      }
-      return count;
+      ));
     } catch (error) {
       this.logger.warn(
         `Failed to embed a batch of ${chunk.length} notes`,
@@ -141,6 +124,31 @@ export class EmbeddingReconcileTask {
       );
       return 0;
     }
+    let count = 0;
+    for (let i = 0; i < chunk.length; i++) {
+      const embedding = embeddings[i];
+      if (!embedding) {
+        this.logger.warn(
+          `Voyage returned no embedding for note ${chunk[i].noteId}`
+        );
+        continue;
+      }
+      try {
+        await this.repo.upsert({
+          noteId: chunk[i].noteId,
+          embedding,
+          model,
+          inputHash: chunk[i].hash,
+        });
+        count++;
+      } catch (error) {
+        this.logger.warn(
+          `Failed to persist embedding for note ${chunk[i].noteId}`,
+          error instanceof Error ? error.stack : String(error)
+        );
+      }
+    }
+    return count;
   }
 
   private async acquireLock(): Promise<boolean> {

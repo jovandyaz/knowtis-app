@@ -128,4 +128,32 @@ describe('EmbeddingReconcileTask', () => {
     await expect(task.reconcile()).resolves.toBeUndefined();
     expect(repo.upsert).not.toHaveBeenCalled();
   });
+
+  it('continues to later chunks when an earlier embedding batch fails', async () => {
+    const stale = Array.from({ length: 40 }, (_, i) => ({
+      noteId: `n${i}`,
+      title: `t${i}`,
+      content: `c${i}`,
+      inputHash: 'old',
+    }));
+    const { task, repo, embed } = makeTask({ stale });
+    vi.mocked(embed.embedDocuments).mockRejectedValueOnce(
+      new Error('voyage 429')
+    );
+    await task.reconcile();
+    expect(embed.embedDocuments).toHaveBeenCalledTimes(2);
+    expect(repo.upsert).toHaveBeenCalledTimes(8);
+  });
+
+  it('counts only persisted upserts when a single write fails', async () => {
+    const { task, repo } = makeTask({
+      stale: [
+        { noteId: 'n1', title: 't1', content: 'c1', inputHash: 'old' },
+        { noteId: 'n2', title: 't2', content: 'c2', inputHash: 'old' },
+      ],
+    });
+    vi.mocked(repo.upsert).mockRejectedValueOnce(new Error('db write failed'));
+    await expect(task.reconcile()).resolves.toBeUndefined();
+    expect(repo.upsert).toHaveBeenCalledTimes(2);
+  });
 });
