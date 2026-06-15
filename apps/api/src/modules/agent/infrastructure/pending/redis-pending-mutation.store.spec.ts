@@ -129,4 +129,18 @@ describe('RedisPendingMutationStore', () => {
     const store = new RedisPendingMutationStore(redis as never, cfg);
     expect(await store.take('invalid', 'u1')).toBeNull();
   });
+
+  it('round-trips conversationId through save/take', async () => {
+    const redis = makeRedis();
+    const store = new RedisPendingMutationStore(redis as never, cfg);
+    const m = makeMutation('33333333-3333-4333-8333-333333333333');
+    await store.save({
+      userId: 'u1',
+      mutation: m,
+      toolName: 'proposeCreateNote',
+      conversationId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    });
+    const taken = await store.take(m.id, 'u1');
+    expect(taken?.conversationId).toBe('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+  });
 });

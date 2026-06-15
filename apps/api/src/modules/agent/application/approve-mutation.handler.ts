@@ -35,6 +35,7 @@ export interface ApproveMutationOutput {
   readonly result: AgentCommitResult;
   readonly outcome: string;
   readonly toolName: string;
+  readonly conversationId?: string;
 }
 
 @Injectable()
@@ -60,14 +61,26 @@ export class ApproveMutationHandler {
       return err(AgentErrors.proposalExpired());
     }
     const m = record.mutation;
+    const withConversation = (
+      res: Result<ApproveMutationOutput, AgentDomainError>
+    ): Result<ApproveMutationOutput, AgentDomainError> =>
+      res.map((out) =>
+        record.conversationId
+          ? { ...out, conversationId: record.conversationId }
+          : out
+      );
 
     switch (m.kind) {
       case 'create':
-        return this.commitCreate(input.userId, m);
+        return withConversation(await this.commitCreate(input.userId, m));
       case 'update':
-        return this.commitUpdate(input.userId, m, record.toolName);
+        return withConversation(
+          await this.commitUpdate(input.userId, m, record.toolName)
+        );
       case 'share':
-        return this.commitShare(input.userId, m, record.toolName);
+        return withConversation(
+          await this.commitShare(input.userId, m, record.toolName)
+        );
       default: {
         const _exhaustive: never = m;
         return err(
