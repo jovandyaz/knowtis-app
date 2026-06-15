@@ -36,6 +36,7 @@ describe('GetNoteByTokenHandler', () => {
       findByShareToken: vi.fn(),
       findByIdForUser: vi.fn(),
       findAccessibleSummariesByUser: vi.fn(),
+      findAccessibleNotesByLexicalRank: vi.fn(),
       countAccessibleByUser: vi.fn(),
     };
     handler = new GetNoteByTokenHandler(noteReadRepo);

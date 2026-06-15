@@ -68,6 +68,14 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.readRepo.findAccessibleSummariesByUser(userId, search);
   }
 
+  findAccessibleNotesByLexicalRank(
+    userId: UserId,
+    query: string,
+    limit: number
+  ): Promise<NoteSummary[]> {
+    return this.readRepo.findAccessibleNotesByLexicalRank(userId, query, limit);
+  }
+
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     return this.readRepo.countAccessibleByUser(userId);
   }

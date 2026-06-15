@@ -25,6 +25,11 @@ export interface NoteReadRepository {
     userId: UserId,
     search?: string
   ): Promise<NoteSummary[]>;
+  findAccessibleNotesByLexicalRank(
+    userId: UserId,
+    query: string,
+    limit: number
+  ): Promise<NoteSummary[]>;
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount>;
   findByShareToken(token: string): Promise<NoteViewWithOwner | null>;
 }
