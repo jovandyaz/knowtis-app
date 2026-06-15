@@ -88,4 +88,33 @@ describe('EmbeddingReconcileTask', () => {
     await task.reconcile();
     expect(repo.findStaleNotes).not.toHaveBeenCalled();
   });
+
+  it('skips upsert when the embedding provider returns nothing', async () => {
+    const { task, repo, embed } = makeTask({
+      stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
+    });
+    vi.mocked(embed.embedDocuments).mockResolvedValueOnce({
+      embeddings: [],
+      totalTokens: 0,
+    });
+    await task.reconcile();
+    expect(repo.upsert).not.toHaveBeenCalled();
+  });
+
+  it('continues reconciling remaining notes when one fails', async () => {
+    const { task, repo, embed } = makeTask({
+      stale: [
+        { noteId: 'n1', title: 't', content: 'c', inputHash: 'old' },
+        { noteId: 'n2', title: 't2', content: 'c2', inputHash: 'old' },
+      ],
+    });
+    vi.mocked(embed.embedDocuments).mockRejectedValueOnce(
+      new Error('voyage down')
+    );
+    await task.reconcile();
+    expect(repo.upsert).toHaveBeenCalledOnce();
+    expect(repo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ noteId: 'n2' })
+    );
+  });
 });

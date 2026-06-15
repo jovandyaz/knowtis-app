@@ -19,21 +19,20 @@ export class FeatureFlaggedRetrievalAdapter implements RetrievalPort {
   ) {}
 
   async search(userId: string, query: string): Promise<NoteHit[]> {
-    const enabled = await this.flags.isEnabled(
-      FEATURE_FLAG_KEYS.AGENT_HYBRID_RETRIEVAL
-    );
-    if (!enabled) {
-      return this.keyword.search(userId, query);
-    }
     try {
-      return await this.hybrid.search(userId, query);
+      const enabled = await this.flags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_HYBRID_RETRIEVAL
+      );
+      if (enabled) {
+        return await this.hybrid.search(userId, query);
+      }
     } catch (error) {
       this.logger.warn(
         'Hybrid retrieval failed; degrading to keyword',
         error instanceof Error ? error.stack : String(error)
       );
-      return this.keyword.search(userId, query);
     }
+    return this.keyword.search(userId, query);
   }
 
   getById(userId: string, noteId: string): Promise<AgentNote | null> {

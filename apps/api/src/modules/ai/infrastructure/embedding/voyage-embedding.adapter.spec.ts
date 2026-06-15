@@ -93,6 +93,20 @@ describe('VoyageEmbeddingAdapter', () => {
     await expect(adapter.embedQuery('x')).rejects.toThrow(/VOYAGE_API_KEY/);
   });
 
+  it('throws when the response count does not match the input count', async () => {
+    fetchSpy.mockResolvedValue(ok([[0.1, 0.2]], 3));
+    const adapter = new VoyageEmbeddingAdapter(
+      makeConfig({
+        VOYAGE_API_KEY: 'k',
+        AI_EMBEDDING_MODEL: 'voyage-4',
+        AI_TIMEOUT_MS: 30000,
+      })
+    );
+    await expect(adapter.embedDocuments(['a', 'b'])).rejects.toThrow(
+      /2 inputs/
+    );
+  });
+
   it('throws on a non-ok HTTP response', async () => {
     fetchSpy.mockResolvedValue({
       ok: false,
