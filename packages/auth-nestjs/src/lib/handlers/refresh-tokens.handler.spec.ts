@@ -2,7 +2,10 @@ import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
-import type { SessionEntity, SessionRepository } from '../ports/session.repository';
+import type {
+  SessionEntity,
+  SessionRepository,
+} from '../ports/session.repository';
 import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 import { RefreshTokensHandler } from './refresh-tokens.handler';
@@ -114,7 +117,9 @@ describe('RefreshTokensHandler', () => {
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('TOKEN_REUSE_DETECTED');
-    expect(deps.sessionRepository.deleteByFamilyId).toHaveBeenCalledWith('fam-1');
+    expect(deps.sessionRepository.deleteByFamilyId).toHaveBeenCalledWith(
+      'fam-1'
+    );
     expect(deps.sessionRepository.deleteAllByUserId).not.toHaveBeenCalled();
     expect(deps.tokenService.generateTokens).not.toHaveBeenCalled();
   });
@@ -130,7 +135,9 @@ describe('RefreshTokensHandler', () => {
 
     expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe('TOKEN_REUSE_DETECTED');
-    expect(deps.sessionRepository.deleteByFamilyId).toHaveBeenCalledWith('fam-7');
+    expect(deps.sessionRepository.deleteByFamilyId).toHaveBeenCalledWith(
+      'fam-7'
+    );
     expect(deps.sessionRepository.deleteAllByUserId).not.toHaveBeenCalled();
   });
 
@@ -180,6 +187,23 @@ describe('RefreshTokensHandler', () => {
     expect(deps.sessionRepository.deleteByFamilyId).not.toHaveBeenCalled();
     expect(deps.sessionRepository.deleteAllByUserId).not.toHaveBeenCalled();
     expect(deps.tokenService.generateTokens).not.toHaveBeenCalled();
+  });
+
+  it('succeeds even when pruning rotated sessions fails after re-issuing tokens', async () => {
+    const deps = createDeps({
+      sub: 'user-1',
+      email: 'u@example.com',
+      familyId: 'fam-1',
+    });
+    vi.mocked(deps.sessionRepository.deleteRotatedBefore).mockRejectedValue(
+      new Error('db unavailable')
+    );
+    const handler = createHandler(deps);
+
+    const result = await handler.execute('refresh-token');
+
+    expect(result.isOk()).toBe(true);
+    expect(deps.sessionRepository.create).toHaveBeenCalled();
   });
 
   it('does not flag registered users as anonymous', async () => {

@@ -48,4 +48,16 @@ describe('JwtTokenService', () => {
     expect(verified.isOk()).toBe(true);
     expect(verified._unsafeUnwrap().familyId).toBeUndefined();
   });
+
+  it('rejects a refresh token signed with the wrong secret', async () => {
+    const service = createService();
+    const forged = await new JwtService().signAsync(
+      { sub: userId.value, email: 'u@example.com', familyId: 'fam-9' },
+      { secret: 'access-secret', expiresIn: '7d', algorithm: 'HS256' }
+    );
+
+    const verified = await service.verifyRefreshToken(forged);
+
+    expect(verified.isErr()).toBe(true);
+  });
 });
