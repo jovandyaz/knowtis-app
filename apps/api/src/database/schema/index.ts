@@ -9,3 +9,4 @@ export * from './mcp-api-keys.schema';
 export * from './artifacts.schema';
 export * from './ai-config.schema';
 export * from './note-images.schema';
+export * from './note-embeddings.schema';
