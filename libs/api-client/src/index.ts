@@ -23,7 +23,6 @@ export type {
 
 export { agentClient, AgentClient } from './lib/agent.client';
 export type {
-  AgentWireMessage,
   AgentSource,
   AgentChunkPayload,
   AgentDonePayload,

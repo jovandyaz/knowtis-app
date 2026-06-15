@@ -9,11 +9,6 @@ import {
 } from './token-refresh-policy';
 import { deriveWsBaseUrl } from './ws-url';
 
-export interface AgentWireMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 export interface AgentSource {
   id: string;
   title: string;
@@ -34,6 +29,7 @@ export interface AgentDonePayload {
   usage: AgentUsagePayload;
   sources: AgentSource[];
   knownNotes: AgentSource[];
+  conversationId?: string;
 }
 
 export interface AgentErrorPayload {
@@ -86,9 +82,9 @@ const CONNECTION_ERROR: AgentErrorPayload = {
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
-  private pendingMessages: AgentWireMessage[] | null = null;
+  private pendingContent: string | null = null;
   private pendingNoteId: string | undefined;
-  private pendingKnownNotes: AgentSource[] | undefined;
+  private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
   private readonly wsUrl: string | undefined;
@@ -122,15 +118,14 @@ export class AgentClient {
 
   disconnect(): void {
     this.activeCallbacks = null;
-    this.pendingMessages = null;
+    this.pendingContent = null;
     this.teardownSocket();
   }
 
   sendMessage(
-    messages: AgentWireMessage[],
+    content: string,
     callbacks: AgentStreamCallbacks,
-    noteId?: string,
-    knownNotes?: AgentSource[]
+    noteId?: string
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -138,16 +133,15 @@ export class AgentClient {
     }
 
     this.activeCallbacks = callbacks;
-    this.pendingMessages = messages;
+    this.pendingContent = content;
     this.pendingNoteId = noteId;
-    this.pendingKnownNotes = knownNotes;
     this.reconnectAttempts = 0;
     this.authPolicy.reset();
 
     if (this.tokenProvider.getAccessToken()) {
-      this.openAndEmit(messages, callbacks);
+      this.openAndEmit(content, callbacks);
     } else if (this.authRefreshHandler) {
-      void this.authPolicy.recover(this.authHandlers(messages, callbacks));
+      void this.authPolicy.recover(this.authHandlers(content, callbacks));
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -157,14 +151,14 @@ export class AgentClient {
         if (this.activeCallbacks === callbacks) {
           this.socket?.emit('agent:cancel');
           this.activeCallbacks = null;
-          this.pendingMessages = null;
+          this.pendingContent = null;
         }
       },
     };
   }
 
   private authHandlers(
-    messages: AgentWireMessage[],
+    content: string,
     callbacks: AgentStreamCallbacks
   ): Parameters<TokenRefreshPolicy['recover']>[0] {
     return {
@@ -174,7 +168,7 @@ export class AgentClient {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(messages, callbacks);
+        this.openAndEmit(content, callbacks);
       },
       onExhausted: () => {
         if (this.activeCallbacks !== callbacks) {
@@ -191,21 +185,16 @@ export class AgentClient {
     };
   }
 
-  private openAndEmit(
-    messages: AgentWireMessage[],
-    callbacks: AgentStreamCallbacks
-  ): void {
+  private openAndEmit(content: string, callbacks: AgentStreamCallbacks): void {
     this.ensureSocket();
     if (!this.socket) {
       this.failRequest(callbacks, CONNECTION_ERROR);
       return;
     }
     this.socket.emit('agent:message', {
-      messages,
+      ...(this.conversationId ? { conversationId: this.conversationId } : {}),
+      message: { content },
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
-      ...(this.pendingKnownNotes?.length
-        ? { knownNotes: this.pendingKnownNotes }
-        : {}),
     });
   }
 
@@ -216,7 +205,7 @@ export class AgentClient {
     callbacks.onError(error);
     if (this.activeCallbacks === callbacks) {
       this.activeCallbacks = null;
-      this.pendingMessages = null;
+      this.pendingContent = null;
     }
   }
 
@@ -287,9 +276,12 @@ export class AgentClient {
     });
 
     this.socket.on('agent:done', (payload: AgentDonePayload) => {
+      if (payload.conversationId) {
+        this.conversationId = payload.conversationId;
+      }
       this.activeCallbacks?.onDone(payload);
       this.activeCallbacks = null;
-      this.pendingMessages = null;
+      this.pendingContent = null;
     });
 
     this.socket.on('agent:proposal', (payload: AgentProposalPayload) => {
@@ -303,7 +295,7 @@ export class AgentClient {
     this.socket.on('agent:error', (payload: AgentErrorPayload) => {
       if (this.canRecoverFromAuthError(payload)) {
         void this.authPolicy.recover(
-          this.authHandlers(this.pendingMessages!, this.activeCallbacks!)
+          this.authHandlers(this.pendingContent!, this.activeCallbacks!)
         );
         return;
       }
@@ -316,35 +308,32 @@ export class AgentClient {
 
   /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
   approve(proposalId: string): boolean {
-    if (!this.pendingMessages || !this.socket) {
+    if (!this.pendingContent || !this.socket) {
       return false;
     }
     this.socket.emit('agent:approve', {
       proposalId,
-      messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
-      ...(this.pendingKnownNotes?.length
-        ? { knownNotes: this.pendingKnownNotes }
-        : {}),
     });
     return true;
   }
 
   /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
   reject(proposalId: string, reason?: string): boolean {
-    if (!this.pendingMessages || !this.socket) {
+    if (!this.pendingContent || !this.socket) {
       return false;
     }
     this.socket.emit('agent:reject', {
       proposalId,
-      messages: this.pendingMessages,
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
-      ...(this.pendingKnownNotes?.length
-        ? { knownNotes: this.pendingKnownNotes }
-        : {}),
       ...(reason ? { reason } : {}),
     });
     return true;
+  }
+
+  /** Starts a fresh server conversation on the next send. */
+  resetConversation(): void {
+    this.conversationId = undefined;
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {
@@ -352,7 +341,7 @@ export class AgentClient {
       payload.code === AUTH_REQUIRED_CODE &&
       !!this.authRefreshHandler &&
       !!this.activeCallbacks &&
-      !!this.pendingMessages
+      !!this.pendingContent
     );
   }
 }
