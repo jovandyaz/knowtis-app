@@ -1,3 +1,4 @@
+import { queryClient } from '@/lib/query-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { agentClient } from '@knowtis/api-client';
@@ -8,6 +9,7 @@ import type {
   AgentProposalPayload,
   AgentStreamHandle,
 } from '@knowtis/api-client';
+import { notesQueryKeys } from '@knowtis/data-access-notes';
 
 import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
 
@@ -19,6 +21,11 @@ vi.mock('@knowtis/api-client', () => ({
     resetConversation: vi.fn(),
   },
 }));
+
+vi.mock('@/lib/query-client', async () => {
+  const { QueryClient } = await import('@tanstack/react-query');
+  return { queryClient: new QueryClient() };
+});
 
 interface Cbs {
   onChunk: (p: { text: string }) => void;
@@ -210,6 +217,23 @@ describe('agent.store server-authoritative wire', () => {
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
       'what did you just do?'
     );
+  });
+
+  it('invalidates the notes cache when a proposal is committed', () => {
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.getState().approveProposal();
+    get().onCommitted?.({
+      proposalId: 'p1',
+      result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+    });
+
+    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
+    expect(spy).toHaveBeenCalledWith({
+      queryKey: notesQueryKeys.detail('n1'),
+    });
   });
 
   it('keeps the proposal annotation on the displayed message', () => {
