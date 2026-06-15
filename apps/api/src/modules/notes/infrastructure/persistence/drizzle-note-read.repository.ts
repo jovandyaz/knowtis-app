@@ -159,6 +159,34 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .orderBy(desc(notes.updatedAt));
   }
 
+  async findAccessibleNotesByLexicalRank(
+    userId: UserId,
+    query: string,
+    limit: number
+  ): Promise<NoteSummary[]> {
+    const tsquery = sql`websearch_to_tsquery('simple', ${query})`;
+    const document = sql`to_tsvector('simple', ${notes.title} || ' ' || ${notes.content})`;
+
+    const ftsRows = await this.db
+      .select(noteSummaryColumns)
+      .from(notes)
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(and(this.accessCondition(userId), sql`${document} @@ ${tsquery}`))
+      .orderBy(desc(sql`ts_rank_cd(${document}, ${tsquery})`))
+      .limit(limit);
+
+    if (ftsRows.length > 0) {
+      return ftsRows;
+    }
+    return this.db
+      .select(noteSummaryColumns)
+      .from(notes)
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(this.accessibleWhere(userId, query))
+      .orderBy(desc(notes.updatedAt))
+      .limit(limit);
+  }
+
   async countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     const result = await this.db
       .select({

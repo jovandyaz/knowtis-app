@@ -57,6 +57,7 @@ describe('ShareNoteHandler', () => {
       findByShareToken: vi.fn(),
       findByIdForUser: vi.fn(),
       findAccessibleSummariesByUser: vi.fn(),
+      findAccessibleNotesByLexicalRank: vi.fn(),
       countAccessibleByUser: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
