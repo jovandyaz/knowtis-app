@@ -37,6 +37,9 @@ export class EmbeddingReconcileTask {
 
   @Interval(INTERVAL_MS)
   async reconcile(): Promise<void> {
+    if (!this.config.get('VOYAGE_API_KEY')) {
+      return;
+    }
     const locked = await this.acquireLock();
     if (!locked) {
       return;
