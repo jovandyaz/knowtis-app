@@ -40,7 +40,7 @@ interface RunAgentTurnInput {
   readonly isAnonymous?: boolean;
   readonly noteId?: string;
   readonly knownNotes?: readonly AgentSource[];
-  readonly newMessage?: { content: string };
+  readonly message?: { content: string };
   readonly conversationId?: string;
 }
 
@@ -108,7 +108,7 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
-    if (input.newMessage) {
+    if (input.message) {
       return this.executeWithMemory(input, callbacks, signal);
     }
     return this.runLoop(
@@ -147,11 +147,11 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
-    const newMessage = input.newMessage;
-    if (!newMessage) {
+    const message = input.message;
+    if (!message) {
       return;
     }
-    const conversationId = await this.resolveConversationId(input, newMessage);
+    const conversationId = await this.resolveConversationId(input, message);
     if (!conversationId) {
       callbacks.onError({
         code: 'forbidden',
@@ -163,7 +163,7 @@ export class RunAgentTurnHandler {
       await this.loadConversationContext(conversationId);
     const messages = coalesceMessages([
       ...history,
-      { role: 'user', content: newMessage.content },
+      { role: 'user', content: message.content },
     ]);
     const synthInput: RunAgentTurnInput = {
       userId: input.userId,
@@ -178,13 +178,13 @@ export class RunAgentTurnHandler {
       callbacks,
       signal,
       this.executePolicy(input.userId, callbacks, conversationId),
-      { conversationId, userContent: newMessage.content }
+      { conversationId, userContent: message.content }
     );
   }
 
   private async resolveConversationId(
     input: RunAgentTurnInput,
-    newMessage: { content: string }
+    message: { content: string }
   ): Promise<string | null> {
     if (input.conversationId) {
       const found = await this.conversations.findByIdForUser(
@@ -196,7 +196,7 @@ export class RunAgentTurnHandler {
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
-      title: [...newMessage.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
+      title: [...message.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
     });
     return created.id;
   }

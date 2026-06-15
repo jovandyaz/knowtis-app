@@ -43,7 +43,13 @@ const knownNotesSchema = z
   .max(100)
   .optional();
 
-const agentMessagePayloadSchema = z.object({
+const agentTurnSchema = z.object({
+  conversationId: z.string().uuid().optional(),
+  message: z.object({ content: z.string().min(1).max(20000) }),
+  noteId: z.string().uuid().optional(),
+});
+
+const legacyAgentMessageSchema = z.object({
   messages: z
     .array(
       z.object({
@@ -60,9 +66,14 @@ const agentMessagePayloadSchema = z.object({
   knownNotes: knownNotesSchema,
 });
 
+const agentMessagePayloadSchema = z.union([
+  agentTurnSchema,
+  legacyAgentMessageSchema,
+]);
+
 const agentApprovePayloadSchema = z.object({
   proposalId: z.string().uuid(),
-  messages: agentMessagePayloadSchema.shape.messages,
+  messages: legacyAgentMessageSchema.shape.messages.optional(),
   noteId: z.string().uuid().optional(),
   knownNotes: knownNotesSchema,
 });
@@ -167,30 +178,46 @@ export class AgentGateway
       return;
     }
 
+    const data = parsed.data;
+    const onProposal: RunAgentTurnCallbacks['onProposal'] = (proposal) =>
+      client.emit('agent:proposal', {
+        id: proposal.id,
+        kind: proposal.kind,
+        targetNoteId: proposal.kind === 'create' ? null : proposal.targetNoteId,
+        summary: proposal.summary,
+        previewHtml: proposal.previewHtml ?? null,
+        payload: proposal.payload,
+      });
+
+    if ('message' in data) {
+      await this.runInTurnSlot(client, userId, (controller) =>
+        this.runAgentTurn.execute(
+          {
+            userId,
+            message: { content: data.message.content },
+            ...(data.conversationId && { conversationId: data.conversationId }),
+            ...(client.data.isAnonymous && { isAnonymous: true }),
+            ...(data.noteId && { noteId: data.noteId }),
+          },
+          { ...this.baseCallbacks(client, controller), onProposal },
+          controller.signal
+        )
+      );
+      return;
+    }
+
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.execute(
         {
           userId,
-          messages: parsed.data.messages,
+          messages: data.messages,
           ...(client.data.isAnonymous && { isAnonymous: true }),
-          ...(parsed.data.noteId && { noteId: parsed.data.noteId }),
-          ...(parsed.data.knownNotes && {
-            knownNotes: parsed.data.knownNotes,
+          ...(data.noteId && { noteId: data.noteId }),
+          ...(data.knownNotes && {
+            knownNotes: data.knownNotes,
           }),
         },
-        {
-          ...this.baseCallbacks(client, controller),
-          onProposal: (proposal) =>
-            client.emit('agent:proposal', {
-              id: proposal.id,
-              kind: proposal.kind,
-              targetNoteId:
-                proposal.kind === 'create' ? null : proposal.targetNoteId,
-              summary: proposal.summary,
-              previewHtml: proposal.previewHtml ?? null,
-              payload: proposal.payload,
-            }),
-        },
+        { ...this.baseCallbacks(client, controller), onProposal },
         controller.signal
       )
     );
@@ -238,7 +265,13 @@ export class AgentGateway
       proposalId: parsed.data.proposalId,
       result: res.value.result,
     });
-    await this.resumeAfter(client, userId, parsed.data, res.value);
+    await this.resumeAfter(
+      client,
+      userId,
+      parsed.data,
+      res.value,
+      res.value.conversationId
+    );
   }
 
   @SubscribeMessage('agent:reject')
@@ -274,7 +307,13 @@ export class AgentGateway
       });
       return;
     }
-    await this.resumeAfter(client, userId, parsed.data, res.value);
+    await this.resumeAfter(
+      client,
+      userId,
+      parsed.data,
+      res.value,
+      res.value.conversationId
+    );
   }
 
   private async ensureAiEnabled(client: AuthenticatedSocket): Promise<boolean> {
@@ -289,19 +328,24 @@ export class AgentGateway
     client: AuthenticatedSocket,
     userId: string,
     data: {
-      messages: { role: 'user' | 'assistant'; content: string }[];
+      messages?: { role: 'user' | 'assistant'; content: string }[] | undefined;
       noteId?: string | undefined;
       knownNotes?: { id: string; title: string }[] | undefined;
     },
-    outcome: { toolName: string; outcome: string }
+    outcome: { toolName: string; outcome: string },
+    conversationId?: string
   ): Promise<void> {
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {
           userId,
-          messages: data.messages,
+          ...(conversationId
+            ? { conversationId }
+            : { messages: data.messages ?? [] }),
           ...(data.noteId && { noteId: data.noteId }),
-          ...(data.knownNotes && { knownNotes: data.knownNotes }),
+          ...(!conversationId && data.knownNotes
+            ? { knownNotes: data.knownNotes }
+            : {}),
           resume: outcome,
         },
         this.baseCallbacks(client, controller),
@@ -349,6 +393,9 @@ export class AgentGateway
           },
           sources: usage.sources,
           knownNotes: usage.knownNotes,
+          ...(usage.conversationId
+            ? { conversationId: usage.conversationId }
+            : {}),
         }),
       onError: (error) => {
         if (!controller.signal.aborted) {

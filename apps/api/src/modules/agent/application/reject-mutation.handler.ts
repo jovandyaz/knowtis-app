@@ -16,6 +16,7 @@ export interface RejectMutationInput {
 export interface RejectMutationOutput {
   readonly outcome: string;
   readonly toolName: string;
+  readonly conversationId?: string;
 }
 
 @Injectable()
@@ -35,6 +36,9 @@ export class RejectMutationHandler {
     return ok({
       toolName: record.toolName,
       outcome: `you declined it, so nothing was changed${reason ? ` (reason: "${reason}")` : ''}`,
+      ...(record.conversationId
+        ? { conversationId: record.conversationId }
+        : {}),
     });
   }
 }
