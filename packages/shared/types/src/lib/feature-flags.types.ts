@@ -1,6 +1,7 @@
 export const FEATURE_FLAG_KEYS = {
   AI_ENABLED: 'ai_enabled',
   VOICE_NOTES_ENABLED: 'voice_notes_enabled',
+  AGENT_HYBRID_RETRIEVAL: 'agent_hybrid_retrieval',
 } as const;
 
 export type FeatureFlagKey =
