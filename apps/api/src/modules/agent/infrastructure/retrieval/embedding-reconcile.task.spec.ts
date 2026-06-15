@@ -101,20 +101,31 @@ describe('EmbeddingReconcileTask', () => {
     expect(repo.upsert).not.toHaveBeenCalled();
   });
 
-  it('continues reconciling remaining notes when one fails', async () => {
+  it('embeds all changed notes in a single provider call', async () => {
     const { task, repo, embed } = makeTask({
       stale: [
-        { noteId: 'n1', title: 't', content: 'c', inputHash: 'old' },
+        { noteId: 'n1', title: 't1', content: 'c1', inputHash: 'old' },
+        { noteId: 'n2', title: 't2', content: 'c2', inputHash: 'old' },
+        { noteId: 'n3', title: 't3', content: 'c3', inputHash: 'old' },
+      ],
+    });
+    await task.reconcile();
+    expect(embed.embedDocuments).toHaveBeenCalledOnce();
+    expect(vi.mocked(embed.embedDocuments).mock.calls[0][0]).toHaveLength(3);
+    expect(repo.upsert).toHaveBeenCalledTimes(3);
+  });
+
+  it('logs and skips a failed embedding batch without aborting the cycle', async () => {
+    const { task, repo, embed } = makeTask({
+      stale: [
+        { noteId: 'n1', title: 't1', content: 'c1', inputHash: 'old' },
         { noteId: 'n2', title: 't2', content: 'c2', inputHash: 'old' },
       ],
     });
     vi.mocked(embed.embedDocuments).mockRejectedValueOnce(
       new Error('voyage down')
     );
-    await task.reconcile();
-    expect(repo.upsert).toHaveBeenCalledOnce();
-    expect(repo.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ noteId: 'n2' })
-    );
+    await expect(task.reconcile()).resolves.toBeUndefined();
+    expect(repo.upsert).not.toHaveBeenCalled();
   });
 });

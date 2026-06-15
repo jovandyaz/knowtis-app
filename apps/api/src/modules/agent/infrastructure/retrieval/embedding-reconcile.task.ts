@@ -20,6 +20,15 @@ const ADVISORY_LOCK_KEY = 778_493_001;
 const QUIET_SECONDS = 90;
 const BATCH_SIZE = 50;
 const INTERVAL_MS = 120_000;
+// Texts are capped at 28K chars (~7K tokens); 32 per request stays well under
+// Voyage's 320K-token-per-request limit.
+const EMBED_SUB_BATCH = 32;
+
+interface PendingEmbedding {
+  noteId: string;
+  text: string;
+  hash: string;
+}
 
 @Injectable()
 export class EmbeddingReconcileTask {
@@ -51,18 +60,14 @@ export class EmbeddingReconcileTask {
         QUIET_SECONDS,
         BATCH_SIZE
       );
-      for (const note of stale) {
-        try {
-          await this.reconcileNote(note, model);
-        } catch (error) {
-          this.logger.warn(
-            `Failed to reconcile embedding for note ${note.noteId}`,
-            error instanceof Error ? error.stack : String(error)
-          );
-        }
-      }
-      if (stale.length > 0) {
-        this.logger.log(`Reconciled ${stale.length} note embeddings`);
+      const { embedded, touched } = await this.reconcileStaleNotes(
+        stale,
+        model
+      );
+      if (embedded > 0 || touched > 0) {
+        this.logger.log(
+          `Reconciled note embeddings: ${embedded} embedded, ${touched} unchanged`
+        );
       }
     } catch (error) {
       this.logger.error(
@@ -74,25 +79,68 @@ export class EmbeddingReconcileTask {
     }
   }
 
-  private async reconcileNote(note: StaleNote, model: string): Promise<void> {
-    const hash = embeddingInputHash(note.title, note.content, model);
-    if (hash === note.inputHash) {
-      await this.repo.touch(note.noteId);
-      return;
+  private async reconcileStaleNotes(
+    stale: StaleNote[],
+    model: string
+  ): Promise<{ embedded: number; touched: number }> {
+    const pending: PendingEmbedding[] = [];
+    let touched = 0;
+    for (const note of stale) {
+      const hash = embeddingInputHash(note.title, note.content, model);
+      if (hash === note.inputHash) {
+        await this.repo.touch(note.noteId);
+        touched++;
+      } else {
+        pending.push({
+          noteId: note.noteId,
+          text: buildEmbeddingText(note.title, note.content),
+          hash,
+        });
+      }
     }
-    const text = buildEmbeddingText(note.title, note.content);
-    const { embeddings } = await this.embed.embedDocuments([text]);
-    const embedding = embeddings[0];
-    if (!embedding) {
-      this.logger.warn(`Voyage returned no embedding for note ${note.noteId}`);
-      return;
+    let embedded = 0;
+    for (let i = 0; i < pending.length; i += EMBED_SUB_BATCH) {
+      embedded += await this.embedChunk(
+        pending.slice(i, i + EMBED_SUB_BATCH),
+        model
+      );
     }
-    await this.repo.upsert({
-      noteId: note.noteId,
-      embedding,
-      model,
-      inputHash: hash,
-    });
+    return { embedded, touched };
+  }
+
+  private async embedChunk(
+    chunk: PendingEmbedding[],
+    model: string
+  ): Promise<number> {
+    try {
+      const { embeddings } = await this.embed.embedDocuments(
+        chunk.map((c) => c.text)
+      );
+      let count = 0;
+      for (let i = 0; i < chunk.length; i++) {
+        const embedding = embeddings[i];
+        if (!embedding) {
+          this.logger.warn(
+            `Voyage returned no embedding for note ${chunk[i].noteId}`
+          );
+          continue;
+        }
+        await this.repo.upsert({
+          noteId: chunk[i].noteId,
+          embedding,
+          model,
+          inputHash: chunk[i].hash,
+        });
+        count++;
+      }
+      return count;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to embed a batch of ${chunk.length} notes`,
+        error instanceof Error ? error.stack : String(error)
+      );
+      return 0;
+    }
   }
 
   private async acquireLock(): Promise<boolean> {
