@@ -1,5 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -16,7 +17,10 @@ import { DrizzleNoteEmbeddingRepository } from './drizzle-note-embedding.reposit
 const USER = '00000000-0000-4000-8000-0000000000e1';
 const NOTE = '00000000-0000-4000-8000-0000000000e2';
 
-describe('DrizzleNoteEmbeddingRepository', () => {
+loadEnv({ path: ['.env.local', '.env'] });
+const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
+
+describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
   let db: Database;
   let repo: DrizzleNoteEmbeddingRepository;
 
