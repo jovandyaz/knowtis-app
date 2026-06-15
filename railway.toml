@@ -10,9 +10,9 @@ buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm buil
 watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml", "railway.toml"]
 
 [deploy]
-# Apply pending DB migrations between build and release. A non-zero exit aborts
-# the deploy, so the new code never serves against an un-migrated schema.
-# One-time bootstrap for the existing (push-managed) DB: see docs/MIGRATIONS.md.
+# Single source of truth for DB migrations: runs in the release environment
+# (same DATABASE_URL/network as the app) and aborts the deploy on non-zero exit,
+# so the new code never serves against an un-migrated schema. See docs/MIGRATIONS.md.
 preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
 # Start command for the API
 startCommand = "node dist/apps/api/main.js"
