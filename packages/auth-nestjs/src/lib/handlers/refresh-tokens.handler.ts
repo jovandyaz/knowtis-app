@@ -130,9 +130,13 @@ export class RefreshTokensHandler {
       return err(tokensResult.error);
     }
 
-    await this.sessionRepository.deleteRotatedBefore(
-      new Date(Date.now() - REFRESH_TOKEN_GRACE_MS)
-    );
+    try {
+      await this.sessionRepository.deleteRotatedBefore(
+        new Date(Date.now() - REFRESH_TOKEN_GRACE_MS)
+      );
+    } catch (error) {
+      this.logger.warn('Failed to prune rotated sessions after refresh', error);
+    }
 
     this.eventEmitter.emit(
       AuthEventName.TOKEN_REFRESH,

@@ -5,6 +5,7 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AuthSessionController } from './auth-session.controller';
+import { REFRESH_TOKEN_COOKIE_NAME } from './utils/cookie.utils';
 
 function createController(refreshResult: unknown) {
   const refreshHandler = {
@@ -49,7 +50,14 @@ describe('AuthSessionController.refresh', () => {
 
     await expect(controller.refresh(req, {}, res)).rejects.toThrow();
 
-    expect(res.clearCookie).toHaveBeenCalled();
+    expect(res.clearCookie).toHaveBeenCalledWith(
+      REFRESH_TOKEN_COOKIE_NAME,
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/api/v1/auth',
+      })
+    );
     expect(res.cookie).not.toHaveBeenCalled();
   });
 
@@ -62,6 +70,14 @@ describe('AuthSessionController.refresh', () => {
     const result = await controller.refresh(req, {}, res);
 
     expect(result).toEqual({ accessToken: 'at' });
-    expect(res.cookie).toHaveBeenCalled();
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_TOKEN_COOKIE_NAME,
+      'rt',
+      expect.objectContaining({
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/api/v1/auth',
+      })
+    );
   });
 });
