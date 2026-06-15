@@ -4,6 +4,7 @@ export interface PendingMutationRecord {
   readonly userId: string;
   readonly mutation: ProposedMutation;
   readonly toolName: string;
+  readonly conversationId?: string;
 }
 
 export interface PendingMutationStore {
