@@ -1,11 +1,22 @@
 import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, desc, eq, ilike, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  cosineDistance,
+  count,
+  desc,
+  eq,
+  ilike,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 
 import { GENERAL_ACCESS } from '@knowtis/shared-types';
 
 import {
   DATABASE_CONNECTION,
+  noteEmbeddings,
   notePermissions,
   notes,
   users,
@@ -184,6 +195,23 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .leftJoin(notePermissions, this.permissionJoinCondition(userId))
       .where(this.accessibleWhere(userId, query))
       .orderBy(desc(notes.updatedAt))
+      .limit(limit);
+  }
+
+  async findAccessibleNotesByEmbedding(
+    userId: UserId,
+    queryVector: number[],
+    model: string,
+    limit: number
+  ): Promise<NoteSummary[]> {
+    const distance = cosineDistance(noteEmbeddings.embedding, queryVector);
+    return this.db
+      .select(noteSummaryColumns)
+      .from(notes)
+      .innerJoin(noteEmbeddings, eq(noteEmbeddings.noteId, notes.id))
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(and(this.accessCondition(userId), eq(noteEmbeddings.model, model)))
+      .orderBy(distance)
       .limit(limit);
   }
 

@@ -30,6 +30,12 @@ export interface NoteReadRepository {
     query: string,
     limit: number
   ): Promise<NoteSummary[]>;
+  findAccessibleNotesByEmbedding(
+    userId: UserId,
+    queryVector: number[],
+    model: string,
+    limit: number
+  ): Promise<NoteSummary[]>;
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount>;
   findByShareToken(token: string): Promise<NoteViewWithOwner | null>;
 }
