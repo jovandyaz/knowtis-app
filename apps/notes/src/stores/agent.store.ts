@@ -5,7 +5,6 @@ import {
   type AgentErrorPayload,
   type AgentSource,
   type AgentStreamHandle,
-  type AgentWireMessage,
 } from '@knowtis/api-client';
 
 import { createChunkBuffer } from './chunk-buffer';
@@ -44,33 +43,6 @@ const PROPOSAL_EXPIRED_ERROR: AgentErrorPayload = {
   message: 'The proposal can no longer be resumed',
 };
 
-const COMMIT_VERB: Record<PendingProposal['kind'], string> = {
-  create: 'created',
-  update: 'updated',
-  share: 'shared',
-};
-
-const MAX_WIRE_SOURCES = 5;
-
-function toWireContent(m: AgentChatMessage): string {
-  let content = m.content;
-  if (m.committed) {
-    const marker = `[${COMMIT_VERB[m.committed.kind]} note "${m.committed.title}"]`;
-    const prose = content.replaceAll(`✓ ${m.committed.title}`, '').trim();
-    content = prose ? `${prose}\n${marker}` : marker;
-  } else if (content.trim().length === 0 && m.proposal) {
-    content = `[proposed: ${m.proposal.summary}]`;
-  }
-  if (m.sources?.length) {
-    const digest = m.sources
-      .slice(0, MAX_WIRE_SOURCES)
-      .map((s) => `"${s.title}" (${s.id})`)
-      .join(', ');
-    content = `${content}\n[sources: ${digest}]`;
-  }
-  return content;
-}
-
 interface AgentState {
   messages: AgentChatMessage[];
   status: AgentStatus;
@@ -93,7 +65,6 @@ export const useAgentStore = create<AgentState>((set, get) => {
   // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
-  let knownNotes: AgentSource[] = [];
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -115,15 +86,11 @@ export const useAgentStore = create<AgentState>((set, get) => {
     },
   });
 
-  const run = (
-    history: AgentWireMessage[],
-    assistantId: string,
-    noteId?: string
-  ) => {
+  const run = (text: string, assistantId: string, noteId?: string) => {
     activeAssistantId = assistantId;
     const version = streamVersion;
     const handle = agentClient.sendMessage(
-      history,
+      text,
       {
         onChunk: ({ text }) => {
           if (version !== streamVersion) {
@@ -131,11 +98,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }
           buffer.push(text);
         },
-        onDone: ({ sources, knownNotes: turnKnownNotes }) => {
+        onDone: ({ sources }) => {
           if (version !== streamVersion) {
             return;
           }
-          knownNotes = turnKnownNotes;
           buffer.clearInactivityTimer();
           buffer.flush();
           const id = activeAssistantId;
@@ -200,8 +166,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
       },
-      noteId,
-      knownNotes
+      noteId
     );
     if (get().status !== 'streaming') {
       return;
@@ -231,13 +196,6 @@ export const useAgentStore = create<AgentState>((set, get) => {
       buffer.clearInactivityTimer();
       buffer.discard();
 
-      const history: AgentWireMessage[] = [
-        ...current.messages
-          .map((m) => ({ role: m.role, content: toWireContent(m) }))
-          .filter((m) => m.content.trim().length > 0),
-        { role: 'user', content: trimmed },
-      ];
-
       const userMessage: AgentChatMessage = {
         id: nextId(),
         role: 'user',
@@ -256,16 +214,16 @@ export const useAgentStore = create<AgentState>((set, get) => {
         _streamHandle: null,
       });
 
-      run(history, assistantMessage.id, noteId);
+      run(trimmed, assistantMessage.id, noteId);
     },
 
     newConversation: () => {
       get()._streamHandle?.cancel();
+      agentClient.resetConversation();
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.discard();
       activeAssistantId = null;
-      knownNotes = [];
       set({
         messages: [],
         status: 'idle',

@@ -16,6 +16,7 @@ vi.mock('@knowtis/api-client', () => ({
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
     approve: vi.fn(() => true),
     reject: vi.fn(() => true),
+    resetConversation: vi.fn(),
   },
 }));
 
@@ -33,7 +34,7 @@ function capture(): {
 } {
   const cancel = vi.fn();
   let captured: Cbs | null = null;
-  vi.mocked(agentClient.sendMessage).mockImplementation((_msgs, cbs) => {
+  vi.mocked(agentClient.sendMessage).mockImplementation((_text, cbs) => {
     captured = cbs as Cbs;
     return { cancel } as AgentStreamHandle;
   });
@@ -114,7 +115,7 @@ describe('useAgentStore', () => {
     expect(useAgentStore.getState().status).toBe('idle');
   });
 
-  it('omits empty assistant placeholders from the wire history', () => {
+  it('sends only the trimmed message content on the wire', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('first');
     get().onChunk({ text: 'answer' });
@@ -124,28 +125,9 @@ describe('useAgentStore', () => {
       sources: [],
       knownNotes: [],
     });
-    useAgentStore.getState().sendMessage('second');
-    const sent = vi.mocked(agentClient.sendMessage).mock.calls[1][0];
-    expect(sent).toEqual([
-      { role: 'user', content: 'first' },
-      { role: 'assistant', content: 'answer' },
-      { role: 'user', content: 'second' },
-    ]);
-  });
-
-  it('threads received knownNotes into the next send', () => {
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('first');
-    get().onChunk({ text: 'answer' });
-    vi.advanceTimersByTime(50);
-    get().onDone({
-      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
-      sources: [],
-      knownNotes: [{ id: 'n1', title: 'GTD' }],
-    });
-    useAgentStore.getState().sendMessage('second');
-    const knownNotesArg = vi.mocked(agentClient.sendMessage).mock.calls[1][3];
-    expect(knownNotesArg).toEqual([{ id: 'n1', title: 'GTD' }]);
+    useAgentStore.getState().sendMessage('  second  ');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls[0][0]).toBe('first');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls[1][0]).toBe('second');
   });
 
   it('cancel keeps partial content and returns to idle', () => {
@@ -173,11 +155,11 @@ describe('useAgentStore', () => {
     expect(messages.map((m) => m.role)).toEqual(['user', 'assistant']);
     expect(messages[0].content).toBe('hello');
     const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
-    expect(sent).toEqual([{ role: 'user', content: 'hello' }]);
+    expect(sent).toBe('hello');
   });
 });
 
-describe('agent.store wire history', () => {
+describe('agent.store server-authoritative wire', () => {
   const USAGE = { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 };
   const PROPOSAL: AgentProposalPayload = {
     id: 'p1',
@@ -202,7 +184,7 @@ describe('agent.store wire history', () => {
     vi.useRealTimers();
   });
 
-  it('preserves streamed prose and the commit marker after a committed proposal', () => {
+  it('keeps the commit marker on the displayed message and sends only content', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');
     get().onProposal?.(PROPOSAL);
@@ -215,61 +197,36 @@ describe('agent.store wire history', () => {
     });
     get().onDone({ usage: USAGE, sources: [], knownNotes: [] });
 
-    useAgentStore.getState().sendMessage('what did you just do?');
-
-    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
-    const turn = sent?.find(
-      (m) => m.role === 'assistant' && m.content.includes('Done, your note')
-    );
-    expect(turn).toBeDefined();
-    expect(turn?.content).toContain('[created note "My Note"]');
-    expect(turn?.content).not.toContain('✓');
-  });
-
-  it('keeps committed turns with no prose in history via synthesized content', () => {
-    capture();
-    useAgentStore.setState({
-      messages: [
-        { id: 'u1', role: 'user', content: 'create it' },
-        {
-          id: 'a1',
-          role: 'assistant',
-          content: '',
-          committed: { kind: 'create', title: 'My Note' },
-        },
-      ],
-      status: 'done',
+    const committedMsg = useAgentStore
+      .getState()
+      .messages.find((m) => m.committed);
+    expect(committedMsg?.committed).toEqual({
+      kind: 'create',
+      title: 'My Note',
     });
+    expect(committedMsg?.content).toContain('✓ My Note');
 
-    useAgentStore.getState().sendMessage('next');
-
-    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
-    expect(sent).toEqual([
-      { role: 'user', content: 'create it' },
-      { role: 'assistant', content: '[created note "My Note"]' },
-      { role: 'user', content: 'next' },
-    ]);
+    useAgentStore.getState().sendMessage('what did you just do?');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
+      'what did you just do?'
+    );
   });
 
-  it('keeps proposal-only turns in history with synthesized content', () => {
+  it('keeps the proposal annotation on the displayed message', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');
     get().onProposal?.(PROPOSAL);
-    useAgentStore.getState().rejectProposal('no');
-    get().onChunk({ text: 'Okay, discarded.' });
-    vi.advanceTimersByTime(50);
-    get().onDone({ usage: USAGE, sources: [], knownNotes: [] });
 
-    useAgentStore.getState().sendMessage('next');
-
-    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
-    expect(sent).toContainEqual({
-      role: 'assistant',
-      content: '[proposed: Create "My Note"]',
+    const proposedMsg = useAgentStore
+      .getState()
+      .messages.find((m) => m.proposal);
+    expect(proposedMsg?.proposal).toEqual({
+      kind: 'create',
+      summary: 'Create "My Note"',
     });
   });
 
-  it('appends a sources digest to assistant turns in the wire history', () => {
+  it('attaches sources to the displayed message for rendering', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('what do my notes say?');
     get().onChunk({ text: 'They say X.' });
@@ -283,13 +240,18 @@ describe('agent.store wire history', () => {
       knownNotes: [],
     });
 
-    useAgentStore.getState().sendMessage('more');
+    expect(useAgentStore.getState().messages.at(-1)?.sources).toEqual([
+      { id: 'n1', title: 'Productividad' },
+      { id: 'n2', title: 'Ideas' },
+    ]);
+  });
 
-    const sent = vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0];
-    expect(sent?.[1]).toEqual({
-      role: 'assistant',
-      content: 'They say X.\n[sources: "Productividad" (n1), "Ideas" (n2)]',
-    });
+  it('newConversation resets the server conversation', () => {
+    capture();
+    useAgentStore.getState().sendMessage('hola');
+    vi.mocked(agentClient.resetConversation).mockClear();
+    useAgentStore.getState().newConversation();
+    expect(agentClient.resetConversation).toHaveBeenCalledTimes(1);
   });
 });
 

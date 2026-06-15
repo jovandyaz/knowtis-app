@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentClient } from './agent.client';
-import type { AgentWireMessage } from './agent.client';
 
 const emit = vi.fn();
 const handlers = new Map<string, (payload: unknown) => void>();
@@ -48,8 +47,6 @@ const AUTH_ERROR = {
   message: 'Authentication required',
 };
 
-const MESSAGES: AgentWireMessage[] = [{ role: 'user', content: 'hi' }];
-
 function makeClient(): AgentClient {
   const client = new AgentClient('http://localhost:3333/agent');
   client.setTokenProvider({
@@ -70,20 +67,70 @@ describe('AgentClient', () => {
     handlers.clear();
   });
 
-  it('emits agent:message with the conversation on sendMessage', () => {
+  it('emits agent:message with the message content on sendMessage', () => {
     const client = makeClient();
-    client.sendMessage(MESSAGES, {
+    client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(emit).toHaveBeenCalledWith('agent:message', { messages: MESSAGES });
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      message: { content: 'hi' },
+    });
+  });
+
+  it('remembers conversationId from agent:done and sends it on the next message', () => {
+    const client = makeClient();
+    client.sendMessage('hi', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      conversationId: 'c1',
+    });
+    emit.mockClear();
+    client.sendMessage('again', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      conversationId: 'c1',
+      message: { content: 'again' },
+    });
+  });
+
+  it('resetConversation clears the remembered conversationId', () => {
+    const client = makeClient();
+    client.sendMessage('hi', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+      conversationId: 'c1',
+    });
+    client.resetConversation();
+    emit.mockClear();
+    client.sendMessage('fresh', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      message: { content: 'fresh' },
+    });
   });
 
   it('routes usage and sources to onDone', () => {
     const client = makeClient();
     const onDone = vi.fn();
-    client.sendMessage(MESSAGES, {
+    client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone,
       onError: vi.fn(),
@@ -103,7 +150,7 @@ describe('AgentClient', () => {
 
   it('emits agent:cancel when the handle is cancelled', () => {
     const client = makeClient();
-    const handle = client.sendMessage(MESSAGES, {
+    const handle = client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
@@ -115,19 +162,19 @@ describe('AgentClient', () => {
   it('includes the current noteId in agent:message when provided', () => {
     const client = makeClient();
     client.sendMessage(
-      MESSAGES,
+      'hi',
       { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
       'note-123'
     );
     expect(emit).toHaveBeenCalledWith('agent:message', {
-      messages: MESSAGES,
+      message: { content: 'hi' },
       noteId: 'note-123',
     });
   });
 
   it('approve returns true and emits while a request is pending', () => {
     const client = makeClient();
-    client.sendMessage(MESSAGES, {
+    client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
@@ -135,13 +182,12 @@ describe('AgentClient', () => {
     expect(client.approve('p1')).toBe(true);
     expect(emit).toHaveBeenCalledWith('agent:approve', {
       proposalId: 'p1',
-      messages: MESSAGES,
     });
   });
 
   it('approve returns false without emitting once the request completed', () => {
     const client = makeClient();
-    client.sendMessage(MESSAGES, {
+    client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
@@ -157,7 +203,7 @@ describe('AgentClient', () => {
 
   it('reject returns false without emitting after cancel cleared the pending request', () => {
     const client = makeClient();
-    const handle = client.sendMessage(MESSAGES, {
+    const handle = client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
@@ -195,7 +241,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       clearTokens: vi.fn(),
     });
 
-    client.sendMessage(MESSAGES, callbacks);
+    client.sendMessage('hi', callbacks);
     await flush();
 
     expect(io).not.toHaveBeenCalled();
@@ -219,7 +265,7 @@ describe('AgentClient – auth/transport failure paths', () => {
     });
     client.setAuthRefreshHandler(refresh);
 
-    client.sendMessage(MESSAGES, callbacks);
+    client.sendMessage('hi', callbacks);
     await flush();
     expect(fake.socket.emit).toHaveBeenCalledTimes(1);
 
@@ -230,7 +276,7 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(fake.socket.emit).toHaveBeenCalledTimes(2);
     expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
-      messages: MESSAGES,
+      message: { content: 'hi' },
     });
   });
 
@@ -249,7 +295,7 @@ describe('AgentClient – auth/transport failure paths', () => {
     client.setAuthRefreshHandler(refresh);
     client.setSessionExpiredHandler(onSessionExpired);
 
-    client.sendMessage(MESSAGES, callbacks);
+    client.sendMessage('hi', callbacks);
     await flush();
 
     fake.trigger('agent:error', AUTH_ERROR);
@@ -270,7 +316,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       clearTokens: vi.fn(),
     });
 
-    client.sendMessage(MESSAGES, callbacks);
+    client.sendMessage('hi', callbacks);
     await flush();
 
     for (let i = 0; i < 5; i++) {
@@ -294,7 +340,7 @@ describe('AgentClient – auth/transport failure paths', () => {
       clearTokens: vi.fn(),
     });
 
-    client.sendMessage(MESSAGES, callbacks);
+    client.sendMessage('hi', callbacks);
     await flush();
 
     for (let i = 0; i < 5; i++) {
