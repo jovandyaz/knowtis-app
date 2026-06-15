@@ -54,7 +54,7 @@ describe('DrizzleNoteEmbeddingRepository', () => {
   });
 
   it('reports a note with no embedding as stale (quietSeconds=0)', async () => {
-    const stale = await repo.findStaleNotes(0, 200);
+    const stale = await repo.findStaleNotes('voyage-4', 0, 200);
     expect(stale.map((s) => s.noteId)).toContain(NOTE);
   });
 
@@ -65,7 +65,21 @@ describe('DrizzleNoteEmbeddingRepository', () => {
       model: 'voyage-4',
       inputHash: 'h',
     });
-    const stale = await repo.findStaleNotes(0, 200);
+    const stale = await repo.findStaleNotes('voyage-4', 0, 200);
     expect(stale.map((s) => s.noteId)).not.toContain(NOTE);
+  });
+
+  it('reports the note as stale when the embedding model differs', async () => {
+    await repo.upsert({
+      noteId: NOTE,
+      embedding: new Array(1024).fill(0),
+      model: 'voyage-4',
+      inputHash: 'h',
+    });
+    const staleForSameModel = await repo.findStaleNotes('voyage-4', 0, 200);
+    expect(staleForSameModel.map((s) => s.noteId)).not.toContain(NOTE);
+
+    const staleForNewModel = await repo.findStaleNotes('voyage-5', 0, 200);
+    expect(staleForNewModel.map((s) => s.noteId)).toContain(NOTE);
   });
 });

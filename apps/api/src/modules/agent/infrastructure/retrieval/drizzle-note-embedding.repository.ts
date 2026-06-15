@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 
 import {
   DATABASE_CONNECTION,
@@ -21,6 +21,7 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
   ) {}
 
   async findStaleNotes(
+    model: string,
     quietSeconds: number,
     limit: number
   ): Promise<StaleNote[]> {
@@ -34,7 +35,9 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
       .from(notes)
       .leftJoin(noteEmbeddings, sql`${noteEmbeddings.noteId} = ${notes.id}`)
       .where(
-        sql`(${noteEmbeddings.noteId} IS NULL OR ${notes.updatedAt} > ${noteEmbeddings.updatedAt})
+        sql`(${noteEmbeddings.noteId} IS NULL
+             OR ${notes.updatedAt} > ${noteEmbeddings.updatedAt}
+             OR ${noteEmbeddings.model} <> ${model})
             AND ${notes.updatedAt} < now() - make_interval(secs => ${quietSeconds})`
       )
       .orderBy(notes.updatedAt)
@@ -67,6 +70,6 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
     await this.db
       .update(noteEmbeddings)
       .set({ updatedAt: new Date() })
-      .where(sql`${noteEmbeddings.noteId} = ${noteId}`);
+      .where(eq(noteEmbeddings.noteId, noteId));
   }
 }

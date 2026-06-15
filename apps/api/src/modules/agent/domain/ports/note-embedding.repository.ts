@@ -13,9 +13,14 @@ export interface UpsertEmbeddingInput {
 }
 
 export interface NoteEmbeddingRepository {
-  /** Notes missing an embedding or whose note.updated_at is newer than the
-   * embedding row, settled past the quiet-period, capped at `limit`. */
-  findStaleNotes(quietSeconds: number, limit: number): Promise<StaleNote[]>;
+  /** Notes missing an embedding, whose note.updated_at is newer than the
+   * embedding row, or whose embedding model differs from `model`,
+   * settled past the quiet-period, capped at `limit`. */
+  findStaleNotes(
+    model: string,
+    quietSeconds: number,
+    limit: number
+  ): Promise<StaleNote[]>;
   upsert(input: UpsertEmbeddingInput): Promise<void>;
   touch(noteId: string): Promise<void>;
 }

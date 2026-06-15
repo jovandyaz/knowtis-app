@@ -37,7 +37,11 @@ describe('VoyageEmbeddingAdapter', () => {
   it('embedQuery sends input_type=query and returns the single vector', async () => {
     fetchSpy.mockResolvedValue(ok([[0.1, 0.2]], 3));
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
+      makeConfig({
+        VOYAGE_API_KEY: 'k',
+        AI_EMBEDDING_MODEL: 'voyage-4',
+        AI_TIMEOUT_MS: 30000,
+      })
     );
 
     const vec = await adapter.embedQuery('hello');
@@ -62,7 +66,11 @@ describe('VoyageEmbeddingAdapter', () => {
       )
     );
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
+      makeConfig({
+        VOYAGE_API_KEY: 'k',
+        AI_EMBEDDING_MODEL: 'voyage-4',
+        AI_TIMEOUT_MS: 30000,
+      })
     );
 
     const result = await adapter.embedDocuments(['a', 'b']);
@@ -92,7 +100,11 @@ describe('VoyageEmbeddingAdapter', () => {
       text: () => Promise.resolve('rate limited'),
     } as unknown as Response);
     const adapter = new VoyageEmbeddingAdapter(
-      makeConfig({ VOYAGE_API_KEY: 'k', AI_EMBEDDING_MODEL: 'voyage-4' })
+      makeConfig({
+        VOYAGE_API_KEY: 'k',
+        AI_EMBEDDING_MODEL: 'voyage-4',
+        AI_TIMEOUT_MS: 30000,
+      })
     );
     await expect(adapter.embedQuery('x')).rejects.toThrow(/Voyage/);
   });
