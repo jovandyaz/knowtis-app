@@ -135,18 +135,19 @@ describe.runIf(GATE)('hybrid retrieval quality', () => {
     }
   });
 
+  const MAX_RANK = 3;
   for (const c of CASES) {
     it(`ranks the expected note for: ${c.name}`, async () => {
       const hits = await adapter.search(USER, c.query);
-      expect(hits.map((h) => h.id)).toContain(c.expected);
+      const rank = hits.findIndex((h) => h.id === c.expected);
+      expect(rank).toBeGreaterThanOrEqual(0);
+      expect(rank).toBeLessThan(MAX_RANK);
     }, 60_000);
   }
 });
 
 if (!GATE) {
   describe('hybrid retrieval quality', () => {
-    it('skipped: VOYAGE_API_KEY not set', () => {
-      expect(true).toBe(true);
-    });
+    it.skip('requires VOYAGE_API_KEY', () => undefined);
   });
 }

@@ -13,13 +13,15 @@ const base = {
 };
 
 describe('toNoteHit', () => {
-  it('marks owner notes', () => {
+  it('maps owner notes with exact metadata', () => {
     const hit = toNoteHit(base, 'u1');
-    expect(hit).toMatchObject({
+    expect(hit).toEqual({
       id: 'n1',
       title: 'N1',
+      updatedAt: '2026-06-02T00:00:00.000Z',
       isOwner: true,
       isSharedWithMe: false,
+      isPubliclyShared: false,
     });
   });
 
@@ -27,6 +29,11 @@ describe('toNoteHit', () => {
     const hit = toNoteHit({ ...base, generalAccess: 'anyone_with_link' }, 'u2');
     expect(hit.isOwner).toBe(false);
     expect(hit.isSharedWithMe).toBe(true);
+    expect(hit.isPubliclyShared).toBe(true);
+  });
+
+  it('treats a restricted note with a share token as publicly shared', () => {
+    const hit = toNoteHit({ ...base, shareToken: 'tok' }, 'u1');
     expect(hit.isPubliclyShared).toBe(true);
   });
 });
