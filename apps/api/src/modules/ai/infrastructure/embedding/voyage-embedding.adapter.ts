@@ -70,6 +70,11 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort {
     const embeddings = [...json.data]
       .sort((a, b) => a.index - b.index)
       .map((d) => d.embedding);
+    if (embeddings.length !== input.length) {
+      throw new Error(
+        `Voyage returned ${embeddings.length} embeddings for ${input.length} inputs`
+      );
+    }
     const totalTokens = json.usage?.total_tokens ?? 0;
     this.logCost(inputType, totalTokens);
     return { embeddings, totalTokens };

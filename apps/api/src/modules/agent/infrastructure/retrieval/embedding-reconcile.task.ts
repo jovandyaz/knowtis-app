@@ -52,7 +52,14 @@ export class EmbeddingReconcileTask {
         BATCH_SIZE
       );
       for (const note of stale) {
-        await this.reconcileNote(note, model);
+        try {
+          await this.reconcileNote(note, model);
+        } catch (error) {
+          this.logger.warn(
+            `Failed to reconcile embedding for note ${note.noteId}`,
+            error instanceof Error ? error.stack : String(error)
+          );
+        }
       }
       if (stale.length > 0) {
         this.logger.log(`Reconciled ${stale.length} note embeddings`);

@@ -53,7 +53,7 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
         embedding: input.embedding,
         model: input.model,
         inputHash: input.inputHash,
-        updatedAt: new Date(),
+        updatedAt: sql`now()`,
       })
       .onConflictDoUpdate({
         target: noteEmbeddings.noteId,
@@ -61,7 +61,7 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
           embedding: input.embedding,
           model: input.model,
           inputHash: input.inputHash,
-          updatedAt: new Date(),
+          updatedAt: sql`now()`,
         },
       });
   }
@@ -69,7 +69,7 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
   async touch(noteId: string): Promise<void> {
     await this.db
       .update(noteEmbeddings)
-      .set({ updatedAt: new Date() })
+      .set({ updatedAt: sql`now()` })
       .where(eq(noteEmbeddings.noteId, noteId));
   }
 }
