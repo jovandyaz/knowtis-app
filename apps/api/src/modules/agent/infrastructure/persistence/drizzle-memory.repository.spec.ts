@@ -105,4 +105,26 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
     expect(await repo.countForUser(U1)).toBe(0);
     expect(await repo.countForUser(U2)).toBe(1); // U2 untouched
   });
+
+  it('applyReconcile applies deletes, inserts, and updates for the owner', async () => {
+    await repo.deleteAllForUser(U1);
+    const stale = await repo.insert({
+      userId: U1,
+      content: 'stale',
+      embedding: vec(10),
+    });
+    const target = await repo.insert({
+      userId: U1,
+      content: 'before',
+      embedding: vec(11),
+    });
+    await repo.applyReconcile({
+      userId: U1,
+      deletes: [stale.id],
+      inserts: [{ content: 'fresh', embedding: vec(12) }],
+      updates: [{ id: target.id, content: 'after', embedding: vec(13) }],
+    });
+    const rows = await repo.listForUser(U1, 50);
+    expect(rows.map((m) => m.content).sort()).toEqual(['after', 'fresh']);
+  });
 });

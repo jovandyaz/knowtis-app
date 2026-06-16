@@ -34,6 +34,10 @@ export function partitionOps(
       result.deletes.push(op.id);
     }
   }
+  // A same-id DELETE wins over an UPDATE: extraction applies deletes first, so
+  // the update would silently target a removed row — drop it for determinism.
+  const deleted = new Set(result.deletes);
+  result.updates = result.updates.filter((u) => !deleted.has(u.id));
   return result;
 }
 

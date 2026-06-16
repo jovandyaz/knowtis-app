@@ -121,11 +121,16 @@ export class DrizzleConversationRepository implements ConversationRepository {
       .limit(limit);
   }
 
-  async markExtracted(conversationId: string): Promise<void> {
+  async markExtracted(userId: string, conversationId: string): Promise<void> {
     await this.db
       .update(conversations)
       .set({ memoriesExtractedAt: sql`now()` })
-      .where(eq(conversations.id, conversationId))
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
       .returning({ id: conversations.id });
   }
 }

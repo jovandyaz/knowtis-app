@@ -39,7 +39,7 @@ export interface ConversationRepository {
     quietSeconds: number,
     limit: number
   ): Promise<{ id: string; userId: string }[]>;
-  markExtracted(conversationId: string): Promise<void>;
+  markExtracted(userId: string, conversationId: string): Promise<void>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');

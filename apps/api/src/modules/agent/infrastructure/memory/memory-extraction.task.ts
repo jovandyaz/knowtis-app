@@ -103,7 +103,7 @@ export class MemoryExtractionTask {
       TRANSCRIPT_MESSAGES
     );
     if (messages.length === 0) {
-      await this.conversations.markExtracted(conversationId);
+      await this.conversations.markExtracted(userId, conversationId);
       return;
     }
     const transcript = messages
@@ -124,10 +124,6 @@ export class MemoryExtractionTask {
       existing.map((m) => m.id)
     );
 
-    for (const id of deletes) {
-      await this.memory.deleteForUser(userId, id);
-    }
-
     // Memories are a persistent injection vector: re-screen LLM-extracted
     // content before it can be stored and replayed into future prompts.
     const safeAdds = adds.filter((c) => detectPromptInjection(c).safe);
@@ -135,29 +131,44 @@ export class MemoryExtractionTask {
       (u) => detectPromptInjection(u.content).safe
     );
 
+    const inserts: { content: string; embedding: number[] }[] = [];
+    const memoryUpdates: {
+      id: string;
+      content: string;
+      embedding: number[];
+    }[] = [];
+    // Compute every fallible external value (embeddings) before any write so
+    // applyReconcile commits delete/insert/update atomically or not at all.
     if (safeAdds.length + safeUpdates.length > 0) {
       const texts = [...safeAdds, ...safeUpdates.map((u) => u.content)];
       const { embeddings } = await this.embed.embedDocuments(texts);
-      let count = await this.memory.countForUser(userId);
+      const count = await this.memory.countForUser(userId);
+      const capacity = Math.max(0, max - (count - deletes.length));
       let i = 0;
       for (const content of safeAdds) {
-        if (count < max) {
-          await this.memory.insert({
-            userId,
-            content,
-            embedding: embeddings[i],
-            sourceConversationId: conversationId,
-          });
-          count++;
-        }
+        const embedding = embeddings[i];
         i++;
+        if (embedding && inserts.length < capacity) {
+          inserts.push({ content, embedding });
+        }
       }
       for (const u of safeUpdates) {
-        await this.memory.update(userId, u.id, u.content, embeddings[i]);
+        const embedding = embeddings[i];
         i++;
+        if (embedding) {
+          memoryUpdates.push({ id: u.id, content: u.content, embedding });
+        }
       }
     }
-    await this.conversations.markExtracted(conversationId);
+
+    await this.memory.applyReconcile({
+      userId,
+      sourceConversationId: conversationId,
+      deletes,
+      inserts,
+      updates: memoryUpdates,
+    });
+    await this.conversations.markExtracted(userId, conversationId);
   }
 
   private async acquireLock(): Promise<boolean> {

@@ -40,6 +40,7 @@ export const conversations = pgTable(
   },
   (table) => [
     index('conversations_user_updated_idx').on(table.userId, table.updatedAt),
+    index('conversations_updated_idx').on(table.updatedAt),
   ]
 );
 

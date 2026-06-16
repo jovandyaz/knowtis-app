@@ -28,10 +28,8 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   };
   const memory = {
     listForUser: vi.fn().mockResolvedValue([]),
-    insert: vi.fn().mockResolvedValue({ id: 'm1' }),
-    update: vi.fn(),
-    deleteForUser: vi.fn(),
     countForUser: vi.fn().mockResolvedValue(0),
+    applyReconcile: vi.fn().mockResolvedValue(undefined),
   };
   const structured = {
     generateStructuredOutput: vi.fn().mockResolvedValue({
@@ -56,17 +54,20 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     structured as never,
     embed as never
   );
-  return { task, conversations, memory, structured, flags };
+  return { task, conversations, memory, structured, flags, embed };
 }
 
 describe('MemoryExtractionTask', () => {
   it('extracts, persists an ADD, and marks the conversation', async () => {
     const { task, memory, conversations } = make();
     await task.reconcile();
-    expect(memory.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: 'u1', content: 'Is vegan' })
+    expect(memory.applyReconcile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'u1',
+        inserts: [expect.objectContaining({ content: 'Is vegan' })],
+      })
     );
-    expect(conversations.markExtracted).toHaveBeenCalledWith('c1');
+    expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
   });
 
   it('does nothing when the flag is off', async () => {
@@ -77,7 +78,7 @@ describe('MemoryExtractionTask', () => {
   });
 
   it('skips storing content flagged as prompt injection', async () => {
-    const { task, memory, structured } = make();
+    const { task, memory, embed, structured } = make();
     structured.generateStructuredOutput.mockResolvedValue({
       object: {
         operations: [
@@ -92,7 +93,17 @@ describe('MemoryExtractionTask', () => {
       model: 'm',
     });
     await task.reconcile();
-    expect(memory.insert).not.toHaveBeenCalled();
+    expect(embed.embedDocuments).not.toHaveBeenCalled();
+    expect(memory.applyReconcile).toHaveBeenCalledWith(
+      expect.objectContaining({ inserts: [], updates: [] })
+    );
+  });
+
+  it('does not mark the conversation extracted when persistence fails', async () => {
+    const { task, memory, conversations } = make();
+    memory.applyReconcile.mockRejectedValue(new Error('db down'));
+    await task.reconcile();
+    expect(conversations.markExtracted).not.toHaveBeenCalled();
   });
 
   it('does nothing when VOYAGE_API_KEY is absent', async () => {
