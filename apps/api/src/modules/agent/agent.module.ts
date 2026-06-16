@@ -18,7 +18,7 @@ import { NOTE_EMBEDDING_REPOSITORY } from './domain/ports/note-embedding.reposit
 import { PENDING_MUTATION_STORE } from './domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
 import { MemoryExtractionTask } from './infrastructure/memory/memory-extraction.task';
-import { AgentToolsFactory } from './infrastructure/orchestrator/agent-tools.factory';
+import { AgentToolRegistry } from './infrastructure/orchestrator/agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './infrastructure/orchestrator/ai-sdk-agent.orchestrator';
 import { MutationProposalBuilder } from './infrastructure/orchestrator/mutation-proposal.builder';
 import { RedisPendingMutationStore } from './infrastructure/pending/redis-pending-mutation.store';
@@ -29,6 +29,13 @@ import { EmbeddingReconcileTask } from './infrastructure/retrieval/embedding-rec
 import { FeatureFlaggedRetrievalAdapter } from './infrastructure/retrieval/feature-flagged-retrieval.adapter';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
 import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retrieval.adapter';
+import {
+  AGENT_TOOL_GROUPS,
+  type AgentToolGroup,
+} from './infrastructure/tools/agent-tool';
+import { NoteMutateToolGroup } from './infrastructure/tools/note-mutate.tool-group';
+import { NoteReadToolGroup } from './infrastructure/tools/note-read.tool-group';
+import { WebToolGroup } from './infrastructure/tools/web.tool-group';
 import { MemoryController } from './memory.controller';
 
 @Module({
@@ -64,7 +71,15 @@ import { MemoryController } from './memory.controller';
     { provide: MEMORY_REPOSITORY, useClass: DrizzleMemoryRepository },
     EmbeddingReconcileTask,
     MemoryExtractionTask,
-    AgentToolsFactory,
+    NoteReadToolGroup,
+    NoteMutateToolGroup,
+    WebToolGroup,
+    {
+      provide: AGENT_TOOL_GROUPS,
+      useFactory: (...groups: AgentToolGroup[]): AgentToolGroup[] => groups,
+      inject: [NoteReadToolGroup, NoteMutateToolGroup, WebToolGroup],
+    },
+    AgentToolRegistry,
     MutationProposalBuilder,
     ApproveMutationHandler,
     RejectMutationHandler,

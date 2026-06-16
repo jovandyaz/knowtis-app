@@ -84,6 +84,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
         },
         sources: [],
         knownNotes: [],
+        webSources: [],
       },
     ]
   );
@@ -236,6 +237,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [{ id: 'n1', title: 'Productividad' }],
         knownNotes: [],
+        webSources: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -276,6 +278,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [],
         knownNotes: [],
+        webSources: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -312,6 +315,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [],
         knownNotes: [{ id: 'n1', title: 'GTD' }],
+        webSources: [],
       },
     ]);
     const conversations = makeConversations([
@@ -405,6 +409,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [],
         knownNotes: [],
+        webSources: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -555,6 +560,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [],
         knownNotes: [],
+        webSources: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1318,6 +1324,7 @@ describe('RunAgentTurnHandler', () => {
         },
         sources: [],
         knownNotes: [],
+        webSources: [],
       },
     ]);
     const handler = new RunAgentTurnHandler(

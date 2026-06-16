@@ -17,9 +17,11 @@ import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
-import { AgentToolsFactory } from './agent-tools.factory';
+import type { AgentToolContext } from '../tools/agent-tool';
+import { AgentToolRegistry } from './agent-tool.registry';
 import { composeSystemPrompt } from './compose-system-prompt';
 import { ProposalCollector } from './proposal-collector';
+import { WebSourceCollector } from './web-source.collector';
 
 interface StepToolResult {
   readonly toolName: string;
@@ -47,7 +49,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
 
   constructor(
     private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly toolsFactory: AgentToolsFactory,
+    private readonly toolRegistry: AgentToolRegistry,
     private readonly providerRegistry: ProviderRegistryFactory,
     private readonly fallbackChain: FallbackChainService
   ) {}
@@ -85,7 +87,15 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     for (const note of input.knownNotes ?? []) {
       knownNotes.set(note.id, note);
     }
-    const collector = new ProposalCollector();
+    const proposals = new ProposalCollector();
+    const webSourceCollector = new WebSourceCollector();
+    const toolContext: AgentToolContext = {
+      userId: input.userId,
+      phase: input.resume ? 'readonly' : 'full',
+      proposals,
+      webSources: webSourceCollector,
+    };
+    const tools = await this.toolRegistry.resolve(toolContext);
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
     let progressed = false;
     let result;
@@ -112,9 +122,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
               role: m.role,
               content: m.content,
             })),
-        tools: input.resume
-          ? this.toolsFactory.buildReadOnly(input.userId)
-          : this.toolsFactory.build(input.userId, collector),
+        tools,
         stopWhen: stepCountIs(input.maxSteps),
         maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
@@ -168,7 +176,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         outputTokens: usage.outputTokens ?? 0,
         model,
       };
-      const captured = collector.captured;
+      const captured = proposals.captured;
       if (captured) {
         yield { type: 'proposal', proposal: captured, usage: turnUsage };
         return;
@@ -178,6 +186,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         usage: turnUsage,
         sources: [...sources.values()],
         knownNotes: [...knownNotes.values()],
+        webSources: webSourceCollector.all,
       };
     } catch (error) {
       const interrupted = this.interruptionEvent(
