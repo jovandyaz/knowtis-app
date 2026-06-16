@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, cosineDistance, desc, eq, sql } from 'drizzle-orm';
+import { and, cosineDistance, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import {
   DATABASE_CONNECTION,
@@ -85,11 +85,14 @@ export class DrizzleMemoryRepository implements MemoryRepository {
       return;
     }
     await this.db.transaction(async (tx) => {
-      for (const id of batch.deletes) {
+      if (batch.deletes.length > 0) {
         await tx
           .delete(userMemories)
           .where(
-            and(eq(userMemories.id, id), eq(userMemories.userId, batch.userId))
+            and(
+              inArray(userMemories.id, [...batch.deletes]),
+              eq(userMemories.userId, batch.userId)
+            )
           );
       }
       if (batch.inserts.length > 0) {
