@@ -17,4 +17,11 @@ describe('composeSystemPrompt', () => {
     const out = composeSystemPrompt(undefined, undefined, []);
     expect(out).not.toContain('durably know');
   });
+
+  it('truncates an over-long memory to bound prompt tokens', () => {
+    const long = 'x'.repeat(1000);
+    const out = composeSystemPrompt(undefined, undefined, [long]);
+    expect(out).not.toContain('x'.repeat(301));
+    expect(out).toContain('x'.repeat(300));
+  });
 });
