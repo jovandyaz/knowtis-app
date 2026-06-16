@@ -5,9 +5,9 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EnvConfig } from '../../../../config/env.config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
 import { ProposedMutation } from '../../domain/proposed-mutation';
-import { AgentToolsFactory } from './agent-tools.factory';
+import type { AgentToolContext } from '../tools/agent-tool';
+import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
-import type { ProposalCollector } from './proposal-collector';
 
 vi.mock('ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ai')>();
@@ -78,20 +78,23 @@ function makeConfig(
   } as unknown as ConfigService<EnvConfig, true>;
 }
 
-function makeTools(over: Record<string, unknown> = {}): AgentToolsFactory {
+function makeToolRegistry(
+  onResolve?: (ctx: AgentToolContext) => void
+): AgentToolRegistry {
   return {
-    build: vi.fn().mockReturnValue({}),
-    buildReadOnly: vi.fn().mockReturnValue({}),
-    ...over,
-  } as unknown as AgentToolsFactory;
+    resolve: vi.fn(async (ctx: AgentToolContext) => {
+      onResolve?.(ctx);
+      return {};
+    }),
+  } as unknown as AgentToolRegistry;
 }
 
 function makeOrchestrator(
   config = makeConfig(),
-  tools = makeTools()
+  toolRegistry = makeToolRegistry()
 ): AiSdkAgentOrchestrator {
   const { registry, chain } = createTestChain(config);
-  return new AiSdkAgentOrchestrator(config, tools, registry, chain);
+  return new AiSdkAgentOrchestrator(config, toolRegistry, registry, chain);
 }
 
 function collect(iter: AsyncIterable<unknown>) {
@@ -186,13 +189,17 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(done?.usage.model).toBe(MODEL);
   });
 
-  it('passes the userId to toolsFactory.build', async () => {
-    const tools = makeTools();
-    const orchestrator = makeOrchestrator(makeConfig(), tools);
+  it('resolves tools with a full-phase context bound to the userId', async () => {
+    const contexts: AgentToolContext[] = [];
+    const registry = makeToolRegistry((ctx) => contexts.push(ctx));
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
 
     await collect(orchestrator.run({ ...baseInput, userId: 'user-42' }));
 
-    expect(tools.build).toHaveBeenCalledWith('user-42', expect.anything());
+    expect(contexts.at(-1)).toMatchObject({
+      userId: 'user-42',
+      phase: 'full',
+    });
   });
 
   it('emits a proposal event when a propose-tool captures into the collector', async () => {
@@ -205,13 +212,10 @@ describe('AiSdkAgentOrchestrator', () => {
     if (m.isErr()) {
       throw new Error('setup');
     }
-    const tools = makeTools({
-      build: vi.fn((_userId: string, collector: ProposalCollector) => {
-        collector.capture(m.value);
-        return {};
-      }),
+    const registry = makeToolRegistry((ctx) => {
+      ctx.proposals.capture(m.value);
     });
-    const orchestrator = makeOrchestrator(makeConfig(), tools);
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
 
     const events = await collect(
       orchestrator.run({
@@ -295,9 +299,10 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('uses the read-only tool set when resuming a turn', async () => {
-    const tools = makeTools();
-    const orchestrator = makeOrchestrator(makeConfig(), tools);
+  it('resolves a read-only-phase context when resuming a turn', async () => {
+    const contexts: AgentToolContext[] = [];
+    const registry = makeToolRegistry((ctx) => contexts.push(ctx));
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
 
     await collect(
       orchestrator.run({
@@ -307,8 +312,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    expect(tools.buildReadOnly).toHaveBeenCalledWith('u1');
-    expect(tools.build).not.toHaveBeenCalled();
+    expect(contexts.at(-1)).toMatchObject({ userId: 'u1', phase: 'readonly' });
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
     expect(JSON.stringify(opts?.messages)).toContain('created');
   });
