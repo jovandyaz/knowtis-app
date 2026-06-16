@@ -135,11 +135,40 @@ describe('AgentGateway', () => {
     const gateway = makeGateway();
     const client = makeClient('u1');
 
-    await gateway.handleMessage(client as never, { noteId: 'x' });
+    await gateway.handleMessage(client as never, {
+      noteId: '11111111-1111-4111-8111-111111111111',
+    });
 
     expect(client.emit).toHaveBeenCalledWith(
       'agent:error',
-      expect.objectContaining({ code: expect.any(String) })
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+  });
+
+  it('rejects a {message} payload with empty content', async () => {
+    const gateway = makeGateway();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, { message: { content: '' } });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+  });
+
+  it('rejects a {message} payload with a non-UUID conversationId', async () => {
+    const gateway = makeGateway();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hello' },
+      conversationId: 'not-a-uuid',
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
     );
   });
 

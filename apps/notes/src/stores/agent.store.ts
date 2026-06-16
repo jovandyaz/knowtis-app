@@ -147,6 +147,9 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
         onCommitted: ({ result }) => {
+          // Invalidate before the stale-stream guard: the mutation is committed
+          // server-side, so the list must refresh even if a newer turn
+          // superseded this stream (only the chat update below is version-gated).
           void queryClient.invalidateQueries({
             queryKey: notesQueryKeys.lists(),
           });

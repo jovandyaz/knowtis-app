@@ -236,6 +236,30 @@ describe('agent.store server-authoritative wire', () => {
     });
   });
 
+  it('still invalidates the notes cache when the stream was superseded', () => {
+    const spy = vi.spyOn(queryClient, 'invalidateQueries');
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.getState().approveProposal();
+    const committed = get().onCommitted;
+
+    useAgentStore.getState().newConversation();
+    spy.mockClear();
+    committed?.({
+      proposalId: 'p1',
+      result: { noteId: 'n1', title: 'My Note', kind: 'create' },
+    });
+
+    expect(spy).toHaveBeenCalledWith({ queryKey: notesQueryKeys.lists() });
+    expect(spy).toHaveBeenCalledWith({
+      queryKey: notesQueryKeys.detail('n1'),
+    });
+    expect(
+      useAgentStore.getState().messages.find((m) => m.committed)
+    ).toBeUndefined();
+  });
+
   it('keeps the proposal annotation on the displayed message', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');
