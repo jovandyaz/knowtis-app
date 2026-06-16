@@ -29,6 +29,7 @@ import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-outp
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
+import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
@@ -44,6 +45,7 @@ import {
 } from './infrastructure/redis/ai-redis.provider';
 import { ExactMatchCacheService } from './infrastructure/redis/exact-match-cache.service';
 import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.service';
+import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-search.adapter';
 
 @Module({
   imports: [
@@ -70,6 +72,7 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     { provide: AI_CONFIG_REPOSITORY, useClass: DrizzleAIConfigRepository },
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
     { provide: EMBEDDING_PORT, useClass: VoyageEmbeddingAdapter },
+    { provide: WEB_SEARCH_PORT, useClass: TavilyWebSearchAdapter },
     { provide: AI_REDIS, useClass: AIRedisProvider },
     { provide: RATE_LIMIT_PROVIDER, useClass: RedisRateLimitService },
     { provide: AI_CACHE, useClass: ExactMatchCacheService },
@@ -97,6 +100,8 @@ import { RedisRateLimitService } from './infrastructure/redis/redis-rate-limit.s
     AI_STRUCTURED_OUTPUT_PROVIDER,
     AI_REDIS,
     EMBEDDING_PORT,
+    WEB_SEARCH_PORT,
+    AI_USAGE_REPOSITORY,
   ],
 })
 export class AIModule {}
