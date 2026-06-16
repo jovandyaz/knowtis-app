@@ -13,19 +13,23 @@ import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
 import { AGENT_ORCHESTRATOR } from './domain/ports/agent-orchestrator.port';
 import { CONVERSATION_REPOSITORY } from './domain/ports/conversation.repository';
+import { MEMORY_REPOSITORY } from './domain/ports/memory.repository';
 import { NOTE_EMBEDDING_REPOSITORY } from './domain/ports/note-embedding.repository';
 import { PENDING_MUTATION_STORE } from './domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
+import { MemoryExtractionTask } from './infrastructure/memory/memory-extraction.task';
 import { AgentToolsFactory } from './infrastructure/orchestrator/agent-tools.factory';
 import { AiSdkAgentOrchestrator } from './infrastructure/orchestrator/ai-sdk-agent.orchestrator';
 import { MutationProposalBuilder } from './infrastructure/orchestrator/mutation-proposal.builder';
 import { RedisPendingMutationStore } from './infrastructure/pending/redis-pending-mutation.store';
 import { DrizzleConversationRepository } from './infrastructure/persistence/drizzle-conversation.repository';
+import { DrizzleMemoryRepository } from './infrastructure/persistence/drizzle-memory.repository';
 import { DrizzleNoteEmbeddingRepository } from './infrastructure/retrieval/drizzle-note-embedding.repository';
 import { EmbeddingReconcileTask } from './infrastructure/retrieval/embedding-reconcile.task';
 import { FeatureFlaggedRetrievalAdapter } from './infrastructure/retrieval/feature-flagged-retrieval.adapter';
 import { HybridRetrievalAdapter } from './infrastructure/retrieval/hybrid-retrieval.adapter';
 import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retrieval.adapter';
+import { MemoryController } from './memory.controller';
 
 @Module({
   imports: [
@@ -42,6 +46,7 @@ import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retr
       }),
     }),
   ],
+  controllers: [MemoryController],
   providers: [
     KeywordRetrievalAdapter,
     HybridRetrievalAdapter,
@@ -56,7 +61,9 @@ import { KeywordRetrievalAdapter } from './infrastructure/retrieval/keyword-retr
       provide: CONVERSATION_REPOSITORY,
       useClass: DrizzleConversationRepository,
     },
+    { provide: MEMORY_REPOSITORY, useClass: DrizzleMemoryRepository },
     EmbeddingReconcileTask,
+    MemoryExtractionTask,
     AgentToolsFactory,
     MutationProposalBuilder,
     ApproveMutationHandler,
