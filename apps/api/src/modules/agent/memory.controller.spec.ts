@@ -1,3 +1,4 @@
+import { NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MemoryController } from './memory.controller';
@@ -11,12 +12,14 @@ describe('MemoryController', () => {
     };
     const c = new MemoryController(repo as never, { get: () => 100 } as never);
     expect(await c.list(user)).toEqual([{ id: 'm1', content: 'x' }]);
+    expect(repo.listForUser).toHaveBeenCalledWith('u1', 100);
   });
 
   it('deletes one and reports not found when not owned', async () => {
     const repo = { deleteForUser: vi.fn().mockResolvedValue(false) };
     const c = new MemoryController(repo as never, { get: () => 100 } as never);
-    await expect(c.deleteOne(user, 'mX')).rejects.toThrow();
+    await expect(c.deleteOne(user, 'mX')).rejects.toThrow(NotFoundException);
+    expect(repo.deleteForUser).toHaveBeenCalledWith('u1', 'mX');
   });
 
   it('deleteOne resolves when the memory is owned', async () => {
