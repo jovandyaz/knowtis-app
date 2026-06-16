@@ -33,49 +33,15 @@ import {
   type RunAgentTurnCallbacks,
 } from './application/run-agent-turn.handler';
 
-const knownNotesSchema = z
-  .array(
-    z.object({
-      id: z.string().uuid(),
-      title: z.string().max(500),
-    })
-  )
-  .max(100)
-  .optional();
-
 const agentTurnSchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
 });
 
-const legacyAgentMessageSchema = z.object({
-  messages: z
-    .array(
-      z.object({
-        role: z.enum(['user', 'assistant']),
-        content: z.string().min(1).max(20000),
-      })
-    )
-    .min(1)
-    .max(40)
-    .refine((m) => m[m.length - 1]?.role === 'user', {
-      message: 'last message must be from the user',
-    }),
-  noteId: z.string().uuid().optional(),
-  knownNotes: knownNotesSchema,
-});
-
-const agentMessagePayloadSchema = z.union([
-  agentTurnSchema,
-  legacyAgentMessageSchema,
-]);
-
 const agentApprovePayloadSchema = z.object({
   proposalId: z.string().uuid(),
-  messages: legacyAgentMessageSchema.shape.messages.optional(),
   noteId: z.string().uuid().optional(),
-  knownNotes: knownNotesSchema,
 });
 
 const agentRejectPayloadSchema = agentApprovePayloadSchema.extend({
@@ -165,7 +131,7 @@ export class AgentGateway
     if (!(await this.ensureAiEnabled(client))) {
       return;
     }
-    const parsed = agentMessagePayloadSchema.safeParse(payload);
+    const parsed = agentTurnSchema.safeParse(payload);
     if (!parsed.success) {
       client.emit(
         'agent:error',
@@ -189,33 +155,14 @@ export class AgentGateway
         payload: proposal.payload,
       });
 
-    if ('message' in data) {
-      await this.runInTurnSlot(client, userId, (controller) =>
-        this.runAgentTurn.execute(
-          {
-            userId,
-            message: { content: data.message.content },
-            ...(data.conversationId && { conversationId: data.conversationId }),
-            ...(client.data.isAnonymous && { isAnonymous: true }),
-            ...(data.noteId && { noteId: data.noteId }),
-          },
-          { ...this.baseCallbacks(client, controller), onProposal },
-          controller.signal
-        )
-      );
-      return;
-    }
-
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.execute(
         {
           userId,
-          messages: data.messages,
+          message: { content: data.message.content },
+          ...(data.conversationId && { conversationId: data.conversationId }),
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(data.noteId && { noteId: data.noteId }),
-          ...(data.knownNotes && {
-            knownNotes: data.knownNotes,
-          }),
         },
         { ...this.baseCallbacks(client, controller), onProposal },
         controller.signal
@@ -265,6 +212,13 @@ export class AgentGateway
       proposalId: parsed.data.proposalId,
       result: res.value.result,
     });
+    if (!res.value.conversationId) {
+      client.emit(
+        'agent:error',
+        AIErrors.validationError('missing conversation context')
+      );
+      return;
+    }
     await this.resumeAfter(
       client,
       userId,
@@ -307,6 +261,13 @@ export class AgentGateway
       });
       return;
     }
+    if (!res.value.conversationId) {
+      client.emit(
+        'agent:error',
+        AIErrors.validationError('missing conversation context')
+      );
+      return;
+    }
     await this.resumeAfter(
       client,
       userId,
@@ -327,25 +288,16 @@ export class AgentGateway
   private async resumeAfter(
     client: AuthenticatedSocket,
     userId: string,
-    data: {
-      messages?: { role: 'user' | 'assistant'; content: string }[] | undefined;
-      noteId?: string | undefined;
-      knownNotes?: { id: string; title: string }[] | undefined;
-    },
+    data: { noteId?: string | undefined },
     outcome: { toolName: string; outcome: string },
-    conversationId?: string
+    conversationId: string
   ): Promise<void> {
     await this.runInTurnSlot(client, userId, (controller) =>
       this.runAgentTurn.resumeTurn(
         {
           userId,
-          ...(conversationId
-            ? { conversationId }
-            : { messages: data.messages ?? [] }),
+          conversationId,
           ...(data.noteId && { noteId: data.noteId }),
-          ...(!conversationId && data.knownNotes
-            ? { knownNotes: data.knownNotes }
-            : {}),
           resume: outcome,
         },
         this.baseCallbacks(client, controller),

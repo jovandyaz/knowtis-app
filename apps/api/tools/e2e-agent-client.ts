@@ -30,7 +30,7 @@ socket.on('connect_error', (err: Error) => {
 socket.on('connect', () => {
   process.stdout.write('connected; sending turn...\n\n');
   socket.emit('agent:message', {
-    messages: [{ role: 'user', content: PROMPT }],
+    message: { content: PROMPT },
   });
 });
 socket.on('agent:chunk', ({ text }: { text: string }) =>
