@@ -15,8 +15,8 @@ import { DrizzleMemoryRepository } from './drizzle-memory.repository';
 
 loadEnv({ path: ['.env.local', '.env'] });
 const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
-const U1 = '00000000-0000-4000-8000-0000000000e1';
-const U2 = '00000000-0000-4000-8000-0000000000e2';
+const U1 = '00000000-0000-4000-8000-0000000000ea';
+const U2 = '00000000-0000-4000-8000-0000000000eb';
 const vec = (seed: number) =>
   new Array(1024).fill(0).map((_, i) => (i === seed ? 1 : 0));
 
