@@ -35,3 +35,16 @@ export {
   type ProviderCooldown,
   type ProviderHealthSnapshot,
 } from './chain/provider-cooldown.tracker';
+export {
+  filterExternalHits,
+  type SafeExternalSource,
+} from './web-search/filter-external-content';
+export { TavilyWebSearch } from './web-search/tavily-web-search';
+export type {
+  TavilyConfig,
+  WebFetchResult,
+  WebSearchHit,
+  WebSearchOptions,
+  WebSearchProvider,
+  WebSearchResult,
+} from './web-search/web-search.types';
