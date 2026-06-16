@@ -106,8 +106,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
     expect(await repo.countForUser(U2)).toBe(1); // U2 untouched
   });
 
-  it('applyReconcile applies deletes, inserts, and updates for the owner', async () => {
+  it('applyReconcile applies the owner batch and never touches another user', async () => {
     await repo.deleteAllForUser(U1);
+    await repo.deleteAllForUser(U2);
     const stale = await repo.insert({
       userId: U1,
       content: 'stale',
@@ -118,13 +119,23 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
       content: 'before',
       embedding: vec(11),
     });
+    const foreign = await repo.insert({
+      userId: U2,
+      content: 'u2 keep',
+      embedding: vec(14),
+    });
     await repo.applyReconcile({
       userId: U1,
-      deletes: [stale.id],
+      deletes: [stale.id, foreign.id],
       inserts: [{ content: 'fresh', embedding: vec(12) }],
-      updates: [{ id: target.id, content: 'after', embedding: vec(13) }],
+      updates: [
+        { id: target.id, content: 'after', embedding: vec(13) },
+        { id: foreign.id, content: 'hacked', embedding: vec(15) },
+      ],
     });
-    const rows = await repo.listForUser(U1, 50);
-    expect(rows.map((m) => m.content).sort()).toEqual(['after', 'fresh']);
+    const mine = await repo.listForUser(U1, 50);
+    expect(mine.map((m) => m.content).sort()).toEqual(['after', 'fresh']);
+    const theirs = await repo.listForUser(U2, 50);
+    expect(theirs.map((m) => m.content)).toEqual(['u2 keep']);
   });
 });
