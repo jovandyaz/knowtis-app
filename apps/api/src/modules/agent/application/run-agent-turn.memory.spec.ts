@@ -23,6 +23,7 @@ import { DrizzleConversationRepository } from '../infrastructure/persistence/dri
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
 const USER = '00000000-0000-4000-8000-0000000000d1';
+const OTHER = '00000000-0000-4000-8000-0000000000d2';
 const MODEL = 'anthropic:claude-haiku-4-5-20251001';
 
 loadEnv({ path: ['.env.local', '.env'] });
@@ -61,17 +62,26 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     config = moduleRef.get(ConfigService);
     await db
       .insert(users)
-      .values({
-        id: USER,
-        email: `e-${USER}@test.local`,
-        name: 'E',
-        isAnonymous: true,
-      })
+      .values([
+        {
+          id: USER,
+          email: `e-${USER}@test.local`,
+          name: 'E',
+          isAnonymous: true,
+        },
+        {
+          id: OTHER,
+          email: `e-${OTHER}@test.local`,
+          name: 'O',
+          isAnonymous: true,
+        },
+      ])
       .onConflictDoNothing();
   });
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER));
+    await db.delete(users).where(eq(users.id, OTHER));
   });
 
   it('reconstructs turn 1 on turn 2 from only conversationId + message', async () => {
@@ -132,5 +142,49 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     expect(turn2).toContain('my codeword is BLUE');
     expect(turn2).toContain('ack');
     expect(turn2[turn2.length - 1]).toBe('what is my codeword?');
+  });
+
+  it('rejects a conversationId owned by another user with forbidden', async () => {
+    const repo = new DrizzleConversationRepository(db);
+    const foreign = await repo.create({ userId: OTHER, title: 'private' });
+
+    const rateLimit = {
+      checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+      releaseReservation: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AIRateLimitService;
+    const aiConfig = {
+      getDefaultModel: vi.fn().mockResolvedValue(MODEL),
+    } as unknown as AIConfigService;
+    const pendingStore = {
+      save: vi.fn(),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      repo
+    );
+
+    const onError = vi.fn();
+    const onDone = vi.fn();
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: foreign.id,
+        message: { content: 'leak it' },
+      },
+      { onChunk: vi.fn(), onDone, onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith({
+      code: 'forbidden',
+      message: 'Conversation not found',
+    });
+    expect(onDone).not.toHaveBeenCalled();
   });
 });
