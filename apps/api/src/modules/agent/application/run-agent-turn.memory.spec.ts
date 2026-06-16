@@ -14,10 +14,13 @@ import {
 } from '../../../database';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
+import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
+import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { DrizzleConversationRepository } from '../infrastructure/persistence/drizzle-conversation.repository';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
@@ -28,6 +31,16 @@ const MODEL = 'anthropic:claude-haiku-4-5-20251001';
 
 loadEnv({ path: ['.env.local', '.env'] });
 const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
+
+const memoryOff = {
+  searchForUser: vi.fn().mockResolvedValue([]),
+} as unknown as MemoryRepository;
+const embedStub = {
+  embedQuery: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
+} as unknown as EmbeddingPort;
+const flagsOff = {
+  isEnabled: vi.fn().mockResolvedValue(false),
+} as unknown as FeatureFlagsService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -104,7 +117,10 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      new DrizzleConversationRepository(db)
+      new DrizzleConversationRepository(db),
+      memoryOff,
+      embedStub,
+      flagsOff
     );
 
     let conversationId: string | undefined;
@@ -167,7 +183,10 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      repo
+      repo,
+      memoryOff,
+      embedStub,
+      flagsOff
     );
 
     const onError = vi.fn();

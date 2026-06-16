@@ -7,13 +7,16 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
+import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentEvent } from '../domain/agent-event';
 import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port';
 import type {
   ConversationMessageRow,
   ConversationRepository,
 } from '../domain/ports/conversation.repository';
+import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
@@ -62,7 +65,11 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
           ? 120000
           : k === 'AI_AGENT_HISTORY_LIMIT'
             ? 40
-            : 0
+            : k === 'AI_MEMORY_RETRIEVAL_K'
+              ? 6
+              : k === 'AI_MEMORY_SIMILARITY_MIN'
+                ? 0.2
+                : 0
     ),
   } as unknown as ConfigService<EnvConfig, true>;
   const orchestrator = orchestratorYielding(
@@ -96,6 +103,26 @@ function makeConversations(history: ConversationMessageRow[] = []) {
   } as unknown as ConversationRepository;
 }
 
+function makeMemory(
+  matches: { id: string; content: string; score: number }[] = []
+) {
+  return {
+    searchForUser: vi.fn().mockResolvedValue(matches),
+  } as unknown as MemoryRepository;
+}
+
+function makeEmbed() {
+  return {
+    embedQuery: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
+  } as unknown as EmbeddingPort;
+}
+
+function makeFlags(enabled = false) {
+  return {
+    isEnabled: vi.fn().mockResolvedValue(enabled),
+  } as unknown as FeatureFlagsService;
+}
+
 describe('RunAgentTurnHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -111,7 +138,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -147,7 +177,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const error = vi.fn();
 
@@ -174,7 +207,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const error = vi.fn();
 
@@ -209,7 +245,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const done = vi.fn();
 
@@ -246,7 +285,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const done = vi.fn();
 
@@ -279,7 +321,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const done = vi.fn();
 
@@ -318,7 +363,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -354,7 +402,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -380,7 +431,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const controller = new AbortController();
     controller.abort();
@@ -412,7 +466,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -454,7 +511,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onProposal = vi.fn();
 
@@ -492,7 +552,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onDone = vi.fn();
 
@@ -525,7 +588,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
 
     await handler.resumeTurn(
@@ -562,7 +628,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -592,7 +661,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -634,7 +706,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onDone = vi.fn();
 
@@ -680,7 +755,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -708,7 +786,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const controller = new AbortController();
     controller.abort();
@@ -742,7 +823,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -777,7 +861,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -814,7 +901,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -850,7 +940,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
 
     await handler.execute(
@@ -876,7 +969,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
 
     await handler.execute(
@@ -903,7 +999,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -939,7 +1038,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const oldMessage = {
       role: 'user' as const,
@@ -973,7 +1075,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const hugeMessage = { role: 'user' as const, content: 'x '.repeat(13000) };
 
@@ -1002,7 +1107,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1037,7 +1145,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1071,7 +1182,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1099,7 +1213,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1132,7 +1249,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1174,7 +1294,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onDone = vi.fn();
 
@@ -1215,7 +1338,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
 
     await handler.execute(
@@ -1247,7 +1373,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations()
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onError = vi.fn();
 
@@ -1274,7 +1403,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const done = vi.fn();
     await handler.execute(
@@ -1308,7 +1440,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     await handler.execute(
       {
@@ -1342,7 +1477,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const error = vi.fn();
     await handler.execute(
@@ -1370,7 +1508,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     await handler.execute(
       { userId: USER, messages: [{ role: 'user', content: 'hi' }] },
@@ -1408,7 +1549,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const onProposal = vi.fn();
 
@@ -1442,7 +1586,10 @@ describe('RunAgentTurnHandler', () => {
       config,
       pendingStore,
       createTestCatalog(),
-      conversations
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -1456,5 +1603,186 @@ describe('RunAgentTurnHandler', () => {
       expect.objectContaining({ conversationId: 'conv-1' })
     );
     expect(error).not.toHaveBeenCalled();
+  });
+
+  it('retrieves user memories and injects them into the orchestrator when the flag is on', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const flags = makeFlags(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'what should I cook?' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(embed.embedQuery).toHaveBeenCalledWith('what should I cook?');
+    expect(memory.searchForUser).toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMemories: ['Is vegan'] })
+    );
+  });
+
+  it('does not inject memories when the flag is off', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const flags = makeFlags(false);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'what should I cook?' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(memory.searchForUser).not.toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userMemories: expect.anything() })
+    );
+  });
+
+  it('does not retrieve memories for anonymous users even with the flag on', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const flags = makeFlags(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        isAnonymous: true,
+        message: { content: 'what should I cook?' },
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(flags.isEnabled).not.toHaveBeenCalled();
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userMemories: expect.anything() })
+    );
+  });
+
+  it('proceeds without memories when retrieval throws', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory();
+    vi.mocked(memory.searchForUser).mockRejectedValue(new Error('vector down'));
+    const embed = makeEmbed();
+    const flags = makeFlags(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'what should I cook?' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userMemories: expect.anything() })
+    );
+  });
+
+  it('filters out memory matches below the similarity threshold', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory([
+      { id: 'm1', content: 'Is vegan', score: 0.9 },
+      { id: 'm2', content: 'Noise', score: 0.05 },
+    ]);
+    const embed = makeEmbed();
+    const flags = makeFlags(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'what should I cook?' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ userMemories: ['Is vegan'] })
+    );
   });
 });

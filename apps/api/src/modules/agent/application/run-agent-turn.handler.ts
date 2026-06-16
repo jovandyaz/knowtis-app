@@ -12,8 +12,13 @@ import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import {
+  EMBEDDING_PORT,
+  type EmbeddingPort,
+} from '../../ai/domain/ports/embedding.port';
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
+import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import { coalesceMessages } from '../domain/coalesce-messages';
@@ -25,6 +30,10 @@ import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
 } from '../domain/ports/conversation.repository';
+import {
+  MEMORY_REPOSITORY,
+  type MemoryRepository,
+} from '../domain/ports/memory.repository';
 import {
   PENDING_MUTATION_STORE,
   type PendingMutationStore,
@@ -42,6 +51,7 @@ interface RunAgentTurnInput {
   readonly knownNotes?: readonly AgentSource[];
   readonly message?: { content: string };
   readonly conversationId?: string;
+  readonly userMemories?: readonly string[];
 }
 
 export interface RunAgentTurnCallbacks {
@@ -100,7 +110,12 @@ export class RunAgentTurnHandler {
     @Inject(MODEL_CATALOG)
     private readonly modelCatalog: ModelCatalog,
     @Inject(CONVERSATION_REPOSITORY)
-    private readonly conversations: ConversationRepository
+    private readonly conversations: ConversationRepository,
+    @Inject(MEMORY_REPOSITORY)
+    private readonly memory: MemoryRepository,
+    @Inject(EMBEDDING_PORT)
+    private readonly embed: EmbeddingPort,
+    private readonly featureFlags: FeatureFlagsService
   ) {}
 
   async execute(
@@ -165,12 +180,18 @@ export class RunAgentTurnHandler {
       ...history,
       { role: 'user', content: message.content },
     ]);
+    const userMemories = await this.loadUserMemories(
+      input.userId,
+      input.isAnonymous,
+      message.content
+    );
     const synthInput: RunAgentTurnInput = {
       userId: input.userId,
       messages,
       ...(input.isAnonymous ? { isAnonymous: true } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
+      ...(userMemories.length ? { userMemories } : {}),
     };
     return this.runLoop(
       synthInput,
@@ -180,6 +201,32 @@ export class RunAgentTurnHandler {
       this.executePolicy(input.userId, callbacks, conversationId),
       { conversationId, userContent: message.content }
     );
+  }
+
+  private async loadUserMemories(
+    userId: string,
+    isAnonymous: boolean | undefined,
+    latestUserContent: string
+  ): Promise<string[]> {
+    if (isAnonymous) {
+      return [];
+    }
+    if (!(await this.featureFlags.isEnabled('agent_longterm_memory'))) {
+      return [];
+    }
+    try {
+      const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
+      const min = this.configService.get('AI_MEMORY_SIMILARITY_MIN');
+      const embedding = await this.embed.embedQuery(latestUserContent);
+      const matches = await this.memory.searchForUser(userId, embedding, k);
+      return matches.filter((m) => m.score >= min).map((m) => m.content);
+    } catch (error) {
+      this.logger.warn(
+        'Long-term memory retrieval failed; proceeding without it',
+        error instanceof Error ? error.stack : String(error)
+      );
+      return [];
+    }
   }
 
   private async resolveConversationId(
@@ -309,6 +356,16 @@ export class RunAgentTurnHandler {
       const { history, knownNotes } = await this.loadConversationContext(
         input.conversationId
       );
+      // Embed the user's last real message, not the tool-confirmation outcome, for memory retrieval.
+      const latestUserContent =
+        history.findLast((m) => m.role === 'user')?.content ?? '';
+      const userMemories = latestUserContent
+        ? await this.loadUserMemories(
+            input.userId,
+            input.isAnonymous,
+            latestUserContent
+          )
+        : [];
       const synthInput: RunAgentTurnInput & {
         resume: { toolName: string; outcome: string };
       } = {
@@ -317,6 +374,7 @@ export class RunAgentTurnHandler {
         knownNotes,
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
+        ...(userMemories.length ? { userMemories } : {}),
         resume: input.resume,
       };
       return this.runLoop(
@@ -406,6 +464,9 @@ export class RunAgentTurnHandler {
         maxSteps,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
+        ...(input.userMemories?.length
+          ? { userMemories: input.userMemories }
+          : {}),
         ...(signal ? { signal } : {}),
         ...(resume ? { resume } : {}),
       })) {
