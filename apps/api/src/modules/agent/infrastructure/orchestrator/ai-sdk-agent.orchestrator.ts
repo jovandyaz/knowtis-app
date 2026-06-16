@@ -17,8 +17,8 @@ import type {
   AgentOrchestrator,
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
-import { AGENT_SYSTEM_PROMPT } from './agent-system-prompt';
 import { AgentToolsFactory } from './agent-tools.factory';
+import { composeSystemPrompt } from './compose-system-prompt';
 import { ProposalCollector } from './proposal-collector';
 
 interface StepToolResult {
@@ -92,7 +92,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     try {
       result = streamText({
         model: this.providerRegistry.languageModel(model),
-        system: this.buildSystemPrompt(input.noteId, input.knownNotes),
+        system: this.buildSystemPrompt(
+          input.noteId,
+          input.knownNotes,
+          input.userMemories
+        ),
         messages: input.resume
           ? [
               ...input.messages.map((m) => ({
@@ -246,19 +250,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
 
   private buildSystemPrompt(
     noteId?: string,
-    knownNotes?: readonly AgentSource[]
+    knownNotes?: readonly AgentSource[],
+    userMemories?: readonly string[]
   ): string {
-    let prompt = AGENT_SYSTEM_PROMPT;
-    if (noteId) {
-      prompt += `\n\nThe user is currently viewing the note with id "${noteId}". When they refer to "this note", "the current note", "esta nota", or similar without naming one, call getNote with that id directly instead of searching.`;
-    }
-    if (knownNotes && knownNotes.length > 0) {
-      const list = knownNotes
-        .map((n) => `- "${n.title}" (id: ${n.id})`)
-        .join('\n');
-      prompt += `\n\nNotes already identified earlier in this conversation. When the user refers to one of these (by this title or a close paraphrase), call getNote with its id directly — do NOT call searchNotes for them:\n${list}`;
-    }
-    return prompt;
+    return composeSystemPrompt(noteId, knownNotes, userMemories);
   }
 
   private collectSources(

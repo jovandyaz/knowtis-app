@@ -15,6 +15,7 @@ export interface AgentRunInput {
   readonly signal?: AbortSignal;
   readonly resume?: AgentResumeContext;
   readonly knownNotes?: readonly AgentSource[];
+  readonly userMemories?: readonly string[];
 }
 
 export interface AgentOrchestrator {
