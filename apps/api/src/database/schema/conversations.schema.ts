@@ -34,6 +34,9 @@ export const conversations = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    memoriesExtractedAt: timestamp('memories_extracted_at', {
+      withTimezone: true,
+    }),
   },
   (table) => [
     index('conversations_user_updated_idx').on(table.userId, table.updatedAt),
