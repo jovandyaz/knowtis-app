@@ -19,7 +19,11 @@ import {
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
-import type { AgentSource, AgentTurnUsage } from '../domain/agent-event';
+import type {
+  AgentSource,
+  AgentTurnUsage,
+  WebSource,
+} from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import { coalesceMessages } from '../domain/coalesce-messages';
 import {
@@ -63,6 +67,7 @@ export interface RunAgentTurnCallbacks {
     costUsd: number;
     sources: readonly AgentSource[];
     knownNotes: readonly AgentSource[];
+    webSources: readonly WebSource[];
     conversationId?: string;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
@@ -322,6 +327,7 @@ export class RunAgentTurnHandler {
           costUsd,
           sources: [],
           knownNotes: [],
+          webSources: [],
         });
         return 'stop';
       },
@@ -333,6 +339,7 @@ export class RunAgentTurnHandler {
           costUsd: 0,
           sources: [],
           knownNotes: [],
+          webSources: [],
         });
         return 'stop';
       },
@@ -521,6 +528,7 @@ export class RunAgentTurnHandler {
               costUsd,
               sources: event.sources,
               knownNotes: event.knownNotes,
+              webSources: event.webSources,
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),

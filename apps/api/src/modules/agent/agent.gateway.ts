@@ -345,6 +345,7 @@ export class AgentGateway
           },
           sources: usage.sources,
           knownNotes: usage.knownNotes,
+          webSources: usage.webSources,
           ...(usage.conversationId
             ? { conversationId: usage.conversationId }
             : {}),
