@@ -12,6 +12,11 @@ export interface AgentSource {
   readonly title: string;
 }
 
+export interface WebSource {
+  readonly title: string;
+  readonly url: string;
+}
+
 export interface AgentCommitResult {
   readonly noteId: string;
   readonly title: string;
