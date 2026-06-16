@@ -5,6 +5,7 @@ import {
   conversationMessages,
   conversations,
   DATABASE_CONNECTION,
+  users,
   type Database,
 } from '../../../../database';
 import type { AgentRole } from '../../domain/agent-message';
@@ -100,5 +101,31 @@ export class DrizzleConversationRepository implements ConversationRepository {
         .set({ updatedAt: sql`now()` })
         .where(eq(conversations.id, input.conversationId));
     });
+  }
+
+  async findExtractable(
+    quietSeconds: number,
+    limit: number
+  ): Promise<{ id: string; userId: string }[]> {
+    return this.db
+      .select({ id: conversations.id, userId: conversations.userId })
+      .from(conversations)
+      .innerJoin(users, eq(users.id, conversations.userId))
+      .where(
+        sql`${users.isAnonymous} = false
+            AND ${conversations.updatedAt} < now() - make_interval(secs => ${quietSeconds})
+            AND (${conversations.memoriesExtractedAt} IS NULL
+                 OR ${conversations.memoriesExtractedAt} < ${conversations.updatedAt})`
+      )
+      .orderBy(conversations.updatedAt)
+      .limit(limit);
+  }
+
+  async markExtracted(conversationId: string): Promise<void> {
+    await this.db
+      .update(conversations)
+      .set({ memoriesExtractedAt: sql`now()` })
+      .where(eq(conversations.id, conversationId))
+      .returning({ id: conversations.id });
   }
 }
