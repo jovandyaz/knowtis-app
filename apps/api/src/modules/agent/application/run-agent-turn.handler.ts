@@ -123,17 +123,14 @@ export class RunAgentTurnHandler {
     callbacks: RunAgentTurnCallbacks,
     signal?: AbortSignal
   ): Promise<void> {
-    if (input.message) {
-      return this.executeWithMemory(input, callbacks, signal);
+    if (!input.message) {
+      callbacks.onError({
+        code: 'validation_error',
+        message: 'message is required',
+      });
+      return;
     }
-    return this.runLoop(
-      input,
-      undefined,
-      callbacks,
-      signal,
-      this.executePolicy(input.userId, callbacks),
-      undefined
-    );
+    return this.executeWithMemory(input, callbacks, signal);
   }
 
   private executePolicy(
@@ -394,14 +391,7 @@ export class RunAgentTurnHandler {
         { conversationId: input.conversationId }
       );
     }
-    return this.runLoop(
-      input,
-      input.resume,
-      callbacks,
-      signal,
-      this.resumePolicy(input.userId, callbacks),
-      undefined
-    );
+    callbacks.onError({ code: 'forbidden', message: 'Conversation not found' });
   }
 
   private async runLoop(

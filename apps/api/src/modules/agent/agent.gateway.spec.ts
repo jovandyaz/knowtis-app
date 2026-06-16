@@ -61,7 +61,7 @@ describe('AgentGateway', () => {
     const client = makeClient();
 
     await gateway.handleMessage(client as never, {
-      messages: [{ role: 'user', content: 'hi' }],
+      message: { content: 'hi' },
     });
 
     expect(client.emit).toHaveBeenCalledWith(
@@ -70,11 +70,13 @@ describe('AgentGateway', () => {
     );
   });
 
-  it('rejects an invalid payload (empty messages)', async () => {
+  it('rejects an invalid payload (missing message field)', async () => {
     const gateway = makeGateway();
     const client = makeClient('u1');
 
-    await gateway.handleMessage(client as never, { messages: [] });
+    await gateway.handleMessage(client as never, {
+      noteId: '11111111-1111-4111-8111-111111111111',
+    });
 
     expect(client.emit).toHaveBeenCalledWith(
       'agent:error',
@@ -88,7 +90,7 @@ describe('AgentGateway', () => {
     const client = makeClient('u1');
 
     await gateway.handleMessage(client as never, {
-      messages: [{ role: 'user', content: 'hi' }],
+      message: { content: 'hi' },
     });
 
     expect(execute).toHaveBeenCalledOnce();
@@ -115,23 +117,7 @@ describe('AgentGateway', () => {
     );
   });
 
-  it('still routes the legacy {messages} payload', async () => {
-    const execute = vi.fn().mockResolvedValue(undefined);
-    const gateway = makeGateway({ handler: { execute } });
-    const client = makeClient('u1');
-
-    await gateway.handleMessage(client as never, {
-      messages: [{ role: 'user', content: 'hi' }],
-    });
-
-    expect(execute).toHaveBeenCalledWith(
-      expect.objectContaining({ messages: [{ role: 'user', content: 'hi' }] }),
-      expect.anything(),
-      expect.anything()
-    );
-  });
-
-  it('rejects a payload with neither message nor messages', async () => {
+  it('rejects a payload with no message field', async () => {
     const gateway = makeGateway();
     const client = makeClient('u1');
 
@@ -164,6 +150,20 @@ describe('AgentGateway', () => {
     await gateway.handleMessage(client as never, {
       message: { content: 'hello' },
       conversationId: 'not-a-uuid',
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+  });
+
+  it('rejects message content exceeding 20000 characters with VALIDATION_ERROR', async () => {
+    const gateway = makeGateway();
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'x'.repeat(20001) },
     });
 
     expect(client.emit).toHaveBeenCalledWith(
@@ -221,7 +221,7 @@ describe('AgentGateway', () => {
     });
     const clientA = makeClient('userA', 'A');
     const clientB = makeClient('userB', 'B');
-    const msg = { messages: [{ role: 'user', content: 'hi' }] };
+    const msg = { message: { content: 'hi' } };
 
     const turnA = gateway.handleMessage(clientA as never, msg);
     const turnB = gateway.handleMessage(clientB as never, msg);
@@ -234,68 +234,6 @@ describe('AgentGateway', () => {
 
     release();
     await Promise.all([turnA, turnB]);
-  });
-
-  it('rejects messages array length > 40 with VALIDATION_ERROR', async () => {
-    const gateway = makeGateway();
-    const client = makeClient('u1');
-    const messages = Array.from({ length: 41 }, (_, i) => ({
-      role: i % 2 === 0 ? 'user' : 'assistant',
-      content: 'hi',
-    }));
-    messages[40] = { role: 'user', content: 'final' };
-
-    await gateway.handleMessage(client as never, { messages });
-
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:error',
-      expect.objectContaining({ code: 'VALIDATION_ERROR' })
-    );
-  });
-
-  it('rejects a message with content length > 20000 with VALIDATION_ERROR', async () => {
-    const gateway = makeGateway();
-    const client = makeClient('u1');
-
-    await gateway.handleMessage(client as never, {
-      messages: [{ role: 'user', content: 'x'.repeat(20001) }],
-    });
-
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:error',
-      expect.objectContaining({ code: 'VALIDATION_ERROR' })
-    );
-  });
-
-  it('rejects payload where last message role is assistant with VALIDATION_ERROR', async () => {
-    const gateway = makeGateway();
-    const client = makeClient('u1');
-
-    await gateway.handleMessage(client as never, {
-      messages: [
-        { role: 'user', content: 'hi' },
-        { role: 'assistant', content: 'hello' },
-      ],
-    });
-
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:error',
-      expect.objectContaining({ code: 'VALIDATION_ERROR' })
-    );
-  });
-
-  it('rejects an invalid role value with VALIDATION_ERROR', async () => {
-    const gateway = makeGateway();
-    const client = makeClient('u1');
-
-    await gateway.handleMessage(client as never, {
-      messages: [{ role: 'system', content: 'hi' }],
-    });
-
-    expect(client.emit).toHaveBeenCalledWith(
-      'agent:error',
-      expect.objectContaining({ code: 'VALIDATION_ERROR' })
-    );
   });
 
   it('rejects a 3rd concurrent turn for the same user with AI_RATE_LIMIT_EXCEEDED', async () => {
@@ -313,7 +251,7 @@ describe('AgentGateway', () => {
       handler: { execute } as Partial<RunAgentTurnHandler>,
     });
     const client = makeClient('u1');
-    const msg = { messages: [{ role: 'user', content: 'hi' }] };
+    const msg = { message: { content: 'hi' } };
 
     const turn1 = gateway.handleMessage(client as never, msg);
     const turn2 = gateway.handleMessage(client as never, msg);
@@ -353,7 +291,7 @@ describe('AgentGateway', () => {
     const client = makeClient('u1');
 
     await gateway.handleMessage(client as never, {
-      messages: [{ role: 'user', content: 'hi' }],
+      message: { content: 'hi' },
     });
 
     expect(client.emit).toHaveBeenCalledWith(
@@ -488,7 +426,6 @@ describe('AgentGateway', () => {
     proposalId = 'd4816ca2-7965-46ea-b828-3ecfe32428be'
   ) => ({
     proposalId,
-    messages: [{ role: 'user', content: 'do it' }],
   });
 
   it('approve commits then resumes the turn', async () => {
@@ -497,6 +434,7 @@ describe('AgentGateway', () => {
         result: { noteId: 'n1', title: 'GTD', kind: 'create' },
         outcome: 'created the note "GTD"',
         toolName: 'proposeCreateNote',
+        conversationId: 'conv-1',
       })
     );
     const resumeTurn = vi.fn().mockResolvedValue(undefined);
@@ -519,6 +457,34 @@ describe('AgentGateway', () => {
       userId: 'u1',
       resume: { toolName: 'proposeCreateNote' },
     });
+  });
+
+  it('approve emits an error and does not resume when conversationId is missing', async () => {
+    const approveExecute = vi.fn().mockResolvedValue(
+      ok({
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+        outcome: 'created the note "GTD"',
+        toolName: 'proposeCreateNote',
+      })
+    );
+    const resumeTurn = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({
+      approve: { execute: approveExecute },
+      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:committed',
+      expect.anything()
+    );
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(resumeTurn).not.toHaveBeenCalled();
   });
 
   it('approve error neither commits nor resumes', async () => {
@@ -552,6 +518,7 @@ describe('AgentGateway', () => {
       ok({
         outcome: 'The user rejected the proposal',
         toolName: 'proposeCreateNote',
+        conversationId: 'conv-1',
       })
     );
     const resumeTurn = vi.fn().mockResolvedValue(undefined);
