@@ -11,3 +11,4 @@ export * from './ai-config.schema';
 export * from './note-images.schema';
 export * from './note-embeddings.schema';
 export * from './conversations.schema';
+export * from './user-memories.schema';

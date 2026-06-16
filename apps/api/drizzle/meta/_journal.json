@@ -78,6 +78,13 @@
       "when": 1781548507478,
       "tag": "0010_green_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1781593700537,
+      "tag": "0011_solid_madame_hydra",
+      "breakpoints": true
     }
   ]
 }
