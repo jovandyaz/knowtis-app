@@ -127,4 +127,19 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows[0].role).toBe('assistant');
     expect(rows[0].content).toBe('proactive');
   });
+
+  it('scopes markExtracted to the owner', async () => {
+    const { id } = await repo.create({ userId: USER, title: 't' });
+    const extractedAt = async () => {
+      const [row] = await db
+        .select({ at: conversations.memoriesExtractedAt })
+        .from(conversations)
+        .where(eq(conversations.id, id));
+      return row?.at ?? null;
+    };
+    await repo.markExtracted(OTHER, id);
+    expect(await extractedAt()).toBeNull();
+    await repo.markExtracted(USER, id);
+    expect(await extractedAt()).not.toBeNull();
+  });
 });

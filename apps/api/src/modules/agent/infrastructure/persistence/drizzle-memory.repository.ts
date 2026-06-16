@@ -8,6 +8,7 @@ import {
 } from '../../../../database';
 import type {
   MemoryMatch,
+  MemoryReconcileBatch,
   MemoryRepository,
   UpsertMemoryInput,
   UserMemoryRow,
@@ -73,6 +74,52 @@ export class DrizzleMemoryRepository implements MemoryRepository {
       .update(userMemories)
       .set({ content, embedding, updatedAt: sql`now()` })
       .where(and(eq(userMemories.id, id), eq(userMemories.userId, userId)));
+  }
+
+  async applyReconcile(batch: MemoryReconcileBatch): Promise<void> {
+    if (
+      batch.deletes.length === 0 &&
+      batch.inserts.length === 0 &&
+      batch.updates.length === 0
+    ) {
+      return;
+    }
+    await this.db.transaction(async (tx) => {
+      for (const id of batch.deletes) {
+        await tx
+          .delete(userMemories)
+          .where(
+            and(eq(userMemories.id, id), eq(userMemories.userId, batch.userId))
+          );
+      }
+      if (batch.inserts.length > 0) {
+        await tx.insert(userMemories).values(
+          batch.inserts.map((x) => ({
+            userId: batch.userId,
+            content: x.content,
+            embedding: x.embedding,
+            ...(batch.sourceConversationId
+              ? { sourceConversationId: batch.sourceConversationId }
+              : {}),
+          }))
+        );
+      }
+      for (const u of batch.updates) {
+        await tx
+          .update(userMemories)
+          .set({
+            content: u.content,
+            embedding: u.embedding,
+            updatedAt: sql`now()`,
+          })
+          .where(
+            and(
+              eq(userMemories.id, u.id),
+              eq(userMemories.userId, batch.userId)
+            )
+          );
+      }
+    });
   }
 
   async deleteForUser(userId: string, id: string): Promise<boolean> {

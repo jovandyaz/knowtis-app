@@ -16,6 +16,18 @@ export interface UpsertMemoryInput {
   readonly sourceConversationId?: string;
 }
 
+export interface MemoryReconcileBatch {
+  readonly userId: string;
+  readonly sourceConversationId?: string;
+  readonly deletes: readonly string[];
+  readonly inserts: readonly { content: string; embedding: number[] }[];
+  readonly updates: readonly {
+    id: string;
+    content: string;
+    embedding: number[];
+  }[];
+}
+
 export interface MemoryRepository {
   listForUser(userId: string, limit: number): Promise<UserMemoryRow[]>;
   searchForUser(
@@ -30,6 +42,9 @@ export interface MemoryRepository {
     content: string,
     embedding: number[]
   ): Promise<void>;
+  /** Applies all deletes, inserts, and updates for one user in a single
+   * transaction so a mid-flight failure leaves no partial state. */
+  applyReconcile(batch: MemoryReconcileBatch): Promise<void>;
   deleteForUser(userId: string, id: string): Promise<boolean>;
   deleteAllForUser(userId: string): Promise<number>;
   countForUser(userId: string): Promise<number>;
