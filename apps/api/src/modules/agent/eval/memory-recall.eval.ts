@@ -1,10 +1,16 @@
 import 'reflect-metadata';
 
+import * as path from 'node:path';
+
 import { ConfigModule } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
+import { I18nModule } from 'nestjs-i18n';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+
+import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv } from '../../../config/env.config';
 import {
@@ -23,9 +29,7 @@ import { DrizzleMemoryRepository } from '../infrastructure/persistence/drizzle-m
 
 loadEnv({ path: ['.env.local', '.env'] });
 
-const GATE =
-  !!process.env['VOYAGE_API_KEY']?.trim() &&
-  !!process.env['DATABASE_URL']?.trim();
+const GATE = !!process.env['VOYAGE_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000e9';
 
 describe.runIf(GATE)('memory recall retrieval quality', () => {
@@ -41,6 +45,14 @@ describe.runIf(GATE)('memory recall retrieval quality', () => {
           isGlobal: true,
           validate: validateEnv,
           envFilePath: ['.env.local', '.env'],
+        }),
+        EventEmitterModule.forRoot(),
+        I18nModule.forRoot({
+          fallbackLanguage: DEFAULT_LOCALE,
+          loaderOptions: {
+            path: path.join(__dirname, '../../../i18n'),
+            watch: false,
+          },
         }),
         DatabaseModule,
         AgentModule,
@@ -105,6 +117,6 @@ describe.runIf(GATE)('memory recall retrieval quality', () => {
 
 if (!GATE) {
   describe('memory recall retrieval quality', () => {
-    it.skip('requires VOYAGE_API_KEY and DATABASE_URL', () => undefined);
+    it.skip('requires VOYAGE_API_KEY', () => undefined);
   });
 }
