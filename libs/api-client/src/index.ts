@@ -24,6 +24,7 @@ export type {
 export { agentClient, AgentClient } from './lib/agent.client';
 export type {
   AgentSource,
+  WebSource,
   AgentChunkPayload,
   AgentDonePayload,
   AgentErrorPayload,
