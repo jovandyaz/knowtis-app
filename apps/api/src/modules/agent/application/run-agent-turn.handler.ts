@@ -211,10 +211,18 @@ export class RunAgentTurnHandler {
     if (isAnonymous) {
       return [];
     }
-    if (!(await this.featureFlags.isEnabled('agent_longterm_memory'))) {
+    // The turn-level length/injection guards in runLoop run after this; bail
+    // early so oversized or injected input never reaches the paid embed call.
+    if (
+      latestUserContent.length > MAX_USER_MESSAGE_CHARS ||
+      !detectPromptInjection(latestUserContent).safe
+    ) {
       return [];
     }
     try {
+      if (!(await this.featureFlags.isEnabled('agent_longterm_memory'))) {
+        return [];
+      }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
       const min = this.configService.get('AI_MEMORY_SIMILARITY_MIN');
       const embedding = await this.embed.embedQuery(latestUserContent);

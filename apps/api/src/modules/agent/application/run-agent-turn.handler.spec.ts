@@ -1749,6 +1749,39 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('proceeds without memories when the feature-flag lookup throws', async () => {
+    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
+      makeDeps({});
+    const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
+    const embed = makeEmbed();
+    const flags = makeFlags(true);
+    vi.mocked(flags.isEnabled).mockRejectedValue(new Error('flag store down'));
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      aiConfig,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      memory,
+      embed,
+      flags
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'what should I cook?' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(embed.embedQuery).not.toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userMemories: expect.anything() })
+    );
+  });
+
   it('filters out memory matches below the similarity threshold', async () => {
     const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
       makeDeps({});
