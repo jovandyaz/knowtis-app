@@ -315,6 +315,7 @@ export class RunAgentTurnHandler {
         userId: input.userId,
         messages: coalesceMessages(history),
         knownNotes,
+        ...(input.isAnonymous ? { isAnonymous: true } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         resume: input.resume,
       };
