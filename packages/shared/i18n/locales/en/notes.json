@@ -201,6 +201,7 @@
       "newConversation": "New conversation",
       "thinking": "Thinking…",
       "sources": "Sources",
+      "webSources": "Web sources",
       "empty": {
         "title": "Ask your notes",
         "suggestions": "\"summarize my bio notes\", \"what did I say about X?\""

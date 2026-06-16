@@ -98,6 +98,7 @@ describe('useAgentStore', () => {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [{ id: 'n1', title: 'Productividad' }],
       knownNotes: [],
+      webSources: [],
     });
     const { status, messages } = useAgentStore.getState();
     expect(status).toBe('done');
@@ -131,6 +132,7 @@ describe('useAgentStore', () => {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
       knownNotes: [],
+      webSources: [],
     });
     useAgentStore.getState().sendMessage('  second  ');
     expect(vi.mocked(agentClient.sendMessage).mock.calls[0][0]).toBe('first');
@@ -202,7 +204,7 @@ describe('agent.store server-authoritative wire', () => {
       proposalId: 'p1',
       result: { noteId: 'n1', title: 'My Note', kind: 'create' },
     });
-    get().onDone({ usage: USAGE, sources: [], knownNotes: [] });
+    get().onDone({ usage: USAGE, sources: [], knownNotes: [], webSources: [] });
 
     const committedMsg = useAgentStore
       .getState()
@@ -286,11 +288,15 @@ describe('agent.store server-authoritative wire', () => {
         { id: 'n2', title: 'Ideas' },
       ],
       knownNotes: [],
+      webSources: [{ title: 'MDN', url: 'https://developer.mozilla.org' }],
     });
 
     expect(useAgentStore.getState().messages.at(-1)?.sources).toEqual([
       { id: 'n1', title: 'Productividad' },
       { id: 'n2', title: 'Ideas' },
+    ]);
+    expect(useAgentStore.getState().messages.at(-1)?.webSources).toEqual([
+      { title: 'MDN', url: 'https://developer.mozilla.org' },
     ]);
   });
 

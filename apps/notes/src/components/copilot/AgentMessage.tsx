@@ -2,6 +2,7 @@ import type { AgentChatMessage } from '@/stores/agent.store';
 
 import { Message, MessageContent, Response } from '../ai-elements/message';
 import { AgentSourceChips } from './AgentSourceChips';
+import { AgentWebSourceChips } from './AgentWebSourceChips';
 
 export function AgentMessage({
   message,
@@ -25,6 +26,9 @@ export function AgentMessage({
               {message.content}
             </Response>
             {message.sources && <AgentSourceChips sources={message.sources} />}
+            {message.webSources && (
+              <AgentWebSourceChips sources={message.webSources} />
+            )}
           </>
         )}
       </MessageContent>

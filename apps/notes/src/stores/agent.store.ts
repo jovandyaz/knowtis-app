@@ -6,6 +6,7 @@ import {
   type AgentErrorPayload,
   type AgentSource,
   type AgentStreamHandle,
+  type WebSource,
 } from '@knowtis/api-client';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
 
@@ -33,6 +34,7 @@ export interface AgentChatMessage {
   role: 'user' | 'assistant';
   content: string;
   sources?: AgentSource[];
+  webSources?: WebSource[];
   proposal?: { kind: PendingProposal['kind']; summary: string };
   committed?: { kind: PendingProposal['kind']; title: string };
 }
@@ -100,7 +102,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }
           buffer.push(text);
         },
-        onDone: ({ sources }) => {
+        onDone: ({ sources, webSources }) => {
           if (version !== streamVersion) {
             return;
           }
@@ -111,7 +113,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
             status: 'done',
             _streamHandle: null,
             messages: s.messages.map((m) =>
-              m.id === id ? { ...m, sources } : m
+              m.id === id ? { ...m, sources, webSources } : m
             ),
           }));
         },

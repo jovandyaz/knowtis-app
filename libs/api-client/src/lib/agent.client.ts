@@ -14,6 +14,11 @@ export interface AgentSource {
   title: string;
 }
 
+export interface WebSource {
+  title: string;
+  url: string;
+}
+
 export interface AgentChunkPayload {
   text: string;
 }
@@ -29,6 +34,7 @@ export interface AgentDonePayload {
   usage: AgentUsagePayload;
   sources: AgentSource[];
   knownNotes: AgentSource[];
+  webSources: WebSource[];
   conversationId?: string;
 }
 
