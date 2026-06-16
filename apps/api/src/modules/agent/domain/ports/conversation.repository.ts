@@ -35,6 +35,11 @@ export interface ConversationRepository {
   ): Promise<ConversationMessageRow[]>;
   /** Single transaction: appends the turn rows and bumps `conversations.updatedAt`. */
   appendTurn(input: AppendTurnInput): Promise<void>;
+  findExtractable(
+    quietSeconds: number,
+    limit: number
+  ): Promise<{ id: string; userId: string }[]>;
+  markExtracted(conversationId: string): Promise<void>;
 }
 
 export const CONVERSATION_REPOSITORY = Symbol('CONVERSATION_REPOSITORY');
