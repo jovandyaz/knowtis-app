@@ -9,6 +9,7 @@ import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
+import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
@@ -50,6 +51,7 @@ function NoteEditor({
   const navigate = useNavigate();
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
+  const refreshNotesList = useNotesListRefresh();
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [isPendingUpdate, setIsPendingUpdate] = useState(false);
@@ -146,10 +148,12 @@ function NoteEditor({
         // Live CRDT already holds these edits and persists them via Hocuspocus
         // onStoreDocument; a REST content write would echo back and reset the caret.
         debouncedUpdateNote({ content: newContent });
+      } else {
+        refreshNotesList();
       }
       deriveAutoTitle(newContent);
     },
-    [canEdit, debouncedUpdateNote, deriveAutoTitle]
+    [canEdit, debouncedUpdateNote, deriveAutoTitle, refreshNotesList]
   );
 
   const handleEditorReady = useCallback((editor: Editor) => {
