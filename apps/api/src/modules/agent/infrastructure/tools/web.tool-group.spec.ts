@@ -109,6 +109,24 @@ describe('WebToolGroup', () => {
     expect(out.results).toHaveLength(1);
   });
 
+  it('webFetch should reject a non-http(s) url without calling the provider', async () => {
+    const web = {
+      search: vi.fn(),
+      fetch: vi.fn(),
+    } as unknown as WebSearchPort;
+    const usage = {
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+    } as unknown as AIUsageRepository;
+    const c = ctx();
+    const out = (await run(new WebToolGroup(web, usage), c, 'webFetch', {
+      url: 'javascript:alert(1)',
+    })) as { note: string };
+    expect(out.note).toMatch(/http/);
+    expect(web.fetch).not.toHaveBeenCalled();
+    expect(usage.recordUsage).not.toHaveBeenCalled();
+    expect(c.webSources.all).toEqual([]);
+  });
+
   it('webFetch should drop content that trips the injection guard', async () => {
     const web = {
       search: vi.fn(),

@@ -1,6 +1,8 @@
 import type { ToolSet } from 'ai';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { FeatureFlagKey } from '@knowtis/shared-types';
+
 import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type {
   AgentToolContext,
@@ -15,13 +17,13 @@ const fakeTool = (n: string) => ({ [n]: { description: n } }) as ToolSet;
 
 function group(
   name: string,
-  opts: { flag?: string; phases: AgentToolPhase[] }
+  opts: { flag?: FeatureFlagKey; phases: AgentToolPhase[]; toolName?: string }
 ): AgentToolGroup {
   return {
     name,
     ...(opts.flag ? { flag: opts.flag } : {}),
     availableIn: (p) => opts.phases.includes(p),
-    build: () => fakeTool(name),
+    build: () => fakeTool(opts.toolName ?? name),
   };
 }
 
@@ -69,5 +71,19 @@ describe('AgentToolRegistry', () => {
       flags
     );
     expect(Object.keys(await registry.resolve(ctx('full')))).toEqual(['web']);
+  });
+
+  it('should throw when two groups expose the same tool name', async () => {
+    const flags = { isEnabled: vi.fn() } as unknown as FeatureFlagsService;
+    const registry = new AgentToolRegistry(
+      [
+        group('groupA', { phases: ['full'], toolName: 'shared' }),
+        group('groupB', { phases: ['full'], toolName: 'shared' }),
+      ],
+      flags
+    );
+    await expect(registry.resolve(ctx('full'))).rejects.toThrow(
+      /Duplicate agent tool name: shared/
+    );
   });
 });

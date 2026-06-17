@@ -2,7 +2,10 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AgentErrors } from '../../domain/agent-errors';
-import type { CreateProposedMutation } from '../../domain/proposed-mutation';
+import type {
+  CreateProposedMutation,
+  UpdateProposedMutation,
+} from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
 import { WebSourceCollector } from '../orchestrator/web-source.collector';
@@ -95,6 +98,51 @@ describe('NoteMutateToolGroup', () => {
       { title: 'x', contentMarkdown: 'y' }
     )) as { error: string };
     expect(out.error).toBe('Invalid proposal: bad title');
+    expect(c.proposals.captured).toBeNull();
+  });
+
+  it('proposeUpdateNote captures the proposal and returns only the slim result', async () => {
+    const updateProposal: UpdateProposedMutation = {
+      id: 'p2',
+      kind: 'update',
+      targetNoteId: 'n1',
+      summary: 'Update note "Plan"',
+      previewHtml: PREVIEW,
+      payload: { title: 'New title' },
+    };
+    const builder = {
+      buildUpdate: vi.fn().mockResolvedValue(ok(updateProposal)),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+    const out = await run(
+      new NoteMutateToolGroup(builder),
+      c,
+      'proposeUpdateNote',
+      { noteId: 'n1', title: 'New title' }
+    );
+    expect(out).toEqual({
+      ok: true,
+      proposalId: 'p2',
+      summary: 'Update note "Plan"',
+    });
+    expect(JSON.stringify(out)).not.toContain('previewHtml');
+    expect(c.proposals.captured).toBe(updateProposal);
+  });
+
+  it('proposeShareNote returns {error} and captures nothing when the builder fails', async () => {
+    const builder = {
+      buildShare: vi
+        .fn()
+        .mockResolvedValue(err(AgentErrors.invalidProposal('note not found'))),
+    } as unknown as MutationProposalBuilder;
+    const c = ctx();
+    const out = (await run(
+      new NoteMutateToolGroup(builder),
+      c,
+      'proposeShareNote',
+      { noteId: 'n1', targetEmail: 'a@b.com', permission: 'viewer' }
+    )) as { error: string };
+    expect(out.error).toBe('Invalid proposal: note not found');
     expect(c.proposals.captured).toBeNull();
   });
 });

@@ -25,4 +25,18 @@ describe('AgentWebSourceChips', () => {
     const { container } = render(<AgentWebSourceChips sources={[]} />);
     expect(container).toBeEmptyDOMElement();
   });
+
+  it('drops sources whose url is not http(s) to prevent unsafe hrefs', () => {
+    const { container } = render(
+      <AgentWebSourceChips
+        sources={[
+          { title: 'Safe', url: 'https://safe.com' },
+          { title: 'XSS', url: 'javascript:alert(1)' },
+        ]}
+      />
+    );
+    expect(screen.getByRole('link', { name: /Safe/ })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /XSS/ })).not.toBeInTheDocument();
+    expect(container.querySelectorAll('a')).toHaveLength(1);
+  });
 });

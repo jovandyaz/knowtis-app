@@ -4,10 +4,21 @@ import { ExternalLink } from 'lucide-react';
 
 import type { WebSource } from '@knowtis/api-client';
 
+function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function AgentWebSourceChips({ sources }: { sources: WebSource[] }) {
   const { t } = useTranslation('notes');
 
-  if (sources.length === 0) {
+  const safeSources = sources.filter((source) => isHttpUrl(source.url));
+
+  if (safeSources.length === 0) {
     return null;
   }
 
@@ -17,7 +28,7 @@ export function AgentWebSourceChips({ sources }: { sources: WebSource[] }) {
         {t('ai.copilot.webSources')}
       </p>
       <div className="flex flex-wrap gap-1.5">
-        {sources.map((source) => (
+        {safeSources.map((source) => (
           <a
             key={source.url}
             href={source.url}
