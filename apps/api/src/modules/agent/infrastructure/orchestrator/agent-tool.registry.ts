@@ -23,6 +23,18 @@ export class AgentToolRegistry {
         g.flag && !(await this.flags.isEnabled(g.flag)) ? null : g.build(ctx)
       )
     );
-    return Object.assign({}, ...built.filter((t): t is ToolSet => t !== null));
+    const merged: ToolSet = {};
+    for (const toolSet of built) {
+      if (!toolSet) {
+        continue;
+      }
+      for (const [name, definition] of Object.entries(toolSet)) {
+        if (name in merged) {
+          throw new Error(`Duplicate agent tool name: ${name}`);
+        }
+        merged[name] = definition;
+      }
+    }
+    return merged;
   }
 }

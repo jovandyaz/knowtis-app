@@ -37,4 +37,30 @@ describe('TavilyWebSearchAdapter', () => {
     expect(r.hits[0]?.url).toBe('https://t.co');
     vi.restoreAllMocks();
   });
+
+  it('should delegate fetch to the Tavily client and map extracted content', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        results: [{ url: 'https://t.co', raw_content: '# body' }],
+      }),
+      text: async () => '',
+    } as Response);
+    const r = await adapter('tvly-x').fetch('https://t.co');
+    expect(r.url).toBe('https://t.co');
+    expect(r.content).toBe('# body');
+    vi.restoreAllMocks();
+  });
+
+  it('should propagate an upstream non-200 response as an error', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+      text: async () => 'unavailable',
+    } as Response);
+    await expect(adapter('tvly-x').search('q')).rejects.toThrow(/503/);
+    vi.restoreAllMocks();
+  });
 });
