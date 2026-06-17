@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { useNavigate } from '@tanstack/react-router';
-
-import { ROUTES } from '@/config';
+import { redirectToLoginWithReload } from '@/auth/redirect-to-login';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
 import { LogOut } from 'lucide-react';
@@ -13,7 +11,6 @@ import { SectionHeader } from '../SectionHeader';
 
 export function AccountSection() {
   const { t } = useTranslation('common');
-  const navigate = useNavigate();
   const { mutate: logout } = useLogout();
   const close = useSettingsStore((s) => s.close);
 
@@ -21,7 +18,7 @@ export function AccountSection() {
     logout(undefined, {
       onSuccess: () => {
         close();
-        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
+        redirectToLoginWithReload();
       },
     });
   };
