@@ -1,3 +1,4 @@
+import { isHttpUrl } from './filter-external-content';
 import type {
   TavilyConfig,
   TavilyExtractResponse,
@@ -47,6 +48,9 @@ export class TavilyWebSearch implements WebSearchProvider {
   }
 
   async fetch(url: string): Promise<WebFetchResult> {
+    if (!isHttpUrl(url)) {
+      throw new Error(`Refusing to fetch non-http(s) URL: ${url}`);
+    }
     const json = await this.post<TavilyExtractResponse>(
       'https://api.tavily.com/extract',
       {

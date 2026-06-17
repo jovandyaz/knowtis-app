@@ -7,12 +7,26 @@ export interface SafeExternalSource {
   readonly snippet: string;
 }
 
+export function isHttpUrl(value: string): boolean {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === 'http:' || protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
 export function filterExternalHits(
   hits: readonly WebSearchHit[],
   opts: { readonly maxHits: number; readonly maxChars: number }
 ): SafeExternalSource[] {
   return hits
-    .filter((h) => detectPromptInjection(h.content).safe)
+    .filter(
+      (h) =>
+        isHttpUrl(h.url) &&
+        detectPromptInjection(h.title).safe &&
+        detectPromptInjection(h.content).safe
+    )
     .slice(0, opts.maxHits)
     .map((h) => ({
       title: h.title,
