@@ -37,6 +37,7 @@ export {
 } from './chain/provider-cooldown.tracker';
 export {
   filterExternalHits,
+  isHttpUrl,
   type SafeExternalSource,
 } from './web-search/filter-external-content';
 export { TavilyWebSearch } from './web-search/tavily-web-search';

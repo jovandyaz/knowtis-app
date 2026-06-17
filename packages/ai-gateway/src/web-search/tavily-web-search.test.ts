@@ -62,4 +62,12 @@ describe('TavilyWebSearch', () => {
       new TavilyWebSearch(cfg).fetch('https://a.com')
     ).rejects.toThrow(/unreachable/);
   });
+
+  it('should reject a non-http(s) url without calling the network', async () => {
+    const netSpy = vi.spyOn(globalThis, 'fetch');
+    await expect(
+      new TavilyWebSearch(cfg).fetch('javascript:alert(1)')
+    ).rejects.toThrow(/non-http/);
+    expect(netSpy).not.toHaveBeenCalled();
+  });
 });
