@@ -12,9 +12,10 @@ This document provides a comprehensive overview of the Knowtis monorepo architec
 4. [Application Architecture](#application-architecture)
 5. [Data Flow](#data-flow)
 6. [Real-time Collaboration](#real-time-collaboration)
-7. [Authentication Flow](#authentication-flow)
-8. [Design Principles](#design-principles)
-9. [Quality & Tooling](#quality--tooling)
+7. [Copilot Agent](#copilot-agent)
+8. [Authentication Flow](#authentication-flow)
+9. [Design Principles](#design-principles)
+10. [Quality & Tooling](#quality--tooling)
 
 ---
 
@@ -229,6 +230,7 @@ The backend follows a **Modular Monolith** architecture where core domains (`aut
 │  │  • AuthController (HTTP -> Command/Query)             │  │
 │  │  • NotesController (HTTP -> Command/Query)            │  │
 │  │  • AIController + AIGateway (HTTP + WebSocket)        │  │
+│  │  • AgentGateway (copilot, WebSocket + HITL)           │  │
 │  │  • ArtifactsController (study artifacts)              │  │
 │  │  • AdminController (user mgmt, AI metrics)            │  │
 │  │  • McpKeysController (MCP API key exchange)           │  │
@@ -366,6 +368,43 @@ provider.awareness.on('change', ({ added, updated, removed }) => {
   // Update collaborator display
 });
 ```
+
+---
+
+## Copilot Agent
+
+The **copilot** is a conversational, tool-using agent that lives in its own `agent` NestJS module — distinct from the `ai` module, which serves single-shot editor completions. It talks to the client over a dedicated Socket.io namespace (`/agent`) and shares the framework-free `@knowtis/ai-gateway` core (provider fallback chain, prompt-injection guard, token costing) with every other AI path.
+
+### Agent loop
+
+Each turn runs a bounded tool-calling loop (Vercel AI SDK) inside `run-agent-turn.handler.ts`. The model can call read tools (search/fetch notes, web) and propose write tools; the loop is capped by `AI_AGENT_MAX_STEPS`, `AI_AGENT_MAX_MS`, and `AI_AGENT_MAX_OUTPUT_TOKENS`. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently.
+
+### Server-authoritative & human-in-the-loop
+
+The agent is **server-authoritative**: the client sends one new message plus a `conversationId`, never its own history. The server rebuilds the thread from Postgres each turn.
+
+Mutations (create / update note) never execute directly. The model emits a **proposal**; the server parks it in Redis and pushes it to the client for **approval**. Only on `agent:approve` does the server commit the change and resume the turn — a strict human-in-the-loop (HITL) gate that an MCP-scoped token cannot bypass.
+
+```
+agent:turn ──▶ load thread ──▶ tool loop ──▶ propose mutation
+                                                    │
+client  ◀── agent:proposal ─────────────────────────┘
+   │
+   └─ agent:approve ──▶ commit ──▶ resume ──▶ agent:done
+```
+
+### Memory & retrieval layers
+
+| Layer                      | Description                                                                                                                                |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Thread memory (A6a)**    | Per-conversation history in `conversations` / `conversation_messages`, reconstructed server-side every turn. Always on with `ai_enabled`.  |
+| **Long-term memory (A6b)** | Durable, userId-scoped facts extracted from idle conversations by a cron and recalled per turn via pgvector. Flag `agent_longterm_memory`. |
+| **Hybrid retrieval (A3)**  | The `searchNotes` tool fuses Postgres FTS with a pgvector KNN leg via Reciprocal Rank Fusion. Flag `agent_hybrid_retrieval`.               |
+| **Web search (A4)**        | `webSearch` / `webFetch` tools behind an agnostic provider port (Tavily). Flag `agent_web_search`.                                         |
+
+All retrieved content — notes, memories, and web results — is injected into the prompt as **DATA**, passed through the injection guard, and never treated as instructions.
+
+See [AI Module → Conversation memory (A6a)](./AI.md#conversation-memory-a6a) and the surrounding sections for the full schema, feature flags, and environment variables.
 
 ---
 
@@ -521,6 +560,6 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`):
 ---
 
 <p align="center">
-  <strong>Knowtis Architecture v1.2</strong><br/>
-  Last updated: April 2026
+  <strong>Knowtis Architecture v1.3</strong><br/>
+  Last updated: June 2026
 </p>
