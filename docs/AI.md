@@ -711,3 +711,32 @@ To roll back: set `agent_hybrid_retrieval` to `false`. Keyword search resumes in
 ### Retrieval-quality eval
 
 `apps/api/src/modules/agent/eval/retrieval-quality.eval.ts` verifies cross-lingual and paraphrase retrieval quality against the real Voyage model and a live DB. Runs under `nx run api:eval` (same target as the copilot eval). Gated on `VOYAGE_API_KEY` — the suite skips cleanly when the key is absent.
+
+## Web search (A4)
+
+The copilot agent can reach the public web through two tools, exposed only when the `agent_web_search` feature flag is on:
+
+- `webSearch` — takes a query and returns ranked results (title, url, snippet).
+- `webFetch` — takes a specific URL and returns its extracted content.
+
+Web results are treated as untrusted **DATA**: every hit and fetched page passes the prompt-injection guard before reaching the model, and the agent is instructed to cite by url rather than follow any embedded instructions. Used sources surface in the copilot UI as **"Fuentes web"**. Each call records cost under the `agent_web_search` usage action.
+
+The provider sits behind the agnostic `WEB_SEARCH_PORT`. Tavily is the first adapter; Exa, Brave, and Anthropic-native search are future adapters behind the same port.
+
+### Feature flag
+
+| Flag key           | Default | Description                                                                                     |
+| ------------------ | ------- | ----------------------------------------------------------------------------------------------- |
+| `agent_web_search` | off     | Exposes the `webSearch` / `webFetch` tools to the copilot. Toggle via `PUT /api/v1/flags/:key`. |
+
+### Environment variables
+
+| Variable                    | Required | Default | Description                                                                                      |
+| --------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `TAVILY_API_KEY`            | No       | —       | Tavily key. Without it the `agent_web_search` flag must stay off (the tools throw when invoked). |
+| `AI_WEB_SEARCH_MAX_RESULTS` | No       | `5`     | Max results requested per search.                                                                |
+| `AI_WEB_SEARCH_DEPTH`       | No       | `basic` | Tavily search depth (`basic` or `advanced`).                                                     |
+
+### Web-search eval
+
+`apps/api/src/modules/agent/eval/web-search-quality.eval.ts` boots the real `AgentModule` with the `agent_web_search` flag forced on and asserts a public-web question yields a non-empty `webSources` array on the `done` event. Runs under `nx run api:eval`. Gated on `TAVILY_API_KEY` (and `ANTHROPIC_API_KEY`) — the suite skips cleanly when either is absent.
