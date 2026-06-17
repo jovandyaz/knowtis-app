@@ -1,6 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
-import { buildReconcilePrompt, partitionOps } from './memory-reconcile';
+import {
+  buildReconcilePrompt,
+  MemoryOpSchema,
+  partitionOps,
+} from './memory-reconcile';
+
+describe('MemoryOpSchema (OpenAI strict structured outputs)', () => {
+  it('marks every operation property as required so strict mode accepts the schema', () => {
+    const json = z.toJSONSchema(MemoryOpSchema) as { required?: string[] };
+    expect(json.required ?? []).toEqual(
+      expect.arrayContaining(['op', 'id', 'content'])
+    );
+  });
+});
 
 describe('partitionOps', () => {
   const existing = ['a', 'b'];
@@ -8,10 +22,10 @@ describe('partitionOps', () => {
   it('keeps valid ADD/UPDATE/DELETE and drops NOOP', () => {
     const { adds, updates, deletes } = partitionOps(
       [
-        { op: 'ADD', content: 'new fact' },
+        { op: 'ADD', id: null, content: 'new fact' },
         { op: 'UPDATE', id: 'a', content: 'fixed' },
-        { op: 'DELETE', id: 'b' },
-        { op: 'NOOP' },
+        { op: 'DELETE', id: 'b', content: null },
+        { op: 'NOOP', id: null, content: null },
       ],
       existing
     );
@@ -24,8 +38,8 @@ describe('partitionOps', () => {
     const { adds, updates, deletes } = partitionOps(
       [
         { op: 'UPDATE', id: 'zzz', content: 'x' },
-        { op: 'DELETE', id: 'zzz' },
-        { op: 'ADD', content: '  ' },
+        { op: 'DELETE', id: 'zzz', content: null },
+        { op: 'ADD', id: null, content: '  ' },
         { op: 'UPDATE', id: 'a', content: '' },
       ],
       existing
@@ -39,7 +53,7 @@ describe('partitionOps', () => {
     const { updates, deletes } = partitionOps(
       [
         { op: 'UPDATE', id: 'a', content: 'changed' },
-        { op: 'DELETE', id: 'a' },
+        { op: 'DELETE', id: 'a', content: null },
       ],
       existing
     );
