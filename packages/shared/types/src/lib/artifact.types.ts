@@ -35,7 +35,7 @@ export interface SummaryContent {
 
 export interface MindMapNode {
   label: string;
-  children?: MindMapNode[];
+  children?: MindMapNode[] | null;
 }
 
 export interface MindMapContent {

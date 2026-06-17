@@ -51,15 +51,15 @@ export const summaryOutputSchema = z.object({
 
 interface MindMapNodeInput {
   label: string;
-  children?: MindMapNodeInput[] | undefined;
+  children: MindMapNodeInput[] | null;
 }
 
 const mindMapNodeSchema: z.ZodType<MindMapNodeInput> = z.object({
   label: z.string().describe('Node label text'),
   children: z
     .lazy(() => z.array(mindMapNodeSchema))
-    .optional()
-    .describe('Child nodes'),
+    .nullable()
+    .describe('Child nodes; null for leaf nodes'),
 });
 
 export const mindMapOutputSchema = z.object({
