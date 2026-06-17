@@ -1,7 +1,16 @@
+import type { ReactElement } from 'react';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NoteEditorPage } from './NoteEditorPage';
+
+const renderWithClient = (ui: ReactElement) =>
+  render(
+    <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
+  );
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -61,12 +70,12 @@ describe('NoteEditorPage', () => {
   });
 
   it('renders the editor', () => {
-    render(<NoteEditorPage />);
+    renderWithClient(<NoteEditorPage />);
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
   });
 
   it('does not re-render the editor subtree on content keystrokes', () => {
-    render(<NoteEditorPage />);
+    renderWithClient(<NoteEditorPage />);
     expect(editorRenders.count).toBe(1);
 
     act(() => {
