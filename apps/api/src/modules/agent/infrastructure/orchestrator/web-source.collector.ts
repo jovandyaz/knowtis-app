@@ -9,7 +9,7 @@ export class WebSourceCollector {
     }
   }
 
-  get all(): WebSource[] {
+  get all(): readonly WebSource[] {
     return [...this.sources.values()];
   }
 }
