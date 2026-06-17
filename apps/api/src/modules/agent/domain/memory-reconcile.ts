@@ -4,8 +4,14 @@ import type { UserMemoryRow } from './ports/memory.repository';
 
 export const MemoryOpSchema = z.object({
   op: z.enum(['ADD', 'UPDATE', 'DELETE', 'NOOP']),
-  id: z.string().optional(),
-  content: z.string().optional(),
+  id: z
+    .string()
+    .nullable()
+    .describe('Existing memory id for UPDATE/DELETE; null for ADD/NOOP'),
+  content: z
+    .string()
+    .nullable()
+    .describe('Fact text for ADD/UPDATE; null for DELETE/NOOP'),
 });
 export const MemoryReconcileSchema = z.object({
   operations: z.array(MemoryOpSchema),
