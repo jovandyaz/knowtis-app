@@ -12,6 +12,7 @@ import { createAuthApiAdapter } from './auth-api-adapter';
 import { AUTH_STORAGE_KEY } from './constants';
 import { runInitAuth } from './init-auth';
 import { performSessionLogout } from './perform-session-logout';
+import { redirectToLoginWithReload } from './redirect-to-login';
 
 export { SessionExpiredError } from './init-auth';
 
@@ -36,9 +37,7 @@ function handleSessionExpired(): void {
   performSessionLogout({
     authStore,
     tokenStorage,
-    redirect: () => {
-      window.location.href = '/login';
-    },
+    redirect: redirectToLoginWithReload,
   });
 }
 

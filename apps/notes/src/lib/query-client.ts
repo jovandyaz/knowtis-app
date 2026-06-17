@@ -1,6 +1,6 @@
 import { QueryCache, QueryClient } from '@tanstack/react-query';
 
-import { authStore } from '@/auth';
+import { authStore, redirectToLoginWithReload } from '@/auth';
 
 import { ApiClientError } from '@knowtis/api-client';
 
@@ -8,7 +8,7 @@ function handleAuthFailure(): void {
   const user = authStore.getState().user;
   if (user && !user.isAnonymous) {
     authStore.getState().logout();
-    window.location.href = '/login';
+    redirectToLoginWithReload();
   }
 }
 

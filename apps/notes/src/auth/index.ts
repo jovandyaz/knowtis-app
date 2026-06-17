@@ -8,4 +8,5 @@ export {
   tokenStorage,
 } from './setup';
 export { createAuthApiAdapter } from './auth-api-adapter';
+export { redirectToLoginWithReload } from './redirect-to-login';
 export { resolvePostLoginRedirect } from './resolve-redirect';

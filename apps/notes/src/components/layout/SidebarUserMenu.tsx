@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { redirectToLoginWithReload } from '@/auth/redirect-to-login';
 import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useLogout } from '@jovandyaz/auth-react';
@@ -32,9 +33,7 @@ export function SidebarUserMenu({
 
   const handleLogout = () => {
     logout(undefined, {
-      onSuccess: () => {
-        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
-      },
+      onSuccess: redirectToLoginWithReload,
     });
   };
 
