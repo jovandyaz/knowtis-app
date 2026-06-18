@@ -11,6 +11,7 @@ import { AgentComposer } from './AgentComposer';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
+import { CopilotModelPicker } from './CopilotModelPicker';
 import { RetryBanner } from './RetryBanner';
 
 export function AgentCopilotPanel() {
@@ -71,6 +72,10 @@ export function AgentCopilotPanel() {
           />
         </div>
       )}
+
+      <div className="border-t border-border px-3 py-1.5">
+        <CopilotModelPicker />
+      </div>
 
       <AgentComposer
         onSend={(text) => sendMessage(text, activeNoteId ?? undefined)}

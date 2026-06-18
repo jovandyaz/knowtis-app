@@ -90,6 +90,7 @@ export class AgentClient {
   private activeCallbacks: AgentStreamCallbacks | null = null;
   private pendingContent: string | null = null;
   private pendingNoteId: string | undefined;
+  private pendingModel: string | undefined;
   private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
@@ -131,7 +132,8 @@ export class AgentClient {
   sendMessage(
     content: string,
     callbacks: AgentStreamCallbacks,
-    noteId?: string
+    noteId?: string,
+    model?: string
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -141,6 +143,7 @@ export class AgentClient {
     this.activeCallbacks = callbacks;
     this.pendingContent = content;
     this.pendingNoteId = noteId;
+    this.pendingModel = model;
     this.reconnectAttempts = 0;
     this.authPolicy.reset();
 
@@ -201,6 +204,7 @@ export class AgentClient {
       ...(this.conversationId ? { conversationId: this.conversationId } : {}),
       message: { content },
       ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
+      ...(this.pendingModel ? { model: this.pendingModel } : {}),
     });
   }
 
