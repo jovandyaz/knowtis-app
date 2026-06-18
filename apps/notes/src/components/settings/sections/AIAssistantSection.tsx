@@ -12,9 +12,11 @@ import { SectionHeader } from '../SectionHeader';
 
 export function AIAssistantSection() {
   const { t } = useTranslation('common');
-  const { data: models } = useAvailableModels();
+  const { data: models, isPending, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
+
+  const status = isError ? 'error' : isPending ? 'loading' : 'ready';
 
   return (
     <div className="space-y-8">
@@ -27,9 +29,15 @@ export function AIAssistantSection() {
           models={models ?? []}
           value={prefs?.preferredModel ?? null}
           onSelect={(id) => update({ preferredModel: id })}
+          status={status}
+          onRetry={() => refetch()}
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
           renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
           triggerLabel={t('aiAssistant.defaultHint')}
+          loadingLabel={t('aiAssistant.loadingModels')}
+          errorLabel={t('aiAssistant.loadError')}
+          emptyLabel={t('aiAssistant.noModels')}
+          retryLabel={t('aiAssistant.retry')}
         />
       </section>
 

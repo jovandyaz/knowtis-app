@@ -97,6 +97,10 @@
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "defaultHint": "Predeterminado de la cuenta",
+    "loadingModels": "Cargando modelos…",
+    "loadError": "No se pudieron cargar los modelos",
+    "noModels": "No hay modelos disponibles",
+    "retry": "Reintentar",
     "tier": {
       "fast": "Rápido",
       "balanced": "Equilibrado",

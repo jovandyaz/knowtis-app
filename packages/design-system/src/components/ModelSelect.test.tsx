@@ -68,4 +68,54 @@ describe('ModelSelect', () => {
     await userEvent.click(screen.getByRole('button'));
     expect(screen.getByText('Account default: Balanced One')).toBeTruthy();
   });
+
+  it('disables the trigger and shows the loading label while models load', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        status="loading"
+        loadingLabel="Loading models…"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger.hasAttribute('disabled')).toBe(true);
+    expect(trigger.textContent).toContain('Loading models…');
+  });
+
+  it('disables the trigger and shows the empty label when no models are available', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger.hasAttribute('disabled')).toBe(true);
+    expect(trigger.textContent).toContain('No models available');
+  });
+
+  it('surfaces an error message and retries on demand', async () => {
+    const onRetry = vi.fn();
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        status="error"
+        errorLabel="Couldn't load models"
+        retryLabel="Retry"
+        onRetry={onRetry}
+      />
+    );
+    await userEvent.click(
+      screen.getByRole('button', { name: "Couldn't load models" })
+    );
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
 });

@@ -7,10 +7,12 @@ import { ModelSelect } from '@knowtis/design-system';
 
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
-  const { data: models } = useAvailableModels();
+  const { data: models, isPending, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const selected = useAgentStore((s) => s.selectedModel);
   const setSelected = useAgentStore((s) => s.setSelectedModel);
+
+  const status = isError ? 'error' : isPending ? 'loading' : 'ready';
 
   const accountDefaultId =
     prefs?.preferredModel ?? models?.find((m) => m.isDefault)?.id ?? null;
@@ -23,9 +25,15 @@ export function CopilotModelPicker() {
       models={models ?? []}
       value={selected ?? prefs?.preferredModel ?? null}
       onSelect={setSelected}
+      status={status}
+      onRetry={() => refetch()}
       tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
       renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
       triggerLabel={t('aiAssistant.defaultHint')}
+      loadingLabel={t('aiAssistant.loadingModels')}
+      errorLabel={t('aiAssistant.loadError')}
+      emptyLabel={t('aiAssistant.noModels')}
+      retryLabel={t('aiAssistant.retry')}
       footer={
         accountDefaultLabel
           ? `${t('aiAssistant.defaultHint')}: ${accountDefaultLabel}`
