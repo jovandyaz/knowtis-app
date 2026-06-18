@@ -49,9 +49,13 @@ export {
   AI_ACTIONS,
   AI_LANGUAGES,
   AI_TONES,
+  MODEL_TIERS,
   type AIAction,
   type AILanguage,
   type AITone,
+  type ModelTier,
+  type SelectableModel,
+  type AIPreferences,
 } from './lib/ai.types';
 
 export {
