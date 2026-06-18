@@ -32,4 +32,10 @@ export const CURATED_MODELS: CuratedModel[] = [
     descriptionKey: 'aiModels.sonnet4',
     tier: 'balanced',
   },
+  {
+    id: 'anthropic:claude-opus-4-8',
+    label: 'Opus 4.8',
+    descriptionKey: 'aiModels.opus48',
+    tier: 'powerful',
+  },
 ];

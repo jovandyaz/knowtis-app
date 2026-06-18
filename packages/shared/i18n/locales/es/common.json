@@ -107,7 +107,8 @@
     "haiku45": "Respuestas veloces para tareas simples",
     "gpt4oMini": "Uso general rápido y económico",
     "gemini20Flash": "Respuestas multimodales rápidas",
-    "sonnet4": "Balance entre calidad y velocidad"
+    "sonnet4": "Balance entre calidad y velocidad",
+    "opus48": "El más capaz para razonamiento complejo"
   },
   "integrations": {
     "title": "Integraciones",
