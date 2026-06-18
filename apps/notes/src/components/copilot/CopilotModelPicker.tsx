@@ -12,6 +12,12 @@ export function CopilotModelPicker() {
   const selected = useAgentStore((s) => s.selectedModel);
   const setSelected = useAgentStore((s) => s.setSelectedModel);
 
+  const accountDefaultId =
+    prefs?.preferredModel ?? models?.find((m) => m.isDefault)?.id ?? null;
+  const accountDefaultLabel = models?.find(
+    (m) => m.id === accountDefaultId
+  )?.label;
+
   return (
     <ModelSelect
       models={models ?? []}
@@ -20,6 +26,11 @@ export function CopilotModelPicker() {
       tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
       renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
       triggerLabel={t('aiAssistant.defaultHint')}
+      footer={
+        accountDefaultLabel
+          ? `${t('aiAssistant.defaultHint')}: ${accountDefaultLabel}`
+          : undefined
+      }
     />
   );
 }

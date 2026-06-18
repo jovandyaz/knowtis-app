@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { Check, ChevronDown } from 'lucide-react';
 
 import { Badge } from './Badge';
@@ -29,6 +31,7 @@ export interface ModelSelectProps {
   renderDescription?: (m: ModelSelectOption) => string;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
+  footer?: ReactNode;
 }
 
 export function ModelSelect({
@@ -38,6 +41,7 @@ export function ModelSelect({
   renderDescription,
   tierLabel,
   triggerLabel,
+  footer,
 }: ModelSelectProps) {
   const active = models.find((m) => m.id === value);
   const groups = TIER_ORDER.map((tier) => ({
@@ -86,6 +90,14 @@ export function ModelSelect({
             ))}
           </div>
         ))}
+        {footer && (
+          <>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
+              {footer}
+            </div>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
