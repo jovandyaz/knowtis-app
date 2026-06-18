@@ -54,3 +54,20 @@ export const AI_TONES = [
 ] as const;
 
 export type AITone = (typeof AI_TONES)[number];
+
+export const MODEL_TIERS = ['fast', 'balanced', 'powerful'] as const;
+export type ModelTier = (typeof MODEL_TIERS)[number];
+
+export interface SelectableModel {
+  id: string;
+  label: string;
+  descriptionKey: string;
+  tier: ModelTier;
+  contextWindow: number;
+  costClass: 1 | 2 | 3;
+  isDefault: boolean;
+}
+
+export interface AIPreferences {
+  preferredModel: string | null;
+}

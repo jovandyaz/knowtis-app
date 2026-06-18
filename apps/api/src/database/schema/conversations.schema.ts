@@ -7,6 +7,7 @@ import {
   text,
   timestamp,
   uuid,
+  varchar,
 } from 'drizzle-orm/pg-core';
 
 import { notes } from './notes.schema';
@@ -37,6 +38,7 @@ export const conversations = pgTable(
     memoriesExtractedAt: timestamp('memories_extracted_at', {
       withTimezone: true,
     }),
+    model: varchar('model', { length: 120 }),
   },
   (table) => [
     index('conversations_user_updated_idx').on(table.userId, table.updatedAt),
