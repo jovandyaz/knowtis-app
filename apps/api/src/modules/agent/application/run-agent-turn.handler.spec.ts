@@ -1,12 +1,12 @@
-import { Logger } from '@nestjs/common';
+import { BadRequestException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { estimateTokenCount } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../config/env.config';
-import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
@@ -52,11 +52,6 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
   } as unknown as AIRateLimitService;
-  const aiConfig = {
-    getDefaultModel: vi
-      .fn()
-      .mockResolvedValue('anthropic:claude-sonnet-4-20250514'),
-  } as unknown as AIConfigService;
   const config = {
     get: vi.fn((k: string) =>
       k === 'AI_AGENT_MAX_STEPS'
@@ -92,13 +87,14 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     save: vi.fn().mockResolvedValue(undefined),
     take: vi.fn().mockResolvedValue(null),
   } as unknown as PendingMutationStore;
-  return { rateLimit, aiConfig, config, orchestrator, pendingStore };
+  return { rateLimit, config, orchestrator, pendingStore };
 }
 
 function makeConversations(history: ConversationMessageRow[] = []) {
   return {
     create: vi.fn().mockResolvedValue({ id: 'conv-1' }),
-    findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1' }),
+    findByIdForUser: vi.fn().mockResolvedValue({ id: 'conv-1', model: null }),
+    setModel: vi.fn().mockResolvedValue(undefined),
     loadMessages: vi.fn().mockResolvedValue(history),
     appendTurn: vi.fn().mockResolvedValue(undefined),
   } as unknown as ConversationRepository;
@@ -124,25 +120,34 @@ function makeFlags(enabled = false) {
   } as unknown as FeatureFlagsService;
 }
 
+function makeModelPreference(
+  effectiveDefault = 'anthropic:claude-sonnet-4-20250514'
+) {
+  return {
+    getEffectiveDefault: vi.fn().mockResolvedValue(effectiveDefault),
+    assertSelectable: vi.fn(),
+    isSelectable: vi.fn().mockReturnValue(true),
+  } as unknown as ModelPreferenceService;
+}
+
 describe('RunAgentTurnHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it('streams chunks then done, and records usage', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -167,21 +172,20 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('denies and never calls the orchestrator when rate-limited', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({
-        allowed: false,
-      });
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
+      allowed: false,
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const error = vi.fn();
 
@@ -197,21 +201,21 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards an orchestrator error event to onError', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'error', error: { code: 'AI_PROVIDER_ERROR', message: 'boom' } },
     ]);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const error = vi.fn();
 
@@ -226,7 +230,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards sources on done', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -243,14 +247,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const done = vi.fn();
 
@@ -267,7 +271,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('forwards empty sources array on done', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -284,14 +288,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const done = vi.fn();
 
@@ -304,7 +308,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('threads knownNotes from prior assistant sources to the orchestrator and forwards them from done', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -333,14 +337,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const done = vi.fn();
 
@@ -364,7 +368,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('calls onError and does not record usage when orchestrator throws synchronously', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('orchestrator failed');
@@ -375,14 +379,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       throwingOrchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -398,7 +402,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('calls onDone with usage and never calls onChunk when orchestrator yields only done', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -415,14 +419,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -439,19 +443,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('returns immediately without calling orchestrator when signal is pre-aborted', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const controller = new AbortController();
     controller.abort();
@@ -472,21 +475,21 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('calls onError with providerError when onChunk throws inside the for-await loop', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'chunk', text: 'boom' },
     ]);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -508,7 +511,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('records usage, persists the proposal, and calls onProposal on a proposal event', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const proposal = makeProposal('22222222-2222-2222-2222-222222222222');
     const orchestrator = orchestratorYielding([
       {
@@ -524,14 +527,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onProposal = vi.fn();
 
@@ -548,7 +551,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resumeTurn streams the acknowledgment and records usage on done', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'chunk', text: 'Done' },
       {
@@ -566,14 +569,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onDone = vi.fn();
 
@@ -593,8 +596,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resume loads server history and persists the assistant-only turn', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       { role: 'user', content: 'rename it', sources: [] },
       { role: 'assistant', content: "I'll rename it, confirm?", sources: [] },
@@ -602,14 +604,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
 
     await handler.resumeTurn(
@@ -635,21 +637,20 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resume rejects a foreign conversationId with forbidden and never runs the orchestrator', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -670,19 +671,20 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resumeTurn denies and never calls the orchestrator when rate-limited', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({ allowed: false });
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
+      allowed: false,
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -705,7 +707,7 @@ describe('RunAgentTurnHandler', () => {
     const warnSpy = vi
       .spyOn(Logger.prototype, 'warn')
       .mockImplementation(() => undefined);
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'proposal',
@@ -720,14 +722,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onDone = vi.fn();
 
@@ -759,7 +761,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resumeTurn calls onError when the orchestrator throws', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {
       run: vi.fn(async function* () {
         throw new Error('resume failed');
@@ -769,14 +771,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       throwingOrchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -795,19 +797,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('resumeTurn returns immediately when signal is pre-aborted', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const controller = new AbortController();
     controller.abort();
@@ -831,20 +832,17 @@ describe('RunAgentTurnHandler', () => {
 
   it('rejects an unknown default model before running the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const aiConfig = {
-      getDefaultModel: vi.fn().mockResolvedValue('custom:unpriced-model'),
-    } as unknown as AIConfigService;
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference('custom:unpriced-model')
     );
     const onError = vi.fn();
 
@@ -860,7 +858,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('records best-effort usage when the turn is aborted mid-stream', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       { type: 'chunk', text: 'partial' },
       {
@@ -875,14 +873,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -900,7 +898,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('records usage carried on an error event before reporting the error', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'error',
@@ -915,14 +913,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -940,7 +938,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('does not record usage for an aborted turn that consumed no tokens', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'aborted',
@@ -954,14 +952,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -978,19 +976,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('estimates tokens with the real tokenizer plus a fixed prompt-overhead margin', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1008,8 +1005,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('drops oldest messages beyond the history token budget while keeping the final user message', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const oldContent = 'x '.repeat(13000);
     const conversations = makeConversations([
       { role: 'user', content: oldContent, sources: [] },
@@ -1020,14 +1016,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -1056,8 +1052,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('drops leading assistant messages left over after trimming', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       { role: 'user', content: 'x '.repeat(13000), sources: [] },
       { role: 'assistant', content: 'sure', sources: [] },
@@ -1065,14 +1060,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -1096,19 +1091,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('keeps the final user message even when it alone exceeds the history budget', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -1129,19 +1123,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('blocks an injected last user message before reserving rate limit or running the orchestrator', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1164,8 +1157,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('drops an injected older message from the context without failing the turn', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       {
         role: 'user',
@@ -1177,14 +1169,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1206,19 +1198,18 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('rejects a fresh user message that exceeds the length cap', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1237,8 +1228,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('drops an oversized older message instead of failing the turn', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       { role: 'user', content: 'y'.repeat(50_001), sources: [] },
       { role: 'assistant', content: 'Noted.', sources: [] },
@@ -1246,14 +1236,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1274,8 +1264,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('blocks an injected resume turn before running the orchestrator', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       {
         role: 'user',
@@ -1286,14 +1275,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1313,7 +1302,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('records zero cost when the catalog has no pricing for the model', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'done',
@@ -1330,14 +1319,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onDone = vi.fn();
 
@@ -1360,7 +1349,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('releases the rate-limit reservation when a turn ends with zero usage', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
       {
         type: 'aborted',
@@ -1374,14 +1363,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1403,20 +1392,17 @@ describe('RunAgentTurnHandler', () => {
 
   it('releases the rate-limit reservation when the configured model is invalid', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const aiConfig = {
-      getDefaultModel: vi.fn().mockResolvedValue('not-a-model'),
-    } as unknown as AIConfigService;
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference('not-a-model')
     );
     const onError = vi.fn();
 
@@ -1433,20 +1419,19 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('creates a conversation, loads history, and persists the turn on done (memory path)', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const done = vi.fn();
     await handler.execute(
@@ -1467,8 +1452,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('loads prior history and feeds it to the orchestrator (memory path, existing conversation)', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations([
       { role: 'user', content: 'my codeword is BLUE', sources: [] },
       { role: 'assistant', content: 'Noted: BLUE', sources: [] },
@@ -1476,14 +1460,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     await handler.execute(
       {
@@ -1506,21 +1490,20 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('rejects a foreign conversationId with a forbidden error (memory path)', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     vi.mocked(conversations.findByIdForUser).mockResolvedValue(null);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const error = vi.fn();
     await handler.execute(
@@ -1538,7 +1521,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('persists the preamble with empty sources on a proposal (memory path)', async () => {
-    const { rateLimit, aiConfig, config, pendingStore } = makeDeps({});
+    const { rateLimit, config, pendingStore } = makeDeps({});
     const proposal = makeProposal('44444444-4444-4444-4444-444444444444');
     const orchestrator = orchestratorYielding([
       { type: 'chunk', text: 'I will create it.' },
@@ -1556,14 +1539,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const onProposal = vi.fn();
 
@@ -1586,21 +1569,20 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('completes the turn and still emits conversationId when persistence fails (memory path)', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     vi.mocked(conversations.appendTurn).mockRejectedValue(new Error('db down'));
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags()
+      makeFlags(),
+      makeModelPreference()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -1617,22 +1599,21 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('retrieves user memories and injects them into the orchestrator when the flag is on', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
     const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1653,22 +1634,21 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('does not inject memories when the flag is off', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
     const flags = makeFlags(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1689,22 +1669,21 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('does not retrieve memories for anonymous users even with the flag on', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
     const flags = makeFlags(true);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1729,8 +1708,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('proceeds without memories when retrieval throws', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory();
     vi.mocked(memory.searchForUser).mockRejectedValue(new Error('vector down'));
     const embed = makeEmbed();
@@ -1738,14 +1716,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1761,8 +1739,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('proceeds without memories when the feature-flag lookup throws', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
     const flags = makeFlags(true);
@@ -1770,14 +1747,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
     const onError = vi.fn();
 
@@ -1794,8 +1771,7 @@ describe('RunAgentTurnHandler', () => {
   });
 
   it('filters out memory matches below the similarity threshold', async () => {
-    const { rateLimit, aiConfig, config, orchestrator, pendingStore } =
-      makeDeps({});
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const memory = makeMemory([
       { id: 'm1', content: 'Is vegan', score: 0.9 },
       { id: 'm2', content: 'Noise', score: 0.05 },
@@ -1805,14 +1781,14 @@ describe('RunAgentTurnHandler', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       makeConversations(),
       memory,
       embed,
-      flags
+      flags,
+      makeModelPreference()
     );
 
     await handler.execute(
@@ -1827,6 +1803,139 @@ describe('RunAgentTurnHandler', () => {
 
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ userMemories: ['Is vegan'] })
+    );
+  });
+
+  it('resolves the stored conversation model over the user effective default', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'openai:gpt-4o-mini',
+    });
+    const modelPreference = makeModelPreference(
+      'anthropic:claude-sonnet-4-20250514'
+    );
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        message: { content: 'hi' },
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'openai:gpt-4o-mini' })
+    );
+    expect(modelPreference.getEffectiveDefault).not.toHaveBeenCalled();
+  });
+
+  it('validates, persists, and uses an explicit valid model from the turn', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+    const modelPreference = makeModelPreference();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        message: { content: 'hi' },
+        model: 'openai:gpt-4o-mini',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(modelPreference.assertSelectable).toHaveBeenCalledWith(
+      'openai:gpt-4o-mini'
+    );
+    expect(conversations.setModel).toHaveBeenCalledWith(
+      'conv-1',
+      USER,
+      'openai:gpt-4o-mini'
+    );
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'openai:gpt-4o-mini' })
+    );
+  });
+
+  it('rejects an invalid explicit model and never runs the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.assertSelectable).mockImplementation(() => {
+      throw new BadRequestException('Model not selectable: bogus:model');
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: 'bogus:model',
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_INVALID_MODEL' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(conversations.setModel).not.toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number)
     );
   });
 });

@@ -41,6 +41,10 @@ export class ModelPreferenceService {
     }
   }
 
+  isSelectable(modelId: string): boolean {
+    return this.selectable.isSelectable(modelId);
+  }
+
   async setUserPreference(userId: string, model: string | null): Promise<void> {
     if (model !== null) {
       this.assertSelectable(model);

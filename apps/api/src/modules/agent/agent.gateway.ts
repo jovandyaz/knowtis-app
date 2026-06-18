@@ -37,6 +37,7 @@ const agentTurnSchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
+  model: z.string().max(120).optional(),
 });
 
 const agentApprovePayloadSchema = z.object({
@@ -163,6 +164,7 @@ export class AgentGateway
           ...(data.conversationId && { conversationId: data.conversationId }),
           ...(client.data.isAnonymous && { isAnonymous: true }),
           ...(data.noteId && { noteId: data.noteId }),
+          ...(data.model && { model: data.model }),
         },
         { ...this.baseCallbacks(client, controller), onProposal },
         controller.signal

@@ -12,8 +12,8 @@ import {
   users,
   type Database,
 } from '../../../database';
-import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
@@ -41,6 +41,11 @@ const embedStub = {
 const flagsOff = {
   isEnabled: vi.fn().mockResolvedValue(false),
 } as unknown as FeatureFlagsService;
+const modelPreferenceStub = {
+  getEffectiveDefault: vi.fn().mockResolvedValue(MODEL),
+  assertSelectable: vi.fn(),
+  isSelectable: vi.fn().mockReturnValue(true),
+} as unknown as ModelPreferenceService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -104,9 +109,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
-    const aiConfig = {
-      getDefaultModel: vi.fn().mockResolvedValue(MODEL),
-    } as unknown as AIConfigService;
     const pendingStore = {
       save: vi.fn(),
       take: vi.fn().mockResolvedValue(null),
@@ -114,14 +116,14 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       new DrizzleConversationRepository(db),
       memoryOff,
       embedStub,
-      flagsOff
+      flagsOff,
+      modelPreferenceStub
     );
 
     let conversationId: string | undefined;
@@ -170,9 +172,6 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
-    const aiConfig = {
-      getDefaultModel: vi.fn().mockResolvedValue(MODEL),
-    } as unknown as AIConfigService;
     const pendingStore = {
       save: vi.fn(),
       take: vi.fn().mockResolvedValue(null),
@@ -180,14 +179,14 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
-      aiConfig,
       config,
       pendingStore,
       createTestCatalog(),
       repo,
       memoryOff,
       embedStub,
-      flagsOff
+      flagsOff,
+      modelPreferenceStub
     );
 
     const onError = vi.fn();
