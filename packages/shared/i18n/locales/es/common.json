@@ -75,6 +75,7 @@
       "appearance": "Apariencia",
       "language": "Idioma",
       "editor": "Editor",
+      "aiAssistant": "Asistente IA",
       "notifications": "Notificaciones",
       "account": "Cuenta",
       "integrations": "Integraciones"
@@ -84,10 +85,29 @@
       "appearance": "Personaliza el aspecto visual",
       "language": "Elige tu idioma preferido",
       "editor": "Configura tus preferencias del editor",
+      "aiAssistant": "Configura las preferencias del modelo de IA",
       "notifications": "Administra tus notificaciones",
       "account": "Seguridad y configuración de la cuenta",
       "integrations": "Gestiona API keys para integraciones externas"
     }
+  },
+  "aiAssistant": {
+    "copilotTitle": "Modelo del copilot",
+    "copilotDescription": "Elige el modelo que usa tu copilot por defecto. Cada conversación puede cambiarlo desde el chat.",
+    "editorTitle": "IA del editor",
+    "editorComingSoon": "Próximamente.",
+    "defaultHint": "Predeterminado de la cuenta",
+    "tier": {
+      "fast": "Rápido",
+      "balanced": "Equilibrado",
+      "powerful": "Potente"
+    }
+  },
+  "aiModels": {
+    "haiku45": "Respuestas veloces para tareas simples",
+    "gpt4oMini": "Uso general rápido y económico",
+    "gemini20Flash": "Respuestas multimodales rápidas",
+    "sonnet4": "Balance entre calidad y velocidad"
   },
   "integrations": {
     "title": "Integraciones",

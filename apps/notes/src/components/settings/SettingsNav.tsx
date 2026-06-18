@@ -9,6 +9,7 @@ import {
   Palette,
   Puzzle,
   Shield,
+  Sparkles,
   User,
 } from 'lucide-react';
 
@@ -19,6 +20,7 @@ const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
   { section: 'appearance', icon: Palette },
   { section: 'language', icon: Globe },
   { section: 'editor', icon: FileEdit },
+  { section: 'aiAssistant', icon: Sparkles },
   { section: 'notifications', icon: Bell },
   { section: 'integrations', icon: Puzzle },
   { section: 'account', icon: Shield },
