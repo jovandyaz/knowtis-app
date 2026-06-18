@@ -2,7 +2,6 @@ import type { ReactNode } from 'react';
 
 import { Check, ChevronDown } from 'lucide-react';
 
-import { Badge } from './Badge';
 import { Button } from './Button';
 import {
   DropdownMenu,
@@ -24,12 +23,27 @@ export interface ModelSelectOption {
 
 const TIER_ORDER = ['fast', 'balanced', 'powerful'] as const;
 
-function costGlyphs(costClass?: number): string {
-  if (!Number.isFinite(costClass)) {
-    return '$';
-  }
-  const clamped = Math.min(3, Math.max(1, Math.trunc(costClass as number)));
-  return '$'.repeat(clamped);
+const COST_GLYPH = '$';
+const MIN_COST_LEVEL = 1;
+const MAX_COST_LEVEL = 3;
+const NO_COST_LEVEL = 0;
+
+function costGlyphs(level: number): string {
+  const clamped = Math.min(
+    MAX_COST_LEVEL,
+    Math.max(MIN_COST_LEVEL, Math.trunc(level))
+  );
+  return COST_GLYPH.repeat(clamped);
+}
+
+function tierCostLevel(items: readonly ModelSelectOption[]): number {
+  return items.reduce((max, m) => {
+    const level = m.costClass;
+    if (level === undefined || !Number.isFinite(level)) {
+      return max;
+    }
+    return Math.max(max, Math.trunc(level));
+  }, NO_COST_LEVEL);
 }
 
 export interface ModelSelectProps {
@@ -80,34 +94,39 @@ export function ModelSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
-        {groups.map((g, i) => (
-          <div key={g.tier}>
-            {i > 0 && <DropdownMenuSeparator />}
-            <DropdownMenuLabel className="text-xs uppercase tracking-wide">
-              {tierLabel ? tierLabel(g.tier) : g.tier}
-            </DropdownMenuLabel>
-            {g.items.map((m) => (
-              <DropdownMenuItem
-                key={m.id}
-                onSelect={() => onSelect(m.id)}
-                className="flex-col items-start gap-0.5"
-              >
-                <div className="flex w-full items-center justify-between gap-2">
-                  <span className="font-medium">{m.label}</span>
-                  <span className="flex items-center gap-1">
-                    <Badge variant="secondary">{costGlyphs(m.costClass)}</Badge>
-                    {m.id === value && <Check className="h-3.5 w-3.5" />}
-                  </span>
-                </div>
-                {renderDescription && (
-                  <span className="text-xs text-(--muted-foreground)">
-                    {renderDescription(m)}
+        {groups.map((g, i) => {
+          const level = tierCostLevel(g.items);
+          return (
+            <div key={g.tier}>
+              {i > 0 && <DropdownMenuSeparator />}
+              <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
+                <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
+                {level > NO_COST_LEVEL && (
+                  <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
+                    {costGlyphs(level)}
                   </span>
                 )}
-              </DropdownMenuItem>
-            ))}
-          </div>
-        ))}
+              </DropdownMenuLabel>
+              {g.items.map((m) => (
+                <DropdownMenuItem
+                  key={m.id}
+                  onSelect={() => onSelect(m.id)}
+                  className="flex-col items-start gap-0.5"
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <span className="font-medium">{m.label}</span>
+                    {m.id === value && <Check className="h-3.5 w-3.5" />}
+                  </div>
+                  {renderDescription && (
+                    <span className="text-xs text-(--muted-foreground)">
+                      {renderDescription(m)}
+                    </span>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </div>
+          );
+        })}
         {footer && (
           <>
             <DropdownMenuSeparator />

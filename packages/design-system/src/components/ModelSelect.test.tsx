@@ -41,6 +41,21 @@ describe('ModelSelect', () => {
     expect(onSelect).toHaveBeenCalledWith('a:bal');
   });
 
+  it('shows one cost indicator per tier header derived from its costliest model', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        tierLabel={(tier) => tier.toUpperCase()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('$')).toBeTruthy();
+    expect(screen.getByText('$$')).toBeTruthy();
+    expect(screen.queryAllByText('$$$')).toHaveLength(0);
+  });
+
   it('renders the footer inside the popover when provided', async () => {
     render(
       <ModelSelect
