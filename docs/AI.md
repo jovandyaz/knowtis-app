@@ -15,7 +15,7 @@ AI text assistant integrated into the Tiptap editor. Supports streaming response
 
 | Model                                 | Use case                              |
 | ------------------------------------- | ------------------------------------- |
-| `anthropic:claude-sonnet-4-20250514`  | All actions (default)                 |
+| `anthropic:claude-sonnet-4-6`         | All actions (default)                 |
 | `anthropic:claude-haiku-4-5-20251001` | `ghost-text` only (latency-optimized) |
 
 ---
@@ -360,6 +360,34 @@ Pricing and context-window data come from [LiteLLM's public pricing JSON](https:
 
 ---
 
+## Copilot Model Selection
+
+Users pick which model the copilot uses, per conversation and as an account default. The list is **curated**: `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) intersects three sources — a hand-maintained `CURATED_MODELS` list (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` tiers), the LiteLLM pricing snapshot (context window + cost class), and provider availability (`isModelAvailable` — the provider key is present). A curated model whose id is missing from the snapshot, or whose provider key is absent, is silently dropped from the list.
+
+**Resolution cascade** (highest priority first), in `ModelPreferenceService`:
+
+1. `conversations.model` — the per-conversation override from the copilot picker.
+2. `user_ai_settings.preferred_model` — the account default set in **Settings → Asistente IA**.
+3. `ai_default_model` (DB `ai_config`, env `AI_DEFAULT_MODEL`) — the system default.
+
+The resolved model enters the [fallback chain](#cross-provider-fallback-chain) as the primary candidate; if its provider is down or out of credit the chain relays to another model, and the model reported back to the client is the one that actually served the turn.
+
+> `ai_default_model` / `AI_DEFAULT_MODEL` **must be one of the curated ids** for the picker's account-default badge to resolve. A curated model only runs as primary if its provider key has access/billing — otherwise it appears in the picker but falls back at invocation (`isModelAvailable` only checks key presence, not per-model access/quota).
+
+**REST API** (gated behind the `ai_enabled` flag):
+
+| Method | Path              | Description                                              |
+| ------ | ----------------- | -------------------------------------------------------- |
+| GET    | `/ai/models`      | Curated, available models with tier, cost class, context |
+| GET    | `/ai/preferences` | The caller's `preferred_model` (account default)         |
+| PUT    | `/ai/preferences` | Set the caller's `preferred_model`                       |
+
+A per-conversation choice rides on the agent WebSocket payload (`{ conversationId?, message, model? }`); `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation.
+
+**Frontend.** `ModelSelect` (`@knowtis/design-system`) is a tier-grouped dropdown; the cost band (`$` / `$$` / `$$$`) shows once per tier header. It renders explicit loading, error (with retry), and empty states. Consumed by `CopilotModelPicker` (copilot panel) and the `AIAssistantSection` settings tab.
+
+---
+
 ## Health & Alerting
 
 **`GET /api/v1/ai/health`** (admin-only, same guards as `GET /ai/config`) returns a passive per-provider snapshot from the cooldown tracker — `{configured, cooling, failureCount, lastFailureAt, lastSuccessAt, cooldownEndsAt}`. No probes are sent and no tokens are spent.
@@ -400,7 +428,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `ANTHROPIC_API_KEY`            | No       | —                                      | Anthropic API key (validated at runtime)                |
 | `OPENAI_API_KEY`               | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | No       | —                                      | Google AI Studio key (chain fallback)                   |
-| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-20250514`   | Model for most actions                                  |
+| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
 | `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
 | `AI_FALLBACK_CHAIN`            | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
 | `AI_COOLDOWN_ALLOWED_FAILS`    | No       | `3`                                    | Failures per minute that start a provider cooldown      |
@@ -433,7 +461,7 @@ Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
 ## Database Schema
 
-Two tables: `ai_usage` and `ai_config`.
+Three tables: `ai_usage`, `ai_config`, and `user_ai_settings`.
 
 | Column          | Type              | Notes                         |
 | --------------- | ----------------- | ----------------------------- |
@@ -458,6 +486,16 @@ Indexed on `(user_id, created_at)` for efficient daily aggregation queries.
 | `updated_at`  | timestamptz     | Auto-set on upsert    |
 
 Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Configuration](#dynamic-model-configuration)).
+
+### `user_ai_settings`
+
+| Column            | Type          | Notes                            |
+| ----------------- | ------------- | -------------------------------- |
+| `user_id`         | uuid (PK, FK) | → users, CASCADE on delete       |
+| `preferred_model` | varchar(120)  | Account-default copilot model id |
+| `updated_at`      | timestamptz   | Auto-set on upsert               |
+
+Holds each user's account-default copilot model. The per-conversation override lives on `conversations.model` (varchar, nullable) in the agent module. See [Copilot Model Selection](#copilot-model-selection).
 
 > After schema changes, run `pnpm db:push`.
 
