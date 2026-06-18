@@ -3,6 +3,7 @@ export const FEATURE_FLAG_KEYS = {
   VOICE_NOTES_ENABLED: 'voice_notes_enabled',
   AGENT_HYBRID_RETRIEVAL: 'agent_hybrid_retrieval',
   AGENT_WEB_SEARCH: 'agent_web_search',
+  AGENT_BYOK: 'agent_byok',
 } as const;
 
 export type FeatureFlagKey =
