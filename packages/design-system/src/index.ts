@@ -75,6 +75,9 @@ export {
   TooltipContent,
   ResizeHandle,
   ResizablePanel,
+  ModelSelect,
+  type ModelSelectProps,
+  type ModelSelectOption,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 
