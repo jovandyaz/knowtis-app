@@ -4,10 +4,12 @@ import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
 
 import type { AIPreferences, SelectableModel } from '@knowtis/shared-types';
 
+import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import { UpdateAiPreferencesDto } from './dto/update-ai-preferences.dto';
 
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
+@RequireFeatureFlag('ai_enabled')
 @Controller('ai')
 export class AiModelsController {
   constructor(private readonly preferences: ModelPreferenceService) {}
