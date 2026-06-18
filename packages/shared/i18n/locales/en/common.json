@@ -107,7 +107,8 @@
     "haiku45": "Fast replies for simple tasks",
     "gpt4oMini": "Quick, low-cost general use",
     "gemini20Flash": "Fast multimodal responses",
-    "sonnet4": "Balanced quality and speed"
+    "sonnet4": "Balanced quality and speed",
+    "opus48": "Most capable for complex reasoning"
   },
   "integrations": {
     "title": "Integrations",
