@@ -13,3 +13,4 @@ export * from './note-embeddings.schema';
 export * from './conversations.schema';
 export * from './user-memories.schema';
 export * from './user-ai-settings.schema';
+export * from './user-provider-keys.schema';

@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   numeric,
@@ -24,6 +25,7 @@ export const aiUsage = pgTable(
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 })
       .notNull()
       .default('0'),
+    byok: boolean('byok').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
