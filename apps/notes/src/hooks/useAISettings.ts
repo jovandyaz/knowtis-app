@@ -17,8 +17,28 @@ export function useUpdateAISettings() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: AIPreferences) => aiModelsApi.updatePreferences(input),
-    onSuccess: (data) => {
-      queryClient.setQueryData(aiModelsQueryKeys.preferences(), data);
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({
+        queryKey: aiModelsQueryKeys.preferences(),
+      });
+      const previous = queryClient.getQueryData<AIPreferences>(
+        aiModelsQueryKeys.preferences()
+      );
+      queryClient.setQueryData(aiModelsQueryKeys.preferences(), input);
+      return { previous };
+    },
+    onError: (_err, _input, context) => {
+      if (context?.previous !== undefined) {
+        queryClient.setQueryData(
+          aiModelsQueryKeys.preferences(),
+          context.previous
+        );
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({
+        queryKey: aiModelsQueryKeys.preferences(),
+      });
     },
   });
 }
