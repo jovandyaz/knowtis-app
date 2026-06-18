@@ -110,4 +110,19 @@ describe('ByokService', () => {
     });
     expect(await service.getApiKey('u1', 'anthropic')).toBe('sk-live');
   });
+
+  it('getApiKey returns null when decryption fails', async () => {
+    const { service } = makeService({
+      repo: {
+        getEncrypted: vi.fn().mockResolvedValue({
+          ciphertext: 'bad',
+          iv: 'x',
+          authTag: 'y',
+          keyPrefix: 'p',
+        }),
+      },
+      flagOn: true,
+    });
+    expect(await service.getApiKey('u1', 'anthropic')).toBeNull();
+  });
 });
