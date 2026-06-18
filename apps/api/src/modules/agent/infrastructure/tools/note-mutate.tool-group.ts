@@ -93,7 +93,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
           noteId: z.string().uuid(),
           targetEmail: z
             .string()
-            .email()
+            .min(3)
             .describe('Email of the person to share with'),
           permission: z.enum(['viewer', 'editor']).default('viewer'),
         }),
