@@ -40,4 +40,17 @@ describe('ModelSelect', () => {
     await userEvent.click(screen.getByText('Balanced One'));
     expect(onSelect).toHaveBeenCalledWith('a:bal');
   });
+
+  it('renders the footer inside the popover when provided', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        footer="Account default: Balanced One"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Account default: Balanced One')).toBeTruthy();
+  });
 });
