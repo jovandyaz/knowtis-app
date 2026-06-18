@@ -455,12 +455,23 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const model = await this.resolveModel(
-      input,
-      persistence?.conversationId,
-      callbacks,
-      estimatedTokens
-    );
+    let model: string | null;
+    try {
+      model = await this.resolveModel(
+        input,
+        persistence?.conversationId,
+        callbacks,
+        estimatedTokens
+      );
+    } catch (error) {
+      await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
+      callbacks.onError(
+        AIErrors.providerError(
+          error instanceof Error ? error.message : 'Model resolution failed'
+        )
+      );
+      return;
+    }
     if (model === null) {
       return;
     }

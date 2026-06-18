@@ -33,6 +33,10 @@ export function useUpdateAISettings() {
           aiModelsQueryKeys.preferences(),
           context.previous
         );
+      } else {
+        queryClient.removeQueries({
+          queryKey: aiModelsQueryKeys.preferences(),
+        });
       }
     },
     onSettled: () => {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiModelsApi } from './ai-models.api';
 import { httpClient } from './http-client';
@@ -8,6 +8,10 @@ vi.mock('./http-client', () => ({
 }));
 
 describe('aiModelsApi', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('getModels hits GET /ai/models', async () => {
     vi.mocked(httpClient.get).mockResolvedValue([]);
     await aiModelsApi.getModels();
@@ -26,5 +30,17 @@ describe('aiModelsApi', () => {
     expect(httpClient.put).toHaveBeenCalledWith('/ai/preferences', {
       preferredModel: null,
     });
+  });
+
+  it('getModels propagates http errors', async () => {
+    vi.mocked(httpClient.get).mockRejectedValueOnce(new Error('network'));
+    await expect(aiModelsApi.getModels()).rejects.toThrow('network');
+  });
+
+  it('updatePreferences propagates http errors', async () => {
+    vi.mocked(httpClient.put).mockRejectedValueOnce(new Error('network'));
+    await expect(
+      aiModelsApi.updatePreferences({ preferredModel: null })
+    ).rejects.toThrow('network');
   });
 });

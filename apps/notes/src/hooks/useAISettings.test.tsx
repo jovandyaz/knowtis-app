@@ -84,4 +84,19 @@ describe('useUpdateAISettings', () => {
       preferredModel: 'a',
     });
   });
+
+  it('clears the optimistic value when rejecting on a cold cache', async () => {
+    vi.mocked(aiModelsApi.updatePreferences).mockRejectedValue(
+      new Error('network error')
+    );
+    const { wrapper, queryClient } = createWrapper();
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ preferredModel: 'b' });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(
+      queryClient.getQueryData(aiModelsQueryKeys.preferences())
+    ).toBeUndefined();
+  });
 });

@@ -320,6 +320,20 @@ describe('agent.store server-authoritative wire', () => {
     );
   });
 
+  it('per-call model overrides selectedModel', () => {
+    capture();
+    useAgentStore.getState().setSelectedModel('openai:gpt-4o-mini');
+    useAgentStore
+      .getState()
+      .sendMessage('hi', undefined, 'anthropic:claude-opus-4-8');
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledWith(
+      'hi',
+      expect.anything(),
+      undefined,
+      'anthropic:claude-opus-4-8'
+    );
+  });
+
   it('newConversation resets selectedModel to null', () => {
     capture();
     useAgentStore.getState().setSelectedModel('openai:gpt-4o-mini');
