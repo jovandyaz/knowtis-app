@@ -1,4 +1,5 @@
 import {
+  HttpException,
   Inject,
   Injectable,
   Logger,
@@ -52,6 +53,7 @@ export class ByokService {
   ): Promise<ReadonlySet<ByokProvider>> {
     if (
       isAnonymous ||
+      !this.masterKey ||
       !(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_BYOK))
     ) {
       return new Set();
@@ -101,6 +103,9 @@ export class ByokService {
     try {
       await this.validateKey(provider, apiKey);
     } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       this.logger.warn({
         event: 'byok.validation_failed',
         provider,
@@ -141,7 +146,9 @@ export class ByokService {
       (m) => m.tier === 'fast' && providerOf(m.id) === provider
     );
     if (!probe) {
-      throw new Error(`No validation model for provider '${provider}'`);
+      throw new UnprocessableEntityException(
+        `No curated fast-tier model found for provider '${provider}'`
+      );
     }
     await generateText({
       model: this.registry.languageModel(probe.id, apiKey),
