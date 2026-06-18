@@ -18,6 +18,7 @@ import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
+import { ByokService } from './application/services/byok.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import {
   PromptLoaderService,
@@ -33,6 +34,7 @@ import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
+import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
@@ -40,6 +42,7 @@ import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedd
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
+import { DrizzleUserProviderKeysRepository } from './infrastructure/persistence/drizzle-user-provider-keys.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
 import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
@@ -71,6 +74,11 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       provide: USER_AI_SETTINGS_REPOSITORY,
       useClass: DrizzleUserAiSettingsRepository,
     },
+    ByokService,
+    {
+      provide: USER_PROVIDER_KEYS_REPOSITORY,
+      useClass: DrizzleUserProviderKeysRepository,
+    },
     ProviderRegistryFactory,
     WebhookAlertService,
     FallbackChainService,
@@ -101,6 +109,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AIGateway,
   ],
   exports: [
+    ByokService,
     ProviderRegistryFactory,
     FallbackChainService,
     MODEL_CATALOG,
