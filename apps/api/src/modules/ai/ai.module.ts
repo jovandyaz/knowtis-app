@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
+import { AiModelsController } from './ai-models.controller';
 import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
@@ -17,10 +18,12 @@ import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
+import { ModelPreferenceService } from './application/services/model-preference.service';
 import {
   PromptLoaderService,
   PROMPTS_DIR,
 } from './application/services/prompt-loader.service';
+import { SelectableModelsService } from './application/services/selectable-models.service';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
 import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
@@ -29,12 +32,14 @@ import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-outp
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
+import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
+import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
 import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
@@ -58,8 +63,14 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       }),
     }),
   ],
-  controllers: [AIController],
+  controllers: [AIController, AiModelsController],
   providers: [
+    SelectableModelsService,
+    ModelPreferenceService,
+    {
+      provide: USER_AI_SETTINGS_REPOSITORY,
+      useClass: DrizzleUserAiSettingsRepository,
+    },
     ProviderRegistryFactory,
     WebhookAlertService,
     FallbackChainService,
@@ -94,6 +105,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     FallbackChainService,
     MODEL_CATALOG,
     AIConfigService,
+    ModelPreferenceService,
     AIMetricsService,
     AIOrchestrator,
     AIRateLimitService,
