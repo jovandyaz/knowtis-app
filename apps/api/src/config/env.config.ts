@@ -26,7 +26,7 @@ const envSchemaBase = z.object({
   ANTHROPIC_API_KEY: z.string().optional(),
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
-  AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-4-20250514'),
+  AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-4-6'),
   AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
