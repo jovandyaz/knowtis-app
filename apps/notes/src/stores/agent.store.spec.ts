@@ -307,6 +307,25 @@ describe('agent.store server-authoritative wire', () => {
     useAgentStore.getState().newConversation();
     expect(agentClient.resetConversation).toHaveBeenCalledTimes(1);
   });
+
+  it('forwards selectedModel to the client on send', () => {
+    capture();
+    useAgentStore.getState().setSelectedModel('openai:gpt-4o-mini');
+    useAgentStore.getState().sendMessage('hi');
+    expect(vi.mocked(agentClient.sendMessage)).toHaveBeenCalledWith(
+      'hi',
+      expect.anything(),
+      undefined,
+      'openai:gpt-4o-mini'
+    );
+  });
+
+  it('newConversation resets selectedModel to null', () => {
+    capture();
+    useAgentStore.getState().setSelectedModel('openai:gpt-4o-mini');
+    useAgentStore.getState().newConversation();
+    expect(useAgentStore.getState().selectedModel).toBeNull();
+  });
 });
 
 describe('agent.store proposals', () => {
