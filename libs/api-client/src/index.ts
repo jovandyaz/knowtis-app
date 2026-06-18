@@ -66,3 +66,5 @@ export {
   type UploadImageArgs,
   type UploadImageResponse,
 } from './lib/images.api';
+
+export { aiModelsApi } from './lib/ai-models.api';
