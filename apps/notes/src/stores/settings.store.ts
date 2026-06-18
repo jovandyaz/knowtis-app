@@ -7,7 +7,8 @@ export type SettingsSection =
   | 'editor'
   | 'notifications'
   | 'integrations'
-  | 'account';
+  | 'account'
+  | 'aiAssistant';
 
 interface SettingsStore {
   isOpen: boolean;
