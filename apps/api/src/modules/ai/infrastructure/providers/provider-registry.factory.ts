@@ -1,4 +1,4 @@
-import { anthropic } from '@ai-sdk/anthropic';
+import { anthropic, createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Injectable, OnModuleInit } from '@nestjs/common';
@@ -54,12 +54,15 @@ export class ProviderRegistryFactory implements OnModuleInit {
   }
 
   /**
-   * Resolves a 'provider:model' id to a language model. Routes through the
-   * Vercel AI Gateway when AI_GATEWAY_API_KEY is set, otherwise through the
-   * direct-SDK registry; throws ProviderNotConfiguredError on malformed ids
-   * or (direct mode only) missing provider keys.
+   * Resolves a 'provider:model' id to a language model. When `byokKey` is
+   * provided and not in gateway mode, builds an ephemeral provider from the
+   * caller's key — bypassing the server's key requirement for that provider.
+   * Routes through the Vercel AI Gateway when AI_GATEWAY_API_KEY is set
+   * (byokKey is ignored in that case). Throws ProviderNotConfiguredError on
+   * malformed ids, unsupported BYOK providers, or (direct mode only) missing
+   * provider keys.
    */
-  languageModel(modelId: string): LanguageModel {
+  languageModel(modelId: string, byokKey?: string): LanguageModel {
     if (!isQualifiedModelId(modelId)) {
       throw new ProviderNotConfiguredError(
         `Model id '${modelId}' must use the 'provider:model' format`
@@ -68,8 +71,32 @@ export class ProviderRegistryFactory implements OnModuleInit {
     if (this.gateway) {
       return this.gateway.languageModel(toGatewayModelId(modelId));
     }
+    if (byokKey) {
+      return this.byokLanguageModel(modelId, byokKey);
+    }
     this.assertProviderKeyConfigured(modelId);
     return this.registry.languageModel(modelId);
+  }
+
+  private byokLanguageModel(
+    modelId: QualifiedModelId,
+    apiKey: string
+  ): LanguageModel {
+    const separator = modelId.indexOf(':');
+    const provider = modelId.slice(0, separator);
+    const bareId = modelId.slice(separator + 1);
+    switch (provider) {
+      case 'anthropic':
+        return createAnthropic({ apiKey })(bareId);
+      case 'openai':
+        return createOpenAI({ apiKey })(bareId);
+      case 'google':
+        return createGoogleGenerativeAI({ apiKey })(bareId);
+      default:
+        throw new ProviderNotConfiguredError(
+          `BYOK is not supported for provider '${provider}'`
+        );
+    }
   }
 
   /** True when this process can route the model: gateway mode accepts any qualified id; direct mode requires the provider's key. */

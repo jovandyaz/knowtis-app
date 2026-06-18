@@ -21,14 +21,19 @@ vi.mock('ai', () => ({
 
 vi.mock('@ai-sdk/anthropic', () => ({
   anthropic: vi.fn(),
+  createAnthropic: vi.fn(() =>
+    vi.fn().mockReturnValue('mock-anthropic-byok-model')
+  ),
 }));
 
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn().mockReturnValue('mock-google'),
+  createGoogleGenerativeAI: vi.fn(() =>
+    vi.fn().mockReturnValue('mock-google-byok-model')
+  ),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
-  createOpenAI: vi.fn().mockReturnValue('mock-openai'),
+  createOpenAI: vi.fn(() => vi.fn().mockReturnValue('mock-openai-byok-model')),
 }));
 
 function makeFactory(overrides?: Record<string, unknown>) {
@@ -156,6 +161,36 @@ describe('ProviderRegistryFactory', () => {
       makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
 
       expect(createProviderRegistry).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('BYOK (per-request key override)', () => {
+    it('should build a model from a user key for a provider the server lacks', () => {
+      const factory = makeFactory({ GOOGLE_GENERATIVE_AI_API_KEY: '' });
+
+      const model = factory.languageModel(
+        'google:gemini-3.5-flash',
+        'user-key'
+      );
+
+      expect(model).toBe('mock-google-byok-model');
+    });
+
+    it('should throw for an unknown provider under BYOK', () => {
+      const factory = makeFactory();
+
+      expect(() => factory.languageModel('mistral:x', 'user-key')).toThrow();
+    });
+
+    it('should ignore byokKey in gateway mode and return gateway model', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      const model = factory.languageModel(
+        'anthropic:claude-sonnet-4-20250514',
+        'user-key'
+      );
+
+      expect(model).toBe('mock-gateway-model');
     });
   });
 });
