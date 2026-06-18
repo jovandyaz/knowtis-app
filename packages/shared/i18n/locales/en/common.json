@@ -105,10 +105,14 @@
   },
   "aiModels": {
     "haiku45": "Fast replies for simple tasks",
-    "gpt4oMini": "Quick, low-cost general use",
-    "gemini20Flash": "Fast multimodal responses",
-    "sonnet4": "Balanced quality and speed",
-    "opus48": "Most capable for complex reasoning"
+    "gpt54mini": "Quick, low-cost general use",
+    "gemini31FlashLite": "Fastest answers",
+    "sonnet46": "Balanced quality and speed",
+    "gpt54": "Strong all-around model",
+    "gemini35Flash": "All-around multimodal help",
+    "opus48": "Most capable for complex reasoning",
+    "gpt55": "OpenAI's most capable model",
+    "gemini31Pro": "Advanced reasoning, math and code"
   },
   "integrations": {
     "title": "Integrations",
