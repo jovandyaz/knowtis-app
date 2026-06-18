@@ -90,7 +90,8 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
           eq(userProviderKeys.userId, userId),
           eq(userProviderKeys.provider, provider)
         )
-      );
+      )
+      .returning({ userId: userProviderKeys.userId });
   }
 
   async touchLastUsed(userId: string, provider: ByokProvider): Promise<void> {
@@ -102,6 +103,7 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
           eq(userProviderKeys.userId, userId),
           eq(userProviderKeys.provider, provider)
         )
-      );
+      )
+      .returning({ userId: userProviderKeys.userId });
   }
 }

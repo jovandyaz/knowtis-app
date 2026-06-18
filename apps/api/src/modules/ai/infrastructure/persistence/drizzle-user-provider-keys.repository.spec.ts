@@ -80,6 +80,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
     expect(await repo.listForUser(USER_ID)).toHaveLength(1);
   });
 
+  it('touchLastUsed stamps lastUsedAt', async () => {
+    await repo.touchLastUsed(USER_ID, 'anthropic');
+    const list = await repo.listForUser(USER_ID);
+    expect(list[0].lastUsedAt).not.toBeNull();
+  });
+
   it('remove deletes the row', async () => {
     await repo.remove(USER_ID, 'anthropic');
     expect(await repo.getEncrypted(USER_ID, 'anthropic')).toBeNull();
