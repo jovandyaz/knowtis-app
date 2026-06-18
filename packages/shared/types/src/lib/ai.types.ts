@@ -73,3 +73,13 @@ export interface SelectableModel {
 export interface AIPreferences {
   preferredModel: string | null;
 }
+
+export const BYOK_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
+export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
+
+export interface ProviderKeyInfo {
+  readonly provider: ByokProvider;
+  readonly keyPrefix: string;
+  readonly lastUsedAt: string | null;
+  readonly createdAt: string;
+}

@@ -57,6 +57,9 @@ export {
   type ModelTier,
   type SelectableModel,
   type AIPreferences,
+  BYOK_PROVIDERS,
+  type ByokProvider,
+  type ProviderKeyInfo,
 } from './lib/ai.types';
 
 export {
