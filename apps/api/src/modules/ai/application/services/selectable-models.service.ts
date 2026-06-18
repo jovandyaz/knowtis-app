@@ -27,8 +27,12 @@ export class SelectableModelsService {
     const pricing = this.catalog.getPricing(id);
     // outputCostPerToken is per-token; thresholds are $15/M and $5/M
     const out = pricing?.outputCostPerToken ?? 0;
-    if (out >= 0.000015) {return 3;}
-    if (out >= 0.000005) {return 2;}
+    if (out >= 0.000015) {
+      return 3;
+    }
+    if (out >= 0.000005) {
+      return 2;
+    }
     return 1;
   }
 
