@@ -25,12 +25,13 @@ export class SelectableModelsService {
 
   private costClass(id: string): 1 | 2 | 3 {
     const pricing = this.catalog.getPricing(id);
-    // outputCostPerToken is per-token; thresholds are $15/M and $5/M
+    // outputCostPerToken is per-token; thresholds are $20/M and $10/M so the
+    // Claude tiers rank Haiku ($) < Sonnet ($$) < Opus ($$$).
     const out = pricing?.outputCostPerToken ?? 0;
-    if (out >= 0.000015) {
+    if (out >= 0.00002) {
       return 3;
     }
-    if (out >= 0.000005) {
+    if (out >= 0.00001) {
       return 2;
     }
     return 1;

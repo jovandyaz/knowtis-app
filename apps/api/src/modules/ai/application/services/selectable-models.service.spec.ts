@@ -78,15 +78,15 @@ describe('SelectableModelsService', () => {
       pricing: {
         'anthropic:claude-haiku-4-5-20251001': {
           inputCostPerToken: 0.0000008,
-          outputCostPerToken: 0.000001,
+          outputCostPerToken: 0.000005,
         },
         'openai:gpt-4o-mini': {
           inputCostPerToken: 0.00000015,
-          outputCostPerToken: 0.000005,
+          outputCostPerToken: 0.000015,
         },
         'anthropic:claude-sonnet-4-20250514': {
           inputCostPerToken: 0.000003,
-          outputCostPerToken: 0.00002,
+          outputCostPerToken: 0.000025,
         },
       },
     });
