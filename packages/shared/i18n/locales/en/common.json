@@ -97,6 +97,10 @@
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "defaultHint": "Account default",
+    "loadingModels": "Loading models…",
+    "loadError": "Couldn't load models",
+    "noModels": "No models available",
+    "retry": "Retry",
     "tier": {
       "fast": "Fast",
       "balanced": "Balanced",

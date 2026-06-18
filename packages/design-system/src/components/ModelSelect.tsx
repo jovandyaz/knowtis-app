@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Loader2 } from 'lucide-react';
 
 import { Button } from './Button';
 import {
@@ -21,12 +21,15 @@ export interface ModelSelectOption {
   costClass?: number;
 }
 
+export type ModelSelectStatus = 'loading' | 'error' | 'ready';
+
 const TIER_ORDER = ['fast', 'balanced', 'powerful'] as const;
 
 const COST_GLYPH = '$';
 const MIN_COST_LEVEL = 1;
 const MAX_COST_LEVEL = 3;
 const NO_COST_LEVEL = 0;
+const FALLBACK_LABEL = '—';
 
 function costGlyphs(level: number): string {
   const clamped = Math.min(
@@ -50,9 +53,15 @@ export interface ModelSelectProps {
   models: ModelSelectOption[];
   value: string | null;
   onSelect: (id: string) => void;
+  status?: ModelSelectStatus;
+  onRetry?: () => void;
   renderDescription?: (m: ModelSelectOption) => string;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
+  loadingLabel?: string;
+  errorLabel?: string;
+  emptyLabel?: string;
+  retryLabel?: string;
   footer?: ReactNode;
 }
 
@@ -60,11 +69,22 @@ export function ModelSelect({
   models,
   value,
   onSelect,
+  status = 'ready',
+  onRetry,
   renderDescription,
   tierLabel,
   triggerLabel,
+  loadingLabel,
+  errorLabel,
+  emptyLabel,
+  retryLabel,
   footer,
 }: ModelSelectProps) {
+  const isLoading = status === 'loading';
+  const isError = status === 'error';
+  const isEmpty = status === 'ready' && models.length === 0;
+  const triggerDisabled = isLoading || isEmpty;
+
   const active = models.find((m) => m.id === value);
   const known = new Set<string>(TIER_ORDER);
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
@@ -77,6 +97,19 @@ export function ModelSelect({
     }))
     .filter((g) => g.items.length > 0);
 
+  const triggerText = ((): string => {
+    if (isLoading) {
+      return loadingLabel ?? FALLBACK_LABEL;
+    }
+    if (isError) {
+      return errorLabel ?? FALLBACK_LABEL;
+    }
+    if (isEmpty) {
+      return emptyLabel ?? FALLBACK_LABEL;
+    }
+    return active?.label ?? triggerLabel ?? FALLBACK_LABEL;
+  })();
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -85,54 +118,70 @@ export function ModelSelect({
           variant="ghost"
           size="sm"
           className="gap-1.5"
-          disabled={models.length === 0}
+          disabled={triggerDisabled}
         >
-          <span className="truncate">
-            {active?.label ?? triggerLabel ?? '—'}
-          </span>
-          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+          {isLoading && (
+            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
+          )}
+          <span className="truncate">{triggerText}</span>
+          {!isLoading && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
-        {groups.map((g, i) => {
-          const level = tierCostLevel(g.items);
-          return (
-            <div key={g.tier}>
-              {i > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
-                <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
-                {level > NO_COST_LEVEL && (
-                  <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
-                    {costGlyphs(level)}
-                  </span>
-                )}
-              </DropdownMenuLabel>
-              {g.items.map((m) => (
-                <DropdownMenuItem
-                  key={m.id}
-                  onSelect={() => onSelect(m.id)}
-                  className="flex-col items-start gap-0.5"
-                >
-                  <div className="flex w-full items-center justify-between gap-2">
-                    <span className="font-medium">{m.label}</span>
-                    {m.id === value && <Check className="h-3.5 w-3.5" />}
-                  </div>
-                  {renderDescription && (
-                    <span className="text-xs text-(--muted-foreground)">
-                      {renderDescription(m)}
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              ))}
-            </div>
-          );
-        })}
-        {footer && (
+        {isError ? (
           <>
-            <DropdownMenuSeparator />
             <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
-              {footer}
+              {errorLabel ?? FALLBACK_LABEL}
             </div>
+            {onRetry && retryLabel && (
+              <DropdownMenuItem onSelect={onRetry}>
+                {retryLabel}
+              </DropdownMenuItem>
+            )}
+          </>
+        ) : (
+          <>
+            {groups.map((g, i) => {
+              const level = tierCostLevel(g.items);
+              return (
+                <div key={g.tier}>
+                  {i > 0 && <DropdownMenuSeparator />}
+                  <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
+                    <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
+                    {level > NO_COST_LEVEL && (
+                      <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
+                        {costGlyphs(level)}
+                      </span>
+                    )}
+                  </DropdownMenuLabel>
+                  {g.items.map((m) => (
+                    <DropdownMenuItem
+                      key={m.id}
+                      onSelect={() => onSelect(m.id)}
+                      className="flex-col items-start gap-0.5"
+                    >
+                      <div className="flex w-full items-center justify-between gap-2">
+                        <span className="font-medium">{m.label}</span>
+                        {m.id === value && <Check className="h-3.5 w-3.5" />}
+                      </div>
+                      {renderDescription && (
+                        <span className="text-xs text-(--muted-foreground)">
+                          {renderDescription(m)}
+                        </span>
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                </div>
+              );
+            })}
+            {footer && (
+              <>
+                <DropdownMenuSeparator />
+                <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
+                  {footer}
+                </div>
+              </>
+            )}
           </>
         )}
       </DropdownMenuContent>
