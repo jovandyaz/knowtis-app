@@ -128,6 +128,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows[0].content).toBe('proactive');
   });
 
+  it('setModel persists, findByIdForUser returns it (scoped to owner)', async () => {
+    const { id } = await repo.create({ userId: USER, title: 'model-test' });
+    await repo.setModel(id, USER, 'openai:gpt-4o-mini');
+    const found = await repo.findByIdForUser(id, USER);
+    expect(found?.model).toBe('openai:gpt-4o-mini');
+    expect(await repo.findByIdForUser(id, OTHER)).toBeNull();
+  });
+
   it('scopes markExtracted to the owner', async () => {
     const { id } = await repo.create({ userId: USER, title: 't' });
     const extractedAt = async () => {

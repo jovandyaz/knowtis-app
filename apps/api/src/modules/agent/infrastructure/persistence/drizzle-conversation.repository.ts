@@ -38,9 +38,9 @@ export class DrizzleConversationRepository implements ConversationRepository {
   async findByIdForUser(
     conversationId: string,
     userId: string
-  ): Promise<{ id: string } | null> {
+  ): Promise<{ id: string; model: string | null } | null> {
     const [row] = await this.db
-      .select({ id: conversations.id })
+      .select({ id: conversations.id, model: conversations.model })
       .from(conversations)
       .where(
         and(
@@ -50,6 +50,23 @@ export class DrizzleConversationRepository implements ConversationRepository {
       )
       .limit(1);
     return row ?? null;
+  }
+
+  async setModel(
+    conversationId: string,
+    userId: string,
+    model: string
+  ): Promise<void> {
+    await this.db
+      .update(conversations)
+      .set({ model, updatedAt: sql`now()` })
+      .where(
+        and(
+          eq(conversations.id, conversationId),
+          eq(conversations.userId, userId)
+        )
+      )
+      .returning({ id: conversations.id });
   }
 
   async loadMessages(

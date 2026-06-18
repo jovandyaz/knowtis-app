@@ -27,7 +27,12 @@ export interface ConversationRepository {
   findByIdForUser(
     conversationId: string,
     userId: string
-  ): Promise<{ id: string } | null>;
+  ): Promise<{ id: string; model: string | null } | null>;
+  setModel(
+    conversationId: string,
+    userId: string,
+    model: string
+  ): Promise<void>;
   /** Oldest→newest, last `limit` messages. */
   loadMessages(
     conversationId: string,
