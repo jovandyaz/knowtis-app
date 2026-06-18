@@ -14,3 +14,5 @@ export {
   type VoiceNoteInput,
   type VoiceNoteResponse,
 } from './useVoiceNote';
+export { useAvailableModels, aiModelsQueryKeys } from './useAvailableModels';
+export { useAISettings, useUpdateAISettings } from './useAISettings';
