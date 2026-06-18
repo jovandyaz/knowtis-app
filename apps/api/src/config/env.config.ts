@@ -80,6 +80,13 @@ const envSchemaBase = z.object({
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_BASE_URL: z.url().default('https://cloud.langfuse.com'),
+  BYOK_ENCRYPTION_KEY: z
+    .string()
+    .refine(
+      (v) => Buffer.from(v, 'base64').length === 32,
+      'BYOK_ENCRYPTION_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)'
+    )
+    .optional(),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
