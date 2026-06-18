@@ -10,6 +10,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+
 import { notes } from './notes.schema';
 import { users } from './users.schema';
 
@@ -38,7 +40,7 @@ export const conversations = pgTable(
     memoriesExtractedAt: timestamp('memories_extracted_at', {
       withTimezone: true,
     }),
-    model: varchar('model', { length: 120 }),
+    model: varchar('model', { length: MODEL_ID_MAX_LENGTH }),
   },
   (table) => [
     index('conversations_user_updated_idx').on(table.userId, table.updatedAt),

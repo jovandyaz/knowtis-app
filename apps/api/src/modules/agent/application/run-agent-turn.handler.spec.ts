@@ -1,4 +1,4 @@
-import { BadRequestException, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -1885,7 +1885,7 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(modelPreference.assertSelectable).toHaveBeenCalledWith(
+    expect(modelPreference.isSelectable).toHaveBeenCalledWith(
       'openai:gpt-4o-mini'
     );
     expect(conversations.setModel).toHaveBeenCalledWith(
@@ -1902,9 +1902,7 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.assertSelectable).mockImplementation(() => {
-      throw new BadRequestException('Model not selectable: bogus:model');
-    });
+    vi.mocked(modelPreference.isSelectable).mockReturnValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,

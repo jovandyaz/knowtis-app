@@ -592,9 +592,7 @@ export class RunAgentTurnHandler {
     estimatedTokens: number
   ): Promise<string | null> {
     if (input.model) {
-      try {
-        this.modelPreference.assertSelectable(input.model);
-      } catch {
+      if (!this.modelPreference.isSelectable(input.model)) {
         await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
         callbacks.onError(AIErrors.invalidModel(input.model));
         return null;
