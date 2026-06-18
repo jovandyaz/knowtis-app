@@ -9,8 +9,8 @@ import {
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../config/env.config';
-import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
   EMBEDDING_PORT,
@@ -56,6 +56,8 @@ interface RunAgentTurnInput {
   readonly message?: { content: string };
   readonly conversationId?: string;
   readonly userMemories?: readonly string[];
+  readonly model?: string;
+  readonly conversationModel?: string | null;
 }
 
 export interface RunAgentTurnCallbacks {
@@ -108,7 +110,6 @@ export class RunAgentTurnHandler {
     @Inject(AGENT_ORCHESTRATOR)
     private readonly orchestrator: AgentOrchestrator,
     private readonly rateLimit: AIRateLimitService,
-    private readonly aiConfig: AIConfigService,
     private readonly configService: ConfigService<EnvConfig, true>,
     @Inject(PENDING_MUTATION_STORE)
     private readonly pendingStore: PendingMutationStore,
@@ -120,7 +121,8 @@ export class RunAgentTurnHandler {
     private readonly memory: MemoryRepository,
     @Inject(EMBEDDING_PORT)
     private readonly embed: EmbeddingPort,
-    private readonly featureFlags: FeatureFlagsService
+    private readonly featureFlags: FeatureFlagsService,
+    private readonly modelPreference: ModelPreferenceService
   ) {}
 
   async execute(
@@ -168,14 +170,15 @@ export class RunAgentTurnHandler {
     if (!message) {
       return;
     }
-    const conversationId = await this.resolveConversationId(input, message);
-    if (!conversationId) {
+    const conversation = await this.resolveConversation(input, message);
+    if (!conversation) {
       callbacks.onError({
         code: 'forbidden',
         message: 'Conversation not found',
       });
       return;
     }
+    const conversationId = conversation.id;
     const { history, knownNotes } =
       await this.loadConversationContext(conversationId);
     const messages = coalesceMessages([
@@ -194,6 +197,8 @@ export class RunAgentTurnHandler {
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
       ...(userMemories.length ? { userMemories } : {}),
+      ...(input.model ? { model: input.model } : {}),
+      conversationModel: conversation.model,
     };
     return this.runLoop(
       synthInput,
@@ -239,23 +244,22 @@ export class RunAgentTurnHandler {
     }
   }
 
-  private async resolveConversationId(
+  private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<string | null> {
+  ): Promise<{ id: string; model: string | null } | null> {
     if (input.conversationId) {
-      const found = await this.conversations.findByIdForUser(
+      return this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
-      return found ? found.id : null;
     }
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: [...message.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
     });
-    return created.id;
+    return { id: created.id, model: null };
   }
 
   private async loadConversationContext(
@@ -387,6 +391,7 @@ export class RunAgentTurnHandler {
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(userMemories.length ? { userMemories } : {}),
+        conversationModel: found.model,
         resume: input.resume,
       };
       return this.runLoop(
@@ -450,7 +455,15 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const model = await this.aiConfig.getDefaultModel();
+    const model = await this.resolveModel(
+      input,
+      persistence?.conversationId,
+      callbacks,
+      estimatedTokens
+    );
+    if (model === null) {
+      return;
+    }
     const modelResult = AIModel.create(model, this.modelCatalog);
     if (modelResult.isErr()) {
       await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
@@ -570,6 +583,36 @@ export class RunAgentTurnHandler {
         )
       );
     }
+  }
+
+  private async resolveModel(
+    input: RunAgentTurnInput,
+    conversationId: string | undefined,
+    callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
+    estimatedTokens: number
+  ): Promise<string | null> {
+    if (input.model) {
+      try {
+        this.modelPreference.assertSelectable(input.model);
+      } catch {
+        await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
+        callbacks.onError(AIErrors.invalidModel(input.model));
+        return null;
+      }
+      if (conversationId) {
+        await this.conversations.setModel(
+          conversationId,
+          input.userId,
+          input.model
+        );
+      }
+      return input.model;
+    }
+    const stored = input.conversationModel ?? null;
+    if (stored && this.modelPreference.isSelectable(stored)) {
+      return stored;
+    }
+    return this.modelPreference.getEffectiveDefault(input.userId);
   }
 
   private async recordUsageSafe(
