@@ -49,6 +49,7 @@ export {
   AI_ACTIONS,
   AI_LANGUAGES,
   AI_TONES,
+  MODEL_ID_MAX_LENGTH,
   MODEL_TIERS,
   type AIAction,
   type AILanguage,

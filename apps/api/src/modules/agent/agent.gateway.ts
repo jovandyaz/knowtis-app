@@ -16,6 +16,8 @@ import {
 import type { Server } from 'socket.io';
 import { z } from 'zod';
 
+import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
@@ -37,7 +39,7 @@ const agentTurnSchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
-  model: z.string().max(120).optional(),
+  model: z.string().max(MODEL_ID_MAX_LENGTH).optional(),
 });
 
 const agentApprovePayloadSchema = z.object({
