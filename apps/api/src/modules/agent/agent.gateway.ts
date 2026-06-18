@@ -39,7 +39,7 @@ const agentTurnSchema = z.object({
   conversationId: z.string().uuid().optional(),
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
-  model: z.string().max(MODEL_ID_MAX_LENGTH).optional(),
+  model: z.string().trim().min(1).max(MODEL_ID_MAX_LENGTH).optional(),
 });
 
 const agentApprovePayloadSchema = z.object({

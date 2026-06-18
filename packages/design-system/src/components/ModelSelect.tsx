@@ -24,6 +24,14 @@ export interface ModelSelectOption {
 
 const TIER_ORDER = ['fast', 'balanced', 'powerful'] as const;
 
+function costGlyphs(costClass?: number): string {
+  if (!Number.isFinite(costClass)) {
+    return '$';
+  }
+  const clamped = Math.min(3, Math.max(1, Math.trunc(costClass as number)));
+  return '$'.repeat(clamped);
+}
+
 export interface ModelSelectProps {
   models: ModelSelectOption[];
   value: string | null;
@@ -44,15 +52,27 @@ export function ModelSelect({
   footer,
 }: ModelSelectProps) {
   const active = models.find((m) => m.id === value);
-  const groups = TIER_ORDER.map((tier) => ({
-    tier,
-    items: models.filter((m) => m.tier === tier),
-  })).filter((g) => g.items.length > 0);
+  const known = new Set<string>(TIER_ORDER);
+  const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
+    (tier) => !known.has(tier)
+  );
+  const groups = [...TIER_ORDER, ...extraTiers]
+    .map((tier) => ({
+      tier,
+      items: models.filter((m) => m.tier === tier),
+    }))
+    .filter((g) => g.items.length > 0);
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="gap-1.5">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="gap-1.5"
+          disabled={models.length === 0}
+        >
           <span className="truncate">
             {active?.label ?? triggerLabel ?? '—'}
           </span>
@@ -75,9 +95,7 @@ export function ModelSelect({
                 <div className="flex w-full items-center justify-between gap-2">
                   <span className="font-medium">{m.label}</span>
                   <span className="flex items-center gap-1">
-                    <Badge variant="secondary">
-                      {'$'.repeat(m.costClass ?? 1)}
-                    </Badge>
+                    <Badge variant="secondary">{costGlyphs(m.costClass)}</Badge>
                     {m.id === value && <Check className="h-3.5 w-3.5" />}
                   </span>
                 </div>
