@@ -68,3 +68,4 @@ export {
 } from './lib/images.api';
 
 export { aiModelsApi } from './lib/ai-models.api';
+export { aiKeysApi } from './lib/ai-keys.api';
