@@ -32,6 +32,12 @@ export function AgentMessage({
             >
               {message.content}
             </Response>
+            {isStreaming && message.content.length > 0 && (
+              <span
+                aria-hidden="true"
+                className="ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 animate-pulse bg-primary motion-reduce:animate-none"
+              />
+            )}
             {message.sources && <AgentSourceChips sources={message.sources} />}
             {message.webSources && (
               <AgentWebSourceChips sources={message.webSources} />
