@@ -131,7 +131,17 @@ describe('ByokService', () => {
     expect(await service.getApiKey('u1', 'anthropic')).toBeNull();
   });
 
-  it('validateKey calls generateText with maxOutputTokens >= 16 (OpenAI minimum)', async () => {
+  it('validates the key against a provider that rejects maxOutputTokens below 16 (OpenAI minimum)', async () => {
+    // Mimic OpenAI's Responses API, which rejects max_output_tokens < 16. setKey
+    // must succeed, proving validateKey never probes with a value below 16.
+    vi.mocked(generateText).mockImplementation((async (opts: {
+      maxOutputTokens?: number;
+    }) => {
+      if ((opts.maxOutputTokens ?? 0) < 16) {
+        throw new Error('integer below minimum value. Expected a value >= 16');
+      }
+      return { usage: { outputTokens: 16 } };
+    }) as never);
     const store = new Map<string, unknown>();
     const repo = {
       listForUser: vi.fn().mockResolvedValue([]),
@@ -164,12 +174,9 @@ describe('ByokService', () => {
       registry as never
     );
 
-    await service.setKey('u1', 'openai', 'sk-valid-123456');
-
-    expect(vi.mocked(generateText)).toHaveBeenCalledWith(
-      expect.objectContaining({ maxOutputTokens: 16 })
-    );
-    const call = vi.mocked(generateText).mock.calls[0][0];
-    expect(call.maxOutputTokens).toBeGreaterThanOrEqual(16);
+    await expect(
+      service.setKey('u1', 'openai', 'sk-valid-123456')
+    ).resolves.toBeUndefined();
+    expect(repo.upsert).toHaveBeenCalled();
   });
 });

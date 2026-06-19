@@ -88,7 +88,7 @@ describe('AIKeysManager', () => {
     );
   });
 
-  it('shows Remove button and stored prefix hint when a key is stored', () => {
+  it('shows the stored prefix hint and removes the stored key on click', async () => {
     vi.mocked(useProviderKeys).mockReturnValue({
       data: [{ provider: 'openai', keyPrefix: 'sk-1234' }],
     } as unknown as ReturnType<typeof useProviderKeys>);
@@ -101,5 +101,9 @@ describe('AIKeysManager', () => {
       name: /aiAssistant\.byok\.remove/i,
     });
     expect(removeButtons).toHaveLength(1);
+
+    await userEvent.click(removeButtons[0]);
+
+    expect(mutateRemoveKey).toHaveBeenCalledWith('openai');
   });
 });

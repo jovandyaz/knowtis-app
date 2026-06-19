@@ -456,20 +456,24 @@ export class RunAgentTurnHandler {
       )
     );
     const estimatedTokens = this.estimateTokens(messages);
-    const limit = await this.rateLimit.checkLimit(
-      input.userId,
-      estimatedTokens,
-      input.isAnonymous ?? false
-    );
-    if (!limit.allowed) {
-      callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
+
+    // Resolve the model and the BYOK key BEFORE the budget gate: a BYOK turn
+    // bills the user's own key, so it must skip the daily token/cost ceiling.
+    let byokProviders: ReadonlySet<string>;
+    try {
+      byokProviders = await this.modelPreference.byokProvidersFor(
+        input.userId,
+        input.isAnonymous
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.byok.providers_lookup_failed',
+        userId: input.userId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return;
     }
-
-    const byokProviders = await this.modelPreference.byokProvidersFor(
-      input.userId,
-      input.isAnonymous
-    );
 
     let model: string | null;
     try {
@@ -477,11 +481,9 @@ export class RunAgentTurnHandler {
         input,
         persistence?.conversationId,
         callbacks,
-        estimatedTokens,
         byokProviders
       );
     } catch (error) {
-      await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
       callbacks.onError(
         AIErrors.providerError(
           error instanceof Error ? error.message : 'Model resolution failed'
@@ -494,15 +496,42 @@ export class RunAgentTurnHandler {
     }
     const modelResult = AIModel.create(model, this.modelCatalog);
     if (modelResult.isErr()) {
-      await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
       callbacks.onError(modelResult.error);
       return;
     }
+
     const provider = providerOf(model);
-    const byokApiKey = byokProviders.has(provider)
-      ? await this.byok.getApiKey(input.userId, provider as ByokProvider)
-      : null;
-    const isByok = byokApiKey !== null;
+    const shouldUseByok = byokProviders.has(provider);
+    let byokApiKey: string | null = null;
+    if (shouldUseByok) {
+      byokApiKey = await this.byok.getApiKey(
+        input.userId,
+        provider as ByokProvider
+      );
+      // Fail closed: the model was selectable on the user's key, so never bill
+      // the server's key as a silent fallback when that key is unavailable.
+      if (!byokApiKey) {
+        callbacks.onError(
+          AIErrors.providerError(
+            'Your saved key for this provider is unavailable. Re-add it in settings.'
+          )
+        );
+        return;
+      }
+    }
+    const isByok = shouldUseByok;
+
+    const limit = await this.rateLimit.checkLimit(
+      input.userId,
+      estimatedTokens,
+      input.isAnonymous ?? false,
+      isByok
+    );
+    if (!limit.allowed) {
+      callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
+      return;
+    }
+
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
     const ctx: TurnLoopContext = { estimatedTokens, model, isByok };
 
@@ -629,12 +658,10 @@ export class RunAgentTurnHandler {
     input: RunAgentTurnInput,
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
-    estimatedTokens: number,
     byokProviders: ReadonlySet<string>
   ): Promise<string | null> {
     if (input.model) {
       if (!this.modelPreference.isSelectableWith(input.model, byokProviders)) {
-        await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
         callbacks.onError(AIErrors.invalidModel(input.model));
         return null;
       }
@@ -667,7 +694,9 @@ export class RunAgentTurnHandler {
     isByok = false
   ): Promise<void> {
     if (usage.inputTokens + usage.outputTokens === 0) {
-      await this.rateLimit.releaseReservation(userId, estimatedTokens);
+      if (!isByok) {
+        await this.rateLimit.releaseReservation(userId, estimatedTokens);
+      }
       return;
     }
     try {

@@ -1,6 +1,8 @@
-import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
-
-import type { EncryptedSecret } from '../../infrastructure/crypto/secret-cipher';
+import type {
+  ByokProvider,
+  EncryptedSecret,
+  ProviderKeyInfo,
+} from '@knowtis/shared-types';
 
 export interface StoredProviderKey extends EncryptedSecret {
   readonly keyPrefix: string;

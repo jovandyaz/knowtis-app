@@ -1434,7 +1434,7 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 
-  it('releases the rate-limit reservation when the configured model is invalid', async () => {
+  it('rejects an invalid resolved model before reserving the budget', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
@@ -1457,10 +1457,8 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(onError).toHaveBeenCalled();
-    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      USER,
-      expect.any(Number)
-    );
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
   it('creates a conversation, loads history, and persists the turn on done (memory path)', async () => {
@@ -1991,10 +1989,8 @@ describe('RunAgentTurnHandler', () => {
     );
     expect(orchestrator.run).not.toHaveBeenCalled();
     expect(conversations.setModel).not.toHaveBeenCalled();
-    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      USER,
-      expect.any(Number)
-    );
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
   });
 
   it('decrypts the user BYOK key for the resolved provider and flags the usage', async () => {
@@ -2055,5 +2051,48 @@ describe('RunAgentTurnHandler', () => {
       expect.objectContaining({ byok: true })
     );
     expect(byok.markUsed).toHaveBeenCalledWith(USER, 'google');
+  });
+
+  it('fails closed without server billing when an advertised BYOK key is unavailable', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set(['google'])
+    );
+    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue(null);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: 'google:gemini-2.0-flash',
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'google');
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 });

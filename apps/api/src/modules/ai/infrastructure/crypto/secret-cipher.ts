@@ -1,18 +1,22 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 
+import type { EncryptedSecret } from '@knowtis/shared-types';
+
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12;
+const MASTER_KEY_BYTES = 32;
 
-export interface EncryptedSecret {
-  readonly ciphertext: string;
-  readonly iv: string;
-  readonly authTag: string;
+function assertValidMasterKey(masterKey: Buffer): void {
+  if (masterKey.length !== MASTER_KEY_BYTES) {
+    throw new Error('BYOK_ENCRYPTION_KEY must decode to 32 bytes');
+  }
 }
 
 export function encryptSecret(
   plaintext: string,
   masterKey: Buffer
 ): EncryptedSecret {
+  assertValidMasterKey(masterKey);
   const iv = randomBytes(IV_BYTES);
   const cipher = createCipheriv(ALGORITHM, masterKey, iv);
   const ciphertext = Buffer.concat([

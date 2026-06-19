@@ -60,6 +60,7 @@ export {
   BYOK_PROVIDERS,
   type ByokProvider,
   type ProviderKeyInfo,
+  type EncryptedSecret,
 } from './lib/ai.types';
 
 export {

@@ -1,7 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 
-import type { ByokProvider, ProviderKeyInfo } from '@knowtis/shared-types';
+import {
+  BYOK_PROVIDERS,
+  type ByokProvider,
+  type EncryptedSecret,
+  type ProviderKeyInfo,
+} from '@knowtis/shared-types';
 
 import {
   DATABASE_CONNECTION,
@@ -12,7 +17,15 @@ import type {
   StoredProviderKey,
   UserProviderKeysRepository,
 } from '../../domain/ports/user-provider-keys.repository';
-import type { EncryptedSecret } from '../crypto/secret-cipher';
+
+const BYOK_PROVIDER_SET = new Set<string>(BYOK_PROVIDERS);
+
+function toByokProvider(raw: string): ByokProvider {
+  if (!BYOK_PROVIDER_SET.has(raw)) {
+    throw new Error(`Invalid BYOK provider value in persistence: ${raw}`);
+  }
+  return raw as ByokProvider;
+}
 
 @Injectable()
 export class DrizzleUserProviderKeysRepository implements UserProviderKeysRepository {
@@ -29,7 +42,7 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
       .from(userProviderKeys)
       .where(eq(userProviderKeys.userId, userId));
     return rows.map((r) => ({
-      provider: r.provider as ByokProvider,
+      provider: toByokProvider(r.provider),
       keyPrefix: r.keyPrefix,
       lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
@@ -41,7 +54,7 @@ export class DrizzleUserProviderKeysRepository implements UserProviderKeysReposi
       .select({ provider: userProviderKeys.provider })
       .from(userProviderKeys)
       .where(eq(userProviderKeys.userId, userId));
-    return rows.map((r) => r.provider as ByokProvider);
+    return rows.map((r) => toByokProvider(r.provider));
   }
 
   async getEncrypted(

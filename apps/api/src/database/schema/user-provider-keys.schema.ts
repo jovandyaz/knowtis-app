@@ -1,4 +1,6 @@
+import { sql } from 'drizzle-orm';
 import {
+  check,
   pgTable,
   primaryKey,
   text,
@@ -28,7 +30,13 @@ export const userProviderKeys = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [primaryKey({ columns: [table.userId, table.provider] })]
+  (table) => [
+    primaryKey({ columns: [table.userId, table.provider] }),
+    check(
+      'user_provider_keys_provider_check',
+      sql`${table.provider} in ('anthropic', 'openai', 'google')`
+    ),
+  ]
 );
 
 export type UserProviderKeyRow = typeof userProviderKeys.$inferSelect;

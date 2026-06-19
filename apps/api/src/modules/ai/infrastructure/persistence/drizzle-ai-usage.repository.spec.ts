@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import {
@@ -16,6 +16,7 @@ import { AI_ACTION } from '@knowtis/shared-types';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
+  aiUsage,
   DATABASE_CONNECTION,
   DatabaseModule,
   users,
@@ -137,11 +138,12 @@ describe('DrizzleAIUsageRepository', () => {
 });
 
 describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleAIUsageRepository;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -163,10 +165,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
         isAnonymous: false,
       })
       .onConflictDoNothing();
+    await db.delete(aiUsage).where(eq(aiUsage.userId, DB_USER_ID));
   });
 
   afterAll(async () => {
+    await db.delete(aiUsage).where(eq(aiUsage.userId, DB_USER_ID));
     await db.delete(users).where(eq(users.id, DB_USER_ID));
+    await moduleRef.close();
   });
 
   it('excludes byok usage from the daily budget total', async () => {

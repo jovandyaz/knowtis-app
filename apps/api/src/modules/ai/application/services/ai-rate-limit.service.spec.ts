@@ -412,7 +412,7 @@ describe('AIRateLimitService', () => {
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
     });
 
-    it('releases the reservation and skips the budget warning for byok usage', async () => {
+    it('records the row but skips budget correction and warning for byok usage', async () => {
       const getDaily = vi
         .spyOn(mockUsageRepo, 'getDailyUsage')
         .mockResolvedValue({
@@ -427,14 +427,49 @@ describe('AIRateLimitService', () => {
       expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
         expect.objectContaining({ byok: true })
       );
-      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
-        'user-123',
-        200,
-        0,
-        0
-      );
+      expect(mockRateLimitProvider.correctUsage).not.toHaveBeenCalled();
       expect(getDaily).not.toHaveBeenCalled();
       expect(alerts.notify).not.toHaveBeenCalled();
+    });
+
+    it('skips the daily budget reservation for byok but still enforces RPM', async () => {
+      vi.mocked(mockRateLimitProvider.checkRpm).mockResolvedValue({
+        allowed: true,
+        currentTokens: 0,
+        currentCostUsd: 0,
+      });
+      const getDaily = vi.spyOn(mockUsageRepo, 'getDailyUsage');
+
+      const result = await byokService.checkLimit(
+        'user-123',
+        1000,
+        false,
+        true
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(mockRateLimitProvider.checkRpm).toHaveBeenCalledWith('user-123');
+      expect(mockRateLimitProvider.checkAndIncrement).not.toHaveBeenCalled();
+      expect(getDaily).not.toHaveBeenCalled();
+    });
+
+    it('denies a byok turn when RPM is exceeded', async () => {
+      vi.mocked(mockRateLimitProvider.checkRpm).mockResolvedValue({
+        allowed: false,
+        currentTokens: 0,
+        currentCostUsd: 0,
+        reason: 'Too many requests',
+      });
+
+      const result = await byokService.checkLimit(
+        'user-123',
+        1000,
+        false,
+        true
+      );
+
+      expect(result.allowed).toBe(false);
+      expect(mockRateLimitProvider.checkAndIncrement).not.toHaveBeenCalled();
     });
 
     it('corrects with actual tokens and cost for non-byok usage', async () => {

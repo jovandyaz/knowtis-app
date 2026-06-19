@@ -159,7 +159,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       if (options.throwOnFreshFailure && !isAbortError(error)) {
         throw error;
       }
-      yield { type: 'error', error: this.toError(error) };
+      yield {
+        type: 'error',
+        error: this.toError(error, Boolean(input.byokApiKey)),
+      };
       return;
     }
 
@@ -212,15 +215,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       if (options.throwOnFreshFailure && !progressed && !isAbortError(error)) {
         throw error;
       }
+      const redact = Boolean(input.byokApiKey);
       this.logger.error({
         event: 'agent.run.error',
         userId: input.userId,
         model,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: this.errorMessage(error, redact),
       });
       yield {
         type: 'error',
-        error: this.toError(error),
+        error: this.toError(error, redact),
         usage: this.bestEffortUsage(model, stepUsage),
       };
     }
@@ -305,9 +309,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
   }
 
-  private toError(error: unknown) {
-    return AIErrors.providerError(
-      error instanceof Error ? error.message : 'Agent run failed'
-    );
+  private toError(error: unknown, redact = false) {
+    return AIErrors.providerError(this.errorMessage(error, redact));
+  }
+
+  // Provider/SDK auth errors can echo key material (e.g. OpenAI's "Incorrect
+  // API key provided: sk-…"), so a BYOK turn must never surface the raw message.
+  private errorMessage(error: unknown, redact: boolean): string {
+    if (redact) {
+      return 'BYOK provider request failed';
+    }
+    return error instanceof Error ? error.message : 'Agent run failed';
   }
 }

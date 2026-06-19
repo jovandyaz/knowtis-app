@@ -107,14 +107,14 @@
       "powerful": "Potente"
     },
     "byok": {
-      "title": "Tus API keys",
-      "description": "Usa tus propias keys de provider. El copilot corre en tu cuenta y tu key desbloquea los modelos de ese provider.",
-      "placeholder": "Pega tu API key de {{provider}}",
+      "title": "Tus claves de API",
+      "description": "Usa tus propias claves del proveedor. El copilot se ejecuta en tu cuenta y tu clave desbloquea los modelos de ese proveedor.",
+      "placeholder": "Pega tu clave de API de {{provider}}",
       "save": "Guardar",
       "remove": "Eliminar",
       "saving": "Validando…",
-      "invalid": "La key fue rechazada. Verifica que sea válida y tenga cupo.",
-      "stored": "Key guardada ({{prefix}}…)"
+      "invalid": "La clave fue rechazada. Verifica que sea válida y tenga cuota.",
+      "stored": "Clave guardada ({{prefix}}…)"
     }
   },
   "aiModels": {
