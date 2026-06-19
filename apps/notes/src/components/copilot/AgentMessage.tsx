@@ -1,6 +1,7 @@
 import type { AgentChatMessage } from '@/stores/agent.store';
 
 import { Message, MessageContent, Response } from '../ai-elements/message';
+import { AgentResolvedChip } from './AgentResolvedChip';
 import { AgentSourceChips } from './AgentSourceChips';
 import { AgentWebSourceChips } from './AgentWebSourceChips';
 
@@ -18,6 +19,12 @@ export function AgentMessage({
           message.content
         ) : (
           <>
+            {(message.committed || message.discarded) && (
+              <AgentResolvedChip
+                committed={message.committed}
+                discarded={message.discarded}
+              />
+            )}
             <Response
               animated
               isAnimating={isStreaming}
