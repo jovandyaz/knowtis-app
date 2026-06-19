@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -74,5 +74,49 @@ describe('AgentProposalCard', () => {
       screen.getByRole('button', { name: /send|confirm|enviar|rejectConfirm/i })
     );
     expect(onReject).toHaveBeenCalledWith(undefined);
+  });
+
+  it('renders the preview in a scrollable (not clipped) region', () => {
+    render(
+      <AgentProposalCard
+        proposal={{
+          id: 'p1',
+          kind: 'update' as const,
+          targetNoteId: 'n1',
+          summary: 's',
+          previewHtml: '<p>long content</p>',
+          payload: {},
+        }}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    const region = screen.getByTestId('proposal-preview');
+    expect(region.className).toContain('overflow-y-auto');
+    expect(region.className).not.toContain('overflow-hidden');
+  });
+
+  it('approves on Cmd/Ctrl+Enter and rejects on Escape', () => {
+    const onApprove = vi.fn();
+    const onReject = vi.fn();
+    render(
+      <AgentProposalCard
+        proposal={{
+          id: 'p1',
+          kind: 'update' as const,
+          targetNoteId: 'n1',
+          summary: 's',
+          previewHtml: '<p>x</p>',
+          payload: {},
+        }}
+        onApprove={onApprove}
+        onReject={onReject}
+      />
+    );
+    const card = screen.getByRole('group');
+    fireEvent.keyDown(card, { key: 'Enter', metaKey: true });
+    expect(onApprove).toHaveBeenCalledTimes(1);
+    fireEvent.keyDown(card, { key: 'Escape' });
+    expect(onReject).toHaveBeenCalledTimes(1);
   });
 });

@@ -37,6 +37,21 @@ export const ConfirmationActions = ({
   />
 );
 
+export type ConfirmationFooterProps = ComponentProps<'div'>;
+
+export const ConfirmationFooter = ({
+  className,
+  ...props
+}: ConfirmationFooterProps) => (
+  <div
+    className={cn(
+      'sticky bottom-0 flex flex-col-reverse gap-2 border-t border-border/60 bg-card px-3 py-2 sm:flex-row sm:justify-end',
+      className
+    )}
+    {...props}
+  />
+);
+
 export type ConfirmationActionProps = ComponentProps<typeof Button>;
 
 export const ConfirmationAction = ({
