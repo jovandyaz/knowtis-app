@@ -53,4 +53,20 @@ describe('AiKeysController', () => {
       controller.list({ id: 'a1', isAnonymous: true } as never)
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('deletes a key for the user', async () => {
+    const { controller, byok } = make();
+    await controller.remove(user, { provider: 'openai' } as never);
+    expect(byok.deleteKey).toHaveBeenCalledWith('u1', 'openai');
+  });
+
+  it('forbids anonymous users from deleting a key', async () => {
+    const { controller } = make(true);
+    await expect(
+      controller.remove(
+        { id: 'a1', isAnonymous: true } as never,
+        { provider: 'openai' } as never
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+  });
 });
