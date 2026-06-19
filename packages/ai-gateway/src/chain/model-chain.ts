@@ -55,10 +55,7 @@ export function isOverloadedError(error: unknown): boolean {
     return true;
   }
   if (Array.isArray(errors)) {
-    return errors.some((inner) => {
-      const status = statusCodeOf(inner);
-      return status !== undefined && TRANSIENT_STATUS_CODES.has(status);
-    });
+    return errors.some((inner) => isOverloadedError(inner));
   }
   return false;
 }

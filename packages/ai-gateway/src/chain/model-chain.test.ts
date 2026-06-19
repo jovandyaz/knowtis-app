@@ -29,6 +29,12 @@ describe('isOverloadedError', () => {
     ).toBe(true);
   });
 
+  it('detects a 503 wrapped inside a nested errors array entry', () => {
+    expect(
+      isOverloadedError({ errors: [{ lastError: { statusCode: 503 } }] })
+    ).toBe(true);
+  });
+
   it('returns false for a non-transient status like 500', () => {
     expect(isOverloadedError({ statusCode: 500 })).toBe(false);
   });
