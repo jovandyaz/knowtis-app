@@ -132,18 +132,29 @@ export class AIRateLimitService {
 
     if (this.rateLimitProvider) {
       try {
-        await this.rateLimitProvider.correctUsage(
-          params.userId,
-          params.estimatedTokens,
-          params.inputTokens + params.outputTokens,
-          params.costUsd
-        );
+        if (params.byok) {
+          await this.rateLimitProvider.correctUsage(
+            params.userId,
+            params.estimatedTokens,
+            0,
+            0
+          );
+        } else {
+          await this.rateLimitProvider.correctUsage(
+            params.userId,
+            params.estimatedTokens,
+            params.inputTokens + params.outputTokens,
+            params.costUsd
+          );
+        }
       } catch (error) {
         this.logger.warn('Redis usage correction failed', error);
       }
     }
 
-    await this.maybeWarnBudget(params.userId);
+    if (!params.byok) {
+      await this.maybeWarnBudget(params.userId);
+    }
   }
 
   private async maybeWarnBudget(userId: string): Promise<void> {

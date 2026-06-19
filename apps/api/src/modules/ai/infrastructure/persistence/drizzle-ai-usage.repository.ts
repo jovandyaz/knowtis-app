@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, gte, sql, sum, type SQL } from 'drizzle-orm';
+import { and, count, eq, gte, sql, sum, type SQL } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { aiUsage } from '../../../../database/schema';
@@ -23,11 +23,14 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       inputTokens: input.inputTokens,
       outputTokens: input.outputTokens,
       costUsd: input.costUsd.toFixed(6),
+      byok: input.byok ?? false,
     });
   }
 
   async getDailyUsage(userId: string): Promise<DailyUsageSummary> {
-    return this.queryDailyUsage(sql`${aiUsage.userId} = ${userId}`);
+    return this.queryDailyUsage(
+      and(sql`${aiUsage.userId} = ${userId}`, eq(aiUsage.byok, false))
+    );
   }
 
   async getGlobalDailyUsage(): Promise<DailyUsageSummary> {

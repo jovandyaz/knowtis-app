@@ -6,6 +6,7 @@ import { estimateTokenCount } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
@@ -127,7 +128,17 @@ function makeModelPreference(
     getEffectiveDefault: vi.fn().mockResolvedValue(effectiveDefault),
     assertSelectable: vi.fn(),
     isSelectable: vi.fn().mockReturnValue(true),
+    isSelectableWith: vi.fn().mockReturnValue(true),
+    byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
   } as unknown as ModelPreferenceService;
+}
+
+function makeByok() {
+  return {
+    getApiKey: vi.fn().mockResolvedValue(null),
+    enabledProviders: vi.fn().mockResolvedValue(new Set()),
+    markUsed: vi.fn().mockResolvedValue(undefined),
+  } as unknown as ByokService;
 }
 
 describe('RunAgentTurnHandler', () => {
@@ -147,7 +158,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -185,7 +197,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const error = vi.fn();
 
@@ -215,7 +228,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const error = vi.fn();
 
@@ -254,7 +268,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const done = vi.fn();
 
@@ -295,7 +310,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const done = vi.fn();
 
@@ -344,7 +360,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const done = vi.fn();
 
@@ -386,7 +403,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -426,7 +444,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -454,7 +473,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const controller = new AbortController();
     controller.abort();
@@ -489,7 +509,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -534,7 +555,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onProposal = vi.fn();
 
@@ -576,7 +598,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onDone = vi.fn();
 
@@ -611,7 +634,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.resumeTurn(
@@ -650,7 +674,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -684,7 +709,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -729,7 +755,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onDone = vi.fn();
 
@@ -778,7 +805,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -808,7 +836,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const controller = new AbortController();
     controller.abort();
@@ -842,7 +871,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference('custom:unpriced-model')
+      makeModelPreference('custom:unpriced-model'),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -880,7 +910,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -920,7 +951,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -959,7 +991,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -987,7 +1020,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1023,7 +1057,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -1067,7 +1102,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -1102,7 +1138,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -1134,7 +1171,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1176,7 +1214,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1209,7 +1248,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1243,7 +1283,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1282,7 +1323,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1326,7 +1368,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onDone = vi.fn();
 
@@ -1370,7 +1413,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1402,7 +1446,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference('not-a-model')
+      makeModelPreference('not-a-model'),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1431,7 +1476,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const done = vi.fn();
     await handler.execute(
@@ -1467,7 +1513,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     await handler.execute(
       {
@@ -1503,7 +1550,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const error = vi.fn();
     await handler.execute(
@@ -1546,7 +1594,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onProposal = vi.fn();
 
@@ -1582,7 +1631,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -1613,7 +1663,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1648,7 +1699,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1683,7 +1735,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1723,7 +1776,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1754,7 +1808,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1788,7 +1843,8 @@ describe('RunAgentTurnHandler', () => {
       memory,
       embed,
       flags,
-      makeModelPreference()
+      makeModelPreference(),
+      makeByok()
     );
 
     await handler.execute(
@@ -1826,7 +1882,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      modelPreference
+      modelPreference,
+      makeByok()
     );
 
     await handler.execute(
@@ -1867,7 +1924,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      modelPreference
+      modelPreference,
+      makeByok()
     );
 
     await handler.execute(
@@ -1885,8 +1943,9 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(modelPreference.isSelectable).toHaveBeenCalledWith(
-      'openai:gpt-4o-mini'
+    expect(modelPreference.isSelectableWith).toHaveBeenCalledWith(
+      'openai:gpt-4o-mini',
+      expect.any(Set)
     );
     expect(conversations.setModel).toHaveBeenCalledWith(
       'conv-1',
@@ -1902,7 +1961,7 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectable).mockReturnValue(false);
+    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -1913,7 +1972,8 @@ describe('RunAgentTurnHandler', () => {
       makeMemory(),
       makeEmbed(),
       makeFlags(),
-      modelPreference
+      modelPreference,
+      makeByok()
     );
     const onError = vi.fn();
 
@@ -1935,5 +1995,65 @@ describe('RunAgentTurnHandler', () => {
       USER,
       expect.any(Number)
     );
+  });
+
+  it('decrypts the user BYOK key for the resolved provider and flags the usage', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          model: 'google:gemini-2.0-flash',
+        },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+      },
+    ]);
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set(['google'])
+    );
+    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: 'google:gemini-2.0-flash',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(byok.getApiKey).toHaveBeenCalledWith(USER, 'google');
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ byokApiKey: 'user-key' })
+    );
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ byok: true })
+    );
+    expect(byok.markUsed).toHaveBeenCalledWith(USER, 'google');
   });
 });

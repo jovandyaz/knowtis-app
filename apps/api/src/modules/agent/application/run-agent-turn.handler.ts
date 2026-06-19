@@ -5,11 +5,14 @@ import {
   detectPromptInjection,
   estimateTokenCount,
   MODEL_CATALOG,
+  providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
+import type { ByokProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
@@ -81,6 +84,7 @@ type TurnEventOutcome = 'continue' | 'stop';
 interface TurnLoopContext {
   readonly estimatedTokens: number;
   readonly model: string;
+  readonly isByok: boolean;
 }
 
 interface PersistenceContext {
@@ -122,7 +126,8 @@ export class RunAgentTurnHandler {
     @Inject(EMBEDDING_PORT)
     private readonly embed: EmbeddingPort,
     private readonly featureFlags: FeatureFlagsService,
-    private readonly modelPreference: ModelPreferenceService
+    private readonly modelPreference: ModelPreferenceService,
+    private readonly byok: ByokService
   ) {}
 
   async execute(
@@ -147,7 +152,12 @@ export class RunAgentTurnHandler {
   ): TurnLoopPolicy {
     return {
       onProposal: async (event, ctx) => {
-        await this.recordUsage(userId, ctx.estimatedTokens, event.usage);
+        await this.recordUsage(
+          userId,
+          ctx.estimatedTokens,
+          event.usage,
+          ctx.isByok
+        );
         await this.pendingStore.save({
           userId,
           mutation: event.proposal,
@@ -322,7 +332,8 @@ export class RunAgentTurnHandler {
         const costUsd = await this.recordUsage(
           userId,
           ctx.estimatedTokens,
-          event.usage
+          event.usage,
+          ctx.isByok
         );
         callbacks.onDone({
           inputTokens: event.usage.inputTokens,
@@ -455,13 +466,19 @@ export class RunAgentTurnHandler {
       return;
     }
 
+    const byokProviders = await this.modelPreference.byokProvidersFor(
+      input.userId,
+      input.isAnonymous
+    );
+
     let model: string | null;
     try {
       model = await this.resolveModel(
         input,
         persistence?.conversationId,
         callbacks,
-        estimatedTokens
+        estimatedTokens,
+        byokProviders
       );
     } catch (error) {
       await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
@@ -481,8 +498,13 @@ export class RunAgentTurnHandler {
       callbacks.onError(modelResult.error);
       return;
     }
+    const provider = providerOf(model);
+    const byokApiKey = byokProviders.has(provider)
+      ? await this.byok.getApiKey(input.userId, provider as ByokProvider)
+      : null;
+    const isByok = byokApiKey !== null;
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    const ctx: TurnLoopContext = { estimatedTokens, model };
+    const ctx: TurnLoopContext = { estimatedTokens, model, isByok };
 
     let assistantText = '';
     try {
@@ -498,6 +520,7 @@ export class RunAgentTurnHandler {
           : {}),
         ...(signal ? { signal } : {}),
         ...(resume ? { resume } : {}),
+        ...(byokApiKey ? { byokApiKey } : {}),
       })) {
         switch (event.type) {
           case 'chunk':
@@ -508,7 +531,8 @@ export class RunAgentTurnHandler {
             await this.recordUsageSafe(
               input.userId,
               estimatedTokens,
-              event.usage ?? { inputTokens: 0, outputTokens: 0, model }
+              event.usage ?? { inputTokens: 0, outputTokens: 0, model },
+              isByok
             );
             callbacks.onError(event.error);
             return;
@@ -516,7 +540,8 @@ export class RunAgentTurnHandler {
             await this.recordUsageSafe(
               input.userId,
               estimatedTokens,
-              event.usage
+              event.usage,
+              isByok
             );
             return;
           case 'done': {
@@ -525,7 +550,8 @@ export class RunAgentTurnHandler {
               costUsd = await this.recordUsage(
                 input.userId,
                 estimatedTokens,
-                event.usage
+                event.usage,
+                isByok
               );
             } catch (error) {
               this.logger.warn({
@@ -541,6 +567,9 @@ export class RunAgentTurnHandler {
                 },
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
+            }
+            if (isByok) {
+              void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
             if (persistence) {
               await this.persistTurn(persistence, assistantText, event.sources);
@@ -600,10 +629,11 @@ export class RunAgentTurnHandler {
     input: RunAgentTurnInput,
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
-    estimatedTokens: number
+    estimatedTokens: number,
+    byokProviders: ReadonlySet<string>
   ): Promise<string | null> {
     if (input.model) {
-      if (!this.modelPreference.isSelectable(input.model)) {
+      if (!this.modelPreference.isSelectableWith(input.model, byokProviders)) {
         await this.rateLimit.releaseReservation(input.userId, estimatedTokens);
         callbacks.onError(AIErrors.invalidModel(input.model));
         return null;
@@ -618,23 +648,30 @@ export class RunAgentTurnHandler {
       return input.model;
     }
     const stored = input.conversationModel ?? null;
-    if (stored && this.modelPreference.isSelectable(stored)) {
+    if (
+      stored &&
+      this.modelPreference.isSelectableWith(stored, byokProviders)
+    ) {
       return stored;
     }
-    return this.modelPreference.getEffectiveDefault(input.userId);
+    return this.modelPreference.getEffectiveDefault(
+      input.userId,
+      byokProviders
+    );
   }
 
   private async recordUsageSafe(
     userId: string,
     estimatedTokens: number,
-    usage: AgentTurnUsage
+    usage: AgentTurnUsage,
+    isByok = false
   ): Promise<void> {
     if (usage.inputTokens + usage.outputTokens === 0) {
       await this.rateLimit.releaseReservation(userId, estimatedTokens);
       return;
     }
     try {
-      await this.recordUsage(userId, estimatedTokens, usage);
+      await this.recordUsage(userId, estimatedTokens, usage, isByok);
     } catch (error) {
       this.logger.warn({
         event: 'agent.usage.record_failed',
@@ -647,7 +684,8 @@ export class RunAgentTurnHandler {
   private async recordUsage(
     userId: string,
     estimatedTokens: number,
-    usage: AgentTurnUsage
+    usage: AgentTurnUsage,
+    isByok = false
   ): Promise<number> {
     const pricing = this.modelCatalog.getPricing(usage.model);
     const tokenUsage = TokenUsage.create(
@@ -666,6 +704,7 @@ export class RunAgentTurnHandler {
       model: usage.model,
       costUsd: tokenUsage.costUsd,
       estimatedTokens,
+      byok: isByok,
     });
     return tokenUsage.costUsd;
   }
