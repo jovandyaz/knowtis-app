@@ -146,4 +146,18 @@ describe('ModelSelect', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: 'Retry' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
+
+  it('applies a custom triggerClassName to the trigger button', () => {
+    render(
+      <ModelSelect
+        models={[{ id: 'm1', label: 'Model One', tier: 'fast' }]}
+        value="m1"
+        onSelect={vi.fn()}
+        triggerClassName="composer-trigger"
+      />
+    );
+    expect(screen.getByRole('button', { name: /Model One/ })).toHaveClass(
+      'composer-trigger'
+    );
+  });
 });
