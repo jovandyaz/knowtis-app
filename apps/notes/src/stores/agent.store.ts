@@ -37,6 +37,7 @@ export interface AgentChatMessage {
   webSources?: WebSource[];
   proposal?: { kind: PendingProposal['kind']; summary: string };
   committed?: { kind: PendingProposal['kind']; title: string };
+  discarded?: boolean;
 }
 
 export const AGENT_STREAM_INACTIVITY_MS = 130000;
@@ -176,9 +177,6 @@ export const useAgentStore = create<AgentState>((set, get) => {
               m.id === id
                 ? {
                     ...m,
-                    content: m.content
-                      ? `${m.content}\n\n✓ ${result.title}\n\n`
-                      : `✓ ${result.title}\n\n`,
                     committed: { kind: result.kind, title: result.title },
                   }
                 : m
@@ -335,11 +333,25 @@ export const useAgentStore = create<AgentState>((set, get) => {
         content: '',
       };
       activeAssistantId = assistant.id;
-      set((s) => ({
-        status: 'streaming',
-        pendingProposal: null,
-        messages: [...s.messages, assistant],
-      }));
+      set((s) => {
+        let marked = false;
+        const messages = [...s.messages];
+        for (let i = messages.length - 1; i >= 0; i--) {
+          const m = messages[i];
+          if (m.proposal && !m.committed && !m.discarded) {
+            messages[i] = { ...m, discarded: true };
+            marked = true;
+            break;
+          }
+        }
+        return {
+          status: 'streaming',
+          pendingProposal: null,
+          messages: marked
+            ? [...messages, assistant]
+            : [...s.messages, assistant],
+        };
+      });
       buffer.armInactivityTimer();
     },
   };
