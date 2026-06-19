@@ -66,6 +66,10 @@ export default defineConfig({
         '../../packages/editor/src/index.ts'
       ),
       '@knowtis/crdt': resolve(__dirname, '../../packages/crdt/src/index.ts'),
+      '@knowtis/data-access-feature-flags': resolve(
+        __dirname,
+        '../../libs/data-access/feature-flags/src/index.ts'
+      ),
     },
   },
 });

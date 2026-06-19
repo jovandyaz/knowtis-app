@@ -6,15 +6,19 @@ import {
   useUpdateAISettings,
 } from '@/hooks';
 
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { ModelSelect } from '@knowtis/design-system';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { SectionHeader } from '../SectionHeader';
+import { AIKeysManager } from './AIKeysManager';
 
 export function AIAssistantSection() {
   const { t } = useTranslation('common');
   const { data: models, isPending, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
+  const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
 
   const status = isError ? 'error' : isPending ? 'loading' : 'ready';
 
@@ -47,6 +51,8 @@ export function AIAssistantSection() {
           description={t('aiAssistant.editorComingSoon')}
         />
       </section>
+
+      {byokEnabled ? <AIKeysManager /> : null}
     </div>
   );
 }

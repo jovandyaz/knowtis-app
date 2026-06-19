@@ -105,6 +105,17 @@
       "fast": "Fast",
       "balanced": "Balanced",
       "powerful": "Powerful"
+    },
+    "byok": {
+      "title": "Your API keys",
+      "description": "Use your own provider keys. The copilot runs on your account, and your key unlocks that provider's models.",
+      "placeholder": "Paste your {{provider}} API key",
+      "save": "Save",
+      "remove": "Remove",
+      "saved": "Saved",
+      "saving": "Validating…",
+      "invalid": "That key was rejected. Check it's valid and has quota.",
+      "stored": "Key stored ({{prefix}}…)"
     }
   },
   "aiModels": {
