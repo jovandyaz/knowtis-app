@@ -129,7 +129,7 @@ export function RightDock({ noteId }: { noteId: string | null }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="max-w-full h-[90vh] p-0">
+      <DialogContent className="max-w-full h-[90vh] p-0 pb-[env(safe-area-inset-bottom)]">
         <DialogHeader className="sr-only">
           <DialogTitle>
             {activeTab === 'copilot'
