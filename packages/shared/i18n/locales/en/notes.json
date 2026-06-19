@@ -203,9 +203,18 @@
       "thinking": "Thinking…",
       "sources": "Sources",
       "webSources": "Web sources",
+      "stop": "Stop",
+      "searching": "Searching…",
       "empty": {
         "title": "Ask your notes",
-        "suggestions": "\"summarize my bio notes\", \"what did I say about X?\""
+        "greeting": "Ask anything about this note — I can summarize, improve, find sources, and more.",
+        "suggestions": "\"summarize my bio notes\", \"what did I say about X?\"",
+        "suggestion": {
+          "summarize": "Summarize this note",
+          "improve": "Improve the writing",
+          "sources": "Find sources",
+          "translate": "Translate it"
+        }
       },
       "estudio": {
         "noNote": "Open a note to use study tools."
@@ -222,7 +231,15 @@
         "rejectConfirm": "Send",
         "reasonPlaceholder": "Why? (optional)",
         "viewer": "Viewer",
-        "editor": "Editor"
+        "editor": "Editor",
+        "committed": {
+          "create": "Note created: «{{title}}»",
+          "update": "Note updated: «{{title}}»",
+          "share": "Note shared: «{{title}}»"
+        },
+        "discarded": "Proposal dismissed",
+        "showMore": "Show more",
+        "showLess": "Show less"
       }
     },
     "groups": {
