@@ -8,6 +8,9 @@ const update = vi.fn();
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => false,
+}));
 vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({
     data: [
