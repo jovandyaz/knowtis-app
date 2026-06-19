@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { Check, ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
+import { cn } from '../utils';
 import { Button } from './Button';
 import {
   DropdownMenu,
@@ -65,6 +66,8 @@ export interface ModelSelectProps {
   retryLabel?: string;
   billedBadgeLabel?: string;
   footer?: ReactNode;
+  triggerClassName?: string;
+  triggerVariant?: 'ghost' | 'outline';
 }
 
 export function ModelSelect({
@@ -82,6 +85,8 @@ export function ModelSelect({
   retryLabel,
   billedBadgeLabel,
   footer,
+  triggerClassName,
+  triggerVariant = 'ghost',
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
@@ -118,9 +123,9 @@ export function ModelSelect({
       <DropdownMenuTrigger asChild>
         <Button
           type="button"
-          variant="ghost"
+          variant={triggerVariant}
           size="sm"
-          className="gap-1.5"
+          className={cn('gap-1.5', triggerClassName)}
           disabled={triggerDisabled}
         >
           {isLoading && (
