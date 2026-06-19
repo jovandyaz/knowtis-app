@@ -56,6 +56,34 @@ describe('ModelSelect', () => {
     expect(screen.queryAllByText('$$$')).toHaveLength(0);
   });
 
+  it('shows the billed badge only on models billed to the user', async () => {
+    render(
+      <ModelSelect
+        models={[
+          { ...models[0], billedToUser: true },
+          { ...models[1], billedToUser: false },
+        ]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        billedBadgeLabel="Your key"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getAllByText('Your key')).toHaveLength(1);
+  });
+
+  it('omits the billed badge when no label is provided', async () => {
+    render(
+      <ModelSelect
+        models={[{ ...models[0], billedToUser: true }]}
+        value="a:fast"
+        onSelect={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.queryByText('Your key')).toBeNull();
+  });
+
   it('renders the footer inside the popover when provided', async () => {
     render(
       <ModelSelect

@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Check, ChevronDown, Loader2 } from 'lucide-react';
+import { Check, ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
 import { Button } from './Button';
 import {
@@ -19,6 +19,7 @@ export interface ModelSelectOption {
   descriptionKey?: string;
   contextWindow?: number;
   costClass?: number;
+  billedToUser?: boolean;
 }
 
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
@@ -62,6 +63,7 @@ export interface ModelSelectProps {
   errorLabel?: string;
   emptyLabel?: string;
   retryLabel?: string;
+  billedBadgeLabel?: string;
   footer?: ReactNode;
 }
 
@@ -78,6 +80,7 @@ export function ModelSelect({
   errorLabel,
   emptyLabel,
   retryLabel,
+  billedBadgeLabel,
   footer,
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
@@ -161,8 +164,18 @@ export function ModelSelect({
                       className="flex-col items-start gap-0.5"
                     >
                       <div className="flex w-full items-center justify-between gap-2">
-                        <span className="font-medium">{m.label}</span>
-                        {m.id === value && <Check className="h-3.5 w-3.5" />}
+                        <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                          <span className="truncate">{m.label}</span>
+                          {m.billedToUser && billedBadgeLabel && (
+                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
+                              <KeyRound className="h-2.5 w-2.5" />
+                              {billedBadgeLabel}
+                            </span>
+                          )}
+                        </span>
+                        {m.id === value && (
+                          <Check className="h-3.5 w-3.5 shrink-0" />
+                        )}
                       </div>
                       {renderDescription && (
                         <span className="text-xs text-(--muted-foreground)">
