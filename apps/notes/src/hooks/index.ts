@@ -16,3 +16,9 @@ export {
 } from './useVoiceNote';
 export { useAvailableModels, aiModelsQueryKeys } from './useAvailableModels';
 export { useAISettings, useUpdateAISettings } from './useAISettings';
+export {
+  useProviderKeys,
+  useSetProviderKey,
+  useDeleteProviderKey,
+  providerKeysQueryKeys,
+} from './useProviderKeys';
