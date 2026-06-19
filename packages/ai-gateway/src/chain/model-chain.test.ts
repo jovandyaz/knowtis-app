@@ -2,12 +2,49 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   executeWithChain,
+  isOverloadedError,
   resolveChainCandidates,
   streamWithChain,
 } from './model-chain';
 import { ProviderCooldownTracker } from './provider-cooldown.tracker';
 
 const logger = { warn: vi.fn(), error: vi.fn() };
+
+describe('isOverloadedError', () => {
+  it('detects a direct provider error with a 503 status', () => {
+    expect(isOverloadedError({ statusCode: 503 })).toBe(true);
+  });
+
+  it('detects a direct provider error with a 429 status', () => {
+    expect(isOverloadedError({ statusCode: 429 })).toBe(true);
+  });
+
+  it('unwraps a RetryError whose lastError is a 503', () => {
+    expect(isOverloadedError({ lastError: { statusCode: 503 } })).toBe(true);
+  });
+
+  it('unwraps a RetryError whose errors array contains a 429', () => {
+    expect(
+      isOverloadedError({ errors: [{ statusCode: 500 }, { statusCode: 429 }] })
+    ).toBe(true);
+  });
+
+  it('returns false for a non-transient status like 500', () => {
+    expect(isOverloadedError({ statusCode: 500 })).toBe(false);
+  });
+
+  it('returns false for an abort error', () => {
+    const error = new Error('aborted');
+    error.name = 'AbortError';
+    expect(isOverloadedError(error)).toBe(false);
+  });
+
+  it('returns false for a plain error or non-object input', () => {
+    expect(isOverloadedError(new Error('boom'))).toBe(false);
+    expect(isOverloadedError(null)).toBe(false);
+    expect(isOverloadedError('503')).toBe(false);
+  });
+});
 
 const SONNET = 'anthropic:claude-sonnet-4-20250514';
 const HAIKU = 'anthropic:claude-haiku-4-5-20251001';

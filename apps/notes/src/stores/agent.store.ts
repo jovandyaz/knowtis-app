@@ -39,7 +39,7 @@ export interface AgentChatMessage {
   committed?: { kind: PendingProposal['kind']; title: string };
 }
 
-export const AGENT_STREAM_INACTIVITY_MS = 45000;
+export const AGENT_STREAM_INACTIVITY_MS = 130000;
 const CHUNK_FLUSH_MS = 50;
 
 const PROPOSAL_EXPIRED_ERROR: AgentErrorPayload = {

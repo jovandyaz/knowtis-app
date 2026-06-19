@@ -69,6 +69,13 @@ describe('useAgentStore', () => {
     vi.useRealTimers();
   });
 
+  it('waits at least as long as the server agent cap before declaring inactivity, so the server error surfaces first', () => {
+    const SERVER_AGENT_MAX_MS = 120000;
+    expect(AGENT_STREAM_INACTIVITY_MS).toBeGreaterThanOrEqual(
+      SERVER_AGENT_MAX_MS
+    );
+  });
+
   it('appends a user message and an empty assistant placeholder on send', () => {
     capture();
     useAgentStore.getState().sendMessage('hola');

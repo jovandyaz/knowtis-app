@@ -29,6 +29,40 @@ export function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+const TRANSIENT_STATUS_CODES: ReadonlySet<number> = new Set([429, 503]);
+
+function statusCodeOf(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  const status = (error as { statusCode?: unknown }).statusCode;
+  return typeof status === 'number' ? status : undefined;
+}
+
+export function isOverloadedError(error: unknown): boolean {
+  const direct = statusCodeOf(error);
+  if (direct !== undefined && TRANSIENT_STATUS_CODES.has(direct)) {
+    return true;
+  }
+  if (typeof error !== 'object' || error === null) {
+    return false;
+  }
+  const { lastError, errors } = error as {
+    lastError?: unknown;
+    errors?: unknown;
+  };
+  if (lastError !== undefined && isOverloadedError(lastError)) {
+    return true;
+  }
+  if (Array.isArray(errors)) {
+    return errors.some((inner) => {
+      const status = statusCodeOf(inner);
+      return status !== undefined && TRANSIENT_STATUS_CODES.has(status);
+    });
+  }
+  return false;
+}
+
 export function providerOf(modelId: string): string {
   return modelId.split(':')[0] ?? modelId;
 }

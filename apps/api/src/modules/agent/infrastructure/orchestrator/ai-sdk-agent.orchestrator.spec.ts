@@ -182,6 +182,26 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(error.message).toContain('BYOK provider request failed');
   });
 
+  it('maps a transient overloaded provider error to a clear code instead of the redacted BYOK message', async () => {
+    const orchestrator = makeOrchestrator();
+    streamTextMock.mockImplementationOnce(() => {
+      throw Object.assign(new Error('Failed after 4 attempts'), {
+        lastError: { statusCode: 503 },
+      });
+    });
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(events).toHaveLength(1);
+    const error = (events[0] as { error: { code: string; message: string } })
+      .error;
+    expect(error.code).toBe('AI_PROVIDER_OVERLOADED');
+    expect(error.message).not.toContain('BYOK provider request failed');
+    expect(error.message).toContain('overloaded');
+  });
+
   it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
     const orchestrator = makeOrchestrator();
 

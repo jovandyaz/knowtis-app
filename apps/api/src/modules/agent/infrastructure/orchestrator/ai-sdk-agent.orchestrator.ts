@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { stepCountIs, streamText } from 'ai';
 
-import { isAbortError, streamWithChain } from '@knowtis/ai-gateway';
+import {
+  isAbortError,
+  isOverloadedError,
+  streamWithChain,
+} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
@@ -310,6 +314,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
   }
 
   private toError(error: unknown, redact = false) {
+    if (isOverloadedError(error)) {
+      return AIErrors.providerOverloaded();
+    }
     return AIErrors.providerError(this.errorMessage(error, redact));
   }
 
