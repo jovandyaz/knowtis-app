@@ -15,8 +15,8 @@ export class AiModelsController {
   constructor(private readonly preferences: ModelPreferenceService) {}
 
   @Get('models')
-  listModels(): Promise<SelectableModel[]> {
-    return this.preferences.listModels();
+  listModels(@CurrentUser() user: RequestUser): Promise<SelectableModel[]> {
+    return this.preferences.listModels(user.id);
   }
 
   @Get('preferences')

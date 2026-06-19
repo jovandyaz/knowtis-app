@@ -16,10 +16,11 @@ function make() {
 }
 
 describe('AiModelsController', () => {
-  it('GET /ai/models returns the catalog', async () => {
-    const { ctrl } = make();
-    const list = await ctrl.listModels();
+  it('GET /ai/models returns the per-user catalog', async () => {
+    const { ctrl, pref } = make();
+    const list = await ctrl.listModels(user);
     expect(list).toHaveLength(1);
+    expect(pref.listModels).toHaveBeenCalledWith('u1');
   });
 
   it('GET /ai/preferences returns the stored preference', async () => {
@@ -62,6 +63,6 @@ describe('AiModelsController', () => {
   it('GET /ai/models propagates a service failure', async () => {
     const { ctrl, pref } = make();
     pref.listModels.mockRejectedValueOnce(new Error('catalog unavailable'));
-    await expect(ctrl.listModels()).rejects.toThrow('catalog unavailable');
+    await expect(ctrl.listModels(user)).rejects.toThrow('catalog unavailable');
   });
 });

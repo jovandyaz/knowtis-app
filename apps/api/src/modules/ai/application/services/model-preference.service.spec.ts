@@ -5,24 +5,40 @@ import { ModelPreferenceService } from './model-preference.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-4-20250514';
 
-function make(pref: string | null, selectable: string[]) {
+function make(
+  pref: string | null,
+  selectable: string[],
+  byokProviders: string[] = []
+) {
   const repo = {
     getPreferredModel: vi.fn().mockResolvedValue(pref),
     setPreferredModel: vi.fn().mockResolvedValue(undefined),
   };
   const selectableSvc = {
-    isSelectable: (id: string) => selectable.includes(id),
-    list: () => selectable.map((id) => ({ id })),
+    isSelectable: (id: string, providers?: ReadonlySet<string>) =>
+      selectable.includes(id) || Boolean(providers?.has(id.split(':')[0])),
+    list: (_systemDefault: string, providers?: ReadonlySet<string>) => {
+      const unlocked = providers
+        ? byokProviders
+            .filter((p) => providers.has(p))
+            .map((p) => `${p}:byok-model`)
+        : [];
+      return [...selectable, ...unlocked].map((id) => ({ id }));
+    },
   };
   const aiConfig = {
     getDefaultModel: vi.fn().mockResolvedValue(SYSTEM_DEFAULT),
   };
+  const byok = {
+    enabledProviders: vi.fn().mockResolvedValue(new Set(byokProviders)),
+  };
   const svc = new ModelPreferenceService(
     repo as never,
     selectableSvc as never,
-    aiConfig as never
+    aiConfig as never,
+    byok as never
   );
-  return { svc, repo };
+  return { svc, repo, byok };
 }
 
 describe('ModelPreferenceService', () => {
@@ -56,5 +72,30 @@ describe('ModelPreferenceService', () => {
     const { svc, repo } = make('x', [SYSTEM_DEFAULT]);
     await svc.setUserPreference('u1', null);
     expect(repo.setPreferredModel).toHaveBeenCalledWith('u1', null);
+  });
+
+  it('listModels includes a BYOK-unlocked provider model', async () => {
+    const { svc, byok } = make(null, [SYSTEM_DEFAULT], ['google']);
+    const ids = (await svc.listModels('u1')).map((m) => m.id);
+    expect(ids.some((id) => id.startsWith('google:'))).toBe(true);
+    expect(byok.enabledProviders).toHaveBeenCalledWith('u1');
+  });
+
+  it('effective default accepts a stored model unlocked by a BYOK key', async () => {
+    const { svc } = make(
+      'google:gemini-3.5-flash',
+      [SYSTEM_DEFAULT],
+      ['google']
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('google:gemini-3.5-flash');
+  });
+
+  it('setUserPreference accepts a model unlocked by a BYOK key', async () => {
+    const { svc, repo } = make(null, [SYSTEM_DEFAULT], ['google']);
+    await svc.setUserPreference('u1', 'google:gemini-3.5-flash');
+    expect(repo.setPreferredModel).toHaveBeenCalledWith(
+      'u1',
+      'google:gemini-3.5-flash'
+    );
   });
 });

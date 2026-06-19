@@ -7,6 +7,7 @@ import {
   type UserAiSettingsRepository,
 } from '../../domain/ports/user-ai-settings.repository';
 import { AIConfigService } from './ai-config.service';
+import { ByokService } from './byok.service';
 import { SelectableModelsService } from './selectable-models.service';
 
 @Injectable()
@@ -15,30 +16,47 @@ export class ModelPreferenceService {
     @Inject(USER_AI_SETTINGS_REPOSITORY)
     private readonly settings: UserAiSettingsRepository,
     private readonly selectable: SelectableModelsService,
-    private readonly aiConfig: AIConfigService
+    private readonly aiConfig: AIConfigService,
+    private readonly byok: ByokService
   ) {}
 
-  async listModels(): Promise<SelectableModel[]> {
-    const systemDefault = await this.aiConfig.getDefaultModel();
-    return this.selectable.list(systemDefault);
+  async listModels(userId: string): Promise<SelectableModel[]> {
+    const [systemDefault, byokProviders] = await Promise.all([
+      this.aiConfig.getDefaultModel(),
+      this.byok.enabledProviders(userId),
+    ]);
+    return this.selectable.list(systemDefault, byokProviders);
+  }
+
+  byokProvidersFor(
+    userId: string,
+    isAnonymous = false
+  ): Promise<ReadonlySet<string>> {
+    return this.byok.enabledProviders(userId, isAnonymous);
+  }
+
+  isSelectableWith(
+    modelId: string,
+    byokProviders: ReadonlySet<string>
+  ): boolean {
+    return this.selectable.isSelectable(modelId, byokProviders);
   }
 
   async getUserPreference(userId: string): Promise<string | null> {
     return this.settings.getPreferredModel(userId);
   }
 
-  async getEffectiveDefault(userId: string): Promise<string> {
+  async getEffectiveDefault(
+    userId: string,
+    byokProviders?: ReadonlySet<string>
+  ): Promise<string> {
+    const providers =
+      byokProviders ?? (await this.byok.enabledProviders(userId));
     const pref = await this.settings.getPreferredModel(userId);
-    if (pref && this.selectable.isSelectable(pref)) {
+    if (pref && this.selectable.isSelectable(pref, providers)) {
       return pref;
     }
     return this.aiConfig.getDefaultModel();
-  }
-
-  assertSelectable(modelId: string): void {
-    if (!this.selectable.isSelectable(modelId)) {
-      throw new BadRequestException(`Model not selectable: ${modelId}`);
-    }
   }
 
   isSelectable(modelId: string): boolean {
@@ -47,7 +65,10 @@ export class ModelPreferenceService {
 
   async setUserPreference(userId: string, model: string | null): Promise<void> {
     if (model !== null) {
-      this.assertSelectable(model);
+      const byokProviders = await this.byok.enabledProviders(userId);
+      if (!this.selectable.isSelectable(model, byokProviders)) {
+        throw new BadRequestException(`Model not selectable: ${model}`);
+      }
     }
     await this.settings.setPreferredModel(userId, model);
   }

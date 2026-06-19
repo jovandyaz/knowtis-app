@@ -41,6 +41,39 @@ describe('SelectableModelsService', () => {
     expect(ids).not.toContain('openai:gpt-5.5');
   });
 
+  it('unlocks a model when the user has a BYOK key for its provider', () => {
+    const registry = {
+      isModelAvailable: (id: string) => id.startsWith('anthropic:'),
+    };
+    const catalog = {
+      isSupported: () => true,
+      getPricing: () => ({ outputCostPerToken: 0.000005 }),
+      getContextWindow: () => ({ maxInputTokens: 1000 }),
+    };
+    const svc = new SelectableModelsService(
+      catalog as never,
+      registry as never
+    );
+    const withByok = svc.list(
+      'anthropic:claude-sonnet-4-6',
+      new Set(['google'])
+    );
+    expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
+    const without = svc.list('anthropic:claude-sonnet-4-6');
+    expect(without.some((m) => m.id.startsWith('google:'))).toBe(false);
+  });
+
+  it('isSelectable unlocks a curated model via a matching BYOK provider', () => {
+    const svc = makeService({
+      supported: new Set(['google:gemini-3.5-flash']),
+      available: new Set(),
+    });
+    expect(svc.isSelectable('google:gemini-3.5-flash')).toBe(false);
+    expect(
+      svc.isSelectable('google:gemini-3.5-flash', new Set(['google']))
+    ).toBe(true);
+  });
+
   it('marks the system default with isDefault', () => {
     const svc = makeService({
       supported: new Set([SYSTEM_DEFAULT]),
