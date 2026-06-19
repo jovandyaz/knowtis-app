@@ -13,10 +13,7 @@ export const Confirmation = ({ className, ...props }: ConfirmationProps) => (
     transition={{ duration: 0.18, ease: 'easeOut' }}
   >
     <Card
-      className={cn(
-        'min-w-0 max-w-full overflow-hidden border-l-2 border-l-primary/70 shadow-sm',
-        className
-      )}
+      className={cn('min-w-0 max-w-full overflow-hidden', className)}
       {...props}
     />
   </motion.div>
