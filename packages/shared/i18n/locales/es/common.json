@@ -115,7 +115,9 @@
       "saving": "Validando…",
       "invalid": "La clave fue rechazada. Verifica que sea válida y tenga cuota.",
       "stored": "Clave guardada ({{prefix}}…)",
-      "billedBadge": "Tu clave"
+      "billedBadge": "Tu clave",
+      "lastUsed": "Último uso {{when}}",
+      "neverUsed": "Sin usar todavía"
     }
   },
   "aiModels": {
