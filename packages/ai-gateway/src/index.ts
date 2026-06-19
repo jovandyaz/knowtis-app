@@ -21,6 +21,7 @@ export { MODEL_PRICES_SNAPSHOT } from './catalog/model-prices.snapshot';
 export {
   executeWithChain,
   isAbortError,
+  isOverloadedError,
   providerOf,
   resolveChainCandidates,
   streamWithChain,

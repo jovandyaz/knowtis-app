@@ -177,6 +177,7 @@
       "generic": "Algo salió mal. Inténtalo de nuevo.",
       "rateLimited": "Has alcanzado tu límite de uso de IA. Inténtalo más tarde.",
       "provider": "El servicio de IA no está disponible temporalmente. Reinténtalo.",
+      "providerOverloaded": "El modelo está saturado temporalmente. Reintenta o elige otro modelo.",
       "connection": "No se pudo conectar con el servicio de IA. Verifica tu conexión y reinténtalo.",
       "featureDisabled": "Las funciones de IA están deshabilitadas actualmente.",
       "auth": "Tu sesión expiró. Vuelve a iniciar sesión.",

@@ -6,6 +6,7 @@ export interface AIDomainError {
 export const AIErrorCodes = {
   RATE_LIMIT_EXCEEDED: 'AI_RATE_LIMIT_EXCEEDED',
   PROVIDER_ERROR: 'AI_PROVIDER_ERROR',
+  PROVIDER_OVERLOADED: 'AI_PROVIDER_OVERLOADED',
   FEATURE_DISABLED: 'AI_FEATURE_DISABLED',
   INVALID_MODEL: 'AI_INVALID_MODEL',
   INVALID_ACTION: 'AI_INVALID_ACTION',
@@ -29,6 +30,12 @@ export const AIErrors = {
 
   providerError: (reason: string) =>
     createAIError(AIErrorCodes.PROVIDER_ERROR, `AI provider error: ${reason}`),
+
+  providerOverloaded: () =>
+    createAIError(
+      AIErrorCodes.PROVIDER_OVERLOADED,
+      'The model provider is temporarily overloaded.'
+    ),
 
   featureDisabled: () =>
     createAIError(AIErrorCodes.FEATURE_DISABLED, 'AI features are not enabled'),

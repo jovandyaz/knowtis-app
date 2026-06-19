@@ -2,6 +2,7 @@ type AIErrorMessageKey =
   | 'ai.errors.generic'
   | 'ai.errors.rateLimited'
   | 'ai.errors.provider'
+  | 'ai.errors.providerOverloaded'
   | 'ai.errors.connection'
   | 'ai.errors.featureDisabled'
   | 'ai.errors.auth'
@@ -20,6 +21,7 @@ const GENERIC_KEY: AIErrorMessageKey = 'ai.errors.generic';
 const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AI_RATE_LIMIT_EXCEEDED: 'ai.errors.rateLimited',
   AI_PROVIDER_ERROR: 'ai.errors.provider',
+  AI_PROVIDER_OVERLOADED: 'ai.errors.providerOverloaded',
   AI_INTERNAL_ERROR: 'ai.errors.provider',
   CONNECTION_FAILED: 'ai.errors.connection',
   AI_FEATURE_DISABLED: 'ai.errors.featureDisabled',

@@ -177,6 +177,7 @@
       "generic": "Something went wrong. Please try again.",
       "rateLimited": "You've reached your AI usage limit. Try again later.",
       "provider": "The AI service is temporarily unavailable. Please retry.",
+      "providerOverloaded": "The model is temporarily overloaded. Retry or pick another model.",
       "connection": "Couldn't reach the AI service. Check your connection and retry.",
       "featureDisabled": "AI features are currently disabled.",
       "auth": "Your session expired. Please sign in again.",
