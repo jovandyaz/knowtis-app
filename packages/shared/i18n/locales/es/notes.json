@@ -203,9 +203,18 @@
       "thinking": "Pensando…",
       "sources": "Fuentes",
       "webSources": "Fuentes web",
+      "stop": "Detener",
+      "searching": "Buscando…",
       "empty": {
         "title": "Pregúntale a tus notas",
-        "suggestions": "\"resume mis notas de bio\", \"¿qué dije sobre X?\""
+        "greeting": "Pregunta lo que quieras sobre esta nota: puedo resumir, mejorar, encontrar fuentes y más.",
+        "suggestions": "\"resume mis notas de bio\", \"¿qué dije sobre X?\"",
+        "suggestion": {
+          "summarize": "Resume esta nota",
+          "improve": "Mejora la redacción",
+          "sources": "Encuentra fuentes",
+          "translate": "Tradúcela"
+        }
       },
       "estudio": {
         "noNote": "Abre una nota para usar las herramientas de estudio."
@@ -222,7 +231,15 @@
         "rejectConfirm": "Enviar",
         "reasonPlaceholder": "¿Por qué? (opcional)",
         "viewer": "Lector",
-        "editor": "Editor"
+        "editor": "Editor",
+        "committed": {
+          "create": "Nota creada: «{{title}}»",
+          "update": "Nota actualizada: «{{title}}»",
+          "share": "Nota compartida: «{{title}}»"
+        },
+        "discarded": "Propuesta descartada",
+        "showMore": "Ver más",
+        "showLess": "Ver menos"
       }
     },
     "groups": {
