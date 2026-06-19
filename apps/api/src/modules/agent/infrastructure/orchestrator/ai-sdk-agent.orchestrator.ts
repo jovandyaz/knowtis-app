@@ -62,6 +62,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       ? AbortSignal.any([input.signal, timeoutSignal])
       : timeoutSignal;
 
+    if (input.byokApiKey) {
+      // BYOK runs a single turn with the user's key — throwOnFreshFailure:false
+      // surfaces a key failure as an error event instead of falling back to a
+      // server-billed provider.
+      yield* this.runTurn(input, input.model, abortSignal, timeoutSignal, {
+        throwOnFreshFailure: false,
+      });
+      return;
+    }
+
     yield* streamWithChain({
       candidates: this.fallbackChain.candidatesFor(input.model),
       cooldown: this.fallbackChain.cooldown,
@@ -101,7 +111,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     let result;
     try {
       result = streamText({
-        model: this.providerRegistry.languageModel(model),
+        model: this.providerRegistry.languageModel(model, input.byokApiKey),
         system: this.buildSystemPrompt(
           input.noteId,
           input.knownNotes,
