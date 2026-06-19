@@ -68,6 +68,8 @@ export interface SelectableModel {
   contextWindow: number;
   costClass: 1 | 2 | 3;
   isDefault: boolean;
+  /** True when the user has a stored BYOK key for this model's provider, so the turn bills their key. */
+  billedToUser: boolean;
 }
 
 export interface AIPreferences {

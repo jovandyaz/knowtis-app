@@ -63,6 +63,26 @@ describe('SelectableModelsService', () => {
     expect(without.some((m) => m.id.startsWith('google:'))).toBe(false);
   });
 
+  it('flags billedToUser only for models whose provider has a BYOK key', () => {
+    const registry = { isModelAvailable: () => true };
+    const catalog = {
+      isSupported: () => true,
+      getPricing: () => ({ outputCostPerToken: 0.000005 }),
+      getContextWindow: () => ({ maxInputTokens: 1000 }),
+    };
+    const svc = new SelectableModelsService(
+      catalog as never,
+      registry as never
+    );
+    const models = svc.list('anthropic:claude-sonnet-4-6', new Set(['google']));
+    expect(models.find((m) => m.id.startsWith('google:'))?.billedToUser).toBe(
+      true
+    );
+    expect(
+      models.find((m) => m.id.startsWith('anthropic:'))?.billedToUser
+    ).toBe(false);
+  });
+
   it('isSelectable unlocks a curated model via a matching BYOK provider', () => {
     const svc = makeService({
       supported: new Set(['google:gemini-3.5-flash']),

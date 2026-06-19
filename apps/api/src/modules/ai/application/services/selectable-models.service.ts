@@ -60,6 +60,7 @@ export class SelectableModelsService {
         contextWindow: this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
         costClass: this.costClass(m.id),
         isDefault: m.id === systemDefault,
+        billedToUser: byokProviders.has(providerOf(m.id)),
       })
     );
   }

@@ -34,6 +34,7 @@ export function CopilotModelPicker() {
       errorLabel={t('aiAssistant.loadError')}
       emptyLabel={t('aiAssistant.noModels')}
       retryLabel={t('aiAssistant.retry')}
+      billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
       footer={
         accountDefaultLabel
           ? `${t('aiAssistant.defaultHint')}: ${accountDefaultLabel}`
