@@ -26,6 +26,8 @@ export function CopilotModelPicker() {
       value={selected ?? prefs?.preferredModel ?? null}
       onSelect={setSelected}
       status={status}
+      triggerClassName="h-8"
+      triggerVariant="ghost"
       onRetry={() => refetch()}
       tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
       renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
