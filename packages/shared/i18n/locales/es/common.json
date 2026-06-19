@@ -112,7 +112,6 @@
       "placeholder": "Pega tu API key de {{provider}}",
       "save": "Guardar",
       "remove": "Eliminar",
-      "saved": "Guardada",
       "saving": "Validando…",
       "invalid": "La key fue rechazada. Verifica que sea válida y tenga cupo.",
       "stored": "Key guardada ({{prefix}}…)"

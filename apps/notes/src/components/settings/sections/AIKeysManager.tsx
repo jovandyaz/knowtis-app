@@ -60,7 +60,11 @@ export function AIKeysManager() {
                   }
                 />
                 <Button
-                  disabled={!draft || setKey.isPending}
+                  disabled={
+                    !draft ||
+                    (setKey.isPending &&
+                      setKey.variables?.provider === provider)
+                  }
                   onClick={() =>
                     setKey.mutate(
                       { provider, apiKey: draft },
