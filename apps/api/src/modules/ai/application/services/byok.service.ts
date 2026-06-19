@@ -30,6 +30,8 @@ import {
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const KEY_PREFIX_LENGTH = 8;
+// OpenAI's Responses API rejects max_output_tokens < 16; Anthropic/Google accept it.
+const VALIDATION_MAX_OUTPUT_TOKENS = 16;
 
 @Injectable()
 export class ByokService {
@@ -153,7 +155,7 @@ export class ByokService {
     await generateText({
       model: this.registry.languageModel(probe.id, apiKey),
       prompt: 'ping',
-      maxOutputTokens: 1,
+      maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
     });
   }
 }

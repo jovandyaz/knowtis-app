@@ -4,6 +4,7 @@ import {
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { generateText } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ByokProvider } from '@knowtis/shared-types';
@@ -13,6 +14,10 @@ import {
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
 import { ByokService } from './byok.service';
+
+vi.mock('ai', () => ({
+  generateText: vi.fn().mockResolvedValue({ usage: { outputTokens: 16 } }),
+}));
 
 const masterKeyB64 = randomBytes(32).toString('base64');
 const masterKey = Buffer.from(masterKeyB64, 'base64');
@@ -124,5 +129,47 @@ describe('ByokService', () => {
       flagOn: true,
     });
     expect(await service.getApiKey('u1', 'anthropic')).toBeNull();
+  });
+
+  it('validateKey calls generateText with maxOutputTokens >= 16 (OpenAI minimum)', async () => {
+    const store = new Map<string, unknown>();
+    const repo = {
+      listForUser: vi.fn().mockResolvedValue([]),
+      getEnabledProviders: vi.fn().mockResolvedValue([]),
+      getEncrypted: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn(
+        async (
+          _u: string,
+          _p: ByokProvider,
+          secret: unknown,
+          prefix: string
+        ) => {
+          store.set('secret', secret);
+          store.set('prefix', prefix);
+        }
+      ),
+      remove: vi.fn(),
+      touchLastUsed: vi.fn(),
+    };
+    const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+    const config = {
+      get: (k: string) =>
+        k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
+    };
+    const registry = { languageModel: vi.fn().mockReturnValue({}) };
+    const service = new ByokService(
+      repo as never,
+      flags as never,
+      config as never,
+      registry as never
+    );
+
+    await service.setKey('u1', 'openai', 'sk-valid-123456');
+
+    expect(vi.mocked(generateText)).toHaveBeenCalledWith(
+      expect.objectContaining({ maxOutputTokens: 16 })
+    );
+    const call = vi.mocked(generateText).mock.calls[0][0];
+    expect(call.maxOutputTokens).toBeGreaterThanOrEqual(16);
   });
 });
