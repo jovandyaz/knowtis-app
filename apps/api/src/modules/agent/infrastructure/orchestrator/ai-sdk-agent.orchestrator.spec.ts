@@ -580,6 +580,34 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  it('skips the fallback chain and builds the model with the BYOK key', async () => {
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain
+    );
+
+    const events = await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'google:gemini-3.5-flash',
+        byokApiKey: 'user-key',
+      })
+    );
+
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(languageModelSpy).toHaveBeenCalledWith(
+      'google:gemini-3.5-flash',
+      'user-key'
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
   it('does not fall back when the chain has no other candidates', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({

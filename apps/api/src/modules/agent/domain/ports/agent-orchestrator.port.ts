@@ -16,6 +16,7 @@ export interface AgentRunInput {
   readonly resume?: AgentResumeContext;
   readonly knownNotes?: readonly AgentSource[];
   readonly userMemories?: readonly string[];
+  readonly byokApiKey?: string;
 }
 
 export interface AgentOrchestrator {
