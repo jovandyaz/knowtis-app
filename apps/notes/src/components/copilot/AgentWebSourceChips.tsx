@@ -27,7 +27,7 @@ export function AgentWebSourceChips({ sources }: { sources: WebSource[] }) {
       <p className="mb-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
         {t('ai.copilot.webSources')}
       </p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {safeSources.map((source) => (
           <a
             key={source.url}

@@ -20,7 +20,7 @@ export function AgentSourceChips({ sources }: { sources: AgentSource[] }) {
       <p className="mb-1.5 text-[9px] font-medium uppercase tracking-wide text-muted-foreground">
         {t('ai.copilot.sources')}
       </p>
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {sources.map((source) => (
           <button
             key={source.id}
