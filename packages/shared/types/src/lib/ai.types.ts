@@ -83,3 +83,9 @@ export interface ProviderKeyInfo {
   readonly lastUsedAt: string | null;
   readonly createdAt: string;
 }
+
+export interface EncryptedSecret {
+  readonly ciphertext: string;
+  readonly iv: string;
+  readonly authTag: string;
+}

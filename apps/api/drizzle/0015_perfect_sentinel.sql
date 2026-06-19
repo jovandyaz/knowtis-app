@@ -1,0 +1,1 @@
+ALTER TABLE "user_provider_keys" ADD CONSTRAINT "user_provider_keys_provider_check" CHECK ("user_provider_keys"."provider" in ('anthropic', 'openai', 'google'));

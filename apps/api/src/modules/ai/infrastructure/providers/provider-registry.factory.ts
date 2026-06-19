@@ -54,13 +54,12 @@ export class ProviderRegistryFactory implements OnModuleInit {
   }
 
   /**
-   * Resolves a 'provider:model' id to a language model. When `byokKey` is
-   * provided and not in gateway mode, builds an ephemeral provider from the
-   * caller's key — bypassing the server's key requirement for that provider.
-   * Routes through the Vercel AI Gateway when AI_GATEWAY_API_KEY is set
-   * (byokKey is ignored in that case). Throws ProviderNotConfiguredError on
-   * malformed ids, unsupported BYOK providers, or (direct mode only) missing
-   * provider keys.
+   * Resolves a 'provider:model' id to a language model. A caller-supplied
+   * `byokKey` always wins: it builds an ephemeral provider from that key so the
+   * turn bills the user, never the server/gateway. Otherwise routes through the
+   * Vercel AI Gateway when AI_GATEWAY_API_KEY is set, else the direct registry.
+   * Throws ProviderNotConfiguredError on malformed ids, unsupported BYOK
+   * providers, or (direct mode only) missing provider keys.
    */
   languageModel(modelId: string, byokKey?: string): LanguageModel {
     if (!isQualifiedModelId(modelId)) {
@@ -68,11 +67,11 @@ export class ProviderRegistryFactory implements OnModuleInit {
         `Model id '${modelId}' must use the 'provider:model' format`
       );
     }
-    if (this.gateway) {
-      return this.gateway.languageModel(toGatewayModelId(modelId));
-    }
     if (byokKey) {
       return this.byokLanguageModel(modelId, byokKey);
+    }
+    if (this.gateway) {
+      return this.gateway.languageModel(toGatewayModelId(modelId));
     }
     this.assertProviderKeyConfigured(modelId);
     return this.registry.languageModel(modelId);

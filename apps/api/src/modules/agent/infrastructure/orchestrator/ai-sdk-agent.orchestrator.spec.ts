@@ -166,6 +166,22 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
+  it('redacts provider error details when a BYOK key is in scope', async () => {
+    const orchestrator = makeOrchestrator();
+    streamTextMock.mockImplementationOnce(() => {
+      throw new Error('Incorrect API key provided: sk-secret-abc123');
+    });
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(events).toHaveLength(1);
+    const error = (events[0] as { error: { message: string } }).error;
+    expect(error.message).not.toContain('sk-secret');
+    expect(error.message).toContain('BYOK provider request failed');
+  });
+
   it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
     const orchestrator = makeOrchestrator();
 

@@ -58,11 +58,13 @@ export class AIRateLimitService {
   async checkLimit(
     userId: string,
     estimatedTokens: number,
-    isAnonymous = false
+    isAnonymous = false,
+    byok = false
   ): Promise<RateLimitResult> {
     const limits = this.effectiveLimits(isAnonymous);
 
     if (this.rateLimitProvider) {
+      let rpmChecked = false;
       try {
         const rpmCheck = await this.rateLimitProvider.checkRpm(userId);
         if (!rpmCheck.allowed) {
@@ -73,8 +75,18 @@ export class AIRateLimitService {
               : {}),
           };
         }
+        rpmChecked = true;
       } catch (error) {
         this.logger.warn('Redis RPM check unavailable, skipping', error);
+      }
+
+      // BYOK turns bill the user's own provider key, so they bypass the daily
+      // token/cost budget and only enforce RPM. Fall back to the PG RPM backstop
+      // when the Redis RPM check was unavailable.
+      if (byok) {
+        return rpmChecked
+          ? { allowed: true }
+          : this.checkLimitViaPg(userId, estimatedTokens, limits, true);
       }
 
       try {
@@ -95,7 +107,7 @@ export class AIRateLimitService {
       }
     }
 
-    return this.checkLimitViaPg(userId, estimatedTokens, limits);
+    return this.checkLimitViaPg(userId, estimatedTokens, limits, byok);
   }
 
   private effectiveLimits(isAnonymous: boolean): RateLimits {
@@ -130,31 +142,26 @@ export class AIRateLimitService {
   ): Promise<void> {
     await this.usageRepository.recordUsage(params);
 
+    // BYOK turns never reserved against the budget (see checkLimit), so there is
+    // nothing to correct or warn about — only the PG row is recorded for telemetry.
+    if (params.byok) {
+      return;
+    }
+
     if (this.rateLimitProvider) {
       try {
-        if (params.byok) {
-          await this.rateLimitProvider.correctUsage(
-            params.userId,
-            params.estimatedTokens,
-            0,
-            0
-          );
-        } else {
-          await this.rateLimitProvider.correctUsage(
-            params.userId,
-            params.estimatedTokens,
-            params.inputTokens + params.outputTokens,
-            params.costUsd
-          );
-        }
+        await this.rateLimitProvider.correctUsage(
+          params.userId,
+          params.estimatedTokens,
+          params.inputTokens + params.outputTokens,
+          params.costUsd
+        );
       } catch (error) {
         this.logger.warn('Redis usage correction failed', error);
       }
     }
 
-    if (!params.byok) {
-      await this.maybeWarnBudget(params.userId);
-    }
+    await this.maybeWarnBudget(params.userId);
   }
 
   private async maybeWarnBudget(userId: string): Promise<void> {
@@ -240,7 +247,8 @@ export class AIRateLimitService {
   private async checkLimitViaPg(
     userId: string,
     estimatedTokens: number,
-    limits: RateLimits
+    limits: RateLimits,
+    byok = false
   ): Promise<RateLimitResult> {
     if (!this.allowPgRpm(userId)) {
       this.logger.warn(`PG-fallback RPM limit exceeded for user ${userId}`);
@@ -248,6 +256,10 @@ export class AIRateLimitService {
         allowed: false,
         reason: 'Too many requests. Please slow down and try again shortly.',
       };
+    }
+
+    if (byok) {
+      return { allowed: true };
     }
 
     const { tokenLimit, costLimit } = limits;

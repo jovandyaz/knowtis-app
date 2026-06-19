@@ -29,15 +29,20 @@ describe('AiKeysController', () => {
 
   it('sets a key then returns the masked list', async () => {
     const { controller, byok } = make();
-    await controller.set(
+    byok.listKeys.mockResolvedValueOnce([
+      { provider: 'anthropic', keyPrefix: 'sk-ant-' },
+    ]);
+
+    const result = await controller.set(
       user,
       { provider: 'anthropic' } as never,
       {
         apiKey: 'sk-ant-1234',
       } as never
     );
+
     expect(byok.setKey).toHaveBeenCalledWith('u1', 'anthropic', 'sk-ant-1234');
-    expect(byok.listKeys).toHaveBeenCalledWith('u1');
+    expect(result).toEqual([{ provider: 'anthropic', keyPrefix: 'sk-ant-' }]);
   });
 
   it('forbids when the flag is off', async () => {
@@ -45,6 +50,30 @@ describe('AiKeysController', () => {
     await expect(controller.list(user)).rejects.toBeInstanceOf(
       ForbiddenException
     );
+  });
+
+  it('forbids setting a key when the flag is off', async () => {
+    const { controller, byok } = make(false);
+    await expect(
+      controller.set(
+        user,
+        { provider: 'anthropic' } as never,
+        { apiKey: 'sk-ant-1234' } as never
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(byok.setKey).not.toHaveBeenCalled();
+  });
+
+  it('forbids anonymous users from setting a key', async () => {
+    const { controller, byok } = make(true);
+    await expect(
+      controller.set(
+        { id: 'a1', isAnonymous: true } as never,
+        { provider: 'anthropic' } as never,
+        { apiKey: 'sk-ant-1234' } as never
+      )
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(byok.setKey).not.toHaveBeenCalled();
   });
 
   it('forbids anonymous users', async () => {

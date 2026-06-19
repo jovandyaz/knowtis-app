@@ -1,3 +1,5 @@
+import { createAnthropic } from '@ai-sdk/anthropic';
+import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createMockConfig } from '../../testing/create-mock-config';
@@ -174,15 +176,20 @@ describe('ProviderRegistryFactory', () => {
       );
 
       expect(model).toBe('mock-google-byok-model');
+      expect(createGoogleGenerativeAI).toHaveBeenCalledWith({
+        apiKey: 'user-key',
+      });
     });
 
     it('should throw for an unknown provider under BYOK', () => {
       const factory = makeFactory();
 
-      expect(() => factory.languageModel('mistral:x', 'user-key')).toThrow();
+      expect(() => factory.languageModel('mistral:x', 'user-key')).toThrow(
+        "BYOK is not supported for provider 'mistral'"
+      );
     });
 
-    it('should ignore byokKey in gateway mode and return gateway model', () => {
+    it('should prefer the user BYOK key over gateway mode', () => {
       const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
 
       const model = factory.languageModel(
@@ -190,7 +197,8 @@ describe('ProviderRegistryFactory', () => {
         'user-key'
       );
 
-      expect(model).toBe('mock-gateway-model');
+      expect(model).toBe('mock-anthropic-byok-model');
+      expect(createAnthropic).toHaveBeenCalledWith({ apiKey: 'user-key' });
     });
   });
 });

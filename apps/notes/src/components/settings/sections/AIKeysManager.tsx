@@ -61,13 +61,13 @@ export function AIKeysManager() {
                 />
                 <Button
                   disabled={
-                    !draft ||
+                    !draft.trim() ||
                     (setKey.isPending &&
                       setKey.variables?.provider === provider)
                   }
                   onClick={() =>
                     setKey.mutate(
-                      { provider, apiKey: draft },
+                      { provider, apiKey: draft.trim() },
                       {
                         onSuccess: () =>
                           setDrafts((d) => ({ ...d, [provider]: '' })),

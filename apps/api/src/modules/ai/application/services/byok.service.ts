@@ -30,6 +30,7 @@ import {
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const KEY_PREFIX_LENGTH = 8;
+const MASTER_KEY_BYTES = 32;
 // OpenAI's Responses API rejects max_output_tokens < 16; Anthropic/Google accept it.
 const VALIDATION_MAX_OUTPUT_TOKENS = 16;
 
@@ -46,7 +47,9 @@ export class ByokService {
     private readonly registry: ProviderRegistryFactory
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
-    this.masterKey = raw ? Buffer.from(raw, 'base64') : null;
+    const decoded = raw ? Buffer.from(raw, 'base64') : null;
+    this.masterKey =
+      decoded && decoded.length === MASTER_KEY_BYTES ? decoded : null;
   }
 
   async enabledProviders(
