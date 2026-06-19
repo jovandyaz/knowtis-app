@@ -13,6 +13,7 @@ import {
   type Database,
 } from '../../../database';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
+import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
@@ -45,7 +46,14 @@ const modelPreferenceStub = {
   getEffectiveDefault: vi.fn().mockResolvedValue(MODEL),
   assertSelectable: vi.fn(),
   isSelectable: vi.fn().mockReturnValue(true),
+  isSelectableWith: vi.fn().mockReturnValue(true),
+  byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
 } as unknown as ModelPreferenceService;
+const byokStub = {
+  getApiKey: vi.fn().mockResolvedValue(null),
+  enabledProviders: vi.fn().mockResolvedValue(new Set()),
+  markUsed: vi.fn().mockResolvedValue(undefined),
+} as unknown as ByokService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -123,7 +131,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       memoryOff,
       embedStub,
       flagsOff,
-      modelPreferenceStub
+      modelPreferenceStub,
+      byokStub
     );
 
     let conversationId: string | undefined;
@@ -186,7 +195,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       memoryOff,
       embedStub,
       flagsOff,
-      modelPreferenceStub
+      modelPreferenceStub,
+      byokStub
     );
 
     const onError = vi.fn();

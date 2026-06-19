@@ -12,6 +12,7 @@ export interface RecordUsageInput {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly costUsd: number;
+  readonly byok?: boolean;
 }
 
 export interface MetricsSummary {

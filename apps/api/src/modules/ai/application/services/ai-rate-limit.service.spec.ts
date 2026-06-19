@@ -380,4 +380,79 @@ describe('AIRateLimitService', () => {
       expect(alerts.notify).not.toHaveBeenCalled();
     });
   });
+
+  describe('BYOK usage recording', () => {
+    let mockRateLimitProvider: RateLimitProvider;
+    let alerts: { notify: ReturnType<typeof vi.fn> };
+    let byokService: AIRateLimitService;
+
+    const usageRecord = {
+      userId: 'user-123',
+      action: 'agent',
+      model: 'google:gemini-2.0-flash',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 9.0,
+      estimatedTokens: 200,
+    };
+
+    beforeEach(() => {
+      mockRateLimitProvider = {
+        checkRpm: vi.fn(),
+        checkAndIncrement: vi.fn(),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+      };
+      alerts = { notify: vi.fn() };
+      byokService = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        mockRateLimitProvider,
+        alerts as unknown as WebhookAlertService
+      );
+      vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    it('releases the reservation and skips the budget warning for byok usage', async () => {
+      const getDaily = vi
+        .spyOn(mockUsageRepo, 'getDailyUsage')
+        .mockResolvedValue({
+          totalInputTokens: 90000,
+          totalOutputTokens: 0,
+          totalCostUsd: 0.95,
+          requestCount: 10,
+        });
+
+      await byokService.recordUsage({ ...usageRecord, byok: true });
+
+      expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ byok: true })
+      );
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-123',
+        200,
+        0,
+        0
+      );
+      expect(getDaily).not.toHaveBeenCalled();
+      expect(alerts.notify).not.toHaveBeenCalled();
+    });
+
+    it('corrects with actual tokens and cost for non-byok usage', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 1000,
+        totalOutputTokens: 500,
+        totalCostUsd: 0.1,
+        requestCount: 3,
+      });
+
+      await byokService.recordUsage({ ...usageRecord, byok: false });
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-123',
+        200,
+        150,
+        9.0
+      );
+    });
+  });
 });
