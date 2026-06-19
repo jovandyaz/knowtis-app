@@ -78,6 +78,9 @@ export {
   ModelSelect,
   type ModelSelectProps,
   type ModelSelectOption,
+  SegmentedControl,
+  type SegmentedControlItem,
+  type SegmentedControlProps,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 

@@ -1,18 +1,22 @@
 import { useTranslation } from 'react-i18next';
 
+import { useAgentStore } from '@/stores/agent.store';
 import {
   useRightDockStore,
   type RightDockTab,
 } from '@/stores/right-dock.store';
-import { BookOpen, Sparkles } from 'lucide-react';
+import { BookOpen, RotateCcw, Sparkles } from 'lucide-react';
 
 import {
+  Button,
   cn,
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   ResizablePanel,
+  SegmentedControl,
+  type SegmentedControlItem,
 } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 
@@ -24,42 +28,41 @@ const DOCK_MAX_WIDTH = 500;
 const DOCK_DEFAULT_WIDTH = DOCK_MAX_WIDTH;
 const DOCK_COLLAPSE_THRESHOLD = 240;
 
-function TabBar() {
+function DockHeader() {
   const { t } = useTranslation('notes');
   const activeTab = useRightDockStore((s) => s.activeTab);
   const setTab = useRightDockStore((s) => s.setTab);
+  const newConversation = useAgentStore((s) => s.newConversation);
+  const messages = useAgentStore((s) => s.messages);
 
-  const tabs: { key: RightDockTab; label: string; icon: typeof Sparkles }[] = [
-    { key: 'copilot', label: t('ai.copilot.tab'), icon: Sparkles },
-    { key: 'estudio', label: t('ai.artifacts.studyTools'), icon: BookOpen },
+  const items: SegmentedControlItem[] = [
+    { value: 'copilot', label: t('ai.copilot.tab'), icon: Sparkles },
+    { value: 'estudio', label: t('ai.artifacts.studyTools'), icon: BookOpen },
   ];
 
   return (
-    <div
-      role="tablist"
-      aria-label={t('ai.copilot.dockLabel')}
-      className="flex items-center border-b border-border"
-    >
-      {tabs.map(({ key, label, icon: Icon }) => (
-        <button
-          key={key}
-          id={`right-dock-tab-${key}`}
+    <div className="flex items-center justify-between gap-2 border-b border-border p-2">
+      <SegmentedControl
+        idBase="right-dock"
+        ariaLabel={t('ai.copilot.dockLabel')}
+        value={activeTab}
+        onValueChange={(v) => setTab(v as RightDockTab)}
+        items={items}
+        className="flex-1"
+      />
+      {activeTab === 'copilot' && (
+        <Button
           type="button"
-          role="tab"
-          aria-selected={activeTab === key}
-          aria-controls={`right-dock-panel-${key}`}
-          onClick={() => setTab(key)}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors',
-            activeTab === key
-              ? 'border-b-2 border-primary text-foreground'
-              : 'text-muted-foreground hover:text-foreground'
-          )}
+          variant="ghost"
+          size="sm"
+          onClick={newConversation}
+          disabled={messages.length === 0}
+          aria-label={t('ai.copilot.newConversation')}
+          className="h-7 w-7 shrink-0 p-0"
         >
-          <Icon className="h-3.5 w-3.5" />
-          {label}
-        </button>
-      ))}
+          <RotateCcw className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -68,7 +71,7 @@ function DockBody({ noteId }: { noteId: string | null }) {
   const activeTab = useRightDockStore((s) => s.activeTab);
   return (
     <div className="flex h-full flex-col min-w-0">
-      <TabBar />
+      <DockHeader />
       <div
         id="right-dock-panel-copilot"
         role="tabpanel"
