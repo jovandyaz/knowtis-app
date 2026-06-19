@@ -9,6 +9,7 @@ import { aiKeysApi } from '@knowtis/api-client';
 
 import {
   providerKeysQueryKeys,
+  useDeleteProviderKey,
   useProviderKeys,
   useSetProviderKey,
 } from './useProviderKeys';
@@ -89,5 +90,22 @@ describe('useSetProviderKey', () => {
     expect(queryClient.getQueryData(providerKeysQueryKeys.list())).toEqual(
       mockKeys
     );
+  });
+});
+
+describe('useDeleteProviderKey', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('calls aiKeysApi.remove with the correct provider', async () => {
+    vi.mocked(aiKeysApi.remove).mockResolvedValue(undefined);
+    const { wrapper } = createWrapper();
+    const { result } = renderHook(() => useDeleteProviderKey(), { wrapper });
+
+    result.current.mutate('anthropic');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(aiKeysApi.remove).toHaveBeenCalledWith('anthropic');
   });
 });
