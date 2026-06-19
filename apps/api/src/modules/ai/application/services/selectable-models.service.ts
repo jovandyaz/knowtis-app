@@ -1,6 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+import {
+  MODEL_CATALOG,
+  providerOf,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 import type { SelectableModel } from '@knowtis/shared-types';
 
 import {
@@ -9,6 +13,8 @@ import {
 } from '../../domain/model-catalog/selectable-models.catalog';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
+const NO_BYOK: ReadonlySet<string> = new Set();
+
 @Injectable()
 export class SelectableModelsService {
   constructor(
@@ -16,10 +22,14 @@ export class SelectableModelsService {
     private readonly registry: ProviderRegistryFactory
   ) {}
 
-  private invocable(model: CuratedModel): boolean {
+  private invocable(
+    model: CuratedModel,
+    byokProviders: ReadonlySet<string>
+  ): boolean {
     return (
       this.catalog.isSupported(model.id) &&
-      this.registry.isModelAvailable(model.id)
+      (this.registry.isModelAvailable(model.id) ||
+        byokProviders.has(providerOf(model.id)))
     );
   }
 
@@ -37,20 +47,28 @@ export class SelectableModelsService {
     return 1;
   }
 
-  list(systemDefault: string): SelectableModel[] {
-    return CURATED_MODELS.filter((m) => this.invocable(m)).map((m) => ({
-      id: m.id,
-      label: m.label,
-      descriptionKey: m.descriptionKey,
-      tier: m.tier,
-      contextWindow: this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
-      costClass: this.costClass(m.id),
-      isDefault: m.id === systemDefault,
-    }));
+  list(
+    systemDefault: string,
+    byokProviders: ReadonlySet<string> = NO_BYOK
+  ): SelectableModel[] {
+    return CURATED_MODELS.filter((m) => this.invocable(m, byokProviders)).map(
+      (m) => ({
+        id: m.id,
+        label: m.label,
+        descriptionKey: m.descriptionKey,
+        tier: m.tier,
+        contextWindow: this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
+        costClass: this.costClass(m.id),
+        isDefault: m.id === systemDefault,
+      })
+    );
   }
 
-  isSelectable(modelId: string): boolean {
+  isSelectable(
+    modelId: string,
+    byokProviders: ReadonlySet<string> = NO_BYOK
+  ): boolean {
     const curated = CURATED_MODELS.find((m) => m.id === modelId);
-    return curated ? this.invocable(curated) : false;
+    return curated ? this.invocable(curated, byokProviders) : false;
   }
 }
