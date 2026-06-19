@@ -30,9 +30,6 @@ export function useSetProviderKey() {
     onSuccess: (keys) => {
       qc.setQueryData(providerKeysQueryKeys.list(), keys);
     },
-    onSettled: () => {
-      void qc.invalidateQueries({ queryKey: providerKeysQueryKeys.list() });
-    },
   });
 }
 
