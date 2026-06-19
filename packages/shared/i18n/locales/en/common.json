@@ -115,7 +115,9 @@
       "saving": "Validating…",
       "invalid": "That key was rejected. Check it's valid and has quota.",
       "stored": "Key stored ({{prefix}}…)",
-      "billedBadge": "Your key"
+      "billedBadge": "Your key",
+      "lastUsed": "Last used {{when}}",
+      "neverUsed": "Not used yet"
     }
   },
   "aiModels": {

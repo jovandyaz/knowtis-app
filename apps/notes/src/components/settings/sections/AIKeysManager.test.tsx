@@ -19,6 +19,7 @@ vi.mock('react-i18next', () => ({
       }
       return k;
     },
+    i18n: { language: 'en' },
   }),
 }));
 
@@ -105,5 +106,41 @@ describe('AIKeysManager', () => {
     await userEvent.click(removeButtons[0]);
 
     expect(mutateRemoveKey).toHaveBeenCalledWith('openai');
+  });
+
+  it('shows the last-used hint when the stored key has been used', () => {
+    vi.mocked(useProviderKeys).mockReturnValue({
+      data: [
+        {
+          provider: 'google',
+          keyPrefix: 'AQ.Ab8',
+          lastUsedAt: '2026-06-19T16:36:02.981Z',
+          createdAt: '2026-06-19T07:16:48.549Z',
+        },
+      ],
+    } as unknown as ReturnType<typeof useProviderKeys>);
+
+    render(<AIKeysManager />);
+
+    expect(screen.getByText(/aiAssistant\.byok\.lastUsed/)).toBeInTheDocument();
+  });
+
+  it('shows the never-used hint when the stored key has not been used yet', () => {
+    vi.mocked(useProviderKeys).mockReturnValue({
+      data: [
+        {
+          provider: 'openai',
+          keyPrefix: 'sk-1234',
+          lastUsedAt: null,
+          createdAt: '2026-06-19T07:16:48.549Z',
+        },
+      ],
+    } as unknown as ReturnType<typeof useProviderKeys>);
+
+    render(<AIKeysManager />);
+
+    expect(
+      screen.getByText(/aiAssistant\.byok\.neverUsed/)
+    ).toBeInTheDocument();
   });
 });

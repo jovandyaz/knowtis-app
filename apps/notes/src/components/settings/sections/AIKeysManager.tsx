@@ -9,6 +9,7 @@ import {
 
 import { Button, PasswordInput } from '@knowtis/design-system';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
+import { formatRelativeTime } from '@knowtis/shared-util';
 
 import { SectionHeader } from '../SectionHeader';
 
@@ -19,7 +20,7 @@ const PROVIDER_LABEL: Record<ByokProvider, string> = {
 };
 
 export function AIKeysManager() {
-  const { t } = useTranslation('common');
+  const { t, i18n } = useTranslation('common');
   const { data: keys } = useProviderKeys(true);
   const setKey = useSetProviderKey();
   const removeKey = useDeleteProviderKey();
@@ -49,6 +50,18 @@ export function AIKeysManager() {
                   </span>
                 ) : null}
               </div>
+              {stored ? (
+                <p className="text-xs text-(--muted-foreground)">
+                  {stored.lastUsedAt
+                    ? t('aiAssistant.byok.lastUsed', {
+                        when: formatRelativeTime(
+                          new Date(stored.lastUsedAt),
+                          i18n.language
+                        ),
+                      })
+                    : t('aiAssistant.byok.neverUsed')}
+                </p>
+              ) : null}
               <div className="flex gap-2">
                 <PasswordInput
                   value={draft}
