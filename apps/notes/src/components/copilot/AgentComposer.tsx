@@ -1,23 +1,34 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ArrowUp } from 'lucide-react';
+import type { AgentStatus } from '@/stores/agent.store';
+import { ArrowUp, Square } from 'lucide-react';
 
 import { Button, cn, Textarea } from '@knowtis/design-system';
 
 interface AgentComposerProps {
   onSend: (text: string) => void;
-  disabled: boolean;
+  onStop: () => void;
+  status: AgentStatus;
+  modelPicker?: ReactNode;
 }
 
-export function AgentComposer({ onSend, disabled }: AgentComposerProps) {
+export function AgentComposer({
+  onSend,
+  onStop,
+  status,
+  modelPicker,
+}: AgentComposerProps) {
   const { t } = useTranslation('notes');
   const [value, setValue] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  const isStreaming = status === 'streaming';
+  const sendBlocked = isStreaming || status === 'pendingProposal';
+
   const submit = () => {
     const text = value.trim();
-    if (!text || disabled) {
+    if (!text || sendBlocked) {
       return;
     }
     onSend(text);
@@ -26,8 +37,8 @@ export function AgentComposer({ onSend, disabled }: AgentComposerProps) {
   };
 
   return (
-    <div className="border-t border-border p-2">
-      <div className="flex items-end gap-2">
+    <div className="p-2">
+      <div className="flex flex-col gap-1.5 rounded-2xl border border-border bg-background p-2 focus-within:ring-2 focus-within:ring-(--ring) focus-within:ring-offset-1">
         <Textarea
           ref={ref}
           value={value}
@@ -45,18 +56,36 @@ export function AgentComposer({ onSend, disabled }: AgentComposerProps) {
           placeholder={t('ai.copilot.placeholder')}
           aria-label={t('ai.copilot.placeholder')}
           rows={1}
-          className="min-h-9 max-h-32 resize-none"
+          className={cn(
+            'min-h-9 max-h-48 resize-none border-0 bg-transparent px-1 py-0.5 shadow-none focus-visible:ring-0'
+          )}
         />
-        <Button
-          type="button"
-          size="sm"
-          onClick={submit}
-          disabled={disabled || value.trim().length === 0}
-          aria-label={t('ai.copilot.send')}
-          className={cn('h-9 w-9 shrink-0 p-0')}
-        >
-          <ArrowUp className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">{modelPicker}</div>
+          {isStreaming ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={onStop}
+              aria-label={t('ai.copilot.stop')}
+              className="h-8 w-8 shrink-0 p-0"
+            >
+              <Square className="h-3.5 w-3.5" />
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              onClick={submit}
+              disabled={sendBlocked || value.trim().length === 0}
+              aria-label={t('ai.copilot.send')}
+              className="h-8 w-8 shrink-0 p-0"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
       <p className="mt-1 px-1 text-[10px] text-muted-foreground">
         {t('ai.copilot.composerHint')}

@@ -17,6 +17,7 @@ export function AgentCopilotPanel() {
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
   const sendMessage = useAgentStore((s) => s.sendMessage);
+  const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
@@ -55,13 +56,11 @@ export function AgentCopilotPanel() {
         </div>
       )}
 
-      <div className="border-t border-border px-3 py-1.5">
-        <CopilotModelPicker />
-      </div>
-
       <AgentComposer
         onSend={(text) => sendMessage(text, activeNoteId ?? undefined)}
-        disabled={status === 'streaming' || status === 'pendingProposal'}
+        onStop={cancel}
+        status={status}
+        modelPicker={<CopilotModelPicker />}
       />
     </div>
   );

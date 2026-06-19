@@ -12,7 +12,7 @@ describe('AgentComposer', () => {
   it('sends on Enter and clears the input', async () => {
     const onSend = vi.fn();
     const user = userEvent.setup();
-    render(<AgentComposer onSend={onSend} disabled={false} />);
+    render(<AgentComposer onSend={onSend} onStop={vi.fn()} status="idle" />);
 
     const box = screen.getByRole('textbox');
     await user.type(box, 'hola{Enter}');
@@ -24,7 +24,7 @@ describe('AgentComposer', () => {
   it('inserts a newline on Shift+Enter without sending', async () => {
     const onSend = vi.fn();
     const user = userEvent.setup();
-    render(<AgentComposer onSend={onSend} disabled={false} />);
+    render(<AgentComposer onSend={onSend} onStop={vi.fn()} status="idle" />);
 
     const box = screen.getByRole('textbox');
     await user.type(box, 'line1{Shift>}{Enter}{/Shift}line2');
@@ -34,25 +34,55 @@ describe('AgentComposer', () => {
   });
 
   it('disables the send button while streaming', () => {
-    render(<AgentComposer onSend={vi.fn()} disabled={true} />);
-    expect(screen.getByRole('button')).toBeDisabled();
-  });
-
-  it('does not send on Enter while disabled', async () => {
-    const onSend = vi.fn();
-    const user = userEvent.setup();
-    render(<AgentComposer onSend={onSend} disabled={true} />);
-
-    await user.type(screen.getByRole('textbox'), 'hi{Enter}');
-
-    expect(onSend).not.toHaveBeenCalled();
+    render(<AgentComposer onSend={vi.fn()} onStop={vi.fn()} status="idle" />);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } });
+    expect(
+      screen.getByRole('button', { name: 'ai.copilot.send' })
+    ).toBeDisabled();
   });
 
   it('does not send on Enter while IME composition is active', () => {
     const onSend = vi.fn();
-    render(<AgentComposer onSend={onSend} disabled={false} />);
+    render(<AgentComposer onSend={onSend} onStop={vi.fn()} status="idle" />);
     const box = screen.getByRole('textbox');
     fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
     expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('shows a Stop button while streaming and calls onStop', async () => {
+    const onStop = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AgentComposer onSend={vi.fn()} onStop={onStop} status="streaming" />
+    );
+    const stop = screen.getByRole('button', { name: 'ai.copilot.stop' });
+    await user.click(stop);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not send while pendingProposal', async () => {
+    const onSend = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <AgentComposer
+        onSend={onSend}
+        onStop={vi.fn()}
+        status="pendingProposal"
+      />
+    );
+    await user.type(screen.getByRole('textbox'), 'hola{Enter}');
+    expect(onSend).not.toHaveBeenCalled();
+  });
+
+  it('renders the model picker slot', () => {
+    render(
+      <AgentComposer
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        status="idle"
+        modelPicker={<div>picker</div>}
+      />
+    );
+    expect(screen.getByText('picker')).toBeInTheDocument();
   });
 });
