@@ -57,7 +57,7 @@ export class AiKeysController {
   }
 
   private async assertEnabled(user: RequestUser): Promise<void> {
-    if (user.isAnonymous) {
+    if (user.isAnonymous === true) {
       throw new ForbiddenException('BYOK requires a registered account');
     }
     if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_BYOK))) {
