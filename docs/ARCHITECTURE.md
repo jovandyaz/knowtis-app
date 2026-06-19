@@ -406,6 +406,12 @@ All retrieved content — notes, memories, and web results — is injected into 
 
 See [AI Module → Conversation memory (A6a)](./AI.md#conversation-memory-a6a) and the surrounding sections for the full schema, feature flags, and environment variables.
 
+### Model selection & billing (BYOK)
+
+The copilot model is resolved per turn through a cascade — per-conversation override → user account default → system default — over a **curated** catalog. Users can also bring their own key (BYOK): provider keys are AES-256-GCM-encrypted at rest, injected per request, and a stored key unlocks that provider's models while billing the user directly (the daily budget is bypassed, RPM is still enforced). A BYOK turn skips the server fallback chain and redacts provider errors. Flag `agent_byok`.
+
+See [AI Module → Copilot Model Selection](./AI.md#copilot-model-selection) and [Bring-your-own-key (BYOK)](./AI.md#bring-your-own-key-byok).
+
 ---
 
 ## Authentication Flow

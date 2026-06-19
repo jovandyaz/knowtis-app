@@ -345,7 +345,7 @@ Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWith
 
 **Circuit breaker:** `ProviderCooldownTracker` puts a provider in cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling providers are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
 
-Model availability is an injected function, so a future per-user key source (BYOK) can plug in without touching the chain.
+Model availability is an injected function, so the per-user key source (BYOK) plugs in without touching the chain — see [Bring-your-own-key (BYOK)](#bring-your-own-key-byok).
 
 ---
 
@@ -463,18 +463,19 @@ Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
 Three tables: `ai_usage`, `ai_config`, and `user_ai_settings`.
 
-| Column          | Type              | Notes                         |
-| --------------- | ----------------- | ----------------------------- |
-| `id`            | uuid (PK)         | Auto-generated                |
-| `user_id`       | uuid (FK → users) | CASCADE on delete             |
-| `action`        | varchar(50)       | AI action name                |
-| `model`         | varchar(80)       | Model identifier              |
-| `input_tokens`  | integer           | Tokens sent to provider       |
-| `output_tokens` | integer           | Tokens received from provider |
-| `cost_usd`      | numeric(10,6)     | Estimated cost                |
-| `created_at`    | timestamptz       | Auto-set                      |
+| Column          | Type              | Notes                                                                                              |
+| --------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
+| `id`            | uuid (PK)         | Auto-generated                                                                                     |
+| `user_id`       | uuid (FK → users) | CASCADE on delete                                                                                  |
+| `action`        | varchar(50)       | AI action name                                                                                     |
+| `model`         | varchar(80)       | Model identifier                                                                                   |
+| `input_tokens`  | integer           | Tokens sent to provider                                                                            |
+| `output_tokens` | integer           | Tokens received from provider                                                                      |
+| `cost_usd`      | numeric(10,6)     | Estimated cost                                                                                     |
+| `byok`          | boolean           | `true` when the turn billed the user's own provider key (excluded from the daily-budget aggregate) |
+| `created_at`    | timestamptz       | Auto-set                                                                                           |
 
-Indexed on `(user_id, created_at)` for efficient daily aggregation queries.
+Indexed on `(user_id, created_at)` for efficient daily aggregation queries. The `byok` column (migration `0014`) lets `getDailyUsage` exclude user-billed turns from the per-user budget — see [Bring-your-own-key (BYOK)](#bring-your-own-key-byok).
 
 ### `ai_config`
 
@@ -879,3 +880,57 @@ Users own their memories via `MemoryController` (`@Controller('agent/memories')`
 ### Memory recall eval
 
 `apps/api/src/modules/agent/eval/` covers extraction + recall against the real Voyage model and a live DB: a planted fact must rank above a decoy on a later turn. Runs under `nx run api:eval`. Gated on `VOYAGE_API_KEY` — the suite skips cleanly when the key is absent.
+
+---
+
+## Bring-your-own-key (BYOK)
+
+Registered users can store their own provider API keys so the copilot runs on **their** account and billing instead of the server's, and a stored key unlocks that provider's curated models even when the server holds no key for it. Gated by the `agent_byok` feature flag (default **off**) and the `BYOK_ENCRYPTION_KEY` secret. Keys are **userId-scoped**, encrypted at rest, and never returned in plaintext. Registered users only.
+
+### Feature flag
+
+| Flag key     | Default | Description                                                                                                            |
+| ------------ | ------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `agent_byok` | off     | Enables the `/ai/keys` endpoints, the settings manager, and per-user key billing. Toggle via `PUT /api/v1/flags/:key`. |
+
+### Environment variables
+
+| Variable              | Required            | Default | Description                                                                                                                                                                                                                                                                                                                                     |
+| --------------------- | ------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BYOK_ENCRYPTION_KEY` | When the flag is on | —       | AES-256-GCM master key: 32 random bytes, base64 (`openssl rand -base64 32`). The app still boots without it, but with the flag on, saving a key **fails closed** (503) rather than storing plaintext. The env schema refuses a non-32-byte value at boot. **Never rotate it once keys are stored** — existing ciphertext becomes undecryptable. |
+
+### Endpoints
+
+`AiKeysController` (`apps/api/src/modules/ai/ai-keys.controller.ts`, `@Controller('ai/keys')`, guarded by `JwtAuthGuard` + `FeatureFlagGuard`):
+
+| Method | Path                 | Effect                                                                               |
+| ------ | -------------------- | ------------------------------------------------------------------------------------ |
+| GET    | `/ai/keys`           | List stored keys as `ProviderKeyInfo[]` — masked `keyPrefix` only, never the secret. |
+| PUT    | `/ai/keys/:provider` | Validate `{ apiKey }` against the live provider, then encrypt + store (upsert).      |
+| DELETE | `/ai/keys/:provider` | Remove the stored key for that provider.                                             |
+
+`:provider` is one of `anthropic | openai | google` (validated by `ProviderParamDto`). A `PUT` first probes the provider with a tiny `generateText` call (`maxOutputTokens: 16`, the universal minimum OpenAI's Responses API accepts) — an invalid or quota-less key returns `422` and nothing is stored.
+
+### Encryption
+
+`secret-cipher.ts` (pure functions) encrypts each key with **AES-256-GCM** under `BYOK_ENCRYPTION_KEY`, persisting `{ ciphertext, iv, auth_tag }` plus a short masked `key_prefix` for display. The decrypted key lives only in memory for the duration of one request — never logged, thrown, sent to telemetry, or returned. `secret-cipher` and `ByokService` both re-assert the 32-byte master-key length defensively.
+
+### Storage
+
+`user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` adds the provider `CHECK`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google'))`. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.
+
+### Per-request provider injection
+
+`ProviderRegistryFactory.languageModel(modelId, byokKey?)` builds a per-request ephemeral provider from the decrypted key (`createAnthropic` / `createOpenAI` / `createGoogleGenerativeAI({ apiKey })`). The BYOK branch is checked **before** the gateway branch, so a BYOK turn never bills the server gateway while being recorded as user-billed. When a BYOK key is in scope the orchestrator **skips the [fallback chain](#cross-provider-fallback-chain)** (no silent server-billed fallback) and **redacts** provider errors to a generic `BYOK provider request failed` (client and logs) so key fragments can't leak. Resume (HITL) turns also use the BYOK key.
+
+### Billing & rate limiting
+
+A BYOK turn records `ai_usage.byok = true`. `getDailyUsage` filters `byok = false`, so BYOK usage **bypasses the per-user daily token/USD budget** (the user pays the provider directly) — but **RPM is still enforced** as an abuse guard. The handler's pre-flight resolves the model + BYOK key **before** `checkLimit`, which then runs RPM-only for BYOK and skips the daily reservation and its correction.
+
+### Model picker signal
+
+`SelectableModelsService.list` sets `SelectableModel.billedToUser = true` for every model whose provider the caller has a stored key for. `ModelSelect` (`@knowtis/design-system`) renders a **"Tu clave" / "Your key"** badge with a key icon on those models — the selection-time signal that the turn bills the user's key (the industry-standard BYOK UX). It is wired in both consumers: `CopilotModelPicker` (chat) and `AIAssistantSection` (settings).
+
+### Frontend
+
+**Settings → Asistente IA** shows `AIKeysManager` (rendered only when `agent_byok` is on, gated by `useFeatureFlag`): a per-provider row with a masked-input field to save a key and a remove button, backed by the `useProviderKeys` hooks over `ai-keys.api`. A saved key surfaces as `Clave guardada (sk-…)`.

@@ -41,6 +41,7 @@
 **Knowtis** is an AI-powered collaborative workspace that turns your notes into a knowledge base:
 
 - 🤖 **AI Assistant** - Improve writing, fix spelling, summarize, translate, and expand content with inline AI actions
+- 💬 **AI Copilot** - Conversational assistant that reads and edits your notes with approval (HITL), with per-conversation model selection and bring-your-own-key (BYOK) billing
 - 🧠 **Study Tools** - Auto-generate flashcards, quizzes, summaries, and mind maps from your notes
 - 🃏 **Spaced Repetition** - SM2 algorithm for optimal flashcard review scheduling
 - 📝 **Rich Text Editing** - Tiptap/ProseMirror with slash commands, ghost text suggestions, and AI blocks
@@ -364,6 +365,7 @@ Recommended VS Code extensions:
 | [Architecture Guide](./docs/ARCHITECTURE.md)      | System design & principles                |
 | [Deployment Guide](./docs/DEPLOYMENT.md)          | Railway & Vercel deployment               |
 | [API Architecture](./apps/api/ARCHITECTURE.md)    | Backend DDD patterns & module structure   |
+| [AI Module](./docs/AI.md)                         | Copilot, model selection, BYOK & AI flows |
 | [Email Templates](./packages/email/README.md)     | React Email templates & i18n              |
 | [Email NestJS](./packages/email-nestjs/README.md) | NestJS email module (Resend/Console)      |
 | [Contributing Guide](./CONTRIBUTING.md)           | How to contribute to the project          |

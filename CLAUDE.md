@@ -174,7 +174,7 @@ pnpm docker:up
 pnpm db:push
 ```
 
-> AI features require `ANTHROPIC_API_KEY` in `apps/api/.env` and the `ai_enabled` flag toggled on in the DB. See [docs/AI.md](docs/AI.md).
+> AI features require `ANTHROPIC_API_KEY` in `apps/api/.env` and the `ai_enabled` flag toggled on in the DB. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64) and the `agent_byok` flag. See [docs/AI.md](docs/AI.md).
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->
