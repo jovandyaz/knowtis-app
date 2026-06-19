@@ -33,7 +33,7 @@ describe('AgentComposer', () => {
     expect(box).toHaveValue('line1\nline2');
   });
 
-  it('disables the send button while streaming', () => {
+  it('disables the send button when the input is empty', () => {
     render(<AgentComposer onSend={vi.fn()} onStop={vi.fn()} status="idle" />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: '' } });
     expect(
