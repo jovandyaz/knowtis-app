@@ -204,7 +204,6 @@
       "sources": "Sources",
       "webSources": "Web sources",
       "stop": "Stop",
-      "searching": "Searching…",
       "empty": {
         "title": "Ask your notes",
         "greeting": "Ask anything about this note — I can summarize, improve, find sources, and more.",

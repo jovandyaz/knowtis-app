@@ -7,7 +7,7 @@ const LINE_WIDTHS = ['w-11/12', 'w-4/5', 'w-3/5'];
 export function AgentStatusIndicator() {
   const { t } = useTranslation('notes');
   return (
-    <div className="flex flex-col gap-2" role="status" aria-live="polite">
+    <div className="flex flex-col gap-2" role="status">
       <span className="text-xs text-muted-foreground">
         {t('ai.copilot.thinking')}
       </span>
