@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
+import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
 import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
@@ -66,7 +67,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       }),
     }),
   ],
-  controllers: [AIController, AiModelsController],
+  controllers: [AIController, AiModelsController, AiKeysController],
   providers: [
     SelectableModelsService,
     ModelPreferenceService,
