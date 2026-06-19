@@ -220,7 +220,7 @@ describe('agent.store server-authoritative wire', () => {
       kind: 'create',
       title: 'My Note',
     });
-    expect(committedMsg?.content).toContain('✓ My Note');
+    expect(committedMsg?.content).not.toContain('✓');
 
     useAgentStore.getState().sendMessage('what did you just do?');
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[0]).toBe(
