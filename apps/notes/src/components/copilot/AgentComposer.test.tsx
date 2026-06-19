@@ -45,6 +45,7 @@ describe('AgentComposer', () => {
     const onSend = vi.fn();
     render(<AgentComposer onSend={onSend} onStop={vi.fn()} status="idle" />);
     const box = screen.getByRole('textbox');
+    fireEvent.change(box, { target: { value: 'hola' } });
     fireEvent.keyDown(box, { key: 'Enter', isComposing: true });
     expect(onSend).not.toHaveBeenCalled();
   });
