@@ -651,9 +651,9 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 ## Adding a New Action
 
 1. Add the action string to `AI_ACTION` in `packages/shared/types/src/lib/ai.types.ts`
-2. Add a system prompt in `SYSTEM_PROMPTS` in `apps/api/src/modules/ai/domain/constants/system-prompts.ts`
-3. If it needs the fast model, add it to `FAST_MODEL_ACTIONS` in the same file
-4. If it should be cached, add it to `CACHEABLE_ACTIONS` in `apps/api/src/modules/ai/infrastructure/redis/semantic-cache.service.ts`
+2. Add the prompt as a `.md` file under `apps/api/src/modules/ai/prompts/<category>/` with front-matter (`id`, `category`, `description`, `cache`). It is auto-discovered by `PromptLoaderService` — no constant to edit. Reuse shared fragments via `{{PARTIAL_NAME}}` (e.g. `{{PRESERVE_LANGUAGE}}`, sourced from `prompts/_partials/`).
+3. If it needs the fast model, add it to `FAST_MODEL_ACTIONS` in `apps/api/src/modules/ai/application/services/ai-orchestrator.service.ts`
+4. If its responses should be cached, add it to `CACHEABLE_ACTIONS` in `apps/api/src/modules/ai/infrastructure/redis/exact-match-cache.service.ts`
 5. Add it to the relevant UI config (`ai-actions.config.ts` for bubble menu, `slash-commands.config.ts` for slash commands)
 6. Add i18n keys in `packages/shared/i18n/locales/{en,es}/notes.json`
 

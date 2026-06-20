@@ -31,9 +31,11 @@ auth-react      auth-nestjs + apps/api
 | `@jovandyaz/auth`        | Browser-safe | Types, errors, `getPasswordChecks()`            |
 | `@jovandyaz/auth/server` | Server only  | + Value objects, `hashToken`, events, constants |
 
-**`@jovandyaz/auth`** (browser-safe): `LoginInput`, `RegisterInput`, `AuthTokens` (readonly), `AuthResponse`, `RequestUser`, `PasswordRequirements`, `PasswordCheck`, `getPasswordChecks()`, `PASSWORD_REQUIREMENTS`, `AuthDomainError`, `AuthErrorCodes`, `AuthErrors`.
+**`@jovandyaz/auth`** (browser-safe): `LoginInput`, `RegisterInput`, `AuthTokens` (readonly), `AuthResponse`, `RequestUser`, `USER_ROLE` / `UserRole`, `PasswordRequirements`, `PasswordCheck`, `getPasswordChecks()`, `PASSWORD_REQUIREMENTS`, `AuthDomainError`, `AuthErrorCodes`, `AuthErrors`.
 
-**`@jovandyaz/auth/server`** (server-only, includes all browser-safe exports plus): Value objects (`Email`, `Password`, `UserId` — all return `Result` via neverthrow), `hashToken()`, `createPasswordHasher()`, `SessionContext`, expiry constants (`SESSION_EXPIRY_MS`, `VERIFICATION_TOKEN_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`), domain events. All exports come from their original source modules — no re-exports.
+> `RequestUser` carries `role: UserRole` (`'user'` | `'admin'`) and optional `isAnonymous?: boolean`. Anonymous sessions are minted at the app level (`AnonymousAuthService` in `apps/api`), not by these packages; see [AUTH.md › Anonymous Users](AUTH.md#anonymous-users).
+
+**`@jovandyaz/auth/server`** (server-only, includes all browser-safe exports plus): Value objects (`Email`, `Password`, `UserId` — all return `Result` via neverthrow), `hashToken()`, `createPasswordHasher()`, `SessionContext`, expiry constants (`SESSION_EXPIRY_MS`, `VERIFICATION_TOKEN_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`, `REFRESH_TOKEN_GRACE_MS`), domain events. All exports come from their original source modules — no re-exports.
 
 ---
 
@@ -102,7 +104,7 @@ HttpClient handles 401 → refresh callback → retry (transparent)
 - **`auth/server` subpath** — server-only exports are explicit; main entry is always browser-safe
 - **`AuthApiAdapter` interface** — decouples React hooks from HTTP implementation
 - **In-memory access tokens** — reduces XSS attack surface
-- **HttpOnly cookie for refresh tokens** — not accessible from JS, mitigates XSS token theft. Cookie: `rid`, path `/api/v1/auth`, SameSite=Strict, Secure in production
+- **HttpOnly cookie for refresh tokens** — not accessible from JS, mitigates XSS token theft. Cookie: `rid`, path `/api/v1/auth`, `SameSite=Lax`, Secure in production (Lax is safe because auth routes are POST-only)
 - **`AuthTokens` in `@jovandyaz/auth`** — single source of truth for both packages
 - **Port interfaces in `auth-nestjs`** — implementations live in the consuming app, not the package
 - **`PasswordHasher` differs per package** — `auth` returns `Promise<string>` (utility), `auth-nestjs` returns `Result<string, AuthDomainError>` (DDD). Intentionally different contracts

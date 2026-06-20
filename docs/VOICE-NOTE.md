@@ -4,14 +4,14 @@
 
 Voice-to-Note lets users record spoken audio, transcribe it via OpenAI Whisper, and structure the result into a formatted note using Claude. Available in two modes: **create** (new note from voice) and **insert** (inject text into an existing note at cursor position). Gated by `ai_enabled` + `voice_notes_enabled` DB feature flags.
 
-| Layer         | Technology                                                   |
-| ------------- | ------------------------------------------------------------ |
-| Recording     | MediaRecorder API, Web Audio API (AnalyserNode for waveform) |
-| Live preview  | Web Speech API (SpeechRecognition, browser-side, no cost)    |
-| Transcription | OpenAI Whisper (`whisper-1`) via Vercel AI SDK               |
-| Structuring   | Anthropic Claude via `generateObject` (Zod schema)           |
-| Frontend      | React 19, Zustand, TanStack Query/Router                     |
-| Design system | `@knowtis/design-system` (VoiceButton, RecordingModal, etc.) |
+| Layer         | Technology                                                                              |
+| ------------- | --------------------------------------------------------------------------------------- |
+| Recording     | MediaRecorder API, Web Audio API (AnalyserNode for waveform)                            |
+| Live preview  | Web Speech API (SpeechRecognition, browser-side, no cost)                               |
+| Transcription | OpenAI Whisper (`whisper-1`) via Vercel AI SDK                                          |
+| Structuring   | Anthropic Claude via `generateStructuredOutput` (`generateText` + `Output.object`, Zod) |
+| Frontend      | React 19, Zustand, TanStack Query/Router                                                |
+| Design system | `@knowtis/design-system` (VoiceButton, RecordingModal, etc.)                            |
 
 ---
 
@@ -66,7 +66,7 @@ POST /ai/voice-note (multipart/form-data)
       → AIRateLimitService.checkLimit()
       → VoiceTranscriptionService.transcribe()    # Whisper
       → AIOrchestrator.selectModel() + getSystemPrompt()
-      → generateObject() with voiceNoteOutputSchema  # Claude
+      → generateStructuredOutput(voiceNoteOutputSchema)  # Claude (generateText + Output.object)
       → AIRateLimitService.recordUsage()           # Whisper + Claude costs
 ```
 
@@ -84,7 +84,7 @@ POST /ai/voice-note (multipart/form-data)
 7. POST /ai/voice-note (FormData: audio blob + mode + language)
       ├─ Rate limit check (estimated tokens from audio size)
       ├─ Whisper transcription → raw text
-      ├─ Claude generateObject → { title, content } (structured HTML)
+      ├─ Claude generateStructuredOutput → { title, content } (structured HTML)
       └─ Usage recording (Whisper cost + Claude tokens)
 8. Frontend displays VoiceNoteResult with title + HTML preview
 9. User taps Create note → creates note and navigates to editor

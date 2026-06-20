@@ -26,6 +26,7 @@ apps/api/src/
 ├── database/         # Drizzle schema and module
 └── modules/
     ├── admin/        # Admin dashboard & metrics (Service-based)
+    ├── agent/        # Conversational copilot: tool-use, HITL, memory (DDD) ✅
     ├── ai/           # AI text assistant (DDD) ✅
     ├── artifacts/    # AI-generated study artifacts (DDD) ✅
     ├── auth/         # Authentication (DDD) ✅
@@ -35,7 +36,9 @@ apps/api/src/
     ├── health/       # Health checks
     ├── mcp/          # MCP API keys & token exchange (Service-based)
     ├── notes/        # Notes CRUD (DDD) ✅
-    └── users/        # User management (Service-based)
+    ├── observability/# Langfuse OpenTelemetry tracing (Service-based)
+    ├── users/        # User management (Service-based)
+    └── websocket/    # Socket.IO auth, concurrency & heartbeat utils (Service-based)
 ```
 
 ## Module Architecture

@@ -35,10 +35,10 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after e
 
 **Config files:**
 
-| File                       | Purpose                           |
-| -------------------------- | --------------------------------- |
-| `railway.toml`             | Build/start commands, healthcheck |
-| `.github/workflows/ci.yml` | CI pipeline with deploy step      |
+| File                       | Purpose                                                  |
+| -------------------------- | -------------------------------------------------------- |
+| `railway.toml`             | Build/start commands, healthcheck, pre-deploy migrations |
+| `.github/workflows/ci.yml` | CI pipeline with deploy step                             |
 
 **Required GitHub secrets/variables:**
 
@@ -62,16 +62,23 @@ Config: `vercel.json` at repo root.
 ```toml
 [build]
 builder = "nixpacks"
-buildCommand = "pnpm install --frozen-lockfile && pnpm build:api"
-watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml"]
+# NODE_ENV=development so build-only devDependencies (nx, tsx) are installed.
+buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm build:api"
+watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml", "railway.toml"]
 
 [deploy]
+# Single source of truth for DB migrations; aborts the deploy on non-zero exit.
+preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
 startCommand = "node dist/apps/api/main.js"
 healthcheckPath = "/api/v1/health/ping"
-healthcheckTimeout = 30
+healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 ```
+
+### Database Migrations (pre-deploy)
+
+`preDeployCommand` runs Drizzle migrations in Railway's release phase — same `DATABASE_URL` and network as the app, before any new instance serves traffic. A non-zero exit **aborts the deploy**, so new code never runs against an un-migrated schema. `migrate.ts` takes a Postgres advisory lock, making it safe under concurrent deploys. This is the **only** migrator; CI does not run migrations. See [MIGRATIONS.md](MIGRATIONS.md).
 
 ### Environment Variables
 

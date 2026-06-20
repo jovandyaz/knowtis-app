@@ -89,9 +89,20 @@ knowtis/
 │       ├── notes/           # Notes hooks & store
 │       └── users/           # Users hooks & schemas
 │
-└── packages/                # Shared packages (publishable)
+└── packages/                # Shared packages (framework-light, reusable)
     ├── ai-gateway/          # Framework-free AI gateway core (chain, catalog, guard, tokens)
-    ├── design-system/       # UI components & tokens
+    ├── auth/                # Auth core (+ /server): types, value objects, token/crypto
+    ├── auth-nestjs/         # NestJS auth adapter (handlers, guards, strategies)
+    ├── auth-react/          # React auth integration (store, hooks, provider)
+    ├── crdt/                # Yjs/CRDT helpers & shared types
+    ├── design-system/       # UI components & design tokens (Storybook)
+    ├── editor/              # Collaborative Tiptap + Yjs editor
+    ├── editor-schema/       # Tiptap schema extensions (Mermaid, semantic nodes)
+    ├── email/               # React Email templates (i18n)
+    ├── email-nestjs/        # NestJS email module (Resend/Console adapters)
+    ├── permissions/         # CASL-wrapped permission core
+    ├── permissions-nestjs/  # NestJS permission guards & decorators
+    ├── permissions-react/   # React permission hooks
     └── shared/              # Common utilities
         ├── hooks/           # Generic React hooks
         ├── i18n/            # Internationalization
@@ -101,14 +112,18 @@ knowtis/
 
 ### Library Categories
 
-| Category          | Path                     | Description                                                               |
-| ----------------- | ------------------------ | ------------------------------------------------------------------------- |
-| **API Client**    | `libs/api-client`        | HTTP client, WebSocket client, API types                                  |
-| **Authorization** | `libs/authorization`     | CASL permission definitions (shared FE/BE)                                |
-| **Data Access**   | `libs/data-access/*`     | Domain logic, Zustand stores, React Query hooks                           |
-| **AI Gateway**    | `packages/ai-gateway`    | AI gateway core: fallback chain, pricing catalog, injection guard, tokens |
-| **Design System** | `packages/design-system` | UI components, design tokens, styles                                      |
-| **Shared**        | `packages/shared/*`      | Hooks, i18n, utilities, TypeScript types                                  |
+| Category          | Path                                                              | Description                                                               |
+| ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| **API Client**    | `libs/api-client`                                                 | HTTP client, WebSocket client, API types                                  |
+| **Authorization** | `libs/authorization`                                              | CASL permission definitions (shared FE/BE)                                |
+| **Data Access**   | `libs/data-access/*`                                              | Domain logic, Zustand stores, React Query hooks                           |
+| **AI Gateway**    | `packages/ai-gateway`                                             | AI gateway core: fallback chain, pricing catalog, injection guard, tokens |
+| **Auth**          | `packages/auth`, `auth-nestjs`, `auth-react`                      | Auth core + NestJS/React adapters (JWT, sessions, anon)                   |
+| **Permissions**   | `packages/permissions`, `permissions-nestjs`, `permissions-react` | CASL core + NestJS/React adapters                                         |
+| **Editor / CRDT** | `packages/editor`, `editor-schema`, `crdt`                        | Collaborative Tiptap + Yjs editor, schema extensions, CRDT helpers        |
+| **Email**         | `packages/email`, `email-nestjs`                                  | React Email templates + NestJS delivery adapter                           |
+| **Design System** | `packages/design-system`                                          | UI components, design tokens, styles                                      |
+| **Shared**        | `packages/shared/*`                                               | Hooks, i18n, utilities, TypeScript types                                  |
 
 ### Dependency Rules
 

@@ -10,13 +10,15 @@ JWT-based auth with refresh token rotation, email verification, and password res
 | Database | PostgreSQL 16, Drizzle ORM                              |
 | Frontend | React 19, TanStack Query, Zustand, react-hook-form, Zod |
 
-| Token               | TTL        | Configurable via               |
-| ------------------- | ---------- | ------------------------------ |
-| Access token (JWT)  | 15 minutes | `JWT_EXPIRES_IN`               |
-| Refresh token (JWT) | 7 days     | `JWT_REFRESH_EXPIRES_IN`       |
-| Email verification  | 24 hours   | `VERIFICATION_TOKEN_EXPIRY_MS` |
-| Password reset      | 1 hour     | `RESET_TOKEN_EXPIRY_MS`        |
-| Session             | 7 days     | `SESSION_EXPIRY_MS`            |
+| Token               | TTL        | Source                                  |
+| ------------------- | ---------- | --------------------------------------- |
+| Access token (JWT)  | 15 minutes | env `JWT_EXPIRES_IN`                    |
+| Refresh token (JWT) | 7 days     | env `JWT_REFRESH_EXPIRES_IN`            |
+| Email verification  | 24 hours   | constant (`@jovandyaz/auth`, hardcoded) |
+| Password reset      | 1 hour     | constant (`@jovandyaz/auth`, hardcoded) |
+| Session             | 7 days     | constant (`@jovandyaz/auth`, hardcoded) |
+
+> Only the JWT TTLs are env-configurable. The verification/reset/session windows are constants in [`packages/auth/src/lib/constants.ts`](../packages/auth/src/lib/constants.ts) (`VERIFICATION_TOKEN_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`, `SESSION_EXPIRY_MS`).
 
 ---
 
@@ -67,9 +69,9 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 ### Token Refresh
 
-`POST /auth/refresh` → read refresh token from HttpOnly cookie (`rid`) → hash token → find session → check expiry → delete old session → generate new tokens → create new session → set new cookie → `200 { accessToken }`
+`POST /auth/refresh` → read refresh token from HttpOnly cookie (`rid`) → verify + hash → find session → check expiry → mark session rotated → issue new tokens **in the same family** → set new cookie → `200 { accessToken }`
 
-**Rotation:** Each refresh invalidates the previous token. Token reuse (replay attack) → **all user sessions invalidated**.
+**Rotation & token-family theft detection:** Refresh tokens are grouped by a `familyId` (issued at login). Each refresh stamps the current session `rotatedAt` and issues a fresh token in the same family. Reusing an already-rotated (or missing) token **past a 30s grace window** (`REFRESH_TOKEN_GRACE_MS`) is treated as theft → only **that family** is revoked (`deleteByFamilyId`), never every session the user owns. The grace window lets concurrent tabs refresh simultaneously without a false-positive theft signal. Legacy tokens carrying no `familyId` (pre-rotation) are simply rejected; rotated sessions are pruned after the grace window.
 
 ### Logout
 
@@ -85,6 +87,14 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 `POST /auth/forgot-password` (always returns success, prevents email enumeration) → if user exists: generate token → send email → `POST /auth/reset-password` → validate token + expiry → hash new password → update user → **invalidate all sessions**.
 
+### Anonymous Users
+
+`POST /auth/anonymous` → mint an anonymous user (`is_anonymous = true`) → issue the standard access + refresh token pair (refresh in the `rid` cookie) → `201 { user, accessToken }`. Passing a still-valid anonymous token reuses the same identity instead of minting a new user (`AnonymousAuthService.createAnonymousSession`).
+
+**Migration to a real account:** `login` and `register` accept optional `anonymousUserId` + `anonymousToken`. After authenticating, the anonymous token is verified as an identity proof (`verifyMigrationProof` — signature + claims + DB match, expiry ignored) and the anonymous user's data (notes, AI usage) is migrated via `DrizzleAnonymousDataMigrationRepository`. Migration failures are logged but never block login/registration.
+
+**Cleanup:** `CleanupAnonymousTask` (`@Cron`, daily 03:00) prunes stale anonymous users.
+
 ---
 
 ## API Reference
@@ -96,8 +106,8 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 ## Security
 
 - **Passwords:** bcrypt (10 rounds). Min 8 chars, uppercase, number, special char. Rules shared between frontend and backend via `getPasswordChecks()` from `@jovandyaz/auth`.
-- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, SameSite=Strict, Secure in production) and as **SHA-256 hashes** in the database (never plaintext). Email/reset tokens also stored as hashes. All generated with `crypto.randomBytes(32)`.
-- **Refresh token rotation:** Each refresh invalidates previous token. Reuse → all sessions invalidated.
+- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, `SameSite=Lax`, `path=/api/v1/auth`, Secure in production) and as **SHA-256 hashes** in the database (never plaintext). `Lax` is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests. Email/reset tokens also stored as hashes. All generated with `crypto.randomBytes(32)`.
+- **Refresh token rotation:** Each refresh rotates the token within its family. Reuse past the grace window → the **token family** is revoked (not all user sessions). See [Token Refresh](#token-refresh).
 - **Rate limiting:** All endpoints via `@nestjs/throttler` (per-IP). Exceeding → `429`.
 - **Email enumeration:** `forgot-password` always returns success regardless of email existence.
 - **Session management:** Password reset invalidates all sessions. Logout invalidates specific session. Metadata (user agent, IP) stored for audit.
@@ -120,8 +130,8 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 
 Four tables: `users`, `sessions`, `email_verification_tokens`, `password_reset_tokens`.
 
-- **`users`** — `id` (uuid PK), `email` (unique), `name`, `avatar_url`, `provider` (default `'local'`), `provider_id`, `password_hash`, `email_verified_at`, timestamps
-- **`sessions`** — `id` (uuid PK), `user_id` (FK), `refresh_token_hash`, `user_agent`, `ip_address`, `expires_at`, `created_at`
+- **`users`** — `id` (uuid PK), `email` (unique), `name`, `avatar_url`, `provider` (default `'local'`), `provider_id`, `password_hash`, `locale`, `is_anonymous` (default `false`), `role` (`user_role` enum: `'user'` | `'admin'`, default `'user'`), `email_verified_at`, timestamps
+- **`sessions`** — `id` (uuid PK), `user_id` (FK), `family_id` (uuid, groups rotated tokens), `refresh_token_hash`, `rotated_at`, `user_agent`, `ip_address`, `expires_at`, `created_at`
 - **`email_verification_tokens`** / **`password_reset_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at`, `created_at`
 
 All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_hash`.
