@@ -77,14 +77,14 @@ When "Anyone with the link" is enabled:
 - The `generalAccessPermission` determines what people with the link can do:
   - **Viewer**: Read-only access
   - **Editor**: Can read and edit
-- The share link is: `${origin}/shared/${shareToken}`
+- The share link is: `${origin}/s/${shareToken}`
 
 Key features:
 
 - **Single token per note**: Unlike the old model, there's only one share link per note
 - **No expiration**: Links remain valid until the owner changes access back to "Restricted"
 - **Automatic token management**: Token is generated when enabling link access, cleared when restricting
-- **Public access**: Shared notes can be accessed without authentication via `/shared/:token`
+- **Public access**: Shared notes can be accessed without authentication via `/s/:token`
 
 ### 2. Direct Permissions (user-to-user)
 
@@ -105,7 +105,7 @@ The `editorsCanShare` boolean (owner-only setting) controls whether editors can 
 
 ## Access Validation
 
-Access is validated at multiple layers: HTTP handlers, the repository, and the WebSocket gateway.
+Access is validated at multiple layers: HTTP handlers, the repository, and the Hocuspocus WebSocket handshake.
 
 ### HTTP Layer
 
@@ -142,33 +142,39 @@ Notes shared via "Anyone with the link" from other users are **excluded** from t
 
 ## WebSocket Collaboration Permissions
 
-The collaboration gateway (`CollaborationGateway`) validates access when a client joins a room via the `JOIN_ROOM` event.
+Real-time collaboration runs on **Hocuspocus** (the official Yjs WebSocket server) rather than a custom Socket.io gateway. Documents sync as **Yjs (CRDT)** updates, and Hocuspocus binds to the same Node HTTP server as the REST API — only the upgrade path differs (`/collaboration`). Access is enforced once, at the WebSocket handshake, via a Hocuspocus extension.
 
-### Connection Flow
+### Components
 
-1. **`handleConnection`**: Extracts auth from Socket.io handshake:
-   - JWT token → `AuthenticatedWsUser`
-   - Share token → stored in `client.data.shareToken`
-   - Neither → `AnonymousWsUser`
+- `hocuspocus.service.ts` — `@Injectable()` service that instantiates the Hocuspocus `Server`, forwards `'upgrade'` events whose URL starts with `/collaboration`, and registers the auth + persistence extensions (plus `@hocuspocus/extension-redis` for multi-instance fan-out when `REDIS_URL` is set).
+- `extensions/hocuspocus-auth.extension.ts` — implements the `onAuthenticate` hook; this is where access is authenticated and enforced.
+- `extensions/hocuspocus-persistence.extension.ts` — loads/stores the `Y.Doc` from `notes.yjs_state`.
 
-2. **`handleJoinRoom`**: Calls `verifyNoteAccess()` which checks in order:
-   1. Note doesn't exist → allow (transient room for new notes)
-   2. Authenticated user has access (`hasAccess`) → allowed; `canEdit` determines `readOnly` flag
-   3. Share token valid (`validateShareToken`) → allowed; permission determines `readOnly`
-   4. Note has general access enabled (`isNotePublic`) → allowed, permission from `generalAccessPermission`
-   5. None of the above → denied
+### Handshake Authentication & Enforcement (`HocuspocusAuthExtension`)
 
-3. **`readOnly` flag**: Set on `client.data.readOnly` at join time. Checked on every `SYNC_UPDATE` event. If `readOnly=true`, the update is rejected with `EDIT_DENIED`.
+Access is checked in the `onAuthenticate` hook. Throwing from the hook aborts the handshake, and the thrown message becomes the close `reason` the client receives. The flow (`authenticate`):
 
-### Share Token Validation (`validateShareToken`)
+1. **Verify the JWT** (`JwtService.verify`, HS256). A missing or invalid token throws (`Authentication required` / `Invalid token`). MCP-sourced tokens (`source === TOKEN_SOURCE_MCP`) are rejected for the collaboration handshake (`Forbidden`). Anonymous users authenticate through the same path with an anonymous JWT.
+2. **Load the user** via `UsersService.findById`.
+3. **Load the note** via `NoteRepository.findById` (throws `Note not found` if missing) and its permissions via `findPermissionsByNote`, in parallel. Unexpected repo/DB errors are normalized to `Internal server error` so raw error details never reach the client as a close reason.
+4. **Build the `SharedNote[]` list** (`buildSharedNotes`) combining (a) the current user's DB-stored direct permissions and (b) a synthetic entry when a valid `?shareToken=` URL parameter matches an `ANYONE_WITH_LINK` note — keeping a single permission-evaluation path.
+5. **Evaluate CASL** (`defineAbilityFor`) and gate the note subject (`enforcePermissions`):
+   - If `cannot('read', note)` → throw `Forbidden` (handshake rejected).
+   - If `cannot('update', note)` → set `connectionConfig.readOnly = true`.
 
-Validates that:
+The same `hasAccess`/permission semantics used by the HTTP layer are reused here through the shared `defineAbilityFor` ability — there is no separate WS access path.
 
-- Note exists for the given `noteId`
-- Note's `shareToken` matches the provided token
-- Note's `generalAccess` is set to `'anyone_with_link'`
+### Read-only Connections
 
-Returns the `generalAccessPermission` (`viewer`/`editor`) or `null` if invalid.
+When the user can read but not edit, `connectionConfig.readOnly = true` is set during `onAuthenticate`. Hocuspocus then rejects document writes from that connection at the protocol level — the client receives `scope: 'readonly'` via `onAuthenticated`. The frontend uses this to call `editor.setEditable(false)`, but enforcement is server-side; the client cannot bypass it.
+
+### Share-token Access
+
+For link-shared notes, the frontend appends `?shareToken=xxx` to the provider URL. The auth extension reads it from `requestParameters`; it grants the note's `generalAccessPermission` (`viewer`/`editor`) only when the note's `generalAccess` is `ANYONE_WITH_LINK` **and** its `shareToken` matches. Otherwise the parameter contributes no access and standard CASL gating applies.
+
+### Token Expiry
+
+When the JWT carries an `exp` claim, `armExpiryDisconnect` schedules a close (`code: 4401`, `reason: 'Token expired'`) shortly after expiry (plus a grace window). The frontend provider refetches a fresh token on reconnect.
 
 ---
 
@@ -214,13 +220,12 @@ When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exis
 
 ### Error Codes
 
-| Code                    | HTTP Status | Description                                  |
-| ----------------------- | ----------- | -------------------------------------------- |
-| `NOTE_NOT_FOUND`        | 404         | Note does not exist                          |
-| `PERMISSION_DENIED`     | 403         | User lacks required permission               |
-| `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted |
-| `INVALID_PERMISSION`    | 400         | Invalid permission level                     |
-| `OWNER_ONLY`            | 403         | Operation requires note ownership            |
+| Code                    | HTTP Status | Description                                                                                |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------ |
+| `NOTE_NOT_FOUND`        | 404         | Note does not exist                                                                        |
+| `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`) |
+| `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                               |
+| `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                   |
 
 ---
 
@@ -230,8 +235,8 @@ When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exis
 
 | Route                           | Auth Required | Description                                |
 | ------------------------------- | ------------- | ------------------------------------------ |
-| `/_authenticated/notes.$noteId` | Yes           | Full note editor (owns or has permissions) |
-| `/shared/$token`                | No            | Shared note view via token                 |
+| `/_authenticated/notes/$noteId` | Yes           | Full note editor (owns or has permissions) |
+| `/s/$token`                     | No            | Shared note view via token                 |
 
 ### Dashboard ("My Notes")
 
@@ -266,7 +271,7 @@ The ShareDialog component provides:
    - Editor
 
 3. **Copy Link Button** (visible when `shareToken` exists):
-   - Copies `${origin}/shared/${shareToken}` to clipboard
+   - Copies `${origin}/s/${shareToken}` to clipboard
 
 4. **Editors Can Share Toggle** (owner only):
    - Allows editors to manage sharing
@@ -274,7 +279,7 @@ The ShareDialog component provides:
 5. **Info Badge** (for non-owners):
    - Displays sharing capabilities based on `editorsCanShare`
 
-### Shared Note Page (`/shared/:token`)
+### Shared Note Page (`/s/:token`)
 
 - Fetches note via `GET /notes/shared/:token` (no auth header)
 - Displays an access badge ("Editor" or "View only") based on `generalAccessPermission`
@@ -383,11 +388,11 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### WebSocket
 
-| File                                                          | Description                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------ |
-| `apps/api/src/modules/collaboration/collaboration.gateway.ts` | WS gateway with `verifyNoteAccess`                           |
-| `apps/api/src/modules/collaboration/collaboration.service.ts` | `hasAccess`, `canEdit`, `validateShareToken`, `isNotePublic` |
-| `apps/api/src/modules/collaboration/ws-auth.service.ts`       | JWT/share token extraction from handshake                    |
+| File                                                                                | Description                                                                  |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `apps/api/src/modules/collaboration/hocuspocus.service.ts`                          | Hocuspocus server lifecycle, `/collaboration` upgrade forwarding, extensions |
+| `apps/api/src/modules/collaboration/extensions/hocuspocus-auth.extension.ts`        | `onAuthenticate`: JWT/share-token auth + CASL read/update enforcement        |
+| `apps/api/src/modules/collaboration/extensions/hocuspocus-persistence.extension.ts` | `onLoadDocument`/`onStoreDocument`: hydrate + persist `Y.Doc`                |
 
 ### Authorization & Permissions Packages
 
@@ -406,8 +411,8 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 | File                                                     | Description                                            |
 | -------------------------------------------------------- | ------------------------------------------------------ |
-| `apps/notes/src/routes/_authenticated/notes.$noteId.tsx` | Authenticated note editor route                        |
-| `apps/notes/src/routes/shared.$token.tsx`                | Public shared note route                               |
+| `apps/notes/src/routes/_authenticated/notes/$noteId.tsx` | Authenticated note editor route                        |
+| `apps/notes/src/routes/s.$token.tsx`                     | Public shared note route                               |
 | `apps/notes/src/pages/NoteEditorPage.tsx`                | Editor with access-based UI                            |
 | `apps/notes/src/pages/SharedNotePage.tsx`                | Shared note view                                       |
 | `apps/notes/src/components/notes/ShareDialog.tsx`        | Share dialog (general access, permissions)             |

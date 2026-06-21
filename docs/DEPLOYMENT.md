@@ -42,14 +42,26 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after e
 
 **Required GitHub secrets/variables:**
 
-| Name                 | Type     | Purpose                       |
-| -------------------- | -------- | ----------------------------- |
-| `RAILWAY_TOKEN`      | Secret   | Project token for Railway CLI |
-| `RAILWAY_SERVICE_ID` | Variable | Service ID for `railway up`   |
+| Name                     | Type     | Purpose                                            |
+| ------------------------ | -------- | -------------------------------------------------- |
+| `RAILWAY_TOKEN`          | Secret   | Project token for Railway CLI (API + MCP deploys)  |
+| `RAILWAY_SERVICE_ID`     | Variable | API service ID for `railway up`                    |
+| `RAILWAY_MCP_SERVICE_ID` | Variable | MCP service ID; `deploy-mcp` is skipped when unset |
+| `VERCEL_TOKEN`           | Secret   | Vercel CLI auth for the `deploy-frontend` job      |
+| `VERCEL_ORG_ID`          | Secret   | Vercel org/team ID                                 |
+| `VERCEL_PROJECT_ID`      | Secret   | Vercel project ID                                  |
 
-### Frontend (Vercel) — Auto-deploy
+> A third deploy job, `deploy-mcp`, ships the MCP server to Railway (`railway up`) on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
 
-Vercel auto-deploys on every push to `main`. No CI gate.
+### Frontend (Vercel) — CI-driven
+
+Like the API, the frontend is deployed by the **CI pipeline**, not by Vercel's GitHub integration. `vercel.json` sets `"git": { "deploymentEnabled": false }`, so pushes never trigger a Vercel build directly.
+
+```
+Push to main → GitHub Actions CI → lint, typecheck, test, build → vercel pull/build/deploy --prebuilt --prod
+```
+
+The `deploy-frontend` job (`.github/workflows/ci.yml`) runs only on `push` to `main` and only when the `notes` app is affected (`needs.ci.outputs.notes_affected`). It installs the Vercel CLI and runs `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
 Config: `vercel.json` at repo root.
 
@@ -137,7 +149,7 @@ VITE_COLLABORATION_MODE=websocket
 4. Generate a public domain: Settings → Networking → Public Networking
 5. Set `FRONTEND_URL` in Railway to your Vercel URL
 6. Set Vercel's `VITE_API_URL` to the Railway domain + `/api/v1`
-7. Set up GitHub secrets (`RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID`) for CI deploys
+7. Set up GitHub secrets/variables for CI deploys: `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID` (API), `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` (frontend), and optionally `RAILWAY_MCP_SERVICE_ID` (MCP)
 
 ---
 
