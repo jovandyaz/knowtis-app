@@ -48,6 +48,8 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  │  • Feature Flags (DB-backed, Redis-cached)                 │  │
 │  │  • MCP API key exchange                                    │  │
 │  │  • Admin (user management, AI metrics)                     │  │
+│  │  • Health checks & Observability (telemetry)               │  │
+│  │  • WebSocket gateway infrastructure                        │  │
 │  └───────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                         DATA LAYER                              │
@@ -127,19 +129,24 @@ knowtis/
 
 ### Dependency Rules
 
-Libraries follow a strict dependency hierarchy:
+Projects are tagged with `type:` tags and follow a tag-based hierarchy, enforced via `@nx/enforce-module-boundaries` in `eslint.config.js`:
 
 ```
-Apps (can import everything below)
+type:app  (can import any library type)
   ↓
-Data Access (domain logic, can import API client & shared)
-  ↓
-API Client (can import shared only)
-  ↓
-Design System (can import shared only)
-  ↓
-Shared (no internal workspace dependencies)
+type:ui  ───────────────►  type:util
+(can import type:ui + type:util)      ↑
+  ↓                                    │
+type:data-access  ───────────────────┘
+(can import type:data-access + type:util)
 ```
+
+- **`type:app`** — applications; may depend on `type:ui`, `type:data-access`, `type:util`.
+- **`type:ui`** — UI libraries (e.g. `design-system`, `editor`); may depend on `type:ui` and `type:util` only. Cannot reach into `type:data-access` or `type:app`.
+- **`type:data-access`** — state/API access; may depend on `type:data-access` and `type:util`. `api-client` is itself `type:data-access`.
+- **`type:util`** — pure utilities; may depend on `type:util` only.
+
+Note: `design-system` is `type:ui` and is **not** part of the data-access import chain; `api-client` is `type:data-access`, not a separate tier. Scope constraints (`scope:shared` / `scope:notes` / `scope:api`) apply on top of these type rules.
 
 ---
 
