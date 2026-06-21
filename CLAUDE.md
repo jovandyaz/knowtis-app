@@ -36,7 +36,8 @@ pnpm format           # Format with Prettier
 
 # Database (requires Docker)
 pnpm docker:up        # Start PostgreSQL + Redis
-pnpm db:push          # Push schema changes
+pnpm db:generate      # Generate a migration from schema changes
+pnpm db:migrate:run   # Apply migrations (source of truth; never db:push shared DBs)
 pnpm db:studio        # Open Drizzle Studio GUI
 
 # Build
@@ -55,7 +56,7 @@ nx run <project> <target>  # Run specific task
 
 ```
 apps/
-├── api/           # NestJS backend (modules: auth, notes, users, ai, agent, artifacts, collaboration, mcp)
+├── api/           # NestJS backend (modules: admin, agent, ai, artifacts, auth, authorization, collaboration, feature-flags, health, mcp, notes, observability, users, websocket)
 ├── mcp/           # MCP server for AI assistants (Hono, standalone)
 └── notes/         # React frontend (Vite, TanStack Router)
 
@@ -79,11 +80,15 @@ packages/          # Shared packages (framework-light, reusable)
 
 ### Dependency Flow
 
-Apps → data-access → api-client → shared. Libraries in `shared/` have no internal workspace dependencies. `packages/ai-gateway` has zero workspace dependencies by design (extractable).
+Enforced by Nx tags (see Module Boundaries): `type:app → {type:ui, type:data-access} → type:util`. `api-client` is itself `type:data-access`, and `design-system` is `type:ui` (not part of the data-access chain). Libraries in `shared/` have no internal workspace dependencies, and `packages/ai-gateway` has zero workspace dependencies by design (extractable).
 
 ### Path Aliases
 
-Use `@knowtis/*` imports (see `tsconfig.base.json` paths for the full list): `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-*`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-types`, `@knowtis/shared-util`
+The workspace uses a dual-namespace convention (see `tsconfig.base.json` paths for the full list).
+
+The 16 `@knowtis/*` aliases: `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-artifacts`, `@knowtis/data-access-feature-flags`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/data-access-users`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-i18n`, `@knowtis/shared-types`, `@knowtis/shared-util`.
+
+The auth/permissions/email packages publish under the `@jovandyaz/*` namespace and are imported that way: `@jovandyaz/auth` (+ `@jovandyaz/auth/server`), `@jovandyaz/auth-react`, `@jovandyaz/auth-nestjs`, `@jovandyaz/permissions-core`, `@jovandyaz/permissions-react`, `@jovandyaz/permissions-nestjs`, `@jovandyaz/email`, `@jovandyaz/email-nestjs`. There is no `@knowtis/auth`, `@knowtis/permissions`, or `@knowtis/email`.
 
 ## Nx Guidelines
 
@@ -115,12 +120,12 @@ Pipeline uses **Nx affected** to optimize builds and deploys:
 
 1. **Single CI job**: `nx affected -t lint test build` — only impacted projects
 2. **Typecheck global**: `tsc --noEmit` on entire workspace
-3. **Conditional deploy**: Deploys API and/or MCP to Railway if affected
+3. **Conditional deploy**: Deploys frontend (Vercel) and API/MCP (Railway) when affected
 4. **SHA detection**: `nrwl/nx-set-shas@v4` auto-detects comparison commits
 
 ### Vercel (Frontend)
 
-Auto-deploys on push to `main`, but uses `tools/vercel-ignore.sh notes` as Ignored Build Step to skip builds when `notes` is unaffected. Configured in Vercel Dashboard > Project Settings > Git > Ignored Build Step.
+CI-driven, not Vercel Git auto-deploy: `vercel.json` sets `"git": { "deploymentEnabled": false }`, and the `deploy-frontend` job in `ci.yml` (gated on `notes` being affected, `main` push only) runs `vercel pull/build/deploy --prebuilt --prod`.
 
 ### Railway (Backend)
 
@@ -153,7 +158,7 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 - **Graphite** manages PR workflow — use stacked PRs for multi-step features instead of one large PR
 - **CodeRabbit** auto-reviews every PR — address its feedback before requesting human review
 - When creating PRs, prefer `gt create` (Graphite CLI) over `gh pr create` for proper stack tracking
-- PR branches created by Graphite follow the pattern `<user>/<branch-name>`
+- Feature branches use a Conventional-style prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`, etc.
 
 ### Git Hooks (Lefthook)
 
