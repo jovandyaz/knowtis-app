@@ -4,6 +4,7 @@ import { Interval } from '@nestjs/schedule';
 import { sql } from 'drizzle-orm';
 
 import { detectPromptInjection } from '@knowtis/ai-gateway';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
@@ -57,7 +58,9 @@ export class MemoryExtractionTask {
     if (!this.config.get('VOYAGE_API_KEY')) {
       return;
     }
-    if (!(await this.flags.isEnabled('agent_longterm_memory'))) {
+    if (
+      !(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY))
+    ) {
       return;
     }
     const locked = await this.acquireLock();
