@@ -4,6 +4,7 @@ export const FEATURE_FLAG_KEYS = {
   AGENT_HYBRID_RETRIEVAL: 'agent_hybrid_retrieval',
   AGENT_WEB_SEARCH: 'agent_web_search',
   AGENT_BYOK: 'agent_byok',
+  AGENT_LONGTERM_MEMORY: 'agent_longterm_memory',
 } as const;
 
 export type FeatureFlagKey =

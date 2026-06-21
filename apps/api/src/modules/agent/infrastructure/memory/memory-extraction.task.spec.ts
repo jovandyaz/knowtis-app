@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import { MemoryExtractionTask } from './memory-extraction.task';
 
 function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
@@ -58,6 +60,17 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
 }
 
 describe('MemoryExtractionTask', () => {
+  it('gates reconcile on the registered agent_longterm_memory flag key', async () => {
+    expect(FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY).toBe(
+      'agent_longterm_memory'
+    );
+    const { task, flags } = make();
+    await task.reconcile();
+    expect(flags.isEnabled).toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
+    );
+  });
+
   it('extracts, persists an ADD, and marks the conversation', async () => {
     const { task, memory, conversations } = make();
     await task.reconcile();

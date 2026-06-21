@@ -8,7 +8,7 @@ import {
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type { ByokProvider } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, type ByokProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
@@ -237,7 +237,11 @@ export class RunAgentTurnHandler {
       return [];
     }
     try {
-      if (!(await this.featureFlags.isEnabled('agent_longterm_memory'))) {
+      if (
+        !(await this.featureFlags.isEnabled(
+          FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
+        ))
+      ) {
         return [];
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
