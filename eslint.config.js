@@ -61,10 +61,6 @@ export default defineConfig([
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:notes'],
             },
             {
-              sourceTag: 'scope:auth',
-              onlyDependOnLibsWithTags: ['scope:shared', 'scope:auth'],
-            },
-            {
               sourceTag: 'scope:api',
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:api'],
             },
