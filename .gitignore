@@ -90,3 +90,6 @@ docs/superpowers/
 
 # Playwright MCP artifacts
 e2e-*.png
+
+# CodeGraph local index
+.codegraph/
