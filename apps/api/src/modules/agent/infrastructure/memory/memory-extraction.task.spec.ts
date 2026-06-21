@@ -87,6 +87,9 @@ describe('MemoryExtractionTask', () => {
     const { task, conversations, flags } = make();
     flags.isEnabled.mockResolvedValue(false);
     await task.reconcile();
+    expect(flags.isEnabled).toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
+    );
     expect(conversations.findExtractable).not.toHaveBeenCalled();
   });
 
