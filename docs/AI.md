@@ -51,23 +51,29 @@ packages/ai-gateway/         # @knowtis/ai-gateway — framework-free gateway co
 └── src/logger.ts            # GatewayLogger interface (no NestJS dependency)
 
 apps/notes/src/components/editor/ai/
-├── AIBubbleMenu.tsx           # Context menu on text selection
+├── AIMenuPopover.tsx          # AI action menu on selection/cursor (dialog)
+├── AIMenuContent.tsx          # Action list rendered inside the menu
 ├── AIResultPanel.tsx          # Tippy-positioned panel below selection
 ├── AIStreamingPreview.tsx     # Streaming text display + accept/discard
 ├── SlashCommandMenu.tsx       # Slash command (/) dropdown
-├── ai-actions.config.ts       # Bubble menu action definitions
+├── ai-actions.config.ts       # AI menu action definitions
 └── slash-commands.config.ts   # Slash command definitions
 
-apps/notes/src/components/editor/extensions/
+packages/editor/src/extensions/    # @knowtis/editor
 ├── ai-block/
 │   ├── AIBlockNode.ts           # Custom Tiptap node (atom block, React node view)
 │   ├── AIBlockView.tsx          # React component (input → stream → insert flow)
-│   └── index.ts
-├── GhostText.ts               # Tiptap extension for inline autocomplete
-└── GhostText.css
+│   ├── useAIBlockStream.ts      # Streaming hook
+│   ├── AIBlockInputForm.tsx     # Topic input + generate
+│   ├── AIBlockStreaming.tsx     # Streaming preview
+│   ├── AIBlockResult.tsx        # Rendered result (insert/retry/discard)
+│   └── AIBlockError.tsx         # Error state
+├── ghost-text.ts              # Tiptap extension for inline autocomplete
+└── ghost-text.css
 
 apps/notes/src/stores/
-└── ai.store.ts                # Zustand store (status, streamedText, selectionRange)
+├── ai.store.ts                # Zustand store (status, streamedText, selectionRange)
+└── ai-menu.store.ts           # Zustand store (AI menu open state)
 
 libs/api-client/src/lib/
 └── ai.client.ts               # Socket.io client for /ai namespace
@@ -299,13 +305,14 @@ AI models can be changed at runtime via the `ai_config` database table, without 
 
 **Supported keys:**
 
-| Key                 | Env Fallback        | Description                |
-| ------------------- | ------------------- | -------------------------- |
-| `ai_default_model`  | `AI_DEFAULT_MODEL`  | Model for most actions     |
-| `ai_fast_model`     | `AI_FAST_MODEL`     | Model for ghost-text       |
-| `ai_fallback_model` | `AI_FALLBACK_MODEL` | Fallback on provider error |
+| Key                | Env Fallback       | Description            |
+| ------------------ | ------------------ | ---------------------- |
+| `ai_default_model` | `AI_DEFAULT_MODEL` | Model for most actions |
+| `ai_fast_model`    | `AI_FAST_MODEL`    | Model for ghost-text   |
 
-**REST API:**
+Cross-provider fallback is the comma-separated `AI_FALLBACK_CHAIN` env var (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)), not a DB config key.
+
+**REST API** (admin only):
 
 | Method | Path              | Description                                   |
 | ------ | ----------------- | --------------------------------------------- |
@@ -430,6 +437,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `GOOGLE_GENERATIVE_AI_API_KEY` | No       | —                                      | Google AI Studio key (chain fallback)                   |
 | `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
 | `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
+| `AI_EVAL_MODEL`                | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
 | `AI_FALLBACK_CHAIN`            | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
 | `AI_COOLDOWN_ALLOWED_FAILS`    | No       | `3`                                    | Failures per minute that start a provider cooldown      |
 | `AI_COOLDOWN_SECONDS`          | No       | `120`                                  | Provider cooldown duration (seconds)                    |
@@ -450,10 +458,14 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key              | Description                |
-| --------------------- | -------------------------- |
-| `ai_enabled`          | Global AI feature gate     |
-| `voice_notes_enabled` | Voice-to-note feature gate |
+| Flag Key                 | Description                                                               |
+| ------------------------ | ------------------------------------------------------------------------- |
+| `ai_enabled`             | Global AI feature gate                                                    |
+| `voice_notes_enabled`    | Voice-to-note feature gate                                                |
+| `agent_hybrid_retrieval` | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))   |
+| `agent_web_search`       | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))     |
+| `agent_byok`             | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))     |
+| `agent_longterm_memory`  | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b)) |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -508,7 +520,8 @@ Holds each user's account-default copilot model. The per-conversation override l
 
 | Component            | Behavior                                                                                |
 | -------------------- | --------------------------------------------------------------------------------------- |
-| `AIBubbleMenu`       | Appears on text selection. 8 actions, sub-menus for translate and tone.                 |
+| `AIMenuPopover`      | AI action menu (dialog) on selection/cursor; backed by `ai-menu.store`.                 |
+| `AIMenuContent`      | Action list rendered inside the menu, with sub-menus for translate and tone.            |
 | `SlashCommandMenu`   | Triggered by `/`. Shows AI commands + formatting commands.                              |
 | `AIResultPanel`      | Tippy panel below selection. Replace, insert below, or discard result.                  |
 | `AIStreamingPreview` | Streams text as chunks arrive. Shows retry button on error.                             |
@@ -561,7 +574,7 @@ aiClient.setTokenProvider({ getAccessToken, clearTokens });
 
 ### GhostText Behavior
 
-- Triggers after 1500ms of inactivity (debounced, configurable via `debounceMs`)
+- Triggers after 750ms of inactivity (debounced, configurable via `debounceMs`)
 - Requires minimum 20 characters of content before cursor
 - Suppressed if another AI action is active (`isAIBusy` check)
 - Cursor move or selection change clears suggestion and cancels in-flight stream
@@ -582,7 +595,7 @@ Custom Tiptap node extension (`aiBlock`) that renders an inline AI content gener
 
 Inserted via slash command. The block is an atom node (non-editable content), rendered with `ReactNodeViewRenderer`. Markdown is converted to sanitized HTML via `markdown-it` + `DOMPurify` before insertion.
 
-**Source:** `apps/notes/src/components/editor/extensions/ai-block/`
+**Source:** `packages/editor/src/extensions/ai-block/` (exported via `@knowtis/editor`)
 
 ---
 
@@ -636,13 +649,24 @@ Voice-to-Note is documented separately in [docs/VOICE-NOTE.md](VOICE-NOTE.md). I
 
 All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enabled`.
 
-| Method | Path              | Description                                       |
-| ------ | ----------------- | ------------------------------------------------- |
-| POST   | `/ai/complete`    | Non-streaming completion. Body: `AICompleteDto`.  |
-| GET    | `/ai/usage`       | Daily token + cost usage for authenticated user.  |
-| GET    | `/ai/metrics`     | Usage summary. Query: `?period=day\|week\|month`. |
-| GET    | `/ai/config`      | All dynamic AI config values (auth required).     |
-| PUT    | `/ai/config/:key` | Update a config value (admin only).               |
+| Method | Path                  | Description                                                                                 |
+| ------ | --------------------- | ------------------------------------------------------------------------------------------- |
+| POST   | `/ai/complete`        | Non-streaming completion. Body: `AICompleteDto`.                                            |
+| GET    | `/ai/usage`           | Daily token + cost usage for authenticated user.                                            |
+| GET    | `/ai/metrics`         | Usage summary. Query: `?period=day\|week\|month`.                                           |
+| GET    | `/ai/health`          | Per-provider cooldown snapshot (admin only).                                                |
+| GET    | `/ai/config`          | All dynamic AI config values (admin only).                                                  |
+| PUT    | `/ai/config/:key`     | Update a config value (admin only).                                                         |
+| GET    | `/ai/models`          | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection). |
+| GET    | `/ai/preferences`     | The caller's account-default copilot model.                                                 |
+| PUT    | `/ai/preferences`     | Set the caller's account-default copilot model.                                             |
+| GET    | `/ai/keys`            | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                       |
+| PUT    | `/ai/keys/:provider`  | Validate + store a provider key.                                                            |
+| DELETE | `/ai/keys/:provider`  | Remove a stored provider key.                                                               |
+| POST   | `/ai/voice-note`      | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                       |
+| GET    | `/agent/memories`     | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).     |
+| DELETE | `/agent/memories/:id` | Forget one memory.                                                                          |
+| DELETE | `/agent/memories`     | Forget all memories.                                                                        |
 
 > Swagger UI available at `/api/docs` in development.
 
@@ -786,7 +810,7 @@ The copilot is **server-authoritative**: the client never sends its own message 
 
 ### Wire payload
 
-`agent:turn` (client → server) carries:
+`agent:message` (client → server) carries:
 
 ```jsonc
 {
