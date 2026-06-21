@@ -176,7 +176,7 @@ Swagger UI available in development at `/api/docs`
 cp apps/api/.env.example apps/api/.env
 cp apps/notes/.env.example apps/notes/.env
 pnpm docker:up
-pnpm db:push
+pnpm db:migrate:run   # Apply migrations to the local DB
 ```
 
 > AI features require `ANTHROPIC_API_KEY` in `apps/api/.env` and the `ai_enabled` flag toggled on in the DB. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64) and the `agent_byok` flag. See [docs/AI.md](docs/AI.md).
