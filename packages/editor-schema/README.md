@@ -28,7 +28,7 @@ import {
 export const YJS_XML_FRAGMENT_NAME = 'content' as const;
 ```
 
-This is the key under which the document's ProseMirror content is stored inside the Yjs document (`ydoc.getXmlFragment(YJS_XML_FRAGMENT_NAME)`). The browser editor binding and the Hocuspocus collaboration server **must use the exact same fragment name** — a mismatch silently breaks sync (each side reads/writes a different fragment, so edits never converge). Always import this constant; never hardcode the `'content'` string on either side.
+This is the key under which the document's ProseMirror content is stored inside the Yjs document (`ydoc.getXmlFragment(YJS_XML_FRAGMENT_NAME)`). The browser editor binding and the Hocuspocus collaboration server **must use the same fragment name** — a mismatch silently breaks sync (each side reads/writes a different fragment, so edits never converge). Always import this constant; never hardcode the `'content'` string on either side.
 
 ## Running unit tests
 
