@@ -183,7 +183,7 @@ Create `.vscode/mcp.json` in your project:
 
 | Tool                | Description                                   | Parameters                                                            | Scope |
 | ------------------- | --------------------------------------------- | --------------------------------------------------------------------- | ----- |
-| `list-notes`        | List user's notes with optional search filter | `search?` (string), `limit?` (number, default 20)                     | read  |
+| `list-notes`        | List user's notes with optional search filter | `search?` (string)                                                    | read  |
 | `get-note`          | Get the full content of a specific note       | `noteId` (UUID)                                                       | read  |
 | `create-note`       | Create a new note                             | `title` (string), `content?` (string)                                 | write |
 | `update-note`       | Update title or content of an existing note   | `noteId` (UUID), `title?` (string), `content?` (string)               | write |

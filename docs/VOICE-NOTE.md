@@ -8,7 +8,7 @@ Voice-to-Note lets users record spoken audio, transcribe it via OpenAI Whisper, 
 | ------------- | --------------------------------------------------------------------------------------- |
 | Recording     | MediaRecorder API, Web Audio API (AnalyserNode for waveform)                            |
 | Live preview  | Web Speech API (SpeechRecognition, browser-side, no cost)                               |
-| Transcription | OpenAI Whisper (`whisper-1`) via Vercel AI SDK                                          |
+| Transcription | OpenAI Whisper (`AI_TRANSCRIPTION_MODEL`, default `openai:whisper-1`) via Vercel AI SDK |
 | Structuring   | Anthropic Claude via `generateStructuredOutput` (`generateText` + `Output.object`, Zod) |
 | Frontend      | React 19, Zustand, TanStack Query/Router                                                |
 | Design system | `@knowtis/design-system` (VoiceButton, RecordingModal, etc.)                            |
@@ -224,10 +224,11 @@ Typing `/voice` or `/voz` in the editor opens the slash command menu with "Voice
 
 ### Environment Variables
 
-| Variable            | Required | Description                                           |
-| ------------------- | -------- | ----------------------------------------------------- |
-| `OPENAI_API_KEY`    | No       | OpenAI API key (Whisper, validated at runtime)        |
-| `ANTHROPIC_API_KEY` | No       | Anthropic API key (structuring, validated at runtime) |
+| Variable                 | Required | Description                                                               |
+| ------------------------ | -------- | ------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`         | No       | OpenAI API key (Whisper, validated at runtime)                            |
+| `ANTHROPIC_API_KEY`      | No       | Anthropic API key (structuring, validated at runtime)                     |
+| `AI_TRANSCRIPTION_MODEL` | No       | Transcription model, default `openai:whisper-1`; must be `openai:<model>` |
 
 ---
 
