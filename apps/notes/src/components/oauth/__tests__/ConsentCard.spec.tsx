@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
 import type { OauthInteractionDetails } from '@knowtis/data-access-oauth';
 
 import { ConsentCard } from '../ConsentCard';
@@ -19,7 +20,10 @@ const baseDetails: OauthInteractionDetails = {
   isCimdClient: true,
 };
 
-function renderCard(overrides: Partial<OauthInteractionDetails> = {}) {
+function renderCard(
+  overrides: Partial<OauthInteractionDetails> = {},
+  props: { decisionError?: Error | null } = {}
+) {
   const onApprove = vi.fn();
   const onDeny = vi.fn();
   render(
@@ -29,6 +33,7 @@ function renderCard(overrides: Partial<OauthInteractionDetails> = {}) {
       onDeny={onDeny}
       isApproving={false}
       isDenying={false}
+      decisionError={props.decisionError ?? null}
     />
   );
   return { onApprove, onDeny };
@@ -81,10 +86,29 @@ describe('ConsentCard', () => {
         onDeny={vi.fn()}
         isApproving
         isDenying={false}
+        decisionError={null}
       />
     );
     for (const button of screen.getAllByRole('button')) {
       expect(button).toBeDisabled();
     }
+  });
+
+  it('shows a terminal message and hides actions when the request was already answered (409)', () => {
+    renderCard({}, { decisionError: new ApiClientError('Conflict', 409) });
+    expect(screen.getByRole('alert')).toHaveTextContent(/already answered/i);
+    expect(screen.queryByRole('button', { name: /approve/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /deny/i })).toBeNull();
+  });
+
+  it('keeps the actions and shows a retry message on a server error (5xx)', () => {
+    renderCard({}, { decisionError: new ApiClientError('Server Error', 503) });
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /complete your request/i
+    );
+    expect(
+      screen.getByRole('button', { name: /approve/i })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument();
   });
 });

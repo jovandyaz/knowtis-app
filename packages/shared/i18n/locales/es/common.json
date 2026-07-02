@@ -174,9 +174,16 @@
     "approve": "Aprobar",
     "approving": "Autorizando...",
     "deny": "Denegar",
+    "denying": "Cancelando...",
     "loading": "Cargando solicitud...",
     "errorTitle": "Solicitud inválida o expirada",
-    "errorDescription": "Esta solicitud de autorización ya no es válida. Vuelve a iniciarla desde la aplicación que te envió aquí."
+    "errorDescription": "Esta solicitud de autorización ya no es válida. Vuelve a iniciarla desde la aplicación que te envió aquí.",
+    "decisionError": {
+      "alreadyResolved": "Esta solicitud ya fue respondida. Reinicia la conexión desde tu cliente MCP.",
+      "expired": "Esta solicitud expiró. Reinicia la conexión desde tu cliente MCP.",
+      "sessionExpired": "Tu sesión expiró. Inicia sesión de nuevo y reinicia la conexión desde tu cliente MCP.",
+      "retryable": "No pudimos completar tu solicitud. Inténtalo de nuevo."
+    }
   },
   "anonymous": {
     "guest": "Invitado",

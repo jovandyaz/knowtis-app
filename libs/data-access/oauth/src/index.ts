@@ -13,3 +13,9 @@ export {
   useConsentDecision,
   oauthQueryKeys,
 } from './oauth.hooks';
+
+export { classifyConsentError } from './oauth.errors';
+export type {
+  ConsentDecisionError,
+  ConsentDecisionErrorKind,
+} from './oauth.errors';

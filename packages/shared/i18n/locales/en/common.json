@@ -174,9 +174,16 @@
     "approve": "Approve",
     "approving": "Authorizing...",
     "deny": "Deny",
+    "denying": "Cancelling...",
     "loading": "Loading request...",
     "errorTitle": "Invalid or expired request",
-    "errorDescription": "This authorization request is no longer valid. Start again from the application that sent you here."
+    "errorDescription": "This authorization request is no longer valid. Start again from the application that sent you here.",
+    "decisionError": {
+      "alreadyResolved": "This request was already answered. Start the connection again from your MCP client.",
+      "expired": "This request expired. Start the connection again from your MCP client.",
+      "sessionExpired": "Your session expired. Sign in again, then restart the connection from your MCP client.",
+      "retryable": "We couldn't complete your request. Please try again."
+    }
   },
   "anonymous": {
     "guest": "Guest",

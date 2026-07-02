@@ -67,6 +67,7 @@ function OauthConsentRoute() {
           isDenying={
             decision.isPending && decision.variables?.action === 'deny'
           }
+          decisionError={decision.isError ? decision.error : null}
         />
       )}
     </div>

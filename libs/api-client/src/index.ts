@@ -54,11 +54,7 @@ export {
   type CreateMcpKeyResponse,
 } from './lib/mcp-keys.api';
 
-export {
-  oauthApi,
-  type OauthInteractionDetails,
-  type ConsentDecisionResult,
-} from './lib/oauth.api';
+export { oauthApi } from './lib/oauth.api';
 
 export {
   artifactsApi,

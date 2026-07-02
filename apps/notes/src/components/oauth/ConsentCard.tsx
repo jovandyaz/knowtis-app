@@ -2,10 +2,13 @@ import { useTranslation } from 'react-i18next';
 
 import { Check, ShieldCheck } from 'lucide-react';
 
-import type { OauthInteractionDetails } from '@knowtis/data-access-oauth';
+import {
+  classifyConsentError,
+  type ConsentDecisionErrorKind,
+  type OauthInteractionDetails,
+} from '@knowtis/data-access-oauth';
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardDescription,
@@ -13,6 +16,7 @@ import {
   CardHeader,
   CardTitle,
   LoadingButton,
+  MutationErrorAlert,
 } from '@knowtis/design-system';
 
 const SCOPE_DESCRIPTION_KEYS: Record<string, string> = {
@@ -21,6 +25,13 @@ const SCOPE_DESCRIPTION_KEYS: Record<string, string> = {
   'notes:share': 'oauth.scopes.notesShare',
   offline_access: 'oauth.scopes.offlineAccess',
 };
+
+const DECISION_ERROR_KEYS = {
+  alreadyResolved: 'oauth.decisionError.alreadyResolved',
+  expired: 'oauth.decisionError.expired',
+  sessionExpired: 'oauth.decisionError.sessionExpired',
+  retryable: 'oauth.decisionError.retryable',
+} as const satisfies Record<ConsentDecisionErrorKind, string>;
 
 function hostFromClientId(clientId: string): string {
   try {
@@ -36,6 +47,7 @@ interface ConsentCardProps {
   onDeny: () => void;
   isApproving: boolean;
   isDenying: boolean;
+  decisionError: Error | null;
 }
 
 export function ConsentCard({
@@ -44,11 +56,13 @@ export function ConsentCard({
   onDeny,
   isApproving,
   isDenying,
+  decisionError,
 }: ConsentCardProps) {
   const { t } = useTranslation('common');
   const clientName = details.clientName ?? hostFromClientId(details.clientId);
   const host = details.redirectHost || hostFromClientId(details.clientId);
   const busy = isApproving || isDenying;
+  const failure = decisionError ? classifyConsentError(decisionError) : null;
 
   return (
     <Card className="w-full max-w-md">
@@ -101,29 +115,41 @@ export function ConsentCard({
             ))}
           </ul>
         </div>
+
+        {failure && (
+          <MutationErrorAlert
+            error={null}
+            isError
+            fallbackMessage={t(DECISION_ERROR_KEYS[failure.kind])}
+          />
+        )}
       </CardContent>
 
-      <CardFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={onDeny}
-          disabled={busy}
-          className="w-full sm:w-auto"
-        >
-          {t('oauth.deny')}
-        </Button>
-        <LoadingButton
-          type="button"
-          onClick={onApprove}
-          loading={isApproving}
-          disabled={busy}
-          loadingText={t('oauth.approving')}
-          className="w-full sm:w-auto"
-        >
-          {t('oauth.approve')}
-        </LoadingButton>
-      </CardFooter>
+      {!failure?.terminal && (
+        <CardFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <LoadingButton
+            type="button"
+            variant="outline"
+            onClick={onDeny}
+            loading={isDenying}
+            disabled={busy}
+            loadingText={t('oauth.denying')}
+            className="w-full sm:w-auto"
+          >
+            {t('oauth.deny')}
+          </LoadingButton>
+          <LoadingButton
+            type="button"
+            onClick={onApprove}
+            loading={isApproving}
+            disabled={busy}
+            loadingText={t('oauth.approving')}
+            className="w-full sm:w-auto"
+          >
+            {t('oauth.approve')}
+          </LoadingButton>
+        </CardFooter>
+      )}
     </Card>
   );
 }

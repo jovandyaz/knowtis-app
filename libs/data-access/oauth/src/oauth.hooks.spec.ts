@@ -135,5 +135,22 @@ describe('oauth hooks', () => {
         'https://mcp.knowtis.app/oauth/auth/denied'
       );
     });
+
+    it('surfaces the error and does not navigate when the decision fails', async () => {
+      vi.mocked(oauthApi.confirm).mockRejectedValue(new Error('Conflict'));
+
+      const { result } = renderHook(() => useConsentDecision('uid-9'), {
+        wrapper,
+      });
+
+      result.current.mutate({
+        action: 'approve',
+        approvedScopes: ['notes:read'],
+      });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(result.current.error).toBeInstanceOf(Error);
+      expect(assignMock).not.toHaveBeenCalled();
+    });
   });
 });
