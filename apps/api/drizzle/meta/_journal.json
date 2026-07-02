@@ -120,6 +120,13 @@
       "when": 1782976731622,
       "tag": "0016_mcp_scopes_namespaced",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782978508708,
+      "tag": "0017_seed_mcp_oauth_flag",
+      "breakpoints": true
     }
   ]
 }
