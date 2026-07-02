@@ -1,10 +1,11 @@
 import { z } from 'zod';
 
+import pkg from '../package.json';
+
 const configSchema = z.object({
   PORT: z.coerce.number().default(3334),
   API_INTERNAL_URL: z.string().url(),
   MCP_SERVER_NAME: z.string().default('knowtis-mcp'),
-  MCP_SERVER_VERSION: z.string().default('0.0.1'),
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
     .default('development'),
@@ -26,7 +27,7 @@ export function parseConfig(
     port: parsed.PORT,
     apiInternalUrl: parsed.API_INTERNAL_URL,
     serverName: parsed.MCP_SERVER_NAME,
-    serverVersion: parsed.MCP_SERVER_VERSION,
+    serverVersion: pkg.version,
     isDev: parsed.NODE_ENV === 'development',
   };
 }
