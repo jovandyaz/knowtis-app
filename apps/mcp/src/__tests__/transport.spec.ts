@@ -10,6 +10,9 @@ const config: AppConfig = {
   serverName: 'knowtis-mcp',
   serverVersion: '0.1.0',
   isDev: true,
+  allowedHosts: [],
+  allowedOrigins: [],
+  enableDnsRebindingProtection: false,
 };
 
 const INITIALIZE = JSON.stringify({
@@ -68,5 +71,26 @@ describe('createApp', () => {
 
     expect(res.status).toBe(200);
     expect(factory).toHaveBeenCalledWith('knowtis_mcp_test_key');
+  });
+
+  it('should reject requests with a non-allowlisted Host header', async () => {
+    const app = createApp(makeServer, {
+      ...config,
+      allowedHosts: ['localhost:3334'],
+      enableDnsRebindingProtection: true,
+    });
+
+    const res = await app.request('http://evil.example.com/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer knowtis_mcp_test_key',
+        Host: 'evil.example.com',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(403);
   });
 });
