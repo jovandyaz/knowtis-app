@@ -16,7 +16,7 @@ function createMockKeyRecord(overrides = {}) {
       name: 'Test Key',
       keyHash: hash,
       keyPrefix: prefix,
-      scopes: 'read',
+      scopes: 'notes:read',
       isActive: true,
       lastUsedAt: null,
       expiresAt: null,
@@ -81,7 +81,7 @@ describe('TokenExchangeController', () => {
     expect(result).toEqual({
       accessToken: 'mock-jwt-token',
       expiresIn: 900,
-      scopes: 'read',
+      scopes: 'notes:read',
     });
 
     expect(jwtService.signAsync).toHaveBeenCalledWith(
@@ -89,7 +89,7 @@ describe('TokenExchangeController', () => {
         sub: record.userId,
         email: 'user@test.com',
         source: 'mcp',
-        scopes: 'read',
+        scopes: 'notes:read',
       },
       { secret: 'test-secret', expiresIn: '15m' }
     );
@@ -97,7 +97,7 @@ describe('TokenExchangeController', () => {
 
   it('should embed scopes in JWT for write,share keys', async () => {
     const { record, fullKey } = createMockKeyRecord({
-      scopes: 'read,write,share',
+      scopes: 'notes:read,notes:write,notes:share',
     });
 
     const { controller, jwtService } = createController({
@@ -108,7 +108,10 @@ describe('TokenExchangeController', () => {
     await controller.exchange({ apiKey: fullKey });
 
     expect(jwtService.signAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ source: 'mcp', scopes: 'read,write,share' }),
+      expect.objectContaining({
+        source: 'mcp',
+        scopes: 'notes:read,notes:write,notes:share',
+      }),
       expect.any(Object)
     );
   });

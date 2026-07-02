@@ -21,12 +21,20 @@ export class CreateMcpKeyDto {
 
   @ApiPropertyOptional({
     description: 'Comma-separated scopes for the key',
-    enum: ['read', 'read,write', 'read,write,share'],
-    default: 'read',
-    example: 'read,write',
+    enum: [
+      'notes:read',
+      'notes:read,notes:write',
+      'notes:read,notes:write,notes:share',
+    ],
+    default: 'notes:read',
+    example: 'notes:read,notes:write',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['read', 'read,write', 'read,write,share'])
+  @IsIn([
+    'notes:read',
+    'notes:read,notes:write',
+    'notes:read,notes:write,notes:share',
+  ])
   scopes?: string;
 }

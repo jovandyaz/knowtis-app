@@ -48,6 +48,7 @@ import {
   ApiUnauthorized,
 } from '../../core/swagger';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
+import { MCP_SCOPES } from '../mcp/mcp-token';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -169,7 +170,7 @@ export class NotesController {
   @ApiUnauthorized()
   @Get()
   @RequirePermission('read', SUBJECTS.Note)
-  @RequireMcpScope('read')
+  @RequireMcpScope(MCP_SCOPES.READ)
   async findAll(
     @CurrentUser() user: RequestUser,
     @Query() query: NotesQueryDto
@@ -226,7 +227,7 @@ export class NotesController {
   @ApiNotFound('note does not exist')
   @Get(':id')
   @RequirePermission('read', SUBJECTS.Note)
-  @RequireMcpScope('read')
+  @RequireMcpScope(MCP_SCOPES.READ)
   async findOne(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser
@@ -254,7 +255,7 @@ export class NotesController {
   @Post()
   @UseGuards(AnonymousNoteLimitGuard)
   @RequirePermission('create', SUBJECTS.Note)
-  @RequireMcpScope('write')
+  @RequireMcpScope(MCP_SCOPES.WRITE)
   async create(@CurrentUser() user: RequestUser, @Body() dto: CreateNoteDto) {
     const result = await this.createNoteHandler.execute({
       ...(dto.id ? { id: dto.id } : {}),
@@ -288,7 +289,7 @@ export class NotesController {
   @Patch(':id')
   @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('update', SUBJECTS.Note)
-  @RequireMcpScope('write')
+  @RequireMcpScope(MCP_SCOPES.WRITE)
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -325,7 +326,7 @@ export class NotesController {
   @ApiNotFound('note does not exist')
   @Delete(':id')
   @RequirePermission('delete', SUBJECTS.Note)
-  @RequireMcpScope('write')
+  @RequireMcpScope(MCP_SCOPES.WRITE)
   @HttpCode(HttpStatus.NO_CONTENT)
   async delete(
     @Param('id', ParseUUIDPipe) id: string,
@@ -367,7 +368,7 @@ export class NotesController {
   @ApiNotFound('note does not exist')
   @Post(':id/share')
   @RequirePermission('share', SUBJECTS.Note)
-  @RequireMcpScope('share')
+  @RequireMcpScope(MCP_SCOPES.SHARE)
   async share(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser,
@@ -404,7 +405,7 @@ export class NotesController {
   @ApiNotFound('note does not exist')
   @Delete(':id/share/:userId')
   @RequirePermission('share', SUBJECTS.Note)
-  @RequireMcpScope('share')
+  @RequireMcpScope(MCP_SCOPES.SHARE)
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeAccess(
     @Param('id', ParseUUIDPipe) id: string,
@@ -455,7 +456,7 @@ export class NotesController {
   @Post(':id/images')
   @Throttle(NOTE_UPDATE_THROTTLE)
   @RequirePermission('update', SUBJECTS.Note)
-  @RequireMcpScope('write')
+  @RequireMcpScope(MCP_SCOPES.WRITE)
   @UseInterceptors(FileInterceptor('file'))
   async uploadImage(
     @Param('id', ParseUUIDPipe) noteId: string,
@@ -531,7 +532,7 @@ export class NotesController {
   @ApiNotFound('note does not exist')
   @Get(':id/collaborators')
   @RequirePermission('read', SUBJECTS.Note)
-  @RequireMcpScope('read')
+  @RequireMcpScope(MCP_SCOPES.READ)
   async getCollaborators(
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: RequestUser

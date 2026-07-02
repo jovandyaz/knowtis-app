@@ -20,7 +20,7 @@ export const mcpApiKeys = pgTable(
     name: varchar('name', { length: 100 }).notNull(),
     keyHash: varchar('key_hash', { length: 128 }).notNull(),
     keyPrefix: varchar('key_prefix', { length: 24 }).notNull(),
-    scopes: text('scopes').notNull().default('read'),
+    scopes: text('scopes').notNull().default('notes:read'),
     isActive: boolean('is_active').notNull().default(true),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),

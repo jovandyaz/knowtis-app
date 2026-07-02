@@ -30,7 +30,7 @@ const mcpKeyBaseProperties = {
   id: { type: 'string', format: 'uuid' },
   name: { type: 'string', example: 'My Claude Key' },
   keyPrefix: { type: 'string', example: 'knowtis_mcp_live_abc123de' },
-  scopes: { type: 'string', example: 'read,write' },
+  scopes: { type: 'string', example: 'notes:read,notes:write' },
   createdAt: { type: 'string', format: 'date-time' },
 };
 
