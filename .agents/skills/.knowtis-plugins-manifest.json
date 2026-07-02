@@ -1,13 +1,13 @@
 {
-  "investigating-postgres": "db-ops@0.1.0",
-  "managing-drizzle-migrations": "db-ops@0.1.0",
-  "deploying-knowtis": "delivery@0.1.1",
-  "running-affected-ci": "delivery@0.1.1",
-  "running-preflight": "delivery@0.1.1",
-  "stacking-prs": "delivery@0.1.1",
-  "building-copilot-features": "domain@0.1.0",
-  "orienting-in-knowtis": "domain@0.1.0",
-  "wiring-realtime-collaboration": "domain@0.1.0",
-  "reviewing-code-standards": "standards@0.1.0",
-  "writing-conventional-commits": "standards@0.1.0"
+  "investigating-postgres": "db-ops@0.1.1",
+  "managing-drizzle-migrations": "db-ops@0.1.1",
+  "deploying-knowtis": "delivery@0.1.2",
+  "running-affected-ci": "delivery@0.1.2",
+  "running-preflight": "delivery@0.1.2",
+  "stacking-prs": "delivery@0.1.2",
+  "building-copilot-features": "domain@0.1.1",
+  "orienting-in-knowtis": "domain@0.1.1",
+  "wiring-realtime-collaboration": "domain@0.1.1",
+  "reviewing-code-standards": "standards@0.1.1",
+  "writing-conventional-commits": "standards@0.1.1"
 }

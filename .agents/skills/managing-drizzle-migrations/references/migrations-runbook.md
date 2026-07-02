@@ -4,13 +4,13 @@ Canonical source: `docs/MIGRATIONS.md` in the knowtis repo (re-sync this file wh
 
 ## Commands
 
-| Command                  | Effect                                                                                                                                  |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `pnpm db:generate`       | Diff schema files → new `apps/api/drizzle/NNNN_*.sql` + meta snapshot                                                                   |
-| `pnpm db:migrate:run`    | Programmatic `migrate()` against `$DATABASE_URL` (same code path as deploy)                                                             |
-| `pnpm db:migrate`        | Raw `drizzle-kit migrate` (works once the DB is tracked)                                                                                |
+| Command | Effect |
+| --- | --- |
+| `pnpm db:generate` | Diff schema files → new `apps/api/drizzle/NNNN_*.sql` + meta snapshot |
+| `pnpm db:migrate:run` | Programmatic `migrate()` against `$DATABASE_URL` (same code path as deploy) |
+| `pnpm db:migrate` | Raw `drizzle-kit migrate` (works once the DB is tracked) |
 | `pnpm db:baseline [tag]` | One-time bootstrap for a previously push-managed DB — records migrations as applied (idempotent, exact hashes via `readMigrationFiles`) |
-| `pnpm db:studio`         | Drizzle Studio GUI                                                                                                                      |
+| `pnpm db:studio` | Drizzle Studio GUI |
 
 ## Deploy-time application (Railway)
 

@@ -24,7 +24,7 @@ Write **no comments**. Code explains itself through clear names and structure. W
 ## Heuristics
 
 - If deleting the comment wouldn't confuse a competent reader, delete it.
-- If tempted to explain _what_ code does, rename a variable or extract a function instead.
+- If tempted to explain *what* code does, rename a variable or extract a function instead.
 - When reviewing: aggressively remove comments that restate code, reference past tasks, or have rotted out of sync.
 
 ## Examples

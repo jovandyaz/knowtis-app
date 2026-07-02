@@ -20,11 +20,11 @@ Prefix nx with `pnpm` (`pnpm nx …`) to use the workspace CLI. Details of each 
 
 ## Interpreting deploy gating
 
-| Affected app | On push to main                                      |
-| ------------ | ---------------------------------------------------- |
-| `notes`      | `deploy-frontend` runs (Vercel prebuilt)             |
-| `api`        | `deploy` runs (`railway up`)                         |
-| `mcp`        | `deploy-mcp` runs if `RAILWAY_MCP_SERVICE_ID` is set |
+| Affected app | On push to main |
+| --- | --- |
+| `notes` | `deploy-frontend` runs (Vercel prebuilt) |
+| `api` | `deploy` runs (`railway up`) |
+| `mcp` | `deploy-mcp` runs if `RAILWAY_MCP_SERVICE_ID` is set |
 
 "CI didn't deploy X" usually means X wasn't affected by the diff — verify with the `--type app` command above.
 

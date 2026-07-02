@@ -15,12 +15,12 @@
 
 ## Redaction defaults
 
-| Data                                           | Default treatment                           |
-| ---------------------------------------------- | ------------------------------------------- |
-| `users.email`, names                           | Mask (`j***@…`) or aggregate                |
-| `notes.title`, `notes.content`, `yjs_state`    | Never dump content; count/measure instead   |
+| Data | Default treatment |
+| --- | --- |
+| `users.email`, names | Mask (`j***@…`) or aggregate |
+| `notes.title`, `notes.content`, `yjs_state` | Never dump content; count/measure instead |
 | `sessions.*`, `*_tokens`, `user_provider_keys` | Metadata only (counts, ages) — never values |
-| IDs (UUIDs)                                    | Fine to show; they are opaque               |
+| IDs (UUIDs) | Fine to show; they are opaque |
 
 ## Production discipline
 

@@ -22,3 +22,8 @@ package-lock.json
 # Design system build
 libs/design-system/build
 libs/design-system/storybook-static
+
+# Vendored skills synced from the knowtis-plugins marketplace (source of truth:
+# jovandyaz/knowtis-plugins). Kept verbatim so re-sync is a no-op; do not reformat.
+.agents/skills
+.opencode/agents/knowtis-architect.md

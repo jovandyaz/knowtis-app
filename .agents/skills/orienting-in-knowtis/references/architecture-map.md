@@ -43,16 +43,16 @@ packages/    Framework-light, reusable
 
 ## Key subsystem locations
 
-| Concern                                           | Where                                                                           |
-| ------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Copilot (conversational agent, HITL)              | `apps/api/src/modules/agent/` — see building-copilot-features skill             |
-| Single-shot AI (inline assistant)                 | `apps/api/src/modules/ai/`                                                      |
-| AI gateway (providers, fallback, injection guard) | `packages/ai-gateway/` + `docs/AI.md`                                           |
-| Realtime collaboration (Yjs/Hocuspocus)           | `apps/api/src/modules/collaboration/` — see wiring-realtime-collaboration skill |
-| AuthN (JWT, refresh rotation)                     | `apps/api/src/modules/auth/` + `@jovandyaz/auth*` + `docs/AUTH.md`              |
-| AuthZ (CASL, single ability HTTP+WS)              | `libs/authorization/` + `docs/PERMISSIONS.md`                                   |
-| DB schema + migrations                            | `apps/api/src/database/schema/` + `apps/api/drizzle/` + `docs/MIGRATIONS.md`    |
-| MCP server (7 tools, API-key→JWT exchange)        | `apps/mcp/` + `apps/api/src/modules/mcp/` + `docs/MCP.md`                       |
+| Concern | Where |
+| --- | --- |
+| Copilot (conversational agent, HITL) | `apps/api/src/modules/agent/` — see building-copilot-features skill |
+| Single-shot AI (inline assistant) | `apps/api/src/modules/ai/` |
+| AI gateway (providers, fallback, injection guard) | `packages/ai-gateway/` + `docs/AI.md` |
+| Realtime collaboration (Yjs/Hocuspocus) | `apps/api/src/modules/collaboration/` — see wiring-realtime-collaboration skill |
+| AuthN (JWT, refresh rotation) | `apps/api/src/modules/auth/` + `@jovandyaz/auth*` + `docs/AUTH.md` |
+| AuthZ (CASL, single ability HTTP+WS) | `libs/authorization/` + `docs/PERMISSIONS.md` |
+| DB schema + migrations | `apps/api/src/database/schema/` + `apps/api/drizzle/` + `docs/MIGRATIONS.md` |
+| MCP server (7 tools, API-key→JWT exchange) | `apps/mcp/` + `apps/api/src/modules/mcp/` + `docs/MCP.md` |
 
 ## Essential commands
 

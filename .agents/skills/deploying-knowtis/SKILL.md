@@ -26,10 +26,10 @@ push to main → CI (nx affected: lint/test/build + typecheck)
 
 ## Troubleshooting quick table
 
-| Symptom                          | First check                                                            |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| Build fails                      | Railway build logs; `pnpm-lock.yaml` committed?                        |
-| CORS errors                      | `FRONTEND_URL` exactly matches the Vercel URL (https, no trailing `/`) |
-| WebSocket not connecting         | `REDIS_URL` set; frontend `VITE_WS_URL` correct                        |
-| Deploy not triggering            | Was the app affected? `RAILWAY_TOKEN` / `RAILWAY_SERVICE_ID` present?  |
-| App boots then 500s on AI routes | `ANTHROPIC_API_KEY` and DB feature flags                               |
+| Symptom | First check |
+| --- | --- |
+| Build fails | Railway build logs; `pnpm-lock.yaml` committed? |
+| CORS errors | `FRONTEND_URL` exactly matches the Vercel URL (https, no trailing `/`) |
+| WebSocket not connecting | `REDIS_URL` set; frontend `VITE_WS_URL` correct |
+| Deploy not triggering | Was the app affected? `RAILWAY_TOKEN` / `RAILWAY_SERVICE_ID` present? |
+| App boots then 500s on AI routes | `ANTHROPIC_API_KEY` and DB feature flags |

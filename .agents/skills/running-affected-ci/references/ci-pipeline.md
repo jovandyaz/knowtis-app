@@ -14,12 +14,12 @@ Canonical sources: `.github/workflows/ci.yml` and the CI/CD section of `CLAUDE.m
 
 ## Required secrets/variables
 
-| Name                                                   | Type     | Purpose                                     |
-| ------------------------------------------------------ | -------- | ------------------------------------------- |
-| `RAILWAY_TOKEN`                                        | Secret   | Railway CLI auth (API + MCP deploys)        |
-| `RAILWAY_SERVICE_ID`                                   | Variable | API service target                          |
-| `RAILWAY_MCP_SERVICE_ID`                               | Variable | MCP service target (job skipped when unset) |
-| `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Secrets  | Frontend deploy                             |
+| Name | Type | Purpose |
+| --- | --- | --- |
+| `RAILWAY_TOKEN` | Secret | Railway CLI auth (API + MCP deploys) |
+| `RAILWAY_SERVICE_ID` | Variable | API service target |
+| `RAILWAY_MCP_SERVICE_ID` | Variable | MCP service target (job skipped when unset) |
+| `VERCEL_TOKEN` / `VERCEL_ORG_ID` / `VERCEL_PROJECT_ID` | Secrets | Frontend deploy |
 
 ## Key facts
 
