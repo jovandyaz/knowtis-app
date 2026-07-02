@@ -51,7 +51,9 @@ describe('createApp', () => {
     });
 
     expect(res.status).toBe(401);
-    expect(res.headers.get('WWW-Authenticate')).toContain('Bearer');
+    expect(res.headers.get('WWW-Authenticate')).toBe(
+      'Bearer realm="knowtis-mcp"'
+    );
     expect(factory).not.toHaveBeenCalled();
   });
 
@@ -92,5 +94,26 @@ describe('createApp', () => {
     });
 
     expect(res.status).toBe(403);
+  });
+
+  it('should serve requests with an allowlisted Host header when protection is on', async () => {
+    const app = createApp(makeServer, {
+      ...config,
+      allowedHosts: ['localhost:3334'],
+      enableDnsRebindingProtection: true,
+    });
+
+    const res = await app.request('http://localhost:3334/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer knowtis_mcp_test_key',
+        Host: 'localhost:3334',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(200);
   });
 });
