@@ -1,0 +1,21 @@
+import { z } from 'zod';
+
+export const interactionDetailsSchema = z.object({
+  clientId: z.string(),
+  clientName: z.string().nullable(),
+  redirectHost: z.string(),
+  scopes: z.array(z.string()),
+  isCimdClient: z.boolean(),
+});
+
+export type OauthInteractionDetails = z.infer<typeof interactionDetailsSchema>;
+
+export const consentDecisionResultSchema = z.object({
+  returnTo: z.string(),
+});
+
+export type ConsentDecisionResult = z.infer<typeof consentDecisionResultSchema>;
+
+export type ConsentDecisionInput =
+  | { action: 'approve'; approvedScopes: string[] }
+  | { action: 'deny' };

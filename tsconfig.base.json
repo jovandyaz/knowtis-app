@@ -36,6 +36,7 @@
       "@knowtis/data-access-mcp-keys": [
         "libs/data-access/mcp-keys/src/index.ts"
       ],
+      "@knowtis/data-access-oauth": ["libs/data-access/oauth/src/index.ts"],
       "@knowtis/data-access-feature-flags": [
         "libs/data-access/feature-flags/src/index.ts"
       ],

@@ -19,6 +19,7 @@ import { Route as VerifyEmailImport } from './routes/verify-email';
 import { Route as STokenImport } from './routes/s.$token';
 import { Route as AppIndexImport } from './routes/_app/index';
 import { Route as AppDashboardImport } from './routes/_app/dashboard';
+import { Route as AppOauthConsentImport } from './routes/_app/oauth.consent';
 import { Route as AppNotesIndexImport } from './routes/_app/notes/index';
 import { Route as AppNotesNoteIdImport } from './routes/_app/notes/$noteId';
 import { Route as AuthenticatedIndexImport } from './routes/_authenticated/index';
@@ -84,6 +85,12 @@ const AppIndexRoute = AppIndexImport.update({
 const AppDashboardRoute = AppDashboardImport.update({
   id: '/dashboard',
   path: '/dashboard',
+  getParentRoute: () => AppRoute,
+} as any);
+
+const AppOauthConsentRoute = AppOauthConsentImport.update({
+  id: '/oauth/consent',
+  path: '/oauth/consent',
   getParentRoute: () => AppRoute,
 } as any);
 
@@ -191,6 +198,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppDashboardImport;
       parentRoute: typeof AppImport;
     };
+    '/_app/oauth/consent': {
+      id: '/_app/oauth/consent';
+      path: '/oauth/consent';
+      fullPath: '/oauth/consent';
+      preLoaderRoute: typeof AppOauthConsentImport;
+      parentRoute: typeof AppImport;
+    };
     '/_app/notes/': {
       id: '/_app/notes/';
       path: '/notes';
@@ -241,6 +255,7 @@ export interface FileRoutesByFullPath {
   '/s/$token': typeof STokenRoute;
   '/': typeof AppIndexRoute;
   '/dashboard': typeof AppDashboardRoute;
+  '/oauth/consent': typeof AppOauthConsentRoute;
   '/notes': typeof AppNotesIndexRoute;
   '/notes/$noteId': typeof AppNotesNoteIdRoute;
 }
@@ -254,6 +269,7 @@ export interface FileRoutesByTo {
   '/s/$token': typeof STokenRoute;
   '/': typeof AppIndexRoute;
   '/dashboard': typeof AppDashboardRoute;
+  '/oauth/consent': typeof AppOauthConsentRoute;
   '/notes': typeof AppNotesIndexRoute;
   '/notes/$noteId': typeof AppNotesNoteIdRoute;
 }
@@ -270,6 +286,7 @@ export interface FileRoutesById {
   '/s/$token': typeof STokenRoute;
   '/_app/': typeof AppIndexRoute;
   '/_app/dashboard': typeof AppDashboardRoute;
+  '/_app/oauth/consent': typeof AppOauthConsentRoute;
   '/_app/notes/': typeof AppNotesIndexRoute;
   '/_app/notes/$noteId': typeof AppNotesNoteIdRoute;
   '/_authenticated/': typeof AuthenticatedIndexRoute;
@@ -279,16 +296,17 @@ export interface FileRoutesById {
 
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/notes' | '/notes/$noteId';
+  fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/oauth/consent' | '/notes' | '/notes/$noteId';
   fileRoutesByTo: FileRoutesByTo;
-  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/notes' | '/notes/$noteId';
-  id: '__root__' | '/_app' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/dashboard' | '/_app/notes/' | '/_app/notes/$noteId' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
+  to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/oauth/consent' | '/notes' | '/notes/$noteId';
+  id: '__root__' | '/_app' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/dashboard' | '/_app/oauth/consent' | '/_app/notes/' | '/_app/notes/$noteId' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
 export interface AppRouteChildren {
   AppIndexRoute: typeof AppIndexRoute;
   AppDashboardRoute: typeof AppDashboardRoute;
+  AppOauthConsentRoute: typeof AppOauthConsentRoute;
   AppNotesIndexRoute: typeof AppNotesIndexRoute;
   AppNotesNoteIdRoute: typeof AppNotesNoteIdRoute;
 }
@@ -296,6 +314,7 @@ export interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppIndexRoute: AppIndexRoute,
   AppDashboardRoute: AppDashboardRoute,
+  AppOauthConsentRoute: AppOauthConsentRoute,
   AppNotesIndexRoute: AppNotesIndexRoute,
   AppNotesNoteIdRoute: AppNotesNoteIdRoute,
 };
@@ -363,6 +382,7 @@ export const routeTree = rootRoute
       "children": [
         "/_app/",
         "/_app/dashboard",
+        "/_app/oauth/consent",
         "/_app/notes/",
         "/_app/notes/$noteId"
       ]
@@ -399,6 +419,10 @@ export const routeTree = rootRoute
     },
     "/_app/dashboard": {
       "filePath": "_app/dashboard.tsx",
+      "parent": "/_app"
+    },
+    "/_app/oauth/consent": {
+      "filePath": "_app/oauth.consent.tsx",
       "parent": "/_app"
     },
     "/_app/notes/": {

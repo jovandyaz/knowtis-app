@@ -158,6 +158,26 @@
     "keyCopied": "Key copiada al portapapeles",
     "done": "Listo"
   },
+  "oauth": {
+    "title": "Autorizar acceso",
+    "requestingAccess": "{{client}} quiere conectarse a tus notas de Knowtis.",
+    "redirectHostLabel": "Redirige a",
+    "redirectHostNotice": "Esta aplicación recibirá acceso en {{host}}. Continúa solo si confías en ella.",
+    "verifiedByUrl": "Verificado por URL",
+    "permissionsTitle": "Esto le permitirá",
+    "scopes": {
+      "notesRead": "Leer tus notas",
+      "notesWrite": "Crear y editar tus notas",
+      "notesShare": "Compartir tus notas con otros",
+      "offlineAccess": "Mantener el acceso sin volver a iniciar sesión"
+    },
+    "approve": "Aprobar",
+    "approving": "Autorizando...",
+    "deny": "Denegar",
+    "loading": "Cargando solicitud...",
+    "errorTitle": "Solicitud inválida o expirada",
+    "errorDescription": "Esta solicitud de autorización ya no es válida. Vuelve a iniciarla desde la aplicación que te envió aquí."
+  },
   "anonymous": {
     "guest": "Invitado",
     "limit": {

@@ -158,6 +158,26 @@
     "keyCopied": "Key copied to clipboard",
     "done": "Done"
   },
+  "oauth": {
+    "title": "Authorize access",
+    "requestingAccess": "{{client}} wants to connect to your Knowtis notes.",
+    "redirectHostLabel": "Redirects to",
+    "redirectHostNotice": "This application will receive access at {{host}}. Only continue if you trust it.",
+    "verifiedByUrl": "Verified by URL",
+    "permissionsTitle": "This will allow it to",
+    "scopes": {
+      "notesRead": "Read your notes",
+      "notesWrite": "Create and edit your notes",
+      "notesShare": "Share your notes with others",
+      "offlineAccess": "Stay connected without signing in again"
+    },
+    "approve": "Approve",
+    "approving": "Authorizing...",
+    "deny": "Deny",
+    "loading": "Loading request...",
+    "errorTitle": "Invalid or expired request",
+    "errorDescription": "This authorization request is no longer valid. Start again from the application that sent you here."
+  },
   "anonymous": {
     "guest": "Guest",
     "limit": {

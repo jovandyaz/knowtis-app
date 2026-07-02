@@ -7,6 +7,7 @@ export const ROUTES = {
   DASHBOARD: '/dashboard',
   NOTES: '/notes',
   NOTE: '/notes/$noteId',
+  OAUTH_CONSENT: '/oauth/consent',
   LOGIN: '/login',
   REGISTER: '/register',
   FORGOT_PASSWORD: '/forgot-password',
