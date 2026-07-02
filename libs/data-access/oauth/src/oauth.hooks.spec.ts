@@ -9,9 +9,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { oauthApi } from '@knowtis/api-client';
 
 import {
+  oauthGrantsQueryKeys,
   oauthQueryKeys,
   useConsentDecision,
+  useOauthGrants,
   useOauthInteraction,
+  useRevokeGrant,
 } from './oauth.hooks';
 
 vi.mock('@knowtis/api-client', () => ({
@@ -19,6 +22,8 @@ vi.mock('@knowtis/api-client', () => ({
     getInteraction: vi.fn(),
     confirm: vi.fn(),
     abort: vi.fn(),
+    getGrants: vi.fn(),
+    revokeGrant: vi.fn(),
   },
 }));
 
@@ -151,6 +156,80 @@ describe('oauth hooks', () => {
       await waitFor(() => expect(result.current.isError).toBe(true));
       expect(result.current.error).toBeInstanceOf(Error);
       expect(assignMock).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('oauthGrantsQueryKeys', () => {
+    it('builds a stable list key', () => {
+      expect(oauthGrantsQueryKeys.list()).toEqual(['oauth-grants', 'list']);
+    });
+  });
+
+  describe('useOauthGrants', () => {
+    it('fetches and validates the connected grants', async () => {
+      const grants = [
+        {
+          grantId: 'grant-1',
+          clientId: 'https://claude.ai',
+          clientName: 'claude.ai',
+          scopes: ['notes:read', 'notes:write'],
+          createdAt: '2026-07-02T12:00:00.000Z',
+        },
+      ];
+      vi.mocked(oauthApi.getGrants).mockResolvedValue({ grants });
+
+      const { result } = renderHook(() => useOauthGrants(), { wrapper });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(grants);
+    });
+
+    it('does not retry and surfaces the error when the flag is off (404)', async () => {
+      vi.mocked(oauthApi.getGrants).mockRejectedValue(new Error('Not Found'));
+
+      const { result } = renderHook(() => useOauthGrants(), { wrapper });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(oauthApi.getGrants).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('useRevokeGrant', () => {
+    it('optimistically removes the grant and revokes it', async () => {
+      queryClient.setQueryData(oauthGrantsQueryKeys.list(), [
+        { grantId: 'grant-1', clientId: 'c1', clientName: null, scopes: [], createdAt: 'x' },
+        { grantId: 'grant-2', clientId: 'c2', clientName: null, scopes: [], createdAt: 'y' },
+      ]);
+      vi.mocked(oauthApi.revokeGrant).mockResolvedValue(undefined);
+
+      const { result } = renderHook(() => useRevokeGrant(), { wrapper });
+
+      result.current.mutate('grant-1');
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(oauthApi.revokeGrant).toHaveBeenCalledWith('grant-1');
+      const cached = queryClient.getQueryData<{ grantId: string }[]>(
+        oauthGrantsQueryKeys.list()
+      );
+      expect(cached?.map((g) => g.grantId)).toEqual(['grant-2']);
+    });
+
+    it('rolls back the optimistic removal when revoke fails', async () => {
+      const initial = [
+        { grantId: 'grant-1', clientId: 'c1', clientName: null, scopes: [], createdAt: 'x' },
+      ];
+      queryClient.setQueryData(oauthGrantsQueryKeys.list(), initial);
+      vi.mocked(oauthApi.revokeGrant).mockRejectedValue(new Error('boom'));
+
+      const { result } = renderHook(() => useRevokeGrant(), { wrapper });
+
+      result.current.mutate('grant-1');
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      const cached = queryClient.getQueryData<{ grantId: string }[]>(
+        oauthGrantsQueryKeys.list()
+      );
+      expect(cached?.map((g) => g.grantId)).toEqual(['grant-1']);
     });
   });
 });

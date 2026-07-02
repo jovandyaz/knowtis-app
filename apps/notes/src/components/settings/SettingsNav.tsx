@@ -7,6 +7,7 @@ import {
   FileEdit,
   Globe,
   Palette,
+  Plug,
   Puzzle,
   Shield,
   Sparkles,
@@ -23,6 +24,7 @@ const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
   { section: 'aiAssistant', icon: Sparkles },
   { section: 'notifications', icon: Bell },
   { section: 'integrations', icon: Puzzle },
+  { section: 'connectedApps', icon: Plug },
   { section: 'account', icon: Shield },
 ];
 

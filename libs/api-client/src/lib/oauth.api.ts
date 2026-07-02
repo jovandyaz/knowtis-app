@@ -23,4 +23,12 @@ export const oauthApi = {
       `/oauth/interactions/${encodeURIComponent(uid)}/abort`
     );
   },
+
+  getGrants(): Promise<unknown> {
+    return httpClient.get('/oauth/grants');
+  },
+
+  revokeGrant(grantId: string): Promise<void> {
+    return httpClient.delete(`/oauth/grants/${encodeURIComponent(grantId)}`);
+  },
 };

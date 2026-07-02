@@ -7,6 +7,7 @@ export type SettingsSection =
   | 'editor'
   | 'notifications'
   | 'integrations'
+  | 'connectedApps'
   | 'account'
   | 'aiAssistant';
 

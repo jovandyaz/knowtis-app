@@ -24,6 +24,8 @@ import {
   createAdapterFactory,
   DrizzleOidcAdapter,
   findGrantIdsByAccountAndClient,
+  grantBelongsToAccount,
+  listGrantsByAccount,
 } from '../drizzle-oidc.adapter';
 
 loadEnv({ path: ['.env.local', '.env'] });
@@ -178,6 +180,41 @@ describe.runIf(DB_AVAILABLE)('DrizzleOidcAdapter', () => {
     expect(
       await findGrantIdsByAccountAndClient(db, 'acc-2', 'client-a')
     ).toEqual([]);
+  });
+
+  it('should list only the account-owned grants with their full payload', async () => {
+    const grants = factory('Grant');
+    await grants.upsert(
+      'g-mine-1',
+      { accountId: 'acc-1', clientId: 'client-a', iat: 1_700_000_000 },
+      3600
+    );
+    await grants.upsert(
+      'g-mine-2',
+      { accountId: 'acc-1', clientId: 'client-b' },
+      3600
+    );
+    await grants.upsert('g-other', { accountId: 'acc-2', clientId: 'client-a' }, 3600);
+
+    const rows = await listGrantsByAccount(db, 'acc-1');
+
+    expect(rows.map((row) => row.id).sort()).toEqual(['g-mine-1', 'g-mine-2']);
+    const mine1 = rows.find((row) => row.id === 'g-mine-1');
+    expect(mine1?.payload).toMatchObject({
+      accountId: 'acc-1',
+      clientId: 'client-a',
+      iat: 1_700_000_000,
+    });
+    expect(await listGrantsByAccount(db, 'acc-3')).toEqual([]);
+  });
+
+  it('should confirm grant ownership only for the owning account', async () => {
+    const grants = factory('Grant');
+    await grants.upsert('g-own', { accountId: 'acc-1', clientId: 'client-a' }, 3600);
+
+    expect(await grantBelongsToAccount(db, 'g-own', 'acc-1')).toBe(true);
+    expect(await grantBelongsToAccount(db, 'g-own', 'acc-2')).toBe(false);
+    expect(await grantBelongsToAccount(db, 'g-missing', 'acc-1')).toBe(false);
   });
 
   it('should find by uid and by userCode', async () => {

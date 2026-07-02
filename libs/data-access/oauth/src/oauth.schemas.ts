@@ -19,3 +19,19 @@ export type ConsentDecisionResult = z.infer<typeof consentDecisionResultSchema>;
 export type ConsentDecisionInput =
   | { action: 'approve'; approvedScopes: string[] }
   | { action: 'deny' };
+
+export const oauthGrantSchema = z.object({
+  grantId: z.string(),
+  clientId: z.string(),
+  clientName: z.string().nullable(),
+  scopes: z.array(z.string()),
+  createdAt: z.string(),
+});
+
+export type OauthGrant = z.infer<typeof oauthGrantSchema>;
+
+export const oauthGrantsResponseSchema = z.object({
+  grants: z.array(oauthGrantSchema),
+});
+
+export type OauthGrantsResponse = z.infer<typeof oauthGrantsResponseSchema>;

@@ -78,7 +78,8 @@
       "aiAssistant": "AI Assistant",
       "notifications": "Notifications",
       "account": "Account",
-      "integrations": "Integrations"
+      "integrations": "Integrations",
+      "connectedApps": "Connected apps"
     },
     "descriptions": {
       "profile": "Manage your account information",
@@ -88,7 +89,8 @@
       "aiAssistant": "Configure AI model preferences",
       "notifications": "Manage your notification settings",
       "account": "Account security and settings",
-      "integrations": "Manage API keys for external integrations"
+      "integrations": "Manage API keys for external integrations",
+      "connectedApps": "Apps you authorized with OAuth"
     }
   },
   "aiAssistant": {
@@ -157,6 +159,18 @@
     "copyKey": "Copy",
     "keyCopied": "Key copied to clipboard",
     "done": "Done"
+  },
+  "connectedApps": {
+    "title": "Connected apps",
+    "description": "Apps and AI assistants you authorized to access your notes with OAuth.",
+    "authorizedAt": "Authorized",
+    "revoke": "Revoke access",
+    "revokeTitle": "Revoke access",
+    "revokeConfirm": "Revoke access for \"{{name}}\"? It will need to be authorized again to connect.",
+    "revokeSuccess": "Access revoked",
+    "emptyTitle": "No connected apps",
+    "emptyDescription": "Apps you authorize with OAuth will appear here.",
+    "cancel": "Cancel"
   },
   "oauth": {
     "title": "Authorize access",
