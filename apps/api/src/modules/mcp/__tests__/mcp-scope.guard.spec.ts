@@ -267,7 +267,7 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
         .sign(privateKey);
   });
 
-  function createRealGuard(scopeMetadata: string) {
+  function createRealGuard(scopeMetadata: string | undefined) {
     const reflector = {
       getAllAndOverride: vi.fn().mockReturnValue(scopeMetadata),
     } as unknown as Reflector;
@@ -279,7 +279,13 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
           key === 'OAUTH_JWKS' ? jwks : undefined
         ),
     } as unknown as ConfigService;
-    return new McpScopeGuard(reflector, new JwtService(), configService);
+    // Same module options as McpModule's JwtModule.register — the guard's ES256
+    // verify relies on per-call options taking precedence over these.
+    const jwtService = new JwtService({
+      signOptions: { algorithm: 'HS256' },
+      verifyOptions: { algorithms: ['HS256'] },
+    });
+    return new McpScopeGuard(reflector, jwtService, configService);
   }
 
   function contextWithToken(token: string) {
@@ -314,18 +320,7 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
   });
 
   it('should reject ES256 OAuth tokens on routes without scope metadata', async () => {
-    const reflector = {
-      getAllAndOverride: vi.fn().mockReturnValue(undefined),
-    } as unknown as Reflector;
-    const configService = {
-      getOrThrow: vi.fn().mockReturnValue('unused-hs-secret'),
-      get: vi
-        .fn()
-        .mockImplementation((key: string) =>
-          key === 'OAUTH_JWKS' ? jwks : undefined
-        ),
-    } as unknown as ConfigService;
-    const guard = new McpScopeGuard(reflector, new JwtService(), configService);
+    const guard = createRealGuard(undefined);
     const token = await signOauthToken('notes:read');
 
     await expect(

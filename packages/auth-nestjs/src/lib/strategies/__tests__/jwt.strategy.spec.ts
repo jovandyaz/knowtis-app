@@ -63,12 +63,19 @@ function runStrategy(
   });
 }
 
-function signHs256(): Promise<string> {
+function signHs256(secret: string = ACCESS_SECRET): Promise<string> {
   return new SignJWT({ email: USER.email })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(USER_ID)
     .setExpirationTime('15m')
-    .sign(new TextEncoder().encode(ACCESS_SECRET));
+    .sign(new TextEncoder().encode(secret));
+}
+
+function unsignedToken(): string {
+  const encode = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const exp = Math.floor(Date.now() / 1000) + 900;
+  return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ sub: USER_ID, exp })}.`;
 }
 
 describe('JwtStrategy', () => {
@@ -121,7 +128,7 @@ describe('JwtStrategy', () => {
 
     const outcome = await runStrategy(strategy, unknownKeyToken);
 
-    expect(outcome.type).not.toBe('success');
+    expect(outcome.type).toBe('fail');
   });
 
   it('should reject ES256 tokens when no public keys are configured', async () => {
@@ -129,6 +136,31 @@ describe('JwtStrategy', () => {
 
     const outcome = await runStrategy(strategy, es256Token);
 
-    expect(outcome.type).not.toBe('success');
+    expect(outcome.type).toBe('fail');
+  });
+
+  it('should reject HS256 tokens signed with the ES256 public key as HMAC secret', async () => {
+    const strategy = buildStrategy([es256Pem]);
+    const confusedToken = await signHs256(es256Pem);
+
+    const outcome = await runStrategy(strategy, confusedToken);
+
+    expect(outcome.type).toBe('fail');
+  });
+
+  it('should reject unsigned tokens with alg none', async () => {
+    const strategy = buildStrategy([es256Pem]);
+
+    const outcome = await runStrategy(strategy, unsignedToken());
+
+    expect(outcome.type).toBe('fail');
+  });
+
+  it('should reject tokens with a malformed header segment', async () => {
+    const strategy = buildStrategy([es256Pem]);
+
+    const outcome = await runStrategy(strategy, 'not-json-header.payload.sig');
+
+    expect(outcome.type).toBe('fail');
   });
 });
