@@ -116,7 +116,7 @@ describe('wrapToolHandler', () => {
   it('should return formatted error when scope check fails', async () => {
     authService = createMockAuthService({
       checkScope: vi.fn().mockImplementation(() => {
-        throw new Error("API key does not have 'write' scope");
+        throw new Error("API key does not have 'notes:write' scope");
       }),
     });
     const handler = vi.fn();
@@ -130,7 +130,7 @@ describe('wrapToolHandler', () => {
     const result = await wrapped({ title: 'test' });
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('write');
+    expect(result.content[0].text).toContain('notes:write');
     expect(handler).not.toHaveBeenCalled();
   });
 

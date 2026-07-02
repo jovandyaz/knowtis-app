@@ -17,7 +17,7 @@ describe('TokenCache', () => {
   it('should store and retrieve token', () => {
     cache.set('prefix1', {
       token: 'jwt1',
-      scopes: 'read',
+      scopes: 'notes:read',
       expiresAt: Date.now() + 60000,
     });
     const entry = cache.get('prefix1');
@@ -27,7 +27,7 @@ describe('TokenCache', () => {
   it('should return null for expired token', () => {
     cache.set('prefix1', {
       token: 'jwt1',
-      scopes: 'read',
+      scopes: 'notes:read',
       expiresAt: Date.now() + 1000,
     });
     vi.advanceTimersByTime(2000);
@@ -41,7 +41,7 @@ describe('TokenCache', () => {
   it('should invalidate a cached token', () => {
     cache.set('prefix1', {
       token: 'jwt1',
-      scopes: 'read',
+      scopes: 'notes:read',
       expiresAt: Date.now() + 60000,
     });
     cache.invalidate('prefix1');
