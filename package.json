@@ -57,7 +57,7 @@
     "@hono/node-server": "^1.19.14",
     "@hookform/resolvers": "^5.2.2",
     "@langfuse/otel": "5.4.1",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@nestjs/cache-manager": "^3.1.0",
     "@nestjs/common": "^11.1.23",
     "@nestjs/config": "^4.0.2",
