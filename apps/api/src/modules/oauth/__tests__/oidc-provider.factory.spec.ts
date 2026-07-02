@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { config as loadEnv } from 'dotenv';
-import { inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { exportJWK, generateKeyPair } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,6 +18,8 @@ import {
 } from '../../../database';
 import {
   createOidcProvider,
+  refreshTokenTtl,
+  shouldIssueRefreshToken,
   type OidcProviderHandle,
 } from '../oidc-provider.factory';
 
@@ -108,11 +110,59 @@ describe('createOidcProvider', () => {
   });
 });
 
+describe('refreshTokenTtl', () => {
+  it('should grant a 30d window to URL (remote CIMD) client_ids', () => {
+    expect(refreshTokenTtl({ clientId: 'https://client.example.com' })).toBe(
+      2592000
+    );
+  });
+
+  it('should grant a 90d window to opaque (locally registered) client_ids', () => {
+    expect(refreshTokenTtl({ clientId: 'abc123' })).toBe(7776000);
+  });
+});
+
+describe('shouldIssueRefreshToken', () => {
+  const allowingClient = { grantTypeAllowed: () => true };
+  const denyingClient = { grantTypeAllowed: () => false };
+  const offlineCode = { scopes: new Set(['notes:read', 'offline_access']) };
+  const onlineCode = { scopes: new Set(['notes:read']) };
+
+  it('should issue when refresh_token is allowed and offline_access is requested', () => {
+    expect(shouldIssueRefreshToken(allowingClient, offlineCode)).toBe(true);
+  });
+
+  it('should not issue when offline_access is absent', () => {
+    expect(shouldIssueRefreshToken(allowingClient, onlineCode)).toBe(false);
+  });
+
+  it('should not issue when the client cannot use the refresh_token grant', () => {
+    expect(shouldIssueRefreshToken(denyingClient, offlineCode)).toBe(false);
+  });
+});
+
 describe.runIf(DB_AVAILABLE)('createOidcProvider dynamic registration', () => {
   let moduleRef: TestingModule;
   let db: Database;
   let server: Server;
   let baseUrl: string;
+  const registeredClientIds: string[] = [];
+
+  async function register(
+    metadata: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
+    const response = await fetch(`${baseUrl}/reg`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(metadata),
+    });
+    const body = (await response.json()) as Record<string, unknown>;
+    const clientId = body['client_id'];
+    if (typeof clientId === 'string') {
+      registeredClientIds.push(clientId);
+    }
+    return body;
+  }
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -142,25 +192,35 @@ describe.runIf(DB_AVAILABLE)('createOidcProvider dynamic registration', () => {
 
   afterAll(async () => {
     server?.close();
-    await db
-      .delete(oauthPayloads)
-      .where(
-        inArray(oauthPayloads.model, ['Client', 'RegistrationAccessToken'])
-      );
+    if (registeredClientIds.length > 0) {
+      await db
+        .delete(oauthPayloads)
+        .where(
+          and(
+            eq(oauthPayloads.model, 'Client'),
+            inArray(oauthPayloads.id, registeredClientIds)
+          )
+        );
+      await db
+        .delete(oauthPayloads)
+        .where(
+          and(
+            eq(oauthPayloads.model, 'RegistrationAccessToken'),
+            inArray(
+              sql`${oauthPayloads.payload}->>'clientId'`,
+              registeredClientIds
+            )
+          )
+        );
+    }
     await moduleRef.close();
   });
 
   it('should register a public client applying clientDefaults', async () => {
-    const response = await fetch(`${baseUrl}/reg`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        redirect_uris: ['https://client.example.com/callback'],
-      }),
+    const body = await register({
+      redirect_uris: ['https://client.example.com/callback'],
     });
-    const body = (await response.json()) as Record<string, unknown>;
 
-    expect(response.status).toBe(201);
     expect(body['client_id']).toBeTypeOf('string');
     expect(body['token_endpoint_auth_method']).toBe('none');
     expect(body['grant_types']).toEqual([
@@ -168,5 +228,38 @@ describe.runIf(DB_AVAILABLE)('createOidcProvider dynamic registration', () => {
       'refresh_token',
     ]);
     expect(body['response_types']).toEqual(['code']);
+  });
+
+  it('should not issue a client_secret when auth method is explicitly none', async () => {
+    const body = await register({
+      redirect_uris: ['https://client.example.com/callback'],
+      token_endpoint_auth_method: 'none',
+    });
+
+    expect(body['token_endpoint_auth_method']).toBe('none');
+    expect(body['client_secret']).toBeUndefined();
+  });
+
+  it('should reject an authorization request that omits code_challenge (PKCE required)', async () => {
+    const client = await register({
+      redirect_uris: ['https://client.example.com/callback'],
+      token_endpoint_auth_method: 'none',
+    });
+    const params = new URLSearchParams({
+      client_id: client['client_id'] as string,
+      response_type: 'code',
+      redirect_uri: 'https://client.example.com/callback',
+      scope: 'notes:read',
+      state: 'xyz',
+    });
+
+    const response = await fetch(`${baseUrl}/auth?${params.toString()}`, {
+      redirect: 'manual',
+    });
+
+    expect(response.status).toBe(303);
+    const location = response.headers.get('location') ?? '';
+    expect(location).toContain('error=invalid_request');
+    expect(location).toContain('PKCE');
   });
 });

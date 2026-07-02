@@ -9,6 +9,32 @@ import { MCP_SCOPES, TOKEN_SOURCE_MCP } from '../mcp/mcp-token';
 import { createAdapterFactory } from './drizzle-oidc.adapter';
 
 const DAY_SECONDS = 24 * 60 * 60;
+const REFRESH_TTL_URL_CLIENT = 30 * DAY_SECONDS;
+const REFRESH_TTL_LOCAL_CLIENT = 90 * DAY_SECONDS;
+
+/**
+ * URL client_ids are remote MCP clients (CIMD) and get a shorter 30d refresh
+ * window; locally registered (opaque) client_ids get 90d.
+ */
+export function refreshTokenTtl(client: { clientId: string }): number {
+  return client.clientId.startsWith('http')
+    ? REFRESH_TTL_URL_CLIENT
+    : REFRESH_TTL_LOCAL_CLIENT;
+}
+
+/**
+ * A refresh token is issued only when the client is allowed the refresh_token
+ * grant AND the authorization code carries the `offline_access` scope.
+ */
+export function shouldIssueRefreshToken(
+  client: { grantTypeAllowed: (type: string) => boolean },
+  code: { scopes: Set<string> }
+): boolean {
+  return (
+    client.grantTypeAllowed('refresh_token') &&
+    code.scopes.has('offline_access')
+  );
+}
 
 // @types/oidc-provider lags the runtime and lacks the experimental clientIdMetadataDocument feature.
 type OidcConfiguration = Omit<Configuration, 'features'> & {
@@ -50,6 +76,7 @@ export async function createOidcProvider(
 
   const configuration: OidcConfiguration = {
     adapter: createAdapterFactory(db),
+    // deps.jwks is Zod-validated at the config boundary; the lib wants its nominal JWK[] type.
     jwks: jwks as JWKS,
     cookies: { keys: cookieKeys },
     clients: [],
@@ -74,15 +101,11 @@ export async function createOidcProvider(
       Grant: 30 * DAY_SECONDS,
       Interaction: 3600,
       Session: 14 * DAY_SECONDS,
-      RefreshToken: (_ctx, _token, client) =>
-        client.clientId.startsWith('http')
-          ? 30 * DAY_SECONDS
-          : 90 * DAY_SECONDS,
+      RefreshToken: (_ctx, _token, client) => refreshTokenTtl(client),
     },
     rotateRefreshToken: true,
     issueRefreshToken: (_ctx, client, code) =>
-      client.grantTypeAllowed('refresh_token') &&
-      code.scopes.has('offline_access'),
+      shouldIssueRefreshToken(client, code),
     features: {
       devInteractions: { enabled: false },
       registration: { enabled: true, initialAccessToken: false },
