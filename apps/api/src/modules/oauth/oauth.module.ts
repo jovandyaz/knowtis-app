@@ -5,15 +5,22 @@ import type { EnvConfig } from '../../config/env.config';
 import { getOauthConfig } from '../../config/oauth.config';
 import { DATABASE_CONNECTION, type Database } from '../../database';
 import { FeatureFlagsModule } from '../feature-flags';
+import { OauthInteractionController } from './oauth-interaction.controller';
 import {
   createOidcProvider,
   type OidcProviderHandle,
 } from './oidc-provider.factory';
 
 export const OAUTH_PROVIDER = 'OAUTH_PROVIDER';
+export const OAUTH_RUNTIME = 'OAUTH_RUNTIME';
+
+export interface OauthRuntime {
+  resourceUrl: string;
+}
 
 @Module({
   imports: [FeatureFlagsModule],
+  controllers: [OauthInteractionController],
   providers: [
     {
       provide: OAUTH_PROVIDER,
@@ -37,6 +44,16 @@ export const OAUTH_PROVIDER = 'OAUTH_PROVIDER';
         return handle;
       },
       inject: [ConfigService, DATABASE_CONNECTION],
+    },
+    {
+      provide: OAUTH_RUNTIME,
+      useFactory: (
+        config: ConfigService<EnvConfig, true>
+      ): OauthRuntime | null => {
+        const oauthConfig = getOauthConfig(config);
+        return oauthConfig ? { resourceUrl: oauthConfig.resourceUrl } : null;
+      },
+      inject: [ConfigService],
     },
   ],
   exports: [OAUTH_PROVIDER],
