@@ -6,10 +6,6 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-comments.mjs\""
-          },
-          {
-            "type": "command",
             "command": "npx tsc --noEmit 2>&1 | head -20 || true"
           }
         ]
@@ -22,9 +18,19 @@
         "source": "github",
         "repo": "nrwl/nx-ai-agents-config"
       }
+    },
+    "knowtis-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "jovandyaz/knowtis-plugins"
+      }
     }
   },
   "enabledPlugins": {
-    "nx@nx-claude-plugins": true
+    "nx@nx-claude-plugins": true,
+    "standards@knowtis-plugins": true,
+    "db-ops@knowtis-plugins": true,
+    "delivery@knowtis-plugins": true,
+    "domain@knowtis-plugins": true
   }
 }
