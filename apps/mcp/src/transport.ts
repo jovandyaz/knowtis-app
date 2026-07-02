@@ -17,7 +17,7 @@ export function createApp(
   app.use(
     '/mcp',
     cors({
-      origin: '*',
+      origin: config.allowedOrigins.length > 0 ? config.allowedOrigins : '*',
       allowHeaders: [
         'Content-Type',
         'Authorization',

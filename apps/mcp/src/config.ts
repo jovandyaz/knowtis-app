@@ -4,7 +4,10 @@ import pkg from '../package.json';
 
 const configSchema = z.object({
   PORT: z.coerce.number().default(3334),
-  API_INTERNAL_URL: z.string().url(),
+  API_INTERNAL_URL: z
+    .string()
+    .url()
+    .transform((url) => url.replace(/\/+$/, '')),
   MCP_SERVER_NAME: z.string().default('knowtis-mcp'),
   MCP_ALLOWED_HOSTS: z.string().optional(),
   MCP_ALLOWED_ORIGINS: z.string().optional(),
@@ -46,6 +49,16 @@ export function parseConfig(
         ? [`localhost:${parsed.PORT}`, `127.0.0.1:${parsed.PORT}`]
         : [];
   const allowedOrigins = splitCsv(parsed.MCP_ALLOWED_ORIGINS);
+
+  if (
+    parsed.NODE_ENV === 'production' &&
+    allowedHosts.length === 0 &&
+    allowedOrigins.length === 0
+  ) {
+    throw new Error(
+      'MCP_ALLOWED_HOSTS or MCP_ALLOWED_ORIGINS must be set in production; without them DNS-rebinding protection is disabled.'
+    );
+  }
 
   return {
     port: parsed.PORT,

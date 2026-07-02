@@ -60,13 +60,18 @@ describe('parseConfig', () => {
     expect(config.enableDnsRebindingProtection).toBe(true);
   });
 
-  it('should disable rebinding protection when no hosts or origins configured in production', () => {
-    const config = parseConfig({
-      API_INTERNAL_URL: 'http://localhost:3333',
-      NODE_ENV: 'production',
-    });
-    expect(config.allowedHosts).toEqual([]);
-    expect(config.enableDnsRebindingProtection).toBe(false);
+  it('should throw in production when no hosts or origins are configured', () => {
+    expect(() =>
+      parseConfig({
+        API_INTERNAL_URL: 'http://localhost:3333',
+        NODE_ENV: 'production',
+      })
+    ).toThrow(/MCP_ALLOWED_HOSTS or MCP_ALLOWED_ORIGINS/);
+  });
+
+  it('should strip trailing slashes from API_INTERNAL_URL', () => {
+    const config = parseConfig({ API_INTERNAL_URL: 'http://localhost:3333/' });
+    expect(config.apiInternalUrl).toBe('http://localhost:3333');
   });
 
   it('should enable rebinding protection from origins alone', () => {
