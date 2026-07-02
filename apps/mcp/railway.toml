@@ -5,9 +5,9 @@
 # Build command for MCP server in Nx monorepo
 builder = "nixpacks"
 buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp"
-# Note: watchPatterns do NOT apply for CI-driven deploys via `railway up`.
-# Conditional deploys are handled in .github/workflows/ci.yml using nx affected.
-watchPatterns = ["apps/mcp/**", "libs/**", "package.json", "pnpm-lock.yaml"]
+# No watchPatterns: they make `railway up` skip the build when no watched file
+# changed, silently deploying nothing while CI reports success. CI already
+# gates deploys with nx affected — when the deploy job runs, Railway must build.
 
 [deploy]
 startCommand = "node dist/apps/mcp/index.js"
