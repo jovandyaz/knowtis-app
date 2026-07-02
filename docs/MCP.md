@@ -297,7 +297,7 @@ The MCP server runs as its own Railway service, configured in [`apps/mcp/railway
 
 Railway config-as-code cannot set environment variables (`railway.toml` has no `[env]` section). The `deploy-mcp` job in `.github/workflows/ci.yml` pins `NODE_ENV=production` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` on the service via `railway variable set` before every `railway up`. `API_INTERNAL_URL` is a Railway service variable pointing at the API's internal URL (e.g. `http://api.railway.internal:3333`).
 
-Deploys are CI-driven via `railway up` (gated on the `mcp` project being affected on `main`); the `watchPatterns` in `railway.toml` do **not** apply. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
+Deploys are CI-driven via `railway up`, gated on the `mcp` project being affected on `main`. `railway.toml` deliberately has no `watchPatterns`: Railway checks them against the uploaded snapshot and **skips the build** when no watched file changed — silently deploying nothing while the CI job reports success. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
 
 ### DNS-rebinding protection
 
