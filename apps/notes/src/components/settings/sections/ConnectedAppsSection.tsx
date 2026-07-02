@@ -72,7 +72,8 @@ export function ConnectedAppsSection() {
       {hasGrants ? (
         <div className="space-y-3">
           {grants.map((grant) => {
-            const appName = grant.clientName ?? hostFromClientId(grant.clientId);
+            const appName =
+              grant.clientName ?? hostFromClientId(grant.clientId);
             return (
               <div
                 key={grant.grantId}
@@ -128,7 +129,9 @@ export function ConnectedAppsSection() {
             }
           }}
           grantId={revokeTarget.grantId}
-          appName={revokeTarget.clientName ?? hostFromClientId(revokeTarget.clientId)}
+          appName={
+            revokeTarget.clientName ?? hostFromClientId(revokeTarget.clientId)
+          }
         />
       )}
     </div>

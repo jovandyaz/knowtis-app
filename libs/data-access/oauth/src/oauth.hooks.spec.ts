@@ -197,8 +197,20 @@ describe('oauth hooks', () => {
   describe('useRevokeGrant', () => {
     it('optimistically removes the grant and revokes it', async () => {
       queryClient.setQueryData(oauthGrantsQueryKeys.list(), [
-        { grantId: 'grant-1', clientId: 'c1', clientName: null, scopes: [], createdAt: 'x' },
-        { grantId: 'grant-2', clientId: 'c2', clientName: null, scopes: [], createdAt: 'y' },
+        {
+          grantId: 'grant-1',
+          clientId: 'c1',
+          clientName: null,
+          scopes: [],
+          createdAt: 'x',
+        },
+        {
+          grantId: 'grant-2',
+          clientId: 'c2',
+          clientName: null,
+          scopes: [],
+          createdAt: 'y',
+        },
       ]);
       vi.mocked(oauthApi.revokeGrant).mockResolvedValue(undefined);
 
@@ -216,7 +228,13 @@ describe('oauth hooks', () => {
 
     it('rolls back the optimistic removal when revoke fails', async () => {
       const initial = [
-        { grantId: 'grant-1', clientId: 'c1', clientName: null, scopes: [], createdAt: 'x' },
+        {
+          grantId: 'grant-1',
+          clientId: 'c1',
+          clientName: null,
+          scopes: [],
+          createdAt: 'x',
+        },
       ];
       queryClient.setQueryData(oauthGrantsQueryKeys.list(), initial);
       vi.mocked(oauthApi.revokeGrant).mockRejectedValue(new Error('boom'));

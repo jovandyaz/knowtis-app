@@ -46,7 +46,9 @@ function makeProvider(): MockProvider {
     Client: { find: vi.fn().mockResolvedValue(undefined) },
     AccessToken: { revokeByGrantId: vi.fn().mockResolvedValue(undefined) },
     RefreshToken: { revokeByGrantId: vi.fn().mockResolvedValue(undefined) },
-    AuthorizationCode: { revokeByGrantId: vi.fn().mockResolvedValue(undefined) },
+    AuthorizationCode: {
+      revokeByGrantId: vi.fn().mockResolvedValue(undefined),
+    },
     Grant: { adapter: { destroy: vi.fn().mockResolvedValue(undefined) } },
   };
 }
@@ -172,7 +174,9 @@ describe('OauthGrantsController', () => {
       const body = (await res.json()) as { grants: unknown[] };
 
       expect(res.status).toBe(200);
-      expect(vi.mocked(listGrantsByAccount).mock.calls[0][1]).toBe(TEST_USER.id);
+      expect(vi.mocked(listGrantsByAccount).mock.calls[0][1]).toBe(
+        TEST_USER.id
+      );
       expect(body.grants).toEqual([
         {
           grantId: 'grant-1',
@@ -265,9 +269,9 @@ describe('OauthGrantsController', () => {
       expect(harness.provider.AccessToken.revokeByGrantId).toHaveBeenCalledWith(
         'grant-1'
       );
-      expect(harness.provider.RefreshToken.revokeByGrantId).toHaveBeenCalledWith(
-        'grant-1'
-      );
+      expect(
+        harness.provider.RefreshToken.revokeByGrantId
+      ).toHaveBeenCalledWith('grant-1');
       expect(
         harness.provider.AuthorizationCode.revokeByGrantId
       ).toHaveBeenCalledWith('grant-1');

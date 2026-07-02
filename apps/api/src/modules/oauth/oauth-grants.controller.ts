@@ -50,7 +50,10 @@ function addSpaceScopes(value: unknown, into: Set<string>): void {
   }
 }
 
-function collectScopes(source: Record<string, unknown>, into: Set<string>): void {
+function collectScopes(
+  source: Record<string, unknown>,
+  into: Set<string>
+): void {
   const resources = source['resources'];
   if (resources && typeof resources === 'object') {
     for (const value of Object.values(resources as Record<string, unknown>)) {
