@@ -3,7 +3,7 @@ import express from 'express';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { FeatureFlagsService } from '../feature-flags';
-import { OAUTH_PROVIDER } from './oauth.module';
+import { OAUTH_PROVIDER } from './oauth.tokens';
 import type { OidcProviderHandle } from './oidc-provider.factory';
 
 export const MCP_OAUTH_FLAG = 'mcp_oauth';

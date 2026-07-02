@@ -12,7 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DATABASE_CONNECTION } from '../../../database';
 import { FeatureFlagsService } from '../../feature-flags';
 import { OauthInteractionController } from '../oauth-interaction.controller';
-import { OAUTH_PROVIDER, OAUTH_RUNTIME } from '../oauth.module';
+import { OAUTH_PROVIDER, OAUTH_RUNTIME } from '../oauth.tokens';
 import type { OidcProviderHandle } from '../oidc-provider.factory';
 
 const RESOURCE_URL = 'https://mcp.knowtis.app/mcp';

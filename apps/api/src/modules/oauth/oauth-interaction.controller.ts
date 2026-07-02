@@ -22,7 +22,7 @@ import {
   OAUTH_PROVIDER,
   OAUTH_RUNTIME,
   type OauthRuntime,
-} from './oauth.module';
+} from './oauth.tokens';
 import { MCP_OAUTH_FLAG } from './oidc-mount.middleware';
 import type { OidcProviderHandle } from './oidc-provider.factory';
 

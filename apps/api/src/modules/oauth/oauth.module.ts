@@ -7,16 +7,14 @@ import { DATABASE_CONNECTION, type Database } from '../../database';
 import { FeatureFlagsModule } from '../feature-flags';
 import { OauthInteractionController } from './oauth-interaction.controller';
 import {
+  OAUTH_PROVIDER,
+  OAUTH_RUNTIME,
+  type OauthRuntime,
+} from './oauth.tokens';
+import {
   createOidcProvider,
   type OidcProviderHandle,
 } from './oidc-provider.factory';
-
-export const OAUTH_PROVIDER = 'OAUTH_PROVIDER';
-export const OAUTH_RUNTIME = 'OAUTH_RUNTIME';
-
-export interface OauthRuntime {
-  resourceUrl: string;
-}
 
 @Module({
   imports: [FeatureFlagsModule],

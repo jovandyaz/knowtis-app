@@ -14,7 +14,7 @@ import {
 
 import type { Database } from '../../../database';
 import { FeatureFlagsService } from '../../feature-flags';
-import { OAUTH_PROVIDER } from '../oauth.module';
+import { OAUTH_PROVIDER } from '../oauth.tokens';
 import {
   applyBodyParsersExcludingOauth,
   createOidcMount,
