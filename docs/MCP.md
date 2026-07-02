@@ -1,61 +1,81 @@
 # Knowtis MCP Server
 
-Model Context Protocol (MCP) server that lets AI assistants (Claude, Cursor, VS Code Copilot) manage Knowtis notes programmatically. Provides 7 tools for notes CRUD and sharing via a standalone Hono app.
+Model Context Protocol (MCP) server that lets AI assistants (Claude, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 7 tools for notes CRUD and sharing.
 
-## Supported Clients
+The **hosted server is the primary way to connect**:
 
-- **Claude Code** (`.mcp.json` or `claude_desktop_config.json`)
-- **Claude Desktop** (`claude_desktop_config.json`)
-- **Cursor** (`.cursor/mcp.json`)
-- **VS Code Copilot** (`.vscode/mcp.json`)
-
-## Setup
-
-### Prerequisites
-
-- Node.js 20+
-- pnpm
-- Running Knowtis API (port 3333)
-- An MCP API key (see [API Key Management](#api-key-management))
-
-### Local Development
-
-```bash
-# 1. Start the API backend
-pnpm dev:api
-
-# 2. Build the MCP server
-pnpm nx build mcp
-
-# 3. Start the MCP server (Streamable HTTP on port 3334)
-API_INTERNAL_URL=http://localhost:3333 node dist/apps/mcp/index.js
+```text
+https://mcp.knowtis.app/mcp
 ```
 
-The server exposes:
+It speaks **Streamable HTTP** (stateless), runs on Railway, and is health-checked at `GET /health`. Authenticate every request with a Knowtis MCP API key as a Bearer token:
 
-- `GET /health` — Health check (returns `{ status: "ok", version: "..." }`)
-- `ALL /mcp` — Streamable HTTP transport (stateless)
+```text
+Authorization: Bearer knowtis_mcp_...
+```
 
-### Environment Variables
+Without a valid Bearer token the server replies `HTTP 401` with a `WWW-Authenticate: Bearer` challenge. Create and manage keys in the Knowtis web app under **Settings > Integrations** (see [API Key Management](#api-key-management)).
 
-| Variable             | Required        | Default       | Description                     |
-| -------------------- | --------------- | ------------- | ------------------------------- |
-| `API_INTERNAL_URL`   | Yes (HTTP mode) | —             | Knowtis API base URL            |
-| `PORT`               | No              | `3334`        | HTTP server port                |
-| `MCP_SERVER_NAME`    | No              | `knowtis-mcp` | Server name reported to clients |
-| `MCP_SERVER_VERSION` | No              | `0.0.1`       | Server version                  |
-| `NODE_ENV`           | No              | `development` | Environment                     |
+> OAuth "click to connect" (connect without pasting an API key) is planned for phase F2.
 
-For stdio mode, use `KNOWTIS_API_URL` instead of `API_INTERNAL_URL`:
+## Quick Connect
 
-| Variable          | Required | Description                               |
-| ----------------- | -------- | ----------------------------------------- |
-| `KNOWTIS_API_URL` | Yes      | Knowtis API base URL                      |
-| `KNOWTIS_API_KEY` | Yes      | Your MCP API key (provided by the client) |
+Point your client at `https://mcp.knowtis.app/mcp` and send your API key in the `Authorization` header.
+
+### Claude Code
+
+```bash
+claude mcp add --transport http knowtis https://mcp.knowtis.app/mcp \
+  --header "Authorization: Bearer knowtis_mcp_..."
+```
+
+### Cursor
+
+Create `.cursor/mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "knowtis": {
+      "url": "https://mcp.knowtis.app/mcp",
+      "headers": {
+        "Authorization": "Bearer knowtis_mcp_..."
+      }
+    }
+  }
+}
+```
+
+### VS Code (Copilot MCP)
+
+Create `.vscode/mcp.json` in your project:
+
+```json
+{
+  "servers": {
+    "knowtis": {
+      "type": "http",
+      "url": "https://mcp.knowtis.app/mcp",
+      "headers": {
+        "Authorization": "Bearer knowtis_mcp_..."
+      }
+    }
+  }
+}
+```
+
+### Legacy stdio-only clients
+
+For clients that can only launch a local stdio process, bridge to the hosted endpoint with [`mcp-remote`](https://www.npmjs.com/package/mcp-remote):
+
+```bash
+npx mcp-remote https://mcp.knowtis.app/mcp \
+  --header "Authorization: Bearer knowtis_mcp_..."
+```
 
 ## API Key Management
 
-API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All API endpoints require JWT authentication.
+API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All key-management endpoints require JWT authentication.
 
 ### Create a key
 
@@ -99,188 +119,161 @@ curl -X DELETE http://localhost:3333/api/v1/mcp/keys/{keyId} \
   -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
-## Client Configuration
+## Tools
 
-### Claude Code
+All 7 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
 
-Create `.mcp.json` at the project root:
+| Tool                | Title             | Description                                        | Parameters                                                            | Result shape                                                      | Annotations                 | Scope   |
+| ------------------- | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- | ------- |
+| `list-notes`        | List Notes        | List the user's notes with an optional search      | `search?` (string)                                                    | `{ notes: [{ id, title, updatedAt }] }`                           | read-only, idempotent       | `read`  |
+| `get-note`          | Get Note          | Get the full content of a specific note by ID      | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | read-only, idempotent       | `read`  |
+| `create-note`       | Create Note       | Create a note (title + optional Markdown content)  | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | create, non-idempotent      | `write` |
+| `update-note`       | Update Note       | Update the title or content of an existing note    | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | destructive, idempotent     | `write` |
+| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)       | `noteId` (UUID)                                                       | `{ success, message }`                                            | destructive, idempotent     | `write` |
+| `get-collaborators` | Get Collaborators | List who has access to a note and their permission | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`        | read-only, idempotent       | `read`  |
+| `share-note`        | Share Note        | Share a note with another user by their user ID    | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                     | non-destructive, idempotent | `share` |
 
-```json
-{
-  "mcpServers": {
-    "knowtis": {
-      "command": "node",
-      "args": ["dist/apps/mcp/stdio.js"],
-      "env": {
-        "KNOWTIS_API_URL": "http://localhost:3333",
-        "KNOWTIS_API_KEY": "your-api-key-here"
-      }
-    }
-  }
-}
-```
+`create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting.
 
-### Claude Desktop
+Annotation semantics (MCP tool hints):
 
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
+- **read-only** (`list-notes`, `get-note`, `get-collaborators`) — `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`.
+- **create** (`create-note`) — not read-only, not destructive, `idempotentHint: false` (each call creates a new note).
+- **destructive, idempotent** (`update-note`, `delete-note`) — `destructiveHint: true`, `idempotentHint: true`.
+- **non-destructive, idempotent** (`share-note`) — not destructive, `idempotentHint: true`.
 
-```json
-{
-  "mcpServers": {
-    "knowtis": {
-      "command": "node",
-      "args": ["/absolute/path/to/knowtis/dist/apps/mcp/stdio.js"],
-      "env": {
-        "KNOWTIS_API_URL": "https://your-api.railway.app",
-        "KNOWTIS_API_KEY": "knowtis_mcp_live_..."
-      }
-    }
-  }
-}
-```
+All tools declare `openWorldHint: false`.
 
-### Cursor
+## Auth Flow
 
-Create `.cursor/mcp.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "knowtis": {
-      "command": "node",
-      "args": ["/absolute/path/to/knowtis/dist/apps/mcp/stdio.js"],
-      "env": {
-        "KNOWTIS_API_URL": "http://localhost:3333",
-        "KNOWTIS_API_KEY": "your-api-key-here"
-      }
-    }
-  }
-}
-```
-
-### VS Code (Copilot MCP)
-
-Create `.vscode/mcp.json` in your project:
-
-```json
-{
-  "servers": {
-    "knowtis": {
-      "command": "node",
-      "args": ["/absolute/path/to/knowtis/dist/apps/mcp/stdio.js"],
-      "env": {
-        "KNOWTIS_API_URL": "http://localhost:3333",
-        "KNOWTIS_API_KEY": "your-api-key-here"
-      }
-    }
-  }
-}
-```
-
-> Claude Code uses `tsx` (no build needed). Other clients require building first: `pnpm nx build mcp`
-
-## Available Tools
-
-| Tool                | Description                                   | Parameters                                                            | Scope |
-| ------------------- | --------------------------------------------- | --------------------------------------------------------------------- | ----- |
-| `list-notes`        | List user's notes with optional search filter | `search?` (string)                                                    | read  |
-| `get-note`          | Get the full content of a specific note       | `noteId` (UUID)                                                       | read  |
-| `create-note`       | Create a new note                             | `title` (string), `content?` (string)                                 | write |
-| `update-note`       | Update title or content of an existing note   | `noteId` (UUID), `title?` (string), `content?` (string)               | write |
-| `delete-note`       | Permanently delete a note (irreversible)      | `noteId` (UUID)                                                       | write |
-| `get-collaborators` | List who has access to a note                 | `noteId` (UUID)                                                       | read  |
-| `share-note`        | Share a note with another user                | `noteId` (UUID), `userId` (UUID), `permission` ("viewer" or "editor") | share |
-
-## Architecture
-
-### Auth Flow
-
-```
-Client (Claude/Cursor/VS Code)
+```text
+Client (Claude / Cursor / VS Code / mcp-remote)
   │
-  │  stdio with KNOWTIS_API_KEY env var
+  │  POST /mcp with  Authorization: Bearer <API key>
+  │  (missing/blank → HTTP 401 + WWW-Authenticate: Bearer challenge)
   ▼
-MCP Server (apps/mcp)
+MCP Server (apps/mcp — Hono, Streamable HTTP)
   │
+  │  On first tool call, exchange the API key for a short-lived JWT:
   │  POST /api/v1/auth/token-exchange { apiKey }
   ▼
 Knowtis API (apps/api)
   │
   │  Returns { accessToken, expiresIn, scopes }
   ▼
-MCP Server caches JWT
+MCP Server caches the JWT
   │
-  │  Bearer token on all API calls
+  │  Bearer <JWT> on all downstream API calls
   ▼
-Notes/Sharing API endpoints
+Notes / Sharing API endpoints
 ```
 
-1. The AI client starts the MCP server via stdio, passing the API key as an environment variable
-2. On the first tool call, the MCP server exchanges the API key for a short-lived JWT via `POST /api/v1/auth/token-exchange`
-3. The JWT is cached in memory (with a 1-minute buffer before expiry)
-4. All subsequent API calls use the cached JWT as a Bearer token
-5. Scope enforcement: the API key's scopes determine which tools are available (read, write, share)
+1. The client sends the API key as a Bearer token on the `/mcp` request. If the `Authorization` header is missing or malformed, the request is rejected at the door with `HTTP 401` and a `WWW-Authenticate: Bearer` challenge — no tool runs.
+2. On the first tool call, the server exchanges the API key for a short-lived JWT via `POST /api/v1/auth/token-exchange`.
+3. The JWT is cached in a **module-scope, shared token cache** keyed by the **SHA-256 hash of the full API key** (never the raw key), with a 1-minute buffer subtracted from the reported expiry. The cache is shared across all requests handled by the process.
+4. Subsequent calls reuse the cached JWT as a Bearer token until it nears expiry.
+5. **Scope enforcement** happens per tool: each tool declares a required scope (`read`, `write`, or `share`), and a call is rejected if the key's scopes don't include it.
 
-### Transports
+## Local Development
 
-- **Streamable HTTP** (`/mcp` endpoint) — For remote/server deployments. Stateless, each request creates a new transport.
-- **stdio** (`dist/apps/mcp/stdio.js`) — For local client integrations. Used by Claude Code, Claude Desktop, Cursor, and VS Code.
+The **stdio** entry point (`dist/apps/mcp/stdio.js`) is **for local development only** — the hosted Streamable HTTP server is the path for real clients.
 
-## Development
+### Run the server
 
 ```bash
-# Run tests
-pnpm nx test mcp
+# 1. Start the API backend (port 3333)
+pnpm dev:api
 
-# Lint
-pnpm nx lint mcp
+# 2. Serve the MCP server locally
+pnpm nx serve mcp
+```
 
-# Build
+The server exposes:
+
+- `GET /health` — Health check, returns `{ status: "ok", version: "0.1.0" }`
+- `ALL /mcp` — Streamable HTTP transport (stateless; each request spins up a fresh transport)
+
+The server version reported to clients (and on `/health`) comes from `apps/mcp/package.json` — there is no version env var.
+
+### Build, test, lint
+
+```bash
 pnpm nx build mcp
-
-# Type check
+pnpm nx test mcp
+pnpm nx lint mcp
 pnpm typecheck
 ```
 
-Source code is in `apps/mcp/src/`:
+### Environment variables
 
-```
+HTTP mode (`index.ts`):
+
+| Variable              | Required        | Default                                                | Description                                                          |
+| --------------------- | --------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
+| `API_INTERNAL_URL`    | Yes (HTTP mode) | —                                                      | Knowtis API base URL                                                 |
+| `PORT`                | No              | `3334`                                                 | HTTP server port                                                     |
+| `MCP_SERVER_NAME`     | No              | `knowtis-mcp`                                          | Server name reported to clients                                      |
+| `NODE_ENV`            | No              | `development`                                          | `development` \| `production` \| `test`                              |
+| `MCP_ALLOWED_HOSTS`   | No              | dev: `localhost:<PORT>,127.0.0.1:<PORT>` — prod: empty | Comma-separated `Host` values allowed for DNS-rebinding protection   |
+| `MCP_ALLOWED_ORIGINS` | No              | empty                                                  | Comma-separated `Origin` values allowed for DNS-rebinding protection |
+
+DNS-rebinding protection is **enabled automatically whenever `MCP_ALLOWED_HOSTS` or `MCP_ALLOWED_ORIGINS` is non-empty**. In development the allowed-hosts default keeps it on for localhost; in production it is **off unless you set at least one of these variables** (the deployed config sets `MCP_ALLOWED_HOSTS`, see [Deployment](#deployment)).
+
+For **stdio** mode (`stdio.ts`), use `KNOWTIS_API_URL` instead of `API_INTERNAL_URL`, and pass the API key as an env var:
+
+| Variable          | Required | Description                    |
+| ----------------- | -------- | ------------------------------ |
+| `KNOWTIS_API_URL` | Yes      | Knowtis API base URL           |
+| `KNOWTIS_API_KEY` | Yes      | Your MCP API key for this host |
+
+### Source layout
+
+```text
 apps/mcp/src/
-├── index.ts              # HTTP entry point (Hono + @hono/node-server)
-├── stdio.ts              # stdio entry point
-├── server.ts             # MCP server factory (registers tools)
-├── transport.ts          # Hono app with /health and /mcp routes
-├── config.ts             # Zod-validated configuration
+├── index.ts                  # HTTP entry point (Hono + @hono/node-server)
+├── stdio.ts                  # stdio entry point (dev-only)
+├── server.ts                 # MCP server factory (registers tools)
+├── transport.ts              # Hono app: /health, CORS, /mcp (Bearer check + Streamable HTTP)
+├── config.ts                 # Zod-validated configuration
 ├── auth/
-│   ├── auth-service.ts   # API key → JWT exchange + caching
-│   └── token-cache.ts    # In-memory token cache
+│   ├── auth-service.ts       # API key → JWT exchange, SHA-256-keyed cache, scope checks
+│   └── token-cache.ts        # In-memory token cache with expiry
 ├── api-client/
-│   ├── client.ts         # Typed HTTP client for Knowtis API
-│   ├── notes.api.ts      # Notes API methods
-│   └── sharing.api.ts    # Sharing API methods
+│   ├── client.ts             # Typed HTTP client for the Knowtis API
+│   ├── notes.api.ts          # Notes API methods
+│   └── sharing.api.ts        # Sharing API methods
 ├── middleware/
-│   └── logger.ts         # Structured logging
-└── tools/
-    ├── notes.tools.ts    # list-notes, get-note, create-note, update-note, delete-note
-    └── sharing.tools.ts  # get-collaborators, share-note
+│   └── logger.ts             # Structured logging
+├── tools/
+│   ├── notes.tools.ts        # list/get/create/update/delete-note
+│   ├── sharing.tools.ts      # get-collaborators, share-note
+│   ├── wrap-tool-handler.ts  # Auth + scope + logging + dual-result wrapper
+│   └── format-error.ts       # Tool error formatting
+└── utils/
+    └── markdown-to-html.ts   # Markdown → editor HTML for create/update
 ```
 
 ## Deployment
 
 ### Railway
 
-The MCP server can be deployed alongside the API on Railway. Required environment variables:
+The MCP server runs as its own Railway service, configured in [`apps/mcp/railway.toml`](../apps/mcp/railway.toml):
 
-| Variable           | Value                                                                              |
-| ------------------ | ---------------------------------------------------------------------------------- |
-| `API_INTERNAL_URL` | Internal Railway URL of the API service (e.g., `http://api.railway.internal:3333`) |
-| `PORT`             | `3334` (or Railway's assigned port)                                                |
-| `NODE_ENV`         | `production`                                                                       |
+| Setting           | Value                                                                      |
+| ----------------- | -------------------------------------------------------------------------- |
+| `buildCommand`    | `NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp` |
+| `startCommand`    | `node dist/apps/mcp/index.js`                                              |
+| `healthcheckPath` | `/health`                                                                  |
+| `internalPort`    | `3334`                                                                     |
 
-The health check endpoint `GET /health` can be used for Railway's health check configuration.
+The `[env]` block sets `NODE_ENV = "production"`, `PORT = "3334"`, and `MCP_ALLOWED_HOSTS = "mcp.knowtis.app"`. `API_INTERNAL_URL` is provided as a Railway service variable pointing at the API's internal URL (e.g. `http://api.railway.internal:3333`).
 
-### Remote Clients
+Deploys are CI-driven via `railway up` (gated on the `mcp` project being affected on `main`); the `watchPatterns` in `railway.toml` do **not** apply.
 
-For remote deployments, clients connect via the Streamable HTTP transport at `https://your-mcp-server.railway.app/mcp` instead of using stdio. The API key must be passed in the request metadata.
+### DNS-rebinding protection
 
-For stdio-based clients (Claude Desktop, etc.), point the command to the deployed server's stdio entry or use a proxy that bridges stdio to the remote HTTP endpoint.
+Setting `MCP_ALLOWED_HOSTS = "mcp.knowtis.app"` in production turns on the transport's DNS-rebinding protection: it validates the incoming `Host` header against the allow-list so a malicious page can't rebind a local/attacker DNS name to the server. Add `MCP_ALLOWED_ORIGINS` if you also want to pin allowed `Origin` values.
+
+### CORS
+
+The `/mcp` route allows any origin and permits the `Content-Type`, `Authorization`, `Mcp-Session-Id`, and `MCP-Protocol-Version` request headers, exposing `Mcp-Session-Id` back to the client. The API key travels in the standard `Authorization: Bearer` header — the server reads it from that header, not from request metadata.
