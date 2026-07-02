@@ -24,7 +24,16 @@ export function registerNotesTools(
     wrapToolHandler(
       'list-notes',
       authService,
-      (token, { search }) => notesApi.list(token, search),
+      async (token, { search }) => {
+        const notes = await notesApi.list(token, search);
+        return {
+          notes: notes.map(({ id, title, updatedAt }) => ({
+            id,
+            title,
+            updatedAt,
+          })),
+        };
+      },
       defaultApiKey
     )
   );
@@ -38,7 +47,9 @@ export function registerNotesTools(
     wrapToolHandler(
       'get-note',
       authService,
-      (token, { noteId }) => notesApi.get(token, noteId),
+      async (token, { noteId }) => ({
+        note: await notesApi.get(token, noteId),
+      }),
       defaultApiKey
     )
   );
@@ -58,12 +69,13 @@ export function registerNotesTools(
     wrapToolHandler(
       'create-note',
       authService,
-      (token, { title, content }) =>
-        notesApi.create(
+      async (token, { title, content }) => ({
+        note: await notesApi.create(
           token,
           title,
           content ? markdownToHtml(content) : undefined
         ),
+      }),
       defaultApiKey
     )
   );
@@ -84,7 +96,7 @@ export function registerNotesTools(
     wrapToolHandler(
       'update-note',
       authService,
-      (token, { noteId, title, content }) => {
+      async (token, { noteId, title, content }) => {
         const data: { title?: string; content?: string } = {};
         if (title !== undefined) {
           data.title = title;
@@ -92,7 +104,7 @@ export function registerNotesTools(
         if (content !== undefined) {
           data.content = markdownToHtml(content);
         }
-        return notesApi.update(token, noteId, data);
+        return { note: await notesApi.update(token, noteId, data) };
       },
       defaultApiKey
     )

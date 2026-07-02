@@ -71,6 +71,24 @@ describe('wrapToolHandler', () => {
     ]);
   });
 
+  it('should return structuredContent alongside the serialized text block', async () => {
+    const data = { note: { id: '1', title: 'My Note' } };
+    const handler = vi.fn().mockResolvedValue(data);
+    const wrapped = wrapToolHandler(
+      'get-note',
+      authService,
+      handler,
+      TEST_API_KEY
+    );
+
+    const result = await wrapped({ noteId: '1' });
+
+    expect(result.structuredContent).toEqual(data);
+    expect(result.content).toEqual([
+      { type: 'text', text: JSON.stringify(data) },
+    ]);
+  });
+
   it('should call getToken before checkScope (prevents cold cache bypass)', async () => {
     const callOrder: string[] = [];
     authService = createMockAuthService({

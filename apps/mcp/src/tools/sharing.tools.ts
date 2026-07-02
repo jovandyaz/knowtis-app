@@ -20,7 +20,9 @@ export function registerSharingTools(
     wrapToolHandler(
       'get-collaborators',
       authService,
-      (token, { noteId }) => sharingApi.getCollaborators(token, noteId),
+      async (token, { noteId }) => ({
+        collaborators: await sharingApi.getCollaborators(token, noteId),
+      }),
       defaultApiKey
     )
   );
@@ -36,8 +38,10 @@ export function registerSharingTools(
     wrapToolHandler(
       'share-note',
       authService,
-      (token, { noteId, userId, permission }) =>
-        sharingApi.share(token, noteId, userId, permission),
+      async (token, { noteId, userId, permission }) => {
+        await sharingApi.share(token, noteId, userId, permission);
+        return { success: true };
+      },
       defaultApiKey
     )
   );

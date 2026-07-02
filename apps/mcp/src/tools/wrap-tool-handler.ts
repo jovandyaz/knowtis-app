@@ -6,13 +6,14 @@ import { formatError } from './format-error.js';
 interface ToolResult {
   [x: string]: unknown;
   content: Array<{ type: 'text'; text: string }>;
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 
-export function wrapToolHandler<TArgs>(
+export function wrapToolHandler<TArgs, TResult extends Record<string, unknown>>(
   toolName: string,
   authService: AuthService,
-  handler: (token: string, args: TArgs) => Promise<unknown>,
+  handler: (token: string, args: TArgs) => Promise<TResult>,
   fallbackApiKey?: string
 ): (args: TArgs) => Promise<ToolResult> {
   return async (args) => {
@@ -38,6 +39,7 @@ export function wrapToolHandler<TArgs>(
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result) }],
+        structuredContent: result,
       };
     } catch (error) {
       const errorCode =
