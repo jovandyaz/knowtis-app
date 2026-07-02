@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { TokenCache } from './token-cache.js';
 
 const SCOPE_REQUIREMENTS: Record<string, string> = {
@@ -19,11 +21,15 @@ export class AuthService {
     this.tokenCache = new TokenCache();
   }
 
+  private cacheKey(apiKey: string): string {
+    return createHash('sha256').update(apiKey).digest('hex');
+  }
+
   async getToken(apiKey: string): Promise<string> {
-    const prefix = apiKey.slice(0, 24);
+    const cacheKey = this.cacheKey(apiKey);
 
     // Check cache first
-    const cached = this.tokenCache.get(prefix);
+    const cached = this.tokenCache.get(cacheKey);
     if (cached) {
       return cached.token;
     }
@@ -49,7 +55,7 @@ export class AuthService {
     };
 
     // Cache with 1 minute buffer before actual expiry
-    this.tokenCache.set(prefix, {
+    this.tokenCache.set(cacheKey, {
       token: data.accessToken,
       scopes: data.scopes,
       expiresAt: Date.now() + (data.expiresIn - 60) * 1000,
@@ -59,8 +65,7 @@ export class AuthService {
   }
 
   checkScope(apiKey: string, toolName: string): void {
-    const prefix = apiKey.slice(0, 24);
-    const cached = this.tokenCache.get(prefix);
+    const cached = this.tokenCache.get(this.cacheKey(apiKey));
     if (!cached) {
       return;
     } // Will fail at token exchange
