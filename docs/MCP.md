@@ -1,6 +1,6 @@
 # Knowtis MCP Server
 
-Model Context Protocol (MCP) server that lets AI assistants (Claude, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 7 tools for notes CRUD and sharing.
+Model Context Protocol (MCP) server that lets AI assistants (Claude Desktop, Claude Code, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 7 tools for notes CRUD and sharing.
 
 The **hosted server is the primary way to connect**:
 
@@ -28,6 +28,31 @@ Point your client at `https://mcp.knowtis.app/mcp` and send your API key in the 
 claude mcp add --transport http knowtis https://mcp.knowtis.app/mcp \
   --header "Authorization: Bearer knowtis_mcp_..."
 ```
+
+### Claude Desktop
+
+Claude Desktop's custom-connectors UI only supports OAuth — there is no field for an `Authorization` header, so until OAuth ships (F2) bridge through [`mcp-remote`](https://www.npmjs.com/package/mcp-remote). Add this to `claude_desktop_config.json` (**Settings > Developer > Edit Config**) and restart Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "knowtis": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.knowtis.app/mcp",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer knowtis_mcp_..."
+      }
+    }
+  }
+}
+```
+
+The `Authorization:${AUTH_HEADER}` form (no space, value in `env`) works around a Claude Desktop bug on Windows that splits `args` containing spaces.
 
 ### Cursor
 
