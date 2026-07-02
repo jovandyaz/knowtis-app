@@ -213,16 +213,16 @@ pnpm typecheck
 
 HTTP mode (`index.ts`):
 
-| Variable              | Required        | Default                                                | Description                                                          |
-| --------------------- | --------------- | ------------------------------------------------------ | -------------------------------------------------------------------- |
-| `API_INTERNAL_URL`    | Yes (HTTP mode) | —                                                      | Knowtis API base URL                                                 |
-| `PORT`                | No              | `3334`                                                 | HTTP server port                                                     |
-| `MCP_SERVER_NAME`     | No              | `knowtis-mcp`                                          | Server name reported to clients                                      |
-| `NODE_ENV`            | No              | `development`                                          | `development` \| `production` \| `test`                              |
-| `MCP_ALLOWED_HOSTS`   | No              | dev: `localhost:<PORT>,127.0.0.1:<PORT>` — prod: empty | Comma-separated `Host` values allowed for DNS-rebinding protection   |
-| `MCP_ALLOWED_ORIGINS` | No              | empty                                                  | Comma-separated `Origin` values allowed for DNS-rebinding protection |
+| Variable              | Required        | Default                                  | Description                                                          |
+| --------------------- | --------------- | ---------------------------------------- | -------------------------------------------------------------------- |
+| `API_INTERNAL_URL`    | Yes (HTTP mode) | —                                        | Knowtis API base URL                                                 |
+| `PORT`                | No              | `3334`                                   | HTTP server port                                                     |
+| `MCP_SERVER_NAME`     | No              | `knowtis-mcp`                            | Server name reported to clients                                      |
+| `NODE_ENV`            | No              | `development`                            | `development` \| `production` \| `test`                              |
+| `MCP_ALLOWED_HOSTS`   | Yes (prod)      | dev: `localhost:<PORT>,127.0.0.1:<PORT>` | Comma-separated `Host` values allowed for DNS-rebinding protection   |
+| `MCP_ALLOWED_ORIGINS` | No              | empty                                    | Comma-separated `Origin` values allowed for DNS-rebinding protection |
 
-DNS-rebinding protection is **enabled automatically whenever `MCP_ALLOWED_HOSTS` or `MCP_ALLOWED_ORIGINS` is non-empty**. In development the allowed-hosts default keeps it on for localhost; in production it is **off unless you set at least one of these variables** (the deployed config sets `MCP_ALLOWED_HOSTS`, see [Deployment](#deployment)).
+DNS-rebinding protection is **enabled automatically whenever `MCP_ALLOWED_HOSTS` or `MCP_ALLOWED_ORIGINS` is non-empty**. In development the allowed-hosts default keeps it on for localhost. In production the server **refuses to start unless at least one of these variables is set** (the deployed config sets `MCP_ALLOWED_HOSTS`, see [Deployment](#deployment)). When `MCP_ALLOWED_ORIGINS` is set, the CORS `Access-Control-Allow-Origin` on `/mcp` is restricted to the same list; otherwise it stays `*` (auth is a Bearer token, never cookies).
 
 For **stdio** mode (`stdio.ts`), use `KNOWTIS_API_URL` instead of `API_INTERNAL_URL`, and pass the API key as an env var:
 
