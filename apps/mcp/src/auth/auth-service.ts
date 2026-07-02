@@ -28,13 +28,11 @@ export class AuthService {
   async getToken(apiKey: string): Promise<string> {
     const cacheKey = this.cacheKey(apiKey);
 
-    // Check cache first
     const cached = this.tokenCache.get(cacheKey);
     if (cached) {
       return cached.token;
     }
 
-    // Exchange API key for JWT
     const res = await fetch(this.tokenExchangeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -54,7 +52,6 @@ export class AuthService {
       scopes: string;
     };
 
-    // Cache with 1 minute buffer before actual expiry
     this.tokenCache.set(cacheKey, {
       token: data.accessToken,
       scopes: data.scopes,

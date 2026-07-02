@@ -24,7 +24,7 @@ export function createApp(
         'Mcp-Session-Id',
         'MCP-Protocol-Version',
       ],
-      exposeHeaders: ['Mcp-Session-Id'],
+      exposeHeaders: ['Mcp-Session-Id', 'WWW-Authenticate'],
     })
   );
 
@@ -43,8 +43,7 @@ export function createApp(
         },
         401,
         {
-          'WWW-Authenticate':
-            'Bearer realm="knowtis-mcp", error="invalid_token"',
+          'WWW-Authenticate': 'Bearer realm="knowtis-mcp"',
         }
       );
     }

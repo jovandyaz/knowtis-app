@@ -119,6 +119,8 @@ curl -X DELETE http://localhost:3333/api/v1/mcp/keys/{keyId} \
   -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
+Revocation stops new token exchanges immediately; tokens already issued for the key remain valid for up to 15 minutes.
+
 ## Tools
 
 All 7 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
