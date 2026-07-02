@@ -294,11 +294,10 @@ The MCP server runs as its own Railway service, configured in [`apps/mcp/railway
 | `buildCommand`    | `NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp` |
 | `startCommand`    | `node dist/apps/mcp/index.js`                                              |
 | `healthcheckPath` | `/health`                                                                  |
-| `internalPort`    | `3334`                                                                     |
 
-The `[env]` block sets `NODE_ENV = "production"`, `PORT = "3334"`, and `MCP_ALLOWED_HOSTS = "mcp.knowtis.app"`. `API_INTERNAL_URL` is provided as a Railway service variable pointing at the API's internal URL (e.g. `http://api.railway.internal:3333`).
+Railway config-as-code cannot set environment variables (`railway.toml` has no `[env]` section). The `deploy-mcp` job in `.github/workflows/ci.yml` pins `NODE_ENV=production` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` on the service via `railway variable set` before every `railway up`. `API_INTERNAL_URL` is a Railway service variable pointing at the API's internal URL (e.g. `http://api.railway.internal:3333`).
 
-Deploys are CI-driven via `railway up` (gated on the `mcp` project being affected on `main`); the `watchPatterns` in `railway.toml` do **not** apply.
+Deploys are CI-driven via `railway up` (gated on the `mcp` project being affected on `main`); the `watchPatterns` in `railway.toml` do **not** apply. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
 
 ### DNS-rebinding protection
 
