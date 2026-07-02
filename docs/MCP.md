@@ -181,16 +181,19 @@ The **stdio** entry point (`dist/apps/mcp/stdio.js`) is **for local development 
 ### Run the server
 
 ```bash
-# 1. Start the API backend (port 3333)
+# 1. Create the local env file (the serve target reads apps/mcp/.env)
+cp apps/mcp/.env.example apps/mcp/.env
+
+# 2. Start the API backend (port 3333)
 pnpm dev:api
 
-# 2. Serve the MCP server locally
+# 3. Serve the MCP server locally
 pnpm nx serve mcp
 ```
 
 The server exposes:
 
-- `GET /health` — Health check, returns `{ status: "ok", version: "0.1.0" }`
+- `GET /health` — Health check, returns `{ status: "ok", version: "<package.json version>" }`
 - `ALL /mcp` — Streamable HTTP transport (stateless; each request spins up a fresh transport)
 
 The server version reported to clients (and on `/health`) comes from `apps/mcp/package.json` — there is no version env var.
