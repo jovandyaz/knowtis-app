@@ -23,9 +23,9 @@ function isOauthPath(path: string): boolean {
 }
 
 /**
- * Forwards /oauth/* and the root well-knowns to oidc-provider, resolving the
- * provider handle and the mcp_oauth flag per request so flipping the flag
- * needs no restart. Anything not handled falls through to Nest's router.
+ * Forwards /oauth/* and the root well-knowns to oidc-provider, checking the
+ * mcp_oauth flag per request so flipping it needs no restart. Anything not
+ * handled falls through to Nest's router.
  *
  * oidc-provider derives its mount prefix from originalUrl minus url, so the
  * /oauth prefix is stripped from url (and prepended to originalUrl for the
@@ -33,21 +33,19 @@ function isOauthPath(path: string): boolean {
  * rendered endpoint URL is absolute and /oauth-prefixed.
  */
 export function createOidcMount(app: INestApplication): RequestHandler {
+  const handle = app.get<OidcProviderHandle | null>(OAUTH_PROVIDER);
+  const flags = app.get(FeatureFlagsService);
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      if (!isOauthPath(req.path)) {
+      if (!handle || !isOauthPath(req.path)) {
         return next();
       }
-      const handle = app.get<OidcProviderHandle | null>(OAUTH_PROVIDER);
-      if (!handle) {
-        return next();
-      }
-      const flags = app.get(FeatureFlagsService);
       if (!(await flags.isEnabled(MCP_OAUTH_FLAG))) {
         return next();
       }
       if (req.path.startsWith(OAUTH_PREFIX)) {
-        req.url = req.url.slice(OAUTH_PREFIX.length) || '/';
+        const stripped = req.url.slice(OAUTH_PREFIX.length);
+        req.url = stripped.startsWith('/') ? stripped : `/${stripped}`;
       } else {
         req.originalUrl = `${OAUTH_PREFIX}${req.url}`;
       }

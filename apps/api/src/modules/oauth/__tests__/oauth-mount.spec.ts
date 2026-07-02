@@ -198,6 +198,36 @@ describe('OIDC mount (provider available)', () => {
     expect(on.status).toBe(200);
   });
 
+  it('should let oidc-provider read the raw body on /oauth/token', async () => {
+    harness.flags.isEnabled.mockResolvedValue(true);
+
+    const res = await fetch(`${harness.base}/oauth/token`, {
+      method: 'POST',
+      headers: {
+        ...PROXY_HEADERS,
+        'content-type': 'application/x-www-form-urlencoded',
+      },
+      body: 'grant_type=authorization_code&code=abc&redirect_uri=https%3A%2F%2Fclient.example.com%2Fcb',
+      signal: AbortSignal.timeout(5000),
+    });
+    const body = (await res.json()) as { error?: string };
+
+    expect(res.status).toBe(400);
+    expect(['invalid_request', 'invalid_client']).toContain(body.error);
+  });
+
+  it('should fall through to Nest 404 for non-oauth paths sharing the prefix', async () => {
+    harness.flags.isEnabled.mockResolvedValue(true);
+
+    const res = await fetch(`${harness.base}/oauthX`, {
+      headers: PROXY_HEADERS,
+    });
+    const body = (await res.json()) as { statusCode?: number };
+
+    expect(res.status).toBe(404);
+    expect(body.statusCode).toBe(404);
+  });
+
   it('should still parse JSON bodies on non-oauth routes', async () => {
     harness.flags.isEnabled.mockResolvedValue(true);
 
@@ -210,6 +240,20 @@ describe('OIDC mount (provider available)', () => {
 
     expect(res.status).toBe(201);
     expect(body.received).toEqual({ hello: 'world' });
+  });
+
+  it('should still parse urlencoded bodies on non-oauth routes', async () => {
+    harness.flags.isEnabled.mockResolvedValue(true);
+
+    const res = await fetch(`${harness.base}/api/v1/echo`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'hello=world&count=1',
+    });
+    const body = (await res.json()) as { received: Record<string, unknown> };
+
+    expect(res.status).toBe(201);
+    expect(body.received).toEqual({ hello: 'world', count: '1' });
   });
 });
 
