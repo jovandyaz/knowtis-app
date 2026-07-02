@@ -6,20 +6,62 @@ import type { AuthService } from '../auth/auth-service.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
+export const noteSummaryShape = {
+  id: z.string(),
+  title: z.string(),
+  updatedAt: z.string(),
+};
+
+export const noteShape = {
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  ownerId: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+};
+
+const READ_ONLY = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
+
+const CREATE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const;
+
+const MUTATING_IDEMPOTENT = {
+  readOnlyHint: false,
+  destructiveHint: true,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
+
 export function registerNotesTools(
   server: McpServer,
   notesApi: NotesApi,
   authService: AuthService,
   defaultApiKey?: string
 ): void {
-  server.tool(
+  server.registerTool(
     'list-notes',
-    "List user's notes with optional search filter. Returns title, id, and last modified date.",
     {
-      search: z
-        .string()
-        .optional()
-        .describe('Search query to filter notes by title or content'),
+      title: 'List Notes',
+      description:
+        "List user's notes with optional search filter. Returns title, id, and last modified date.",
+      inputSchema: {
+        search: z
+          .string()
+          .optional()
+          .describe('Search query to filter notes by title or content'),
+      },
+      outputSchema: { notes: z.array(z.object(noteSummaryShape)) },
+      annotations: READ_ONLY,
     },
     wrapToolHandler(
       'list-notes',
@@ -38,11 +80,16 @@ export function registerNotesTools(
     )
   );
 
-  server.tool(
+  server.registerTool(
     'get-note',
-    'Get the full content of a specific note by ID.',
     {
-      noteId: z.string().uuid().describe('The UUID of the note to retrieve'),
+      title: 'Get Note',
+      description: 'Get the full content of a specific note by ID.',
+      inputSchema: {
+        noteId: z.string().uuid().describe('The UUID of the note to retrieve'),
+      },
+      outputSchema: { note: z.object(noteShape) },
+      annotations: READ_ONLY,
     },
     wrapToolHandler(
       'get-note',
@@ -54,17 +101,23 @@ export function registerNotesTools(
     )
   );
 
-  server.tool(
+  server.registerTool(
     'create-note',
-    'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
     {
-      title: z.string().min(1).describe('Title of the new note'),
-      content: z
-        .string()
-        .optional()
-        .describe(
-          'Note content in Markdown format. Use standard Markdown syntax for rich formatting.'
-        ),
+      title: 'Create Note',
+      description:
+        'Create a new note with a title and optional Markdown content. Supports: headings (#, ##, ###), **bold**, *italic*, ~~strikethrough~~, `inline code`, fenced code blocks (```lang), [links](url), lists (-, 1.), task lists (- [ ], - [x]), blockquotes (>), horizontal rules (---), GFM tables (| col | col |), highlight (==text==), superscript (^text^), subscript (~text~), and Mermaid diagrams (```mermaid ... ```).',
+      inputSchema: {
+        title: z.string().min(1).describe('Title of the new note'),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            'Note content in Markdown format. Use standard Markdown syntax for rich formatting.'
+          ),
+      },
+      outputSchema: { note: z.object(noteShape) },
+      annotations: CREATE,
     },
     wrapToolHandler(
       'create-note',
@@ -80,18 +133,24 @@ export function registerNotesTools(
     )
   );
 
-  server.tool(
+  server.registerTool(
     'update-note',
-    'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, highlight, super/subscript, Mermaid diagrams).',
     {
-      noteId: z.string().uuid().describe('The UUID of the note to update'),
-      title: z.string().optional().describe('New title'),
-      content: z
-        .string()
-        .optional()
-        .describe(
-          'New content in Markdown format. This replaces the entire note content.'
-        ),
+      title: 'Update Note',
+      description:
+        'Update the title or content of an existing note. Content should be in Markdown format (same syntax supported as create-note: headings, bold/italic/strike/code, lists, task lists, tables, blockquotes, highlight, super/subscript, Mermaid diagrams).',
+      inputSchema: {
+        noteId: z.string().uuid().describe('The UUID of the note to update'),
+        title: z.string().optional().describe('New title'),
+        content: z
+          .string()
+          .optional()
+          .describe(
+            'New content in Markdown format. This replaces the entire note content.'
+          ),
+      },
+      outputSchema: { note: z.object(noteShape) },
+      annotations: MUTATING_IDEMPOTENT,
     },
     wrapToolHandler(
       'update-note',
@@ -110,11 +169,16 @@ export function registerNotesTools(
     )
   );
 
-  server.tool(
+  server.registerTool(
     'delete-note',
-    'Permanently delete a note. This action cannot be undone.',
     {
-      noteId: z.string().uuid().describe('The UUID of the note to delete'),
+      title: 'Delete Note',
+      description: 'Permanently delete a note. This action cannot be undone.',
+      inputSchema: {
+        noteId: z.string().uuid().describe('The UUID of the note to delete'),
+      },
+      outputSchema: { success: z.boolean(), message: z.string() },
+      annotations: MUTATING_IDEMPOTENT,
     },
     wrapToolHandler(
       'delete-note',
