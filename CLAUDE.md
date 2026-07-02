@@ -14,6 +14,21 @@ Knowtis is a real-time collaborative notes platform built as an Nx monorepo with
 - **Always consult official docs** — before implementing or configuring anything involving external tools, libraries, or services (Vercel, Railway, Nx, etc.), AND before debugging library-specific issues (auth flows, init APIs, error codes), fetch the latest official documentation using Context7 MCP, web search, or CLI help. Never assume behavior from memory alone.
 - **Minimal comments** — default to no inline comments. Only write JSDoc on exported APIs, `TODO`/`FIXME` markers, or comments that explain a non-obvious WHY (hidden constraint, subtle invariant, framework quirk workaround). Never paraphrase code, never reference the current task/PR/fix in comments.
 
+## Claude Code Plugins
+
+This repo uses the internal [knowtis-plugins](https://github.com/jovandyaz/knowtis-plugins) marketplace. `.claude/settings.json` auto-registers it and enables four plugins (`standards`, `db-ops`, `delivery`, `domain`), but plugins from a GitHub source load only after a one-time install per machine:
+
+```bash
+claude plugin install standards@knowtis-plugins
+claude plugin install db-ops@knowtis-plugins
+claude plugin install delivery@knowtis-plugins
+claude plugin install domain@knowtis-plugins
+```
+
+They then load automatically every session. The `standards` plugin provides the minimal-comments PostToolUse hook (formerly `.claude/hooks/check-comments.mjs`), so install it to keep that check active. `domain` ships the architecture/copilot/collaboration skills plus the read-only `knowtis-architect` agent.
+
+**Other agents (Codex, OpenCode, Cursor, Gemini):** no install needed — the same skills are vendored in `.agents/skills/` and discovered on checkout. Re-sync after a marketplace update with `node scripts/sync-agents.mjs --install-repo <this-repo>` run from the knowtis-plugins repo.
+
 ## Essential Commands
 
 ```bash
