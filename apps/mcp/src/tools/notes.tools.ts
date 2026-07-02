@@ -4,6 +4,11 @@ import { z } from 'zod';
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
+import {
+  DESTRUCTIVE_IDEMPOTENT,
+  NON_DESTRUCTIVE,
+  READ_ONLY,
+} from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
 const noteSummaryShape = {
@@ -20,27 +25,6 @@ const noteShape = {
   createdAt: z.string(),
   updatedAt: z.string(),
 };
-
-const READ_ONLY = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
-
-const CREATE = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: false,
-  openWorldHint: false,
-} as const;
-
-const MUTATING_IDEMPOTENT = {
-  readOnlyHint: false,
-  destructiveHint: true,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
 
 export function registerNotesTools(
   server: McpServer,
@@ -117,7 +101,7 @@ export function registerNotesTools(
           ),
       },
       outputSchema: { note: z.object(noteShape) },
-      annotations: CREATE,
+      annotations: NON_DESTRUCTIVE,
     },
     wrapToolHandler(
       'create-note',
@@ -150,7 +134,7 @@ export function registerNotesTools(
           ),
       },
       outputSchema: { note: z.object(noteShape) },
-      annotations: MUTATING_IDEMPOTENT,
+      annotations: DESTRUCTIVE_IDEMPOTENT,
     },
     wrapToolHandler(
       'update-note',
@@ -178,7 +162,7 @@ export function registerNotesTools(
         noteId: z.string().uuid().describe('The UUID of the note to delete'),
       },
       outputSchema: { success: z.boolean(), message: z.string() },
-      annotations: MUTATING_IDEMPOTENT,
+      annotations: DESTRUCTIVE_IDEMPOTENT,
     },
     wrapToolHandler(
       'delete-note',
