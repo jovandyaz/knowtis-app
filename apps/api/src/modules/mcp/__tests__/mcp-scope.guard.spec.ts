@@ -247,8 +247,12 @@ describe('McpScopeGuard', () => {
 });
 
 describe('McpScopeGuard with ES256 OAuth tokens', () => {
+  const RESOURCE_URL = 'https://mcp.knowtis.app/mcp';
   let jwks: string;
-  let signOauthToken: (scopes: string) => Promise<string>;
+  let signOauthToken: (
+    scopes: string,
+    aud?: string | string[]
+  ) => Promise<string>;
 
   beforeAll(async () => {
     const { privateKey } = await generateKeyPair('ES256', {
@@ -259,8 +263,8 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
     jwk.use = 'sig';
     jwk.kid = 'test-key';
     jwks = JSON.stringify({ keys: [jwk] });
-    signOauthToken = (scopes: string) =>
-      new SignJWT({ source: 'mcp', scopes })
+    signOauthToken = (scopes: string, aud: string | string[] = RESOURCE_URL) =>
+      new SignJWT({ source: 'mcp', scopes, aud })
         .setProtectedHeader({ alg: 'ES256' })
         .setSubject('user-1')
         .setExpirationTime('15m')
@@ -273,11 +277,12 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
     } as unknown as Reflector;
     const configService = {
       getOrThrow: vi.fn().mockReturnValue('unused-hs-secret'),
-      get: vi
-        .fn()
-        .mockImplementation((key: string) =>
-          key === 'OAUTH_JWKS' ? jwks : undefined
-        ),
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === 'OAUTH_JWKS') {
+          return jwks;
+        }
+        return key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined;
+      }),
     } as unknown as ConfigService;
     // Same module options as McpModule's JwtModule.register — the guard's ES256
     // verify relies on per-call options taking precedence over these.
@@ -326,5 +331,47 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
     await expect(
       guard.canActivate(contextWithToken(token) as never)
     ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should reject a valid-signature ES256 token with a foreign audience instead of passing it through', async () => {
+    const guard = createRealGuard(MCP_SCOPES.READ);
+    const token = await signOauthToken(
+      'notes:read',
+      'https://other-service.example'
+    );
+
+    await expect(
+      guard.canActivate(contextWithToken(token) as never)
+    ).rejects.toThrow('audience mismatch');
+  });
+
+  it('should reject an ES256 token without an aud claim', async () => {
+    const guard = createRealGuard(MCP_SCOPES.READ);
+    const token = await new SignJWT({ source: 'mcp', scopes: 'notes:read' })
+      .setProtectedHeader({ alg: 'ES256' })
+      .setSubject('user-1')
+      .setExpirationTime('15m')
+      .sign(
+        (await import('node:crypto')).createPrivateKey({
+          key: JSON.parse(jwks).keys[0],
+          format: 'jwk',
+        })
+      );
+
+    await expect(
+      guard.canActivate(contextWithToken(token) as never)
+    ).rejects.toThrow('audience mismatch');
+  });
+
+  it('should accept an aud array that contains the resource url', async () => {
+    const guard = createRealGuard(MCP_SCOPES.READ);
+    const token = await signOauthToken('notes:read', [
+      RESOURCE_URL,
+      'https://sibling.example',
+    ]);
+
+    await expect(
+      guard.canActivate(contextWithToken(token) as never)
+    ).resolves.toBe(true);
   });
 });

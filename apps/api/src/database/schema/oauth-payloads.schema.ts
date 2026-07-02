@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   index,
   jsonb,
@@ -25,6 +26,12 @@ export const oauthPayloads = pgTable(
     index('idx_oauth_payloads_uid').on(table.uid),
     index('idx_oauth_payloads_user_code').on(table.userCode),
     index('idx_oauth_payloads_expires').on(table.expiresAt),
+    index('idx_oauth_payloads_grant_account_client')
+      .on(
+        sql`(${table.payload} ->> 'accountId')`,
+        sql`(${table.payload} ->> 'clientId')`
+      )
+      .where(sql`${table.model} = 'Grant'`),
   ]
 );
 

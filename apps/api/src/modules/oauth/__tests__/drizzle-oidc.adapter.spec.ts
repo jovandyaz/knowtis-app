@@ -84,6 +84,32 @@ describe.runIf(DB_AVAILABLE)('DrizzleOidcAdapter', () => {
     expect(await adapter.find('at-1')).toBeUndefined();
   });
 
+  it('should store a permanent row when expiresIn is omitted', async () => {
+    const adapter = factory('Grant');
+    await adapter.upsert('grant-perm', { accountId: 'acc-1' });
+
+    const [row] = await db
+      .select()
+      .from(oauthPayloads)
+      .where(inArray(oauthPayloads.id, ['grant-perm']));
+    expect(row.expiresAt).toBeNull();
+    await expect(adapter.find('grant-perm')).resolves.toMatchObject({
+      accountId: 'acc-1',
+    });
+  });
+
+  it('should treat expiresIn of zero as already expired, not permanent', async () => {
+    const adapter = factory('AccessToken');
+    await adapter.upsert('at-zero', { accountId: 'acc-1' }, 0);
+
+    const [row] = await db
+      .select()
+      .from(oauthPayloads)
+      .where(inArray(oauthPayloads.id, ['at-zero']));
+    expect(row.expiresAt).not.toBeNull();
+    await expect(adapter.find('at-zero')).resolves.toBeUndefined();
+  });
+
   it('should replace the payload for an existing (model,id) on upsert', async () => {
     const adapter = factory('AccessToken');
     await adapter.upsert('at-2', { scope: 'openid' }, 3600);

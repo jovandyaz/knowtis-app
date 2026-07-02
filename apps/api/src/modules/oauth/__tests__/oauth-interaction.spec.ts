@@ -291,7 +291,9 @@ describe('OauthInteractionController', () => {
 
   it('should submit login unconditionally even when an oidc session matches', async () => {
     harness = await buildHarness(makeProvider());
-    const interaction = makeInteraction();
+    const interaction = makeInteraction({
+      session: { accountId: TEST_USER.id },
+    });
     harness.provider.Interaction.find.mockResolvedValue(interaction);
 
     await postConfirm(harness.base, ['notes:read']);
@@ -448,6 +450,19 @@ describe('OauthInteractionController', () => {
     expect(harness.provider.Grant.adapter.destroy).toHaveBeenCalledWith(
       'session-grant'
     );
+  });
+
+  it('should 409 confirm when the interaction was already resolved', async () => {
+    harness = await buildHarness(makeProvider());
+    const interaction = makeInteraction({
+      result: { login: { accountId: TEST_USER.id } },
+    });
+    harness.provider.Interaction.find.mockResolvedValue(interaction);
+
+    const res = await postConfirm(harness.base, ['notes:read']);
+
+    expect(res.status).toBe(409);
+    expect(interaction.persist).not.toHaveBeenCalled();
   });
 
   it('should reject confirm bodies with unknown scopes', async () => {

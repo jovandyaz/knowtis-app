@@ -1,5 +1,9 @@
 import { createPublicKey, type JsonWebKey } from 'node:crypto';
 
+import { Logger } from '@nestjs/common';
+
+const logger = new Logger('OauthPublicKeys');
+
 function isEcJwk(value: unknown): value is JsonWebKey {
   return (
     typeof value === 'object' &&
@@ -24,11 +28,13 @@ export function deriveOauthPublicKeys(rawJwks: string | undefined): string[] {
   try {
     parsed = JSON.parse(rawJwks);
   } catch {
+    logger.warn('OAUTH_JWKS is not valid JSON; ES256 verification disabled');
     return [];
   }
 
   const keys = (parsed as { keys?: unknown })?.keys;
   if (!Array.isArray(keys)) {
+    logger.warn('OAUTH_JWKS has no keys array; ES256 verification disabled');
     return [];
   }
 
@@ -43,7 +49,10 @@ export function deriveOauthPublicKeys(rawJwks: string | undefined): string[] {
         format: 'pem',
       });
       pems.push(typeof pem === 'string' ? pem : pem.toString('utf8'));
-    } catch {
+    } catch (error) {
+      logger.warn(
+        `Skipping underivable JWK (kid: ${String((key as { kid?: unknown }).kid ?? 'unknown')}): ${error instanceof Error ? error.message : String(error)}`
+      );
       continue;
     }
   }

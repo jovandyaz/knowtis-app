@@ -1,0 +1,1 @@
+CREATE INDEX "idx_oauth_payloads_grant_account_client" ON "oauth_payloads" USING btree (("payload" ->> 'accountId'),("payload" ->> 'clientId')) WHERE "oauth_payloads"."model" = 'Grant';

@@ -2,6 +2,7 @@ import { CurrentUser, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   Body,
+  ConflictException,
   Controller,
   Get,
   Inject,
@@ -200,6 +201,11 @@ export class OauthInteractionController {
     const interaction = await provider.Interaction.find(uid);
     if (!interaction) {
       throw new NotFoundException('interaction not found');
+    }
+    // A fresh or resumed interaction carries prior rounds in lastSubmission,
+    // never in result — a set result means this uid was already decided.
+    if (interaction.result) {
+      throw new ConflictException('interaction already resolved');
     }
     return interaction;
   }

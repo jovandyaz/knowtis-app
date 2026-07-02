@@ -94,7 +94,6 @@ export async function createOidcProvider(
       token_endpoint_auth_method: 'none',
       id_token_signed_response_alg: 'ES256',
     },
-    clientBasedCORS: () => true,
     ttl: {
       AccessToken: 3600,
       AuthorizationCode: 600,

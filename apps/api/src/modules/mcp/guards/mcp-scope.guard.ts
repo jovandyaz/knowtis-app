@@ -17,6 +17,7 @@ import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp-token';
 export class McpScopeGuard implements CanActivate {
   private readonly jwtSecret: string;
   private readonly es256PublicKey: string | undefined;
+  private readonly resourceAudience: string | undefined;
 
   constructor(
     private readonly reflector: Reflector,
@@ -27,6 +28,7 @@ export class McpScopeGuard implements CanActivate {
     this.es256PublicKey = deriveOauthPublicKeys(
       configService.get('OAUTH_JWKS')
     )[0];
+    this.resourceAudience = configService.get('MCP_RESOURCE_URL');
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -87,13 +89,33 @@ export class McpScopeGuard implements CanActivate {
       return null;
     }
 
+    let claims: McpTokenClaims & { aud?: string | string[] };
     try {
-      return await this.jwtService.verifyAsync<McpTokenClaims>(token, {
+      claims = await this.jwtService.verifyAsync<
+        McpTokenClaims & { aud?: string | string[] }
+      >(token, {
         publicKey: this.es256PublicKey,
         algorithms: ['ES256'],
       });
     } catch {
       return null;
     }
+
+    // Audience is enforced AFTER signature verification: folding it into
+    // verifyAsync would turn a wrong-aud token into a verify failure, which
+    // falls through to JwtAuthGuard as a full session — an escalation.
+    if (!this.hasResourceAudience(claims.aud)) {
+      throw new ForbiddenException('MCP token audience mismatch');
+    }
+    return claims;
+  }
+
+  private hasResourceAudience(aud: string | string[] | undefined): boolean {
+    if (!this.resourceAudience) {
+      return false;
+    }
+    return Array.isArray(aud)
+      ? aud.includes(this.resourceAudience)
+      : aud === this.resourceAudience;
   }
 }

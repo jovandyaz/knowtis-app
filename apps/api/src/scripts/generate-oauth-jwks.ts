@@ -8,6 +8,9 @@ async function main(): Promise<void> {
   jwk.kid = randomUUID();
   jwk.alg = 'ES256';
   jwk.use = 'sig';
+  process.stderr.write(
+    'WARNING: output contains PRIVATE key material — pipe it only into a secret store, never into logs, files, or version control.\n'
+  );
   process.stdout.write(`${JSON.stringify({ keys: [jwk] })}\n`);
 }
 

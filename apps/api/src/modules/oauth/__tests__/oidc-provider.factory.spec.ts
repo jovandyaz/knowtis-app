@@ -120,6 +120,14 @@ describe('refreshTokenTtl', () => {
   it('should grant a 90d window to opaque (locally registered) client_ids', () => {
     expect(refreshTokenTtl({ clientId: 'abc123' })).toBe(7776000);
   });
+
+  it('should treat any http-prefixed client_id as remote, even non-URLs', () => {
+    expect(refreshTokenTtl({ clientId: 'httpfoo' })).toBe(2592000);
+  });
+
+  it('should treat an empty client_id as locally registered', () => {
+    expect(refreshTokenTtl({ clientId: '' })).toBe(7776000);
+  });
 });
 
 describe('shouldIssueRefreshToken', () => {
@@ -138,6 +146,10 @@ describe('shouldIssueRefreshToken', () => {
 
   it('should not issue when the client cannot use the refresh_token grant', () => {
     expect(shouldIssueRefreshToken(denyingClient, offlineCode)).toBe(false);
+  });
+
+  it('should not issue when both the grant is denied and offline_access is absent', () => {
+    expect(shouldIssueRefreshToken(denyingClient, onlineCode)).toBe(false);
   });
 });
 

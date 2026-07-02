@@ -58,9 +58,10 @@ export class DrizzleOidcAdapter {
     const grantId = optionalString(payload['grantId']);
     const userCode = optionalString(payload['userCode']);
     const uid = optionalString(payload['uid']);
-    const expiresAt = expiresIn
-      ? new Date(Date.now() + expiresIn * 1000)
-      : null;
+    const expiresAt =
+      typeof expiresIn === 'number'
+        ? new Date(Date.now() + expiresIn * 1000)
+        : null;
 
     await this.db
       .insert(oauthPayloads)
