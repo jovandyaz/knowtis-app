@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { SharingApi } from '../api-client/sharing.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import { NON_DESTRUCTIVE_IDEMPOTENT, READ_ONLY } from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
 const collaboratorShape = {
@@ -11,20 +12,6 @@ const collaboratorShape = {
   name: z.string(),
   permission: z.enum(['owner', 'viewer', 'editor']),
 };
-
-const READ_ONLY = {
-  readOnlyHint: true,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
-
-const SHARE = {
-  readOnlyHint: false,
-  destructiveHint: false,
-  idempotentHint: true,
-  openWorldHint: false,
-} as const;
 
 export function registerSharingTools(
   server: McpServer,
@@ -68,7 +55,7 @@ export function registerSharingTools(
         permission: z.enum(['viewer', 'editor']).describe('Permission level'),
       },
       outputSchema: { success: z.boolean() },
-      annotations: SHARE,
+      annotations: NON_DESTRUCTIVE_IDEMPOTENT,
     },
     wrapToolHandler(
       'share-note',
