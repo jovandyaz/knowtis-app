@@ -14,18 +14,14 @@ export function wrapToolHandler<TArgs>(
   authService: AuthService,
   handler: (token: string, args: TArgs) => Promise<unknown>,
   fallbackApiKey?: string
-): (
-  args: TArgs,
-  extra: { _meta?: Record<string, unknown> }
-) => Promise<ToolResult> {
-  return async (args, extra) => {
-    const apiKey =
-      (extra._meta?.apiKey as string | undefined) ?? fallbackApiKey;
+): (args: TArgs) => Promise<ToolResult> {
+  return async (args) => {
+    const apiKey = fallbackApiKey;
 
     if (!apiKey) {
       return formatError(
         new Error(
-          'Missing API key. Pass apiKey via _meta or KNOWTIS_API_KEY env var.'
+          'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
         )
       );
     }

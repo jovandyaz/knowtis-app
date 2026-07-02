@@ -6,7 +6,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import type { AppConfig } from './config.js';
 
 export function createApp(
-  serverFactory: (apiKey?: string) => McpServer,
+  serverFactory: (apiKey: string) => McpServer,
   config: AppConfig
 ): Hono {
   const app = new Hono();
@@ -19,6 +19,20 @@ export function createApp(
 
   app.all('/mcp', async (c) => {
     const apiKey = extractBearerToken(c.req.raw.headers);
+    if (!apiKey) {
+      return c.json(
+        {
+          error: 'unauthorized',
+          message:
+            'Provide a Knowtis MCP API key as a Bearer token. Create one in the Knowtis app under Settings > Integrations.',
+        },
+        401,
+        {
+          'WWW-Authenticate':
+            'Bearer realm="knowtis-mcp", error="invalid_token"',
+        }
+      );
+    }
     const server = serverFactory(apiKey);
     const transport = new WebStandardStreamableHTTPServerTransport({});
     await server.connect(transport);
