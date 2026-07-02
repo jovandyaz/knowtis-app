@@ -18,10 +18,11 @@ export {
   oauthQueryKeys,
   useOauthGrants,
   useRevokeGrant,
+  useConnectedAppsAvailable,
   oauthGrantsQueryKeys,
 } from './oauth.hooks';
 
-export { classifyConsentError } from './oauth.errors';
+export { classifyConsentError, isOauthDisabledError } from './oauth.errors';
 export type {
   ConsentDecisionError,
   ConsentDecisionErrorKind,

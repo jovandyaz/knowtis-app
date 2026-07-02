@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
 
-import { classifyConsentError } from './oauth.errors';
+import { classifyConsentError, isOauthDisabledError } from './oauth.errors';
 
 describe('classifyConsentError', () => {
   it('marks a 409 (already resolved) as terminal', () => {
@@ -43,5 +43,21 @@ describe('classifyConsentError', () => {
       kind: 'retryable',
       terminal: false,
     });
+  });
+});
+
+describe('isOauthDisabledError', () => {
+  it('is true for a 404 ApiClientError', () => {
+    expect(isOauthDisabledError(new ApiClientError('Not Found', 404))).toBe(
+      true
+    );
+  });
+
+  it('is false for other statuses, plain errors, and no error', () => {
+    expect(isOauthDisabledError(new ApiClientError('Server Error', 503))).toBe(
+      false
+    );
+    expect(isOauthDisabledError(new Error('Network down'))).toBe(false);
+    expect(isOauthDisabledError(null)).toBe(false);
   });
 });

@@ -18,6 +18,8 @@ describe('OauthModule bootstrap', () => {
     const { OauthModule } = await import('../oauth.module');
     const { OauthInteractionController } =
       await import('../oauth-interaction.controller');
+    const { OauthGrantsController } =
+      await import('../oauth-grants.controller');
 
     const moduleRef = await Test.createTestingModule({
       imports: [
@@ -28,6 +30,7 @@ describe('OauthModule bootstrap', () => {
     }).compile();
 
     expect(moduleRef.get(OauthInteractionController)).toBeDefined();
+    expect(moduleRef.get(OauthGrantsController)).toBeDefined();
     expect(moduleRef.get(OAUTH_PROVIDER)).toBeNull();
     await moduleRef.close();
   });

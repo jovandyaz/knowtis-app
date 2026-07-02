@@ -6,18 +6,20 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { oauthApi } from '@knowtis/api-client';
+import { ApiClientError, oauthApi } from '@knowtis/api-client';
 
 import {
   oauthGrantsQueryKeys,
   oauthQueryKeys,
+  useConnectedAppsAvailable,
   useConsentDecision,
   useOauthGrants,
   useOauthInteraction,
   useRevokeGrant,
 } from './oauth.hooks';
 
-vi.mock('@knowtis/api-client', () => ({
+vi.mock('@knowtis/api-client', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   oauthApi: {
     getInteraction: vi.fn(),
     confirm: vi.fn(),
@@ -248,6 +250,52 @@ describe('oauth hooks', () => {
         oauthGrantsQueryKeys.list()
       );
       expect(cached?.map((g) => g.grantId)).toEqual(['grant-1']);
+    });
+  });
+
+  describe('useConnectedAppsAvailable', () => {
+    it('turns unavailable when the grants request 404s (flag off)', async () => {
+      vi.mocked(oauthApi.getGrants).mockRejectedValue(
+        new ApiClientError('Not Found', 404)
+      );
+
+      const { result } = renderHook(() => useConnectedAppsAvailable(), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(result.current).toBe(false));
+    });
+
+    it('stays available when the grants list is empty', async () => {
+      vi.mocked(oauthApi.getGrants).mockResolvedValue({ grants: [] });
+
+      const { result } = renderHook(
+        () => ({
+          available: useConnectedAppsAvailable(),
+          grants: useOauthGrants(),
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.grants.isSuccess).toBe(true));
+      expect(result.current.available).toBe(true);
+    });
+
+    it('stays available on non-404 failures', async () => {
+      vi.mocked(oauthApi.getGrants).mockRejectedValue(
+        new ApiClientError('Server Error', 503)
+      );
+
+      const { result } = renderHook(
+        () => ({
+          available: useConnectedAppsAvailable(),
+          grants: useOauthGrants(),
+        }),
+        { wrapper }
+      );
+
+      await waitFor(() => expect(result.current.grants.isError).toBe(true));
+      expect(result.current.available).toBe(true);
     });
   });
 });

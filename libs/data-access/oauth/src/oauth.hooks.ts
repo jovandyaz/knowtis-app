@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { oauthApi } from '@knowtis/api-client';
 
+import { isOauthDisabledError } from './oauth.errors';
 import {
   consentDecisionResultSchema,
   interactionDetailsSchema,
@@ -101,4 +102,13 @@ export function useRevokeGrant() {
       });
     },
   });
+}
+
+/**
+ * False only while the grants endpoint 404s (MCP OAuth flag off). An empty
+ * grants list or a transient failure keeps the feature visible.
+ */
+export function useConnectedAppsAvailable(): boolean {
+  const { error } = useOauthGrants();
+  return !isOauthDisabledError(error);
 }

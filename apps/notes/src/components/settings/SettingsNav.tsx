@@ -14,6 +14,7 @@ import {
   User,
 } from 'lucide-react';
 
+import { useConnectedAppsAvailable } from '@knowtis/data-access-oauth';
 import { cn } from '@knowtis/design-system';
 
 const NAV_ITEMS: { section: SettingsSection; icon: ElementType }[] = [
@@ -38,6 +39,11 @@ export function SettingsNav({
   onSectionChange,
 }: SettingsNavProps) {
   const { t } = useTranslation('common');
+  const connectedAppsAvailable = useConnectedAppsAvailable();
+
+  const navItems = NAV_ITEMS.filter(
+    ({ section }) => section !== 'connectedApps' || connectedAppsAvailable
+  );
 
   return (
     <nav
@@ -46,7 +52,7 @@ export function SettingsNav({
         'flex overflow-x-auto border-b border-(--border) px-2 sm:w-44 sm:flex-col sm:overflow-x-visible sm:border-b-0 sm:border-r sm:px-0 sm:py-2'
       )}
     >
-      {NAV_ITEMS.map(({ section, icon: Icon }) => (
+      {navItems.map(({ section, icon: Icon }) => (
         <button
           key={section}
           type="button"
