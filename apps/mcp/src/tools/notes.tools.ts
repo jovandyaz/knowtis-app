@@ -6,13 +6,13 @@ import type { AuthService } from '../auth/auth-service.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
-export const noteSummaryShape = {
+const noteSummaryShape = {
   id: z.string(),
   title: z.string(),
   updatedAt: z.string(),
 };
 
-export const noteShape = {
+const noteShape = {
   id: z.string(),
   title: z.string(),
   content: z.string(),

@@ -68,4 +68,15 @@ describe('parseConfig', () => {
     expect(config.allowedHosts).toEqual([]);
     expect(config.enableDnsRebindingProtection).toBe(false);
   });
+
+  it('should enable rebinding protection from origins alone', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      NODE_ENV: 'production',
+      MCP_ALLOWED_ORIGINS: 'https://app.knowtis.app',
+    });
+    expect(config.allowedHosts).toEqual([]);
+    expect(config.allowedOrigins).toEqual(['https://app.knowtis.app']);
+    expect(config.enableDnsRebindingProtection).toBe(true);
+  });
 });
