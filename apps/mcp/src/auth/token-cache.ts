@@ -7,23 +7,23 @@ interface CacheEntry {
 export class TokenCache {
   private cache = new Map<string, CacheEntry>();
 
-  set(keyPrefix: string, entry: CacheEntry): void {
-    this.cache.set(keyPrefix, entry);
+  set(key: string, entry: CacheEntry): void {
+    this.cache.set(key, entry);
   }
 
-  get(keyPrefix: string): CacheEntry | null {
-    const entry = this.cache.get(keyPrefix);
+  get(key: string): CacheEntry | null {
+    const entry = this.cache.get(key);
     if (!entry) {
       return null;
     }
     if (Date.now() >= entry.expiresAt) {
-      this.cache.delete(keyPrefix);
+      this.cache.delete(key);
       return null;
     }
     return entry;
   }
 
-  invalidate(keyPrefix: string): void {
-    this.cache.delete(keyPrefix);
+  invalidate(key: string): void {
+    this.cache.delete(key);
   }
 }

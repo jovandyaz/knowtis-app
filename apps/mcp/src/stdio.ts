@@ -1,5 +1,6 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
+import { AuthService } from './auth/auth-service.js';
 import { parseConfig } from './config.js';
 import { createMcpServer } from './server.js';
 
@@ -15,6 +16,9 @@ if (!defaultApiKey) {
   );
 }
 
-const server = createMcpServer({ config, defaultApiKey });
+const authService = new AuthService(
+  `${config.apiInternalUrl}/api/v1/auth/token-exchange`
+);
+const server = createMcpServer({ config, authService, defaultApiKey });
 const transport = new StdioServerTransport();
 await server.connect(transport);
