@@ -5,7 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { and, eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
-import { MCP_SCOPES } from './mcp-token';
+import { MCP_SCOPES, type McpScopeCsv } from './mcp-token';
 
 interface KeyParts {
   fullKey: string;
@@ -66,7 +66,11 @@ export class McpKeysService {
    * Create a new MCP API key for a user.
    * Returns the full key (shown once) along with the persisted record.
    */
-  async create(userId: string, name: string, scopes: string = MCP_SCOPES.READ) {
+  async create(
+    userId: string,
+    name: string,
+    scopes: McpScopeCsv = MCP_SCOPES.READ
+  ) {
     const env =
       this.configService.get('NODE_ENV') === 'production' ? 'live' : 'test';
     const { fullKey, prefix, hash } = McpKeysService.generateKeyParts(env);
