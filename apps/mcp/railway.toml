@@ -16,10 +16,6 @@ healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
 restartPolicyMaxRetries = 3
 
-[service]
-internalPort = 3334
-
-[env]
-NODE_ENV = "production"
-PORT = "3334"
-MCP_ALLOWED_HOSTS = "mcp.knowtis.app"
+# Railway config-as-code has no [env]/[service] sections — env vars cannot be
+# set from this file. Service variables (NODE_ENV, MCP_ALLOWED_HOSTS, ...) are
+# pinned by the deploy-mcp job in .github/workflows/ci.yml before `railway up`.
