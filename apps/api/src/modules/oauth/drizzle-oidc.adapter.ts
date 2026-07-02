@@ -1,4 +1,4 @@
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 
 import {
   oauthPayloads,
@@ -7,6 +7,29 @@ import {
 } from '../../database';
 
 type AdapterPayload = Record<string, unknown>;
+
+/**
+ * Returns the ids of every stored Grant for an account+client pair. Grant rows
+ * keep accountId/clientId only inside the JSON payload (their grant_id column
+ * is null — the row id IS the grant id), so the lookup goes through the payload.
+ */
+export async function findGrantIdsByAccountAndClient(
+  db: Database,
+  accountId: string,
+  clientId: string
+): Promise<string[]> {
+  const rows = await db
+    .select({ id: oauthPayloads.id })
+    .from(oauthPayloads)
+    .where(
+      and(
+        eq(oauthPayloads.model, 'Grant'),
+        sql`${oauthPayloads.payload} ->> 'accountId' = ${accountId}`,
+        sql`${oauthPayloads.payload} ->> 'clientId' = ${clientId}`
+      )
+    );
+  return rows.map((row) => row.id);
+}
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;

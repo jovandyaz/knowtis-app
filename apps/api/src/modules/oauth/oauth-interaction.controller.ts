@@ -5,6 +5,7 @@ import {
   Controller,
   Get,
   Inject,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -13,7 +14,9 @@ import {
 import type Provider from 'oidc-provider';
 import type { Interaction, InteractionResults } from 'oidc-provider';
 
+import { DATABASE_CONNECTION, type Database } from '../../database';
 import { FeatureFlagsService } from '../feature-flags';
+import { findGrantIdsByAccountAndClient } from './drizzle-oidc.adapter';
 import { ConsentDecisionDto } from './dto/consent-decision.dto';
 import {
   OAUTH_PROVIDER,
@@ -61,11 +64,15 @@ function safeHost(uri: string): string {
  */
 @Controller('oauth/interactions')
 export class OauthInteractionController {
+  private readonly logger = new Logger(OauthInteractionController.name);
+
   constructor(
     @Inject(OAUTH_PROVIDER)
     private readonly handle: OidcProviderHandle | null,
     @Inject(OAUTH_RUNTIME)
     private readonly runtime: OauthRuntime | null,
+    @Inject(DATABASE_CONNECTION)
+    private readonly db: Database,
     private readonly featureFlags: FeatureFlagsService
   ) {}
 
@@ -102,37 +109,62 @@ export class OauthInteractionController {
     const clientId = stringParam(params, 'client_id');
     const requestedScopes = parseScopes(stringParam(params, 'scope'));
 
-    if (interaction.grantId) {
-      await this.revokePriorGrant(provider, interaction.grantId);
-    }
+    await this.revokePriorGrants(
+      provider,
+      user.id,
+      clientId,
+      interaction.grantId
+    );
+
+    const approved = new Set(decision.approvedScopes);
+    const requestedNotes = requestedScopes.filter((scope) =>
+      scope.startsWith('notes:')
+    );
+    const grantedNotes = requestedNotes.filter((scope) => approved.has(scope));
+    const deniedNotes = requestedNotes.filter((scope) => !approved.has(scope));
 
     const grant = new provider.Grant({ accountId: user.id, clientId });
-    const resourceScopes = decision.approvedScopes.filter(
-      (scope) => scope.startsWith('notes:') && requestedScopes.includes(scope)
-    );
-    if (resourceScopes.length > 0) {
-      grant.addResourceScope(resourceUrl, resourceScopes.join(' '));
+    if (grantedNotes.length > 0) {
+      grant.addResourceScope(resourceUrl, grantedNotes.join(' '));
     }
-    if (
-      requestedScopes.includes('offline_access') &&
-      decision.approvedScopes.includes('offline_access')
-    ) {
-      grant.addOIDCScope('offline_access');
+    // Requested scopes left undecided make the provider re-prompt for consent
+    // (missing-scope check), so denied scopes must be explicitly rejected.
+    if (deniedNotes.length > 0) {
+      grant.rejectResourceScope(resourceUrl, deniedNotes.join(' '));
+    }
+    if (requestedScopes.includes('offline_access')) {
+      if (approved.has('offline_access')) {
+        grant.addOIDCScope('offline_access');
+      } else {
+        grant.rejectOIDCScope('offline_access');
+      }
     }
     const grantId = await grant.save();
+    this.logger.log({
+      event: 'oauth.grant.created',
+      clientId,
+      accountId: user.id,
+      grantId,
+    });
 
-    const result: InteractionResults = { consent: { grantId } };
-    if (interaction.session?.accountId !== user.id) {
-      result.login = { accountId: user.id };
-    }
-
-    return this.finish(interaction, result, true);
+    // login is always submitted: resume is a no-op on a matching OP session
+    // and rebinds a stale/expired one instead of failing the flow.
+    return this.finish(
+      interaction,
+      { login: { accountId: user.id }, consent: { grantId } },
+      true
+    );
   }
 
   @Post(':uid/abort')
   async abort(@Param('uid') uid: string): Promise<{ returnTo: string }> {
     const provider = await this.resolveProvider();
     const interaction = await this.findInteraction(provider, uid);
+
+    this.logger.log({
+      event: 'oauth.consent.denied',
+      clientId: stringParam(interaction.params, 'client_id'),
+    });
 
     return this.finish(
       interaction,
@@ -185,7 +217,39 @@ export class OauthInteractionController {
     return { returnTo: interaction.returnTo };
   }
 
-  private async revokePriorGrant(
+  /**
+   * Revokes every prior grant for the account+client pair before a new one is
+   * saved. interaction.grantId only exists when the OP session already had a
+   * grant — absent on the login-bridge path — so prior grants are also looked
+   * up by accountId+clientId in the adapter store.
+   */
+  private async revokePriorGrants(
+    provider: Provider,
+    accountId: string,
+    clientId: string,
+    sessionGrantId: string | undefined
+  ): Promise<void> {
+    const grantIds = new Set(
+      await findGrantIdsByAccountAndClient(this.db, accountId, clientId)
+    );
+    if (sessionGrantId) {
+      grantIds.add(sessionGrantId);
+    }
+    if (grantIds.size === 0) {
+      return;
+    }
+    await Promise.all(
+      [...grantIds].map((id) => this.revokeGrant(provider, id))
+    );
+    this.logger.log({
+      event: 'oauth.grants.revoked',
+      clientId,
+      accountId,
+      grantIds: [...grantIds],
+    });
+  }
+
+  private async revokeGrant(
     provider: Provider,
     grantId: string
   ): Promise<void> {
@@ -193,8 +257,7 @@ export class OauthInteractionController {
       provider.AccessToken.revokeByGrantId(grantId),
       provider.RefreshToken.revokeByGrantId(grantId),
       provider.AuthorizationCode.revokeByGrantId(grantId),
+      provider.Grant.adapter.destroy(grantId),
     ]);
-    const grant = await provider.Grant.find(grantId);
-    await grant?.destroy();
   }
 }

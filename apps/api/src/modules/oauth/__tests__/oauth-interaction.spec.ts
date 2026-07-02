@@ -9,6 +9,7 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DATABASE_CONNECTION } from '../../../database';
 import { FeatureFlagsService } from '../../feature-flags';
 import { OauthInteractionController } from '../oauth-interaction.controller';
 import { OAUTH_PROVIDER, OAUTH_RUNTIME } from '../oauth.module';
@@ -35,7 +36,9 @@ interface MockInteraction {
 
 class MockGrant {
   addResourceScope = vi.fn();
+  rejectResourceScope = vi.fn();
   addOIDCScope = vi.fn();
+  rejectOIDCScope = vi.fn();
   save = vi.fn().mockResolvedValue('grant-123');
   constructor(public props: { accountId?: string; clientId?: string }) {
     grantInstances.push(this);
@@ -46,7 +49,7 @@ let grantInstances: MockGrant[] = [];
 
 interface MockProvider {
   Interaction: { find: ReturnType<typeof vi.fn> };
-  Grant: typeof MockGrant & { find: ReturnType<typeof vi.fn> };
+  Grant: typeof MockGrant & { adapter: { destroy: ReturnType<typeof vi.fn> } };
   Client: { find: ReturnType<typeof vi.fn> };
   AccessToken: { revokeByGrantId: ReturnType<typeof vi.fn> };
   RefreshToken: { revokeByGrantId: ReturnType<typeof vi.fn> };
@@ -55,7 +58,7 @@ interface MockProvider {
 
 function makeProvider(): MockProvider {
   const grantClass = MockGrant as MockProvider['Grant'];
-  grantClass.find = vi.fn().mockResolvedValue(undefined);
+  grantClass.adapter = { destroy: vi.fn().mockResolvedValue(undefined) };
   return {
     Interaction: { find: vi.fn() },
     Grant: grantClass,
@@ -84,6 +87,7 @@ interface Harness {
   base: string;
   provider: MockProvider;
   flags: { isEnabled: ReturnType<typeof vi.fn> };
+  dbWhere: ReturnType<typeof vi.fn>;
 }
 
 async function buildHarness(
@@ -94,12 +98,19 @@ async function buildHarness(
     ? ({ provider, callback: vi.fn() } as unknown as OidcProviderHandle)
     : null;
   const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+  const dbWhere = vi.fn().mockResolvedValue([]);
+  const db = {
+    select: vi.fn().mockReturnValue({
+      from: vi.fn().mockReturnValue({ where: dbWhere }),
+    }),
+  };
 
   const moduleRef: TestingModule = await Test.createTestingModule({
     controllers: [OauthInteractionController],
     providers: [
       { provide: OAUTH_PROVIDER, useValue: handle },
       { provide: OAUTH_RUNTIME, useValue: runtime },
+      { provide: DATABASE_CONNECTION, useValue: db },
       { provide: FeatureFlagsService, useValue: flags },
     ],
   })
@@ -121,6 +132,7 @@ async function buildHarness(
     base: await app.getUrl(),
     provider: provider as MockProvider,
     flags,
+    dbWhere,
   };
 }
 
@@ -138,6 +150,20 @@ function makeInteraction(
     persist: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+}
+
+function postConfirm(
+  base: string,
+  approvedScopes: string[]
+): Promise<Response> {
+  return fetch(`${base}/api/v1/oauth/interactions/UID/confirm`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: 'Bearer knowtis-jwt',
+    },
+    body: JSON.stringify({ approvedScopes }),
+  });
 }
 
 describe('OauthInteractionController', () => {
@@ -169,6 +195,25 @@ describe('OauthInteractionController', () => {
       scopes: ['notes:read', 'notes:write'],
       isCimdClient: true,
     });
+  });
+
+  it('should return an empty redirect host for a malformed redirect_uri', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({
+        params: {
+          client_id: 'local-client',
+          redirect_uri: 'not-a-valid-url',
+          scope: 'notes:read',
+        },
+      })
+    );
+
+    const res = await fetch(`${harness.base}/api/v1/oauth/interactions/UID`);
+    const body = (await res.json()) as { redirectHost: string };
+
+    expect(res.status).toBe(200);
+    expect(body.redirectHost).toBe('');
   });
 
   it('should 404 describe when the interaction is unknown', async () => {
@@ -221,19 +266,7 @@ describe('OauthInteractionController', () => {
     });
     harness.provider.Interaction.find.mockResolvedValue(interaction);
 
-    const res = await fetch(
-      `${harness.base}/api/v1/oauth/interactions/UID/confirm`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer knowtis-jwt',
-        },
-        body: JSON.stringify({
-          approvedScopes: ['notes:read', 'notes:write'],
-        }),
-      }
-    );
+    const res = await postConfirm(harness.base, ['notes:read', 'notes:write']);
     const body = (await res.json()) as { returnTo: string };
 
     expect(res.status).toBe(201);
@@ -247,24 +280,21 @@ describe('OauthInteractionController', () => {
       RESOURCE_URL,
       'notes:read notes:write'
     );
+    expect(grantInstances[0].rejectResourceScope).not.toHaveBeenCalled();
     expect(grantInstances[0].save).toHaveBeenCalled();
-    expect(interaction.result).toEqual({ consent: { grantId: 'grant-123' } });
+    expect(interaction.result).toEqual({
+      login: { accountId: TEST_USER.id },
+      consent: { grantId: 'grant-123' },
+    });
     expect(interaction.persist).toHaveBeenCalled();
   });
 
-  it('should submit login and consent when there is no oidc session account', async () => {
+  it('should submit login unconditionally even when an oidc session matches', async () => {
     harness = await buildHarness(makeProvider());
     const interaction = makeInteraction();
     harness.provider.Interaction.find.mockResolvedValue(interaction);
 
-    await fetch(`${harness.base}/api/v1/oauth/interactions/UID/confirm`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: 'Bearer knowtis-jwt',
-      },
-      body: JSON.stringify({ approvedScopes: ['notes:read'] }),
-    });
+    await postConfirm(harness.base, ['notes:read']);
 
     expect(interaction.result).toEqual({
       login: { accountId: TEST_USER.id },
@@ -276,77 +306,155 @@ describe('OauthInteractionController', () => {
     );
   });
 
-  it('should grant offline_access only when requested and approved', async () => {
+  it('should grant only the intersection of approved and requested scopes', async () => {
     harness = await buildHarness(makeProvider());
-    const interaction = makeInteraction({
-      params: {
-        client_id: 'local-client',
-        redirect_uri: 'https://client.example/callback',
-        scope: 'notes:read offline_access',
-      },
-      session: { accountId: TEST_USER.id },
-    });
-    harness.provider.Interaction.find.mockResolvedValue(interaction);
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({
+        params: {
+          client_id: 'local-client',
+          redirect_uri: 'https://client.example/callback',
+          scope: 'notes:read',
+        },
+        session: { accountId: TEST_USER.id },
+      })
+    );
 
-    await fetch(`${harness.base}/api/v1/oauth/interactions/UID/confirm`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: 'Bearer knowtis-jwt',
-      },
-      body: JSON.stringify({
-        approvedScopes: ['notes:read', 'offline_access'],
-      }),
-    });
+    await postConfirm(harness.base, ['notes:read', 'notes:write']);
+
+    expect(grantInstances[0].addResourceScope).toHaveBeenCalledWith(
+      RESOURCE_URL,
+      'notes:read'
+    );
+    expect(grantInstances[0].rejectResourceScope).not.toHaveBeenCalled();
+  });
+
+  it('should reject requested notes scopes the user denied', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({ session: { accountId: TEST_USER.id } })
+    );
+
+    await postConfirm(harness.base, ['notes:read']);
+
+    expect(grantInstances[0].addResourceScope).toHaveBeenCalledWith(
+      RESOURCE_URL,
+      'notes:read'
+    );
+    expect(grantInstances[0].rejectResourceScope).toHaveBeenCalledWith(
+      RESOURCE_URL,
+      'notes:write'
+    );
+  });
+
+  it('should grant offline_access when requested and approved', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({
+        params: {
+          client_id: 'local-client',
+          redirect_uri: 'https://client.example/callback',
+          scope: 'notes:read offline_access',
+        },
+        session: { accountId: TEST_USER.id },
+      })
+    );
+
+    await postConfirm(harness.base, ['notes:read', 'offline_access']);
 
     expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith(
       'offline_access'
     );
+    expect(grantInstances[0].rejectOIDCScope).not.toHaveBeenCalled();
   });
 
-  it('should revoke a prior grant before saving the new one on re-consent', async () => {
+  it('should ignore offline_access approved but not requested', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({
+        params: {
+          client_id: 'local-client',
+          redirect_uri: 'https://client.example/callback',
+          scope: 'notes:read',
+        },
+        session: { accountId: TEST_USER.id },
+      })
+    );
+
+    await postConfirm(harness.base, ['notes:read', 'offline_access']);
+
+    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalled();
+    expect(grantInstances[0].rejectOIDCScope).not.toHaveBeenCalled();
+  });
+
+  it('should reject offline_access requested but denied', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({
+        params: {
+          client_id: 'local-client',
+          redirect_uri: 'https://client.example/callback',
+          scope: 'notes:read offline_access',
+        },
+        session: { accountId: TEST_USER.id },
+      })
+    );
+
+    await postConfirm(harness.base, ['notes:read']);
+
+    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalled();
+    expect(grantInstances[0].rejectOIDCScope).toHaveBeenCalledWith(
+      'offline_access'
+    );
+  });
+
+  it('should revoke prior grants found by account and client before saving', async () => {
+    harness = await buildHarness(makeProvider());
+    const interaction = makeInteraction();
+    harness.provider.Interaction.find.mockResolvedValue(interaction);
+    harness.dbWhere.mockResolvedValue([{ id: 'stored-grant' }]);
+
+    await postConfirm(harness.base, ['notes:read']);
+
+    for (const model of [
+      harness.provider.AccessToken,
+      harness.provider.RefreshToken,
+      harness.provider.AuthorizationCode,
+    ]) {
+      expect(model.revokeByGrantId).toHaveBeenCalledWith('stored-grant');
+    }
+    expect(harness.provider.Grant.adapter.destroy).toHaveBeenCalledWith(
+      'stored-grant'
+    );
+  });
+
+  it('should also revoke the session-derived grant id without duplicating', async () => {
     harness = await buildHarness(makeProvider());
     const interaction = makeInteraction({
-      grantId: 'old-grant',
+      grantId: 'session-grant',
       session: { accountId: TEST_USER.id },
     });
     harness.provider.Interaction.find.mockResolvedValue(interaction);
-    const priorGrant = { destroy: vi.fn().mockResolvedValue(undefined) };
-    harness.provider.Grant.find.mockResolvedValue(priorGrant);
+    harness.dbWhere.mockResolvedValue([
+      { id: 'stored-grant' },
+      { id: 'session-grant' },
+    ]);
 
-    await fetch(`${harness.base}/api/v1/oauth/interactions/UID/confirm`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        authorization: 'Bearer knowtis-jwt',
-      },
-      body: JSON.stringify({ approvedScopes: ['notes:read'] }),
-    });
+    await postConfirm(harness.base, ['notes:read']);
 
-    expect(harness.provider.AccessToken.revokeByGrantId).toHaveBeenCalledWith(
-      'old-grant'
+    expect(harness.provider.Grant.adapter.destroy).toHaveBeenCalledTimes(2);
+    expect(harness.provider.Grant.adapter.destroy).toHaveBeenCalledWith(
+      'stored-grant'
     );
-    expect(harness.provider.RefreshToken.revokeByGrantId).toHaveBeenCalledWith(
-      'old-grant'
+    expect(harness.provider.Grant.adapter.destroy).toHaveBeenCalledWith(
+      'session-grant'
     );
-    expect(priorGrant.destroy).toHaveBeenCalled();
   });
 
   it('should reject confirm bodies with unknown scopes', async () => {
     harness = await buildHarness(makeProvider());
     harness.provider.Interaction.find.mockResolvedValue(makeInteraction());
 
-    const res = await fetch(
-      `${harness.base}/api/v1/oauth/interactions/UID/confirm`,
-      {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          authorization: 'Bearer knowtis-jwt',
-        },
-        body: JSON.stringify({ approvedScopes: ['notes:read', 'admin:all'] }),
-      }
-    );
+    const res = await postConfirm(harness.base, ['notes:read', 'admin:all']);
 
     expect(res.status).toBe(400);
   });

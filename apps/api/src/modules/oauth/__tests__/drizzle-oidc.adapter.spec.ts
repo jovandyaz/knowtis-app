@@ -23,6 +23,7 @@ import {
 import {
   createAdapterFactory,
   DrizzleOidcAdapter,
+  findGrantIdsByAccountAndClient,
 } from '../drizzle-oidc.adapter';
 
 loadEnv({ path: ['.env.local', '.env'] });
@@ -125,6 +126,32 @@ describe.runIf(DB_AVAILABLE)('DrizzleOidcAdapter', () => {
     expect(await accessTokens.find('at-b')).toMatchObject({
       grantId: 'grant-2',
     });
+  });
+
+  it('should find grant ids by account and client from the payload', async () => {
+    const grants = factory('Grant');
+    await grants.upsert(
+      'g-ac-1',
+      { accountId: 'acc-1', clientId: 'client-a' },
+      3600
+    );
+    await grants.upsert(
+      'g-ac-2',
+      { accountId: 'acc-1', clientId: 'client-a' },
+      3600
+    );
+    await grants.upsert(
+      'g-other',
+      { accountId: 'acc-1', clientId: 'client-b' },
+      3600
+    );
+
+    const ids = await findGrantIdsByAccountAndClient(db, 'acc-1', 'client-a');
+
+    expect(ids.sort()).toEqual(['g-ac-1', 'g-ac-2']);
+    expect(
+      await findGrantIdsByAccountAndClient(db, 'acc-2', 'client-a')
+    ).toEqual([]);
   });
 
   it('should find by uid and by userCode', async () => {
