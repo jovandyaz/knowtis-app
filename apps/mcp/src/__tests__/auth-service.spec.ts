@@ -25,6 +25,7 @@ describe('AuthService', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('should exchange the key once and serve the second call from cache', async () => {
@@ -54,5 +55,45 @@ describe('AuthService', () => {
 
     expect(() => service.checkScope(key, 'share-note')).toThrow(/share/);
     expect(() => service.checkScope(key, 'create-note')).not.toThrow();
+  });
+
+  it('should throw when the token exchange responds non-ok', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      statusText: 'Unauthorized',
+      json: async () => ({ message: 'API key revoked' }),
+    });
+    const service = new AuthService(EXCHANGE_URL);
+
+    await expect(service.getToken('knowtis_mcp_live_revoked')).rejects.toThrow(
+      'Authentication failed: API key revoked'
+    );
+  });
+
+  it('should fall back to statusText when the error body is not JSON', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      statusText: 'Bad Gateway',
+      json: async () => {
+        throw new Error('not json');
+      },
+    });
+    const service = new AuthService(EXCHANGE_URL);
+
+    await expect(service.getToken('knowtis_mcp_live_whatever')).rejects.toThrow(
+      'Authentication failed: Bad Gateway'
+    );
+  });
+
+  it('should re-exchange the key after the cached token expires', async () => {
+    vi.useFakeTimers();
+    const service = new AuthService(EXCHANGE_URL);
+    const key = 'knowtis_mcp_live_aaaaaaaaaaaaaaaaaaaaaaaa';
+
+    await service.getToken(key);
+    vi.advanceTimersByTime((900 - 60) * 1000 + 1);
+    await service.getToken(key);
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
