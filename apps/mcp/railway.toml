@@ -22,3 +22,4 @@ internalPort = 3334
 [env]
 NODE_ENV = "production"
 PORT = "3334"
+MCP_ALLOWED_HOSTS = "mcp.knowtis.app"

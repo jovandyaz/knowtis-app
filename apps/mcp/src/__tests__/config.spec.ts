@@ -40,4 +40,32 @@ describe('parseConfig', () => {
     });
     expect(config.serverVersion).toBe(pkg.version);
   });
+
+  it('should default allowed hosts to localhost in development', () => {
+    const config = parseConfig({ API_INTERNAL_URL: 'http://localhost:3333' });
+    expect(config.allowedHosts).toEqual(['localhost:3334', '127.0.0.1:3334']);
+    expect(config.enableDnsRebindingProtection).toBe(true);
+  });
+
+  it('should parse MCP_ALLOWED_HOSTS as a comma-separated list', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      NODE_ENV: 'production',
+      MCP_ALLOWED_HOSTS: 'mcp.knowtis.app, mcp-staging.knowtis.app',
+    });
+    expect(config.allowedHosts).toEqual([
+      'mcp.knowtis.app',
+      'mcp-staging.knowtis.app',
+    ]);
+    expect(config.enableDnsRebindingProtection).toBe(true);
+  });
+
+  it('should disable rebinding protection when no hosts or origins configured in production', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      NODE_ENV: 'production',
+    });
+    expect(config.allowedHosts).toEqual([]);
+    expect(config.enableDnsRebindingProtection).toBe(false);
+  });
 });

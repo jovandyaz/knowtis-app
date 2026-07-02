@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
+import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 
 import type { AppConfig } from './config.js';
@@ -12,6 +13,20 @@ export function createApp(
   const app = new Hono();
 
   app.use('*', secureHeaders());
+
+  app.use(
+    '/mcp',
+    cors({
+      origin: '*',
+      allowHeaders: [
+        'Content-Type',
+        'Authorization',
+        'Mcp-Session-Id',
+        'MCP-Protocol-Version',
+      ],
+      exposeHeaders: ['Mcp-Session-Id'],
+    })
+  );
 
   app.get('/health', (c) =>
     c.json({ status: 'ok', version: config.serverVersion })
@@ -34,7 +49,11 @@ export function createApp(
       );
     }
     const server = serverFactory(apiKey);
-    const transport = new WebStandardStreamableHTTPServerTransport({});
+    const transport = new WebStandardStreamableHTTPServerTransport({
+      allowedHosts: config.allowedHosts,
+      allowedOrigins: config.allowedOrigins,
+      enableDnsRebindingProtection: config.enableDnsRebindingProtection,
+    });
     await server.connect(transport);
     return transport.handleRequest(c.req.raw);
   });
