@@ -23,18 +23,18 @@ describe('wrapToolHandler', () => {
     authService = createMockAuthService();
   });
 
-  it('should return error when apiKey is missing and no fallback', async () => {
+  it('should return error when no API key is configured', async () => {
     const handler = vi.fn();
     const wrapped = wrapToolHandler('list-notes', authService, handler);
 
-    const result = await wrapped({}, { _meta: {} });
+    const result = await wrapped({});
 
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Missing API key');
+    expect(result.content[0].text).toContain('No API key configured');
     expect(handler).not.toHaveBeenCalled();
   });
 
-  it('should use fallback apiKey when _meta.apiKey is not provided', async () => {
+  it('should authenticate with the configured API key', async () => {
     const handler = vi.fn().mockResolvedValue({ notes: [] });
     const wrapped = wrapToolHandler(
       'list-notes',
@@ -43,7 +43,7 @@ describe('wrapToolHandler', () => {
       TEST_API_KEY
     );
 
-    const result = await wrapped({}, { _meta: {} });
+    const result = await wrapped({});
 
     expect(result.isError).toBeUndefined();
     expect(authService.checkScope).toHaveBeenCalledWith(
@@ -53,30 +53,17 @@ describe('wrapToolHandler', () => {
     expect(authService.getToken).toHaveBeenCalledWith(TEST_API_KEY);
   });
 
-  it('should prefer _meta.apiKey over fallback', async () => {
-    const metaKey = 'knowtis_mcp_live_meta_key_value_here_1234';
-    const handler = vi.fn().mockResolvedValue({});
+  it('should return handler result as JSON text content on success', async () => {
+    const data = { id: '1', title: 'My Note' };
+    const handler = vi.fn().mockResolvedValue(data);
     const wrapped = wrapToolHandler(
-      'list-notes',
+      'get-note',
       authService,
       handler,
       TEST_API_KEY
     );
 
-    await wrapped({}, { _meta: { apiKey: metaKey } });
-
-    expect(authService.getToken).toHaveBeenCalledWith(metaKey);
-  });
-
-  it('should return handler result as JSON text content on success', async () => {
-    const data = { id: '1', title: 'My Note' };
-    const handler = vi.fn().mockResolvedValue(data);
-    const wrapped = wrapToolHandler('get-note', authService, handler);
-
-    const result = await wrapped(
-      { noteId: '1' },
-      { _meta: { apiKey: TEST_API_KEY } }
-    );
+    const result = await wrapped({ noteId: '1' });
 
     expect(result.isError).toBeUndefined();
     expect(result.content).toEqual([
@@ -96,9 +83,14 @@ describe('wrapToolHandler', () => {
       }),
     });
     const handler = vi.fn().mockResolvedValue({});
-    const wrapped = wrapToolHandler('create-note', authService, handler);
+    const wrapped = wrapToolHandler(
+      'create-note',
+      authService,
+      handler,
+      TEST_API_KEY
+    );
 
-    await wrapped({}, { _meta: { apiKey: TEST_API_KEY } });
+    await wrapped({});
 
     expect(callOrder).toEqual(['getToken', 'checkScope']);
   });
@@ -110,12 +102,14 @@ describe('wrapToolHandler', () => {
       }),
     });
     const handler = vi.fn();
-    const wrapped = wrapToolHandler('create-note', authService, handler);
-
-    const result = await wrapped(
-      { title: 'test' },
-      { _meta: { apiKey: TEST_API_KEY } }
+    const wrapped = wrapToolHandler(
+      'create-note',
+      authService,
+      handler,
+      TEST_API_KEY
     );
+
+    const result = await wrapped({ title: 'test' });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('write');
@@ -126,12 +120,14 @@ describe('wrapToolHandler', () => {
     const handler = vi
       .fn()
       .mockRejectedValue(new ApiError(403, { message: 'Forbidden' }));
-    const wrapped = wrapToolHandler('delete-note', authService, handler);
-
-    const result = await wrapped(
-      { noteId: '1' },
-      { _meta: { apiKey: TEST_API_KEY } }
+    const wrapped = wrapToolHandler(
+      'delete-note',
+      authService,
+      handler,
+      TEST_API_KEY
     );
+
+    const result = await wrapped({ noteId: '1' });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('permission');
@@ -141,12 +137,14 @@ describe('wrapToolHandler', () => {
     const handler = vi
       .fn()
       .mockRejectedValue(new ApiError(404, { message: 'Not found' }));
-    const wrapped = wrapToolHandler('get-note', authService, handler);
-
-    const result = await wrapped(
-      { noteId: 'nonexistent' },
-      { _meta: { apiKey: TEST_API_KEY } }
+    const wrapped = wrapToolHandler(
+      'get-note',
+      authService,
+      handler,
+      TEST_API_KEY
     );
+
+    const result = await wrapped({ noteId: 'nonexistent' });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('not found');
@@ -159,9 +157,14 @@ describe('wrapToolHandler', () => {
         .mockRejectedValue(new Error('Authentication failed: Invalid API key')),
     });
     const handler = vi.fn();
-    const wrapped = wrapToolHandler('list-notes', authService, handler);
+    const wrapped = wrapToolHandler(
+      'list-notes',
+      authService,
+      handler,
+      TEST_API_KEY
+    );
 
-    const result = await wrapped({}, { _meta: { apiKey: TEST_API_KEY } });
+    const result = await wrapped({});
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Authentication failed');
