@@ -1,6 +1,7 @@
 import { serve } from '@hono/node-server';
 
 import { AuthService } from './auth/auth-service.js';
+import { OauthVerifier } from './auth/oauth-verifier.js';
 import { parseConfig } from './config.js';
 import { log } from './middleware/logger.js';
 import { createMcpServer } from './server.js';
@@ -10,9 +11,13 @@ const config = parseConfig(process.env as Record<string, string | undefined>);
 const authService = new AuthService(
   `${config.apiInternalUrl}/api/v1/auth/token-exchange`
 );
+const oauthVerifier = config.oauth
+  ? new OauthVerifier(config.oauth)
+  : undefined;
 const app = createApp(
-  (apiKey) => createMcpServer({ config, authService, defaultApiKey: apiKey }),
-  config
+  (credential) => createMcpServer({ config, authService, credential }),
+  config,
+  oauthVerifier
 );
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

@@ -79,4 +79,16 @@ export class AuthService {
       );
     }
   }
+
+  checkScopes(scopes: string[], toolName: string): void {
+    const required = SCOPE_REQUIREMENTS[toolName];
+    if (!required) {
+      return;
+    }
+    if (!scopes.includes(required)) {
+      throw new Error(
+        `Access token does not have '${required}' scope required for tool '${toolName}'.`
+      );
+    }
+  }
 }

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiError } from '../api-client/client.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { wrapToolHandler } from '../tools/wrap-tool-handler.js';
 
 function createMockAuthService(
@@ -10,11 +11,16 @@ function createMockAuthService(
   return {
     getToken: vi.fn().mockResolvedValue('jwt-token-123'),
     checkScope: vi.fn(),
+    checkScopes: vi.fn(),
     ...overrides,
   } as unknown as AuthService;
 }
 
 const TEST_API_KEY = 'knowtis_mcp_test_abcdefghijklmnopqrstuvwxyz';
+const API_KEY_CRED: McpCredential = {
+  kind: 'api-key',
+  apiKey: TEST_API_KEY,
+};
 
 describe('wrapToolHandler', () => {
   let authService: AuthService;
@@ -23,7 +29,7 @@ describe('wrapToolHandler', () => {
     authService = createMockAuthService();
   });
 
-  it('should return error when no API key is configured', async () => {
+  it('should return error when no credential is configured', async () => {
     const handler = vi.fn();
     const wrapped = wrapToolHandler('list-notes', authService, handler);
 
@@ -40,7 +46,7 @@ describe('wrapToolHandler', () => {
       'list-notes',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({});
@@ -53,6 +59,59 @@ describe('wrapToolHandler', () => {
     expect(authService.getToken).toHaveBeenCalledWith(TEST_API_KEY);
   });
 
+  it('should use the oauth JWT directly without a token exchange', async () => {
+    const handler = vi.fn().mockResolvedValue({ notes: [] });
+    const credential: McpCredential = {
+      kind: 'oauth',
+      jwt: 'oauth.jwt.value',
+      scopes: ['notes:read'],
+    };
+    const wrapped = wrapToolHandler(
+      'list-notes',
+      authService,
+      handler,
+      credential
+    );
+
+    const result = await wrapped({});
+
+    expect(result.isError).toBeUndefined();
+    expect(authService.getToken).not.toHaveBeenCalled();
+    expect(authService.checkScopes).toHaveBeenCalledWith(
+      ['notes:read'],
+      'list-notes'
+    );
+    expect(handler).toHaveBeenCalledWith('oauth.jwt.value', {});
+  });
+
+  it('should return formatted error when the oauth token lacks the scope', async () => {
+    authService = createMockAuthService({
+      checkScopes: vi.fn().mockImplementation(() => {
+        throw new Error(
+          "Access token does not have 'notes:write' scope required for tool 'create-note'."
+        );
+      }),
+    });
+    const handler = vi.fn();
+    const credential: McpCredential = {
+      kind: 'oauth',
+      jwt: 'oauth.jwt.value',
+      scopes: ['notes:read'],
+    };
+    const wrapped = wrapToolHandler(
+      'create-note',
+      authService,
+      handler,
+      credential
+    );
+
+    const result = await wrapped({ title: 'test' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('notes:write');
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('should return handler result as JSON text content on success', async () => {
     const data = { id: '1', title: 'My Note' };
     const handler = vi.fn().mockResolvedValue(data);
@@ -60,7 +119,7 @@ describe('wrapToolHandler', () => {
       'get-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({ noteId: '1' });
@@ -78,7 +137,7 @@ describe('wrapToolHandler', () => {
       'get-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({ noteId: '1' });
@@ -105,7 +164,7 @@ describe('wrapToolHandler', () => {
       'create-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     await wrapped({});
@@ -124,7 +183,7 @@ describe('wrapToolHandler', () => {
       'create-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({ title: 'test' });
@@ -142,7 +201,7 @@ describe('wrapToolHandler', () => {
       'delete-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({ noteId: '1' });
@@ -159,7 +218,7 @@ describe('wrapToolHandler', () => {
       'get-note',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({ noteId: 'nonexistent' });
@@ -179,7 +238,7 @@ describe('wrapToolHandler', () => {
       'list-notes',
       authService,
       handler,
-      TEST_API_KEY
+      API_KEY_CRED
     );
 
     const result = await wrapped({});

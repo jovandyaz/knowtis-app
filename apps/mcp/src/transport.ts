@@ -4,13 +4,16 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 
+import { classifyBearer, type McpCredential } from './auth/credentials.js';
+import type { OauthVerifier } from './auth/oauth-verifier.js';
 import type { AppConfig, OauthConfig } from './config.js';
 
 const SUPPORTED_SCOPES = ['notes:read', 'notes:write', 'notes:share'] as const;
 
 export function createApp(
-  serverFactory: (apiKey: string) => McpServer,
-  config: AppConfig
+  serverFactory: (credential: McpCredential) => McpServer,
+  config: AppConfig,
+  oauthVerifier?: OauthVerifier
 ): Hono {
   const app = new Hono();
 
@@ -44,21 +47,39 @@ export function createApp(
   );
 
   app.all('/mcp', async (c) => {
-    const apiKey = extractBearerToken(c.req.raw.headers);
-    if (!apiKey) {
+    const bearer = extractBearerToken(c.req.raw.headers);
+    if (!bearer) {
       return c.json(
         {
           error: 'unauthorized',
           message:
-            'Provide a Knowtis MCP API key as a Bearer token. Create one in the Knowtis app under Settings > Integrations.',
+            'Provide a Knowtis MCP API key or OAuth access token as a Bearer token. Create an API key in the Knowtis app under Settings > Integrations.',
         },
         401,
-        {
-          'WWW-Authenticate': buildChallenge(config.oauth),
-        }
+        { 'WWW-Authenticate': buildChallenge(config.oauth) }
       );
     }
-    const server = serverFactory(apiKey);
+
+    let credential: McpCredential;
+    if (oauthVerifier && classifyBearer(bearer) === 'oauth') {
+      try {
+        const { scopes } = await oauthVerifier.verify(bearer);
+        credential = { kind: 'oauth', jwt: bearer, scopes };
+      } catch {
+        return c.json(
+          {
+            error: 'invalid_token',
+            message: 'The access token is invalid or expired.',
+          },
+          401,
+          { 'WWW-Authenticate': buildInvalidTokenChallenge(config.oauth) }
+        );
+      }
+    } else {
+      credential = { kind: 'api-key', apiKey: bearer };
+    }
+
+    const server = serverFactory(credential);
     const transport = new WebStandardStreamableHTTPServerTransport({
       allowedHosts: config.allowedHosts,
       allowedOrigins: config.allowedOrigins,
@@ -94,4 +115,8 @@ function buildChallenge(oauth: OauthConfig | null): string {
     return 'Bearer realm="knowtis-mcp"';
   }
   return `Bearer resource_metadata="${oauth.metadataUrl}", scope="notes:read"`;
+}
+
+function buildInvalidTokenChallenge(oauth: OauthConfig | null): string {
+  return `${buildChallenge(oauth)}, error="invalid_token"`;
 }

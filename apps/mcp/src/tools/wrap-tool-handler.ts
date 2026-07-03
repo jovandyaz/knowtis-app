@@ -1,5 +1,6 @@
 import { ApiError } from '../api-client/client.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { logToolCall } from '../middleware/logger.js';
 import { formatError } from './format-error.js';
 
@@ -14,12 +15,10 @@ export function wrapToolHandler<TArgs, TResult extends Record<string, unknown>>(
   toolName: string,
   authService: AuthService,
   handler: (token: string, args: TArgs) => Promise<TResult>,
-  fallbackApiKey?: string
+  credential?: McpCredential
 ): (args: TArgs) => Promise<ToolResult> {
   return async (args) => {
-    const apiKey = fallbackApiKey;
-
-    if (!apiKey) {
+    if (!credential) {
       return formatError(
         new Error(
           'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
@@ -27,15 +26,23 @@ export function wrapToolHandler<TArgs, TResult extends Record<string, unknown>>(
       );
     }
 
-    const apiKeyPrefix = apiKey.slice(0, 24);
+    const logKey =
+      credential.kind === 'api-key' ? credential.apiKey.slice(0, 24) : 'oauth';
     const start = Date.now();
 
     try {
-      const token = await authService.getToken(apiKey);
-      authService.checkScope(apiKey, toolName);
+      let token: string;
+      if (credential.kind === 'api-key') {
+        token = await authService.getToken(credential.apiKey);
+        authService.checkScope(credential.apiKey, toolName);
+      } else {
+        authService.checkScopes(credential.scopes, toolName);
+        token = credential.jwt;
+      }
+
       const result = await handler(token, args);
 
-      logToolCall(toolName, apiKeyPrefix, Date.now() - start, 'success');
+      logToolCall(toolName, logKey, Date.now() - start, 'success');
 
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(result) }],
@@ -44,13 +51,7 @@ export function wrapToolHandler<TArgs, TResult extends Record<string, unknown>>(
     } catch (error) {
       const errorCode =
         error instanceof ApiError ? String(error.status) : undefined;
-      logToolCall(
-        toolName,
-        apiKeyPrefix,
-        Date.now() - start,
-        'error',
-        errorCode
-      );
+      logToolCall(toolName, logKey, Date.now() - start, 'error', errorCode);
       return formatError(error);
     }
   };

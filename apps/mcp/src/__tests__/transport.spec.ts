@@ -1,8 +1,15 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { OauthVerifier } from '../auth/oauth-verifier.js';
 import type { AppConfig } from '../config.js';
 import { createApp } from '../transport.js';
+
+function mockVerifier(
+  verify: OauthVerifier['verify'] = vi.fn()
+): OauthVerifier {
+  return { verify } as unknown as OauthVerifier;
+}
 
 const config: AppConfig = {
   port: 3334,
@@ -83,7 +90,103 @@ describe('createApp', () => {
     });
 
     expect(res.status).toBe(200);
-    expect(factory).toHaveBeenCalledWith('knowtis_mcp_test_key');
+    expect(factory).toHaveBeenCalledWith({
+      kind: 'api-key',
+      apiKey: 'knowtis_mcp_test_key',
+    });
+  });
+
+  it('should treat any bearer token as an api-key credential when oauth is not configured', async () => {
+    const factory = vi.fn(makeServer);
+    const app = createApp(factory, config);
+
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer some-opaque-oauth-looking-token',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(200);
+    expect(factory).toHaveBeenCalledWith({
+      kind: 'api-key',
+      apiKey: 'some-opaque-oauth-looking-token',
+    });
+  });
+
+  it('should verify an oauth bearer token and serve the request with an oauth credential', async () => {
+    const factory = vi.fn(makeServer);
+    const verify = vi.fn().mockResolvedValue({ scopes: ['notes:read'] });
+    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer valid.oauth.jwt',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(200);
+    expect(verify).toHaveBeenCalledWith('valid.oauth.jwt');
+    expect(factory).toHaveBeenCalledWith({
+      kind: 'oauth',
+      jwt: 'valid.oauth.jwt',
+      scopes: ['notes:read'],
+    });
+  });
+
+  it('should pass an api-key bearer through without verification when oauth is configured', async () => {
+    const factory = vi.fn(makeServer);
+    const verify = vi.fn();
+    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer knowtis_mcp_live_key',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(200);
+    expect(verify).not.toHaveBeenCalled();
+    expect(factory).toHaveBeenCalledWith({
+      kind: 'api-key',
+      apiKey: 'knowtis_mcp_live_key',
+    });
+  });
+
+  it('should reject an invalid oauth token with 401 invalid_token and resource_metadata', async () => {
+    const factory = vi.fn(makeServer);
+    const verify = vi.fn().mockRejectedValue(new Error('signature mismatch'));
+    const app = createApp(factory, oauthConfig, mockVerifier(verify));
+
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+        Authorization: 'Bearer tampered.oauth.jwt',
+      },
+      body: INITIALIZE,
+    });
+
+    expect(res.status).toBe(401);
+    const challenge = res.headers.get('WWW-Authenticate');
+    expect(challenge).toContain('error="invalid_token"');
+    expect(challenge).toContain(
+      'resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource"'
+    );
+    expect((await res.json()).error).toBe('invalid_token');
+    expect(factory).not.toHaveBeenCalled();
   });
 
   it('should reject requests with a non-allowlisted Host header', async () => {
