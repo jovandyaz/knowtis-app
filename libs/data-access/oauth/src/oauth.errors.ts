@@ -6,13 +6,16 @@ export type ConsentDecisionErrorKind =
   | 'sessionExpired'
   | 'retryable';
 
+/** Kinds that cannot be retried; the status map only ever holds these. */
+type TerminalDecisionErrorKind = Exclude<ConsentDecisionErrorKind, 'retryable'>;
+
 export interface ConsentDecisionError {
   kind: ConsentDecisionErrorKind;
   /** Terminal errors cannot be retried — the user must restart the flow. */
   terminal: boolean;
 }
 
-const TERMINAL_KIND_BY_STATUS: Record<number, ConsentDecisionErrorKind> = {
+const TERMINAL_KIND_BY_STATUS: Record<number, TerminalDecisionErrorKind> = {
   401: 'sessionExpired',
   404: 'expired',
   409: 'alreadyResolved',

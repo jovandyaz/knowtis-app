@@ -3,11 +3,16 @@ import { useTranslation } from 'react-i18next';
 
 import { Plug } from 'lucide-react';
 
-import { useOauthGrants, type OauthGrant } from '@knowtis/data-access-oauth';
+import {
+  isOauthDisabledError,
+  useOauthGrants,
+  type OauthGrant,
+} from '@knowtis/data-access-oauth';
 import {
   Badge,
   Button,
   EmptyState,
+  ErrorState,
   LoadingState,
 } from '@knowtis/design-system';
 
@@ -39,11 +44,11 @@ function formatDate(dateStr: string, locale: string): string {
 
 export function ConnectedAppsSection() {
   const { t, i18n } = useTranslation('common');
-  const { data: grants, isLoading, isError } = useOauthGrants();
+  const { data: grants, isLoading, isError, error } = useOauthGrants();
   const [revokeTarget, setRevokeTarget] = useState<OauthGrant | null>(null);
 
-  // A 404 means the MCP OAuth flag is off — hide the section entirely.
-  if (isError) {
+  // A terminal 404 means the MCP OAuth flag is off — hide the section entirely.
+  if (isOauthDisabledError(error)) {
     return null;
   }
 
@@ -63,6 +68,21 @@ export function ConnectedAppsSection() {
     );
   }
 
+  // Any other failure (5xx / network / auth) is transient — surface it instead
+  // of silently hiding a feature the user actually has access to.
+  if (isError) {
+    return (
+      <div className="space-y-6">
+        {header}
+        <ErrorState
+          title={t('connectedApps.errorTitle')}
+          message={t('connectedApps.errorDescription')}
+          fullHeight={false}
+        />
+      </div>
+    );
+  }
+
   const hasGrants = grants && grants.length > 0;
 
   return (
@@ -73,7 +93,7 @@ export function ConnectedAppsSection() {
         <div className="space-y-3">
           {grants.map((grant) => {
             const appName =
-              grant.clientName ?? hostFromClientId(grant.clientId);
+              grant.clientName || hostFromClientId(grant.clientId);
             return (
               <div
                 key={grant.grantId}
@@ -130,7 +150,7 @@ export function ConnectedAppsSection() {
           }}
           grantId={revokeTarget.grantId}
           appName={
-            revokeTarget.clientName ?? hostFromClientId(revokeTarget.clientId)
+            revokeTarget.clientName || hostFromClientId(revokeTarget.clientId)
           }
         />
       )}

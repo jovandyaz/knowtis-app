@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
+
 import { ConnectedAppsSection } from './ConnectedAppsSection';
 
 const useOauthGrants = vi.fn();
@@ -14,7 +16,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@knowtis/data-access-oauth', () => ({
+vi.mock('@knowtis/data-access-oauth', async (importActual) => ({
+  ...(await importActual<Record<string, unknown>>()),
   useOauthGrants: () => useOauthGrants(),
   useRevokeGrant: () => ({ mutate: revokeMutate, isPending: false }),
 }));
@@ -35,16 +38,33 @@ describe('ConnectedAppsSection', () => {
     vi.clearAllMocks();
   });
 
-  it('renders nothing when the grants request errors (OAuth flag off)', () => {
+  it('renders nothing when the grants request 404s (OAuth flag off)', () => {
     useOauthGrants.mockReturnValue({
       data: undefined,
       isLoading: false,
       isError: true,
+      error: new ApiClientError('Not Found', 404),
     });
 
     const { container } = render(<ConnectedAppsSection />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows an error state on a non-404 failure (5xx/network)', () => {
+    useOauthGrants.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new ApiClientError('Server Error', 500),
+    });
+
+    render(<ConnectedAppsSection />);
+
+    expect(screen.getByText('connectedApps.errorTitle')).toBeInTheDocument();
+    expect(
+      screen.getByText('connectedApps.errorDescription')
+    ).toBeInTheDocument();
   });
 
   it('renders an empty state when there are no connected apps', () => {

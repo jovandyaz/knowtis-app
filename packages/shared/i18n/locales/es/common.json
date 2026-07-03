@@ -170,6 +170,8 @@
     "revokeSuccess": "Acceso revocado",
     "emptyTitle": "Sin apps conectadas",
     "emptyDescription": "Las apps que autorices con OAuth aparecerán aquí.",
+    "errorTitle": "No se pudieron cargar las apps conectadas",
+    "errorDescription": "Algo salió mal al cargar tus apps conectadas. Inténtalo de nuevo.",
     "cancel": "Cancelar"
   },
   "oauth": {

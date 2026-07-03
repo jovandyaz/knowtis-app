@@ -208,6 +208,41 @@ describe('OauthGrantsController', () => {
       expect(harness.provider.Client.find).not.toHaveBeenCalled();
     });
 
+    it('should degrade a single failing client lookup to a null name without failing the list', async () => {
+      harness = await buildHarness(makeProvider());
+      harness.provider.Client.find.mockImplementation((id: string) =>
+        id === 'client-bad'
+          ? Promise.reject(new Error('client store down'))
+          : Promise.resolve({ clientName: 'Good Client' })
+      );
+      vi.mocked(listGrantsByAccount).mockResolvedValue([
+        grantRow({
+          id: 'grant-bad',
+          clientId: 'client-bad',
+          resources: { [RESOURCE_URL]: 'notes:read' },
+        }),
+        grantRow({
+          id: 'grant-good',
+          clientId: 'client-good',
+          resources: { [RESOURCE_URL]: 'notes:write' },
+        }),
+      ] as never);
+
+      const res = await authed(harness.base, '/api/v1/oauth/grants');
+      const body = (await res.json()) as {
+        grants: { grantId: string; clientName: string | null }[];
+      };
+
+      expect(res.status).toBe(200);
+      expect(body.grants).toHaveLength(2);
+      expect(
+        body.grants.find((g) => g.grantId === 'grant-bad')?.clientName
+      ).toBeNull();
+      expect(
+        body.grants.find((g) => g.grantId === 'grant-good')?.clientName
+      ).toBe('Good Client');
+    });
+
     it('should exclude rejected scopes from the displayed grant scopes', async () => {
       harness = await buildHarness(makeProvider());
       vi.mocked(listGrantsByAccount).mockResolvedValue([

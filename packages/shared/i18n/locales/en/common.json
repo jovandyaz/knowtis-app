@@ -170,6 +170,8 @@
     "revokeSuccess": "Access revoked",
     "emptyTitle": "No connected apps",
     "emptyDescription": "Apps you authorize with OAuth will appear here.",
+    "errorTitle": "Couldn't load connected apps",
+    "errorDescription": "Something went wrong loading your connected apps. Please try again.",
     "cancel": "Cancel"
   },
   "oauth": {

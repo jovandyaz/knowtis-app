@@ -143,6 +143,24 @@ describe('oauth hooks', () => {
       );
     });
 
+    it('rejects a non-http returnTo and never navigates', async () => {
+      vi.mocked(oauthApi.confirm).mockResolvedValue({
+        returnTo: 'javascript:alert(1)',
+      } as never);
+
+      const { result } = renderHook(() => useConsentDecision('uid-x'), {
+        wrapper,
+      });
+
+      result.current.mutate({
+        action: 'approve',
+        approvedScopes: ['notes:read'],
+      });
+
+      await waitFor(() => expect(result.current.isError).toBe(true));
+      expect(assignMock).not.toHaveBeenCalled();
+    });
+
     it('surfaces the error and does not navigate when the decision fails', async () => {
       vi.mocked(oauthApi.confirm).mockRejectedValue(new Error('Conflict'));
 
@@ -254,6 +272,19 @@ describe('oauth hooks', () => {
   });
 
   describe('useConnectedAppsAvailable', () => {
+    it('stays hidden while the grants query is still pending (dark launch)', () => {
+      // A pending query has no error yet — the feature must not flash visible.
+      vi.mocked(oauthApi.getGrants).mockReturnValue(
+        new Promise(() => undefined)
+      );
+
+      const { result } = renderHook(() => useConnectedAppsAvailable(), {
+        wrapper,
+      });
+
+      expect(result.current).toBe(false);
+    });
+
     it('turns unavailable when the grants request 404s (flag off)', async () => {
       vi.mocked(oauthApi.getGrants).mockRejectedValue(
         new ApiClientError('Not Found', 404)

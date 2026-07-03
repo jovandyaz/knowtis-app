@@ -105,10 +105,15 @@ export function useRevokeGrant() {
 }
 
 /**
- * False only while the grants endpoint 404s (MCP OAuth flag off). An empty
- * grants list or a transient failure keeps the feature visible.
+ * Whether to surface the Connected apps feature in the nav. Hidden while the
+ * grants query is still pending (so a flag-off feature never flashes in during
+ * dark launch) and when the endpoint 404s (MCP OAuth flag off). An empty grants
+ * list or a transient non-404 failure keeps the feature visible.
  */
 export function useConnectedAppsAvailable(): boolean {
-  const { error } = useOauthGrants();
+  const { isPending, error } = useOauthGrants();
+  if (isPending) {
+    return false;
+  }
   return !isOauthDisabledError(error);
 }

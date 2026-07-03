@@ -11,7 +11,9 @@ export const interactionDetailsSchema = z.object({
 export type OauthInteractionDetails = z.infer<typeof interactionDetailsSchema>;
 
 export const consentDecisionResultSchema = z.object({
-  returnTo: z.string(),
+  // Drives a full-page window.location.assign — restrict to absolute http(s)
+  // so a malformed backend/proxy value can never inject a javascript: URI.
+  returnTo: z.httpUrl(),
 });
 
 export type ConsentDecisionResult = z.infer<typeof consentDecisionResultSchema>;

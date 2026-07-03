@@ -177,7 +177,18 @@ export class OauthGrantsController {
     if (clientId.startsWith('http')) {
       return safeHost(clientId) || null;
     }
-    const client = await provider.Client.find(clientId);
-    return client?.clientName ?? null;
+    // Isolate the lookup: one client store failure must degrade a single row to
+    // a null name, never reject the whole grants list.
+    try {
+      const client = await provider.Client.find(clientId);
+      return client?.clientName ?? null;
+    } catch (error) {
+      this.logger.warn({
+        event: 'oauth.grant.client_lookup_failed',
+        clientId,
+        error,
+      });
+      return null;
+    }
   }
 }

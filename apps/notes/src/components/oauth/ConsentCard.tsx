@@ -59,7 +59,7 @@ export function ConsentCard({
   decisionError,
 }: ConsentCardProps) {
   const { t } = useTranslation('common');
-  const clientName = details.clientName ?? hostFromClientId(details.clientId);
+  const clientName = details.clientName || hostFromClientId(details.clientId);
   const host = details.redirectHost || hostFromClientId(details.clientId);
   const busy = isApproving || isDenying;
   const failure = decisionError ? classifyConsentError(decisionError) : null;
