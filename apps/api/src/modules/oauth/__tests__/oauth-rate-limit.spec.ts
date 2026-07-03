@@ -98,14 +98,17 @@ describe('OAuth rate limit', () => {
 
     expect(blocked.status).toBe(429);
     expect(body.error).toBe('temporarily_unavailable');
-    expect(body.error_description).toBeTruthy();
-    expect(blocked.headers.get('retry-after')).toBeTruthy();
+    expect(body.error_description).toBe(
+      'Too many requests to the OAuth endpoint. Try again later.'
+    );
+    expect(Number(blocked.headers.get('retry-after'))).toBeGreaterThan(0);
   });
 
   it('should key the strict limit per forwarded client IP', async () => {
     const exhausted = '198.51.100.20';
-    for (let i = 0; i <= DCR_LIMIT; i++) {
-      await postReg(harness.base, exhausted);
+    for (let i = 0; i < DCR_LIMIT; i++) {
+      const res = await postReg(harness.base, exhausted);
+      expect(res.status).not.toBe(429);
     }
     const blocked = await postReg(harness.base, exhausted);
     expect(blocked.status).toBe(429);
@@ -144,10 +147,22 @@ describe('OAuth rate limit', () => {
 
   it('should leave POST /oauth/reg/:clientId (RFC 7592) on the looser tier', async () => {
     const ip = '203.0.113.4';
+    // Past the strict DCR limit it is still allowed (not the strict tier)...
     for (let i = 0; i <= DCR_LIMIT; i++) {
       const res = await postPath(harness.base, '/oauth/reg/abc123', ip);
       expect(res.status).not.toBe(429);
     }
+    // ...but it is still governed by the looser tier and blocks at its ceiling,
+    // so it is never left completely unthrottled.
+    let blocked = false;
+    for (let i = 0; i <= OAUTH_LIMIT; i++) {
+      const res = await postPath(harness.base, '/oauth/reg/abc123', ip);
+      if (res.status === 429) {
+        blocked = true;
+        break;
+      }
+    }
+    expect(blocked).toBe(true);
   });
 
   it('should never rate-limit non-oauth paths', async () => {
