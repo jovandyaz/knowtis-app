@@ -125,13 +125,18 @@ export class OauthInteractionController {
     const deniedNotes = requestedNotes.filter((scope) => !approved.has(scope));
 
     const grant = new provider.Grant({ accountId: user.id, clientId });
+    // notes:* are both OIDC scopes and resource-server scopes here, so the
+    // consent prompt checks each in both dimensions; a scope decided in only one
+    // keeps re-prompting, so grant/reject every one as OIDC AND resource.
     if (grantedNotes.length > 0) {
-      grant.addResourceScope(resourceUrl, grantedNotes.join(' '));
+      const granted = grantedNotes.join(' ');
+      grant.addResourceScope(resourceUrl, granted);
+      grant.addOIDCScope(granted);
     }
-    // Requested scopes left undecided make the provider re-prompt for consent
-    // (missing-scope check), so denied scopes must be explicitly rejected.
     if (deniedNotes.length > 0) {
-      grant.rejectResourceScope(resourceUrl, deniedNotes.join(' '));
+      const denied = deniedNotes.join(' ');
+      grant.rejectResourceScope(resourceUrl, denied);
+      grant.rejectOIDCScope(denied);
     }
     if (requestedScopes.includes('offline_access')) {
       if (approved.has('offline_access')) {
