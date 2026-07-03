@@ -84,4 +84,52 @@ describe('parseConfig', () => {
     expect(config.allowedOrigins).toEqual(['https://app.knowtis.app']);
     expect(config.enableDnsRebindingProtection).toBe(true);
   });
+
+  it('should leave oauth null when the OAuth envs are absent', () => {
+    const config = parseConfig({ API_INTERNAL_URL: 'http://localhost:3333' });
+    expect(config.oauth).toBeNull();
+  });
+
+  it('should treat empty OAuth env strings as absent', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      MCP_OAUTH_ISSUER: '',
+      MCP_RESOURCE_URL: '',
+    });
+    expect(config.oauth).toBeNull();
+  });
+
+  it('should populate oauth with derived jwks and metadata urls', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      MCP_OAUTH_ISSUER: 'https://api.knowtis.app',
+      MCP_RESOURCE_URL: 'https://mcp.knowtis.app/mcp',
+    });
+    expect(config.oauth).toEqual({
+      issuer: 'https://api.knowtis.app',
+      resourceUrl: 'https://mcp.knowtis.app/mcp',
+      jwksUrl: 'https://api.knowtis.app/oauth/jwks',
+      metadataUrl:
+        'https://mcp.knowtis.app/.well-known/oauth-protected-resource',
+    });
+  });
+
+  it('should strip trailing slashes from the resource url and issuer', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      MCP_OAUTH_ISSUER: 'https://api.knowtis.app/',
+      MCP_RESOURCE_URL: 'https://mcp.knowtis.app/mcp/',
+    });
+    expect(config.oauth?.resourceUrl).toBe('https://mcp.knowtis.app/mcp');
+    expect(config.oauth?.jwksUrl).toBe('https://api.knowtis.app/oauth/jwks');
+  });
+
+  it('should throw when only one OAuth env is set', () => {
+    expect(() =>
+      parseConfig({
+        API_INTERNAL_URL: 'http://localhost:3333',
+        MCP_OAUTH_ISSUER: 'https://api.knowtis.app',
+      })
+    ).toThrow(/MCP_OAUTH_ISSUER and MCP_RESOURCE_URL/);
+  });
 });

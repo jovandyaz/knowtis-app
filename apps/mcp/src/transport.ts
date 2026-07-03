@@ -4,7 +4,9 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { secureHeaders } from 'hono/secure-headers';
 
-import type { AppConfig } from './config.js';
+import type { AppConfig, OauthConfig } from './config.js';
+
+const SUPPORTED_SCOPES = ['notes:read', 'notes:write', 'notes:share'] as const;
 
 export function createApp(
   serverFactory: (apiKey: string) => McpServer,
@@ -28,6 +30,15 @@ export function createApp(
     })
   );
 
+  if (config.oauth) {
+    const metadata = buildProtectedResourceMetadata(config.oauth);
+    app.use('/.well-known/*', cors({ origin: '*' }));
+    app.get('/.well-known/oauth-protected-resource', (c) => c.json(metadata));
+    app.get('/.well-known/oauth-protected-resource/mcp', (c) =>
+      c.json(metadata)
+    );
+  }
+
   app.get('/health', (c) =>
     c.json({ status: 'ok', version: config.serverVersion })
   );
@@ -43,7 +54,7 @@ export function createApp(
         },
         401,
         {
-          'WWW-Authenticate': 'Bearer realm="knowtis-mcp"',
+          'WWW-Authenticate': buildChallenge(config.oauth),
         }
       );
     }
@@ -66,4 +77,21 @@ function extractBearerToken(headers: Headers): string | undefined {
     return undefined;
   }
   return auth.slice(7);
+}
+
+function buildProtectedResourceMetadata(oauth: OauthConfig) {
+  return {
+    resource: oauth.resourceUrl,
+    authorization_servers: [oauth.issuer],
+    scopes_supported: SUPPORTED_SCOPES,
+    bearer_methods_supported: ['header'],
+    resource_name: 'Knowtis MCP',
+  };
+}
+
+function buildChallenge(oauth: OauthConfig | null): string {
+  if (!oauth) {
+    return 'Bearer realm="knowtis-mcp"';
+  }
+  return `Bearer resource_metadata="${oauth.metadataUrl}", scope="notes:read"`;
 }
