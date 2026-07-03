@@ -47,16 +47,29 @@ async function buildHarness(): Promise<Harness> {
   return { app, base: await app.getUrl() };
 }
 
-function postReg(base: string, ip: string): Promise<Response> {
-  return fetch(`${base}/oauth/reg`, {
+function postPath(
+  base: string,
+  path: string,
+  forwardedFor: string
+): Promise<Response> {
+  return fetch(`${base}${path}`, {
     method: 'POST',
-    headers: { 'x-forwarded-for': ip, 'content-type': 'application/json' },
+    headers: {
+      'x-forwarded-for': forwardedFor,
+      'content-type': 'application/json',
+    },
     body: '{}',
   });
 }
 
-function getAuthorize(base: string, ip: string): Promise<Response> {
-  return fetch(`${base}/oauth/auth`, { headers: { 'x-forwarded-for': ip } });
+function postReg(base: string, forwardedFor: string): Promise<Response> {
+  return postPath(base, '/oauth/reg', forwardedFor);
+}
+
+function getAuthorize(base: string, forwardedFor: string): Promise<Response> {
+  return fetch(`${base}/oauth/auth`, {
+    headers: { 'x-forwarded-for': forwardedFor },
+  });
 }
 
 describe('OAuth rate limit', () => {
@@ -89,7 +102,7 @@ describe('OAuth rate limit', () => {
     expect(blocked.headers.get('retry-after')).toBeTruthy();
   });
 
-  it('should key the strict limit per client IP via trust proxy', async () => {
+  it('should key the strict limit per forwarded client IP', async () => {
     const exhausted = '198.51.100.20';
     for (let i = 0; i <= DCR_LIMIT; i++) {
       await postReg(harness.base, exhausted);
@@ -100,6 +113,41 @@ describe('OAuth rate limit', () => {
     const fresh = '198.51.100.21';
     const allowed = await postReg(harness.base, fresh);
     expect(allowed.status).not.toBe(429);
+  });
+
+  it('should ignore a client-spoofed X-Forwarded-For prefix and key on the proxy-appended IP', async () => {
+    const realIp = '203.0.113.77';
+    // One Railway hop: attacker rotates the leading (spoofed) XFF entry, the
+    // proxy always appends the same real IP last, trust proxy:1 keys on it.
+    for (let i = 0; i < DCR_LIMIT; i++) {
+      const res = await postReg(harness.base, `10.0.0.${i}, ${realIp}`);
+      expect(res.status).not.toBe(429);
+    }
+
+    const blocked = await postReg(harness.base, `10.0.0.250, ${realIp}`);
+    expect(blocked.status).toBe(429);
+  });
+
+  it.each([
+    ['/oauth/reg', '203.0.113.1'],
+    ['/oauth/reg/', '203.0.113.2'],
+    ['/oauth/REG', '203.0.113.3'],
+  ])('should route POST %s to the strict DCR tier', async (path, ip) => {
+    for (let i = 0; i < DCR_LIMIT; i++) {
+      const res = await postPath(harness.base, path, ip);
+      expect(res.status).not.toBe(429);
+    }
+
+    const blocked = await postPath(harness.base, path, ip);
+    expect(blocked.status).toBe(429);
+  });
+
+  it('should leave POST /oauth/reg/:clientId (RFC 7592) on the looser tier', async () => {
+    const ip = '203.0.113.4';
+    for (let i = 0; i <= DCR_LIMIT; i++) {
+      const res = await postPath(harness.base, '/oauth/reg/abc123', ip);
+      expect(res.status).not.toBe(429);
+    }
   });
 
   it('should never rate-limit non-oauth paths', async () => {

@@ -7,7 +7,10 @@ import {
 
 import { isOauthPath } from './oidc-mount.middleware';
 
-const DCR_REGISTRATION_PATH = '/oauth/reg';
+// oidc-provider's koa router is non-strict + case-insensitive, so open DCR
+// create also answers at /oauth/reg/ and /oauth/REG; catch every variant while
+// excluding the token-authenticated /oauth/reg/:clientId RFC 7592 endpoints.
+const DCR_REGISTRATION_PATH_PATTERN = /^\/oauth\/reg\/?$/i;
 
 interface RateLimitTier {
   windowMs: number;
@@ -77,7 +80,7 @@ export function createOauthRateLimit(
       next();
       return;
     }
-    if (req.method === 'POST' && req.path === DCR_REGISTRATION_PATH) {
+    if (req.method === 'POST' && DCR_REGISTRATION_PATH_PATTERN.test(req.path)) {
       dcrLimiter(req, res, next);
       return;
     }
