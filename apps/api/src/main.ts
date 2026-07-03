@@ -11,6 +11,7 @@ import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { buildAllowedOrigins } from './config/cors-origins';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
+import { createOauthRateLimit } from './modules/oauth/oauth-rate-limit.middleware';
 import {
   applyBodyParsersExcludingOauth,
   createOidcMount,
@@ -25,6 +26,7 @@ async function bootstrap() {
   // Railway terminates TLS at a proxy; without this, req.ip is the proxy and
   // per-IP rate limits become global.
   app.set('trust proxy', 1);
+  app.use(createOauthRateLimit());
   app.use(createOidcMount(app));
   applyBodyParsersExcludingOauth(app);
   const configService = app.get(ConfigService);
