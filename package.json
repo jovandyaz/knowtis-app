@@ -112,6 +112,7 @@
     "dompurify": "^3.4.5",
     "drizzle-orm": "^0.45.2",
     "express": "^5.2.1",
+    "express-rate-limit": "^8.5.2",
     "gpt-tokenizer": "^3.4.0",
     "gray-matter": "^4.0.3",
     "helmet": "^8.1.0",

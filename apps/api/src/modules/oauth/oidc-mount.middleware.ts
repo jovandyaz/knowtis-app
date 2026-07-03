@@ -14,7 +14,7 @@ const WELL_KNOWN_PATHS = new Set([
   '/.well-known/openid-configuration',
 ]);
 
-function isOauthPath(path: string): boolean {
+export function isOauthPath(path: string): boolean {
   return (
     path === OAUTH_PREFIX ||
     path.startsWith(`${OAUTH_PREFIX}/`) ||
