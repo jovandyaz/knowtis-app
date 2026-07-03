@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import pkg from '../../package.json';
 import { parseConfig } from '../config.js';
+import { logOauthConfig } from '../middleware/logger.js';
 
 describe('parseConfig', () => {
   it('should parse valid config from env', () => {
@@ -131,5 +132,39 @@ describe('parseConfig', () => {
         MCP_OAUTH_ISSUER: 'https://api.knowtis.app',
       })
     ).toThrow(/MCP_OAUTH_ISSUER and MCP_RESOURCE_URL/);
+  });
+
+  it('should emit oauth_config_loaded echoing the resolved issuer and resourceUrl', () => {
+    const config = parseConfig({
+      API_INTERNAL_URL: 'http://localhost:3333',
+      MCP_OAUTH_ISSUER: 'https://api.knowtis.app/',
+      MCP_RESOURCE_URL: 'https://mcp.knowtis.app/mcp/',
+    });
+    const { oauth } = config;
+    if (!oauth) {
+      throw new Error('expected oauth config to be populated');
+    }
+
+    const writeSpy = vi
+      .spyOn(process.stderr, 'write')
+      .mockReturnValue(true);
+    let callCount: number;
+    let written: string;
+    try {
+      logOauthConfig(oauth.issuer, oauth.resourceUrl);
+      callCount = writeSpy.mock.calls.length;
+      written = String(writeSpy.mock.calls[0]?.[0] ?? '');
+    } finally {
+      writeSpy.mockRestore();
+    }
+
+    expect(callCount).toBe(1);
+    const line = JSON.parse(written);
+    expect(line).toMatchObject({
+      level: 'info',
+      event: 'oauth_config_loaded',
+      issuer: 'https://api.knowtis.app',
+      resourceUrl: 'https://mcp.knowtis.app/mcp',
+    });
   });
 });

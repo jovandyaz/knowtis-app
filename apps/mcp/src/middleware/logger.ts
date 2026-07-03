@@ -16,6 +16,20 @@ export function log(entry: LogEntry): void {
   process.stderr.write(JSON.stringify(output) + '\n');
 }
 
+/**
+ * Boot-time echo of the resolved OAuth resource-server config so operators can
+ * eyeball cross-service parity (issuer/resourceUrl must byte-equal the api AS)
+ * in Railway logs. Public URLs only — never log secret material here.
+ */
+export function logOauthConfig(issuer: string, resourceUrl: string): void {
+  log({
+    level: 'info',
+    event: 'oauth_config_loaded',
+    issuer,
+    resourceUrl,
+  });
+}
+
 export function logToolCall(
   tool: string,
   apiKeyPrefix: string,
