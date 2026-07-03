@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { SharingApi } from '../api-client/sharing.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { NON_DESTRUCTIVE_IDEMPOTENT, READ_ONLY } from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
 
@@ -17,7 +18,7 @@ export function registerSharingTools(
   server: McpServer,
   sharingApi: SharingApi,
   authService: AuthService,
-  defaultApiKey?: string
+  credential?: McpCredential
 ): void {
   server.registerTool(
     'get-collaborators',
@@ -37,7 +38,7 @@ export function registerSharingTools(
       async (token, { noteId }) => ({
         collaborators: await sharingApi.getCollaborators(token, noteId),
       }),
-      defaultApiKey
+      credential
     )
   );
 
@@ -64,7 +65,7 @@ export function registerSharingTools(
         await sharingApi.share(token, noteId, userId, permission);
         return { success: true };
       },
-      defaultApiKey
+      credential
     )
   );
 }

@@ -19,6 +19,12 @@ if (!defaultApiKey) {
 const authService = new AuthService(
   `${config.apiInternalUrl}/api/v1/auth/token-exchange`
 );
-const server = createMcpServer({ config, authService, defaultApiKey });
+const server = createMcpServer({
+  config,
+  authService,
+  credential: defaultApiKey
+    ? { kind: 'api-key', apiKey: defaultApiKey }
+    : undefined,
+});
 const transport = new StdioServerTransport();
 await server.connect(transport);

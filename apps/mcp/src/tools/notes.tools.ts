@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
@@ -30,7 +31,7 @@ export function registerNotesTools(
   server: McpServer,
   notesApi: NotesApi,
   authService: AuthService,
-  defaultApiKey?: string
+  credential?: McpCredential
 ): void {
   server.registerTool(
     'list-notes',
@@ -60,7 +61,7 @@ export function registerNotesTools(
           })),
         };
       },
-      defaultApiKey
+      credential
     )
   );
 
@@ -81,7 +82,7 @@ export function registerNotesTools(
       async (token, { noteId }) => ({
         note: await notesApi.get(token, noteId),
       }),
-      defaultApiKey
+      credential
     )
   );
 
@@ -113,7 +114,7 @@ export function registerNotesTools(
           content ? markdownToHtml(content) : undefined
         ),
       }),
-      defaultApiKey
+      credential
     )
   );
 
@@ -149,7 +150,7 @@ export function registerNotesTools(
         }
         return { note: await notesApi.update(token, noteId, data) };
       },
-      defaultApiKey
+      credential
     )
   );
 
@@ -171,7 +172,7 @@ export function registerNotesTools(
         await notesApi.delete(token, noteId);
         return { success: true, message: 'Note deleted.' };
       },
-      defaultApiKey
+      credential
     )
   );
 }

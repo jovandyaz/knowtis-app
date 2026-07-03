@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteResponse, NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { registerNotesTools } from '../tools/notes.tools.js';
 import {
   createFakeServer,
@@ -9,6 +10,8 @@ import {
   getTool,
   TEST_API_KEY,
 } from './test-utils.js';
+
+const CREDENTIAL: McpCredential = { kind: 'api-key', apiKey: TEST_API_KEY };
 
 function createMockNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
   return {
@@ -47,7 +50,7 @@ describe('registerNotesTools', () => {
   it('should register all five notes tools via registerTool', () => {
     const { server, tools } = createFakeServer();
 
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect([...tools.keys()].sort()).toEqual([
       'create-note',
@@ -60,7 +63,7 @@ describe('registerNotesTools', () => {
 
   it('should annotate delete-note as destructive and get/list as read-only', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'delete-note').config.annotations).toEqual(
       DESTRUCTIVE_IDEMPOTENT
@@ -72,7 +75,7 @@ describe('registerNotesTools', () => {
 
   it('should annotate update-note as destructive-idempotent and create-note as non-idempotent', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'update-note').config.annotations).toEqual(
       DESTRUCTIVE_IDEMPOTENT
@@ -87,7 +90,7 @@ describe('registerNotesTools', () => {
 
   it('should set titles and expected output-schema shapes on every tool', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'list-notes').config.title).toBe('List Notes');
     expect(getTool(tools, 'create-note').config.title).toBe('Create Note');
@@ -110,7 +113,7 @@ describe('registerNotesTools', () => {
 
   it('should keep tool descriptions verbatim', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'list-notes').config.description).toBe(
       "List user's notes with optional search filter. Returns title, id, and last modified date."
@@ -133,7 +136,7 @@ describe('registerNotesTools', () => {
       list: vi.fn().mockResolvedValue([fullNote]),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'list-notes').cb({ search: 'my' });
 
@@ -152,7 +155,7 @@ describe('registerNotesTools', () => {
 
   it('should confirm deletion from the delete-note handler', async () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'delete-note').cb({ noteId: 'note-1' });
 
@@ -169,7 +172,7 @@ describe('registerNotesTools', () => {
       list: vi.fn().mockRejectedValue(new Error('upstream exploded')),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'list-notes').cb({});
 
@@ -185,7 +188,7 @@ describe('registerNotesTools', () => {
         .mockRejectedValue(new Error('Authentication failed: key revoked')),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, TEST_API_KEY);
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
 

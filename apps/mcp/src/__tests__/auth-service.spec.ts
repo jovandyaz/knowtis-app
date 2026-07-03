@@ -68,6 +68,18 @@ describe('AuthService', () => {
     ).not.toThrow();
   });
 
+  it('should enforce oauth scopes from an explicit scope list without a cache lookup', () => {
+    const service = new AuthService(EXCHANGE_URL);
+
+    expect(() =>
+      service.checkScopes(['notes:read', 'notes:write'], 'share-note')
+    ).toThrow(/notes:share/);
+    expect(() =>
+      service.checkScopes(['notes:read', 'notes:write'], 'create-note')
+    ).not.toThrow();
+    expect(() => service.checkScopes([], 'list-notes')).toThrow(/notes:read/);
+  });
+
   it('should throw when the token exchange responds non-ok', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

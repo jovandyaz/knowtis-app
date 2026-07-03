@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Collaborator, SharingApi } from '../api-client/sharing.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import type { McpCredential } from '../auth/credentials.js';
 import { registerSharingTools } from '../tools/sharing.tools.js';
 import {
   createFakeServer,
@@ -9,6 +10,8 @@ import {
   getTool,
   TEST_API_KEY,
 } from './test-utils.js';
+
+const CREDENTIAL: McpCredential = { kind: 'api-key', apiKey: TEST_API_KEY };
 
 function createMockSharingApi(overrides: Partial<SharingApi> = {}): SharingApi {
   return {
@@ -44,7 +47,7 @@ describe('registerSharingTools', () => {
   it('should register both sharing tools via registerTool', () => {
     const { server, tools } = createFakeServer();
 
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     expect([...tools.keys()].sort()).toEqual([
       'get-collaborators',
@@ -54,7 +57,7 @@ describe('registerSharingTools', () => {
 
   it('should annotate get-collaborators as read-only and share-note as mutating non-destructive', () => {
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'get-collaborators').config.annotations).toEqual(
       READ_ONLY
@@ -66,7 +69,7 @@ describe('registerSharingTools', () => {
 
   it('should set titles and expected output-schema shapes on every tool', () => {
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'get-collaborators').config.title).toBe(
       'Get Collaborators'
@@ -83,7 +86,7 @@ describe('registerSharingTools', () => {
 
   it('should keep tool descriptions verbatim', () => {
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'get-collaborators').config.description).toBe(
       'List who has access to a note and their permission level (owner, editor, viewer).'
@@ -106,7 +109,7 @@ describe('registerSharingTools', () => {
       getCollaborators: vi.fn().mockResolvedValue(collaborators),
     });
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-collaborators').cb({
       noteId: 'note-1',
@@ -122,7 +125,7 @@ describe('registerSharingTools', () => {
 
   it('should report success from the share-note handler', async () => {
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'share-note').cb({
       noteId: 'note-1',
@@ -145,7 +148,7 @@ describe('registerSharingTools', () => {
       getCollaborators: vi.fn().mockRejectedValue(new Error('upstream down')),
     });
     const { server, tools } = createFakeServer();
-    registerSharingTools(server, sharingApi, authService, TEST_API_KEY);
+    registerSharingTools(server, sharingApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-collaborators').cb({
       noteId: 'note-1',
