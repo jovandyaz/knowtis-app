@@ -41,6 +41,7 @@ interface TokenOverrides {
   scope?: string;
   scopes?: string;
   omitScope?: boolean;
+  omitExp?: boolean;
 }
 
 async function signToken(overrides: TokenOverrides = {}): Promise<string> {
@@ -51,13 +52,15 @@ async function signToken(overrides: TokenOverrides = {}): Promise<string> {
   if (overrides.scopes !== undefined) {
     payload.scopes = overrides.scopes;
   }
-  return new SignJWT(payload)
+  const builder = new SignJWT(payload)
     .setProtectedHeader({ alg: 'ES256', kid: KID })
     .setIssuedAt()
     .setIssuer(overrides.issuer ?? ISSUER)
-    .setAudience(overrides.audience ?? RESOURCE_URL)
-    .setExpirationTime(overrides.expirationTime ?? '1h')
-    .sign(keyPair.privateKey);
+    .setAudience(overrides.audience ?? RESOURCE_URL);
+  if (!overrides.omitExp) {
+    builder.setExpirationTime(overrides.expirationTime ?? '1h');
+  }
+  return builder.sign(keyPair.privateKey);
 }
 
 function createVerifier(): OauthVerifier {
@@ -102,6 +105,13 @@ describe('OauthVerifier', () => {
   it('should reject a token from a different issuer', async () => {
     stubJwks();
     const token = await signToken({ issuer: 'https://evil.example.com' });
+
+    await expect(createVerifier().verify(token)).rejects.toThrow();
+  });
+
+  it('should reject a token with no exp claim', async () => {
+    stubJwks();
+    const token = await signToken({ omitExp: true });
 
     await expect(createVerifier().verify(token)).rejects.toThrow();
   });

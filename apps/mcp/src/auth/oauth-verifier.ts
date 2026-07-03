@@ -27,6 +27,7 @@ export class OauthVerifier {
       issuer: this.issuer,
       audience: this.resourceUrl,
       algorithms: ['ES256'],
+      requiredClaims: ['exp'],
     });
     return { scopes: extractScopes(payload) };
   }

@@ -7,6 +7,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { classifyBearer, type McpCredential } from './auth/credentials.js';
 import type { OauthVerifier } from './auth/oauth-verifier.js';
 import type { AppConfig, OauthConfig } from './config.js';
+import { log } from './middleware/logger.js';
 
 const SUPPORTED_SCOPES = ['notes:read', 'notes:write', 'notes:share'] as const;
 
@@ -65,7 +66,15 @@ export function createApp(
       try {
         const { scopes } = await oauthVerifier.verify(bearer);
         credential = { kind: 'oauth', jwt: bearer, scopes };
-      } catch {
+      } catch (error) {
+        log({
+          level: 'warn',
+          event: 'token_verify_rejected',
+          code:
+            error && typeof error === 'object' && 'code' in error
+              ? String((error as { code: unknown }).code)
+              : 'unknown',
+        });
         return c.json(
           {
             error: 'invalid_token',
