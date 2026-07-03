@@ -11,12 +11,22 @@ import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
 import { buildAllowedOrigins } from './config/cors-origins';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
+import {
+  applyBodyParsersExcludingOauth,
+  createOidcMount,
+} from './modules/oauth/oidc-mount.middleware';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // bodyParser off app-wide: oidc-provider reads the raw request stream, so
+  // parsers are re-applied below for every non-oauth path instead.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
   // Railway terminates TLS at a proxy; without this, req.ip is the proxy and
   // per-IP rate limits become global.
   app.set('trust proxy', 1);
+  app.use(createOidcMount(app));
+  applyBodyParsersExcludingOauth(app);
   const configService = app.get(ConfigService);
   const isDevelopment = configService.get('NODE_ENV') === 'development';
 

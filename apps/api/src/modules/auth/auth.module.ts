@@ -4,6 +4,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtModule, type JwtSignOptions } from '@nestjs/jwt';
 
+import { deriveOauthPublicKeys } from '../../config/oauth-public-keys';
 import { UsersModule } from '../users';
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
 import { AuthAccountController } from './auth-account.controller';
@@ -38,6 +39,9 @@ const configService = new ConfigService();
         refreshTokenExpiresIn: configService.get(
           'JWT_REFRESH_EXPIRES_IN',
           '7d'
+        ),
+        additionalPublicKeys: deriveOauthPublicKeys(
+          configService.get('OAUTH_JWKS')
         ),
       },
       userRepository: DrizzleUserRepository,

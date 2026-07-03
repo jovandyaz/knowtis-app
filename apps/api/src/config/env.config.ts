@@ -81,6 +81,10 @@ const envSchemaBase = z.object({
       'BYOK_ENCRYPTION_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)'
     )
     .optional(),
+  OAUTH_ISSUER: z.url().optional(),
+  OAUTH_JWKS: z.string().optional(),
+  OAUTH_COOKIE_KEYS: z.string().optional(),
+  MCP_RESOURCE_URL: z.url().optional(),
 });
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {

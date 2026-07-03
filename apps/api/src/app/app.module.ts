@@ -30,6 +30,7 @@ import { FeatureFlagsModule } from '../modules/feature-flags';
 import { HealthModule } from '../modules/health';
 import { McpModule } from '../modules/mcp/mcp.module';
 import { NotesModule } from '../modules/notes';
+import { OauthModule } from '../modules/oauth/oauth.module';
 import { ObservabilityModule } from '../modules/observability/observability.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -79,6 +80,7 @@ import { AppService } from './app.service';
     AuthorizationModule,
     McpModule,
     NotesModule,
+    OauthModule,
     CollaborationModule,
     HealthModule,
     ObservabilityModule,

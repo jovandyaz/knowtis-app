@@ -120,6 +120,27 @@
       "when": 1782976731622,
       "tag": "0016_mcp_scopes_namespaced",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1782978508708,
+      "tag": "0017_seed_mcp_oauth_flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1782979334294,
+      "tag": "0018_sticky_miek",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1783031712347,
+      "tag": "0019_cooing_weapon_omega",
+      "breakpoints": true
     }
   ]
 }

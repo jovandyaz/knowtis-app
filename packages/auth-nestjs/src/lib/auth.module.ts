@@ -36,6 +36,8 @@ export interface TokenConfig {
   readonly refreshTokenSecret: string;
   readonly accessTokenExpiresIn?: JwtSignOptions['expiresIn'];
   readonly refreshTokenExpiresIn?: string;
+  /** PEM-encoded public keys for asymmetric (ES256) verification. Empty = HS256-only. */
+  readonly additionalPublicKeys?: string[];
 }
 
 type InjectableClass = Type<any>;

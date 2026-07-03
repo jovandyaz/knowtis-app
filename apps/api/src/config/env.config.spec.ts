@@ -57,3 +57,37 @@ describe('env.config agent vars', () => {
     expect(() => validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '500' })).toThrow();
   });
 });
+
+describe('env.config oauth vars', () => {
+  it('parses a valid env without any OAuth vars (all optional)', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.OAUTH_ISSUER).toBeUndefined();
+    expect(env.OAUTH_JWKS).toBeUndefined();
+    expect(env.OAUTH_COOKIE_KEYS).toBeUndefined();
+    expect(env.MCP_RESOURCE_URL).toBeUndefined();
+  });
+
+  it('accepts OAuth vars when provided', () => {
+    const env = validateEnv({
+      ...baseEnv,
+      OAUTH_ISSUER: 'https://api.knowtis.app',
+      OAUTH_JWKS: '{"keys":[]}',
+      OAUTH_COOKIE_KEYS: 'a,b',
+      MCP_RESOURCE_URL: 'https://mcp.knowtis.app/mcp',
+    });
+    expect(env.OAUTH_ISSUER).toBe('https://api.knowtis.app');
+    expect(env.MCP_RESOURCE_URL).toBe('https://mcp.knowtis.app/mcp');
+  });
+
+  it('rejects a non-URL OAUTH_ISSUER', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, OAUTH_ISSUER: 'not-a-url' })
+    ).toThrow();
+  });
+
+  it('rejects a non-URL MCP_RESOURCE_URL', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, MCP_RESOURCE_URL: 'not-a-url' })
+    ).toThrow();
+  });
+});
