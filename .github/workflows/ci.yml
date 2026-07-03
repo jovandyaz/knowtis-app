@@ -159,5 +159,51 @@ jobs:
       - name: Pin service variables
         run: railway variable set "NODE_ENV=production" "MCP_ALLOWED_HOSTS=mcp.knowtis.app" --service "$RAILWAY_MCP_SERVICE_ID" --skip-deploys
 
+      - name: Assert OAuth env parity
+        env:
+          RAILWAY_API_SERVICE_ID: ${{ vars.RAILWAY_SERVICE_ID }}
+        run: |
+          set -euo pipefail
+
+          # Read each service's variables once. A CLI/auth/network failure here
+          # fails the deploy loudly instead of silently skipping the check.
+          api_vars="$(railway variable list --service "$RAILWAY_API_SERVICE_ID" --kv)"
+          mcp_vars="$(railway variable list --service "$RAILWAY_MCP_SERVICE_ID" --kv)"
+
+          extract() {
+            # $1 = dotenv blob, $2 = key; prints the raw value or empty if unset.
+            printf '%s\n' "$1" | grep -E "^$2=" | head -n1 | cut -d= -f2- || true
+          }
+
+          api_issuer="$(extract "$api_vars" OAUTH_ISSUER)"
+
+          # Guard: only assert once the api AS issuer is configured. While fully
+          # dark (issuer empty/unset) OAuth is off, so never block the deploy.
+          if [ -z "$api_issuer" ]; then
+            echo "OAUTH_ISSUER is empty on the api service — OAuth is dark; skipping parity check."
+            exit 0
+          fi
+
+          mcp_issuer="$(extract "$mcp_vars" MCP_OAUTH_ISSUER)"
+          api_resource="$(extract "$api_vars" MCP_RESOURCE_URL)"
+          mcp_resource="$(extract "$mcp_vars" MCP_RESOURCE_URL)"
+
+          drift=0
+          if [ "$mcp_issuer" != "$api_issuer" ]; then
+            echo "::error::OAuth issuer drift: mcp MCP_OAUTH_ISSUER='$mcp_issuer' != api OAUTH_ISSUER='$api_issuer'"
+            drift=1
+          fi
+          if [ "$mcp_resource" != "$api_resource" ]; then
+            echo "::error::Resource URL drift: mcp MCP_RESOURCE_URL='$mcp_resource' != api MCP_RESOURCE_URL='$api_resource'"
+            drift=1
+          fi
+
+          if [ "$drift" -ne 0 ]; then
+            echo "::error::OAuth env parity check failed — the RS would reject every OAuth token while API keys keep working. Fix the Railway vars before deploying."
+            exit 1
+          fi
+
+          echo "OAuth env parity OK: issuer='$api_issuer' resourceUrl='$api_resource'"
+
       - name: Deploy to Railway
         run: railway up --service "$RAILWAY_MCP_SERVICE_ID"
