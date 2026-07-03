@@ -11,6 +11,7 @@ import { SectionHeader } from './SectionHeader';
 import { AccountSection } from './sections/AccountSection';
 import { AIAssistantSection } from './sections/AIAssistantSection';
 import { AppearanceSection } from './sections/AppearanceSection';
+import { ConnectedAppsSection } from './sections/ConnectedAppsSection';
 import { IntegrationsSection } from './sections/IntegrationsSection';
 import { LanguageSection } from './sections/LanguageSection';
 import { ProfileSection } from './sections/ProfileSection';
@@ -41,6 +42,7 @@ const SECTION_COMPONENTS: Record<SettingsSection, ComponentType> = {
   aiAssistant: AIAssistantSection,
   notifications: () => <PlaceholderSection section="notifications" />,
   integrations: IntegrationsSection,
+  connectedApps: ConnectedAppsSection,
   account: AccountSection,
 };
 

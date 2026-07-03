@@ -68,7 +68,7 @@ export const Route = createFileRoute('/_app')({
       if (error instanceof SessionExpiredError) {
         throw redirect({
           to: ROUTES.LOGIN,
-          search: { redirect: location.pathname },
+          search: { redirect: location.href },
         });
       }
       throw error;

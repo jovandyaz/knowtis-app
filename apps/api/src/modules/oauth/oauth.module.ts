@@ -5,6 +5,7 @@ import type { EnvConfig } from '../../config/env.config';
 import { getOauthConfig } from '../../config/oauth.config';
 import { DATABASE_CONNECTION, type Database } from '../../database';
 import { FeatureFlagsModule } from '../feature-flags';
+import { OauthGrantsController } from './oauth-grants.controller';
 import { OauthInteractionController } from './oauth-interaction.controller';
 import {
   OAUTH_PROVIDER,
@@ -18,7 +19,7 @@ import {
 
 @Module({
   imports: [FeatureFlagsModule],
-  controllers: [OauthInteractionController],
+  controllers: [OauthInteractionController, OauthGrantsController],
   providers: [
     {
       provide: OAUTH_PROVIDER,

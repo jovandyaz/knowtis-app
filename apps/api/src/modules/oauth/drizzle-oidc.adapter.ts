@@ -31,6 +31,46 @@ export async function findGrantIdsByAccountAndClient(
   return rows.map((row) => row.id);
 }
 
+/**
+ * Returns every stored Grant row for an account, leaning on the partial index
+ * on (payload->>'accountId', payload->>'clientId') WHERE model='Grant'
+ * (accountId is the leading column).
+ */
+export function listGrantsByAccount(
+  db: Database,
+  accountId: string
+): Promise<OauthPayloadRow[]> {
+  return db
+    .select()
+    .from(oauthPayloads)
+    .where(
+      and(
+        eq(oauthPayloads.model, 'Grant'),
+        sql`${oauthPayloads.payload} ->> 'accountId' = ${accountId}`
+      )
+    );
+}
+
+/** True only when the grantId names a Grant row owned by the given account. */
+export async function grantBelongsToAccount(
+  db: Database,
+  grantId: string,
+  accountId: string
+): Promise<boolean> {
+  const rows = await db
+    .select({ id: oauthPayloads.id })
+    .from(oauthPayloads)
+    .where(
+      and(
+        eq(oauthPayloads.model, 'Grant'),
+        eq(oauthPayloads.id, grantId),
+        sql`${oauthPayloads.payload} ->> 'accountId' = ${accountId}`
+      )
+    )
+    .limit(1);
+  return rows.length > 0;
+}
+
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
 }

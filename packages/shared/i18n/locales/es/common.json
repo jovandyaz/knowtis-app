@@ -78,7 +78,8 @@
       "aiAssistant": "Asistente IA",
       "notifications": "Notificaciones",
       "account": "Cuenta",
-      "integrations": "Integraciones"
+      "integrations": "Integraciones",
+      "connectedApps": "Apps conectadas"
     },
     "descriptions": {
       "profile": "Administra la información de tu cuenta",
@@ -88,7 +89,8 @@
       "aiAssistant": "Configura las preferencias del modelo de IA",
       "notifications": "Administra tus notificaciones",
       "account": "Seguridad y configuración de la cuenta",
-      "integrations": "Gestiona API keys para integraciones externas"
+      "integrations": "Gestiona API keys para integraciones externas",
+      "connectedApps": "Apps que autorizaste con OAuth"
     }
   },
   "aiAssistant": {
@@ -157,6 +159,47 @@
     "copyKey": "Copiar",
     "keyCopied": "Key copiada al portapapeles",
     "done": "Listo"
+  },
+  "connectedApps": {
+    "title": "Apps conectadas",
+    "description": "Apps y asistentes de IA que autorizaste para acceder a tus notas con OAuth.",
+    "authorizedAt": "Autorizada",
+    "revoke": "Revocar acceso",
+    "revokeTitle": "Revocar acceso",
+    "revokeConfirm": "¿Revocar el acceso de \"{{name}}\"? Deberá autorizarse de nuevo para conectarse.",
+    "revokeSuccess": "Acceso revocado",
+    "emptyTitle": "Sin apps conectadas",
+    "emptyDescription": "Las apps que autorices con OAuth aparecerán aquí.",
+    "errorTitle": "No se pudieron cargar las apps conectadas",
+    "errorDescription": "Algo salió mal al cargar tus apps conectadas. Inténtalo de nuevo.",
+    "cancel": "Cancelar"
+  },
+  "oauth": {
+    "title": "Autorizar acceso",
+    "requestingAccess": "{{client}} quiere conectarse a tus notas de Knowtis.",
+    "redirectHostLabel": "Redirige a",
+    "redirectHostNotice": "Esta aplicación recibirá acceso en {{host}}. Continúa solo si confías en ella.",
+    "verifiedByUrl": "Verificado por URL",
+    "permissionsTitle": "Esto le permitirá",
+    "scopes": {
+      "notesRead": "Leer tus notas",
+      "notesWrite": "Crear y editar tus notas",
+      "notesShare": "Compartir tus notas con otros",
+      "offlineAccess": "Mantener el acceso sin volver a iniciar sesión"
+    },
+    "approve": "Aprobar",
+    "approving": "Autorizando...",
+    "deny": "Denegar",
+    "denying": "Cancelando...",
+    "loading": "Cargando solicitud...",
+    "errorTitle": "Solicitud inválida o expirada",
+    "errorDescription": "Esta solicitud de autorización ya no es válida. Vuelve a iniciarla desde la aplicación que te envió aquí.",
+    "decisionError": {
+      "alreadyResolved": "Esta solicitud ya fue respondida. Reinicia la conexión desde tu cliente MCP.",
+      "expired": "Esta solicitud expiró. Reinicia la conexión desde tu cliente MCP.",
+      "sessionExpired": "Tu sesión expiró. Inicia sesión de nuevo y reinicia la conexión desde tu cliente MCP.",
+      "retryable": "No pudimos completar tu solicitud. Inténtalo de nuevo."
+    }
   },
   "anonymous": {
     "guest": "Invitado",
