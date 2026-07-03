@@ -188,6 +188,26 @@ jobs:
           api_resource="$(extract "$api_vars" MCP_RESOURCE_URL)"
           mcp_resource="$(extract "$mcp_vars" MCP_RESOURCE_URL)"
 
+          # The api mints these values VERBATIM as the JWT aud/iss, while the RS
+          # (apps/mcp) normalizes its own copy (strips trailing slashes) before
+          # exact-matching. So a trailing slash on BOTH sides byte-equals here yet
+          # still makes the RS reject every token. Reject any slash outright — the
+          # canonical form is slashless — rather than normalize-then-compare.
+          reject_trailing_slash() {
+            # $1 = label, $2 = value
+            case "$2" in
+              */)
+                echo "::error::$1 has a trailing slash ('$2') — OAUTH_ISSUER/MCP_RESOURCE_URL are used verbatim as JWT aud/iss and must be canonical (no trailing slash), or the RS rejects every OAuth token."
+                exit 1
+                ;;
+            esac
+          }
+
+          reject_trailing_slash "api OAUTH_ISSUER" "$api_issuer"
+          reject_trailing_slash "mcp MCP_OAUTH_ISSUER" "$mcp_issuer"
+          reject_trailing_slash "api MCP_RESOURCE_URL" "$api_resource"
+          reject_trailing_slash "mcp MCP_RESOURCE_URL" "$mcp_resource"
+
           drift=0
           if [ "$mcp_issuer" != "$api_issuer" ]; then
             echo "::error::OAuth issuer drift: mcp MCP_OAUTH_ISSUER='$mcp_issuer' != api OAUTH_ISSUER='$api_issuer'"
