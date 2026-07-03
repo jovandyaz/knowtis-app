@@ -280,6 +280,9 @@ describe('OauthInteractionController', () => {
       RESOURCE_URL,
       'notes:read notes:write'
     );
+    expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith(
+      'notes:read notes:write'
+    );
     expect(grantInstances[0].rejectResourceScope).not.toHaveBeenCalled();
     expect(grantInstances[0].save).toHaveBeenCalled();
     expect(interaction.result).toEqual({
@@ -342,9 +345,32 @@ describe('OauthInteractionController', () => {
       RESOURCE_URL,
       'notes:read'
     );
+    expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith('notes:read');
     expect(grantInstances[0].rejectResourceScope).toHaveBeenCalledWith(
       RESOURCE_URL,
       'notes:write'
+    );
+    expect(grantInstances[0].rejectOIDCScope).toHaveBeenCalledWith(
+      'notes:write'
+    );
+  });
+
+  it('should grant notes scopes as both OIDC and resource scopes so consent resolves', async () => {
+    harness = await buildHarness(makeProvider());
+    harness.provider.Interaction.find.mockResolvedValue(
+      makeInteraction({ session: { accountId: TEST_USER.id } })
+    );
+
+    await postConfirm(harness.base, ['notes:read', 'notes:write']);
+
+    // notes:* are both OIDC and resource-server scopes; deciding only one
+    // dimension re-prompts forever, so both must be granted.
+    expect(grantInstances[0].addResourceScope).toHaveBeenCalledWith(
+      RESOURCE_URL,
+      'notes:read notes:write'
+    );
+    expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith(
+      'notes:read notes:write'
     );
   });
 
@@ -384,7 +410,10 @@ describe('OauthInteractionController', () => {
 
     await postConfirm(harness.base, ['notes:read', 'offline_access']);
 
-    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalled();
+    expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith('notes:read');
+    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalledWith(
+      'offline_access'
+    );
     expect(grantInstances[0].rejectOIDCScope).not.toHaveBeenCalled();
   });
 
@@ -403,7 +432,10 @@ describe('OauthInteractionController', () => {
 
     await postConfirm(harness.base, ['notes:read']);
 
-    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalled();
+    expect(grantInstances[0].addOIDCScope).toHaveBeenCalledWith('notes:read');
+    expect(grantInstances[0].addOIDCScope).not.toHaveBeenCalledWith(
+      'offline_access'
+    );
     expect(grantInstances[0].rejectOIDCScope).toHaveBeenCalledWith(
       'offline_access'
     );
