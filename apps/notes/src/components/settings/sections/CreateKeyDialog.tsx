@@ -24,10 +24,13 @@ import {
 } from '@knowtis/design-system';
 
 const SCOPE_OPTIONS = [
-  { value: 'read', labelKey: 'integrations.scopeOptions.read' },
-  { value: 'read,write', labelKey: 'integrations.scopeOptions.readWrite' },
+  { value: 'notes:read', labelKey: 'integrations.scopeOptions.read' },
   {
-    value: 'read,write,share',
+    value: 'notes:read,notes:write',
+    labelKey: 'integrations.scopeOptions.readWrite',
+  },
+  {
+    value: 'notes:read,notes:write,notes:share',
     labelKey: 'integrations.scopeOptions.readWriteShare',
   },
 ] as const;
@@ -51,7 +54,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
     formState: { errors },
   } = useForm<CreateMcpKeyFormValues>({
     resolver: zodResolver(createMcpKeySchema),
-    defaultValues: { name: '', scopes: 'read' },
+    defaultValues: { name: '', scopes: 'notes:read' },
   });
 
   const selectedScopes = watch('scopes');

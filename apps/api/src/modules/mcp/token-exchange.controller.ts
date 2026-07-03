@@ -28,7 +28,7 @@ const tokenExchangeResultSchema = {
       description: 'Token TTL in seconds',
       example: 900,
     },
-    scopes: { type: 'string', example: 'read,write' },
+    scopes: { type: 'string', example: 'notes:read,notes:write' },
   },
 };
 

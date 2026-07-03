@@ -3,13 +3,13 @@ import { createHash } from 'node:crypto';
 import { TokenCache } from './token-cache.js';
 
 const SCOPE_REQUIREMENTS: Record<string, string> = {
-  'list-notes': 'read',
-  'get-note': 'read',
-  'get-collaborators': 'read',
-  'create-note': 'write',
-  'update-note': 'write',
-  'delete-note': 'write',
-  'share-note': 'share',
+  'list-notes': 'notes:read',
+  'get-note': 'notes:read',
+  'get-collaborators': 'notes:read',
+  'create-note': 'notes:write',
+  'update-note': 'notes:write',
+  'delete-note': 'notes:write',
+  'share-note': 'notes:share',
 };
 
 export class AuthService {

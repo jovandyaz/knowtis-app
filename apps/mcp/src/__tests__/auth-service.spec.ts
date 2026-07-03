@@ -10,7 +10,7 @@ function mockExchangeResponse(token: string) {
     json: async () => ({
       accessToken: token,
       expiresIn: 900,
-      scopes: 'read,write',
+      scopes: 'notes:read,notes:write',
     }),
   };
 }
@@ -48,13 +48,24 @@ describe('AuthService', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('should enforce scopes from the cached entry for the exact key', async () => {
+  it('should enforce namespaced scopes from the cached entry', async () => {
     const service = new AuthService(EXCHANGE_URL);
-    const key = 'knowtis_mcp_live_aaaaaaaaaaaaaaaaaaaaaaaa';
-    await service.getToken(key);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        accessToken: 'jwt-1',
+        expiresIn: 900,
+        scopes: 'notes:read,notes:write',
+      }),
+    });
+    await service.getToken('knowtis_mcp_live_key');
 
-    expect(() => service.checkScope(key, 'share-note')).toThrow(/share/);
-    expect(() => service.checkScope(key, 'create-note')).not.toThrow();
+    expect(() =>
+      service.checkScope('knowtis_mcp_live_key', 'share-note')
+    ).toThrow(/notes:share/);
+    expect(() =>
+      service.checkScope('knowtis_mcp_live_key', 'create-note')
+    ).not.toThrow();
   });
 
   it('should throw when the token exchange responds non-ok', async () => {

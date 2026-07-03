@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { MCP_SCOPE_KEY } from '../decorators/require-mcp-scope.decorator';
 import { McpScopeGuard } from '../guards/mcp-scope.guard';
+import { MCP_SCOPES } from '../mcp-token';
 
 function createGuard(overrides: {
   scopeMetadata?: string;
@@ -50,7 +51,36 @@ function createGuard(overrides: {
   return { guard, reflector, jwtService, verifyAsync, context };
 }
 
+async function guardAllows(
+  payload: Record<string, unknown>,
+  requiredScope: string
+): Promise<boolean> {
+  const { guard, context } = createGuard({
+    scopeMetadata: requiredScope,
+    token: 'mcp-jwt',
+    payload: { sub: 'user-1', source: 'mcp', ...payload },
+  });
+
+  try {
+    return await guard.canActivate(context as never);
+  } catch (error) {
+    if (error instanceof ForbiddenException) {
+      return false;
+    }
+    throw error;
+  }
+}
+
 describe('McpScopeGuard', () => {
+  it('should accept namespaced scopes and reject legacy names', async () => {
+    await expect(
+      guardAllows({ scopes: 'notes:read,notes:write' }, MCP_SCOPES.WRITE)
+    ).resolves.toBe(true);
+    await expect(
+      guardAllows({ scopes: 'write' }, MCP_SCOPES.WRITE)
+    ).resolves.toBe(false);
+  });
+
   it('should pass when no Authorization header is present', async () => {
     const { guard, context, verifyAsync } = createGuard({});
 
@@ -78,7 +108,7 @@ describe('McpScopeGuard', () => {
 
   it('should pass for regular user JWT regardless of scope metadata', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'write',
+      scopeMetadata: 'notes:write',
       token: 'regular-jwt',
       payload: { sub: 'user-1', email: 'user@test.com' },
     });
@@ -89,7 +119,11 @@ describe('McpScopeGuard', () => {
   it('should throw ForbiddenException for MCP JWT on a route without scope metadata', async () => {
     const { guard, context } = createGuard({
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write,share' },
+      payload: {
+        sub: 'user-1',
+        source: 'mcp',
+        scopes: 'notes:read,notes:write,notes:share',
+      },
     });
 
     await expect(guard.canActivate(context as never)).rejects.toThrow(
@@ -99,9 +133,13 @@ describe('McpScopeGuard', () => {
 
   it('should pass for MCP JWT with sufficient scope', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'read',
+      scopeMetadata: 'notes:read',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write' },
+      payload: {
+        sub: 'user-1',
+        source: 'mcp',
+        scopes: 'notes:read,notes:write',
+      },
     });
 
     await expect(guard.canActivate(context as never)).resolves.toBe(true);
@@ -109,7 +147,7 @@ describe('McpScopeGuard', () => {
 
   it('should throw ForbiddenException for MCP JWT without scopes claim', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'read',
+      scopeMetadata: 'notes:read',
       token: 'mcp-jwt',
       payload: { sub: 'user-1', source: 'mcp' },
     });
@@ -121,9 +159,9 @@ describe('McpScopeGuard', () => {
 
   it('should throw ForbiddenException for MCP JWT with insufficient scope', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'write',
+      scopeMetadata: 'notes:write',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
     await expect(guard.canActivate(context as never)).rejects.toThrow(
@@ -133,9 +171,13 @@ describe('McpScopeGuard', () => {
 
   it('should throw ForbiddenException for MCP JWT missing share scope', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'share',
+      scopeMetadata: 'notes:share',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read,write' },
+      payload: {
+        sub: 'user-1',
+        source: 'mcp',
+        scopes: 'notes:read,notes:write',
+      },
     });
 
     await expect(guard.canActivate(context as never)).rejects.toThrow(
@@ -145,21 +187,21 @@ describe('McpScopeGuard', () => {
 
   it('should include required scope in error message', async () => {
     const { guard, context } = createGuard({
-      scopeMetadata: 'write',
+      scopeMetadata: 'notes:write',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
     await expect(guard.canActivate(context as never)).rejects.toThrow(
-      "'write'"
+      "'notes:write'"
     );
   });
 
   it('should verify the token signature with the configured secret pinned to HS256', async () => {
     const { guard, context, verifyAsync } = createGuard({
-      scopeMetadata: 'read',
+      scopeMetadata: 'notes:read',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
     await guard.canActivate(context as never);
@@ -173,7 +215,7 @@ describe('McpScopeGuard', () => {
   it('should pass for non-HTTP execution contexts', async () => {
     const { guard, context, verifyAsync } = createGuard({
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
       contextType: 'ws',
     });
 
@@ -183,9 +225,9 @@ describe('McpScopeGuard', () => {
 
   it('should use reflector with correct metadata key', async () => {
     const { guard, reflector, context } = createGuard({
-      scopeMetadata: 'read',
+      scopeMetadata: 'notes:read',
       token: 'mcp-jwt',
-      payload: { sub: 'user-1', source: 'mcp', scopes: 'read' },
+      payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
     await guard.canActivate(context as never);

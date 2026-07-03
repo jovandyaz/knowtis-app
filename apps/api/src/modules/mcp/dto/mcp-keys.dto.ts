@@ -7,6 +7,8 @@ import {
   MinLength,
 } from 'class-validator';
 
+import { MCP_SCOPE_CSVS, type McpScopeCsv } from '../mcp-token';
+
 export class CreateMcpKeyDto {
   @ApiProperty({
     description: 'Display name for the API key',
@@ -21,12 +23,12 @@ export class CreateMcpKeyDto {
 
   @ApiPropertyOptional({
     description: 'Comma-separated scopes for the key',
-    enum: ['read', 'read,write', 'read,write,share'],
-    default: 'read',
-    example: 'read,write',
+    enum: MCP_SCOPE_CSVS,
+    default: 'notes:read',
+    example: 'notes:read,notes:write',
   })
   @IsOptional()
   @IsString()
-  @IsIn(['read', 'read,write', 'read,write,share'])
-  scopes?: string;
+  @IsIn(MCP_SCOPE_CSVS)
+  scopes?: McpScopeCsv;
 }

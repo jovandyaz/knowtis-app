@@ -108,7 +108,7 @@ API keys are managed from the Knowtis web app under **Settings > Integrations**,
 curl -X POST http://localhost:3333/api/v1/mcp/keys \
   -H "Authorization: Bearer $JWT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "My Claude Key", "scopes": "read,write,share"}'
+  -d '{"name": "My Claude Key", "scopes": "notes:read,notes:write,notes:share"}'
 ```
 
 Response includes the full API key (shown only once):
@@ -119,16 +119,16 @@ Response includes the full API key (shown only once):
   "name": "My Claude Key",
   "key": "knowtis_mcp_...",
   "keyPrefix": "knowtis_mcp_...",
-  "scopes": "read,write,share",
+  "scopes": "notes:read,notes:write,notes:share",
   "createdAt": "2026-01-01T00:00:00.000Z"
 }
 ```
 
 **Available scopes:**
 
-- `read` — List and read notes, view collaborators
-- `read,write` — Above + create, update, delete notes
-- `read,write,share` — Above + share notes with other users
+- `notes:read` — List and read notes, view collaborators
+- `notes:read,notes:write` — Above + create, update, delete notes
+- `notes:read,notes:write,notes:share` — Above + share notes with other users
 
 ### List keys
 
@@ -150,15 +150,15 @@ Revocation stops new token exchanges immediately; tokens already issued for the 
 
 All 7 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
 
-| Tool                | Title             | Description                                        | Parameters                                                            | Result shape                                                      | Annotations                 | Scope   |
-| ------------------- | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- | ------- |
-| `list-notes`        | List Notes        | List the user's notes with an optional search      | `search?` (string)                                                    | `{ notes: [{ id, title, updatedAt }] }`                           | read-only, idempotent       | `read`  |
-| `get-note`          | Get Note          | Get the full content of a specific note by ID      | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | read-only, idempotent       | `read`  |
-| `create-note`       | Create Note       | Create a note (title + optional Markdown content)  | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | create, non-idempotent      | `write` |
-| `update-note`       | Update Note       | Update the title or content of an existing note    | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | destructive, idempotent     | `write` |
-| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)       | `noteId` (UUID)                                                       | `{ success, message }`                                            | destructive, idempotent     | `write` |
-| `get-collaborators` | Get Collaborators | List who has access to a note and their permission | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`        | read-only, idempotent       | `read`  |
-| `share-note`        | Share Note        | Share a note with another user by their user ID    | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                     | non-destructive, idempotent | `share` |
+| Tool                | Title             | Description                                        | Parameters                                                            | Result shape                                                      | Annotations                 | Scope         |
+| ------------------- | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- | ------------- |
+| `list-notes`        | List Notes        | List the user's notes with an optional search      | `search?` (string)                                                    | `{ notes: [{ id, title, updatedAt }] }`                           | read-only, idempotent       | `notes:read`  |
+| `get-note`          | Get Note          | Get the full content of a specific note by ID      | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | read-only, idempotent       | `notes:read`  |
+| `create-note`       | Create Note       | Create a note (title + optional Markdown content)  | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | create, non-idempotent      | `notes:write` |
+| `update-note`       | Update Note       | Update the title or content of an existing note    | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | destructive, idempotent     | `notes:write` |
+| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)       | `noteId` (UUID)                                                       | `{ success, message }`                                            | destructive, idempotent     | `notes:write` |
+| `get-collaborators` | Get Collaborators | List who has access to a note and their permission | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`        | read-only, idempotent       | `notes:read`  |
+| `share-note`        | Share Note        | Share a note with another user by their user ID    | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                     | non-destructive, idempotent | `notes:share` |
 
 `create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting.
 
@@ -199,7 +199,7 @@ Notes / Sharing API endpoints
 2. On the first tool call, the server exchanges the API key for a short-lived JWT via `POST /api/v1/auth/token-exchange`.
 3. The JWT is cached in a **module-scope, shared token cache** keyed by the **SHA-256 hash of the full API key** (never the raw key), with a 1-minute buffer subtracted from the reported expiry. The cache is shared across all requests handled by the process.
 4. Subsequent calls reuse the cached JWT as a Bearer token until it nears expiry.
-5. **Scope enforcement** happens per tool: each tool declares a required scope (`read`, `write`, or `share`), and a call is rejected if the key's scopes don't include it.
+5. **Scope enforcement** happens per tool: each tool declares a required scope (`notes:read`, `notes:write`, or `notes:share`), and a call is rejected if the key's scopes don't include it.
 
 ## Local Development
 
