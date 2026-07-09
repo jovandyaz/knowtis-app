@@ -5,6 +5,7 @@ import { TokenCache } from './token-cache.js';
 const SCOPE_REQUIREMENTS: Record<string, string> = {
   'list-notes': 'notes:read',
   'get-note': 'notes:read',
+  'search-notes': 'notes:read',
   'get-collaborators': 'notes:read',
   'create-note': 'notes:write',
   'update-note': 'notes:write',

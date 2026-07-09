@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { NotesApi } from '../api-client/notes.api.js';
+import type { SearchApi } from '../api-client/search.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
@@ -29,9 +30,19 @@ const noteShape = {
   updatedAt: z.string(),
 };
 
+const searchHitShape = {
+  id: z.string(),
+  title: z.string(),
+  updatedAt: z.string(),
+  isOwner: z.boolean(),
+  isSharedWithMe: z.boolean(),
+  isPubliclyShared: z.boolean(),
+};
+
 export function registerNotesTools(
   server: McpServer,
   notesApi: NotesApi,
+  searchApi: SearchApi,
   authService: AuthService,
   credential?: McpCredential
 ): void {
@@ -84,6 +95,41 @@ export function registerNotesTools(
           ...(nextCursor ? { nextCursor } : {}),
         };
       },
+      credential
+    )
+  );
+
+  server.registerTool(
+    'search-notes',
+    {
+      title: 'Search Notes',
+      description:
+        'Search across all accessible notes by meaning and keywords ' +
+        '(hybrid full-text + semantic). Returns the most relevant notes; ' +
+        'use get-note to read a result.',
+      inputSchema: {
+        query: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe('What to look for, e.g. "budget decisions from June"'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe('Maximum hits to return (default 20)'),
+      },
+      outputSchema: { hits: z.array(z.object(searchHitShape)) },
+      annotations: READ_ONLY,
+    },
+    wrapToolHandler(
+      'search-notes',
+      authService,
+      async (token, { query, limit }) => ({
+        hits: await searchApi.search(token, query, limit),
+      }),
       credential
     )
   );

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteResponse, NotesApi } from '../api-client/notes.api.js';
-import type { AuthService } from '../auth/auth-service.js';
+import type { SearchApi, SearchHit } from '../api-client/search.api.js';
+import { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { registerNotesTools } from '../tools/notes.tools.js';
 import {
@@ -24,6 +25,13 @@ function createMockNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
   } as unknown as NotesApi;
 }
 
+function createMockSearchApi(overrides: Partial<SearchApi> = {}): SearchApi {
+  return {
+    search: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  } as unknown as SearchApi;
+}
+
 const READ_ONLY = {
   readOnlyHint: true,
   destructiveHint: false,
@@ -40,30 +48,33 @@ const DESTRUCTIVE_IDEMPOTENT = {
 
 describe('registerNotesTools', () => {
   let notesApi: NotesApi;
+  let searchApi: SearchApi;
   let authService: AuthService;
 
   beforeEach(() => {
     notesApi = createMockNotesApi();
+    searchApi = createMockSearchApi();
     authService = createMockAuthService();
   });
 
-  it('should register all five notes tools via registerTool', () => {
+  it('should register all six notes tools via registerTool', () => {
     const { server, tools } = createFakeServer();
 
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     expect([...tools.keys()].sort()).toEqual([
       'create-note',
       'delete-note',
       'get-note',
       'list-notes',
+      'search-notes',
       'update-note',
     ]);
   });
 
   it('should annotate delete-note as destructive and get/list as read-only', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'delete-note').config.annotations).toEqual(
       DESTRUCTIVE_IDEMPOTENT
@@ -75,7 +86,7 @@ describe('registerNotesTools', () => {
 
   it('should annotate update-note as destructive-idempotent and create-note as non-idempotent', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'update-note').config.annotations).toEqual(
       DESTRUCTIVE_IDEMPOTENT
@@ -90,7 +101,7 @@ describe('registerNotesTools', () => {
 
   it('should set titles and expected output-schema shapes on every tool', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'list-notes').config.title).toBe('List Notes');
     expect(getTool(tools, 'create-note').config.title).toBe('Create Note');
@@ -113,7 +124,7 @@ describe('registerNotesTools', () => {
 
   it('should keep tool descriptions verbatim', () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'list-notes').config.description).toBe(
       "List user's notes ordered by recency. Use cursor from a previous " +
@@ -140,7 +151,7 @@ describe('registerNotesTools', () => {
       list: vi.fn().mockResolvedValue([fullNote]),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'list-notes').cb({ search: 'my' });
 
@@ -175,7 +186,7 @@ describe('registerNotesTools', () => {
       list: vi.fn().mockResolvedValue(upstream),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const page1 = await getTool(tools, 'list-notes').cb({ limit: 2 });
 
@@ -224,7 +235,7 @@ describe('registerNotesTools', () => {
       get: vi.fn().mockResolvedValue(fullNote),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
 
@@ -249,7 +260,7 @@ describe('registerNotesTools', () => {
       get: vi.fn().mockResolvedValue(fullNote),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
 
@@ -275,7 +286,7 @@ describe('registerNotesTools', () => {
       create: vi.fn().mockResolvedValue(createdNote),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'create-note').cb({
       title: 'T',
@@ -301,7 +312,7 @@ describe('registerNotesTools', () => {
       update: vi.fn().mockResolvedValue(updatedNote),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'update-note').cb({
       noteId: 'note-3',
@@ -316,7 +327,7 @@ describe('registerNotesTools', () => {
 
   it('should confirm deletion from the delete-note handler', async () => {
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'delete-note').cb({ noteId: 'note-1' });
 
@@ -328,12 +339,70 @@ describe('registerNotesTools', () => {
     });
   });
 
+  it('should search notes via /api/v1/search and return hits', async () => {
+    const hit: SearchHit = {
+      id: 'note-7',
+      title: 'Q2 budget decisions',
+      updatedAt: '2026-06-15T00:00:00.000Z',
+      isOwner: true,
+      isSharedWithMe: false,
+      isPubliclyShared: false,
+    };
+    searchApi = createMockSearchApi({
+      search: vi.fn().mockResolvedValue([hit]),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'search-notes').cb({ query: 'budget' });
+
+    expect(searchApi.search).toHaveBeenCalledWith(
+      'jwt-token-123',
+      'budget',
+      undefined
+    );
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({ hits: [hit] });
+  });
+
+  it('should forward the limit argument to searchApi.search', async () => {
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    await getTool(tools, 'search-notes').cb({ query: 'budget', limit: 5 });
+
+    expect(searchApi.search).toHaveBeenCalledWith('jwt-token-123', 'budget', 5);
+  });
+
+  it('should reject search-notes without notes:read scope', async () => {
+    const oauthCredential: McpCredential = {
+      kind: 'oauth',
+      jwt: 'oauth-jwt',
+      scopes: ['notes:write'],
+    };
+    const realAuthService = new AuthService('http://localhost/exchange');
+    const { server, tools } = createFakeServer();
+    registerNotesTools(
+      server,
+      notesApi,
+      searchApi,
+      realAuthService,
+      oauthCredential
+    );
+
+    const result = await getTool(tools, 'search-notes').cb({ query: 'budget' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('notes:read');
+    expect(searchApi.search).not.toHaveBeenCalled();
+  });
+
   it('should surface API failures as isError results', async () => {
     notesApi = createMockNotesApi({
       list: vi.fn().mockRejectedValue(new Error('upstream exploded')),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'list-notes').cb({});
 
@@ -349,7 +418,7 @@ describe('registerNotesTools', () => {
         .mockRejectedValue(new Error('Authentication failed: key revoked')),
     });
     const { server, tools } = createFakeServer();
-    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
 
