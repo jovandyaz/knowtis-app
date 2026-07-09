@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import pkg from '../../package.json';
-import { parseConfig } from '../config.js';
+import { parseConfig, resolveApiUrl } from '../config.js';
 import { logOauthConfig } from '../middleware/logger.js';
 
 describe('parseConfig', () => {
@@ -68,6 +68,18 @@ describe('parseConfig', () => {
         NODE_ENV: 'production',
       })
     ).toThrow(/MCP_ALLOWED_HOSTS or MCP_ALLOWED_ORIGINS/);
+  });
+
+  it('should not require hosts or origins when requireHttpSecurity is false', () => {
+    expect(() =>
+      parseConfig(
+        {
+          API_INTERNAL_URL: 'http://localhost:3333',
+          NODE_ENV: 'production',
+        },
+        { requireHttpSecurity: false }
+      )
+    ).not.toThrow();
   });
 
   it('should strip trailing slashes from API_INTERNAL_URL', () => {
@@ -145,9 +157,7 @@ describe('parseConfig', () => {
       throw new Error('expected oauth config to be populated');
     }
 
-    const writeSpy = vi
-      .spyOn(process.stderr, 'write')
-      .mockReturnValue(true);
+    const writeSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true);
     let callCount: number;
     let written: string;
     try {
@@ -166,5 +176,32 @@ describe('parseConfig', () => {
       issuer: 'https://api.knowtis.app',
       resourceUrl: 'https://mcp.knowtis.app/mcp',
     });
+  });
+});
+
+describe('resolveApiUrl', () => {
+  it('should prefer KNOWTIS_API_URL when set', () => {
+    expect(
+      resolveApiUrl({
+        KNOWTIS_API_URL: 'https://custom.example.com',
+        API_INTERNAL_URL: 'http://localhost:3333',
+      })
+    ).toBe('https://custom.example.com');
+  });
+
+  it('should fall back to API_INTERNAL_URL when KNOWTIS_API_URL is unset', () => {
+    expect(resolveApiUrl({ API_INTERNAL_URL: 'http://localhost:3333' })).toBe(
+      'http://localhost:3333'
+    );
+  });
+
+  it('should treat empty KNOWTIS_API_URL as absent and use the default', () => {
+    expect(resolveApiUrl({ KNOWTIS_API_URL: '' })).toBe(
+      'https://api.knowtis.app'
+    );
+  });
+
+  it('should default to the production API url when nothing is set', () => {
+    expect(resolveApiUrl({})).toBe('https://api.knowtis.app');
   });
 });

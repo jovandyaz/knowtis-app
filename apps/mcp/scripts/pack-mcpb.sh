@@ -10,6 +10,8 @@ if [ "$VERSION" != "$MANIFEST_VERSION" ]; then
   exit 1
 fi
 
+rm -rf "$STAGING"
+mkdir -p "$STAGING/server"
 pnpm exec nx run mcp:build-mcpb
 cp "$ROOT/apps/mcp/mcpb/manifest.json" "$STAGING/manifest.json"
 cp "$ROOT/apps/mcp/mcpb/icon.png" "$STAGING/icon.png"
