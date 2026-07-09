@@ -11,6 +11,7 @@ const SCOPE_REQUIREMENTS: Record<string, string> = {
   'update-note': 'notes:write',
   'delete-note': 'notes:write',
   'share-note': 'notes:share',
+  'note-resource': 'notes:read',
 };
 
 export class AuthService {
