@@ -1,0 +1,26 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.knowtis/knowtis",
+  "title": "Knowtis",
+  "description": "Create, search and manage Knowtis collaborative notes from AI assistants.",
+  "websiteUrl": "https://knowtis.app",
+  "repository": {
+    "url": "https://github.com/jovandyaz/knowtis-app",
+    "source": "github",
+    "subfolder": "apps/mcp"
+  },
+  "version": "0.1.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.knowtis.app/mcp"
+    }
+  ],
+  "icons": [
+    {
+      "src": "https://knowtis.app/apple-touch-icon.png",
+      "sizes": ["180x180"],
+      "mimeType": "image/png"
+    }
+  ]
+}
