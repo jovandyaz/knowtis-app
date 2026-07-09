@@ -121,4 +121,19 @@ describe('htmlToMarkdown', () => {
     expect(eq).toContain('x = y');
     expect(eq).not.toContain('<mark>');
   });
+
+  it('should not double-escape a leading == run into a visible backslash', () => {
+    const html = markdownToHtml(htmlToMarkdown('<p>==foo== rest</p>'));
+    expect(html).toContain('==foo== rest');
+    expect(html).not.toContain('\\==');
+    expect(html).not.toContain('<mark>');
+  });
+
+  it('should not double-escape a leading ~~~ run into a visible backslash', () => {
+    const html = markdownToHtml(htmlToMarkdown('<p>~~~foo</p>'));
+    expect(html).toContain('~~~foo');
+    expect(html).not.toContain('\\~');
+    expect(html).not.toContain('<sub>');
+    expect(html).not.toContain('<s>');
+  });
 });

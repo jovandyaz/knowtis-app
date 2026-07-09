@@ -58,14 +58,14 @@ turndown.addRule('strikethrough', {
   replacement: (content) => `~~${content}~~`,
 });
 
-// turndown runs escape only on text nodes, never on rule output (turndown.cjs.js:703),
-// so escaping literal '~ ^ ==' here keeps them literal on the markdownToHtml round-trip
-// (markdown-it-sub/sup/mark would otherwise re-interpret them) while intended marks stay intact.
+// turndown runs escape only on text nodes (nodeType 3), never on rule output, so escaping literal
+// '~ ^ ==' here keeps them literal across the markdownToHtml round-trip (else markdown-it-sub/sup/mark
+// re-parses them); the lookbehind skips delimiters default escape already backslashed to avoid a leaked '\'.
 const defaultEscape = turndown.escape.bind(turndown);
 turndown.escape = (text) =>
   defaultEscape(text)
-    .replace(/[~^]/g, '\\$&')
-    .replace(/={2,}/g, (run) => run.replace(/=/g, '\\='));
+    .replace(/(?<!\\)[~^]/g, '\\$&')
+    .replace(/(?<!\\)={2,}/g, (run) => run.replace(/=/g, '\\='));
 
 /**
  * Converts Tiptap-produced HTML to Markdown, inverting `markdownToHtml`:
