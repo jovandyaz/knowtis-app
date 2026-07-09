@@ -339,7 +339,7 @@ describe('registerNotesTools', () => {
     });
   });
 
-  it('should search notes via /api/v1/search and return hits', async () => {
+  it('should return search hits for a given query', async () => {
     const hit: SearchHit = {
       id: 'note-7',
       title: 'Q2 budget decisions',
@@ -372,6 +372,20 @@ describe('registerNotesTools', () => {
     await getTool(tools, 'search-notes').cb({ query: 'budget', limit: 5 });
 
     expect(searchApi.search).toHaveBeenCalledWith('jwt-token-123', 'budget', 5);
+  });
+
+  it('should surface search-notes API failures as isError results', async () => {
+    searchApi = createMockSearchApi({
+      search: vi.fn().mockRejectedValue(new Error('search backend down')),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'search-notes').cb({ query: 'budget' });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('search backend down');
+    expect(result.structuredContent).toBeUndefined();
   });
 
   it('should reject search-notes without notes:read scope', async () => {

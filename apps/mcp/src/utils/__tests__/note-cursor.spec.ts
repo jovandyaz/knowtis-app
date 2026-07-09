@@ -36,11 +36,30 @@ describe('note cursor', () => {
   it('should order by updatedAt desc then id desc and paginate without gaps or dupes', () => {
     const page1 = paginateByRecency(items, 2);
     expect(page1.page.map((n) => n.id)).toEqual(['b', 'd']);
-    expect(page1.nextCursor).toBeDefined();
+    expect(decodeNoteCursor(page1.nextCursor ?? '')).toEqual({
+      u: '2026-07-02T10:00:00.000Z',
+      i: 'd',
+    });
 
     const page2 = paginateByRecency(items, 2, page1.nextCursor);
     expect(page2.page.map((n) => n.id)).toEqual(['c', 'a']);
     expect(page2.nextCursor).toBeUndefined();
+  });
+
+  it('should return an empty page and no cursor for empty input', () => {
+    expect(paginateByRecency([], 2)).toEqual({ page: [] });
+  });
+
+  it('should resume from the next item when the cursor points to a deleted note', () => {
+    const cursorForD = encodeNoteCursor({
+      u: '2026-07-02T10:00:00.000Z',
+      i: 'd',
+    });
+    const withoutD = items.filter((n) => n.id !== 'd');
+
+    const { page } = paginateByRecency(withoutD, 2, cursorForD);
+
+    expect(page.map((n) => n.id)).toEqual(['c', 'a']);
   });
 
   it('should omit nextCursor when the page is not full', () => {
