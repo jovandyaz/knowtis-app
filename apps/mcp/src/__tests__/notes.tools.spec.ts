@@ -98,7 +98,7 @@ describe('registerNotesTools', () => {
     expect(getTool(tools, 'delete-note').config.title).toBe('Delete Note');
 
     const expectedOutputKeys: Record<string, string[]> = {
-      'list-notes': ['notes'],
+      'list-notes': ['notes', 'nextCursor'],
       'get-note': ['note'],
       'create-note': ['note'],
       'update-note': ['note'],
@@ -116,7 +116,8 @@ describe('registerNotesTools', () => {
     registerNotesTools(server, notesApi, authService, CREDENTIAL);
 
     expect(getTool(tools, 'list-notes').config.description).toBe(
-      "List user's notes with optional search filter. Returns title, id, and last modified date."
+      "List user's notes ordered by recency. Use cursor from a previous " +
+        'call to fetch the next page; prefer search-notes for content lookup.'
     );
     expect(getTool(tools, 'delete-note').config.description).toBe(
       'Permanently delete a note. This action cannot be undone.'
@@ -154,6 +155,60 @@ describe('registerNotesTools', () => {
         },
       ],
     });
+  });
+
+  it('should paginate list-notes and expose nextCursor', async () => {
+    const note = (id: string, updatedAt: string): NoteResponse => ({
+      id,
+      title: `Note ${id}`,
+      content: `<p>${id}</p>`,
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt,
+    });
+    const upstream = [
+      note('note-1', '2026-01-01T00:00:00.000Z'),
+      note('note-2', '2026-01-02T00:00:00.000Z'),
+      note('note-3', '2026-01-03T00:00:00.000Z'),
+    ];
+    notesApi = createMockNotesApi({
+      list: vi.fn().mockResolvedValue(upstream),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+
+    const page1 = await getTool(tools, 'list-notes').cb({ limit: 2 });
+
+    expect(page1.isError).toBeUndefined();
+    expect(page1.structuredContent?.notes).toEqual([
+      {
+        id: 'note-3',
+        title: 'Note note-3',
+        updatedAt: '2026-01-03T00:00:00.000Z',
+      },
+      {
+        id: 'note-2',
+        title: 'Note note-2',
+        updatedAt: '2026-01-02T00:00:00.000Z',
+      },
+    ]);
+    const nextCursor = page1.structuredContent?.nextCursor;
+    expect(typeof nextCursor).toBe('string');
+
+    const page2 = await getTool(tools, 'list-notes').cb({
+      limit: 2,
+      cursor: nextCursor,
+    });
+
+    expect(page2.isError).toBeUndefined();
+    expect(page2.structuredContent?.notes).toEqual([
+      {
+        id: 'note-1',
+        title: 'Note note-1',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    expect(page2.structuredContent?.nextCursor).toBeUndefined();
   });
 
   it('should return note content as Markdown from the get-note handler', async () => {

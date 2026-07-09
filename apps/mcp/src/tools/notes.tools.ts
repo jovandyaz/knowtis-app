@@ -6,6 +6,7 @@ import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
+import { paginateByRecency } from '../utils/note-cursor.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
   NON_DESTRUCTIVE,
@@ -39,27 +40,48 @@ export function registerNotesTools(
     {
       title: 'List Notes',
       description:
-        "List user's notes with optional search filter. Returns title, id, and last modified date.",
+        "List user's notes ordered by recency. Use cursor from a previous " +
+        'call to fetch the next page; prefer search-notes for content lookup.',
       inputSchema: {
         search: z
           .string()
           .optional()
           .describe('Search query to filter notes by title or content'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Page size (default 20)'),
+        cursor: z
+          .string()
+          .optional()
+          .describe('Opaque cursor from a previous list-notes call'),
       },
-      outputSchema: { notes: z.array(z.object(noteSummaryShape)) },
+      outputSchema: {
+        notes: z.array(z.object(noteSummaryShape)),
+        nextCursor: z.string().optional(),
+      },
       annotations: READ_ONLY,
     },
     wrapToolHandler(
       'list-notes',
       authService,
-      async (token, { search }) => {
+      async (token, { search, limit, cursor }) => {
         const notes = await notesApi.list(token, search);
+        const { page, nextCursor } = paginateByRecency(
+          notes,
+          limit ?? 20,
+          cursor
+        );
         return {
-          notes: notes.map(({ id, title, updatedAt }) => ({
+          notes: page.map(({ id, title, updatedAt }) => ({
             id,
             title,
             updatedAt,
           })),
+          ...(nextCursor ? { nextCursor } : {}),
         };
       },
       credential
