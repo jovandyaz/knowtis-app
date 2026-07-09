@@ -15,6 +15,16 @@ const SCOPE_REQUIREMENTS: Record<string, string> = {
   'note-resource': 'notes:read',
 };
 
+export const NO_CREDENTIAL_MESSAGE =
+  'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).';
+
+export class InsufficientScopeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InsufficientScopeError';
+  }
+}
+
 export class AuthService {
   private tokenCache: TokenCache;
   private tokenExchangeUrl: string;
@@ -77,7 +87,7 @@ export class AuthService {
 
     const scopes = cached.scopes.split(',');
     if (!scopes.includes(required)) {
-      throw new Error(
+      throw new InsufficientScopeError(
         `API key does not have '${required}' scope required for tool '${toolName}'.`
       );
     }
@@ -89,7 +99,7 @@ export class AuthService {
       return;
     }
     if (!scopes.includes(required)) {
-      throw new Error(
+      throw new InsufficientScopeError(
         `Access token does not have '${required}' scope required for tool '${toolName}'.`
       );
     }
@@ -108,9 +118,7 @@ export async function resolveCredentialToken(
   action: string
 ): Promise<string> {
   if (!credential) {
-    throw new Error(
-      'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
-    );
+    throw new Error(NO_CREDENTIAL_MESSAGE);
   }
   if (credential.kind === 'api-key') {
     const token = await authService.getToken(credential.apiKey);

@@ -19,8 +19,11 @@ export function wrapToolHandler<TArgs, TResult extends Record<string, unknown>>(
   credential?: McpCredential
 ): (args: TArgs) => Promise<ToolResult> {
   return async (args) => {
-    const logKey =
-      credential?.kind === 'api-key' ? credential.apiKey.slice(0, 24) : 'oauth';
+    const logKey = credential
+      ? credential.kind === 'api-key'
+        ? credential.apiKey.slice(0, 24)
+        : 'oauth'
+      : 'none';
     const start = Date.now();
 
     try {

@@ -10,7 +10,11 @@ import {
 import { ApiError } from '../api-client/client.js';
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
-import { resolveCredentialToken } from '../auth/auth-service.js';
+import {
+  InsufficientScopeError,
+  NO_CREDENTIAL_MESSAGE,
+  resolveCredentialToken,
+} from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { paginateByRecency } from '../utils/note-cursor.js';
@@ -24,15 +28,26 @@ async function resolveToken(
   credential: McpCredential | undefined
 ): Promise<string> {
   if (!credential) {
-    throw new McpError(
-      ErrorCode.InvalidRequest,
-      'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
-    );
+    throw new McpError(ErrorCode.InvalidRequest, NO_CREDENTIAL_MESSAGE);
   }
-  return resolveCredentialToken(authService, credential, 'note-resource');
+  try {
+    return await resolveCredentialToken(
+      authService,
+      credential,
+      'note-resource'
+    );
+  } catch (error) {
+    if (error instanceof InsufficientScopeError) {
+      throw new McpError(ErrorCode.InvalidRequest, error.message);
+    }
+    throw error;
+  }
 }
 
-function apiErrorToMcpError(error: ApiError): McpError {
+function apiErrorToMcpError(
+  error: ApiError,
+  fallbackMessage: string
+): McpError {
   switch (error.status) {
     case 404:
       return new McpError(ErrorCode.InvalidParams, 'Note not found.');
@@ -47,7 +62,7 @@ function apiErrorToMcpError(error: ApiError): McpError {
         'Authentication failed. Your API key may be invalid or expired.'
       );
     default:
-      return new McpError(ErrorCode.InternalError, 'Failed to read the note.');
+      return new McpError(ErrorCode.InternalError, fallbackMessage);
   }
 }
 
@@ -66,7 +81,15 @@ export function registerNoteResources(
     ListResourcesRequestSchema,
     async (request) => {
       const token = await resolveToken(authService, credential);
-      const notes = await notesApi.list(token);
+      let notes;
+      try {
+        notes = await notesApi.list(token);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw apiErrorToMcpError(error, 'Failed to list notes.');
+        }
+        throw error;
+      }
       const { page, nextCursor } = paginateByRecency(
         notes,
         PAGE_SIZE,
@@ -99,7 +122,7 @@ export function registerNoteResources(
         note = await notesApi.get(token, match[1]);
       } catch (error) {
         if (error instanceof ApiError) {
-          throw apiErrorToMcpError(error);
+          throw apiErrorToMcpError(error, 'Failed to read the note.');
         }
         throw error;
       }

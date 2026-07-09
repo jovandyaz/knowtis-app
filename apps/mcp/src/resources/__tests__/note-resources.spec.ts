@@ -149,9 +149,12 @@ describe('note resources', () => {
     const client = await connect(notesApi as unknown as NotesApi, {
       credential: { kind: 'oauth', jwt: 'jwt-token', scopes: ['notes:write'] },
     });
-    await expect(
-      client.readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
-    ).rejects.toThrow(/notes:read/);
+    const error = await client
+      .readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect((error as McpError).message).toContain('notes:read');
     expect(notesApi.get).not.toHaveBeenCalled();
   });
 
@@ -159,7 +162,10 @@ describe('note resources', () => {
     const client = await connect(notesApi as unknown as NotesApi, {
       credential: { kind: 'oauth', jwt: 'jwt-token', scopes: ['notes:write'] },
     });
-    await expect(client.listResources()).rejects.toThrow(/notes:read/);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect((error as McpError).message).toContain('notes:read');
     expect(notesApi.list).not.toHaveBeenCalled();
   });
 
@@ -216,7 +222,35 @@ describe('note resources', () => {
     const error = await client
       .readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
       .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidParams);
     expect((error as McpError).message).toContain('Note not found.');
+    expect((error as McpError).message).not.toContain(
+      'internal upstream detail'
+    );
+  });
+
+  it('should map an upstream 401 on resources/list without leaking the body', async () => {
+    notesApi.list.mockRejectedValue(
+      new ApiError(401, { message: 'internal upstream detail' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect((error as McpError).message).not.toContain(
+      'internal upstream detail'
+    );
+  });
+
+  it('should use a list-specific fallback for unmapped upstream errors on resources/list', async () => {
+    notesApi.list.mockRejectedValue(
+      new ApiError(500, { message: 'internal upstream detail' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).message).toContain('Failed to list notes.');
     expect((error as McpError).message).not.toContain(
       'internal upstream detail'
     );
