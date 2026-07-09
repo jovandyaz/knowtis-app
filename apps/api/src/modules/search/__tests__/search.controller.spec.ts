@@ -67,4 +67,16 @@ describe('SearchController', () => {
     expect(result.hits).toHaveLength(2);
     expect(result.hits.map((h) => h.id)).toEqual(['a', 'b']);
   });
+
+  it('should default to 20 hits when no limit is provided', async () => {
+    search.mockResolvedValue(
+      Array.from({ length: 25 }, (_, i) => hit(String(i)))
+    );
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    const result = await controller.search(user, dto);
+
+    expect(result.hits).toHaveLength(20);
+  });
 });
