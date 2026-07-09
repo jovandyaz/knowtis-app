@@ -79,4 +79,35 @@ describe('SearchController', () => {
 
     expect(result.hits).toHaveLength(20);
   });
+
+  it('should return a single hit when the limit is 1', async () => {
+    search.mockResolvedValue([hit('a'), hit('b')]);
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+    dto.limit = 1;
+
+    const result = await controller.search(user, dto);
+
+    expect(result.hits).toEqual([hit('a')]);
+  });
+
+  it('should return an empty hits array when retrieval finds nothing', async () => {
+    search.mockResolvedValue([]);
+    const dto = new SearchQueryDto();
+    dto.q = 'nope';
+
+    const result = await controller.search(user, dto);
+
+    expect(result).toEqual({ hits: [] });
+  });
+
+  it('should propagate errors from the retrieval port', async () => {
+    search.mockRejectedValue(new Error('retrieval failed'));
+    const dto = new SearchQueryDto();
+    dto.q = 'x';
+
+    await expect(controller.search(user, dto)).rejects.toThrow(
+      'retrieval failed'
+    );
+  });
 });

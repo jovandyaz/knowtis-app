@@ -42,6 +42,9 @@ const stubRetrieval: RetrievalPort = {
 class StubAgentModule {}
 
 describe('SearchModule bootstrap', () => {
+  // Guards the REAL AgentModule's export list. The DI-boot test below stubs
+  // AgentModule, so it cannot catch a regression that drops this export — only
+  // this metadata assertion can.
   it('exports RETRIEVAL_PORT from AgentModule for cross-module injection', () => {
     const exports: unknown[] =
       Reflect.getMetadata(MODULE_EXPORTS_KEY, AgentModule) ?? [];
