@@ -121,6 +121,9 @@ describe('registerNotesTools', () => {
     expect(getTool(tools, 'delete-note').config.description).toBe(
       'Permanently delete a note. This action cannot be undone.'
     );
+    expect(getTool(tools, 'get-note').config.description).toContain(
+      'Content is returned as Markdown.'
+    );
   });
 
   it('should return notes narrowed to id/title/updatedAt from list-notes handler', async () => {
@@ -201,6 +204,58 @@ describe('registerNotesTools', () => {
     });
     expect(result.structuredContent).toMatchObject({
       note: { content: expect.stringContaining('- [ ] item') },
+    });
+  });
+
+  it('should return created note content as Markdown from the create-note handler', async () => {
+    const createdNote: NoteResponse = {
+      id: 'note-2',
+      title: 'T',
+      content: '<h2>T</h2><p>b</p>',
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    notesApi = createMockNotesApi({
+      create: vi.fn().mockResolvedValue(createdNote),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'create-note').cb({
+      title: 'T',
+      content: '## T\n\nb',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      note: { ...createdNote, content: '## T\n\nb' },
+    });
+  });
+
+  it('should return updated note content as Markdown from the update-note handler', async () => {
+    const updatedNote: NoteResponse = {
+      id: 'note-3',
+      title: 'T',
+      content: '<h2>T</h2><p>b</p>',
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    notesApi = createMockNotesApi({
+      update: vi.fn().mockResolvedValue(updatedNote),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'update-note').cb({
+      noteId: 'note-3',
+      content: '## T\n\nb',
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      note: { ...updatedNote, content: '## T\n\nb' },
     });
   });
 
