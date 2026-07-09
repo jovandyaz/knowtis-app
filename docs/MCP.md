@@ -1,6 +1,6 @@
 # Knowtis MCP Server
 
-Model Context Protocol (MCP) server that lets AI assistants (Claude Desktop, Claude Code, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 7 tools for notes CRUD and sharing.
+Model Context Protocol (MCP) server that lets AI assistants (Claude Desktop, Claude Code, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 8 tools for notes CRUD, search, and sharing, plus every note as an MCP resource.
 
 The **hosted server is the primary way to connect**:
 
@@ -229,28 +229,48 @@ Revocation stops new token exchanges immediately; tokens already issued for the 
 
 ## Tools
 
-All 7 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
+All 8 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
 
-| Tool                | Title             | Description                                        | Parameters                                                            | Result shape                                                      | Annotations                 | Scope         |
-| ------------------- | ----------------- | -------------------------------------------------- | --------------------------------------------------------------------- | ----------------------------------------------------------------- | --------------------------- | ------------- |
-| `list-notes`        | List Notes        | List the user's notes with an optional search      | `search?` (string)                                                    | `{ notes: [{ id, title, updatedAt }] }`                           | read-only, idempotent       | `notes:read`  |
-| `get-note`          | Get Note          | Get the full content of a specific note by ID      | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | read-only, idempotent       | `notes:read`  |
-| `create-note`       | Create Note       | Create a note (title + optional Markdown content)  | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | create, non-idempotent      | `notes:write` |
-| `update-note`       | Update Note       | Update the title or content of an existing note    | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }` | destructive, idempotent     | `notes:write` |
-| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)       | `noteId` (UUID)                                                       | `{ success, message }`                                            | destructive, idempotent     | `notes:write` |
-| `get-collaborators` | Get Collaborators | List who has access to a note and their permission | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`        | read-only, idempotent       | `notes:read`  |
-| `share-note`        | Share Note        | Share a note with another user by their user ID    | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                     | non-destructive, idempotent | `notes:share` |
+| Tool                | Title             | Description                                                  | Parameters                                                            | Result shape                                                                      | Annotations                 | Scope         |
+| ------------------- | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------- | ------------- |
+| `list-notes`        | List Notes        | List the user's notes by recency, with cursor pagination     | `search?` (string), `limit?` (1–100, default 20), `cursor?` (opaque)  | `{ notes: [{ id, title, updatedAt }], nextCursor? }`                              | read-only, idempotent       | `notes:read`  |
+| `search-notes`      | Search Notes      | Hybrid (full-text + semantic) search across accessible notes | `query` (string), `limit?` (1–20, default 20)                         | `{ hits: [{ id, title, updatedAt, isOwner, isSharedWithMe, isPubliclyShared }] }` | read-only, idempotent       | `notes:read`  |
+| `get-note`          | Get Note          | Get the full content of a note, returned as **Markdown**     | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | read-only, idempotent       | `notes:read`  |
+| `create-note`       | Create Note       | Create a note (title + optional Markdown content)            | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | create, non-idempotent      | `notes:write` |
+| `update-note`       | Update Note       | Update the title or content of an existing note              | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | destructive, idempotent     | `notes:write` |
+| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)                 | `noteId` (UUID)                                                       | `{ success, message }`                                                            | destructive, idempotent     | `notes:write` |
+| `get-collaborators` | Get Collaborators | List who has access to a note and their permission           | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`                        | read-only, idempotent       | `notes:read`  |
+| `share-note`        | Share Note        | Share a note with another user by their user ID              | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                                     | non-destructive, idempotent | `notes:share` |
 
-`create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting.
+`create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting — and converts back on read: the `content` in `get-note`, `create-note`, and `update-note` results is always Markdown, never the stored HTML.
+
+`list-notes` orders by recency and paginates with an **opaque cursor**: when more notes remain, the result carries a `nextCursor` to pass to the next call. An invalid or missing cursor starts from the first page.
+
+`search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one.
 
 Annotation semantics (MCP tool hints):
 
-- **read-only** (`list-notes`, `get-note`, `get-collaborators`) — `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`.
+- **read-only** (`list-notes`, `search-notes`, `get-note`, `get-collaborators`) — `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`.
 - **create** (`create-note`) — not read-only, not destructive, `idempotentHint: false` (each call creates a new note).
 - **destructive, idempotent** (`update-note`, `delete-note`) — `destructiveHint: true`, `idempotentHint: true`.
 - **non-destructive, idempotent** (`share-note`) — not destructive, `idempotentHint: true`.
 
 All tools declare `openWorldHint: false`.
+
+The `initialize` result also declares server **instructions** — a one-paragraph orientation for the model (search with `search-notes`, read with `get-note`, write in Markdown, page `list-notes` by cursor, attach notes as resources).
+
+## Resources
+
+Every note is also exposed as an **MCP resource**, so clients can attach notes as context without a tool call. The server advertises one resource template (via `resources/templates/list`):
+
+```text
+knowtis://notes/{noteId}
+```
+
+- `resources/list` returns the user's notes ordered by recency in **pages of 20**, with an opaque `nextCursor` when more remain (same cursor mechanics as `list-notes`). Each entry carries the note title as `name` and `mimeType: text/markdown`.
+- `resources/read` on a note URI returns a single `text/markdown` content block: a `# <title>` heading followed by the note body converted to Markdown. A URI that doesn't match the template is rejected.
+
+Resource access requires the `notes:read` scope on both auth paths (API key and OAuth), enforced exactly like the tool scope checks.
 
 ## Auth Flow
 
@@ -389,7 +409,7 @@ For **stdio** mode (`stdio.ts`), use `KNOWTIS_API_URL` instead of `API_INTERNAL_
 apps/mcp/src/
 ├── index.ts                  # HTTP entry point (Hono + @hono/node-server)
 ├── stdio.ts                  # stdio entry point (dev-only)
-├── server.ts                 # MCP server factory (registers tools)
+├── server.ts                 # MCP server factory (instructions, tools, resources)
 ├── transport.ts              # Hono app: /health, CORS, PRM well-knowns, /mcp (Bearer check + Streamable HTTP)
 ├── config.ts                 # Zod-validated configuration
 ├── auth/
@@ -400,16 +420,21 @@ apps/mcp/src/
 ├── api-client/
 │   ├── client.ts             # Typed HTTP client for the Knowtis API
 │   ├── notes.api.ts          # Notes API methods
+│   ├── search.api.ts         # GET /api/v1/search (hybrid retrieval)
 │   └── sharing.api.ts        # Sharing API methods
 ├── middleware/
 │   └── logger.ts             # Structured logging
+├── resources/
+│   └── note-resources.ts     # knowtis://notes/{noteId} list/read/templates handlers
 ├── tools/
-│   ├── notes.tools.ts        # list/get/create/update/delete-note
+│   ├── notes.tools.ts        # list/search/get/create/update/delete-note
 │   ├── sharing.tools.ts      # get-collaborators, share-note
 │   ├── wrap-tool-handler.ts  # Auth + scope + logging + dual-result wrapper
 │   └── format-error.ts       # Tool error formatting
 └── utils/
-    └── markdown-to-html.ts   # Markdown → editor HTML for create/update
+    ├── html-to-markdown.ts   # Editor HTML → Markdown for reads (turndown)
+    ├── markdown-to-html.ts   # Markdown → editor HTML for create/update
+    └── note-cursor.ts        # Opaque base64url recency cursor + pagination
 ```
 
 ## Deployment

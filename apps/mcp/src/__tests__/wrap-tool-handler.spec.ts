@@ -3,7 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../api-client/client.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
+import { logToolCall } from '../middleware/logger.js';
 import { wrapToolHandler } from '../tools/wrap-tool-handler.js';
+
+vi.mock('../middleware/logger.js', () => ({
+  logToolCall: vi.fn(),
+}));
 
 function createMockAuthService(
   overrides: Partial<AuthService> = {}
@@ -38,6 +43,21 @@ describe('wrapToolHandler', () => {
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('No API key configured');
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it('should log missing-credential calls under the "none" key', async () => {
+    vi.mocked(logToolCall).mockClear();
+    const wrapped = wrapToolHandler('list-notes', authService, vi.fn());
+
+    await wrapped({});
+
+    expect(logToolCall).toHaveBeenCalledWith(
+      'list-notes',
+      'none',
+      expect.any(Number),
+      'error',
+      undefined
+    );
   });
 
   it('should authenticate with the configured API key', async () => {

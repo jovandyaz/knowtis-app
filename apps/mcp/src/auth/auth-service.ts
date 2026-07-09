@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import type { McpCredential } from './credentials.js';
 import { TokenCache } from './token-cache.js';
 
 const SCOPE_REQUIREMENTS: Record<string, string> = {
@@ -11,7 +12,18 @@ const SCOPE_REQUIREMENTS: Record<string, string> = {
   'update-note': 'notes:write',
   'delete-note': 'notes:write',
   'share-note': 'notes:share',
+  'note-resource': 'notes:read',
 };
+
+export const NO_CREDENTIAL_MESSAGE =
+  'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).';
+
+export class InsufficientScopeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InsufficientScopeError';
+  }
+}
 
 export class AuthService {
   private tokenCache: TokenCache;
@@ -75,7 +87,7 @@ export class AuthService {
 
     const scopes = cached.scopes.split(',');
     if (!scopes.includes(required)) {
-      throw new Error(
+      throw new InsufficientScopeError(
         `API key does not have '${required}' scope required for tool '${toolName}'.`
       );
     }
@@ -87,9 +99,32 @@ export class AuthService {
       return;
     }
     if (!scopes.includes(required)) {
-      throw new Error(
+      throw new InsufficientScopeError(
         `Access token does not have '${required}' scope required for tool '${toolName}'.`
       );
     }
   }
+}
+
+/**
+ * Resolves a bearer token for the given action, enforcing scope on the passed
+ * AuthService instance. api-key credentials exchange + scope-check; oauth
+ * credentials scope-check the presented JWT. Throws a plain Error when no
+ * credential is present — callers wrap it in their own error strategy.
+ */
+export async function resolveCredentialToken(
+  authService: AuthService,
+  credential: McpCredential | undefined,
+  action: string
+): Promise<string> {
+  if (!credential) {
+    throw new Error(NO_CREDENTIAL_MESSAGE);
+  }
+  if (credential.kind === 'api-key') {
+    const token = await authService.getToken(credential.apiKey);
+    authService.checkScope(credential.apiKey, action);
+    return token;
+  }
+  authService.checkScopes(credential.scopes, action);
+  return credential.jwt;
 }
