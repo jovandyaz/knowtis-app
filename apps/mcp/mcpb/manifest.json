@@ -1,0 +1,52 @@
+{
+  "manifest_version": "0.3",
+  "name": "knowtis",
+  "display_name": "Knowtis Notes",
+  "version": "0.1.0",
+  "description": "Create, search and manage your Knowtis collaborative notes from Claude.",
+  "author": {
+    "name": "Jovan Dyaz",
+    "url": "https://knowtis.app"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jovandyaz/knowtis-app"
+  },
+  "homepage": "https://knowtis.app",
+  "documentation": "https://github.com/jovandyaz/knowtis-app/blob/main/docs/MCP.md",
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/index.js"],
+      "env": {
+        "KNOWTIS_API_KEY": "${user_config.api_key}",
+        "KNOWTIS_API_URL": "${user_config.api_url}"
+      }
+    }
+  },
+  "user_config": {
+    "api_key": {
+      "type": "string",
+      "title": "Knowtis API Key",
+      "description": "Create one in Knowtis under Settings > Integrations (starts with knowtis_mcp_).",
+      "sensitive": true,
+      "required": true
+    },
+    "api_url": {
+      "type": "string",
+      "title": "API URL",
+      "description": "Knowtis API base URL. Leave the default unless self-hosting.",
+      "default": "https://api.knowtis.app",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": ["darwin", "win32"],
+    "runtimes": { "node": ">=20.0.0" }
+  },
+  "keywords": ["notes", "collaboration", "knowledge", "markdown"],
+  "license": "MIT"
+}

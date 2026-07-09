@@ -6,7 +6,10 @@ import { createMcpServer } from './server.js';
 
 const config = parseConfig({
   ...process.env,
-  API_INTERNAL_URL: process.env.KNOWTIS_API_URL ?? process.env.API_INTERNAL_URL,
+  API_INTERNAL_URL:
+    process.env.KNOWTIS_API_URL ||
+    process.env.API_INTERNAL_URL ||
+    'https://api.knowtis.app',
 });
 
 const defaultApiKey = process.env.KNOWTIS_API_KEY;
