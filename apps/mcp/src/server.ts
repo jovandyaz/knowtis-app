@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 import { KnowtisApiClient } from './api-client/client.js';
 import { NotesApi } from './api-client/notes.api.js';
+import { SearchApi } from './api-client/search.api.js';
 import { SharingApi } from './api-client/sharing.api.js';
 import type { AuthService } from './auth/auth-service.js';
 import type { McpCredential } from './auth/credentials.js';
@@ -27,9 +28,10 @@ export function createMcpServer({
 
   const apiClient = new KnowtisApiClient(config.apiInternalUrl);
   const notesApi = new NotesApi(apiClient);
+  const searchApi = new SearchApi(apiClient);
   const sharingApi = new SharingApi(apiClient);
 
-  registerNotesTools(server, notesApi, authService, credential);
+  registerNotesTools(server, notesApi, searchApi, authService, credential);
   registerSharingTools(server, sharingApi, authService, credential);
 
   return server;
