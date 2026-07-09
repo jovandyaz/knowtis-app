@@ -86,5 +86,6 @@ import { MemoryController } from './memory.controller';
     RunAgentTurnHandler,
     AgentGateway,
   ],
+  exports: [RETRIEVAL_PORT],
 })
 export class AgentModule {}

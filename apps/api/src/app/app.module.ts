@@ -32,6 +32,7 @@ import { McpModule } from '../modules/mcp/mcp.module';
 import { NotesModule } from '../modules/notes';
 import { OauthModule } from '../modules/oauth/oauth.module';
 import { ObservabilityModule } from '../modules/observability/observability.module';
+import { SearchModule } from '../modules/search';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -81,6 +82,7 @@ import { AppService } from './app.service';
     McpModule,
     NotesModule,
     OauthModule,
+    SearchModule,
     CollaborationModule,
     HealthModule,
     ObservabilityModule,
