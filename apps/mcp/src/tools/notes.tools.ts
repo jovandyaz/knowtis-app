@@ -110,13 +110,14 @@ export function registerNotesTools(
     wrapToolHandler(
       'create-note',
       authService,
-      async (token, { title, content }) => ({
-        note: await notesApi.create(
+      async (token, { title, content }) => {
+        const note = await notesApi.create(
           token,
           title,
           content ? markdownToHtml(content) : undefined
-        ),
-      }),
+        );
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
+      },
       credential
     )
   );
@@ -151,7 +152,8 @@ export function registerNotesTools(
         if (content !== undefined) {
           data.content = markdownToHtml(content);
         }
-        return { note: await notesApi.update(token, noteId, data) };
+        const note = await notesApi.update(token, noteId, data);
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
       },
       credential
     )
