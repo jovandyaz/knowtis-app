@@ -65,4 +65,60 @@ describe('htmlToMarkdown', () => {
     expect(roundTripped).toContain('==highlighted==');
     expect(roundTripped).toContain('H~2~O');
   });
+
+  it('should escape literal delimiters so they do not re-parse as marks', () => {
+    const cases: { text: string; visible: string }[] = [
+      { text: 'x == y == z', visible: 'x == y == z' },
+      { text: 'H~2~O', visible: 'H~2~O' },
+      { text: '2^3^', visible: '2^3^' },
+      { text: 'a~~b~~c', visible: 'a~~b~~c' },
+    ];
+    for (const { text, visible } of cases) {
+      const html = markdownToHtml(htmlToMarkdown(`<p>${text}</p>`));
+      expect(html).not.toContain('<mark>');
+      expect(html).not.toContain('<sub>');
+      expect(html).not.toContain('<sup>');
+      expect(html).not.toContain('<s>');
+      expect(html).toContain(visible);
+    }
+  });
+
+  it('should keep intended marks intact after the escape override', () => {
+    expect(htmlToMarkdown('<p><mark>hi</mark></p>')).toContain('==hi==');
+    expect(htmlToMarkdown('<p>H<sub>2</sub>O</p>')).toContain('~2~');
+    expect(htmlToMarkdown('<p>x<sup>3</sup></p>')).toContain('^3^');
+    expect(htmlToMarkdown('<p><s>gone</s></p>')).toContain('~~gone~~');
+  });
+
+  it('should round-trip a document co-locating sup, table, strike, mermaid and sub', () => {
+    const original = [
+      'E = mc^2^ with ~~old~~ and H~2~O.',
+      '',
+      '| A | B |',
+      '| --- | --- |',
+      '| 1 | 2 |',
+      '',
+      '```mermaid',
+      'graph TD;',
+      'A-->B',
+      '```',
+    ].join('\n');
+    const roundTripped = htmlToMarkdown(markdownToHtml(original));
+    expect(roundTripped).toContain('mc^2^');
+    expect(roundTripped).toContain('~~old~~');
+    expect(roundTripped).toContain('H~2~O');
+    expect(roundTripped).toContain('| A | B |');
+    expect(roundTripped).toContain('```mermaid');
+    expect(roundTripped).toContain('A-->B');
+  });
+
+  it('should preserve visible text for unpaired special characters', () => {
+    const bashrc = markdownToHtml(htmlToMarkdown('<p>~/.bashrc</p>'));
+    expect(bashrc).toContain('~/.bashrc');
+    expect(bashrc).not.toContain('<sub>');
+
+    const eq = markdownToHtml(htmlToMarkdown('<p>x = y</p>'));
+    expect(eq).toContain('x = y');
+    expect(eq).not.toContain('<mark>');
+  });
 });

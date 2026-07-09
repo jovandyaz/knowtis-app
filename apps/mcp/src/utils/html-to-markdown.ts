@@ -58,10 +58,21 @@ turndown.addRule('strikethrough', {
   replacement: (content) => `~~${content}~~`,
 });
 
+// turndown runs escape only on text nodes, never on rule output (turndown.cjs.js:703),
+// so escaping literal '~ ^ ==' here keeps them literal on the markdownToHtml round-trip
+// (markdown-it-sub/sup/mark would otherwise re-interpret them) while intended marks stay intact.
+const defaultEscape = turndown.escape.bind(turndown);
+turndown.escape = (text) =>
+  defaultEscape(text)
+    .replace(/[~^]/g, '\\$&')
+    .replace(/={2,}/g, (run) => run.replace(/=/g, '\\='));
+
 /**
  * Converts Tiptap-produced HTML to Markdown, inverting `markdownToHtml`:
  * task lists, `==mark==`, `~sub~`, `^sup^`, `~~del~~`, mermaid blocks and GFM
- * tables survive a round-trip.
+ * tables survive a round-trip. Intended marks (emitted by rules) round-trip
+ * unescaped; literal `~`, `^`, and `==` in text are backslash-escaped so they
+ * survive as literals rather than re-parsing into marks via `markdownToHtml`.
  */
 export function htmlToMarkdown(html: string): string {
   return turndown.turndown(html);
