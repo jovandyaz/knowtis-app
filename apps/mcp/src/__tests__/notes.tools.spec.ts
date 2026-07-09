@@ -153,6 +153,57 @@ describe('registerNotesTools', () => {
     });
   });
 
+  it('should return note content as Markdown from the get-note handler', async () => {
+    const fullNote: NoteResponse = {
+      id: 'note-1',
+      title: 'My Note',
+      content: '<p>secret body</p>',
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    notesApi = createMockNotesApi({
+      get: vi.fn().mockResolvedValue(fullNote),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
+
+    expect(notesApi.get).toHaveBeenCalledWith('jwt-token-123', 'note-1');
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      note: { ...fullNote, content: 'secret body' },
+    });
+  });
+
+  it('should convert rich HTML to Markdown in get-note content', async () => {
+    const fullNote: NoteResponse = {
+      id: 'note-1',
+      title: 'Plan Note',
+      content:
+        '<h2>Plan</h2><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>item</p></li></ul>',
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    notesApi = createMockNotesApi({
+      get: vi.fn().mockResolvedValue(fullNote),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'get-note').cb({ noteId: 'note-1' });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      note: { content: expect.stringContaining('## Plan') },
+    });
+    expect(result.structuredContent).toMatchObject({
+      note: { content: expect.stringContaining('- [ ] item') },
+    });
+  });
+
   it('should confirm deletion from the delete-note handler', async () => {
     const { server, tools } = createFakeServer();
     registerNotesTools(server, notesApi, authService, CREDENTIAL);

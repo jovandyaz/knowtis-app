@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
+import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
@@ -69,7 +70,8 @@ export function registerNotesTools(
     'get-note',
     {
       title: 'Get Note',
-      description: 'Get the full content of a specific note by ID.',
+      description:
+        'Get the full content of a specific note by ID. Content is returned as Markdown.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to retrieve'),
       },
@@ -79,9 +81,10 @@ export function registerNotesTools(
     wrapToolHandler(
       'get-note',
       authService,
-      async (token, { noteId }) => ({
-        note: await notesApi.get(token, noteId),
-      }),
+      async (token, { noteId }) => {
+        const note = await notesApi.get(token, noteId);
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
+      },
       credential
     )
   );
