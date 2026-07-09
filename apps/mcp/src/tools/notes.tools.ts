@@ -2,9 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 import type { NotesApi } from '../api-client/notes.api.js';
+import type { SearchApi } from '../api-client/search.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
+import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
+import { paginateByRecency } from '../utils/note-cursor.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
   NON_DESTRUCTIVE,
@@ -27,9 +30,19 @@ const noteShape = {
   updatedAt: z.string(),
 };
 
+const searchHitShape = {
+  id: z.string(),
+  title: z.string(),
+  updatedAt: z.string(),
+  isOwner: z.boolean(),
+  isSharedWithMe: z.boolean(),
+  isPubliclyShared: z.boolean(),
+};
+
 export function registerNotesTools(
   server: McpServer,
   notesApi: NotesApi,
+  searchApi: SearchApi,
   authService: AuthService,
   credential?: McpCredential
 ): void {
@@ -38,29 +51,85 @@ export function registerNotesTools(
     {
       title: 'List Notes',
       description:
-        "List user's notes with optional search filter. Returns title, id, and last modified date.",
+        "List user's notes ordered by recency. Use cursor from a previous " +
+        'call to fetch the next page; prefer search-notes for content lookup.',
       inputSchema: {
         search: z
           .string()
           .optional()
           .describe('Search query to filter notes by title or content'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(100)
+          .optional()
+          .describe('Page size (default 20)'),
+        cursor: z
+          .string()
+          .optional()
+          .describe('Opaque cursor from a previous list-notes call'),
       },
-      outputSchema: { notes: z.array(z.object(noteSummaryShape)) },
+      outputSchema: {
+        notes: z.array(z.object(noteSummaryShape)),
+        nextCursor: z.string().optional(),
+      },
       annotations: READ_ONLY,
     },
     wrapToolHandler(
       'list-notes',
       authService,
-      async (token, { search }) => {
+      async (token, { search, limit, cursor }) => {
         const notes = await notesApi.list(token, search);
+        const { page, nextCursor } = paginateByRecency(
+          notes,
+          limit ?? 20,
+          cursor
+        );
         return {
-          notes: notes.map(({ id, title, updatedAt }) => ({
+          notes: page.map(({ id, title, updatedAt }) => ({
             id,
             title,
             updatedAt,
           })),
+          ...(nextCursor ? { nextCursor } : {}),
         };
       },
+      credential
+    )
+  );
+
+  server.registerTool(
+    'search-notes',
+    {
+      title: 'Search Notes',
+      description:
+        'Search across all accessible notes by meaning and keywords ' +
+        '(hybrid full-text + semantic). Returns the most relevant notes; ' +
+        'use get-note to read a result.',
+      inputSchema: {
+        query: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe('What to look for, e.g. "budget decisions from June"'),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .optional()
+          .describe('Maximum hits to return (default 20)'),
+      },
+      outputSchema: { hits: z.array(z.object(searchHitShape)) },
+      annotations: READ_ONLY,
+    },
+    wrapToolHandler(
+      'search-notes',
+      authService,
+      async (token, { query, limit }) => ({
+        hits: await searchApi.search(token, query, limit),
+      }),
       credential
     )
   );
@@ -69,7 +138,8 @@ export function registerNotesTools(
     'get-note',
     {
       title: 'Get Note',
-      description: 'Get the full content of a specific note by ID.',
+      description:
+        'Get the full content of a specific note by ID. Content is returned as Markdown.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to retrieve'),
       },
@@ -79,9 +149,10 @@ export function registerNotesTools(
     wrapToolHandler(
       'get-note',
       authService,
-      async (token, { noteId }) => ({
-        note: await notesApi.get(token, noteId),
-      }),
+      async (token, { noteId }) => {
+        const note = await notesApi.get(token, noteId);
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
+      },
       credential
     )
   );
@@ -107,13 +178,14 @@ export function registerNotesTools(
     wrapToolHandler(
       'create-note',
       authService,
-      async (token, { title, content }) => ({
-        note: await notesApi.create(
+      async (token, { title, content }) => {
+        const note = await notesApi.create(
           token,
           title,
           content ? markdownToHtml(content) : undefined
-        ),
-      }),
+        );
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
+      },
       credential
     )
   );
@@ -148,7 +220,8 @@ export function registerNotesTools(
         if (content !== undefined) {
           data.content = markdownToHtml(content);
         }
-        return { note: await notesApi.update(token, noteId, data) };
+        const note = await notesApi.update(token, noteId, data);
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
       },
       credential
     )
