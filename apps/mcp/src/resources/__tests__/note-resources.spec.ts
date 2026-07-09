@@ -140,9 +140,12 @@ describe('note resources', () => {
 
   it('should reject reads for malformed URIs', async () => {
     const client = await connect(notesApi as unknown as NotesApi);
-    await expect(
-      client.readResource({ uri: 'knowtis://notes/not-a-uuid' })
-    ).rejects.toThrow();
+    const error = await client
+      .readResource({ uri: 'knowtis://notes/not-a-uuid' })
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidParams);
+    expect(notesApi.get).not.toHaveBeenCalled();
   });
 
   it('should reject resources/read when the token lacks notes:read scope', async () => {
@@ -237,10 +240,36 @@ describe('note resources', () => {
     const client = await connect(notesApi as unknown as NotesApi);
     const error = await client.listResources().catch((err: unknown) => err);
     expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InternalError);
     expect((error as McpError).message).toContain('Rate limit exceeded');
     expect((error as McpError).message).not.toContain(
       'internal upstream detail'
     );
+  });
+
+  it('should map an upstream 403 on resources/list to a permission message', async () => {
+    notesApi.list.mockRejectedValue(
+      new ApiError(403, { message: 'internal upstream detail' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect((error as McpError).message).toContain('permission');
+    expect((error as McpError).message).not.toContain(
+      'internal upstream detail'
+    );
+  });
+
+  it('should map an upstream 422 on resources/list to an invalid-input message', async () => {
+    notesApi.list.mockRejectedValue(
+      new ApiError(422, { message: 'bad query' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InvalidParams);
+    expect((error as McpError).message).toContain('Invalid input');
   });
 
   it('should map an upstream 401 on resources/list without leaking the body', async () => {
@@ -263,6 +292,7 @@ describe('note resources', () => {
     const client = await connect(notesApi as unknown as NotesApi);
     const error = await client.listResources().catch((err: unknown) => err);
     expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).code).toBe(ErrorCode.InternalError);
     expect((error as McpError).message).toContain('Failed to list notes.');
     expect((error as McpError).message).not.toContain(
       'internal upstream detail'
