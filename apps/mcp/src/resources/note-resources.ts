@@ -23,6 +23,10 @@ const NOTE_URI_PATTERN =
   /^knowtis:\/\/notes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
 const PAGE_SIZE = 20;
 
+// MCP spec (2025-06-18) code for a resource that does not exist; SDK 1.29.0's
+// ErrorCode enum does not export it, so it is defined inline.
+const RESOURCE_NOT_FOUND = -32002;
+
 async function resolveToken(
   authService: AuthService,
   credential: McpCredential | undefined
@@ -50,7 +54,7 @@ function apiErrorToMcpError(
 ): McpError {
   switch (error.status) {
     case 404:
-      return new McpError(ErrorCode.InvalidParams, 'Note not found.');
+      return new McpError(RESOURCE_NOT_FOUND, 'Note not found.');
     case 403:
       return new McpError(
         ErrorCode.InvalidRequest,
@@ -60,6 +64,16 @@ function apiErrorToMcpError(
       return new McpError(
         ErrorCode.InvalidRequest,
         'Authentication failed. Your API key may be invalid or expired.'
+      );
+    case 422:
+      return new McpError(
+        ErrorCode.InvalidParams,
+        `Invalid input: ${error.message}`
+      );
+    case 429:
+      return new McpError(
+        ErrorCode.InternalError,
+        'Rate limit exceeded. Try again later.'
       );
     default:
       return new McpError(ErrorCode.InternalError, fallbackMessage);

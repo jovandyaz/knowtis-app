@@ -223,8 +223,21 @@ describe('note resources', () => {
       .readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
       .catch((err: unknown) => err);
     expect(error).toBeInstanceOf(McpError);
-    expect((error as McpError).code).toBe(ErrorCode.InvalidParams);
+    expect((error as McpError).code).toBe(-32002);
     expect((error as McpError).message).toContain('Note not found.');
+    expect((error as McpError).message).not.toContain(
+      'internal upstream detail'
+    );
+  });
+
+  it('should map an upstream 429 on resources/list to a retryable rate-limit message', async () => {
+    notesApi.list.mockRejectedValue(
+      new ApiError(429, { message: 'internal upstream detail' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client.listResources().catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(McpError);
+    expect((error as McpError).message).toContain('Rate limit exceeded');
     expect((error as McpError).message).not.toContain(
       'internal upstream detail'
     );
