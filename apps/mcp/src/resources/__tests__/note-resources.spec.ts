@@ -1,10 +1,13 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '../../api-client/client.js';
 import type { NotesApi } from '../../api-client/notes.api.js';
 import { AuthService } from '../../auth/auth-service.js';
+import type { McpCredential } from '../../auth/credentials.js';
 import { registerNoteResources } from '../note-resources.js';
 
 function note(id: string, updatedAt: string) {
@@ -31,16 +34,36 @@ const NOTE_C = note(
   '2026-07-01T00:00:00.000Z'
 );
 
-async function connect(notesApi: NotesApi) {
+const DEFAULT_CREDENTIAL: McpCredential = {
+  kind: 'oauth',
+  jwt: 'jwt-token',
+  scopes: ['notes:read'],
+};
+
+interface ConnectOptions {
+  credential?: McpCredential;
+  authService?: AuthService;
+  omitCredential?: boolean;
+}
+
+async function connect(
+  notesApi: NotesApi,
+  {
+    credential = DEFAULT_CREDENTIAL,
+    authService = new AuthService('http://unused'),
+    omitCredential = false,
+  }: ConnectOptions = {}
+) {
   const server = new McpServer(
     { name: 'test', version: '0.0.0' },
     { capabilities: { resources: {} } }
   );
-  registerNoteResources(server, notesApi, new AuthService('http://unused'), {
-    kind: 'oauth',
-    jwt: 'jwt-token',
-    scopes: ['notes:read'],
-  });
+  registerNoteResources(
+    server,
+    notesApi,
+    authService,
+    omitCredential ? undefined : credential
+  );
   const client = new Client({ name: 'test-client', version: '0.0.0' });
   const [ct, st] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(st), client.connect(ct)]);
@@ -58,6 +81,10 @@ describe('note resources', () => {
       list: vi.fn().mockResolvedValue([NOTE_C, NOTE_A, NOTE_B]),
       get: vi.fn().mockResolvedValue(NOTE_A),
     };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('should list recent notes as resources ordered by recency', async () => {
@@ -116,5 +143,95 @@ describe('note resources', () => {
     await expect(
       client.readResource({ uri: 'knowtis://notes/not-a-uuid' })
     ).rejects.toThrow();
+  });
+
+  it('should reject resources/read when the token lacks notes:read scope', async () => {
+    const client = await connect(notesApi as unknown as NotesApi, {
+      credential: { kind: 'oauth', jwt: 'jwt-token', scopes: ['notes:write'] },
+    });
+    await expect(
+      client.readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
+    ).rejects.toThrow(/notes:read/);
+    expect(notesApi.get).not.toHaveBeenCalled();
+  });
+
+  it('should reject resources/list when the token lacks notes:read scope', async () => {
+    const client = await connect(notesApi as unknown as NotesApi, {
+      credential: { kind: 'oauth', jwt: 'jwt-token', scopes: ['notes:write'] },
+    });
+    await expect(client.listResources()).rejects.toThrow(/notes:read/);
+    expect(notesApi.list).not.toHaveBeenCalled();
+  });
+
+  it('should list resources for an api-key credential with notes:read scope', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: vi.fn().mockResolvedValue({
+          accessToken: 'exchanged-jwt',
+          expiresIn: 3600,
+          scopes: 'notes:read,notes:write',
+        }),
+      })
+    );
+    const client = await connect(notesApi as unknown as NotesApi, {
+      credential: { kind: 'api-key', apiKey: 'knowtis_mcp_x' },
+      authService: new AuthService('http://exchange'),
+    });
+
+    const result = await client.listResources();
+
+    expect(result.resources).toHaveLength(3);
+    expect(notesApi.list).toHaveBeenCalledWith('exchanged-jwt');
+  });
+
+  it('should reject resources/read and resources/list with an InvalidRequest McpError when no credential is present', async () => {
+    const readClient = await connect(notesApi as unknown as NotesApi, {
+      omitCredential: true,
+    });
+    const readError = await readClient
+      .readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
+      .catch((error: unknown) => error);
+    expect(readError).toBeInstanceOf(McpError);
+    expect((readError as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect(notesApi.get).not.toHaveBeenCalled();
+
+    const listClient = await connect(notesApi as unknown as NotesApi, {
+      omitCredential: true,
+    });
+    const listError = await listClient
+      .listResources()
+      .catch((error: unknown) => error);
+    expect(listError).toBeInstanceOf(McpError);
+    expect((listError as McpError).code).toBe(ErrorCode.InvalidRequest);
+    expect(notesApi.list).not.toHaveBeenCalled();
+  });
+
+  it('should map an upstream 404 to a not-found message without leaking the body', async () => {
+    notesApi.get.mockRejectedValue(
+      new ApiError(404, { message: 'internal upstream detail' })
+    );
+    const client = await connect(notesApi as unknown as NotesApi);
+    const error = await client
+      .readResource({ uri: `knowtis://notes/${NOTE_A.id}` })
+      .catch((err: unknown) => err);
+    expect((error as McpError).message).toContain('Note not found.');
+    expect((error as McpError).message).not.toContain(
+      'internal upstream detail'
+    );
+  });
+
+  it('should collapse a multiline title into a single-line Markdown heading', async () => {
+    notesApi.get.mockResolvedValue({
+      ...NOTE_A,
+      title: 'Line one\nLine two\n# hash',
+    });
+    const client = await connect(notesApi as unknown as NotesApi);
+    const result = await client.readResource({
+      uri: `knowtis://notes/${NOTE_A.id}`,
+    });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(text.split('\n')[0]).toBe('# Line one Line two # hash');
   });
 });

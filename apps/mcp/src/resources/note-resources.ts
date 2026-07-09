@@ -7,8 +7,10 @@ import {
   ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
+import { ApiError } from '../api-client/client.js';
 import type { NotesApi } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
+import { resolveCredentialToken } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { paginateByRecency } from '../utils/note-cursor.js';
@@ -27,13 +29,26 @@ async function resolveToken(
       'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
     );
   }
-  if (credential.kind === 'api-key') {
-    const token = await authService.getToken(credential.apiKey);
-    authService.checkScope(credential.apiKey, 'note-resource');
-    return token;
+  return resolveCredentialToken(authService, credential, 'note-resource');
+}
+
+function apiErrorToMcpError(error: ApiError): McpError {
+  switch (error.status) {
+    case 404:
+      return new McpError(ErrorCode.InvalidParams, 'Note not found.');
+    case 403:
+      return new McpError(
+        ErrorCode.InvalidRequest,
+        "You don't have permission to perform this action."
+      );
+    case 401:
+      return new McpError(
+        ErrorCode.InvalidRequest,
+        'Authentication failed. Your API key may be invalid or expired.'
+      );
+    default:
+      return new McpError(ErrorCode.InternalError, 'Failed to read the note.');
   }
-  authService.checkScopes(credential.scopes, 'note-resource');
-  return credential.jwt;
 }
 
 /**
@@ -79,13 +94,22 @@ export function registerNoteResources(
         );
       }
       const token = await resolveToken(authService, credential);
-      const note = await notesApi.get(token, match[1]);
+      let note;
+      try {
+        note = await notesApi.get(token, match[1]);
+      } catch (error) {
+        if (error instanceof ApiError) {
+          throw apiErrorToMcpError(error);
+        }
+        throw error;
+      }
+      const heading = note.title.replace(/\s+/g, ' ').trim();
       return {
         contents: [
           {
             uri: request.params.uri,
             mimeType: 'text/markdown',
-            text: `# ${note.title}\n\n${htmlToMarkdown(note.content)}`,
+            text: `# ${heading}\n\n${htmlToMarkdown(note.content)}`,
           },
         ],
       };

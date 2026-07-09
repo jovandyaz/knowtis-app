@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 
+import type { McpCredential } from './credentials.js';
 import { TokenCache } from './token-cache.js';
 
 const SCOPE_REQUIREMENTS: Record<string, string> = {
@@ -93,4 +94,29 @@ export class AuthService {
       );
     }
   }
+}
+
+/**
+ * Resolves a bearer token for the given action, enforcing scope on the passed
+ * AuthService instance. api-key credentials exchange + scope-check; oauth
+ * credentials scope-check the presented JWT. Throws a plain Error when no
+ * credential is present — callers wrap it in their own error strategy.
+ */
+export async function resolveCredentialToken(
+  authService: AuthService,
+  credential: McpCredential | undefined,
+  action: string
+): Promise<string> {
+  if (!credential) {
+    throw new Error(
+      'No API key configured. Set KNOWTIS_API_KEY (stdio) or send an Authorization: Bearer header (HTTP).'
+    );
+  }
+  if (credential.kind === 'api-key') {
+    const token = await authService.getToken(credential.apiKey);
+    authService.checkScope(credential.apiKey, action);
+    return token;
+  }
+  authService.checkScopes(credential.scopes, action);
+  return credential.jwt;
 }
