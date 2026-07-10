@@ -16,6 +16,6 @@ pnpm exec nx run mcp:build-mcpb
 cp "$ROOT/apps/mcp/mcpb/manifest.json" "$STAGING/manifest.json"
 cp "$ROOT/apps/mcp/mcpb/icon.png" "$STAGING/icon.png"
 
-npx -y @anthropic-ai/mcpb validate "$STAGING/manifest.json"
-npx -y @anthropic-ai/mcpb pack "$STAGING" "$ROOT/dist/apps/mcp-mcpb/knowtis-mcp-$VERSION.mcpb"
+npx -y @anthropic-ai/mcpb@2.1.2 validate "$STAGING/manifest.json"
+npx -y @anthropic-ai/mcpb@2.1.2 pack "$STAGING" "$ROOT/dist/apps/mcp-mcpb/knowtis-mcp-$VERSION.mcpb"
 echo "packed: dist/apps/mcp-mcpb/knowtis-mcp-$VERSION.mcpb"

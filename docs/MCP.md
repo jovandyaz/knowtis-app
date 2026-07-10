@@ -279,8 +279,10 @@ pnpm exec nx run mcp:pack-mcpb
 # 3. Publish the GitHub Release
 gh release create mcp-v<version> dist/apps/mcp-mcpb/knowtis-mcp-<version>.mcpb
 
-# 4. Hash the RELEASE asset (not the local file), then update
-#    fileSha256 in apps/mcp/server.json
+# 4. Hash the RELEASE asset (not the local file). First release: ADD the
+#    packages entry to apps/mcp/server.json — registryType "mcpb",
+#    identifier = the release asset URL, transport {"type":"stdio"},
+#    fileSha256 = this hash. Later releases: update identifier + fileSha256.
 curl -sL <asset-url> | shasum -a 256
 
 # 5. Publish to the registry (the key lives in the GitHub secret MCP_PUBLISHER_PRIVATE_KEY)
