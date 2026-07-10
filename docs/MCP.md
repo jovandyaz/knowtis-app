@@ -227,6 +227,77 @@ curl -X DELETE http://localhost:3333/api/v1/mcp/keys/{keyId} \
 
 Revocation stops new token exchanges immediately; tokens already issued for the key remain valid for up to 15 minutes.
 
+## Distribution & Installation
+
+All remote channels point at the same hosted endpoint, `https://mcp.knowtis.app/mcp`; the MCPB bundle is the one local-install path.
+
+### Official MCP Registry
+
+The server is published to the [official MCP registry](https://registry.modelcontextprotocol.io) as `app.knowtis/knowtis` (entry: [`apps/mcp/server.json`](../apps/mcp/server.json)):
+
+```bash
+curl https://registry.modelcontextprotocol.io/v0.1/servers/app.knowtis%2Fknowtis/versions/latest
+```
+
+Downstream directories — the GitHub MCP Registry (VS Code / Copilot, [github.com/mcp](https://github.com/mcp)), PulseMCP, and Glama — ingest the official registry automatically; propagation can take hours.
+
+### Claude Desktop (MCPB)
+
+1. Download `knowtis-mcp-<version>.mcpb` from the repo's [GitHub Releases](https://github.com/jovandyaz/knowtis-app/releases).
+2. Double-click it, or drag it into Claude Desktop.
+3. Fill in the **Knowtis API Key** — create one in Knowtis under **Settings > Integrations** (see [API Key Management](#api-key-management)). The **API URL** field defaults to `https://api.knowtis.app`; only change it if self-hosting.
+
+Privately distributed MCPB bundles have **no auto-update** — install new versions manually.
+
+### Remote connect (any OAuth-capable MCP client)
+
+Point the client at `https://mcp.knowtis.app/mcp` — OAuth 2.1 flows automatically (DCR and CIMD are both supported); see [Connect with OAuth](#connect-with-oauth). For headless contexts, an API-key Bearer works instead; see [API keys (headless / advanced)](#api-keys-headless--advanced).
+
+### Cursor deeplink
+
+"Add to Cursor" install link (`config` is the base64 of `{"url":"https://mcp.knowtis.app/mcp"}`):
+
+```text
+cursor://anysphere.cursor-deeplink/mcp/install?name=knowtis&config=eyJ1cmwiOiJodHRwczovL21jcC5rbm93dGlzLmFwcC9tY3AifQ==
+```
+
+### ChatGPT (developer mode)
+
+**Settings > Apps & Connectors** → enable developer mode → add a connector with URL `https://mcp.knowtis.app/mcp`. OAuth runs automatically.
+
+### Maintainer runbook
+
+The version in `apps/mcp/package.json`, `apps/mcp/mcpb/manifest.json`, and `apps/mcp/server.json` must all match — the pack script fails on `package.json`/`manifest.json` drift.
+
+```bash
+# 1. Bump the version in all three:
+#    apps/mcp/package.json, apps/mcp/mcpb/manifest.json, apps/mcp/server.json
+
+# 2. Pack the MCPB bundle
+pnpm exec nx run mcp:pack-mcpb
+
+# 3. Publish the GitHub Release
+gh release create mcp-v<version> dist/apps/mcp-mcpb/knowtis-mcp-<version>.mcpb
+
+# 4. Hash the RELEASE asset (not the local file). First release: ADD the
+#    packages entry to apps/mcp/server.json — registryType "mcpb",
+#    identifier = the release asset URL, transport {"type":"stdio"},
+#    fileSha256 = this hash. Later releases: update identifier + fileSha256.
+curl -sL <asset-url> | shasum -a 256
+
+# 5. Publish to the registry (the key lives in the GitHub secret MCP_PUBLISHER_PRIVATE_KEY)
+mcp-publisher login http --domain knowtis.app --private-key $MCP_PUBLISHER_PRIVATE_KEY
+mcp-publisher publish apps/mcp/server.json
+```
+
+Pre-publish gate: `curl -s https://knowtis.app/.well-known/mcp-registry-auth` must return the raw key line (`v=MCPv1; k=ed25519; p=...`), not HTML — HTTP login proves domain ownership against it.
+
+Deprecate a published version:
+
+```bash
+mcp-publisher status --status deprecated app.knowtis/knowtis <version>
+```
+
 ## Tools
 
 All 8 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.

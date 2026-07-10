@@ -48,9 +48,17 @@ function splitCsv(value?: string): string[] {
     : [];
 }
 
+export function resolveApiUrl(env: NodeJS.ProcessEnv): string {
+  return (
+    env.KNOWTIS_API_URL || env.API_INTERNAL_URL || 'https://api.knowtis.app'
+  );
+}
+
 export function parseConfig(
-  env: Record<string, string | undefined>
+  env: Record<string, string | undefined>,
+  options?: { requireHttpSecurity?: boolean }
 ): AppConfig {
+  const requireHttpSecurity = options?.requireHttpSecurity ?? true;
   const parsed = configSchema.parse(env);
   const isDev = parsed.NODE_ENV === 'development';
   const configuredHosts = splitCsv(parsed.MCP_ALLOWED_HOSTS);
@@ -63,6 +71,7 @@ export function parseConfig(
   const allowedOrigins = splitCsv(parsed.MCP_ALLOWED_ORIGINS);
 
   if (
+    requireHttpSecurity &&
     parsed.NODE_ENV === 'production' &&
     allowedHosts.length === 0 &&
     allowedOrigins.length === 0

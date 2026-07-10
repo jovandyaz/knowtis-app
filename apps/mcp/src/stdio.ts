@@ -1,13 +1,16 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 
 import { AuthService } from './auth/auth-service.js';
-import { parseConfig } from './config.js';
+import { parseConfig, resolveApiUrl } from './config.js';
 import { createMcpServer } from './server.js';
 
-const config = parseConfig({
-  ...process.env,
-  API_INTERNAL_URL: process.env.KNOWTIS_API_URL ?? process.env.API_INTERNAL_URL,
-});
+const config = parseConfig(
+  {
+    ...process.env,
+    API_INTERNAL_URL: resolveApiUrl(process.env),
+  },
+  { requireHttpSecurity: false }
+);
 
 const defaultApiKey = process.env.KNOWTIS_API_KEY;
 if (!defaultApiKey) {

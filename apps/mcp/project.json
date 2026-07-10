@@ -16,6 +16,16 @@
       },
       "outputs": ["{workspaceRoot}/dist/apps/mcp"]
     },
+    "build-mcpb": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "esbuild apps/mcp/src/stdio.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/apps/mcp-mcpb/staging/server/index.js --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\""
+      }
+    },
+    "pack-mcpb": {
+      "executor": "nx:run-commands",
+      "options": { "command": "apps/mcp/scripts/pack-mcpb.sh" }
+    },
     "serve": {
       "executor": "nx:run-commands",
       "options": {
