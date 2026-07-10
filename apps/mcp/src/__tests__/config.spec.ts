@@ -201,6 +201,15 @@ describe('resolveApiUrl', () => {
     );
   });
 
+  it('should fall back to API_INTERNAL_URL when KNOWTIS_API_URL is empty', () => {
+    expect(
+      resolveApiUrl({
+        KNOWTIS_API_URL: '',
+        API_INTERNAL_URL: 'http://localhost:3333',
+      })
+    ).toBe('http://localhost:3333');
+  });
+
   it('should default to the production API url when nothing is set', () => {
     expect(resolveApiUrl({})).toBe('https://api.knowtis.app');
   });
