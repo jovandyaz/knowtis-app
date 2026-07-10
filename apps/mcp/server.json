@@ -16,6 +16,28 @@
       "url": "https://mcp.knowtis.app/mcp"
     }
   ],
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/jovandyaz/knowtis-app/releases/download/mcp-v0.1.0/knowtis-mcp-0.1.0.mcpb",
+      "fileSha256": "0b77e747746842799c3543c10ea3def4bc7952d6abf512fb0e188eac4ba222d4",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "KNOWTIS_API_KEY",
+          "description": "Knowtis API key (Settings > Integrations)",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "KNOWTIS_API_URL",
+          "description": "API base URL",
+          "isRequired": false,
+          "default": "https://api.knowtis.app"
+        }
+      ]
+    }
+  ],
   "icons": [
     {
       "src": "https://knowtis.app/apple-touch-icon.png",
