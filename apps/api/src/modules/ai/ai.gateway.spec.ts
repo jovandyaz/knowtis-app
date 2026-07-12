@@ -471,6 +471,34 @@ describe('AIGateway', () => {
       ).toHaveBeenCalledTimes(2);
     });
 
+    it('should emit a generic provider error without leaking internal error detail', async () => {
+      const singleStreamGateway = new AIGateway(
+        {
+          execute: vi
+            .fn()
+            .mockRejectedValue(
+              new Error('connection to 10.0.0.5:5432 refused')
+            ),
+        } as unknown as StreamTextHandler,
+        mockJwtService,
+        mockFeatureFlags,
+        createMockConfigService(1)
+      );
+
+      const client = createMockAISocket({ id: 'socket-1' });
+      client.data.userId = 'user-123';
+
+      await singleStreamGateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      });
+
+      const errorEmit = vi
+        .mocked(client.emit)
+        .mock.calls.find(([event]) => event === 'ai:error');
+      expect(JSON.stringify(errorEmit?.[1])).not.toContain('10.0.0.5');
+    });
+
     it('should emit validation error for invalid targetLanguage', async () => {
       const client = createMockAISocket();
       client.data.userId = 'user-123';
