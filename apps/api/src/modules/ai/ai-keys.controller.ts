@@ -11,6 +11,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 
 import { FEATURE_FLAG_KEYS, type ProviderKeyInfo } from '@knowtis/shared-types';
 
@@ -36,6 +37,7 @@ export class AiKeysController {
   }
 
   @Put(':provider')
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
   async set(
     @CurrentUser() user: RequestUser,
     @Param() params: ProviderParamDto,

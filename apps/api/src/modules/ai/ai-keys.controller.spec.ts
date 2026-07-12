@@ -98,4 +98,27 @@ describe('AiKeysController', () => {
       )
     ).rejects.toBeInstanceOf(ForbiddenException);
   });
+
+  it('throttles the key-validation endpoint', () => {
+    const metadata = Reflect.getMetadata(
+      'THROTTLER:LIMITdefault',
+      AiKeysController.prototype.set
+    );
+    expect(metadata).toBeDefined();
+  });
+
+  it('does not throttle list or remove', () => {
+    expect(
+      Reflect.getMetadata(
+        'THROTTLER:LIMITdefault',
+        AiKeysController.prototype.list
+      )
+    ).toBeUndefined();
+    expect(
+      Reflect.getMetadata(
+        'THROTTLER:LIMITdefault',
+        AiKeysController.prototype.remove
+      )
+    ).toBeUndefined();
+  });
 });
