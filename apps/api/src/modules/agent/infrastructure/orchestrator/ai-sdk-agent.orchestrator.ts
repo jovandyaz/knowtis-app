@@ -25,6 +25,7 @@ import type { AgentToolContext } from '../tools/agent-tool';
 import { AgentToolRegistry } from './agent-tool.registry';
 import { composeSystemPrompt } from './compose-system-prompt';
 import { ProposalCollector } from './proposal-collector';
+import { WebFetchAllowlist } from './web-fetch-allowlist';
 import { WebSourceCollector } from './web-source.collector';
 
 interface StepToolResult {
@@ -103,11 +104,19 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
     const proposals = new ProposalCollector();
     const webSourceCollector = new WebSourceCollector();
+    const webFetchAllowlist = new WebFetchAllowlist();
+    const latestUserContent = [...input.messages]
+      .reverse()
+      .find((m) => m.role === 'user')?.content;
+    if (latestUserContent) {
+      webFetchAllowlist.seedFromText(latestUserContent);
+    }
     const toolContext: AgentToolContext = {
       userId: input.userId,
       phase: input.resume ? 'readonly' : 'full',
       proposals,
       webSources: webSourceCollector,
+      webFetchAllowlist,
     };
     const tools = await this.toolRegistry.resolve(toolContext);
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };

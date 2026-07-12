@@ -8,6 +8,7 @@ import type {
 } from '../../domain/proposed-mutation';
 import { MutationProposalBuilder } from '../orchestrator/mutation-proposal.builder';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
+import { WebFetchAllowlist } from '../orchestrator/web-fetch-allowlist';
 import { WebSourceCollector } from '../orchestrator/web-source.collector';
 import type { AgentToolContext } from './agent-tool';
 import { NoteMutateToolGroup } from './note-mutate.tool-group';
@@ -18,6 +19,7 @@ function ctx(): AgentToolContext {
     phase: 'full',
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
+    webFetchAllowlist: new WebFetchAllowlist(),
   };
 }
 

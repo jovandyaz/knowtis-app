@@ -3,6 +3,7 @@ import type { ToolSet } from 'ai';
 import type { FeatureFlagKey } from '@knowtis/shared-types';
 
 import type { ProposalCollector } from '../orchestrator/proposal-collector';
+import type { WebFetchAllowlist } from '../orchestrator/web-fetch-allowlist';
 import type { WebSourceCollector } from '../orchestrator/web-source.collector';
 
 export type AgentToolPhase = 'full' | 'readonly';
@@ -12,6 +13,7 @@ export interface AgentToolContext {
   readonly phase: AgentToolPhase;
   readonly proposals: ProposalCollector;
   readonly webSources: WebSourceCollector;
+  readonly webFetchAllowlist: WebFetchAllowlist;
 }
 
 export interface AgentToolGroup {
