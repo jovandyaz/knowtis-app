@@ -133,6 +133,16 @@ describe('refreshTokenTtl', () => {
 describe('shouldIssueRefreshToken', () => {
   const allowingClient = { grantTypeAllowed: () => true };
   const denyingClient = { grantTypeAllowed: () => false };
+  const publicWebClient = {
+    grantTypeAllowed: () => true,
+    applicationType: 'web',
+    clientAuthMethod: 'none',
+  };
+  const confidentialClient = {
+    grantTypeAllowed: () => true,
+    applicationType: 'web',
+    clientAuthMethod: 'client_secret_basic',
+  };
   const offlineCode = { scopes: new Set(['notes:read', 'offline_access']) };
   const onlineCode = { scopes: new Set(['notes:read']) };
 
@@ -150,6 +160,27 @@ describe('shouldIssueRefreshToken', () => {
 
   it('should not issue when both the grant is denied and offline_access is absent', () => {
     expect(shouldIssueRefreshToken(denyingClient, onlineCode)).toBe(false);
+  });
+
+  it('should issue to a public web client (auth method none) even when offline_access was stripped by the AS', () => {
+    expect(shouldIssueRefreshToken(publicWebClient, onlineCode)).toBe(true);
+  });
+
+  it('should not issue to a confidential client when offline_access is absent', () => {
+    expect(shouldIssueRefreshToken(confidentialClient, onlineCode)).toBe(false);
+  });
+
+  it('should not issue to a public web client that cannot use the refresh_token grant', () => {
+    expect(
+      shouldIssueRefreshToken(
+        {
+          grantTypeAllowed: () => false,
+          applicationType: 'web',
+          clientAuthMethod: 'none',
+        },
+        onlineCode
+      )
+    ).toBe(false);
   });
 });
 

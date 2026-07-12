@@ -23,16 +23,29 @@ export function refreshTokenTtl(client: { clientId: string }): number {
 }
 
 /**
- * A refresh token is issued only when the client is allowed the refresh_token
- * grant AND the authorization code carries the `offline_access` scope.
+ * A refresh token is issued when the client may use the refresh_token grant AND
+ * either the authorization code carries `offline_access`, or the client is a
+ * public web client (code flow, no client authentication). oidc-provider strips
+ * `offline_access` from any request whose `prompt` omits `consent` (OIDC Core
+ * §11, enforced in lib/actions/authorization/check_scope.js), and MCP clients
+ * cannot add `prompt=consent` — so the public-client branch keeps their
+ * connections alive past the 1h access-token expiry. Mirrors oidc-provider's
+ * documented `issueRefreshToken` "always issue" recipe.
  */
 export function shouldIssueRefreshToken(
-  client: { grantTypeAllowed: (type: string) => boolean },
+  client: {
+    grantTypeAllowed: (type: string) => boolean;
+    applicationType?: string | undefined;
+    clientAuthMethod?: string | undefined;
+  },
   code: { scopes: Set<string> }
 ): boolean {
+  if (!client.grantTypeAllowed('refresh_token')) {
+    return false;
+  }
   return (
-    client.grantTypeAllowed('refresh_token') &&
-    code.scopes.has('offline_access')
+    code.scopes.has('offline_access') ||
+    (client.applicationType === 'web' && client.clientAuthMethod === 'none')
   );
 }
 
