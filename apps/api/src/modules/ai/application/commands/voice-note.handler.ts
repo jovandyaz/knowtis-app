@@ -22,6 +22,7 @@ interface VoiceNoteInput {
   readonly audio: Buffer;
   readonly mode: 'create-note' | 'insert';
   readonly language?: string;
+  readonly isAnonymous?: boolean;
 }
 
 export interface VoiceNoteOutput {
@@ -57,7 +58,8 @@ export class VoiceNoteHandler {
     const estimatedTokens = this.estimateTokensFromAudio(input.audio);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
-      estimatedTokens
+      estimatedTokens,
+      input.isAnonymous ?? false
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
