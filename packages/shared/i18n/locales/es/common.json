@@ -164,7 +164,6 @@
     "revokeSuccess": "API key revocada",
     "keyCreated": "API key creada",
     "keyCreatedWarning": "Copia esta key ahora. No se volverá a mostrar.",
-    "emptyTitle": "Sin API keys",
     "emptyDescription": "Crea una API key para conectar asistentes de IA a tus notas.",
     "copyKey": "Copiar",
     "keyCopied": "Key copiada al portapapeles",
