@@ -7,19 +7,11 @@ import type { McpApiKey } from '@knowtis/api-client';
 import { useMcpKeys } from '@knowtis/data-access-mcp-keys';
 import { Badge, Button, cn, LoadingState } from '@knowtis/design-system';
 
-import { SCOPE_LABEL_KEYS } from '../../../lib/mcp-scopes';
 import { SectionHeader } from '../SectionHeader';
 import { CreateKeyDialog } from './CreateKeyDialog';
 import { McpConnectCard } from './McpConnectCard';
+import { McpKeyRow } from './McpKeyRow';
 import { RevokeKeyDialog } from './RevokeKeyDialog';
-
-function formatDate(dateStr: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(dateStr));
-}
 
 export function IntegrationsSection() {
   const { t, i18n } = useTranslation('common');
@@ -90,54 +82,12 @@ export function IntegrationsSection() {
               {hasKeys ? (
                 <div className="space-y-3">
                   {keys.map((apiKey) => (
-                    <div
+                    <McpKeyRow
                       key={apiKey.id}
-                      className="flex items-center justify-between gap-4 rounded-lg border border-(--border) p-4"
-                    >
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate font-medium text-(--foreground)">
-                            {apiKey.name}
-                          </span>
-                          <code className="rounded bg-(--muted) px-1.5 py-0.5 font-mono text-xs text-(--muted-foreground)">
-                            {apiKey.keyPrefix}
-                          </code>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          {apiKey.scopes.split(',').map((rawScope) => {
-                            const scope = rawScope.trim();
-                            return (
-                              <Badge key={scope} variant="secondary">
-                                {t(SCOPE_LABEL_KEYS[scope] ?? scope, {
-                                  defaultValue: scope,
-                                })}
-                              </Badge>
-                            );
-                          })}
-                        </div>
-                        <div className="flex gap-4 text-xs text-(--muted-foreground)">
-                          <span>
-                            {t('integrations.createdAt')}{' '}
-                            {formatDate(apiKey.createdAt, i18n.language)}
-                          </span>
-                          <span>
-                            {t('integrations.lastUsed')}{' '}
-                            {apiKey.lastUsedAt
-                              ? formatDate(apiKey.lastUsedAt, i18n.language)
-                              : t('integrations.never')}
-                          </span>
-                        </div>
-                      </div>
-
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setRevokeTarget(apiKey)}
-                      >
-                        {t('integrations.revoke')}
-                      </Button>
-                    </div>
+                      apiKey={apiKey}
+                      locale={i18n.language}
+                      onRevoke={setRevokeTarget}
+                    />
                   ))}
                 </div>
               ) : (
