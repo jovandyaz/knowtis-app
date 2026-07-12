@@ -18,6 +18,7 @@ import {
 } from '../../../database';
 import {
   createOidcProvider,
+  hasRejectedOfflineAccess,
   refreshTokenTtl,
   shouldIssueRefreshToken,
   type OidcProviderHandle,
@@ -147,27 +148,51 @@ describe('shouldIssueRefreshToken', () => {
   const onlineCode = { scopes: new Set(['notes:read']) };
 
   it('should issue when refresh_token is allowed and offline_access is requested', () => {
-    expect(shouldIssueRefreshToken(allowingClient, offlineCode)).toBe(true);
+    expect(shouldIssueRefreshToken(allowingClient, offlineCode, false)).toBe(
+      true
+    );
   });
 
   it('should not issue when offline_access is absent', () => {
-    expect(shouldIssueRefreshToken(allowingClient, onlineCode)).toBe(false);
+    expect(shouldIssueRefreshToken(allowingClient, onlineCode, false)).toBe(
+      false
+    );
   });
 
   it('should not issue when the client cannot use the refresh_token grant', () => {
-    expect(shouldIssueRefreshToken(denyingClient, offlineCode)).toBe(false);
+    expect(shouldIssueRefreshToken(denyingClient, offlineCode, false)).toBe(
+      false
+    );
   });
 
   it('should not issue when both the grant is denied and offline_access is absent', () => {
-    expect(shouldIssueRefreshToken(denyingClient, onlineCode)).toBe(false);
+    expect(shouldIssueRefreshToken(denyingClient, onlineCode, false)).toBe(
+      false
+    );
   });
 
-  it('should issue to a public web client (auth method none) even when offline_access was stripped by the AS', () => {
-    expect(shouldIssueRefreshToken(publicWebClient, onlineCode)).toBe(true);
+  it('should issue to a public web client (auth method none) when offline_access was stripped by the AS', () => {
+    expect(shouldIssueRefreshToken(publicWebClient, onlineCode, false)).toBe(
+      true
+    );
+  });
+
+  it('should not issue to a public web client that explicitly rejected offline_access on its grant', () => {
+    expect(shouldIssueRefreshToken(publicWebClient, onlineCode, true)).toBe(
+      false
+    );
+  });
+
+  it('should still issue to a public web client when an unrelated scope was rejected but offline_access was not', () => {
+    expect(shouldIssueRefreshToken(publicWebClient, onlineCode, false)).toBe(
+      true
+    );
   });
 
   it('should not issue to a confidential client when offline_access is absent', () => {
-    expect(shouldIssueRefreshToken(confidentialClient, onlineCode)).toBe(false);
+    expect(shouldIssueRefreshToken(confidentialClient, onlineCode, false)).toBe(
+      false
+    );
   });
 
   it('should not issue to a public web client that cannot use the refresh_token grant', () => {
@@ -178,9 +203,44 @@ describe('shouldIssueRefreshToken', () => {
           applicationType: 'web',
           clientAuthMethod: 'none',
         },
-        onlineCode
+        onlineCode,
+        false
       )
     ).toBe(false);
+  });
+});
+
+describe('hasRejectedOfflineAccess', () => {
+  it('should report rejection when offline_access is in the grant rejected OIDC scope', () => {
+    expect(
+      hasRejectedOfflineAccess({
+        rejected: { openid: { scope: 'offline_access' } },
+      })
+    ).toBe(true);
+  });
+
+  it('should report rejection when offline_access sits among other rejected scopes', () => {
+    expect(
+      hasRejectedOfflineAccess({
+        rejected: { openid: { scope: 'notes:write offline_access' } },
+      })
+    ).toBe(true);
+  });
+
+  it('should not report rejection when only unrelated scopes were rejected', () => {
+    expect(
+      hasRejectedOfflineAccess({
+        rejected: { openid: { scope: 'notes:write' } },
+      })
+    ).toBe(false);
+  });
+
+  it('should not report rejection when the grant has no rejected scopes', () => {
+    expect(hasRejectedOfflineAccess({})).toBe(false);
+  });
+
+  it('should not report rejection when the grant is absent', () => {
+    expect(hasRejectedOfflineAccess(undefined)).toBe(false);
   });
 });
 
