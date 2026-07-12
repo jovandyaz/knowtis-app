@@ -27,12 +27,18 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     schema: ZodType<T>,
     options: StructuredOutputOptions
   ): Promise<StructuredOutputResult<T>> {
-    const timeoutSignal = options.timeoutMs
-      ? AbortSignal.timeout(options.timeoutMs)
-      : undefined;
     return executeWithChain(
-      (model) =>
-        this.callGenerate(prompt, schema, { ...options, model }, timeoutSignal),
+      (model) => {
+        const timeoutSignal = options.timeoutMs
+          ? AbortSignal.timeout(options.timeoutMs)
+          : undefined;
+        return this.callGenerate(
+          prompt,
+          schema,
+          { ...options, model },
+          timeoutSignal
+        );
+      },
       {
         candidates: this.fallbackChain.candidatesFor(options.model),
         cooldown: this.fallbackChain.cooldown,
