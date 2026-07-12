@@ -90,7 +90,7 @@ The MCP server exposes your notes to AI clients. There are two auth paths.
 
 ### API key (works out of the box locally)
 
-OAuth "click to connect" is **off by default locally** — the `mcp_oauth` feature flag seeds `false`, so OAuth discovery returns `404` and clients fall back to API keys. This is expected on a fresh environment.
+OAuth "click to connect" is **on by default** (the `mcp_oauth` flag seeds `true`). It activates once the OAuth env is set on both services (below); until then, discovery stays dormant and clients fall back to API keys.
 
 1. Sign in (see above), open **Settings → Integrations**.
 2. Expand **Advanced: API keys** → **Create API Key** → pick a permission level (default is read + write) → copy the `knowtis_mcp_...` key.
@@ -104,9 +104,9 @@ curl -s http://localhost:3334/health          # {"status":"ok",...}
 
 ### OAuth (to exercise the browser connect flow / scope challenge)
 
-The one-click connector in **Settings → Integrations** is the primary path in production. To exercise the OAuth pieces locally you need two things.
+The one-click connector in **Settings → Integrations** is the primary path in production. To exercise the OAuth pieces locally, point the MCP server at an OAuth issuer + resource URL.
 
-**1. The MCP server needs an OAuth issuer + resource URL.** Add to `apps/mcp/.env` and restart `pnpm dev:mcp`:
+**The MCP server needs an OAuth issuer + resource URL.** Add to `apps/mcp/.env` and restart `pnpm dev:mcp`:
 
 ```bash
 MCP_OAUTH_ISSUER=http://localhost:3333
@@ -124,23 +124,16 @@ curl -si -X POST http://localhost:3334/mcp \
 # Bearer resource_metadata="...", scope="notes:read notes:write notes:share offline_access"
 ```
 
-**2. For the full browser flow, enable the AS.** Turn on the `mcp_oauth` flag so the API publishes OAuth discovery (`/.well-known/oauth-authorization-server`) and the consent screen works:
-
-```bash
-docker exec knowtis-postgres psql -U knowtis -d knowtis \
-  -c "UPDATE feature_flags SET enabled = true WHERE key = 'mcp_oauth';"
-```
-
 See [MCP.md](./MCP.md) for the full protocol details (discovery, PKCE, scopes, endpoints).
 
 ## Troubleshooting
 
-| Symptom                                              | Cause                                                              | Fix                                                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
-| `Docker is not running` on `pnpm setup`              | Daemon down                                                        | Start Docker Desktop, re-run `pnpm setup`.                                                   |
-| `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn) | `pnpm nx run design-system:tokens:build`, then restart. On current `main` this is automatic. |
-| `Node 22.x required`                                 | Wrong Node                                                         | `nvm install 22 && nvm use 22`.                                                              |
-| Register works but Settings never appears            | Email unverified (no local mail)                                   | Run the `email_verified_at` SQL above, sign in again.                                        |
-| MCP OAuth discovery returns `404`                    | `mcp_oauth` flag is `false` (default local)                        | Use the API-key path, or flip the flag as above.                                             |
-| `role "postgres" does not exist`                     | Wrong psql user                                                    | The local DB user is `knowtis`, not `postgres`.                                              |
-| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                   | `lsof -ti:4200 \| xargs kill -9` (swap the port).                                            |
+| Symptom                                              | Cause                                                                      | Fix                                                                                          |
+| ---------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `Docker is not running` on `pnpm setup`              | Daemon down                                                                | Start Docker Desktop, re-run `pnpm setup`.                                                   |
+| `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx run design-system:tokens:build`, then restart. On current `main` this is automatic. |
+| `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                              |
+| Register works but Settings never appears            | Email unverified (no local mail)                                           | Run the `email_verified_at` SQL above, sign in again.                                        |
+| MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                                 |
+| `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                              |
+| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `lsof -ti:4200 \| xargs kill -9` (swap the port).                                            |
