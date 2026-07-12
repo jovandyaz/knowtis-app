@@ -16,15 +16,9 @@ import {
   LoadingState,
 } from '@knowtis/design-system';
 
+import { SCOPE_LABEL_KEYS } from '../../../lib/mcp-scopes';
 import { SectionHeader } from '../SectionHeader';
 import { RevokeGrantDialog } from './RevokeGrantDialog';
-
-const SCOPE_LABEL_KEYS: Record<string, string> = {
-  'notes:read': 'oauth.scopes.notesRead',
-  'notes:write': 'oauth.scopes.notesWrite',
-  'notes:share': 'oauth.scopes.notesShare',
-  offline_access: 'oauth.scopes.offlineAccess',
-};
 
 function hostFromClientId(clientId: string): string {
   try {
