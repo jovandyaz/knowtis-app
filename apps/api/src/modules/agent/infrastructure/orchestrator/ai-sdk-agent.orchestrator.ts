@@ -106,9 +106,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     const proposals = new ProposalCollector();
     const webSourceCollector = new WebSourceCollector();
     const webFetchAllowlist = new WebFetchAllowlist();
-    const latestUserContent = [...input.messages]
-      .reverse()
-      .find((m) => m.role === 'user')?.content;
+    const latestUserContent = input.messages.findLast(
+      (m) => m.role === 'user'
+    )?.content;
     if (latestUserContent) {
       webFetchAllowlist.seedFromText(latestUserContent);
     }

@@ -115,4 +115,13 @@ describe('isHttpUrl — SSRF host filtering', () => {
     expect(isHttpUrl('http://[fc00::1]/x')).toBe(false);
     expect(isHttpUrl('http://[::ffff:192.168.1.1]/x')).toBe(false);
   });
+
+  it('rejects a trailing-dot loopback FQDN', () => {
+    expect(isHttpUrl('http://127.0.0.1./x')).toBe(false);
+    expect(isHttpUrl('http://localhost./x')).toBe(false);
+  });
+
+  it('still allows a public domain with a trailing root dot', () => {
+    expect(isHttpUrl('https://example.com./x')).toBe(true);
+  });
 });

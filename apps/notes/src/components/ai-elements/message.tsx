@@ -51,9 +51,9 @@ export const Response = memo(({ className, ...props }: ResponseProps) => (
       'prose prose-sm dark:prose-invert max-w-none',
       className
     )}
+    {...props}
     urlTransform={hardenAssistantUrl}
     linkSafety={{ enabled: true }}
-    {...props}
   />
 ));
 

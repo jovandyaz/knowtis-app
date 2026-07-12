@@ -27,4 +27,10 @@ describe('WebFetchAllowlist', () => {
     expect(allow.has('https://example.com/a')).toBe(true);
     expect(allow.has('not a url')).toBe(false);
   });
+
+  it('canonicalizes a seeded root url so a slash-less lookup matches', () => {
+    const allow = new WebFetchAllowlist();
+    allow.seedFromText('visit https://example.com');
+    expect(allow.has('https://example.com')).toBe(true);
+  });
 });

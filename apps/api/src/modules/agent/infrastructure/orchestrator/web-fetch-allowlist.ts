@@ -5,7 +5,7 @@ export class WebFetchAllowlist {
 
   seedFromText(text: string): void {
     for (const url of extractHttpUrls(text)) {
-      this.urls.add(url);
+      this.add(url);
     }
   }
 

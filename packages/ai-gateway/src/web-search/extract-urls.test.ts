@@ -19,4 +19,16 @@ describe('extractHttpUrls', () => {
   it('ignores non-http schemes and plain text', () => {
     expect(extractHttpUrls('no links; ftp://x.test file:///etc')).toEqual([]);
   });
+
+  it('strips a trailing sentence period', () => {
+    expect(extractHttpUrls('see https://example.com.')).toEqual([
+      'https://example.com/',
+    ]);
+  });
+
+  it('strips trailing comma and closing paren', () => {
+    expect(
+      extractHttpUrls('read https://example.com/a, or (https://foo.test)')
+    ).toEqual(['https://example.com/a', 'https://foo.test/']);
+  });
 });

@@ -8,7 +8,10 @@ export interface SafeExternalSource {
 }
 
 function isPrivateOrLoopbackHost(hostname: string): boolean {
-  const host = hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  const host = hostname
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.+$/, '')
+    .toLowerCase();
 
   if (host === 'localhost' || host.endsWith('.localhost')) {
     return true;

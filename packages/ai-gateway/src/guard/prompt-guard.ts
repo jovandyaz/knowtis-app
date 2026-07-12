@@ -97,7 +97,7 @@ const INJECTION_PATTERNS: {
   },
   {
     pattern:
-      /olvida(?:r|te\s+de)?\s+(?:(?:todas|todo)\s+)?(?:tus\s+|las\s+)?(?:instrucciones|reglas|indicaciones)/i,
+      /olv[íi]da(?:r|te\s+de)?\s+(?:(?:todas|todo)\s+)?(?:tus\s+|las\s+)?(?:instrucciones|reglas|indicaciones)/i,
     weight: 0.8,
     reason: 'Instruction override attempt (es)',
   },
@@ -140,6 +140,9 @@ const STRIP_CODEPOINTS: readonly number[] = [
   0x2067,
   0x2068,
   0x2069, // bidi isolates
+  0x200e,
+  0x200f,
+  0x061c, // bidi marks (LRM, RLM, ALM)
 ];
 const STRIP_CHARS: ReadonlySet<string> = new Set(
   STRIP_CODEPOINTS.map((cp) => String.fromCharCode(cp))
