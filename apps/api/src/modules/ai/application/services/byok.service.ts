@@ -114,7 +114,7 @@ export class ByokService {
       this.logger.warn({
         event: 'byok.validation_failed',
         provider,
-        error: error instanceof Error ? error.message : 'unknown',
+        error: error instanceof Error ? error.name : 'unknown',
       });
       throw new UnprocessableEntityException(
         `The ${provider} key was rejected. Check it is valid and has quota.`
