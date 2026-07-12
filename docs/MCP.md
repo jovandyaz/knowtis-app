@@ -23,7 +23,7 @@ Authorization: Bearer <oauth-access-token | knowtis_mcp_...>
 
 Without a valid Bearer token the server replies `HTTP 401` with a `WWW-Authenticate: Bearer` challenge (carrying `resource_metadata` when OAuth is enabled, so clients can start discovery).
 
-> **OAuth availability.** The authorization server is gated by the `mcp_oauth` feature flag and is **on in production** — discovery resolves and "click to connect" works today. The flag seeds as `false`, so a fresh environment (local, staging, a new deploy) serves `404` on discovery until it is enabled and clients fall back to API-key auth there. See [Enable OAuth locally](#enable-oauth-locally).
+> **OAuth availability.** The authorization server is gated by the `mcp_oauth` feature flag and is **on by default in every environment** (seeded `true` by migration `0020_enable_mcp_oauth`). Discovery resolves and "click to connect" works as soon as the OAuth env is set (`OAUTH_ISSUER`, `OAUTH_JWKS`, `OAUTH_COOKIE_KEYS`, `MCP_RESOURCE_URL` on the API; `MCP_OAUTH_ISSUER`, `MCP_RESOURCE_URL` on the MCP service). If those are unset the AS stays dormant and clients fall back to API-key auth, even with the flag on.
 
 ## Connect with OAuth
 
@@ -431,7 +431,7 @@ To exercise the full OAuth flow (e.g. with the [MCP Inspector](https://github.co
    MCP_RESOURCE_URL=http://localhost:3334/mcp
    ```
 
-3. **Enable the flag** (the AS 404s until it is on):
+3. **Flag is on by default** (seeded `true` by `0020_enable_mcp_oauth`). If a legacy DB still has it off, enable it:
 
    ```sql
    UPDATE feature_flags SET enabled = true WHERE key = 'mcp_oauth';
