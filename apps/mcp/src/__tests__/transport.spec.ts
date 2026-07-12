@@ -244,7 +244,12 @@ describe('createApp', () => {
     expect(await res.json()).toEqual({
       resource: 'https://mcp.knowtis.app/mcp',
       authorization_servers: ['https://api.knowtis.app'],
-      scopes_supported: ['notes:read', 'notes:write', 'notes:share'],
+      scopes_supported: [
+        'notes:read',
+        'notes:write',
+        'notes:share',
+        'offline_access',
+      ],
       bearer_methods_supported: ['header'],
       resource_name: 'Knowtis MCP',
     });
@@ -254,7 +259,18 @@ describe('createApp', () => {
     const app = createApp(makeServer, oauthConfig);
     const res = await app.request('/.well-known/oauth-protected-resource/mcp');
     expect(res.status).toBe(200);
-    expect((await res.json()).resource).toBe('https://mcp.knowtis.app/mcp');
+    expect(await res.json()).toEqual({
+      resource: 'https://mcp.knowtis.app/mcp',
+      authorization_servers: ['https://api.knowtis.app'],
+      scopes_supported: [
+        'notes:read',
+        'notes:write',
+        'notes:share',
+        'offline_access',
+      ],
+      bearer_methods_supported: ['header'],
+      resource_name: 'Knowtis MCP',
+    });
   });
 
   it('should expose protected resource metadata to browsers via CORS', async () => {
