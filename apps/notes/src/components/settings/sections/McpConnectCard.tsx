@@ -33,8 +33,13 @@ export function McpConnectCard() {
   const mcpUrl = import.meta.env.VITE_MCP_URL ?? DEFAULT_MCP_URL;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(mcpUrl);
-    toast.success(t('integrations.connect.urlCopied'));
+    try {
+      await navigator.clipboard.writeText(mcpUrl);
+      toast.success(t('integrations.connect.urlCopied'));
+    } catch (err) {
+      console.error('Failed to copy MCP URL:', err);
+      toast.error(t('integrations.connect.copyFailed'));
+    }
   };
 
   return (

@@ -68,4 +68,19 @@ describe('McpConnectCard', () => {
 
     expect(JSON.parse(atob(config ?? ''))).toEqual({ url: MCP_URL });
   });
+
+  it('shows an error toast when copying the URL fails', async () => {
+    const user = userEvent.setup();
+    vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
+      new Error('denied')
+    );
+
+    render(<McpConnectCard />);
+    await user.click(
+      screen.getByRole('button', { name: 'integrations.connect.copyUrl' })
+    );
+
+    expect(error).toHaveBeenCalledWith('integrations.connect.copyFailed');
+    expect(success).not.toHaveBeenCalled();
+  });
 });

@@ -142,6 +142,7 @@
       "urlLabel": "Knowtis MCP server URL",
       "copyUrl": "Copy URL",
       "urlCopied": "URL copied to clipboard",
+      "copyFailed": "Couldn't copy the URL. Copy it manually.",
       "step1": "In Claude Desktop or claude.ai, open Settings > Connectors > Add custom connector.",
       "step2": "Paste the URL above. Claude will ask you to sign in to Knowtis and approve access to read, edit and share your notes.",
       "step3": "Claude warns that this is a third-party connector — that is expected. Approve to finish.",
