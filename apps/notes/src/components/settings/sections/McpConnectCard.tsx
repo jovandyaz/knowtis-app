@@ -17,9 +17,8 @@ const DOCS_URL =
   'https://github.com/jovandyaz/knowtis-app/blob/main/docs/MCP.md';
 
 function cursorDeeplink(url: string): string {
-  return `cursor://anysphere.cursor-deeplink/mcp/install?name=knowtis&config=${btoa(
-    JSON.stringify({ url })
-  )}`;
+  const config = encodeURIComponent(btoa(JSON.stringify({ url })));
+  return `cursor://anysphere.cursor-deeplink/mcp/install?name=knowtis&config=${config}`;
 }
 
 const STEP_KEYS = [

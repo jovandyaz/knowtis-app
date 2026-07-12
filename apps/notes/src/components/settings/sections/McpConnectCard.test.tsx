@@ -69,6 +69,21 @@ describe('McpConnectCard', () => {
     expect(JSON.parse(atob(config ?? ''))).toEqual({ url: MCP_URL });
   });
 
+  it('encodes the Cursor config so it round-trips even with base64 specials', () => {
+    vi.stubEnv('VITE_MCP_URL', 'https://mcp.knowtis.app/mcp?x=>>>');
+    render(<McpConnectCard />);
+
+    const link = screen.getByRole('link', {
+      name: 'integrations.connect.addToCursor',
+    });
+    const raw = new URL(link.getAttribute('href') ?? '').searchParams.get(
+      'config'
+    );
+    expect(JSON.parse(atob(raw ?? ''))).toEqual({
+      url: 'https://mcp.knowtis.app/mcp?x=>>>',
+    });
+  });
+
   it('shows an error toast when copying the URL fails', async () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(
