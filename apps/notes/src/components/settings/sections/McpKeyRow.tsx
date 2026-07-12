@@ -1,17 +1,10 @@
 import { useTranslation } from 'react-i18next';
 
 import type { McpApiKey } from '@knowtis/api-client';
-import { Badge, Button } from '@knowtis/design-system';
+import { Button } from '@knowtis/design-system';
 
-import { SCOPE_LABEL_KEYS } from '../../../lib/mcp-scopes';
-
-function formatDate(dateStr: string, locale: string): string {
-  return new Date(dateStr).toLocaleDateString(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
-}
+import { formatDate } from '../../../lib/format-date';
+import { ScopeBadgeList } from '../ScopeBadgeList';
 
 interface McpKeyRowProps {
   apiKey: McpApiKey;
@@ -33,16 +26,9 @@ export function McpKeyRow({ apiKey, locale, onRevoke }: McpKeyRowProps) {
             {apiKey.keyPrefix}
           </code>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {apiKey.scopes.split(',').map((rawScope) => {
-            const scope = rawScope.trim();
-            return (
-              <Badge key={scope} variant="secondary">
-                {t(SCOPE_LABEL_KEYS[scope] ?? scope, { defaultValue: scope })}
-              </Badge>
-            );
-          })}
-        </div>
+        <ScopeBadgeList
+          scopes={apiKey.scopes.split(',').map((s) => s.trim())}
+        />
         <div className="flex gap-4 text-xs text-(--muted-foreground)">
           <span>
             {t('integrations.createdAt')} {formatDate(apiKey.createdAt, locale)}

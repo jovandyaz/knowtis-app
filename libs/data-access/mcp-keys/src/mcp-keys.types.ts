@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+// Keep in sync with MCP_SCOPE_CSVS in apps/api/src/modules/mcp/mcp-token.ts
 export const MCP_KEY_SCOPE_OPTIONS = [
   'notes:read',
   'notes:read,notes:write',
