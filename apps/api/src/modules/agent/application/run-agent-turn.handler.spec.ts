@@ -451,6 +451,10 @@ describe('RunAgentTurnHandler', () => {
     expect(JSON.stringify(onError.mock.calls[0]?.[0])).not.toContain(
       '10.0.0.5'
     );
+    expect(onError).toHaveBeenCalledWith({
+      code: 'AI_PROVIDER_ERROR',
+      message: 'AI provider error: Agent turn failed',
+    });
   });
 
   it('calls onError with a generic message, not the raw internal error, when model resolution throws', async () => {

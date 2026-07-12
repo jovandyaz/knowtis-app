@@ -24,4 +24,9 @@ describe('buildRedactedTelemetry', () => {
     expect(result.recordInputs).toBe(true);
     expect(result.recordOutputs).toBe(true);
   });
+
+  it('omits the metadata key entirely when metadata is undefined', () => {
+    const result = buildRedactedTelemetry('agent-turn', undefined, false);
+    expect(result).not.toHaveProperty('metadata');
+  });
 });

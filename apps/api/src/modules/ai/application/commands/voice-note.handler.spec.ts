@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AIErrorCodes } from '../../domain/errors/ai.errors';
 import { VoiceNoteHandler } from './voice-note.handler';
 
 function makeHandler(checkLimit: ReturnType<typeof vi.fn>) {
@@ -60,5 +61,24 @@ describe('VoiceNoteHandler anonymous budget', () => {
       expect.any(Number),
       false
     );
+  });
+
+  it('returns a rate-limit error when the anonymous budget is exhausted', async () => {
+    const checkLimit = vi
+      .fn()
+      .mockResolvedValue({ allowed: false, reason: 'daily cap reached' });
+    const { handler } = makeHandler(checkLimit);
+
+    const result = await handler.execute({
+      userId: 'anon-1',
+      audio: Buffer.from('x'),
+      mode: 'create-note',
+      isAnonymous: true,
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(AIErrorCodes.RATE_LIMIT_EXCEEDED);
+    }
   });
 });

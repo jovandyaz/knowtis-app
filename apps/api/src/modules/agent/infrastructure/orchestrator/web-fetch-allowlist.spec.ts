@@ -33,4 +33,10 @@ describe('WebFetchAllowlist', () => {
     allow.seedFromText('visit https://example.com');
     expect(allow.has('https://example.com')).toBe(true);
   });
+
+  it('folds host case and drops the default port when matching', () => {
+    const allow = new WebFetchAllowlist();
+    allow.add('https://Example.COM:443/a');
+    expect(allow.has('https://example.com/a')).toBe(true);
+  });
 });

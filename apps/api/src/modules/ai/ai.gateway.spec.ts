@@ -497,6 +497,10 @@ describe('AIGateway', () => {
         .mocked(client.emit)
         .mock.calls.find(([event]) => event === 'ai:error');
       expect(JSON.stringify(errorEmit?.[1])).not.toContain('10.0.0.5');
+      expect(errorEmit?.[1]).toEqual({
+        code: 'AI_PROVIDER_ERROR',
+        message: 'AI provider error: AI streaming failed',
+      });
     });
 
     it('should emit validation error for invalid targetLanguage', async () => {

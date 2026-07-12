@@ -43,12 +43,32 @@ describe('hardenAssistantUrl', () => {
   });
 
   it('drops a javascript: link (delegates to default sanitizer)', () => {
-    const out = hardenAssistantUrl('javascript:alert(1)', 'href', linkNode);
-    expect(out === '' || out == null).toBe(true);
+    expect(hardenAssistantUrl('javascript:alert(1)', 'href', linkNode)).toBe(
+      ''
+    );
   });
 
   it('drops a vbscript: link', () => {
-    const out = hardenAssistantUrl('vbscript:msgbox', 'href', linkNode);
-    expect(out === '' || out == null).toBe(true);
+    expect(hardenAssistantUrl('vbscript:msgbox', 'href', linkNode)).toBe('');
+  });
+
+  it('drops a data: link href', () => {
+    expect(hardenAssistantUrl('data:text/html,x', 'href', linkNode)).toBe('');
+  });
+
+  it('keeps a mailto: link href', () => {
+    expect(hardenAssistantUrl('mailto:a@b.com', 'href', linkNode)).toBe(
+      'mailto:a@b.com'
+    );
+  });
+
+  it('keeps a tel: link href', () => {
+    expect(hardenAssistantUrl('tel:+123', 'href', linkNode)).toBe('tel:+123');
+  });
+
+  it('keeps a blob: image source (cannot phone home)', () => {
+    expect(hardenAssistantUrl('blob:https://x/abc', 'src', imgNode)).toBe(
+      'blob:https://x/abc'
+    );
   });
 });

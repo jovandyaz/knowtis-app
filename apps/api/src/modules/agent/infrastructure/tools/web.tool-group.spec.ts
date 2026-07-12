@@ -167,6 +167,28 @@ describe('WebToolGroup', () => {
     expect(res.note).toMatch(/not in the user message or a prior web search/i);
     expect(res.content).toBeUndefined();
     expect(web.fetch).not.toHaveBeenCalled();
+    expect(usage.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('fetches a root url the user provided even without a trailing slash', async () => {
+    const web = {
+      search: vi.fn(),
+      fetch: vi.fn().mockResolvedValue({
+        url: 'https://example.com',
+        content: 'root page',
+        costUsd: 0,
+      }),
+    } as unknown as WebSearchPort;
+    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
+    const group = new WebToolGroup(web, usage);
+    const c = ctx();
+    c.webFetchAllowlist.seedFromText('read https://example.com');
+
+    const res = (await run(group, c, 'webFetch', {
+      url: 'https://example.com',
+    })) as { content?: string };
+
+    expect(res.content).toBe('root page');
   });
 
   it('fetches a url the user provided', async () => {
