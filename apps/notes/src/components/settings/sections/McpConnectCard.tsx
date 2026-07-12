@@ -11,7 +11,7 @@ import {
   Input,
 } from '@knowtis/design-system';
 
-const MCP_URL = import.meta.env.VITE_MCP_URL ?? 'https://mcp.knowtis.app/mcp';
+const DEFAULT_MCP_URL = 'https://mcp.knowtis.app/mcp';
 
 const DOCS_URL =
   'https://github.com/jovandyaz/knowtis-app/blob/main/docs/MCP.md';
@@ -30,9 +30,10 @@ const STEP_KEYS = [
 
 export function McpConnectCard() {
   const { t } = useTranslation('common');
+  const mcpUrl = import.meta.env.VITE_MCP_URL ?? DEFAULT_MCP_URL;
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(MCP_URL);
+    await navigator.clipboard.writeText(mcpUrl);
     toast.success(t('integrations.connect.urlCopied'));
   };
 
@@ -58,7 +59,7 @@ export function McpConnectCard() {
           <div className="flex gap-2">
             <Input
               id="mcp-server-url"
-              value={MCP_URL}
+              value={mcpUrl}
               readOnly
               onFocus={(event) => event.currentTarget.select()}
               className="font-mono text-sm"
@@ -91,7 +92,7 @@ export function McpConnectCard() {
 
         <div className="flex flex-wrap gap-2">
           <a
-            href={cursorDeeplink(MCP_URL)}
+            href={cursorDeeplink(mcpUrl)}
             className={buttonVariants({ variant: 'outline', size: 'sm' })}
           >
             {t('integrations.connect.addToCursor')}
