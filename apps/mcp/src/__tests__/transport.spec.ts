@@ -278,7 +278,31 @@ describe('createApp', () => {
 
     expect(res.status).toBe(401);
     expect(res.headers.get('WWW-Authenticate')).toBe(
-      'Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read"'
+      'Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read notes:write notes:share offline_access"'
     );
+  });
+
+  it('should advertise write and share scopes so clients do not consent read-only', async () => {
+    const app = createApp(makeServer, oauthConfig);
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: INITIALIZE,
+    });
+
+    const scope = res.headers
+      .get('WWW-Authenticate')
+      ?.match(/scope="([^"]+)"/)?.[1]
+      .split(' ');
+
+    expect(scope).toEqual([
+      'notes:read',
+      'notes:write',
+      'notes:share',
+      'offline_access',
+    ]);
   });
 });

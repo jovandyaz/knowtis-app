@@ -23,7 +23,7 @@ Authorization: Bearer <oauth-access-token | knowtis_mcp_...>
 
 Without a valid Bearer token the server replies `HTTP 401` with a `WWW-Authenticate: Bearer` challenge (carrying `resource_metadata` when OAuth is enabled, so clients can start discovery).
 
-> **OAuth availability.** The authorization server ships **behind the `mcp_oauth` feature flag** (dark by default). Discovery returns `404` until the flag is enabled; while it is off, clients fall back to API-key auth. Everything in [Connect with OAuth](#connect-with-oauth) describes the experience **once the flag is on**.
+> **OAuth availability.** The authorization server is gated by the `mcp_oauth` feature flag and is **on in production** — discovery resolves and "click to connect" works today. The flag seeds as `false`, so a fresh environment (local, staging, a new deploy) serves `404` on discovery until it is enabled and clients fall back to API-key auth there. See [Enable OAuth locally](#enable-oauth-locally).
 
 ## Connect with OAuth
 
@@ -31,7 +31,7 @@ Knowtis implements the [MCP authorization spec (revision 2025-11-25)](https://mo
 
 ### How it works
 
-1. The client calls `POST https://mcp.knowtis.app/mcp` with no token and gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read"`.
+1. The client calls `POST https://mcp.knowtis.app/mcp` with no token and gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read notes:write notes:share offline_access"`. Clients copy that `scope` verbatim into the authorization request, so the challenge advertises the **full** set — advertising less mints read-only tokens and every write tool then fails on an otherwise successful connection.
 2. It fetches that **Protected Resource Metadata** ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)) and learns the authorization server is `https://api.knowtis.app`.
 3. It fetches the AS metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) / OpenID Connect Discovery) and learns the `authorization`, `token`, `jwks`, and `registration` endpoints.
 4. It registers itself — via **Client ID Metadata Documents** (CIMD, `client_id` is the client's own HTTPS URL) or **Dynamic Client Registration** ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591), open — no initial access token) — then runs the **authorization-code + PKCE S256** flow. **PKCE is required.**
@@ -49,7 +49,7 @@ https://api.knowtis.app/.well-known/oauth-authorization-server
 https://api.knowtis.app/.well-known/openid-configuration
 ```
 
-Its endpoints are absolute and live under `/oauth/...` (`/oauth/authorize`, `/oauth/token`, `/oauth/jwks`, `/oauth/registration`).
+Its endpoints are absolute and live under `/oauth/...` — `/oauth/auth` (authorization), `/oauth/token`, `/oauth/jwks`, `/oauth/reg` (dynamic client registration), `/oauth/token/revocation`. Read them from the discovery document rather than hardcoding: they are `oidc-provider` defaults and change with its config.
 
 Resource server (MCP) — RFC 9728 metadata, both the root and MCP-endpoint-scoped forms:
 

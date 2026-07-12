@@ -136,15 +136,24 @@
   "integrations": {
     "title": "Integraciones",
     "description": "Conecta asistentes de IA como Claude, Cursor o VS Code a tus notas de Knowtis.",
+    "connect": {
+      "title": "Conecta con un clic",
+      "description": "Agrega Knowtis como conector en Claude, Cursor o VS Code. Inicias sesión y apruebas: no hay claves que copiar.",
+      "urlLabel": "URL del servidor MCP de Knowtis",
+      "copyUrl": "Copiar URL",
+      "urlCopied": "URL copiada al portapapeles",
+      "step1": "En Claude Desktop o claude.ai, abre Ajustes > Conectores > Añadir conector personalizado.",
+      "step2": "Pega la URL de arriba. Claude te pedirá iniciar sesión en Knowtis y aprobar el acceso para leer, editar y compartir tus notas.",
+      "step3": "Claude avisa que es un conector de terceros: es normal. Apruébalo para terminar.",
+      "addToCursor": "Añadir a Cursor",
+      "docs": "Guía de configuración"
+    },
+    "advancedTitle": "Avanzado: API keys",
+    "advancedDescription": "Para scripts, servidores o clientes que no pueden abrir un navegador. La mayoría debería usar el conector de arriba.",
     "createKey": "Crear API Key",
     "keyName": "Nombre de la key",
     "keyNamePlaceholder": "ej., Mi Claude Desktop",
     "scopes": "Permisos",
-    "scopeOptions": {
-      "read": "Solo lectura",
-      "readWrite": "Lectura y escritura",
-      "readWriteShare": "Lectura, escritura y compartir"
-    },
     "createdAt": "Creada",
     "lastUsed": "Último uso",
     "never": "Nunca",
@@ -158,7 +167,21 @@
     "emptyDescription": "Crea una API key para conectar asistentes de IA a tus notas.",
     "copyKey": "Copiar",
     "keyCopied": "Key copiada al portapapeles",
-    "done": "Listo"
+    "done": "Listo",
+    "scopeOptions": {
+      "read": {
+        "label": "Solo lectura",
+        "description": "Ver tus notas y con quién están compartidas."
+      },
+      "readWrite": {
+        "label": "Lectura y escritura",
+        "description": "Además crear, editar y eliminar notas. Recomendado."
+      },
+      "readWriteShare": {
+        "label": "Lectura, escritura y compartir",
+        "description": "Además compartir tus notas con otras personas."
+      }
+    }
   },
   "connectedApps": {
     "title": "Apps conectadas",

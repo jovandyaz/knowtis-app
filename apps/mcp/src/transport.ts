@@ -11,6 +11,15 @@ import { log } from './middleware/logger.js';
 
 const SUPPORTED_SCOPES = ['notes:read', 'notes:write', 'notes:share'] as const;
 
+/**
+ * Scopes advertised in the `WWW-Authenticate` challenge. Clients copy this value
+ * verbatim into the authorization request, so anything omitted here is never
+ * consented to: advertising only `notes:read` mints read-only tokens and every
+ * write/share tool fails after an otherwise successful connect. `offline_access`
+ * buys the refresh token that keeps the client connected past the 1h access token.
+ */
+const CHALLENGE_SCOPE = [...SUPPORTED_SCOPES, 'offline_access'].join(' ');
+
 export function createApp(
   serverFactory: (credential: McpCredential) => McpServer,
   config: AppConfig,
@@ -123,7 +132,7 @@ function buildChallenge(oauth: OauthConfig | null): string {
   if (!oauth) {
     return 'Bearer realm="knowtis-mcp"';
   }
-  return `Bearer resource_metadata="${oauth.metadataUrl}", scope="notes:read"`;
+  return `Bearer resource_metadata="${oauth.metadataUrl}", scope="${CHALLENGE_SCOPE}"`;
 }
 
 function buildInvalidTokenChallenge(oauth: OauthConfig | null): string {

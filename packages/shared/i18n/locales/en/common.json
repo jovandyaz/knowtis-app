@@ -136,15 +136,24 @@
   "integrations": {
     "title": "Integrations",
     "description": "Connect AI assistants like Claude, Cursor, or VS Code to your Knowtis notes.",
+    "connect": {
+      "title": "Connect with one click",
+      "description": "Add Knowtis as a connector in Claude, Cursor or VS Code. You sign in and approve — no keys to copy.",
+      "urlLabel": "Knowtis MCP server URL",
+      "copyUrl": "Copy URL",
+      "urlCopied": "URL copied to clipboard",
+      "step1": "In Claude Desktop or claude.ai, open Settings > Connectors > Add custom connector.",
+      "step2": "Paste the URL above. Claude will ask you to sign in to Knowtis and approve access to read, edit and share your notes.",
+      "step3": "Claude warns that this is a third-party connector — that is expected. Approve to finish.",
+      "addToCursor": "Add to Cursor",
+      "docs": "Setup guide"
+    },
+    "advancedTitle": "Advanced: API keys",
+    "advancedDescription": "For scripts, servers, or clients that can't open a browser. Most people should use the connector above instead.",
     "createKey": "Create API Key",
     "keyName": "Key name",
     "keyNamePlaceholder": "e.g., My Claude Desktop",
     "scopes": "Permissions",
-    "scopeOptions": {
-      "read": "Read only",
-      "readWrite": "Read & Write",
-      "readWriteShare": "Read, Write & Share"
-    },
     "createdAt": "Created",
     "lastUsed": "Last used",
     "never": "Never",
@@ -158,7 +167,21 @@
     "emptyDescription": "Create an API key to connect AI assistants to your notes.",
     "copyKey": "Copy",
     "keyCopied": "Key copied to clipboard",
-    "done": "Done"
+    "done": "Done",
+    "scopeOptions": {
+      "read": {
+        "label": "Read only",
+        "description": "View your notes and who they are shared with."
+      },
+      "readWrite": {
+        "label": "Read and write",
+        "description": "Also create, edit and delete notes. Recommended."
+      },
+      "readWriteShare": {
+        "label": "Read, write and share",
+        "description": "Also share your notes with other people."
+      }
+    }
   },
   "connectedApps": {
     "title": "Connected apps",
