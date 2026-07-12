@@ -12,6 +12,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { buildRedactedTelemetry } from '../../../ai/infrastructure/providers/redacted-telemetry';
 import type {
   AgentEvent,
   AgentSource,
@@ -158,15 +159,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           stepUsage.inputTokens += usage?.inputTokens ?? 0;
           stepUsage.outputTokens += usage?.outputTokens ?? 0;
         },
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: 'agent-turn',
-          metadata: {
+        experimental_telemetry: buildRedactedTelemetry(
+          'agent-turn',
+          {
             userId: input.userId,
             environment: this.configService.get('NODE_ENV'),
             ...(input.resume ? { tags: ['resume'] } : {}),
           },
-        },
+          this.configService.get('NODE_ENV') !== 'production' &&
+            !input.byokApiKey
+        ),
       });
     } catch (error) {
       if (options.throwOnFreshFailure && !isAbortError(error)) {

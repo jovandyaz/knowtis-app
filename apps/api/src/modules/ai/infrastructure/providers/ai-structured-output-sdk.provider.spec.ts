@@ -76,6 +76,8 @@ describe('AIStructuredOutputSDKProvider', () => {
       expect.objectContaining({
         experimental_telemetry: {
           isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
           functionId: 'artifact:generate_quiz',
           metadata: { userId: 'user-1', environment: 'test' },
         },

@@ -11,6 +11,7 @@ import type {
 } from '../../domain/ports/ai-structured-output.port';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
+import { buildRedactedTelemetry } from './redacted-telemetry';
 
 @Injectable()
 export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider {
@@ -58,11 +59,11 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
       ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
       ...(options.telemetry
         ? {
-            experimental_telemetry: {
-              isEnabled: true,
-              functionId: options.telemetry.functionId,
-              metadata: options.telemetry.metadata,
-            },
+            experimental_telemetry: buildRedactedTelemetry(
+              options.telemetry.functionId,
+              options.telemetry.metadata,
+              options.telemetry.recordContent ?? false
+            ),
           }
         : {}),
     });
