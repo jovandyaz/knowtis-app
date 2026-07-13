@@ -19,7 +19,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 
-import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+  ApiUnauthorized,
+} from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagKeyParam } from './dto/feature-flag-key.param';
 import { UpsertFeatureFlagDto } from './dto/feature-flags.dto';
@@ -48,14 +52,17 @@ export class FeatureFlagsController {
   @ApiOperation({
     summary: 'List all feature flags',
     description:
-      'Returns all feature flags and their current state. This endpoint is public and does not require authentication.',
+      'Returns all feature flags and their current state. Requires authentication (anonymous sessions included).',
   })
+  @ApiBearerAuth()
   @ApiResponse({
     status: 200,
     description: 'List of all feature flags',
     schema: { type: 'array', items: flagSchema },
   })
+  @ApiUnauthorized()
   @Get()
+  @UseGuards(JwtAuthGuard)
   async getAll() {
     return this.featureFlagsService.getAll();
   }
