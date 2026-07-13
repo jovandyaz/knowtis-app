@@ -21,6 +21,7 @@ interface CompleteTextInput {
   readonly targetLanguage?: string;
   readonly targetTone?: string;
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
 }
 
 export interface CompleteTextOutput {

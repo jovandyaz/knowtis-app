@@ -55,6 +55,7 @@ interface RunAgentTurnInput {
   readonly userId: string;
   readonly messages?: readonly AgentMessage[];
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
   readonly noteId?: string;
   readonly knownNotes?: readonly AgentSource[];
   readonly message?: { content: string };
@@ -87,6 +88,8 @@ interface TurnLoopContext {
   readonly estimatedCostUsd: number;
   readonly model: string;
   readonly isByok: boolean;
+  readonly isAnonymous: boolean;
+  readonly clientIp?: string;
 }
 
 interface PersistenceContext {
@@ -154,13 +157,7 @@ export class RunAgentTurnHandler {
   ): TurnLoopPolicy {
     return {
       onProposal: async (event, ctx) => {
-        await this.recordUsage(
-          userId,
-          ctx.estimatedTokens,
-          event.usage,
-          ctx.isByok,
-          ctx.estimatedCostUsd
-        );
+        await this.recordUsage(userId, ctx, event.usage);
         await this.pendingStore.save({
           userId,
           mutation: event.proposal,
@@ -207,6 +204,7 @@ export class RunAgentTurnHandler {
       userId: input.userId,
       messages,
       ...(input.isAnonymous ? { isAnonymous: true } : {}),
+      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
       knownNotes,
       ...(userMemories.length ? { userMemories } : {}),
@@ -344,13 +342,7 @@ export class RunAgentTurnHandler {
           proposalId: event.proposal.id,
           summary: event.proposal.summary,
         });
-        const costUsd = await this.recordUsage(
-          userId,
-          ctx.estimatedTokens,
-          event.usage,
-          ctx.isByok,
-          ctx.estimatedCostUsd
-        );
+        const costUsd = await this.recordUsage(userId, ctx, event.usage);
         callbacks.onDone({
           inputTokens: event.usage.inputTokens,
           outputTokens: event.usage.outputTokens,
@@ -416,6 +408,7 @@ export class RunAgentTurnHandler {
         messages: coalesceMessages(history),
         knownNotes,
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
+        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(userMemories.length ? { userMemories } : {}),
         conversationModel: found.model,
@@ -551,7 +544,8 @@ export class RunAgentTurnHandler {
       estimatedTokens,
       input.isAnonymous ?? false,
       isByok,
-      estimatedCostUsd
+      estimatedCostUsd,
+      input.clientIp
     );
     if (!limit.allowed) {
       callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
@@ -564,6 +558,8 @@ export class RunAgentTurnHandler {
       estimatedCostUsd,
       model,
       isByok,
+      isAnonymous: input.isAnonymous ?? false,
+      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
     };
 
     let assistantText = '';
@@ -590,32 +586,18 @@ export class RunAgentTurnHandler {
           case 'error':
             await this.recordUsageSafe(
               input.userId,
-              estimatedTokens,
-              event.usage ?? { inputTokens: 0, outputTokens: 0, model },
-              isByok,
-              estimatedCostUsd
+              ctx,
+              event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             callbacks.onError(event.error);
             return;
           case 'aborted':
-            await this.recordUsageSafe(
-              input.userId,
-              estimatedTokens,
-              event.usage,
-              isByok,
-              estimatedCostUsd
-            );
+            await this.recordUsageSafe(input.userId, ctx, event.usage);
             return;
           case 'done': {
             let costUsd: number;
             try {
-              costUsd = await this.recordUsage(
-                input.userId,
-                estimatedTokens,
-                event.usage,
-                isByok,
-                estimatedCostUsd
-              );
+              costUsd = await this.recordUsage(input.userId, ctx, event.usage);
             } catch (error) {
               this.logger.warn({
                 event: 'agent.usage.record_failed',
@@ -719,29 +701,23 @@ export class RunAgentTurnHandler {
 
   private async recordUsageSafe(
     userId: string,
-    estimatedTokens: number,
-    usage: AgentTurnUsage,
-    isByok = false,
-    estimatedCostUsd = 0
+    ctx: TurnLoopContext,
+    usage: AgentTurnUsage
   ): Promise<void> {
     if (usage.inputTokens + usage.outputTokens === 0) {
-      if (!isByok) {
+      if (!ctx.isByok) {
         await this.rateLimit.releaseReservation(
           userId,
-          estimatedTokens,
-          estimatedCostUsd
+          ctx.estimatedTokens,
+          ctx.estimatedCostUsd,
+          ctx.isAnonymous,
+          ctx.clientIp
         );
       }
       return;
     }
     try {
-      await this.recordUsage(
-        userId,
-        estimatedTokens,
-        usage,
-        isByok,
-        estimatedCostUsd
-      );
+      await this.recordUsage(userId, ctx, usage);
     } catch (error) {
       this.logger.warn({
         event: 'agent.usage.record_failed',
@@ -753,10 +729,8 @@ export class RunAgentTurnHandler {
 
   private async recordUsage(
     userId: string,
-    estimatedTokens: number,
-    usage: AgentTurnUsage,
-    isByok = false,
-    estimatedCostUsd = 0
+    ctx: TurnLoopContext,
+    usage: AgentTurnUsage
   ): Promise<number> {
     const pricing = this.modelCatalog.getPricing(usage.model);
     const tokenUsage = TokenUsage.create(
@@ -774,9 +748,11 @@ export class RunAgentTurnHandler {
       outputTokens: usage.outputTokens,
       model: usage.model,
       costUsd: tokenUsage.costUsd,
-      estimatedTokens,
-      estimatedCostUsd,
-      byok: isByok,
+      estimatedTokens: ctx.estimatedTokens,
+      estimatedCostUsd: ctx.estimatedCostUsd,
+      byok: ctx.isByok,
+      ...(ctx.isAnonymous ? { isAnonymous: true } : {}),
+      ...(ctx.clientIp ? { clientIp: ctx.clientIp } : {}),
     });
     return tokenUsage.costUsd;
   }

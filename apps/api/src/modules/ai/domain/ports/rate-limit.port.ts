@@ -11,11 +11,17 @@ export interface RateLimits {
 }
 
 export interface RateLimitProvider {
+  /**
+   * `countGlobal: false` keeps the reservation out of the global daily-spend
+   * counter — for secondary reservations (per-IP) whose spend the primary
+   * user-subject call already counted.
+   */
   checkAndIncrement(
     subject: string,
     estimatedTokens: number,
     estimatedCostUsd: number,
-    limits: RateLimits
+    limits: RateLimits,
+    countGlobal?: boolean
   ): Promise<RateLimitCheckResult>;
 
   checkRpm(subject: string): Promise<RateLimitCheckResult>;
@@ -25,7 +31,8 @@ export interface RateLimitProvider {
     estimatedTokens: number,
     actualTokens: number,
     estimatedCostUsd: number,
-    actualCostUsd: number
+    actualCostUsd: number,
+    countGlobal?: boolean
   ): Promise<void>;
 
   recordByokCost(subject: string, costUsd: number): Promise<void>;

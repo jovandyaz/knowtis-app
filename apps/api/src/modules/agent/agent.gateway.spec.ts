@@ -97,6 +97,21 @@ describe('AgentGateway', () => {
     expect(execute.mock.calls[0][0]).toMatchObject({ userId: 'u1' });
   });
 
+  it('forwards the client IP to the turn handler', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+    (client.data as Record<string, unknown>)['clientIp'] = '203.0.113.7';
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(execute.mock.calls[0][0]).toMatchObject({
+      clientIp: '203.0.113.7',
+    });
+  });
+
   it('routes the {message} payload to execute with a single message', async () => {
     const execute = vi.fn().mockResolvedValue(undefined);
     const gateway = makeGateway({ handler: { execute } });
@@ -456,6 +471,32 @@ describe('AgentGateway', () => {
     expect(resumeTurn.mock.calls[0][0]).toMatchObject({
       userId: 'u1',
       resume: { toolName: 'proposeCreateNote' },
+    });
+  });
+
+  it('resumed turns keep the anonymous budget and client IP of the session', async () => {
+    const approveExecute = vi.fn().mockResolvedValue(
+      ok({
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+        outcome: 'created the note "GTD"',
+        toolName: 'proposeCreateNote',
+        conversationId: 'conv-1',
+      })
+    );
+    const resumeTurn = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({
+      approve: { execute: approveExecute },
+      handler: { resumeTurn } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+    (client.data as Record<string, unknown>)['isAnonymous'] = true;
+    (client.data as Record<string, unknown>)['clientIp'] = '203.0.113.7';
+
+    await gateway.handleApprove(client as never, approvePayload());
+
+    expect(resumeTurn.mock.calls[0][0]).toMatchObject({
+      isAnonymous: true,
+      clientIp: '203.0.113.7',
     });
   });
 

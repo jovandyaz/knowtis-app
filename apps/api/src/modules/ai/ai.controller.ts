@@ -14,6 +14,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -28,11 +29,13 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import type { Request } from 'express';
 
 import { unwrapOrThrow } from '../../core/http';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
+import { realIpOf } from '../websocket/socket-auth';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import { AIConfigService } from './application/services/ai-config.service';
@@ -198,7 +201,12 @@ export class AIController {
     description: 'Bad gateway — AI provider error',
   })
   @Post('complete')
-  async complete(@CurrentUser() user: RequestUser, @Body() dto: AICompleteDto) {
+  async complete(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: AICompleteDto,
+    @Req() req: Request
+  ) {
+    const clientIp = realIpOf(req.headers) ?? req.ip;
     const result = await this.completeTextHandler.execute({
       userId: user.id,
       action: dto.action,
@@ -209,6 +217,7 @@ export class AIController {
       }),
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
       ...(user.isAnonymous && { isAnonymous: true }),
+      ...(clientIp ? { clientIp } : {}),
     });
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
@@ -260,14 +269,17 @@ export class AIController {
     )
     audio: Express.Multer.File,
     @Body() dto: VoiceNoteDto,
-    @CurrentUser() user: RequestUser
+    @CurrentUser() user: RequestUser,
+    @Req() req: Request
   ) {
+    const clientIp = realIpOf(req.headers) ?? req.ip;
     const result = await this.voiceNoteHandler.execute({
       userId: user.id,
       audio: audio.buffer,
       mode: dto.mode,
       ...(dto.language !== undefined && { language: dto.language }),
       ...(user.isAnonymous && { isAnonymous: true }),
+      ...(clientIp ? { clientIp } : {}),
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);

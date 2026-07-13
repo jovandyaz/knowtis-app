@@ -23,6 +23,7 @@ interface VoiceNoteInput {
   readonly mode: 'create-note' | 'insert';
   readonly language?: string;
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
 }
 
 export interface VoiceNoteOutput {
@@ -66,7 +67,8 @@ export class VoiceNoteHandler {
       estimatedTokens,
       input.isAnonymous ?? false,
       false,
-      estimatedCostUsd
+      estimatedCostUsd,
+      input.clientIp
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -101,7 +103,9 @@ export class VoiceNoteHandler {
       await this.rateLimitService.releaseReservation(
         input.userId,
         estimatedTokens,
-        estimatedCostUsd
+        estimatedCostUsd,
+        input.isAnonymous ?? false,
+        input.clientIp
       );
       return err(transcriptionResult.error);
     }
@@ -118,7 +122,9 @@ export class VoiceNoteHandler {
       await this.rateLimitService.releaseReservation(
         input.userId,
         estimatedTokens,
-        estimatedCostUsd
+        estimatedCostUsd,
+        input.isAnonymous ?? false,
+        input.clientIp
       );
       return err(
         AIErrors.invalidInput(
@@ -144,6 +150,8 @@ export class VoiceNoteHandler {
         inputTokens: 0,
         outputTokens: 0,
         costUsd: whisperCostUsd,
+        ...(input.isAnonymous ? { isAnonymous: true } : {}),
+        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
       })
       .catch((err) =>
         this.logger.warn({
@@ -172,7 +180,9 @@ export class VoiceNoteHandler {
         await this.rateLimitService.releaseReservation(
           input.userId,
           estimatedTokens,
-          0
+          0,
+          input.isAnonymous ?? false,
+          input.clientIp
         );
         return err(modelResult.error);
       }
@@ -210,6 +220,8 @@ export class VoiceNoteHandler {
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
+          ...(input.isAnonymous ? { isAnonymous: true } : {}),
+          ...(input.clientIp ? { clientIp: input.clientIp } : {}),
         })
         .catch((err) =>
           this.logger.warn({
@@ -249,7 +261,9 @@ export class VoiceNoteHandler {
       await this.rateLimitService.releaseReservation(
         input.userId,
         estimatedTokens,
-        0
+        0,
+        input.isAnonymous ?? false,
+        input.clientIp
       );
 
       const fallbackTitle = this.buildFallbackTitle(transcript);

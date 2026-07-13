@@ -286,6 +286,23 @@ describe('AIGateway', () => {
       );
     });
 
+    it('should forward the client IP to the stream handler', async () => {
+      const client = createMockAISocket();
+      client.data.userId = 'user-123';
+      client.data.clientIp = '203.0.113.7';
+
+      await gateway.handleComplete(client, {
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some note content to summarize',
+      });
+
+      expect(mockStreamHandler.execute).toHaveBeenCalledWith(
+        expect.objectContaining({ clientIp: '203.0.113.7' }),
+        expect.anything(),
+        expect.any(AbortSignal)
+      );
+    });
+
     it('should emit validation error for invalid action', async () => {
       const client = createMockAISocket();
       client.data.userId = 'user-123';

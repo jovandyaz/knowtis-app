@@ -152,6 +152,20 @@ describe('AICompletionPipeline', () => {
       );
     });
 
+    it('should pass the client IP to the rate-limit check', async () => {
+      const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+      const { pipeline } = createPipeline({ checkLimit });
+
+      await pipeline.preflight({
+        ...baseInput,
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      });
+
+      expect(checkLimit.mock.calls[0][2]).toBe(true);
+      expect(checkLimit.mock.calls[0][5]).toBe('203.0.113.7');
+    });
+
     it('should expose the estimated cost on the preflight context', async () => {
       const { pipeline } = createPipeline();
 
@@ -288,7 +302,64 @@ describe('AICompletionPipeline', () => {
       expect(releaseReservation).toHaveBeenCalledWith(
         'user-1',
         context.estimatedTokens,
-        context.estimatedCostUsd
+        context.estimatedCostUsd,
+        false,
+        undefined
+      );
+    });
+
+    it('should forward anonymity and client IP into usage recording', async () => {
+      const recordUsage = vi.fn().mockResolvedValue(undefined);
+      const { pipeline } = createPipeline({ recordUsage });
+      const input = {
+        ...baseInput,
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      };
+
+      const preflight = await pipeline.preflight(input);
+      if (preflight.isErr() || preflight.value.kind !== 'ready') {
+        throw new Error('expected ready preflight');
+      }
+
+      pipeline.recordUsage(preflight.value.context, input, {
+        inputTokens: 100,
+        outputTokens: 40,
+        model: MODEL,
+        costUsd: 0.002,
+      });
+
+      expect(recordUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isAnonymous: true,
+          clientIp: '203.0.113.7',
+        })
+      );
+    });
+
+    it('should release the reservation with anonymity and client IP', async () => {
+      const releaseReservation = vi.fn().mockResolvedValue(undefined);
+      const { pipeline } = createPipeline({ releaseReservation });
+      const input = {
+        ...baseInput,
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      };
+
+      const preflight = await pipeline.preflight(input);
+      if (preflight.isErr() || preflight.value.kind !== 'ready') {
+        throw new Error('expected ready preflight');
+      }
+      const { context } = preflight.value;
+
+      pipeline.releaseReservation(context, input);
+
+      expect(releaseReservation).toHaveBeenCalledWith(
+        'user-1',
+        context.estimatedTokens,
+        context.estimatedCostUsd,
+        true,
+        '203.0.113.7'
       );
     });
 

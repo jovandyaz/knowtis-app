@@ -31,6 +31,7 @@ export interface TextCompletionInput {
   readonly targetLanguage?: string;
   readonly targetTone?: string;
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
 }
 
 export interface PreflightContext {
@@ -139,7 +140,8 @@ export class AICompletionPipeline {
       estimatedTokens,
       input.isAnonymous ?? false,
       false,
-      estimatedCostUsd
+      estimatedCostUsd,
+      input.clientIp
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -213,6 +215,8 @@ export class AICompletionPipeline {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd,
+        ...(input.isAnonymous ? { isAnonymous: true } : {}),
+        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
       })
       .catch((error) =>
         this.logger.warn({
@@ -231,7 +235,9 @@ export class AICompletionPipeline {
     void this.rateLimitService.releaseReservation(
       input.userId,
       context.estimatedTokens,
-      context.estimatedCostUsd
+      context.estimatedCostUsd,
+      input.isAnonymous ?? false,
+      input.clientIp
     );
   }
 

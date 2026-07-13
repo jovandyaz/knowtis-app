@@ -219,6 +219,129 @@ describe('RunAgentTurnHandler', () => {
     expect(call[4]).toBeCloseTo(estimatedTokens * 0.000003, 12);
   });
 
+  it('threads the client IP into the rate-limit check', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const call = vi.mocked(rateLimit.checkLimit).mock.calls[0] as unknown[];
+    expect(call[2]).toBe(true);
+    expect(call[5]).toBe('203.0.113.7');
+  });
+
+  it('threads anonymity and client IP into usage recording', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(vi.mocked(rateLimit.recordUsage).mock.calls[0][0]).toMatchObject({
+      isAnonymous: true,
+      clientIp: '203.0.113.7',
+    });
+  });
+
+  it('threads anonymity and client IP into the reservation release', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number),
+      expect.any(Number),
+      true,
+      '203.0.113.7'
+    );
+  });
+
   it('forwards the reserved cost estimate into usage recording', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
@@ -1571,7 +1694,9 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
       USER,
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
+      false,
+      undefined
     );
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });

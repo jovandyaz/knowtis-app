@@ -113,17 +113,21 @@ describe('RedisRateLimitService', () => {
         if (numKeys !== 3) {
           throw new Error('budget Luas expect 3 keys (tokens, cost, global)');
         }
-        if (argv.length === 3) {
+        if (argv.length === 3 || argv.length === 4) {
           const [tokenDelta, costIncrement] = argv;
+          const countGlobal = argv[3] ?? 1;
           const tokens = incr(keys[0], tokenDelta);
           const cost = incr(keys[1], costIncrement);
-          incr(keys[2], costIncrement);
+          if (countGlobal === 1) {
+            incr(keys[2], costIncrement);
+          }
           return [tokens, String(cost)];
         }
-        if (argv.length !== 5) {
-          throw new Error('sliding-window Lua expects 5 ARGV');
+        if (argv.length !== 5 && argv.length !== 6) {
+          throw new Error('sliding-window Lua expects 5 or 6 ARGV');
         }
         const [estimatedTokens, estimatedCost, tokenLimit, costLimit] = argv;
+        const countGlobal = argv[5] ?? 1;
         const currentTokens = Number(store.get(keys[0]) ?? '0');
         const currentCost = Number(store.get(keys[1]) ?? '0');
         if (currentTokens + estimatedTokens > tokenLimit) {
@@ -137,7 +141,9 @@ describe('RedisRateLimitService', () => {
         }
         const newTokens = incr(keys[0], estimatedTokens);
         const newCost = incr(keys[1], estimatedCost);
-        incr(keys[2], estimatedCost);
+        if (countGlobal === 1) {
+          incr(keys[2], estimatedCost);
+        }
         return [1, newTokens, String(newCost), ''];
       });
       const redis = { client: { eval: evalFn } } as unknown as AIRedisProvider;
@@ -233,6 +239,36 @@ describe('RedisRateLimitService', () => {
 
       expect(Number(store.get(`ai:spend:global:${today}`))).toBeCloseTo(0.7);
     });
+
+    it('skips the global spend key when countGlobal is off (secondary IP reservation)', async () => {
+      const { store, service } = createLuaFake();
+
+      const result = await service.checkAndIncrement(
+        'ip:abc123',
+        10,
+        0.3,
+        limits,
+        false
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(store.has(`ai:spend:global:${today}`)).toBe(false);
+      expect(
+        Number(store.get(`ai:ratelimit:ip:abc123:cost:${today}`))
+      ).toBeCloseTo(0.3);
+    });
+
+    it('skips the global spend key on correction when countGlobal is off', async () => {
+      const { store, service } = createLuaFake();
+      store.set(`ai:spend:global:${today}`, '1.0');
+
+      await service.correctUsage('ip:abc123', 1000, 400, 0.5, 0.2, false);
+
+      expect(Number(store.get(`ai:spend:global:${today}`))).toBeCloseTo(1.0);
+      expect(
+        Number(store.get(`ai:ratelimit:ip:abc123:cost:${today}`))
+      ).toBeCloseTo(-0.3);
+    });
   });
 
   describe('correctUsage', () => {
@@ -249,7 +285,8 @@ describe('RedisRateLimitService', () => {
         expect.stringContaining('ai:spend:global:'),
         -600,
         '-0.300000',
-        expect.any(Number)
+        expect.any(Number),
+        1
       );
     });
   });

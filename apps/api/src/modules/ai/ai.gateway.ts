@@ -159,6 +159,7 @@ export class AIGateway
           ...(targetLanguage !== undefined && { targetLanguage }),
           ...(targetTone !== undefined && { targetTone }),
           ...(client.data.isAnonymous && { isAnonymous: true }),
+          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
         },
         {
           onChunk: (text) => client.emit('ai:chunk', { text }),
