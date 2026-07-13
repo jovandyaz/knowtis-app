@@ -32,6 +32,7 @@
     "serve": {
       "executor": "@nx/vite:dev-server",
       "defaultConfiguration": "development",
+      "dependsOn": ["^build"],
       "options": {
         "buildTarget": "notes:build"
       },

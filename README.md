@@ -76,12 +76,17 @@ pnpm dev:all     # starts the API + frontend
 
 > `pnpm setup` is idempotent — it never overwrites an existing `.env`. AI features (`/api/ai/*`) need an `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `apps/api/.env` after the first run.
 
+Design-system tokens are regenerated automatically before the app starts (the `serve`/`build` targets depend on `design-system:build`), so `pnpm dev:all` works on a fresh clone with no extra step.
+
 To run apps individually instead:
 
 ```bash
 pnpm dev      # Frontend only (http://localhost:4200)
 pnpm dev:api  # Backend only (http://localhost:3333)
+pnpm dev:mcp  # MCP server only (http://localhost:3334)
 ```
+
+> New here? [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) is the full onboarding guide — verified boot sequence, how to reach Settings (email verification), and how to connect an MCP client (Claude Desktop, Cursor, VS Code) to your local notes.
 
 ### Access Points
 
