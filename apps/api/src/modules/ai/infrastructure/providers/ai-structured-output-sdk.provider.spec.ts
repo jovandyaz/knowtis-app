@@ -76,6 +76,8 @@ describe('AIStructuredOutputSDKProvider', () => {
       expect.objectContaining({
         experimental_telemetry: {
           isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
           functionId: 'artifact:generate_quiz',
           metadata: { userId: 'user-1', environment: 'test' },
         },
@@ -139,5 +141,44 @@ describe('AIStructuredOutputSDKProvider', () => {
         model: 'anthropic:claude-sonnet-4-20250514',
       })
     ).rejects.toThrow('ANTHROPIC_API_KEY is not configured');
+  });
+});
+
+describe('AIStructuredOutputSDKProvider timeout handling', () => {
+  beforeEach(async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    generateText.mockReset();
+    languageModel.mockClear();
+  });
+
+  it('should give each fallback attempt a distinct, non-shared abort signal', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const seenSignals: (AbortSignal | undefined)[] = [];
+
+    generateText
+      .mockImplementationOnce((options) => {
+        seenSignals.push(options.abortSignal);
+        const error = new Error('timed out');
+        error.name = 'TimeoutError';
+        return Promise.reject(error);
+      })
+      .mockImplementationOnce((options) => {
+        seenSignals.push(options.abortSignal);
+        return Promise.resolve({
+          output: { answer: 42 },
+          usage: { inputTokens: 1, outputTokens: 1 },
+        } as unknown as Awaited<ReturnType<typeof generateText>>);
+      });
+
+    const provider = createProvider();
+    const result = await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      timeoutMs: 5_000,
+    });
+
+    expect(result.model).toBe('anthropic:claude-haiku-4-5-20251001');
+    expect(seenSignals).toHaveLength(2);
+    expect(seenSignals[0]).not.toBe(seenSignals[1]);
+    expect(seenSignals[1]?.aborted).toBe(false);
   });
 });

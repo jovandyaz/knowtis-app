@@ -87,9 +87,76 @@ const INJECTION_PATTERNS: {
     weight: 0.85,
     reason: 'Model-specific delimiter injection',
   },
+
+  // Spanish — role override
+  {
+    pattern:
+      /ignora(?:r)?\s+(?:(?:todas|todo)\s+)?(?:las\s+|los\s+)?(?:instrucciones|reglas|indicaciones|[óo]rdenes)\s+(?:anteriores|previas|de\s+arriba)/i,
+    weight: 0.9,
+    reason: 'Instruction override attempt (es)',
+  },
+  {
+    pattern:
+      /olv[íi]da(?:r|te\s+de)?\s+(?:(?:todas|todo)\s+)?(?:tus\s+|las\s+)?(?:instrucciones|reglas|indicaciones)/i,
+    weight: 0.8,
+    reason: 'Instruction override attempt (es)',
+  },
+  {
+    pattern:
+      /haz\s+caso\s+omiso\s+(?:de\s+|a\s+)?(?:las\s+)?(?:instrucciones|reglas)/i,
+    weight: 0.85,
+    reason: 'Instruction override attempt (es)',
+  },
+  // Spanish — role hijacking
+  {
+    pattern:
+      /act[úu]a\s+como\s+(?:un[ao]?\s+)?(?:ia\s+|asistente\s+|modelo\s+)?(?:sin\s+(?:restricciones|filtros|l[íi]mites)|no\s+restringid)/i,
+    weight: 0.9,
+    reason: 'Role hijacking attempt (es)',
+  },
+  // Spanish — system prompt extraction
+  {
+    pattern:
+      /(?:mu[ée]stra(?:me)?|revela|imprime|repite|dime)\s+(?:(?:tus?\s+(?:prompt|instrucciones|reglas))|(?:(?:el|la|las?)\s+(?:prompt|instrucciones|reglas)\s+(?:de|del)\s+sistema))/i,
+    weight: 0.85,
+    reason: 'System prompt extraction attempt (es)',
+  },
 ];
 
 const INJECTION_THRESHOLD = 0.6;
+
+const STRIP_CODEPOINTS: readonly number[] = [
+  0x200b,
+  0x200c,
+  0x200d,
+  0x2060,
+  0xfeff, // zero-width
+  0x202a,
+  0x202b,
+  0x202c,
+  0x202d,
+  0x202e, // bidi embedding/override
+  0x2066,
+  0x2067,
+  0x2068,
+  0x2069, // bidi isolates
+  0x200e,
+  0x200f,
+  0x061c, // bidi marks (LRM, RLM, ALM)
+];
+const STRIP_CHARS: ReadonlySet<string> = new Set(
+  STRIP_CODEPOINTS.map((cp) => String.fromCharCode(cp))
+);
+
+function normalizeForGuard(text: string): string {
+  let out = '';
+  for (const ch of text.normalize('NFKC')) {
+    if (!STRIP_CHARS.has(ch)) {
+      out += ch;
+    }
+  }
+  return out;
+}
 
 export function detectPromptInjection(text: string): PromptGuardResult {
   if (!text) {
@@ -100,11 +167,13 @@ export function detectPromptInjection(text: string): PromptGuardResult {
     return { safe: false, score: 1, reason: 'Input exceeds safety limit' };
   }
 
+  const normalized = normalizeForGuard(text);
+
   let maxScore = 0;
   let matchedReason: string | undefined;
 
   for (const { pattern, weight, reason } of INJECTION_PATTERNS) {
-    if (pattern.test(text)) {
+    if (pattern.test(normalized)) {
       if (weight > maxScore) {
         maxScore = weight;
         matchedReason = reason;

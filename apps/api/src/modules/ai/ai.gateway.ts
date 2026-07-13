@@ -178,12 +178,7 @@ export class AIGateway
         error: error instanceof Error ? error.message : 'Unknown error',
       });
       if (!controller.signal.aborted) {
-        client.emit(
-          'ai:error',
-          AIErrors.providerError(
-            error instanceof Error ? error.message : 'AI streaming failed'
-          )
-        );
+        client.emit('ai:error', AIErrors.providerError('AI streaming failed'));
       }
     } finally {
       this.streams.release(userId, client.id, streamId);

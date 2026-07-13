@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AIUsageRepository } from '../../../ai/domain/ports/ai-usage.repository';
 import type { WebSearchPort } from '../../../ai/domain/ports/web-search.port';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
+import { WebFetchAllowlist } from '../orchestrator/web-fetch-allowlist';
 import { WebSourceCollector } from '../orchestrator/web-source.collector';
 import type { AgentToolContext } from './agent-tool';
 import { WebToolGroup } from './web.tool-group';
@@ -13,6 +14,7 @@ function ctx(): AgentToolContext {
     phase: 'full',
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
+    webFetchAllowlist: new WebFetchAllowlist(),
   };
 }
 
@@ -140,6 +142,7 @@ describe('WebToolGroup', () => {
       recordUsage: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIUsageRepository;
     const c = ctx();
+    c.webFetchAllowlist.add('https://x.com');
     const out = (await run(new WebToolGroup(web, usage), c, 'webFetch', {
       url: 'https://x.com',
     })) as {
@@ -148,5 +151,64 @@ describe('WebToolGroup', () => {
     expect(out.note).toMatch(/safety check/);
     expect(c.webSources.all).toEqual([]);
     expect(usage.recordUsage).toHaveBeenCalled();
+  });
+
+  it('refuses to fetch a url that is not on the allowlist', async () => {
+    const web = { search: vi.fn(), fetch: vi.fn() } as unknown as WebSearchPort;
+    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
+    const group = new WebToolGroup(web, usage);
+    const c = ctx();
+    c.webFetchAllowlist.seedFromText('no links here');
+
+    const res = (await run(group, c, 'webFetch', {
+      url: 'https://evil.com/?d=x',
+    })) as { note: string; content?: string };
+
+    expect(res.note).toMatch(/not in the user message or a prior web search/i);
+    expect(res.content).toBeUndefined();
+    expect(web.fetch).not.toHaveBeenCalled();
+    expect(usage.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('fetches a root url the user provided even without a trailing slash', async () => {
+    const web = {
+      search: vi.fn(),
+      fetch: vi.fn().mockResolvedValue({
+        url: 'https://example.com',
+        content: 'root page',
+        costUsd: 0,
+      }),
+    } as unknown as WebSearchPort;
+    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
+    const group = new WebToolGroup(web, usage);
+    const c = ctx();
+    c.webFetchAllowlist.seedFromText('read https://example.com');
+
+    const res = (await run(group, c, 'webFetch', {
+      url: 'https://example.com',
+    })) as { content?: string };
+
+    expect(res.content).toBe('root page');
+  });
+
+  it('fetches a url the user provided', async () => {
+    const web = {
+      search: vi.fn(),
+      fetch: vi.fn().mockResolvedValue({
+        url: 'https://example.com/a',
+        content: 'hello',
+        costUsd: 0,
+      }),
+    } as unknown as WebSearchPort;
+    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
+    const group = new WebToolGroup(web, usage);
+    const c = ctx();
+    c.webFetchAllowlist.seedFromText('read https://example.com/a');
+
+    const res = (await run(group, c, 'webFetch', {
+      url: 'https://example.com/a',
+    })) as { content?: string };
+
+    expect(res.content).toBe('hello');
   });
 });

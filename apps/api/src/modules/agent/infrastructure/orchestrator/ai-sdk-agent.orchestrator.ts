@@ -12,6 +12,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import { buildRedactedTelemetry } from '../../../ai/infrastructure/providers/redacted-telemetry';
 import type {
   AgentEvent,
   AgentSource,
@@ -25,6 +26,7 @@ import type { AgentToolContext } from '../tools/agent-tool';
 import { AgentToolRegistry } from './agent-tool.registry';
 import { composeSystemPrompt } from './compose-system-prompt';
 import { ProposalCollector } from './proposal-collector';
+import { WebFetchAllowlist } from './web-fetch-allowlist';
 import { WebSourceCollector } from './web-source.collector';
 
 interface StepToolResult {
@@ -103,11 +105,19 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
     const proposals = new ProposalCollector();
     const webSourceCollector = new WebSourceCollector();
+    const webFetchAllowlist = new WebFetchAllowlist();
+    const latestUserContent = input.messages.findLast(
+      (m) => m.role === 'user'
+    )?.content;
+    if (latestUserContent) {
+      webFetchAllowlist.seedFromText(latestUserContent);
+    }
     const toolContext: AgentToolContext = {
       userId: input.userId,
       phase: input.resume ? 'readonly' : 'full',
       proposals,
       webSources: webSourceCollector,
+      webFetchAllowlist,
     };
     const tools = await this.toolRegistry.resolve(toolContext);
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
@@ -149,15 +159,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           stepUsage.inputTokens += usage?.inputTokens ?? 0;
           stepUsage.outputTokens += usage?.outputTokens ?? 0;
         },
-        experimental_telemetry: {
-          isEnabled: true,
-          functionId: 'agent-turn',
-          metadata: {
+        experimental_telemetry: buildRedactedTelemetry(
+          'agent-turn',
+          {
             userId: input.userId,
             environment: this.configService.get('NODE_ENV'),
             ...(input.resume ? { tags: ['resume'] } : {}),
           },
-        },
+          this.configService.get('NODE_ENV') !== 'production' &&
+            !input.byokApiKey
+        ),
       });
     } catch (error) {
       if (options.throwOnFreshFailure && !isAbortError(error)) {

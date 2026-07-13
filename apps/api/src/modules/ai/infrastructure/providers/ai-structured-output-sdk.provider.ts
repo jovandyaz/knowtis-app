@@ -11,6 +11,7 @@ import type {
 } from '../../domain/ports/ai-structured-output.port';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
+import { buildRedactedTelemetry } from './redacted-telemetry';
 
 @Injectable()
 export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider {
@@ -26,12 +27,18 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     schema: ZodType<T>,
     options: StructuredOutputOptions
   ): Promise<StructuredOutputResult<T>> {
-    const timeoutSignal = options.timeoutMs
-      ? AbortSignal.timeout(options.timeoutMs)
-      : undefined;
     return executeWithChain(
-      (model) =>
-        this.callGenerate(prompt, schema, { ...options, model }, timeoutSignal),
+      (model) => {
+        const timeoutSignal = options.timeoutMs
+          ? AbortSignal.timeout(options.timeoutMs)
+          : undefined;
+        return this.callGenerate(
+          prompt,
+          schema,
+          { ...options, model },
+          timeoutSignal
+        );
+      },
       {
         candidates: this.fallbackChain.candidatesFor(options.model),
         cooldown: this.fallbackChain.cooldown,
@@ -58,11 +65,11 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
       ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
       ...(options.telemetry
         ? {
-            experimental_telemetry: {
-              isEnabled: true,
-              functionId: options.telemetry.functionId,
-              metadata: options.telemetry.metadata,
-            },
+            experimental_telemetry: buildRedactedTelemetry(
+              options.telemetry.functionId,
+              options.telemetry.metadata,
+              options.telemetry.recordContent ?? false
+            ),
           }
         : {}),
     });

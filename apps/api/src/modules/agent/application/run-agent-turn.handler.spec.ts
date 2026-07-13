@@ -419,6 +419,79 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
   });
 
+  it('calls onError with a generic message, not the raw internal error, when orchestrator throws synchronously', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const throwingOrchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('connection to 10.0.0.5:5432 refused');
+        // TypeScript needs a yield to infer AsyncGenerator; unreachable:
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const handler = new RunAgentTurnHandler(
+      throwingOrchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(JSON.stringify(onError.mock.calls[0]?.[0])).not.toContain(
+      '10.0.0.5'
+    );
+    expect(onError).toHaveBeenCalledWith({
+      code: 'AI_PROVIDER_ERROR',
+      message: 'AI provider error: Agent turn failed',
+    });
+  });
+
+  it('calls onError with a generic message, not the raw internal error, when model resolution throws', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.getEffectiveDefault).mockRejectedValue(
+      new Error('pg connection to 10.0.0.9 refused')
+    );
+    const handler = new RunAgentTurnHandler(
+      orchestratorYielding([]),
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(JSON.stringify(onError.mock.calls[0]?.[0])).not.toContain(
+      '10.0.0.9'
+    );
+    expect(onError).toHaveBeenCalledWith({
+      code: 'AI_PROVIDER_ERROR',
+      message: 'AI provider error: Model resolution failed',
+    });
+  });
+
   it('calls onDone with usage and never calls onChunk when orchestrator yields only done', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([

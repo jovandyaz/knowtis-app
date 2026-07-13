@@ -53,6 +53,7 @@ export class WebToolGroup implements AgentToolGroup {
           });
           for (const h of safe) {
             ctx.webSources.add({ title: h.title, url: h.url });
+            ctx.webFetchAllowlist.add(h.url);
           }
           const answer =
             result.answer && detectPromptInjection(result.answer).safe
@@ -72,6 +73,12 @@ export class WebToolGroup implements AgentToolGroup {
         execute: async ({ url }) => {
           if (!isHttpUrl(url)) {
             return { note: 'Only http(s) URLs can be fetched.', url };
+          }
+          if (!ctx.webFetchAllowlist.has(url)) {
+            return {
+              note: 'That URL was not in the user message or a prior web search, so it cannot be fetched. Ask the user to paste it, or search first.',
+              url,
+            };
           }
           const result = await this.web.fetch(url);
           await this.recordCost(ctx.userId, result.costUsd);

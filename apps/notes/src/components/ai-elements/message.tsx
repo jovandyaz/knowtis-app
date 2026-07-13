@@ -5,6 +5,8 @@ import { Streamdown } from 'streamdown';
 
 import { cn } from '@knowtis/design-system';
 
+import { hardenAssistantUrl } from './harden-assistant-url';
+
 export type MessageProps = HTMLAttributes<HTMLDivElement> & {
   from: 'user' | 'assistant';
 };
@@ -50,6 +52,8 @@ export const Response = memo(({ className, ...props }: ResponseProps) => (
       className
     )}
     {...props}
+    urlTransform={hardenAssistantUrl}
+    linkSafety={{ enabled: true }}
   />
 ));
 

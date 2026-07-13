@@ -488,11 +488,12 @@ export class RunAgentTurnHandler {
         byokProviders
       );
     } catch (error) {
-      callbacks.onError(
-        AIErrors.providerError(
-          error instanceof Error ? error.message : 'Model resolution failed'
-        )
-      );
+      this.logger.error({
+        event: 'agent.model_resolution_failed',
+        userId: input.userId,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      callbacks.onError(AIErrors.providerError('Model resolution failed'));
       return;
     }
     if (model === null) {
@@ -650,11 +651,7 @@ export class RunAgentTurnHandler {
         userId: input.userId,
         error: error instanceof Error ? error.message : 'unknown',
       });
-      callbacks.onError(
-        AIErrors.providerError(
-          error instanceof Error ? error.message : 'Agent turn failed'
-        )
-      );
+      callbacks.onError(AIErrors.providerError('Agent turn failed'));
     }
   }
 

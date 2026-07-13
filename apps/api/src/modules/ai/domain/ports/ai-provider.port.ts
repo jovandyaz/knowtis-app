@@ -2,6 +2,8 @@ export interface AITelemetryContext {
   /** Span identifier in tracing backends, e.g. 'completion:summarize'. */
   readonly functionId: string;
   readonly metadata: Record<string, string>;
+  /** Record prompt/response content in traces. Default: redact. */
+  readonly recordContent?: boolean;
 }
 
 export interface CompletionOptions {

@@ -146,6 +146,8 @@ describe('AISDKProvider', () => {
     const expected = expect.objectContaining({
       experimental_telemetry: {
         isEnabled: true,
+        recordInputs: false,
+        recordOutputs: false,
         functionId: 'completion:summarize',
         metadata: { userId: 'user-1', environment: 'test' },
       },

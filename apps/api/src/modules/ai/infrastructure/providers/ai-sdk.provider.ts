@@ -11,6 +11,7 @@ import type {
 } from '../../domain/ports/ai-provider.port';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
+import { buildRedactedTelemetry } from './redacted-telemetry';
 
 @Injectable()
 export class AISDKProvider implements AICompletionProvider {
@@ -58,11 +59,11 @@ export class AISDKProvider implements AICompletionProvider {
       return {};
     }
     return {
-      experimental_telemetry: {
-        isEnabled: true,
-        functionId: telemetry.functionId,
-        metadata: telemetry.metadata,
-      },
+      experimental_telemetry: buildRedactedTelemetry(
+        telemetry.functionId,
+        telemetry.metadata,
+        telemetry.recordContent ?? false
+      ),
     };
   }
 

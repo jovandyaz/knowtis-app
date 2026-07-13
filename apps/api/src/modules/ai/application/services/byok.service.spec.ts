@@ -179,4 +179,29 @@ describe('ByokService', () => {
     ).resolves.toBeUndefined();
     expect(repo.upsert).toHaveBeenCalled();
   });
+
+  it('does not log the raw provider error when key validation fails', async () => {
+    const warn = vi
+      .spyOn((await import('@nestjs/common')).Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+
+    const { service } = makeService({
+      validate: vi
+        .fn()
+        .mockRejectedValue(
+          new Error('Incorrect API key provided: sk-proj-ABCDEF1234567890')
+        ),
+    });
+
+    await expect(service.setKey('user-1', 'openai', 'sk-bad')).rejects.toThrow(
+      UnprocessableEntityException
+    );
+
+    const loggedPayloads = warn.mock.calls.map((c) => JSON.stringify(c[0]));
+    expect(loggedPayloads.some((p) => p.includes('sk-proj'))).toBe(false);
+    expect(
+      loggedPayloads.some((p) => p.includes('byok.validation_failed'))
+    ).toBe(true);
+    warn.mockRestore();
+  });
 });

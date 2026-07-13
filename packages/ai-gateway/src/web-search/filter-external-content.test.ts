@@ -77,3 +77,51 @@ describe('isHttpUrl', () => {
     expect(isHttpUrl('not a url')).toBe(false);
   });
 });
+
+describe('isHttpUrl — SSRF host filtering', () => {
+  it('allows a normal public URL', () => {
+    expect(isHttpUrl('https://example.com/page')).toBe(true);
+  });
+
+  it.each([
+    'http://localhost/x',
+    'http://127.0.0.1/x',
+    'http://0.0.0.0/x',
+    'http://10.1.2.3/x',
+    'http://192.168.0.5/x',
+    'http://172.16.9.9/x',
+    'http://169.254.169.254/latest/meta-data',
+    'http://[::1]/x',
+    'http://[fe80::1]/x',
+    'http://[fd00::1]/x',
+  ])('rejects private/loopback/link-local host %s', (url) => {
+    expect(isHttpUrl(url)).toBe(false);
+  });
+
+  it('rejects a non-http scheme', () => {
+    expect(isHttpUrl('file:///etc/passwd')).toBe(false);
+  });
+
+  it.each([
+    'https://fcbarcelona.com/page',
+    'https://fd-example.com/x',
+    'https://fe80example.com/x',
+  ])('allows a public domain that shares an IPv6 prefix (%s)', (url) => {
+    expect(isHttpUrl(url)).toBe(true);
+  });
+
+  it('still rejects IPv6 ULA and mapped-IPv4 literals', () => {
+    expect(isHttpUrl('http://[fd00::1]/x')).toBe(false);
+    expect(isHttpUrl('http://[fc00::1]/x')).toBe(false);
+    expect(isHttpUrl('http://[::ffff:192.168.1.1]/x')).toBe(false);
+  });
+
+  it('rejects a trailing-dot loopback FQDN', () => {
+    expect(isHttpUrl('http://127.0.0.1./x')).toBe(false);
+    expect(isHttpUrl('http://localhost./x')).toBe(false);
+  });
+
+  it('still allows a public domain with a trailing root dot', () => {
+    expect(isHttpUrl('https://example.com./x')).toBe(true);
+  });
+});

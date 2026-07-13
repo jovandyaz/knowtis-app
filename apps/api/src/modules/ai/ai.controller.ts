@@ -267,6 +267,7 @@ export class AIController {
       audio: audio.buffer,
       mode: dto.mode,
       ...(dto.language !== undefined && { language: dto.language }),
+      ...(user.isAnonymous && { isAnonymous: true }),
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);

@@ -41,6 +41,7 @@ export {
   isHttpUrl,
   type SafeExternalSource,
 } from './web-search/filter-external-content';
+export { extractHttpUrls } from './web-search/extract-urls';
 export { TavilyWebSearch } from './web-search/tavily-web-search';
 export type {
   TavilyConfig,

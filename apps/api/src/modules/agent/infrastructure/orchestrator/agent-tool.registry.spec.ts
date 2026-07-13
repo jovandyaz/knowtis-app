@@ -11,6 +11,7 @@ import type {
 } from '../tools/agent-tool';
 import { AgentToolRegistry } from './agent-tool.registry';
 import { ProposalCollector } from './proposal-collector';
+import { WebFetchAllowlist } from './web-fetch-allowlist';
 import { WebSourceCollector } from './web-source.collector';
 
 const fakeTool = (n: string) => ({ [n]: { description: n } }) as ToolSet;
@@ -33,6 +34,7 @@ function ctx(phase: AgentToolPhase): AgentToolContext {
     phase,
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
+    webFetchAllowlist: new WebFetchAllowlist(),
   };
 }
 
