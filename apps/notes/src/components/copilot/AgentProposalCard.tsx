@@ -2,7 +2,6 @@ import { useState, type KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { PendingProposal } from '@/stores/agent.store';
-import DOMPurify from 'dompurify';
 import {
   ArrowUp,
   FilePlus2,
@@ -14,6 +13,7 @@ import { AnimatePresence, motion } from 'motion/react';
 
 import { Badge, Button, cn, Textarea } from '@knowtis/design-system';
 
+import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 import {
   Confirmation,
   ConfirmationAction,
@@ -110,7 +110,9 @@ export function AgentProposalCard({
               <p className="text-sm font-medium text-foreground">
                 {t(meta.titleKey)}
               </p>
-              <p className="text-xs text-muted-foreground">{proposal.summary}</p>
+              <p className="text-xs text-muted-foreground">
+                {proposal.summary}
+              </p>
             </div>
           </div>
 
@@ -119,7 +121,10 @@ export function AgentProposalCard({
               <span className="truncate text-foreground">
                 {payload.targetEmail}
               </span>
-              <Badge variant="secondary" className="ml-auto shrink-0 capitalize">
+              <Badge
+                variant="secondary"
+                className="ml-auto shrink-0 capitalize"
+              >
                 {payload.permission === 'editor'
                   ? t('ai.copilot.proposal.editor')
                   : t('ai.copilot.proposal.viewer')}
@@ -140,7 +145,7 @@ export function AgentProposalCard({
                     className="prose prose-sm dark:prose-invert max-w-none text-xs [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                     // previewHtml is LLM-generated; re-sanitize client-side as defense-in-depth.
                     dangerouslySetInnerHTML={{
-                      __html: DOMPurify.sanitize(proposal.previewHtml),
+                      __html: sanitizeAiHtml(proposal.previewHtml),
                     }}
                   />
                 </div>
@@ -186,7 +191,10 @@ export function AgentProposalCard({
                   <ConfirmationAction variant="ghost" onClick={cancelReject}>
                     {t('ai.copilot.proposal.rejectCancel')}
                   </ConfirmationAction>
-                  <ConfirmationAction variant="secondary" onClick={confirmReject}>
+                  <ConfirmationAction
+                    variant="secondary"
+                    onClick={confirmReject}
+                  >
                     {t('ai.copilot.proposal.rejectConfirm')}
                     <ArrowUp className="ml-1 size-3.5" />
                   </ConfirmationAction>
