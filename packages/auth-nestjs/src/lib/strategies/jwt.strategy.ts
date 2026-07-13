@@ -4,7 +4,14 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, type SecretOrKeyProvider } from 'passport-jwt';
 
 import type { AuthModuleOptions } from '../auth.module';
-import { AUTH_MODULE_OPTIONS, USER_REPOSITORY } from '../constants';
+import {
+  AUTH_MODULE_OPTIONS,
+  JWT_AUDIENCE_ACCESS,
+  JWT_ISSUER,
+  SESSION_REPOSITORY,
+  USER_REPOSITORY,
+} from '../constants';
+import type { SessionRepository } from '../ports/session.repository';
 import type { JwtPayload } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
 
@@ -64,7 +71,9 @@ function createSecretOrKeyProvider(
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @Inject(AUTH_MODULE_OPTIONS) options: AuthModuleOptions,
-    @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository
+    @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessionRepository: SessionRepository
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
@@ -75,6 +84,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: JwtPayload) {
+    // Tokens with a `source` claim (MCP exchange / OAuth) carry no session;
+    // the app-level scope guard is responsible for gating them.
+    if (payload.source === undefined) {
+      await this.assertLiveSessionToken(payload);
+    }
+
     try {
       const userId = UserId.fromTrusted(payload.sub);
       const user = await this.userRepository.findById(userId);
@@ -93,6 +108,23 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       };
     } catch {
       throw new UnauthorizedException('Invalid token');
+    }
+  }
+
+  private async assertLiveSessionToken(payload: JwtPayload): Promise<void> {
+    const { familyId } = payload;
+    const hasExpectedClaims =
+      payload.iss === JWT_ISSUER &&
+      payload.aud === JWT_AUDIENCE_ACCESS &&
+      typeof familyId === 'string';
+
+    if (!hasExpectedClaims || typeof familyId !== 'string') {
+      throw new UnauthorizedException('Invalid token');
+    }
+
+    const live = await this.sessionRepository.hasLiveSessionForFamily(familyId);
+    if (!live) {
+      throw new UnauthorizedException('Session revoked');
     }
   }
 }

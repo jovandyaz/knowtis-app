@@ -1,13 +1,17 @@
 import { USER_ROLE } from '@jovandyaz/auth/server';
+import { UnauthorizedException } from '@nestjs/common';
 import { exportSPKI, generateKeyPair, SignJWT } from 'jose';
-import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthModuleOptions } from '../../auth.module';
+import { JWT_AUDIENCE_ACCESS, JWT_ISSUER } from '../../constants';
+import type { SessionRepository } from '../../ports/session.repository';
 import type { UserEntity, UserRepository } from '../../ports/user.repository';
 import { JwtStrategy } from '../jwt.strategy';
 
 const ACCESS_SECRET = 'test-access-token-secret';
 const USER_ID = 'user-1';
+const FAMILY_ID = 'family-1';
 
 const USER: UserEntity = {
   id: USER_ID,
@@ -28,10 +32,19 @@ interface AuthOutcome {
   error?: unknown;
 }
 
-function buildStrategy(additionalPublicKeys: string[]): JwtStrategy {
+function buildStrategy(
+  additionalPublicKeys: string[],
+  sessionRepository?: SessionRepository
+): JwtStrategy {
   const userRepository = {
     findById: vi.fn().mockResolvedValue(USER),
   } as unknown as UserRepository;
+
+  const resolvedSessionRepository =
+    sessionRepository ??
+    ({
+      hasLiveSessionForFamily: vi.fn().mockResolvedValue(true),
+    } as unknown as SessionRepository);
 
   const options = {
     tokenConfig: {
@@ -41,7 +54,7 @@ function buildStrategy(additionalPublicKeys: string[]): JwtStrategy {
     },
   } as unknown as AuthModuleOptions;
 
-  return new JwtStrategy(options, userRepository);
+  return new JwtStrategy(options, userRepository, resolvedSessionRepository);
 }
 
 function runStrategy(
@@ -64,7 +77,12 @@ function runStrategy(
 }
 
 function signHs256(secret: string = ACCESS_SECRET): Promise<string> {
-  return new SignJWT({ email: USER.email })
+  return new SignJWT({
+    email: USER.email,
+    familyId: FAMILY_ID,
+    iss: JWT_ISSUER,
+    aud: JWT_AUDIENCE_ACCESS,
+  })
     .setProtectedHeader({ alg: 'HS256' })
     .setSubject(USER_ID)
     .setExpirationTime('15m')
@@ -162,5 +180,93 @@ describe('JwtStrategy', () => {
     const outcome = await runStrategy(strategy, 'not-json-header.payload.sig');
 
     expect(outcome.type).toBe('fail');
+  });
+});
+
+describe('JwtStrategy.validate', () => {
+  const SESSION_USER_ID = '11111111-1111-1111-1111-111111111111';
+
+  const options = {
+    tokenConfig: {
+      accessTokenSecret: 'a'.repeat(48),
+      refreshTokenSecret: 'b'.repeat(48),
+    },
+  } as AuthModuleOptions;
+
+  const sessionUser = {
+    id: SESSION_USER_ID,
+    email: 'user@example.com',
+    name: 'Test User',
+    avatarUrl: null,
+    role: 'user',
+  };
+
+  const sessionPayload = {
+    sub: SESSION_USER_ID,
+    email: 'user@example.com',
+    familyId: 'family-1',
+    iss: JWT_ISSUER,
+    aud: JWT_AUDIENCE_ACCESS,
+  };
+
+  let userRepository: UserRepository;
+  let sessionRepository: SessionRepository;
+  let strategy: JwtStrategy;
+
+  beforeEach(() => {
+    userRepository = {
+      findById: vi.fn().mockResolvedValue(sessionUser),
+    } as unknown as UserRepository;
+    sessionRepository = {
+      hasLiveSessionForFamily: vi.fn().mockResolvedValue(true),
+    } as unknown as SessionRepository;
+    strategy = new JwtStrategy(options, userRepository, sessionRepository);
+  });
+
+  it('should accept a session token whose family is live', async () => {
+    const result = await strategy.validate(sessionPayload);
+    expect(result.id).toBe(SESSION_USER_ID);
+    expect(sessionRepository.hasLiveSessionForFamily).toHaveBeenCalledWith(
+      'family-1'
+    );
+  });
+
+  it('should reject a session token after its family is revoked', async () => {
+    vi.mocked(sessionRepository.hasLiveSessionForFamily).mockResolvedValue(
+      false
+    );
+    await expect(strategy.validate(sessionPayload)).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
+
+  it('should reject session tokens missing the issuer claim', async () => {
+    const { iss: _iss, ...payloadWithoutIssuer } = sessionPayload;
+    await expect(strategy.validate(payloadWithoutIssuer)).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
+
+  it('should reject session tokens with a wrong audience', async () => {
+    await expect(
+      strategy.validate({ ...sessionPayload, aud: 'knowtis:refresh' })
+    ).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('should reject session tokens missing familyId', async () => {
+    const { familyId: _familyId, ...payloadWithoutFamilyId } = sessionPayload;
+    await expect(strategy.validate(payloadWithoutFamilyId)).rejects.toThrow(
+      UnauthorizedException
+    );
+  });
+
+  it('should skip session checks for externally-scoped tokens', async () => {
+    const result = await strategy.validate({
+      sub: SESSION_USER_ID,
+      email: 'user@example.com',
+      source: 'mcp',
+    });
+    expect(result.id).toBe(SESSION_USER_ID);
+    expect(sessionRepository.hasLiveSessionForFamily).not.toHaveBeenCalled();
   });
 });
