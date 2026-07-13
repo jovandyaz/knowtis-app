@@ -5,7 +5,7 @@ export interface PasswordHasher {
   verify(password: string, hash: string): Promise<boolean>;
 }
 
-export function createPasswordHasher(saltRounds = 10): PasswordHasher {
+export function createPasswordHasher(saltRounds = 12): PasswordHasher {
   return {
     async hash(password: string): Promise<string> {
       return bcrypt.hash(password, saltRounds);
