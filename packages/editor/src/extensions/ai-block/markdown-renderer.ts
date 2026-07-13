@@ -1,28 +1,13 @@
 import DOMPurify from 'dompurify';
 import MarkdownIt from 'markdown-it';
 
+import { AI_HTML_FORBID_ATTR, AI_HTML_FORBID_TAGS } from '@knowtis/shared-util';
+
 const MARKDOWN_RENDERER = new MarkdownIt({
   html: false,
   linkify: true,
   typographer: true,
 });
-
-const FORBID_TAGS = [
-  'img',
-  'picture',
-  'source',
-  'audio',
-  'video',
-  'iframe',
-  'svg',
-  'math',
-  'form',
-  'link',
-  'meta',
-  'base',
-];
-
-const FORBID_ATTR = ['style', 'srcset', 'ping', 'background', 'formaction'];
 
 /**
  * Renders markdown to sanitized HTML for insertion into the editor.
@@ -36,7 +21,7 @@ const FORBID_ATTR = ['style', 'srcset', 'ping', 'background', 'formaction'];
  */
 export function renderMarkdownToSanitizedHtml(markdown: string): string {
   return DOMPurify.sanitize(MARKDOWN_RENDERER.render(markdown), {
-    FORBID_TAGS,
-    FORBID_ATTR,
+    FORBID_TAGS: AI_HTML_FORBID_TAGS,
+    FORBID_ATTR: AI_HTML_FORBID_ATTR,
   });
 }
