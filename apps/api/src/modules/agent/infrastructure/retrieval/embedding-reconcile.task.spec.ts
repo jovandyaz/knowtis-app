@@ -88,6 +88,13 @@ describe('EmbeddingReconcileTask', () => {
     expect(rateLimit.recordGlobalCost).toHaveBeenCalledWith(0.002);
   });
 
+  it('records no cost when there are no stale notes to embed', async () => {
+    const { task, rateLimit, embed } = makeTask({ stale: [] });
+    await task.reconcile();
+    expect(embed.embedDocuments).not.toHaveBeenCalled();
+    expect(rateLimit.recordGlobalCost).not.toHaveBeenCalled();
+  });
+
   it('does nothing when the advisory lock is not acquired', async () => {
     const { task, repo } = makeTask({
       stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],

@@ -241,6 +241,18 @@ export class RedisRateLimitService implements RateLimitProvider {
     return value === null ? 0 : Number.parseFloat(value);
   }
 
+  async claimDailyFlag(name: string): Promise<boolean> {
+    const today = new Date().toISOString().slice(0, 10);
+    const claimed = await this.redis.client.set(
+      `ai:${name}:${today}`,
+      '1',
+      'EX',
+      KEY_TTL_SECONDS,
+      'NX'
+    );
+    return claimed === 'OK';
+  }
+
   private byokCostKey(subject: string): string {
     const today = new Date().toISOString().slice(0, 10);
     return `ai:ratelimit:${subject}:byok_cost:${today}`;

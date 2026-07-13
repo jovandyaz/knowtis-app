@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
@@ -175,6 +176,7 @@ describe('AIRateLimitService', () => {
         getByokCostUsd: vi.fn().mockResolvedValue(0),
         recordGlobalCost: vi.fn().mockResolvedValue(undefined),
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
         correctUsage: vi.fn(),
       };
       const mockConfig = createMockConfig();
@@ -346,6 +348,42 @@ describe('AIRateLimitService', () => {
       );
     });
 
+    it('claims the per-user warning flag through the rate-limit provider when present', async () => {
+      const provider: RateLimitProvider = {
+        checkRpm: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        checkAndIncrement: vi.fn(),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
+      };
+      const svc = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        provider,
+        alerts as unknown as WebhookAlertService
+      );
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 60000,
+        totalOutputTokens: 25000,
+        totalCostUsd: 0.3,
+        requestCount: 10,
+      });
+
+      await svc.recordUsage(usageRecord);
+
+      expect(provider.claimDailyFlag).toHaveBeenCalledWith(
+        'budget-warned:user-123'
+      );
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+    });
+
     it('should warn when the cost budget crosses the threshold even if tokens are low', async () => {
       vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
         totalInputTokens: 1000,
@@ -410,6 +448,7 @@ describe('AIRateLimitService', () => {
         getByokCostUsd: vi.fn().mockResolvedValue(0),
         recordGlobalCost: vi.fn().mockResolvedValue(undefined),
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
         correctUsage: vi.fn().mockResolvedValue(undefined),
       };
       alerts = { notify: vi.fn() };
@@ -522,6 +561,7 @@ describe('AIRateLimitService', () => {
         getByokCostUsd: vi.fn().mockResolvedValue(0),
         recordGlobalCost: vi.fn().mockResolvedValue(undefined),
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
       };
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
       vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
@@ -543,7 +583,6 @@ describe('AIRateLimitService', () => {
         mockUsageRepo,
         createMockConfig(),
         mockRateLimitProvider,
-        undefined,
         undefined,
         featureFlags
       );
@@ -690,7 +729,6 @@ describe('AIRateLimitService', () => {
         createMockConfig(),
         undefined,
         undefined,
-        undefined,
         makeFlags(true)
       );
 
@@ -709,7 +747,6 @@ describe('AIRateLimitService', () => {
       const svc = new AIRateLimitService(
         mockUsageRepo,
         createMockConfig(),
-        undefined,
         undefined,
         undefined,
         makeFlags(false)
@@ -739,13 +776,13 @@ describe('AIRateLimitService', () => {
         getByokCostUsd: vi.fn().mockResolvedValue(0),
         recordGlobalCost: vi.fn().mockResolvedValue(undefined),
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
       };
       flags = { isEnabled: vi.fn().mockResolvedValue(true) };
       gated = new AIRateLimitService(
         mockUsageRepo,
         createMockConfig(),
         provider,
-        undefined,
         undefined,
         flags as unknown as FeatureFlagsService
       );
@@ -887,6 +924,10 @@ describe('AIRateLimitService', () => {
         getByokCostUsd: vi.fn().mockResolvedValue(0),
         recordGlobalCost: vi.fn().mockResolvedValue(undefined),
         getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi
+          .fn()
+          .mockResolvedValueOnce(true)
+          .mockResolvedValue(false),
       };
       flags = { isEnabled: vi.fn().mockResolvedValue(true) };
       alerts = { notify: vi.fn() };
@@ -895,7 +936,6 @@ describe('AIRateLimitService', () => {
         createMockConfig(),
         provider,
         alerts as unknown as WebhookAlertService,
-        undefined,
         flags as unknown as FeatureFlagsService
       );
     });
@@ -932,6 +972,29 @@ describe('AIRateLimitService', () => {
         'budget.global_breaker',
         expect.objectContaining({ spentUsd: 25, limitUsd: 25 })
       );
+    });
+
+    it('claims the daily breaker flag through the rate-limit provider', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      await breakered.checkLimit('user-1', 1000);
+
+      expect(provider.claimDailyFlag).toHaveBeenCalledWith(
+        'global-breaker-fired'
+      );
+    });
+
+    it('logs the breaker trip once, staying quiet on later rejections', async () => {
+      const errorSpy = vi
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => undefined);
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      await breakered.checkLimit('user-1', 1000);
+      await breakered.checkLimit('user-2', 1000);
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      errorSpy.mockRestore();
     });
 
     it('allows turns while global spend sits under the limit', async () => {

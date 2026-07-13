@@ -16,10 +16,6 @@ import {
   type RateLimits,
 } from '../../domain/ports/rate-limit.port';
 import { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
-import {
-  AI_REDIS,
-  AIRedisProvider,
-} from '../../infrastructure/redis/ai-redis.provider';
 
 interface RateLimitResult {
   readonly allowed: boolean;
@@ -28,7 +24,6 @@ interface RateLimitResult {
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
 const BUDGET_WARNING_THRESHOLD = 0.8;
-const BUDGET_FLAG_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
 export class AIRateLimitService {
@@ -56,9 +51,6 @@ export class AIRateLimitService {
     private readonly rateLimitProvider?: RateLimitProvider,
     @Optional()
     private readonly alerts?: WebhookAlertService,
-    @Optional()
-    @Inject(AI_REDIS)
-    private readonly aiRedis?: AIRedisProvider,
     @Optional()
     private readonly featureFlags?: FeatureFlagsService
   ) {}
@@ -165,6 +157,9 @@ export class AIRateLimitService {
     return { allowed: true };
   }
 
+  // Read-then-reserve: concurrent in-flight turns may overshoot the cap by at
+  // most (in-flight turns × per-turn estimate). Enforcement stays out of the
+  // reservation Lua because BYOK turns skip reservation yet must still be gated.
   private async checkGlobalSpendBreaker(): Promise<RateLimitResult> {
     if (
       !this.rateLimitProvider ||
@@ -176,12 +171,12 @@ export class AIRateLimitService {
       const spentUsd = await this.rateLimitProvider.getGlobalSpendUsd();
       const limitUsd = this.configService.get('AI_GLOBAL_DAILY_COST_LIMIT_USD');
       if (spentUsd >= limitUsd) {
-        this.logger.error({
-          event: 'ai.budget.global_breaker',
-          spentUsd,
-          limitUsd,
-        });
         if (await this.claimGlobalBreakerFlag()) {
+          this.logger.error({
+            event: 'ai.budget.global_breaker',
+            spentUsd,
+            limitUsd,
+          });
           this.alerts?.notify('budget.global_breaker', { spentUsd, limitUsd });
         }
         return {
@@ -199,18 +194,11 @@ export class AIRateLimitService {
   }
 
   private async claimGlobalBreakerFlag(): Promise<boolean> {
-    const dayKey = new Date().toISOString().slice(0, 10);
-    const redis = this.aiRedis?.client;
-    if (redis) {
+    if (this.rateLimitProvider) {
       try {
-        const claimed = await redis.set(
-          `ai:global-breaker-fired:${dayKey}`,
-          '1',
-          'EX',
-          BUDGET_FLAG_TTL_SECONDS,
-          'NX'
+        return await this.rateLimitProvider.claimDailyFlag(
+          'global-breaker-fired'
         );
-        return claimed === 'OK';
       } catch (error) {
         this.logger.warn(
           'Global breaker flag via Redis failed, using memory',
@@ -218,6 +206,7 @@ export class AIRateLimitService {
         );
       }
     }
+    const dayKey = new Date().toISOString().slice(0, 10);
     if (this.globalBreakerFiredOn === dayKey) {
       return false;
     }
@@ -424,22 +413,16 @@ export class AIRateLimitService {
   }
 
   private async claimBudgetWarningFlag(userId: string): Promise<boolean> {
-    const dayKey = new Date().toISOString().slice(0, 10);
-    const redis = this.aiRedis?.client;
-    if (redis) {
+    if (this.rateLimitProvider) {
       try {
-        const claimed = await redis.set(
-          `ai:budget-warned:${userId}:${dayKey}`,
-          '1',
-          'EX',
-          BUDGET_FLAG_TTL_SECONDS,
-          'NX'
+        return await this.rateLimitProvider.claimDailyFlag(
+          `budget-warned:${userId}`
         );
-        return claimed === 'OK';
       } catch (error) {
         this.logger.warn('Budget flag via Redis failed, using memory', error);
       }
     }
+    const dayKey = new Date().toISOString().slice(0, 10);
     if (this.budgetWarnedOn.get(userId) === dayKey) {
       return false;
     }

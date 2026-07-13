@@ -297,6 +297,37 @@ describe('RedisRateLimitService', () => {
       await expect(counterService.getGlobalSpendUsd()).resolves.toBe(0);
     });
 
+    it('claims a daily flag atomically via SET NX with the 25h TTL', async () => {
+      const set = vi.fn().mockResolvedValue('OK');
+      const claimService = new RedisRateLimitService(
+        { client: { set } } as unknown as AIRedisProvider,
+        mockConfig
+      );
+
+      await expect(
+        claimService.claimDailyFlag('global-breaker-fired')
+      ).resolves.toBe(true);
+      expect(set).toHaveBeenCalledWith(
+        `ai:global-breaker-fired:${today}`,
+        '1',
+        'EX',
+        25 * 60 * 60,
+        'NX'
+      );
+    });
+
+    it('reports an already-claimed daily flag as false', async () => {
+      const set = vi.fn().mockResolvedValue(null);
+      const claimService = new RedisRateLimitService(
+        { client: { set } } as unknown as AIRedisProvider,
+        mockConfig
+      );
+
+      await expect(
+        claimService.claimDailyFlag('budget-warned:u1')
+      ).resolves.toBe(false);
+    });
+
     it('routes byok side costs into the global key in the same atomic eval', async () => {
       await counterService.recordByokCost('u1', 0.008);
 
