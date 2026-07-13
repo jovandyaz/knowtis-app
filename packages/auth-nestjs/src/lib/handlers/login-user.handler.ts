@@ -47,6 +47,8 @@ export interface LoginUserOutput {
 
 @Injectable()
 export class LoginUserHandler {
+  private dummyHashPromise: Promise<string | null> | null = null;
+
   constructor(
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
@@ -55,6 +57,20 @@ export class LoginUserHandler {
     private readonly sessionRepository: SessionRepository,
     private readonly eventEmitter: EventEmitter2
   ) {}
+
+  /** Burn a bcrypt comparison on the unknown-user path so login latency
+   * cannot distinguish registered from unregistered emails. */
+  private async equalizeTiming(password: string): Promise<void> {
+    this.dummyHashPromise ??= this.passwordHasher
+      .hash('knowtis-timing-equalization-dummy')
+      .then((result) => (result.isOk() ? result.value : null));
+    const dummyHash = await this.dummyHashPromise;
+    if (dummyHash === null) {
+      this.dummyHashPromise = null;
+      return;
+    }
+    await this.passwordHasher.verify(password, dummyHash);
+  }
 
   async validateCredentials(
     input: ValidateUserInput
@@ -71,6 +87,7 @@ export class LoginUserHandler {
 
     const user = await this.userRepository.findByEmail(email);
     if (!user || !user.passwordHash) {
+      await this.equalizeTiming(input.password);
       this.emitLoginFailed(input.email, {
         ipAddress: input.ipAddress,
         userAgent: input.userAgent,
