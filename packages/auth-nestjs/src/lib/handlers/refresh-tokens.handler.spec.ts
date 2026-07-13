@@ -207,6 +207,23 @@ describe('RefreshTokensHandler', () => {
     expect(deps.sessionRepository.create).toHaveBeenCalled();
   });
 
+  it('returns tokens even when markRotated throws after successful issuance', async () => {
+    const deps = createDeps({
+      sub: 'user-1',
+      email: 'u@example.com',
+      familyId: 'fam-1',
+    });
+    vi.mocked(deps.sessionRepository.markRotated).mockRejectedValue(
+      new Error('db unavailable')
+    );
+    const handler = createHandler(deps);
+
+    const result = await handler.execute('refresh-token');
+
+    expect(result.isOk()).toBe(true);
+    expect(deps.sessionRepository.markRotated).toHaveBeenCalledWith('s1');
+  });
+
   it('creates the replacement session before marking the old one rotated', async () => {
     const deps = createDeps({
       sub: 'user-1',

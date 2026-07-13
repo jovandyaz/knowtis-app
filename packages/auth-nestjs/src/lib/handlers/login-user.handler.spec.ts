@@ -1,5 +1,6 @@
+import { AuthErrors } from '@jovandyaz/auth/server';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { PasswordHasher } from '../ports/password-hasher.port';
@@ -69,5 +70,36 @@ describe('LoginUserHandler.validateCredentials', () => {
     ]);
     expect(passwordHasher.hash).toHaveBeenCalledTimes(1);
     expect(passwordHasher.verify).toHaveBeenCalledTimes(2);
+  });
+
+  it('should reset the dummy hash and skip verify when hashing fails', async () => {
+    const failingHasher = {
+      hash: vi.fn().mockResolvedValue(err(AuthErrors.invalidPassword())),
+      verify: vi.fn().mockResolvedValue(ok(false)),
+    } as unknown as PasswordHasher;
+    const failingHandler = new LoginUserHandler(
+      userRepository,
+      failingHasher,
+      {} as TokenService,
+      {} as SessionRepository,
+      new EventEmitter2()
+    );
+
+    const first = await failingHandler.validateCredentials({
+      email: 'nobody@example.com',
+      password: 'whatever-password',
+    });
+    expect(first.isErr()).toBe(true);
+    expect(failingHasher.verify).not.toHaveBeenCalled();
+
+    failingHasher.hash = vi
+      .fn()
+      .mockResolvedValue(ok('$2b$12$dummy-hash-value'));
+    await failingHandler.validateCredentials({
+      email: 'nobody@example.com',
+      password: 'retry-password',
+    });
+    expect(failingHasher.hash).toHaveBeenCalledTimes(1);
+    expect(failingHasher.verify).toHaveBeenCalledTimes(1);
   });
 });

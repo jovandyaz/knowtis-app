@@ -236,7 +236,20 @@ describe('JwtStrategy.validate', () => {
       false
     );
     await expect(strategy.validate(sessionPayload)).rejects.toThrow(
-      UnauthorizedException
+      'Session revoked'
+    );
+  });
+
+  it('should reject session tokens with a wrong issuer', async () => {
+    await expect(
+      strategy.validate({ ...sessionPayload, iss: 'wrong-issuer' })
+    ).rejects.toThrow('Invalid token');
+  });
+
+  it('should reject session tokens missing the audience claim', async () => {
+    const { aud: _aud, ...payloadWithoutAud } = sessionPayload;
+    await expect(strategy.validate(payloadWithoutAud)).rejects.toThrow(
+      'Invalid token'
     );
   });
 
