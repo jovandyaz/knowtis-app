@@ -10,6 +10,10 @@ export interface JwtPayload {
   readonly email: string;
   readonly isAnonymous?: boolean;
   readonly familyId?: string;
+  readonly iss?: string;
+  readonly aud?: string | string[];
+  /** Set on externally-scoped tokens (e.g. MCP `source: 'mcp'`); absent on session tokens. */
+  readonly source?: string;
   readonly iat?: number;
   readonly exp?: number;
 }

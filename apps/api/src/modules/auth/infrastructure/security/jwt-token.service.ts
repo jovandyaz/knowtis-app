@@ -1,4 +1,10 @@
-import type { JwtPayload, TokenService } from '@jovandyaz/auth-nestjs';
+import {
+  JWT_AUDIENCE_ACCESS,
+  JWT_AUDIENCE_REFRESH,
+  JWT_ISSUER,
+  type JwtPayload,
+  type TokenService,
+} from '@jovandyaz/auth-nestjs';
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type {
   AuthDomainError,
@@ -35,11 +41,15 @@ export class JwtTokenService implements TokenService {
           secret: this.configService.getOrThrow('JWT_SECRET'),
           expiresIn: this.configService.get('JWT_EXPIRES_IN', '15m'),
           algorithm: 'HS256',
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE_ACCESS,
         }),
         this.jwtService.signAsync(payload, {
           secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
           expiresIn: this.configService.get('JWT_REFRESH_EXPIRES_IN', '7d'),
           algorithm: 'HS256',
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE_REFRESH,
         }),
       ]);
 
@@ -56,6 +66,8 @@ export class JwtTokenService implements TokenService {
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token, {
         secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
         algorithms: ['HS256'],
+        issuer: JWT_ISSUER,
+        audience: JWT_AUDIENCE_REFRESH,
       });
 
       return ok({
