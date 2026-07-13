@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import {
   createMcpKeySchema,
+  MCP_KEY_SCOPE_OPTIONS,
   useCreateMcpKey,
   type CreateMcpKeyFormValues,
 } from '@knowtis/data-access-mcp-keys';
@@ -23,23 +24,33 @@ import {
   LoadingButton,
 } from '@knowtis/design-system';
 
-const SCOPE_OPTIONS = [
-  {
-    value: 'notes:read',
+interface ScopeOptionCopy {
+  labelKey: string;
+  descriptionKey: string;
+}
+
+const SCOPE_OPTION_COPY = {
+  'notes:read': {
     labelKey: 'integrations.scopeOptions.read.label',
     descriptionKey: 'integrations.scopeOptions.read.description',
   },
-  {
-    value: 'notes:read,notes:write',
+  'notes:read,notes:write': {
     labelKey: 'integrations.scopeOptions.readWrite.label',
     descriptionKey: 'integrations.scopeOptions.readWrite.description',
   },
-  {
-    value: 'notes:read,notes:write,notes:share',
+  'notes:read,notes:write,notes:share': {
     labelKey: 'integrations.scopeOptions.readWriteShare.label',
     descriptionKey: 'integrations.scopeOptions.readWriteShare.description',
   },
-] as const;
+} as const satisfies Record<
+  (typeof MCP_KEY_SCOPE_OPTIONS)[number],
+  ScopeOptionCopy
+>;
+
+const SCOPE_OPTIONS = MCP_KEY_SCOPE_OPTIONS.map((value) => ({
+  value,
+  ...SCOPE_OPTION_COPY[value],
+}));
 
 interface CreateKeyDialogProps {
   open: boolean;

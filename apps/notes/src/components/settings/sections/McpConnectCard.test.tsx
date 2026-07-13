@@ -84,6 +84,21 @@ describe('McpConnectCard', () => {
     });
   });
 
+  it('renders without crashing when the server URL has non-Latin1 characters', () => {
+    const url = 'https://mcp.knowtis.app/café/例';
+    vi.stubEnv('VITE_MCP_URL', url);
+    render(<McpConnectCard />);
+
+    const link = screen.getByRole('link', {
+      name: 'integrations.connect.addToCursor',
+    });
+    const raw = new URL(link.getAttribute('href') ?? '').searchParams.get(
+      'config'
+    );
+    const bytes = Uint8Array.from(atob(raw ?? ''), (c) => c.charCodeAt(0));
+    expect(JSON.parse(new TextDecoder().decode(bytes))).toEqual({ url });
+  });
+
   it('shows an error toast when copying the URL fails', async () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, 'writeText').mockRejectedValue(

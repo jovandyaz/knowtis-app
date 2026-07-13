@@ -16,8 +16,16 @@ const DEFAULT_MCP_URL = 'https://mcp.knowtis.app/mcp';
 const DOCS_URL =
   'https://github.com/jovandyaz/knowtis-app/blob/main/docs/MCP.md';
 
+function toBase64Utf8(value: string): string {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(value)) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary);
+}
+
 function cursorDeeplink(url: string): string {
-  const config = encodeURIComponent(btoa(JSON.stringify({ url })));
+  const config = encodeURIComponent(toBase64Utf8(JSON.stringify({ url })));
   return `cursor://anysphere.cursor-deeplink/mcp/install?name=knowtis&config=${config}`;
 }
 

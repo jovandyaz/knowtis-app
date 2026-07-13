@@ -15,7 +15,7 @@ import { RevokeKeyDialog } from './RevokeKeyDialog';
 
 export function IntegrationsSection() {
   const { t, i18n } = useTranslation('common');
-  const { data: keys, isLoading } = useMcpKeys();
+  const { data: keys, isLoading, isError } = useMcpKeys();
   const [createOpen, setCreateOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<McpApiKey | null>(null);
@@ -79,7 +79,11 @@ export function IntegrationsSection() {
                 </Button>
               </div>
 
-              {hasKeys ? (
+              {isError ? (
+                <p className="rounded-lg border border-dashed border-(--destructive)/40 p-4 text-sm text-(--destructive)">
+                  {t('errors.errorLoadingData')}
+                </p>
+              ) : hasKeys ? (
                 <div className="space-y-3">
                   {keys.map((apiKey) => (
                     <McpKeyRow
