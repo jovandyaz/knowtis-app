@@ -2,6 +2,7 @@ import { ForbiddenException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiKeysController } from './ai-keys.controller';
+import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 function make(flagOn = true) {
   const byok = {
@@ -105,6 +106,12 @@ describe('AiKeysController', () => {
       AiKeysController.prototype.set
     );
     expect(metadata).toBeDefined();
+  });
+
+  it('scopes the key-validation throttle to the authenticated user', () => {
+    const guards: unknown[] =
+      Reflect.getMetadata('__guards__', AiKeysController.prototype.set) ?? [];
+    expect(guards).toContain(UserScopedThrottlerGuard);
   });
 
   it('does not throttle list or remove', () => {
