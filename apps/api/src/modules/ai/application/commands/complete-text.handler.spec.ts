@@ -190,4 +190,24 @@ describe('CompleteTextHandler', () => {
       expect(result.error.code).toBe('AI_INVALID_ACTION');
     }
   });
+
+  it('should return a generic error message when the provider throws', async () => {
+    vi.mocked(mockProvider.generateCompletion).mockRejectedValue(
+      new Error('401 invalid x-api-key: sk-ant-...')
+    );
+
+    const result = await handler.execute({
+      userId: 'user-1',
+      action: AI_ACTION.SUMMARIZE,
+      content: 'some text to summarize',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        'AI provider error: AI completion failed'
+      );
+      expect(result.error.message).not.toContain('sk-ant');
+    }
+  });
 });

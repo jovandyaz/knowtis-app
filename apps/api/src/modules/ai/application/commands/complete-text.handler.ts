@@ -124,11 +124,7 @@ export class CompleteTextHandler {
         latencyMs: Date.now() - context.startTime,
       });
       this.pipeline.releaseReservation(context, input);
-      return err(
-        AIErrors.providerError(
-          error instanceof Error ? error.message : 'Unknown error'
-        )
-      );
+      return err(AIErrors.providerError('AI completion failed'));
     }
   }
 }
