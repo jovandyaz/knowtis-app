@@ -48,6 +48,19 @@ function makeServer() {
   return new McpServer({ name: 'test', version: '0.0.0' });
 }
 
+const EXPECTED_PROTECTED_RESOURCE_METADATA = {
+  resource: 'https://mcp.knowtis.app/mcp',
+  authorization_servers: ['https://api.knowtis.app'],
+  scopes_supported: [
+    'notes:read',
+    'notes:write',
+    'notes:share',
+    'offline_access',
+  ],
+  bearer_methods_supported: ['header'],
+  resource_name: 'Knowtis MCP',
+};
+
 describe('createApp', () => {
   it('should return 200 on /health without auth', async () => {
     const app = createApp(makeServer, config);
@@ -241,20 +254,14 @@ describe('createApp', () => {
     const app = createApp(makeServer, oauthConfig);
     const res = await app.request('/.well-known/oauth-protected-resource');
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({
-      resource: 'https://mcp.knowtis.app/mcp',
-      authorization_servers: ['https://api.knowtis.app'],
-      scopes_supported: ['notes:read', 'notes:write', 'notes:share'],
-      bearer_methods_supported: ['header'],
-      resource_name: 'Knowtis MCP',
-    });
+    expect(await res.json()).toEqual(EXPECTED_PROTECTED_RESOURCE_METADATA);
   });
 
   it('should serve protected resource metadata on the path-inserted variant', async () => {
     const app = createApp(makeServer, oauthConfig);
     const res = await app.request('/.well-known/oauth-protected-resource/mcp');
     expect(res.status).toBe(200);
-    expect((await res.json()).resource).toBe('https://mcp.knowtis.app/mcp');
+    expect(await res.json()).toEqual(EXPECTED_PROTECTED_RESOURCE_METADATA);
   });
 
   it('should expose protected resource metadata to browsers via CORS', async () => {
@@ -278,7 +285,31 @@ describe('createApp', () => {
 
     expect(res.status).toBe(401);
     expect(res.headers.get('WWW-Authenticate')).toBe(
-      'Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read"'
+      'Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read notes:write notes:share offline_access"'
     );
+  });
+
+  it('should advertise write and share scopes so clients do not consent read-only', async () => {
+    const app = createApp(makeServer, oauthConfig);
+    const res = await app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: INITIALIZE,
+    });
+
+    const scope = res.headers
+      .get('WWW-Authenticate')
+      ?.match(/scope="([^"]+)"/)?.[1]
+      .split(' ');
+
+    expect(scope).toEqual([
+      'notes:read',
+      'notes:write',
+      'notes:share',
+      'offline_access',
+    ]);
   });
 });

@@ -11,6 +11,18 @@ import { log } from './middleware/logger.js';
 
 const SUPPORTED_SCOPES = ['notes:read', 'notes:write', 'notes:share'] as const;
 
+/**
+ * Every scope a client should request. `offline_access` is advertised alongside
+ * the resource scopes because a client copies these verbatim into its
+ * authorization request; omitting it anywhere a client might read (the
+ * `WWW-Authenticate` challenge OR the RFC 9728 Protected Resource Metadata)
+ * mints a token with no refresh token, so the connection dies at the 1h access
+ * token expiry. This is the single source for both discovery surfaces.
+ */
+const ADVERTISED_SCOPES = [...SUPPORTED_SCOPES, 'offline_access'] as const;
+
+const CHALLENGE_SCOPE = ADVERTISED_SCOPES.join(' ');
+
 export function createApp(
   serverFactory: (credential: McpCredential) => McpServer,
   config: AppConfig,
@@ -113,7 +125,7 @@ function buildProtectedResourceMetadata(oauth: OauthConfig) {
   return {
     resource: oauth.resourceUrl,
     authorization_servers: [oauth.issuer],
-    scopes_supported: SUPPORTED_SCOPES,
+    scopes_supported: ADVERTISED_SCOPES,
     bearer_methods_supported: ['header'],
     resource_name: 'Knowtis MCP',
   };
@@ -123,7 +135,7 @@ function buildChallenge(oauth: OauthConfig | null): string {
   if (!oauth) {
     return 'Bearer realm="knowtis-mcp"';
   }
-  return `Bearer resource_metadata="${oauth.metadataUrl}", scope="notes:read"`;
+  return `Bearer resource_metadata="${oauth.metadataUrl}", scope="${CHALLENGE_SCOPE}"`;
 }
 
 function buildInvalidTokenChallenge(oauth: OauthConfig | null): string {

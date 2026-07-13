@@ -23,7 +23,7 @@ Authorization: Bearer <oauth-access-token | knowtis_mcp_...>
 
 Without a valid Bearer token the server replies `HTTP 401` with a `WWW-Authenticate: Bearer` challenge (carrying `resource_metadata` when OAuth is enabled, so clients can start discovery).
 
-> **OAuth availability.** The authorization server ships **behind the `mcp_oauth` feature flag** (dark by default). Discovery returns `404` until the flag is enabled; while it is off, clients fall back to API-key auth. Everything in [Connect with OAuth](#connect-with-oauth) describes the experience **once the flag is on**.
+> **OAuth availability.** The authorization server is gated by the `mcp_oauth` feature flag and is **on by default in every environment** (seeded `true` by migration `0020_enable_mcp_oauth`). Discovery resolves and "click to connect" works as soon as the OAuth env is set (`OAUTH_ISSUER`, `OAUTH_JWKS`, `OAUTH_COOKIE_KEYS`, `MCP_RESOURCE_URL` on the API; `MCP_OAUTH_ISSUER`, `MCP_RESOURCE_URL` on the MCP service). If those are unset the AS stays dormant and clients fall back to API-key auth, even with the flag on.
 
 ## Connect with OAuth
 
@@ -31,11 +31,11 @@ Knowtis implements the [MCP authorization spec (revision 2025-11-25)](https://mo
 
 ### How it works
 
-1. The client calls `POST https://mcp.knowtis.app/mcp` with no token and gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read"`.
+1. The client calls `POST https://mcp.knowtis.app/mcp` with no token and gets `401` with `WWW-Authenticate: Bearer resource_metadata="https://mcp.knowtis.app/.well-known/oauth-protected-resource", scope="notes:read notes:write notes:share offline_access"`. Clients copy that `scope` verbatim into the authorization request, so the challenge advertises the **full** set — advertising less mints read-only tokens and every write tool then fails on an otherwise successful connection.
 2. It fetches that **Protected Resource Metadata** ([RFC 9728](https://datatracker.ietf.org/doc/html/rfc9728)) and learns the authorization server is `https://api.knowtis.app`.
 3. It fetches the AS metadata ([RFC 8414](https://datatracker.ietf.org/doc/html/rfc8414) / OpenID Connect Discovery) and learns the `authorization`, `token`, `jwks`, and `registration` endpoints.
 4. It registers itself — via **Client ID Metadata Documents** (CIMD, `client_id` is the client's own HTTPS URL) or **Dynamic Client Registration** ([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591), open — no initial access token) — then runs the **authorization-code + PKCE S256** flow. **PKCE is required.**
-5. The browser opens the Knowtis consent page. You sign in (dev or prod account) and approve. The client receives an access token (and a refresh token if `offline_access` was granted).
+5. The browser opens the Knowtis consent page. You sign in (dev or prod account) and approve. The client receives an access token and, for public MCP clients, a refresh token — see [Scopes](#scopes) for exactly when a refresh token is issued.
 6. Every subsequent `/mcp` request carries `Authorization: Bearer <access-token>`. The MCP server validates the token (ES256 signature via JWKS, exact `aud`/`iss`, unexpired) and forwards it to the API.
 
 The access token is an **ES256 JWT** whose audience (`aud`) is the MCP resource URL (`https://mcp.knowtis.app/mcp`), valid for **1 hour**. Resource indicators ([RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)) bind the token to this specific server.
@@ -49,7 +49,7 @@ https://api.knowtis.app/.well-known/oauth-authorization-server
 https://api.knowtis.app/.well-known/openid-configuration
 ```
 
-Its endpoints are absolute and live under `/oauth/...` (`/oauth/authorize`, `/oauth/token`, `/oauth/jwks`, `/oauth/registration`).
+Its endpoints are absolute and live under `/oauth/...` — `/oauth/auth` (authorization), `/oauth/token`, `/oauth/jwks`, `/oauth/reg` (dynamic client registration), `/oauth/token/revocation`. Read them from the discovery document rather than hardcoding: they are `oidc-provider` defaults and change with its config.
 
 Resource server (MCP) — RFC 9728 metadata, both the root and MCP-endpoint-scoped forms:
 
@@ -64,14 +64,18 @@ The resource-server metadata is **env-gated, not flag-gated**: it is advertised 
 
 OAuth clients request scopes individually; the consent screen lists each one before you approve.
 
-| Scope            | Grants                                                                        |
-| ---------------- | ----------------------------------------------------------------------------- |
-| `notes:read`     | List and read notes, view collaborators                                       |
-| `notes:write`    | Create, update, and delete notes                                              |
-| `notes:share`    | Share notes with other users                                                  |
-| `offline_access` | Issue a **refresh token** so the client stays connected without re-consenting |
+| Scope            | Grants                                                         |
+| ---------------- | -------------------------------------------------------------- |
+| `notes:read`     | List and read notes, view collaborators                        |
+| `notes:write`    | Create, update, and delete notes                               |
+| `notes:share`    | Share notes with other users                                   |
+| `offline_access` | Signals the client wants a **refresh token** to stay connected |
 
-`offline_access` is OAuth-only and grants no data access — it only controls whether a refresh token is issued. When granted, refresh tokens **rotate on every use with no grace window**: replaying an already-used refresh token revokes the whole token family (`invalid_grant`). Refresh tokens live 30 days for remote (CIMD/URL) clients and 90 days for locally registered clients.
+`offline_access` is OAuth-only and grants no data access — it only signals that the client wants a refresh token. Per [OIDC Core §11](https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess) the authorization server **drops `offline_access` from any request whose `prompt` does not contain `consent`**, and MCP clients are inconsistent here: some hardcode `prompt=consent`, others send no scope at all. So rather than depend on the client, Knowtis issues a refresh token to **every public MCP client** — the authorization-code + PKCE flow with no client authentication (`token_endpoint_auth_method: none`) — whether or not `offline_access` survived the strip. This uses oidc-provider's supported `issueRefreshToken` override and is what keeps a connection alive past the 1h access-token expiry; clients that _do_ send `prompt=consent` additionally see "Stay connected" listed on the consent screen. The one exception is an **explicit denial**: if `offline_access` was requested but rejected on the grant (recorded as a rejected OIDC scope), no refresh token is issued — a rejection always wins over the default-issue policy.
+
+**Scope of the policy.** Dynamic client registration is open (no initial access token) and `clientDefaults` force `token_endpoint_auth_method: none`, so effectively **every dynamically-registered client is a public web client** and the always-issue policy applies universally. That is accepted for this authorization server — it is purpose-built for MCP — and the blast radius is bounded by refresh-token rotation, the 30/90-day TTLs, and the **Settings > Connected apps** revoke UI. The exception is a client that registers `application_type: native`: native public clients fall back to the spec-default, `offline_access`-gated path and only receive a refresh token when the scope actually survives.
+
+Refresh tokens **rotate on every use with no grace window**: replaying an already-used refresh token revokes the whole token family (`invalid_grant`). They live 30 days for remote (CIMD/URL) clients and 90 days for locally registered clients.
 
 ### Clients
 
@@ -431,7 +435,7 @@ To exercise the full OAuth flow (e.g. with the [MCP Inspector](https://github.co
    MCP_RESOURCE_URL=http://localhost:3334/mcp
    ```
 
-3. **Enable the flag** (the AS 404s until it is on):
+3. **Flag is on by default** (seeded `true` by `0020_enable_mcp_oauth`). If a legacy DB still has it off, enable it:
 
    ```sql
    UPDATE feature_flags SET enabled = true WHERE key = 'mcp_oauth';

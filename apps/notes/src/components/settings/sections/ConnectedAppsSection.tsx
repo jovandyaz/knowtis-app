@@ -9,22 +9,16 @@ import {
   type OauthGrant,
 } from '@knowtis/data-access-oauth';
 import {
-  Badge,
   Button,
   EmptyState,
   ErrorState,
   LoadingState,
 } from '@knowtis/design-system';
 
+import { formatDate } from '../../../lib/format-date';
+import { ScopeBadgeList } from '../ScopeBadgeList';
 import { SectionHeader } from '../SectionHeader';
 import { RevokeGrantDialog } from './RevokeGrantDialog';
-
-const SCOPE_LABEL_KEYS: Record<string, string> = {
-  'notes:read': 'oauth.scopes.notesRead',
-  'notes:write': 'oauth.scopes.notesWrite',
-  'notes:share': 'oauth.scopes.notesShare',
-  offline_access: 'oauth.scopes.offlineAccess',
-};
 
 function hostFromClientId(clientId: string): string {
   try {
@@ -32,14 +26,6 @@ function hostFromClientId(clientId: string): string {
   } catch {
     return clientId;
   }
-}
-
-function formatDate(dateStr: string, locale: string): string {
-  return new Intl.DateTimeFormat(locale, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  }).format(new Date(dateStr));
 }
 
 export function ConnectedAppsSection() {
@@ -103,15 +89,7 @@ export function ConnectedAppsSection() {
                   <span className="block truncate font-medium text-(--foreground)">
                     {appName}
                   </span>
-                  <div className="flex flex-wrap items-center gap-2">
-                    {grant.scopes.map((scope) => (
-                      <Badge key={scope} variant="secondary">
-                        {t(SCOPE_LABEL_KEYS[scope] ?? scope, {
-                          defaultValue: scope,
-                        })}
-                      </Badge>
-                    ))}
-                  </div>
+                  <ScopeBadgeList scopes={grant.scopes} />
                   <div className="text-xs text-(--muted-foreground)">
                     {t('connectedApps.authorizedAt')}{' '}
                     {formatDate(grant.createdAt, i18n.language)}

@@ -19,12 +19,7 @@ import {
   MutationErrorAlert,
 } from '@knowtis/design-system';
 
-const SCOPE_DESCRIPTION_KEYS: Record<string, string> = {
-  'notes:read': 'oauth.scopes.notesRead',
-  'notes:write': 'oauth.scopes.notesWrite',
-  'notes:share': 'oauth.scopes.notesShare',
-  offline_access: 'oauth.scopes.offlineAccess',
-};
+import { SCOPE_LABEL_KEYS } from '../../lib/mcp-scopes';
 
 const DECISION_ERROR_KEYS = {
   alreadyResolved: 'oauth.decisionError.alreadyResolved',
@@ -107,7 +102,7 @@ export function ConsentCard({
                   aria-hidden="true"
                 />
                 <span>
-                  {t(SCOPE_DESCRIPTION_KEYS[scope] ?? scope, {
+                  {t(SCOPE_LABEL_KEYS[scope] ?? scope, {
                     defaultValue: scope,
                   })}
                 </span>

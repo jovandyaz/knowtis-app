@@ -23,17 +23,54 @@ export function refreshTokenTtl(client: { clientId: string }): number {
 }
 
 /**
- * A refresh token is issued only when the client is allowed the refresh_token
- * grant AND the authorization code carries the `offline_access` scope.
+ * A refresh token is issued when the client may use the refresh_token grant AND
+ * either the authorization code carries `offline_access`, or the client is a
+ * public web client (code flow, no client authentication) that did not have
+ * `offline_access` explicitly rejected on its grant. oidc-provider strips
+ * `offline_access` from any request whose `prompt` omits `consent` (OIDC Core
+ * §11, enforced in lib/actions/authorization/check_scope.js), and MCP clients
+ * cannot add `prompt=consent` — so the public-client branch keeps their
+ * connections alive past the 1h access-token expiry. Mirrors oidc-provider's
+ * documented `issueRefreshToken` "always issue" recipe, gated so an explicit
+ * denial recorded on the Grant is still honored.
  */
 export function shouldIssueRefreshToken(
-  client: { grantTypeAllowed: (type: string) => boolean },
-  code: { scopes: Set<string> }
+  client: {
+    grantTypeAllowed: (type: string) => boolean;
+    applicationType?: string | undefined;
+    clientAuthMethod?: string | undefined;
+  },
+  code: { scopes: Set<string> },
+  offlineAccessRejected: boolean
 ): boolean {
-  return (
-    client.grantTypeAllowed('refresh_token') &&
-    code.scopes.has('offline_access')
-  );
+  if (!client.grantTypeAllowed('refresh_token')) {
+    return false;
+  }
+  if (code.scopes.has('offline_access')) {
+    return true;
+  }
+  const isPublicWebClient =
+    client.applicationType === 'web' && client.clientAuthMethod === 'none';
+  return isPublicWebClient && !offlineAccessRejected;
+}
+
+/**
+ * True when `offline_access` was explicitly rejected on the grant — the consent
+ * bridge records a subset approval as `grant.rejected.openid.scope`, and that
+ * denial must veto the public-web default-issue policy. Absent when
+ * `offline_access` was simply never requested (stripped per OIDC Core §11).
+ */
+export function hasRejectedOfflineAccess(
+  grant:
+    | {
+        rejected?:
+          | { openid?: { scope?: string | undefined } | undefined }
+          | undefined;
+      }
+    | undefined
+): boolean {
+  const rejectedScope = grant?.rejected?.openid?.scope ?? '';
+  return rejectedScope.split(' ').includes('offline_access');
 }
 
 // @types/oidc-provider lags the runtime and lacks the experimental clientIdMetadataDocument feature.
@@ -103,8 +140,17 @@ export async function createOidcProvider(
       RefreshToken: (_ctx, _token, client) => refreshTokenTtl(client),
     },
     rotateRefreshToken: true,
-    issueRefreshToken: (_ctx, client, code) =>
-      shouldIssueRefreshToken(client, code),
+    issueRefreshToken: async (ctx, client, code) => {
+      const grant =
+        typeof code.grantId === 'string'
+          ? await ctx.oidc.provider.Grant.find(code.grantId)
+          : undefined;
+      return shouldIssueRefreshToken(
+        client,
+        code,
+        hasRejectedOfflineAccess(grant)
+      );
+    },
     features: {
       devInteractions: { enabled: false },
       registration: { enabled: true, initialAccessToken: false },

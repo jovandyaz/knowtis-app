@@ -141,6 +141,13 @@
       "when": 1783031712347,
       "tag": "0019_cooing_weapon_omega",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1783886042788,
+      "tag": "0020_enable_mcp_oauth",
+      "breakpoints": true
     }
   ]
 }

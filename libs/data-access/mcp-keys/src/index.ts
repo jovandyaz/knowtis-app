@@ -1,4 +1,4 @@
-export { createMcpKeySchema } from './mcp-keys.types';
+export { createMcpKeySchema, MCP_KEY_SCOPE_OPTIONS } from './mcp-keys.types';
 export type { CreateMcpKeyFormValues } from './mcp-keys.types';
 
 export {

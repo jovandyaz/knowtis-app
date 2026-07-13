@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import {
   createMcpKeySchema,
+  MCP_KEY_SCOPE_OPTIONS,
   useCreateMcpKey,
   type CreateMcpKeyFormValues,
 } from '@knowtis/data-access-mcp-keys';
@@ -23,17 +24,33 @@ import {
   LoadingButton,
 } from '@knowtis/design-system';
 
-const SCOPE_OPTIONS = [
-  { value: 'notes:read', labelKey: 'integrations.scopeOptions.read' },
-  {
-    value: 'notes:read,notes:write',
-    labelKey: 'integrations.scopeOptions.readWrite',
+interface ScopeOptionCopy {
+  labelKey: string;
+  descriptionKey: string;
+}
+
+const SCOPE_OPTION_COPY = {
+  'notes:read': {
+    labelKey: 'integrations.scopeOptions.read.label',
+    descriptionKey: 'integrations.scopeOptions.read.description',
   },
-  {
-    value: 'notes:read,notes:write,notes:share',
-    labelKey: 'integrations.scopeOptions.readWriteShare',
+  'notes:read,notes:write': {
+    labelKey: 'integrations.scopeOptions.readWrite.label',
+    descriptionKey: 'integrations.scopeOptions.readWrite.description',
   },
-] as const;
+  'notes:read,notes:write,notes:share': {
+    labelKey: 'integrations.scopeOptions.readWriteShare.label',
+    descriptionKey: 'integrations.scopeOptions.readWriteShare.description',
+  },
+} as const satisfies Record<
+  (typeof MCP_KEY_SCOPE_OPTIONS)[number],
+  ScopeOptionCopy
+>;
+
+const SCOPE_OPTIONS = MCP_KEY_SCOPE_OPTIONS.map((value) => ({
+  value,
+  ...SCOPE_OPTION_COPY[value],
+}));
 
 interface CreateKeyDialogProps {
   open: boolean;
@@ -54,7 +71,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
     formState: { errors },
   } = useForm<CreateMcpKeyFormValues>({
     resolver: zodResolver(createMcpKeySchema),
-    defaultValues: { name: '', scopes: 'notes:read' },
+    defaultValues: { name: '', scopes: 'notes:read,notes:write' },
   });
 
   const selectedScopes = watch('scopes');
@@ -164,6 +181,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
                 <button
                   key={option.value}
                   type="button"
+                  aria-pressed={selectedScopes === option.value}
                   onClick={() => setValue('scopes', option.value)}
                   className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
                     selectedScopes === option.value
@@ -171,7 +189,12 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
                       : 'border-(--border) text-(--muted-foreground) hover:border-(--primary)/50'
                   }`}
                 >
-                  {t(option.labelKey)}
+                  <span className="block font-medium text-(--foreground)">
+                    {t(option.labelKey)}
+                  </span>
+                  <span className="block text-xs text-(--muted-foreground)">
+                    {t(option.descriptionKey)}
+                  </span>
                 </button>
               ))}
             </div>
