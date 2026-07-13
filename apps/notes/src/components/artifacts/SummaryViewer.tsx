@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import DOMPurify from 'dompurify';
 import { Check, CheckCircle2, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@knowtis/design-system';
 import type { SummaryArtifact } from '@knowtis/shared-types';
+
+import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 
 const COPY_FEEDBACK_MS = 2000;
 
@@ -51,7 +52,7 @@ export function SummaryViewer({ artifact }: SummaryViewerProps) {
         <div
           className="prose prose-sm dark:prose-invert max-w-none text-foreground"
           dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(content.summary),
+            __html: sanitizeAiHtml(content.summary),
           }}
         />
       )}

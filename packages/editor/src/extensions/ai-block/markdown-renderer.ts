@@ -7,13 +7,36 @@ const MARKDOWN_RENDERER = new MarkdownIt({
   typographer: true,
 });
 
+const FORBID_TAGS = [
+  'img',
+  'picture',
+  'source',
+  'audio',
+  'video',
+  'iframe',
+  'svg',
+  'math',
+  'form',
+  'link',
+  'meta',
+  'base',
+];
+
+const FORBID_ATTR = ['style', 'srcset', 'ping', 'background', 'formaction'];
+
 /**
  * Renders markdown to sanitized HTML for insertion into the editor.
  *
  * DOMPurify guards against malicious markdown that produces unsafe HTML.
+ * Markdown image syntax (`![alt](url)`) lowers to `<img src>`, which would
+ * otherwise auto-fire a network request against LLM-controlled URLs, so
+ * FORBID_TAGS/FORBID_ATTR strip that channel beyond DOMPurify's defaults.
  * Tiptap's `insertContent` will further filter by ProseMirror schema, but
  * the explicit sanitize step keeps this util safe in any consumer context.
  */
 export function renderMarkdownToSanitizedHtml(markdown: string): string {
-  return DOMPurify.sanitize(MARKDOWN_RENDERER.render(markdown));
+  return DOMPurify.sanitize(MARKDOWN_RENDERER.render(markdown), {
+    FORBID_TAGS,
+    FORBID_ATTR,
+  });
 }

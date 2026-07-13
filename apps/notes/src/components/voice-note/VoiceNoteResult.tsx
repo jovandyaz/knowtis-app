@@ -1,9 +1,10 @@
 import { useTranslation } from 'react-i18next';
 
-import DOMPurify from 'dompurify';
 import { FileText, RefreshCw, Trash2 } from 'lucide-react';
 
 import { Button } from '@knowtis/design-system';
+
+import { sanitizeAiHtml } from '../../lib/sanitize-ai-html';
 
 interface VoiceNoteResultProps {
   title: string;
@@ -35,7 +36,7 @@ export function VoiceNoteResult({
 
       <div
         className="prose prose-sm dark:prose-invert max-h-48 overflow-y-auto rounded-lg border border-(--border)/50 bg-(--muted)/30 p-3"
-        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+        dangerouslySetInnerHTML={{ __html: sanitizeAiHtml(content) }}
       />
 
       <div className="flex flex-wrap items-center justify-end gap-2">
