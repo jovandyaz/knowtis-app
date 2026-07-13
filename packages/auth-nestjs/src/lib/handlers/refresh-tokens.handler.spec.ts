@@ -1,5 +1,6 @@
+import { AuthErrors } from '@jovandyaz/auth/server';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import type {
@@ -204,6 +205,47 @@ describe('RefreshTokensHandler', () => {
 
     expect(result.isOk()).toBe(true);
     expect(deps.sessionRepository.create).toHaveBeenCalled();
+  });
+
+  it('creates the replacement session before marking the old one rotated', async () => {
+    const deps = createDeps({
+      sub: 'user-1',
+      email: 'u@example.com',
+      familyId: 'fam-1',
+    });
+    const callOrder: string[] = [];
+    vi.mocked(deps.sessionRepository.create).mockImplementation(async () => {
+      callOrder.push('create');
+      return ok({ id: 's2' } as SessionEntity);
+    });
+    vi.mocked(deps.sessionRepository.markRotated).mockImplementation(
+      async () => {
+        callOrder.push('markRotated');
+      }
+    );
+    const handler = createHandler(deps);
+
+    const result = await handler.execute('refresh-token');
+
+    expect(result.isOk()).toBe(true);
+    expect(callOrder).toEqual(['create', 'markRotated']);
+  });
+
+  it('does not mark the session rotated when token generation fails', async () => {
+    const deps = createDeps({
+      sub: 'user-1',
+      email: 'u@example.com',
+      familyId: 'fam-1',
+    });
+    vi.mocked(deps.sessionRepository.create).mockResolvedValue(
+      err(AuthErrors.internalError('db unavailable'))
+    );
+    const handler = createHandler(deps);
+
+    const result = await handler.execute('refresh-token');
+
+    expect(result.isErr()).toBe(true);
+    expect(deps.sessionRepository.markRotated).not.toHaveBeenCalled();
   });
 
   it('does not flag registered users as anonymous', async () => {

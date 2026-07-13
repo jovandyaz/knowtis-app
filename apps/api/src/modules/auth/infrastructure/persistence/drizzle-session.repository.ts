@@ -6,7 +6,7 @@ import type {
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, gt, isNotNull, lt } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, isNull, lt } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -68,7 +68,11 @@ export class DrizzleSessionRepository implements SessionRepository {
       .select({ id: sessions.id })
       .from(sessions)
       .where(
-        and(eq(sessions.familyId, familyId), gt(sessions.expiresAt, new Date()))
+        and(
+          eq(sessions.familyId, familyId),
+          gt(sessions.expiresAt, new Date()),
+          isNull(sessions.rotatedAt)
+        )
       )
       .limit(1);
 
