@@ -366,3 +366,74 @@ describe('streamWithChain', () => {
     expect(infos).toEqual([false, false, true]);
   });
 });
+
+describe('streamWithChain cooldown outcome', () => {
+  interface Event {
+    type: string;
+  }
+
+  function makeCooldown() {
+    return {
+      isCooling: vi.fn().mockReturnValue(false),
+      recordSuccess: vi.fn(),
+      recordFailure: vi.fn(),
+    };
+  }
+
+  async function* eventsOf(...types: string[]): AsyncGenerator<Event> {
+    for (const type of types) {
+      yield { type };
+    }
+  }
+
+  it('records failure when the stream completes after a failure chunk', async () => {
+    const cooldown = makeCooldown();
+    const stream = streamWithChain<AsyncGenerator<Event>, Event>({
+      candidates: [SONNET],
+      cooldown,
+      logger,
+      open: () => eventsOf('chunk', 'error'),
+      chunks: (h) => h,
+      isFailureChunk: (c) => c.type === 'error',
+    });
+    for await (const chunk of stream) {
+      void chunk;
+    }
+    expect(cooldown.recordFailure).toHaveBeenCalledWith('anthropic');
+    expect(cooldown.recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it('still records success when no failure chunk was yielded', async () => {
+    const cooldown = makeCooldown();
+    const stream = streamWithChain<AsyncGenerator<Event>, Event>({
+      candidates: [SONNET],
+      cooldown,
+      logger,
+      open: () => eventsOf('chunk', 'done'),
+      chunks: (h) => h,
+      isFailureChunk: (c) => c.type === 'error',
+    });
+    for await (const chunk of stream) {
+      void chunk;
+    }
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith('anthropic');
+    expect(cooldown.recordFailure).not.toHaveBeenCalled();
+  });
+
+  it('does not treat aborted events as failures', async () => {
+    const cooldown = makeCooldown();
+    const stream = streamWithChain<AsyncGenerator<Event>, Event>({
+      candidates: [SONNET],
+      cooldown,
+      logger,
+      open: () => eventsOf('chunk', 'aborted'),
+      chunks: (h) => h,
+      isFailureChunk: (c) => c.type === 'error',
+    });
+    for await (const chunk of stream) {
+      void chunk;
+    }
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith('anthropic');
+    expect(cooldown.recordFailure).not.toHaveBeenCalled();
+  });
+});

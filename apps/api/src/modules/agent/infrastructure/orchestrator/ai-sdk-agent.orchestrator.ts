@@ -88,6 +88,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         }),
       chunks: (turn) => turn,
       isAborted: () => abortSignal.aborted,
+      isFailureChunk: (event) => event.type === 'error',
     });
   }
 

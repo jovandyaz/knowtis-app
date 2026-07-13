@@ -23,6 +23,12 @@ export interface StreamChainContext<THandle, TChunk> extends ChainContext {
   readonly chunks: (handle: THandle) => AsyncIterable<TChunk>;
   readonly isAborted?: (() => boolean) | undefined;
   readonly onSettle?: ((active: THandle) => void) | undefined;
+  /**
+   * Marks a yielded chunk as a terminal failure. When any chunk matches, a
+   * normally-completed stream records a cooldown failure instead of success —
+   * for consumers that surface provider errors as events rather than throws.
+   */
+  readonly isFailureChunk?: ((chunk: TChunk) => boolean) | undefined;
 }
 
 export function isAbortError(error: unknown): boolean {
@@ -142,12 +148,20 @@ export async function* streamWithChain<THandle, TChunk>(
         continue;
       }
       let emitted = false;
+      let sawFailure = false;
       try {
         for await (const chunk of context.chunks(active)) {
           emitted = true;
+          if (context.isFailureChunk?.(chunk)) {
+            sawFailure = true;
+          }
           yield chunk;
         }
-        context.cooldown?.recordSuccess(providerOf(model));
+        if (sawFailure) {
+          context.cooldown?.recordFailure(providerOf(model));
+        } else {
+          context.cooldown?.recordSuccess(providerOf(model));
+        }
         return;
       } catch (error) {
         if (emitted || context.isAborted?.() || isAbortError(error)) {
