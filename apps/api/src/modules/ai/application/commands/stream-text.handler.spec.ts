@@ -249,8 +249,7 @@ describe('StreamTextHandler', () => {
       callbacks
     );
 
-    expect(errorResult).toBeTruthy();
-    expect(errorResult!.code).toBe('AI_PROVIDER_ERROR');
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
     expect(errorResult!.message).toContain('Provider connection failed');
   });
 
@@ -447,8 +446,7 @@ describe('StreamTextHandler', () => {
       callbacks
     );
 
-    expect(errorResult).toBeTruthy();
-    expect(errorResult!.code).toBe('AI_PROVIDER_ERROR');
+    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
     expect(releaseSpy).toHaveBeenCalledWith(
       expect.objectContaining({ estimatedTokens: expect.any(Number) }),
       expect.objectContaining({ userId: 'user-123' })
@@ -470,6 +468,7 @@ describe('StreamTextHandler', () => {
       }),
     });
     const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
 
     await handler.execute(
       {
@@ -482,6 +481,7 @@ describe('StreamTextHandler', () => {
     );
 
     expect(recordSpy).toHaveBeenCalledTimes(1);
+    expect(releaseSpy).not.toHaveBeenCalled();
     const recorded = recordSpy.mock.calls[0][2];
     expect(recorded.inputTokens).toBeGreaterThan(0);
     expect(recorded.outputTokens).toBeGreaterThan(0);

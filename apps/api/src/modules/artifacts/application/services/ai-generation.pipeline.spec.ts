@@ -45,4 +45,40 @@ describe('AIGenerationPipeline', () => {
     expect(result.isErr()).toBe(true);
     expect(releaseReservation).toHaveBeenCalledWith('user-1', 500);
   });
+
+  it('does not release a reservation when the rate-limit check itself fails', async () => {
+    const releaseReservation = vi.fn().mockResolvedValue(undefined);
+    const rateLimit = {
+      checkLimit: vi.fn().mockRejectedValue(new Error('redis exploded')),
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+      releaseReservation,
+    };
+    const orchestrator = {
+      selectModel: vi.fn(),
+      getSystemPrompt: vi.fn(),
+    };
+    const structuredOutput = { generateStructuredOutput: vi.fn() };
+    const catalog = { getPricing: vi.fn().mockReturnValue(undefined) };
+    const config = { get: vi.fn().mockReturnValue('test') };
+
+    const pipeline = new AIGenerationPipeline(
+      structuredOutput as never,
+      orchestrator as never,
+      rateLimit as never,
+      catalog as never,
+      config as never
+    );
+
+    await expect(
+      pipeline.execute({
+        userId: 'user-1',
+        action: AI_ACTION.SUMMARIZE,
+        prompt: 'generate something',
+        schema: z.object({ title: z.string() }),
+        estimatedTokens: 500,
+      })
+    ).rejects.toThrow('redis exploded');
+    expect(releaseReservation).not.toHaveBeenCalled();
+    expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
+  });
 });

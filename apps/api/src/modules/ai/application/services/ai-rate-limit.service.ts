@@ -123,6 +123,7 @@ export class AIRateLimitService {
     };
   }
 
+  /** Never rejects — release failures are logged and swallowed, so callers may fire-and-forget. */
   async releaseReservation(
     userId: string,
     estimatedTokens: number

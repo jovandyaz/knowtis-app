@@ -132,15 +132,19 @@ describe('VoiceNoteHandler reservation accounting', () => {
 
   it('reconciles the token reservation exactly once on success', async () => {
     const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
-    const { handler, recordUsage } = makeHandler(checkLimit, {
-      transcribe: okTranscribe(),
-      selectModel: okSelectModel(),
-      generateStructuredOutput: okStructured(),
-    });
+    const { handler, recordUsage, releaseReservation } = makeHandler(
+      checkLimit,
+      {
+        transcribe: okTranscribe(),
+        selectModel: okSelectModel(),
+        generateStructuredOutput: okStructured(),
+      }
+    );
 
     const result = await handler.execute(input);
 
     expect(result.isOk()).toBe(true);
+    expect(releaseReservation).not.toHaveBeenCalled();
     const whisper = recordUsage.mock.calls.find(
       (c) => c[0].action === AI_ACTION.VOICE_TRANSCRIPTION
     )?.[0];
@@ -217,11 +221,14 @@ describe('VoiceNoteHandler reservation accounting', () => {
 
   it('releases the reservation when structuring fails and falls back to raw transcript', async () => {
     const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
-    const { handler, releaseReservation } = makeHandler(checkLimit, {
-      transcribe: okTranscribe(),
-      selectModel: okSelectModel(),
-      generateStructuredOutput: vi.fn().mockRejectedValue(new Error('boom')),
-    });
+    const { handler, recordUsage, releaseReservation } = makeHandler(
+      checkLimit,
+      {
+        transcribe: okTranscribe(),
+        selectModel: okSelectModel(),
+        generateStructuredOutput: vi.fn().mockRejectedValue(new Error('boom')),
+      }
+    );
 
     const result = await handler.execute(input);
 
@@ -231,5 +238,9 @@ describe('VoiceNoteHandler reservation accounting', () => {
       'user-1',
       expect.any(Number)
     );
+    const structuring = recordUsage.mock.calls.find(
+      (c) => c[0].action === AI_ACTION.STRUCTURE_VOICE_NOTE
+    );
+    expect(structuring).toBeUndefined();
   });
 });
