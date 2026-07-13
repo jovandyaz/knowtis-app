@@ -6,7 +6,7 @@ import type {
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNotNull, lt } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, lt } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -63,6 +63,18 @@ export class DrizzleSessionRepository implements SessionRepository {
     return this.mapToEntity(result[0]);
   }
 
+  async hasLiveSessionForFamily(familyId: string): Promise<boolean> {
+    const result = await this.db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(eq(sessions.familyId, familyId), gt(sessions.expiresAt, new Date()))
+      )
+      .limit(1);
+
+    return result.length > 0;
+  }
+
   async markRotated(id: string): Promise<void> {
     await this.db
       .update(sessions)
@@ -85,7 +97,9 @@ export class DrizzleSessionRepository implements SessionRepository {
   async deleteRotatedBefore(cutoff: Date): Promise<void> {
     await this.db
       .delete(sessions)
-      .where(and(isNotNull(sessions.rotatedAt), lt(sessions.rotatedAt, cutoff)));
+      .where(
+        and(isNotNull(sessions.rotatedAt), lt(sessions.rotatedAt, cutoff))
+      );
   }
 
   private mapToEntity(session: typeof sessions.$inferSelect): SessionEntity {

@@ -27,6 +27,7 @@ export interface SessionRepository {
     data: CreateSessionData
   ): Promise<Result<SessionEntity, AuthDomainError>>;
   findByRefreshTokenHash(hash: string): Promise<SessionEntity | null>;
+  hasLiveSessionForFamily(familyId: string): Promise<boolean>;
   markRotated(id: string): Promise<void>;
   deleteById(id: string): Promise<void>;
   deleteByFamilyId(familyId: string): Promise<void>;
