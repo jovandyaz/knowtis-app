@@ -1,5 +1,4 @@
 export { defineAbilityFor } from './lib/permissions';
-export { appRoleManager, ROLES, type Role } from './lib/roles';
 export {
   SUBJECTS,
   type Action,
