@@ -8,6 +8,7 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
+import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
   type AIStructuredOutputProvider,
@@ -50,7 +51,8 @@ export class MemoryExtractionTask {
     @Inject(MEMORY_REPOSITORY) private readonly memory: MemoryRepository,
     @Inject(AI_STRUCTURED_OUTPUT_PROVIDER)
     private readonly structured: AIStructuredOutputProvider,
-    @Inject(EMBEDDING_PORT) private readonly embed: EmbeddingPort
+    @Inject(EMBEDDING_PORT) private readonly embed: EmbeddingPort,
+    private readonly rateLimit: AIRateLimitService
   ) {}
 
   @Interval(INTERVAL_MS)
@@ -144,7 +146,8 @@ export class MemoryExtractionTask {
     // applyReconcile commits delete/insert/update atomically or not at all.
     if (safeAdds.length + safeUpdates.length > 0) {
       const texts = [...safeAdds, ...safeUpdates.map((u) => u.content)];
-      const { embeddings } = await this.embed.embedDocuments(texts);
+      const { embeddings, costUsd } = await this.embed.embedDocuments(texts);
+      void this.rateLimit.recordGlobalCost(costUsd);
       const count = await this.memory.countForUser(userId);
       const capacity = Math.max(0, max - (count - deletes.length));
       let i = 0;

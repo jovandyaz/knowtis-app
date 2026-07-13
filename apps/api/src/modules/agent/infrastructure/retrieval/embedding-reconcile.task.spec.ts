@@ -18,6 +18,7 @@ function makeTask(opts: {
   task: EmbeddingReconcileTask;
   repo: NoteEmbeddingRepository;
   embed: EmbeddingPort;
+  rateLimit: { recordGlobalCost: ReturnType<typeof vi.fn> };
 } {
   const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'test-key';
   const repo = {
@@ -30,6 +31,7 @@ function makeTask(opts: {
     embedDocuments: vi.fn(async (texts: string[]) => ({
       embeddings: texts.map(() => new Array(1024).fill(0.1)),
       totalTokens: 5,
+      costUsd: 0.002,
     })),
   } as unknown as EmbeddingPort;
   const db = {
@@ -46,8 +48,15 @@ function makeTask(opts: {
       return undefined;
     },
   } as unknown as ConfigService<EnvConfig, true>;
-  const task = new EmbeddingReconcileTask(db as never, config, repo, embed);
-  return { task, repo, embed };
+  const rateLimit = { recordGlobalCost: vi.fn().mockResolvedValue(undefined) };
+  const task = new EmbeddingReconcileTask(
+    db as never,
+    config,
+    repo,
+    embed,
+    rateLimit as never
+  );
+  return { task, repo, embed, rateLimit };
 }
 
 describe('EmbeddingReconcileTask', () => {
@@ -69,6 +78,14 @@ describe('EmbeddingReconcileTask', () => {
     await task.reconcile();
     expect(embed.embedDocuments).not.toHaveBeenCalled();
     expect(repo.touch).toHaveBeenCalledWith('n1');
+  });
+
+  it('records the embedding cost against the global spend counter only', async () => {
+    const { task, rateLimit } = makeTask({
+      stale: [{ noteId: 'n1', title: 't', content: 'c', inputHash: 'old' }],
+    });
+    await task.reconcile();
+    expect(rateLimit.recordGlobalCost).toHaveBeenCalledWith(0.002);
   });
 
   it('does nothing when the advisory lock is not acquired', async () => {

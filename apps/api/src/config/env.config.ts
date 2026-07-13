@@ -26,6 +26,7 @@ const envSchemaBase = z.object({
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
   AI_BYOK_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
+  AI_GLOBAL_DAILY_COST_LIMIT_USD: z.coerce.number().default(25),
   AI_ANONYMOUS_DAILY_LIMIT_PCT: z.coerce.number().min(0).max(1).default(0.33),
   AI_MAX_RETRIES: z.coerce.number().default(3),
   AI_FALLBACK_CHAIN: z

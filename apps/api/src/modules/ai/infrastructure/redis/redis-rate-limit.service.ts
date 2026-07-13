@@ -12,6 +12,7 @@ import { AI_REDIS, AIRedisProvider } from './ai-redis.provider';
 const SLIDING_WINDOW_LUA = `
 local token_key = KEYS[1]
 local cost_key = KEYS[2]
+local global_key = KEYS[3]
 local estimated_tokens = tonumber(ARGV[1])
 local estimated_cost = tonumber(ARGV[2])
 local token_limit = tonumber(ARGV[3])
@@ -37,6 +38,10 @@ local new_cost = redis.call('INCRBYFLOAT', cost_key, estimated_cost)
 if redis.call('TTL', cost_key) == -1 then
   redis.call('EXPIRE', cost_key, ttl)
 end
+redis.call('INCRBYFLOAT', global_key, estimated_cost)
+if redis.call('TTL', global_key) == -1 then
+  redis.call('EXPIRE', global_key, ttl)
+end
 
 return {1, current_tokens + estimated_tokens, tostring(new_cost), ''}
 `;
@@ -44,6 +49,7 @@ return {1, current_tokens + estimated_tokens, tostring(new_cost), ''}
 const CORRECT_USAGE_LUA = `
 local token_key = KEYS[1]
 local cost_key = KEYS[2]
+local global_key = KEYS[3]
 local token_delta = tonumber(ARGV[1])
 local cost_increment = ARGV[2]
 local ttl = tonumber(ARGV[3])
@@ -58,6 +64,10 @@ end
 local new_cost = redis.call('INCRBYFLOAT', cost_key, cost_increment)
 if redis.call('TTL', cost_key) == -1 then
   redis.call('EXPIRE', cost_key, ttl)
+end
+redis.call('INCRBYFLOAT', global_key, cost_increment)
+if redis.call('TTL', global_key) == -1 then
+  redis.call('EXPIRE', global_key, ttl)
 end
 
 return {tonumber(redis.call('GET', token_key)), new_cost}
@@ -82,17 +92,18 @@ end
 return {1, current + 1}
 `;
 
-const BYOK_COST_LUA = `
-local key = KEYS[1]
+const INCR_COST_LUA = `
 local increment = ARGV[1]
 local ttl = tonumber(ARGV[2])
 
-local new_cost = redis.call('INCRBYFLOAT', key, increment)
-if redis.call('TTL', key) == -1 then
-  redis.call('EXPIRE', key, ttl)
+for i = 1, #KEYS do
+  redis.call('INCRBYFLOAT', KEYS[i], increment)
+  if redis.call('TTL', KEYS[i]) == -1 then
+    redis.call('EXPIRE', KEYS[i], ttl)
+  end
 end
 
-return new_cost
+return redis.call('GET', KEYS[1])
 `;
 
 const KEY_TTL_SECONDS = 25 * 60 * 60;
@@ -120,9 +131,10 @@ export class RedisRateLimitService implements RateLimitProvider {
 
     const result = (await this.redis.client.eval(
       SLIDING_WINDOW_LUA,
-      2,
+      3,
       tokenKey,
       costKey,
+      this.globalSpendKey(),
       estimatedTokens,
       estimatedCostUsd,
       tokenLimit,
@@ -185,9 +197,10 @@ export class RedisRateLimitService implements RateLimitProvider {
     try {
       await this.redis.client.eval(
         CORRECT_USAGE_LUA,
-        2,
+        3,
         tokenKey,
         costKey,
+        this.globalSpendKey(),
         tokenDelta,
         costDelta.toFixed(6),
         KEY_TTL_SECONDS
@@ -198,11 +211,11 @@ export class RedisRateLimitService implements RateLimitProvider {
   }
 
   async recordByokCost(subject: string, costUsd: number): Promise<void> {
-    const key = this.byokCostKey(subject);
     await this.redis.client.eval(
-      BYOK_COST_LUA,
-      1,
-      key,
+      INCR_COST_LUA,
+      2,
+      this.byokCostKey(subject),
+      this.globalSpendKey(),
       costUsd.toFixed(6),
       KEY_TTL_SECONDS
     );
@@ -213,8 +226,28 @@ export class RedisRateLimitService implements RateLimitProvider {
     return value === null ? 0 : Number.parseFloat(value);
   }
 
+  async recordGlobalCost(costUsd: number): Promise<void> {
+    await this.redis.client.eval(
+      INCR_COST_LUA,
+      1,
+      this.globalSpendKey(),
+      costUsd.toFixed(6),
+      KEY_TTL_SECONDS
+    );
+  }
+
+  async getGlobalSpendUsd(): Promise<number> {
+    const value = await this.redis.client.get(this.globalSpendKey());
+    return value === null ? 0 : Number.parseFloat(value);
+  }
+
   private byokCostKey(subject: string): string {
     const today = new Date().toISOString().slice(0, 10);
     return `ai:ratelimit:${subject}:byok_cost:${today}`;
+  }
+
+  private globalSpendKey(): string {
+    const today = new Date().toISOString().slice(0, 10);
+    return `ai:spend:global:${today}`;
   }
 }

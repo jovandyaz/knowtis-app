@@ -31,6 +31,10 @@ export interface RateLimitProvider {
   recordByokCost(subject: string, costUsd: number): Promise<void>;
 
   getByokCostUsd(subject: string): Promise<number>;
+
+  recordGlobalCost(costUsd: number): Promise<void>;
+
+  getGlobalSpendUsd(): Promise<number>;
 }
 
 export const RATE_LIMIT_PROVIDER = Symbol('RATE_LIMIT_PROVIDER');
