@@ -468,14 +468,16 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                 | Description                                                               |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `ai_enabled`             | Global AI feature gate                                                    |
-| `voice_notes_enabled`    | Voice-to-note feature gate                                                |
-| `agent_hybrid_retrieval` | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))   |
-| `agent_web_search`       | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))     |
-| `agent_byok`             | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))     |
-| `agent_longterm_memory`  | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b)) |
+| Flag Key                 | Description                                                                          |
+| ------------------------ | ------------------------------------------------------------------------------------ |
+| `ai_enabled`             | Global AI feature gate                                                               |
+| `voice_notes_enabled`    | Voice-to-note feature gate                                                           |
+| `agent_hybrid_retrieval` | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))              |
+| `agent_web_search`       | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                |
+| `agent_byok`             | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                |
+| `agent_longterm_memory`  | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))            |
+| `ai_cost_reserve`        | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))    |
+| `ai_byok_cost_gate`      | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok)) |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -959,7 +961,9 @@ Registered users can store their own provider API keys so the copilot runs on **
 
 ### Billing & rate limiting
 
-A BYOK turn records `ai_usage.byok = true`. `getDailyUsage` filters `byok = false`, so BYOK usage **bypasses the per-user daily token/USD budget** (the user pays the provider directly) — but **RPM is still enforced** as an abuse guard. The handler's pre-flight resolves the model + BYOK key **before** `checkLimit`, which then runs RPM-only for BYOK and skips the daily reservation and its correction.
+A BYOK turn records `ai_usage.byok = true`. `getDailyUsage` filters `byok = false`, so BYOK usage **bypasses the per-user daily token/USD budget for LLM usage billed to the user's own key** (the user pays the provider directly) — but **RPM is still enforced** as an abuse guard. The handler's pre-flight resolves the model + BYOK key **before** `checkLimit`, which then runs RPM-only for BYOK and skips the daily reservation and its correction.
+
+**Server-billed side costs are the exception.** Tavily search/fetch and Voyage embeddings are paid by the server regardless of the turn's LLM billing, so they never bypass enforcement: every side cost is recorded via `AIRateLimitService.recordSideCost` (PG row with `byok: false` — the server paid). On a server-billed turn the cost lands on the user's shared daily cost key; on a BYOK turn it accrues to a dedicated `ai:ratelimit:{userId}:byok_cost:{day}` counter with its own ceiling, `AI_BYOK_DAILY_COST_LIMIT_USD` (default `$1.00`/day). Behind the `ai_byok_cost_gate` flag, `checkLimit` refuses further BYOK turns once that ceiling is reached (cost-only comparison; token state never rejects a BYOK turn). The counter is warm even with the flag off, so flipping it enforces against real history.
 
 The key-management endpoint is throttled independently: `PUT /ai/keys/:provider` allows **5 requests/minute scoped to the authenticated user** via `UserScopedThrottlerGuard`, which buckets by user id (falling back to IP when unauthenticated). Because a save probes the live provider, this caps the endpoint's use as a stolen-key validation oracle — the per-user bucket survives IP rotation and never penalizes users sharing a NAT, while the app-level IP `ThrottlerGuard` stays on as a backstop.
 

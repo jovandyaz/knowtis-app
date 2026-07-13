@@ -249,8 +249,16 @@ export class RunAgentTurnHandler {
       }
       const k = this.configService.get('AI_MEMORY_RETRIEVAL_K');
       const min = this.configService.get('AI_MEMORY_SIMILARITY_MIN');
-      const embedding = await this.embed.embedQuery(latestUserContent);
-      const matches = await this.memory.searchForUser(userId, embedding, k);
+      const { vector, costUsd } =
+        await this.embed.embedQuery(latestUserContent);
+      void this.rateLimit.recordSideCost({
+        userId,
+        action: 'embedding',
+        model: this.configService.get('AI_EMBEDDING_MODEL'),
+        costUsd,
+        byokTurn: false,
+      });
+      const matches = await this.memory.searchForUser(userId, vector, k);
       return matches.filter((m) => m.score >= min).map((m) => m.content);
     } catch (error) {
       this.logger.warn(

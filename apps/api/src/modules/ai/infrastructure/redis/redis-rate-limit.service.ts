@@ -183,4 +183,23 @@ export class RedisRateLimitService implements RateLimitProvider {
       this.logger.warn('Redis usage correction failed', error);
     }
   }
+
+  async recordByokCost(subject: string, costUsd: number): Promise<void> {
+    const key = this.byokCostKey(subject);
+    const client = this.redis.client;
+    await client.incrbyfloat(key, costUsd.toFixed(6));
+    if ((await client.ttl(key)) === -1) {
+      await client.expire(key, KEY_TTL_SECONDS);
+    }
+  }
+
+  async getByokCostUsd(subject: string): Promise<number> {
+    const value = await this.redis.client.get(this.byokCostKey(subject));
+    return value === null ? 0 : Number.parseFloat(value);
+  }
+
+  private byokCostKey(subject: string): string {
+    const today = new Date().toISOString().slice(0, 10);
+    return `ai:ratelimit:${subject}:byok_cost:${today}`;
+  }
 }

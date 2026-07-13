@@ -32,6 +32,7 @@ function ctx(phase: AgentToolPhase): AgentToolContext {
   return {
     userId: 'u1',
     phase,
+    byokTurn: false,
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),

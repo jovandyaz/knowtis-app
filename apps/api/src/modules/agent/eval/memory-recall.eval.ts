@@ -100,7 +100,7 @@ describe.runIf(GATE)('memory recall retrieval quality', () => {
   });
 
   it('ranks the vegan fact first for a dietary query', async () => {
-    const queryEmbedding = await embed.embedQuery(
+    const { vector: queryEmbedding } = await embed.embedQuery(
       'what should I cook for dinner?'
     );
     const hits = await repo.searchForUser(USER, queryEmbedding, 6);

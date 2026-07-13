@@ -52,6 +52,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     checkLimit: vi.fn().mockResolvedValue({ allowed: over.allowed ?? true }),
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
+    recordSideCost: vi.fn().mockResolvedValue(undefined),
   } as unknown as AIRateLimitService;
   const config = {
     get: vi.fn((k: string) =>
@@ -111,7 +112,10 @@ function makeMemory(
 
 function makeEmbed() {
   return {
-    embedQuery: vi.fn().mockResolvedValue(new Array(1024).fill(0)),
+    embedQuery: vi.fn().mockResolvedValue({
+      vector: new Array(1024).fill(0),
+      costUsd: 0.001,
+    }),
   } as unknown as EmbeddingPort;
 }
 
@@ -1814,6 +1818,13 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(embed.embedQuery).toHaveBeenCalledWith('what should I cook?');
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'embedding',
+        costUsd: 0.001,
+        byokTurn: false,
+      })
+    );
     expect(memory.searchForUser).toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ userMemories: ['Is vegan'] })

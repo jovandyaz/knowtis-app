@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -30,7 +31,8 @@ export class HybridRetrievalAdapter implements RetrievalPort {
     @Inject(EMBEDDING_PORT)
     private readonly embed: EmbeddingPort,
     private readonly keyword: KeywordRetrievalAdapter,
-    private readonly config: ConfigService<EnvConfig, true>
+    private readonly config: ConfigService<EnvConfig, true>,
+    private readonly rateLimit: AIRateLimitService
   ) {}
 
   async search(userId: string, query: string): Promise<NoteHit[]> {
@@ -49,8 +51,16 @@ export class HybridRetrievalAdapter implements RetrievalPort {
 
     let vector: NoteHit[] = [];
     try {
-      const queryVector = await this.embed.embedQuery(query);
+      const { vector: queryVector, costUsd } =
+        await this.embed.embedQuery(query);
       const model = this.config.get('AI_EMBEDDING_MODEL');
+      void this.rateLimit.recordSideCost({
+        userId,
+        action: 'embedding',
+        model,
+        costUsd,
+        byokTurn: false,
+      });
       const vectorRows = await this.notes.findAccessibleNotesByEmbedding(
         user,
         queryVector,

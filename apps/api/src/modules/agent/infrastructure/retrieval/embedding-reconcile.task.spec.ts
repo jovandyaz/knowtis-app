@@ -96,6 +96,7 @@ describe('EmbeddingReconcileTask', () => {
     vi.mocked(embed.embedDocuments).mockResolvedValueOnce({
       embeddings: [],
       totalTokens: 0,
+      costUsd: 0,
     });
     await task.reconcile();
     expect(repo.upsert).not.toHaveBeenCalled();
