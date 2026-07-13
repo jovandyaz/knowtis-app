@@ -42,6 +42,7 @@ describe('InjectionGuardService', () => {
 
     await expect(guard.guard(HEURISTIC_HIT, 'u1')).resolves.toEqual({
       safe: false,
+      score: 1,
     });
     expect(classifier.classify).not.toHaveBeenCalled();
   });
@@ -53,7 +54,10 @@ describe('InjectionGuardService', () => {
     });
     const { guard, classifier } = make({ flagOn: true });
 
-    await expect(guard.guard(CLEAN, 'u1')).resolves.toEqual({ safe: true });
+    await expect(guard.guard(CLEAN, 'u1')).resolves.toEqual({
+      safe: true,
+      score: 0.1,
+    });
     expect(classifier.classify).not.toHaveBeenCalled();
   });
 
@@ -66,6 +70,7 @@ describe('InjectionGuardService', () => {
 
     await expect(guard.guard(GRAY_ZONE, 'u1')).resolves.toEqual({
       safe: false,
+      score: 0.4,
     });
     expect(classifier.classify).toHaveBeenCalledWith(GRAY_ZONE, 'u1');
   });
@@ -77,7 +82,10 @@ describe('InjectionGuardService', () => {
     });
     const { guard, classifier } = make({ flagOn: false });
 
-    await expect(guard.guard(GRAY_ZONE, 'u1')).resolves.toEqual({ safe: true });
+    await expect(guard.guard(GRAY_ZONE, 'u1')).resolves.toEqual({
+      safe: true,
+      score: 0.4,
+    });
     expect(classifier.classify).not.toHaveBeenCalled();
   });
 
@@ -88,7 +96,10 @@ describe('InjectionGuardService', () => {
     });
     const { guard, classifier, featureFlags } = make({ flagThrows: true });
 
-    await expect(guard.guard(GRAY_ZONE, 'u1')).resolves.toEqual({ safe: true });
+    await expect(guard.guard(GRAY_ZONE, 'u1')).resolves.toEqual({
+      safe: true,
+      score: 0.5,
+    });
     expect(featureFlags.isEnabled).toHaveBeenCalledWith(
       FEATURE_FLAG_KEYS.AGENT_INJECTION_CLASSIFIER
     );

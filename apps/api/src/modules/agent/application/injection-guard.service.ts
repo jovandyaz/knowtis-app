@@ -9,11 +9,18 @@ import {
 } from '../../ai/application/services/injection-classifier.service';
 import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
 
+/** Verdict from {@link InjectionGuardService.guard}: `score` is the heuristic injection score (0–1) that drove `safe`. */
+export interface InjectionVerdict {
+  safe: boolean;
+  score: number;
+}
+
 /**
  * Single owner of the prompt-injection escalation policy shared by the agent
- * turn handler and the web-fetch tool: heuristic guard, then a model classifier
- * for gray-zone scores when `agent_injection_classifier` is on. Fail-open on the
- * flag lookup (treated as off) so a flag-store outage never blocks a turn.
+ * turn handler, the web-fetch tool, and retrieved-note scanning: heuristic
+ * guard, then a model classifier for gray-zone scores when
+ * `agent_injection_classifier` is on. Fail-open on the flag lookup (treated as
+ * off) so a flag-store outage never blocks a turn.
  */
 @Injectable()
 export class InjectionGuardService {
@@ -24,18 +31,19 @@ export class InjectionGuardService {
     private readonly featureFlags: FeatureFlagsService
   ) {}
 
-  async guard(text: string, userId: string): Promise<{ safe: boolean }> {
+  async guard(text: string, userId: string): Promise<InjectionVerdict> {
     const check = detectPromptInjection(text);
     if (!check.safe) {
-      return { safe: false };
+      return { safe: false, score: check.score };
     }
     if (
       check.score >= INJECTION_GRAY_ZONE_MIN &&
       (await this.classifierFlagOn())
     ) {
-      return this.injectionClassifier.classify(text, userId);
+      const verdict = await this.injectionClassifier.classify(text, userId);
+      return { safe: verdict.safe, score: check.score };
     }
-    return { safe: true };
+    return { safe: true, score: check.score };
   }
 
   private async classifierFlagOn(): Promise<boolean> {

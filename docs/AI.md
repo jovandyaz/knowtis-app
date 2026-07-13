@@ -286,6 +286,8 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 **Gray-zone classifier (flag `agent_injection_classifier`, default off):** heuristic scores in `0.3 ≤ score < 0.6` get a second, language-independent opinion from an LLM judge (`AI_GUARD_CLASSIFIER_MODEL`, default `anthropic:claude-haiku-4-5-20251001`) at the copilot's latest-user-message guard and on `webFetch` content. It is a single direct AI SDK call with its own 5s timeout — deliberately outside the fallback chain so classifier failures never open the shared provider breaker — and it **fails open** on any classifier error. An `injection: true` verdict blocks exactly like a heuristic hit; token spend is recorded as the server-billed `injection_classifier` side cost, and telemetry never records the suspected-hostile content.
 
+**Retrieved-note body scanning (flag `agent_scan_retrieved_notes`, default off):** every note body returned by the agent's `getNote` is run through `detectPromptInjection` after truncation — keyword and hybrid retrieval both resolve bodies at this single site, so one scan covers both modes. A heuristic hit (score ≥ 0.6), or a gray-zone score the classifier confirms unsafe (only when `agent_injection_classifier` is also on — the classifier flag governs every paid classifier call), replaces the body with the fenced stub `[Note content withheld: it failed the injection safety check]` (title and metadata preserved) and logs `agent.retrieval.content_blocked` with the note id and score. A failing flag lookup degrades to off, so retrieval never breaks on flag-store errors. Note **titles are deliberately not scanned**: they are short, weak carriers, already JSON-escaped and DATA-caveated in the known-notes block, and scanning them would put the guard in every search hit's hot path. Flip checklist: guard corpus green in CI, the copilot eval cases green (the guard-bait Spanish note still answered, the exfiltration note not obeyed), and `agent.retrieval.content_blocked` telemetry quiet while dark.
+
 **Logged as:** `ai.request.injection_blocked` with score and reason.
 
 **Defense-in-depth (egress + data-fencing):** the regex guard is best-effort, so untrusted content is also structurally contained:
@@ -487,6 +489,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                          |
 | `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                      |
 | `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)); ships dark |
+| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense)); ships dark        |
 | `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                              |
 | `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                           |
 | `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark  |
