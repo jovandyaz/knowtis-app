@@ -20,6 +20,7 @@ import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
 import { ByokService } from './application/services/byok.service';
+import { InjectionClassifierService } from './application/services/injection-classifier.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
 import {
   PromptLoaderService,
@@ -103,6 +104,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AICompletionPipeline,
     AIMetricsService,
     AIRateLimitService,
+    InjectionClassifierService,
     CompleteTextHandler,
     StreamTextHandler,
     VoiceNoteHandler,
@@ -119,6 +121,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AIMetricsService,
     AIOrchestrator,
     AIRateLimitService,
+    InjectionClassifierService,
     AI_STRUCTURED_OUTPUT_PROVIDER,
     AI_REDIS,
     EMBEDDING_PORT,

@@ -23,6 +23,9 @@ const envSchemaBase = z.object({
   OPENAI_API_KEY: z.string().optional(),
   AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-4-6'),
   AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
+  AI_GUARD_CLASSIFIER_MODEL: z
+    .string()
+    .default('anthropic:claude-haiku-4-5-20251001'),
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
   AI_BYOK_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),

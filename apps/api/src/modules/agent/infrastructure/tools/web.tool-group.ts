@@ -11,14 +11,21 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
+  INJECTION_GRAY_ZONE_MIN,
+  InjectionClassifierService,
+} from '../../../ai/application/services/injection-classifier.service';
+import {
   WEB_SEARCH_PORT,
   type WebSearchPort,
 } from '../../../ai/domain/ports/web-search.port';
+import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 
 const MAX_WEB_HITS = 5;
 const MAX_WEB_SNIPPET_CHARS = 1500;
 const MAX_WEB_FETCH_CHARS = 8000;
+const FETCH_DROPPED_NOTE =
+  'Fetched content failed the safety check and was dropped.';
 
 @Injectable()
 export class WebToolGroup implements AgentToolGroup {
@@ -28,7 +35,9 @@ export class WebToolGroup implements AgentToolGroup {
 
   constructor(
     @Inject(WEB_SEARCH_PORT) private readonly web: WebSearchPort,
-    private readonly rateLimit: AIRateLimitService
+    private readonly rateLimit: AIRateLimitService,
+    private readonly featureFlags: FeatureFlagsService,
+    private readonly injectionClassifier: InjectionClassifierService
   ) {}
 
   availableIn(): boolean {
@@ -79,11 +88,21 @@ export class WebToolGroup implements AgentToolGroup {
           }
           const result = await this.web.fetch(url);
           await this.recordCost(ctx, result.costUsd);
-          if (!detectPromptInjection(result.content).safe) {
-            return {
-              note: 'Fetched content failed the safety check and was dropped.',
-              url,
-            };
+          const check = detectPromptInjection(result.content);
+          if (!check.safe) {
+            return { note: FETCH_DROPPED_NOTE, url };
+          }
+          if (
+            check.score >= INJECTION_GRAY_ZONE_MIN &&
+            (await this.classifierFlagOn())
+          ) {
+            const verdict = await this.injectionClassifier.classify(
+              result.content,
+              ctx.userId
+            );
+            if (!verdict.safe) {
+              return { note: FETCH_DROPPED_NOTE, url };
+            }
           }
           ctx.webSources.add({ title: result.title ?? url, url });
           return {
@@ -94,6 +113,19 @@ export class WebToolGroup implements AgentToolGroup {
         },
       }),
     };
+  }
+
+  private async classifierFlagOn(): Promise<boolean> {
+    try {
+      return await this.featureFlags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_INJECTION_CLASSIFIER
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Injection classifier flag lookup failed, treating as off: ${error instanceof Error ? error.message : 'unknown'}`
+      );
+      return false;
+    }
   }
 
   private async recordCost(

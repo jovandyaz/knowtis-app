@@ -14,6 +14,10 @@ import { FEATURE_FLAG_KEYS, type ByokProvider } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../config/env.config';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
+import {
+  INJECTION_GRAY_ZONE_MIN,
+  InjectionClassifierService,
+} from '../../ai/application/services/injection-classifier.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
@@ -131,7 +135,8 @@ export class RunAgentTurnHandler {
     private readonly embed: EmbeddingPort,
     private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
-    private readonly byok: ByokService
+    private readonly byok: ByokService,
+    private readonly injectionClassifier: InjectionClassifierService
   ) {}
 
   async execute(
@@ -447,9 +452,23 @@ export class RunAgentTurnHandler {
         );
         return;
       }
-      if (!detectPromptInjection(lastUserMessage.content).safe) {
+      const check = detectPromptInjection(lastUserMessage.content);
+      if (!check.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
         return;
+      }
+      if (
+        check.score >= INJECTION_GRAY_ZONE_MIN &&
+        (await this.classifierFlagOn())
+      ) {
+        const verdict = await this.injectionClassifier.classify(
+          lastUserMessage.content,
+          input.userId
+        );
+        if (!verdict.safe) {
+          callbacks.onError(AIErrors.promptInjectionDetected());
+          return;
+        }
       }
     }
     // Unsafe older messages are dropped instead of failing the turn: the
@@ -755,6 +774,20 @@ export class RunAgentTurnHandler {
         : {}),
     });
     return tokenUsage.costUsd;
+  }
+
+  private async classifierFlagOn(): Promise<boolean> {
+    try {
+      return await this.featureFlags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_INJECTION_CLASSIFIER
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Injection classifier flag lookup failed, treating as off',
+        error instanceof Error ? error.message : String(error)
+      );
+      return false;
+    }
   }
 
   private isSafeHistoryMessage(message: AgentMessage, userId: string): boolean {
