@@ -961,6 +961,8 @@ Registered users can store their own provider API keys so the copilot runs on **
 
 A BYOK turn records `ai_usage.byok = true`. `getDailyUsage` filters `byok = false`, so BYOK usage **bypasses the per-user daily token/USD budget** (the user pays the provider directly) — but **RPM is still enforced** as an abuse guard. The handler's pre-flight resolves the model + BYOK key **before** `checkLimit`, which then runs RPM-only for BYOK and skips the daily reservation and its correction.
 
+The key-management endpoint is throttled independently: `PUT /ai/keys/:provider` allows **5 requests/minute scoped to the authenticated user** via `UserScopedThrottlerGuard`, which buckets by user id (falling back to IP when unauthenticated). Because a save probes the live provider, this caps the endpoint's use as a stolen-key validation oracle — the per-user bucket survives IP rotation and never penalizes users sharing a NAT, while the app-level IP `ThrottlerGuard` stays on as a backstop.
+
 ### Model picker signal
 
 `SelectableModelsService.list` sets `SelectableModel.billedToUser = true` for every model whose provider the caller has a stored key for. `ModelSelect` (`@knowtis/design-system`) renders a **"Tu clave" / "Your key"** badge with a key icon on those models — the selection-time signal that the turn bills the user's key (the industry-standard BYOK UX). It is wired in both consumers: `CopilotModelPicker` (chat) and `AIAssistantSection` (settings).
