@@ -5,6 +5,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import type {
   EmbeddingPort,
   EmbeddingResult,
+  QueryEmbedding,
 } from '../../domain/ports/embedding.port';
 
 const VOYAGE_URL = 'https://api.voyageai.com/v1/embeddings';
@@ -18,14 +19,14 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort {
 
   constructor(private readonly config: ConfigService<EnvConfig, true>) {}
 
-  async embedQuery(text: string): Promise<number[]> {
-    const { embeddings } = await this.call([text], 'query');
-    return embeddings[0];
+  async embedQuery(text: string): Promise<QueryEmbedding> {
+    const { embeddings, costUsd } = await this.call([text], 'query');
+    return { vector: embeddings[0], costUsd };
   }
 
   async embedDocuments(texts: string[]): Promise<EmbeddingResult> {
     if (texts.length === 0) {
-      return { embeddings: [], totalTokens: 0 };
+      return { embeddings: [], totalTokens: 0, costUsd: 0 };
     }
     return this.call(texts, 'document');
   }
@@ -76,14 +77,10 @@ export class VoyageEmbeddingAdapter implements EmbeddingPort {
       );
     }
     const totalTokens = json.usage?.total_tokens ?? 0;
-    this.logCost(inputType, totalTokens);
-    return { embeddings, totalTokens };
-  }
-
-  private logCost(inputType: 'query' | 'document', totalTokens: number): void {
     const costUsd = (totalTokens / 1_000_000) * PRICE_PER_1M_TOKENS_USD;
     this.logger.log(
       `Voyage embedding (${inputType}): ${totalTokens} tokens ~= $${costUsd.toFixed(6)}`
     );
+    return { embeddings, totalTokens, costUsd };
   }
 }

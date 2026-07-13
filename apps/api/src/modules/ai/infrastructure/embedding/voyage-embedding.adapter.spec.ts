@@ -44,9 +44,10 @@ describe('VoyageEmbeddingAdapter', () => {
       })
     );
 
-    const vec = await adapter.embedQuery('hello');
+    const result = await adapter.embedQuery('hello');
 
-    expect(vec).toEqual([0.1, 0.2]);
+    expect(result.vector).toEqual([0.1, 0.2]);
+    expect(result.costUsd).toBeCloseTo((3 / 1_000_000) * 0.12, 12);
     const body = JSON.parse(
       (fetchSpy.mock.calls[0][1] as RequestInit).body as string
     );
@@ -80,10 +81,26 @@ describe('VoyageEmbeddingAdapter', () => {
       [0, 1],
     ]);
     expect(result.totalTokens).toBe(10);
+    expect(result.costUsd).toBeCloseTo((10 / 1_000_000) * 0.12, 12);
     const body = JSON.parse(
       (fetchSpy.mock.calls[0][1] as RequestInit).body as string
     );
     expect(body.input_type).toBe('document');
+  });
+
+  it('embedDocuments returns zero cost for empty input without calling Voyage', async () => {
+    const adapter = new VoyageEmbeddingAdapter(
+      makeConfig({
+        VOYAGE_API_KEY: 'k',
+        AI_EMBEDDING_MODEL: 'voyage-4',
+        AI_TIMEOUT_MS: 30000,
+      })
+    );
+
+    const result = await adapter.embedDocuments([]);
+
+    expect(result).toEqual({ embeddings: [], totalTokens: 0, costUsd: 0 });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it('throws when VOYAGE_API_KEY is missing', async () => {

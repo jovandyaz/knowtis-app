@@ -116,6 +116,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     const toolContext: AgentToolContext = {
       userId: input.userId,
       phase: input.resume ? 'readonly' : 'full',
+      byokTurn: Boolean(input.byokApiKey),
       proposals,
       webSources: webSourceCollector,
       webFetchAllowlist,

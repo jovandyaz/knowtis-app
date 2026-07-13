@@ -171,6 +171,8 @@ describe('AIRateLimitService', () => {
       mockRateLimitProvider = {
         checkRpm: vi.fn(),
         checkAndIncrement: vi.fn(),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
         correctUsage: vi.fn(),
       };
       const mockConfig = createMockConfig();
@@ -402,6 +404,8 @@ describe('AIRateLimitService', () => {
       mockRateLimitProvider = {
         checkRpm: vi.fn(),
         checkAndIncrement: vi.fn(),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
         correctUsage: vi.fn().mockResolvedValue(undefined),
       };
       alerts = { notify: vi.fn() };
@@ -510,6 +514,8 @@ describe('AIRateLimitService', () => {
           currentCostUsd: 0,
         }),
         correctUsage: vi.fn().mockResolvedValue(undefined),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
       };
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
       vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
@@ -706,6 +712,147 @@ describe('AIRateLimitService', () => {
       const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
 
       expect(result.allowed).toBe(true);
+    });
+  });
+
+  describe('BYOK side-cost ceiling and recordSideCost', () => {
+    let provider: RateLimitProvider;
+    let flags: { isEnabled: ReturnType<typeof vi.fn> };
+    let gated: AIRateLimitService;
+
+    beforeEach(() => {
+      provider = {
+        checkRpm: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        checkAndIncrement: vi.fn(),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
+      };
+      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+      gated = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        provider,
+        undefined,
+        undefined,
+        flags as unknown as FeatureFlagsService
+      );
+      vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+    });
+
+    it('refuses a byok turn at the byok cost ceiling when the gate flag is on', async () => {
+      vi.mocked(provider.getByokCostUsd).mockResolvedValue(1.0);
+
+      const result = await gated.checkLimit('user-123', 100, false, true);
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toMatch(/cost/i);
+      expect(provider.checkAndIncrement).not.toHaveBeenCalled();
+    });
+
+    it('allows the byok turn under the same counter state when the gate flag is off', async () => {
+      flags.isEnabled.mockResolvedValue(false);
+      vi.mocked(provider.getByokCostUsd).mockResolvedValue(1.0);
+
+      const result = await gated.checkLimit('user-123', 100, false, true);
+
+      expect(result.allowed).toBe(true);
+      expect(provider.getByokCostUsd).not.toHaveBeenCalled();
+    });
+
+    it('allows the byok turn when side costs sit under the ceiling', async () => {
+      vi.mocked(provider.getByokCostUsd).mockResolvedValue(0.4);
+
+      const result = await gated.checkLimit('user-123', 100, false, true);
+
+      expect(result.allowed).toBe(true);
+    });
+
+    it('degrades open when the byok cost lookup fails', async () => {
+      vi.mocked(provider.getByokCostUsd).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      const result = await gated.checkLimit('user-123', 100, false, true);
+
+      expect(result.allowed).toBe(true);
+    });
+
+    it('routes a byok-turn side cost to the dedicated byok counter, never the shared key', async () => {
+      await gated.recordSideCost({
+        userId: 'u1',
+        action: 'agent_web_search',
+        model: 'tavily',
+        costUsd: 0.008,
+        byokTurn: true,
+      });
+
+      expect(provider.recordByokCost).toHaveBeenCalledWith('u1', 0.008);
+      expect(provider.correctUsage).not.toHaveBeenCalled();
+      expect(mockUsageRepo.recordUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 'u1',
+          action: 'agent_web_search',
+          model: 'tavily',
+          costUsd: 0.008,
+          inputTokens: 0,
+          outputTokens: 0,
+          byok: false,
+        })
+      );
+    });
+
+    it('routes a server-turn side cost into the shared cost key', async () => {
+      await gated.recordSideCost({
+        userId: 'u1',
+        action: 'embedding',
+        model: 'voyage-3.5',
+        costUsd: 0.002,
+        byokTurn: false,
+      });
+
+      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
+      expect(provider.recordByokCost).not.toHaveBeenCalled();
+    });
+
+    it('still persists the PG row when Redis routing fails', async () => {
+      vi.mocked(provider.correctUsage).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      await expect(
+        gated.recordSideCost({
+          userId: 'u1',
+          action: 'embedding',
+          model: 'voyage-3.5',
+          costUsd: 0.002,
+          byokTurn: false,
+        })
+      ).resolves.toBeUndefined();
+
+      expect(mockUsageRepo.recordUsage).toHaveBeenCalled();
+    });
+
+    it('never throws when the PG write fails and still routes the Redis cost', async () => {
+      vi.mocked(mockUsageRepo.recordUsage).mockRejectedValue(
+        new Error('db down')
+      );
+
+      await expect(
+        gated.recordSideCost({
+          userId: 'u1',
+          action: 'embedding',
+          model: 'voyage-3.5',
+          costUsd: 0.002,
+          byokTurn: false,
+        })
+      ).resolves.toBeUndefined();
+
+      expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
     });
   });
 });

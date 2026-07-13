@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type { AIUsageRepository } from '../../../ai/domain/ports/ai-usage.repository';
+import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { WebSearchPort } from '../../../ai/domain/ports/web-search.port';
 import { ProposalCollector } from '../orchestrator/proposal-collector';
 import { WebFetchAllowlist } from '../orchestrator/web-fetch-allowlist';
@@ -8,14 +8,21 @@ import { WebSourceCollector } from '../orchestrator/web-source.collector';
 import type { AgentToolContext } from './agent-tool';
 import { WebToolGroup } from './web.tool-group';
 
-function ctx(): AgentToolContext {
+function ctx(byokTurn = false): AgentToolContext {
   return {
     userId: 'u1',
     phase: 'full',
+    byokTurn,
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),
   };
+}
+
+function makeRateLimit(): AIRateLimitService {
+  return {
+    recordSideCost: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AIRateLimitService;
 }
 
 function run(
@@ -32,7 +39,7 @@ function run(
 
 describe('WebToolGroup', () => {
   it('should be gated by the agent_web_search flag and available in both phases', () => {
-    const g = new WebToolGroup({} as WebSearchPort, {} as AIUsageRepository);
+    const g = new WebToolGroup({} as WebSearchPort, {} as AIRateLimitService);
     expect(g.flag).toBe('agent_web_search');
     expect(g.availableIn()).toBe(true);
   });
@@ -60,11 +67,9 @@ describe('WebToolGroup', () => {
       }),
       fetch: vi.fn(),
     } as unknown as WebSearchPort;
-    const usage = {
-      recordUsage: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AIUsageRepository;
+    const rateLimit = makeRateLimit();
     const c = ctx();
-    const out = (await run(new WebToolGroup(web, usage), c, 'webSearch', {
+    const out = (await run(new WebToolGroup(web, rateLimit), c, 'webSearch', {
       query: 'q',
     })) as {
       results: { url: string }[];
@@ -74,12 +79,31 @@ describe('WebToolGroup', () => {
     expect(c.webSources.all).toEqual([
       { title: 'Good', url: 'https://good.com' },
     ]);
-    expect(usage.recordUsage).toHaveBeenCalledWith(
-      expect.objectContaining({
-        userId: 'u1',
-        action: 'agent_web_search',
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith({
+      userId: 'u1',
+      action: 'agent_web_search',
+      model: 'tavily',
+      costUsd: 0.008,
+      byokTurn: false,
+    });
+  });
+
+  it('webSearch should forward byokTurn from the tool context', async () => {
+    const web = {
+      search: vi.fn().mockResolvedValue({
+        query: 'q',
+        answer: undefined,
+        hits: [],
         costUsd: 0.008,
-      })
+      }),
+      fetch: vi.fn(),
+    } as unknown as WebSearchPort;
+    const rateLimit = makeRateLimit();
+    await run(new WebToolGroup(web, rateLimit), ctx(true), 'webSearch', {
+      query: 'q',
+    });
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith(
+      expect.objectContaining({ byokTurn: true })
     );
   });
 
@@ -101,12 +125,15 @@ describe('WebToolGroup', () => {
       }),
       fetch: vi.fn(),
     } as unknown as WebSearchPort;
-    const usage = {
-      recordUsage: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AIUsageRepository;
-    const out = (await run(new WebToolGroup(web, usage), ctx(), 'webSearch', {
-      query: 'q',
-    })) as { answer?: string; results: { url: string }[] };
+    const rateLimit = makeRateLimit();
+    const out = (await run(
+      new WebToolGroup(web, rateLimit),
+      ctx(),
+      'webSearch',
+      {
+        query: 'q',
+      }
+    )) as { answer?: string; results: { url: string }[] };
     expect(out.answer).toBeUndefined();
     expect(out.results).toHaveLength(1);
   });
@@ -116,16 +143,14 @@ describe('WebToolGroup', () => {
       search: vi.fn(),
       fetch: vi.fn(),
     } as unknown as WebSearchPort;
-    const usage = {
-      recordUsage: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AIUsageRepository;
+    const rateLimit = makeRateLimit();
     const c = ctx();
-    const out = (await run(new WebToolGroup(web, usage), c, 'webFetch', {
+    const out = (await run(new WebToolGroup(web, rateLimit), c, 'webFetch', {
       url: 'javascript:alert(1)',
     })) as { note: string };
     expect(out.note).toMatch(/http/);
     expect(web.fetch).not.toHaveBeenCalled();
-    expect(usage.recordUsage).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
     expect(c.webSources.all).toEqual([]);
   });
 
@@ -138,25 +163,23 @@ describe('WebToolGroup', () => {
         costUsd: 0.008,
       }),
     } as unknown as WebSearchPort;
-    const usage = {
-      recordUsage: vi.fn().mockResolvedValue(undefined),
-    } as unknown as AIUsageRepository;
+    const rateLimit = makeRateLimit();
     const c = ctx();
     c.webFetchAllowlist.add('https://x.com');
-    const out = (await run(new WebToolGroup(web, usage), c, 'webFetch', {
+    const out = (await run(new WebToolGroup(web, rateLimit), c, 'webFetch', {
       url: 'https://x.com',
     })) as {
       note: string;
     };
     expect(out.note).toMatch(/safety check/);
     expect(c.webSources.all).toEqual([]);
-    expect(usage.recordUsage).toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).toHaveBeenCalled();
   });
 
   it('refuses to fetch a url that is not on the allowlist', async () => {
     const web = { search: vi.fn(), fetch: vi.fn() } as unknown as WebSearchPort;
-    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
-    const group = new WebToolGroup(web, usage);
+    const rateLimit = makeRateLimit();
+    const group = new WebToolGroup(web, rateLimit);
     const c = ctx();
     c.webFetchAllowlist.seedFromText('no links here');
 
@@ -167,7 +190,7 @@ describe('WebToolGroup', () => {
     expect(res.note).toMatch(/not in the user message or a prior web search/i);
     expect(res.content).toBeUndefined();
     expect(web.fetch).not.toHaveBeenCalled();
-    expect(usage.recordUsage).not.toHaveBeenCalled();
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 
   it('fetches a root url the user provided even without a trailing slash', async () => {
@@ -179,8 +202,7 @@ describe('WebToolGroup', () => {
         costUsd: 0,
       }),
     } as unknown as WebSearchPort;
-    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
-    const group = new WebToolGroup(web, usage);
+    const group = new WebToolGroup(web, makeRateLimit());
     const c = ctx();
     c.webFetchAllowlist.seedFromText('read https://example.com');
 
@@ -200,8 +222,7 @@ describe('WebToolGroup', () => {
         costUsd: 0,
       }),
     } as unknown as WebSearchPort;
-    const usage = { recordUsage: vi.fn() } as unknown as AIUsageRepository;
-    const group = new WebToolGroup(web, usage);
+    const group = new WebToolGroup(web, makeRateLimit());
     const c = ctx();
     c.webFetchAllowlist.seedFromText('read https://example.com/a');
 

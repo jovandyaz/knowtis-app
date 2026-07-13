@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { EmbeddingPort } from '../../../ai/domain/ports/embedding.port';
 import type { NoteReadRepository } from '../../../notes/domain/ports/note-read.repository';
 import { HybridRetrievalAdapter } from './hybrid-retrieval.adapter';
@@ -34,7 +35,7 @@ function make(opts: {
       if (opts.embedThrows) {
         throw new Error('voyage down');
       }
-      return new Array(1024).fill(0);
+      return { vector: new Array(1024).fill(0), costUsd: 0.001 };
     }),
     embedDocuments: vi.fn(),
   } as unknown as EmbeddingPort;
@@ -47,10 +48,20 @@ function make(opts: {
   const config = {
     get: () => 'voyage-4',
   } as unknown as ConfigService<Record<string, unknown>, true>;
+  const rateLimit = {
+    recordSideCost: vi.fn().mockResolvedValue(undefined),
+  } as unknown as AIRateLimitService;
   return {
-    adapter: new HybridRetrievalAdapter(repo, embed, keyword, config),
+    adapter: new HybridRetrievalAdapter(
+      repo,
+      embed,
+      keyword,
+      config,
+      rateLimit
+    ),
     repo,
     embed,
+    rateLimit,
   };
 }
 
@@ -59,6 +70,18 @@ describe('HybridRetrievalAdapter.search', () => {
     const { adapter } = make({ lexical: ['a', 'b'], vector: ['b', 'c'] });
     const hits = await adapter.search('u1', 'q');
     expect(hits[0].id).toBe('b');
+  });
+
+  it('records the query-embedding side cost against the requesting user', async () => {
+    const { adapter, rateLimit } = make({ lexical: ['a'], vector: ['a'] });
+    await adapter.search('u1', 'q');
+    expect(rateLimit.recordSideCost).toHaveBeenCalledWith({
+      userId: 'u1',
+      action: 'embedding',
+      model: 'voyage-4',
+      costUsd: 0.001,
+      byokTurn: false,
+    });
   });
 
   it('falls back to lexical-only when embedding fails', async () => {
@@ -70,5 +93,15 @@ describe('HybridRetrievalAdapter.search', () => {
     const hits = await adapter.search('u1', 'q');
     expect(hits.map((h) => h.id)).toEqual(['a']);
     expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
+  });
+
+  it('does not record a side cost when the embedding call fails', async () => {
+    const { adapter, rateLimit } = make({
+      lexical: ['a'],
+      vector: [],
+      embedThrows: true,
+    });
+    await adapter.search('u1', 'q');
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
   });
 });

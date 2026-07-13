@@ -82,6 +82,19 @@ end
 return {1, current + 1}
 `;
 
+const BYOK_COST_LUA = `
+local key = KEYS[1]
+local increment = ARGV[1]
+local ttl = tonumber(ARGV[2])
+
+local new_cost = redis.call('INCRBYFLOAT', key, increment)
+if redis.call('TTL', key) == -1 then
+  redis.call('EXPIRE', key, ttl)
+end
+
+return new_cost
+`;
+
 const KEY_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
@@ -182,5 +195,26 @@ export class RedisRateLimitService implements RateLimitProvider {
     } catch (error) {
       this.logger.warn('Redis usage correction failed', error);
     }
+  }
+
+  async recordByokCost(subject: string, costUsd: number): Promise<void> {
+    const key = this.byokCostKey(subject);
+    await this.redis.client.eval(
+      BYOK_COST_LUA,
+      1,
+      key,
+      costUsd.toFixed(6),
+      KEY_TTL_SECONDS
+    );
+  }
+
+  async getByokCostUsd(subject: string): Promise<number> {
+    const value = await this.redis.client.get(this.byokCostKey(subject));
+    return value === null ? 0 : Number.parseFloat(value);
+  }
+
+  private byokCostKey(subject: string): string {
+    const today = new Date().toISOString().slice(0, 10);
+    return `ai:ratelimit:${subject}:byok_cost:${today}`;
   }
 }

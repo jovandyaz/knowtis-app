@@ -11,6 +11,7 @@ export type AgentToolPhase = 'full' | 'readonly';
 export interface AgentToolContext {
   readonly userId: string;
   readonly phase: AgentToolPhase;
+  readonly byokTurn: boolean;
   readonly proposals: ProposalCollector;
   readonly webSources: WebSourceCollector;
   readonly webFetchAllowlist: WebFetchAllowlist;

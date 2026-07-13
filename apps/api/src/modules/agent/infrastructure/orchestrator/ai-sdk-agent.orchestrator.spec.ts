@@ -235,7 +235,18 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(contexts.at(-1)).toMatchObject({
       userId: 'user-42',
       phase: 'full',
+      byokTurn: false,
     });
+  });
+
+  it('marks the tool context as a byok turn when a byok key is in scope', async () => {
+    const contexts: AgentToolContext[] = [];
+    const registry = makeToolRegistry((ctx) => contexts.push(ctx));
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
+
+    await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
+
+    expect(contexts.at(-1)).toMatchObject({ byokTurn: true });
   });
 
   it('emits a proposal event when a propose-tool captures into the collector', async () => {

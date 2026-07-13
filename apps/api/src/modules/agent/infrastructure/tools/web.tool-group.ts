@@ -9,10 +9,7 @@ import {
 } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
-import {
-  AI_USAGE_REPOSITORY,
-  type AIUsageRepository,
-} from '../../../ai/domain/ports/ai-usage.repository';
+import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   WEB_SEARCH_PORT,
   type WebSearchPort,
@@ -31,7 +28,7 @@ export class WebToolGroup implements AgentToolGroup {
 
   constructor(
     @Inject(WEB_SEARCH_PORT) private readonly web: WebSearchPort,
-    @Inject(AI_USAGE_REPOSITORY) private readonly usage: AIUsageRepository
+    private readonly rateLimit: AIRateLimitService
   ) {}
 
   availableIn(): boolean {
@@ -46,7 +43,7 @@ export class WebToolGroup implements AgentToolGroup {
         inputSchema: z.object({ query: z.string().min(1).max(400) }),
         execute: async ({ query }) => {
           const result = await this.web.search(query);
-          await this.recordCost(ctx.userId, result.costUsd);
+          await this.recordCost(ctx, result.costUsd);
           const safe = filterExternalHits(result.hits, {
             maxHits: MAX_WEB_HITS,
             maxChars: MAX_WEB_SNIPPET_CHARS,
@@ -81,7 +78,7 @@ export class WebToolGroup implements AgentToolGroup {
             };
           }
           const result = await this.web.fetch(url);
-          await this.recordCost(ctx.userId, result.costUsd);
+          await this.recordCost(ctx, result.costUsd);
           if (!detectPromptInjection(result.content).safe) {
             return {
               note: 'Fetched content failed the safety check and was dropped.',
@@ -99,15 +96,17 @@ export class WebToolGroup implements AgentToolGroup {
     };
   }
 
-  private async recordCost(userId: string, costUsd: number): Promise<void> {
+  private async recordCost(
+    ctx: AgentToolContext,
+    costUsd: number
+  ): Promise<void> {
     try {
-      await this.usage.recordUsage({
-        userId,
+      await this.rateLimit.recordSideCost({
+        userId: ctx.userId,
         action: 'agent_web_search',
         model: 'tavily',
-        inputTokens: 0,
-        outputTokens: 0,
         costUsd,
+        byokTurn: ctx.byokTurn,
       });
     } catch (error) {
       this.logger.warn(

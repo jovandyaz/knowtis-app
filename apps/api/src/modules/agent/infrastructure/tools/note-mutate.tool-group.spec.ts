@@ -17,6 +17,7 @@ function ctx(): AgentToolContext {
   return {
     userId: 'u1',
     phase: 'full',
+    byokTurn: false,
     proposals: new ProposalCollector(),
     webSources: new WebSourceCollector(),
     webFetchAllowlist: new WebFetchAllowlist(),

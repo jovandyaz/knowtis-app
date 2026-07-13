@@ -88,10 +88,14 @@ export class AIRateLimitService {
         this.logger.warn('Redis RPM check unavailable, skipping', error);
       }
 
-      // BYOK turns bill the user's own provider key, so they bypass the daily
-      // token/cost budget and only enforce RPM. Fall back to the PG RPM backstop
-      // when the Redis RPM check was unavailable.
+      // BYOK turns bill the user's key: no daily budget, only RPM plus (behind
+      // ai_byok_cost_gate) a ceiling on server-billed side costs. PG RPM
+      // backstop applies when the Redis RPM check was unavailable.
       if (byok) {
+        const byokGate = await this.checkByokCostCeiling(userId);
+        if (!byokGate.allowed) {
+          return byokGate;
+        }
         return rpmChecked
           ? { allowed: true }
           : this.checkLimitViaPg(userId, estimatedTokens, 0, limits, true);
@@ -123,6 +127,94 @@ export class AIRateLimitService {
       limits,
       byok
     );
+  }
+
+  private async checkByokCostCeiling(userId: string): Promise<RateLimitResult> {
+    if (
+      !this.rateLimitProvider ||
+      !(await this.isFlagOn('AI_BYOK_COST_GATE'))
+    ) {
+      return { allowed: true };
+    }
+    try {
+      const spent = await this.rateLimitProvider.getByokCostUsd(userId);
+      const ceiling = this.configService.get('AI_BYOK_DAILY_COST_LIMIT_USD');
+      if (spent >= ceiling) {
+        this.logger.warn(
+          `BYOK side-cost ceiling reached for user ${userId} ($${spent.toFixed(2)}/$${ceiling.toFixed(2)})`
+        );
+        return {
+          allowed: false,
+          reason:
+            'Daily cost limit for BYOK side services exceeded. Please try again tomorrow.',
+        };
+      }
+    } catch (error) {
+      this.logger.warn('BYOK cost ceiling check unavailable, allowing', error);
+    }
+    return { allowed: true };
+  }
+
+  /**
+   * Records a server-billed side cost (Tavily, Voyage). Never throws — callers
+   * fire-and-forget from hot paths, so failures are logged, not propagated.
+   */
+  async recordSideCost(params: {
+    readonly userId: string;
+    readonly action: string;
+    readonly model: string;
+    readonly costUsd: number;
+    readonly byokTurn: boolean;
+  }): Promise<void> {
+    try {
+      // The SERVER pays Tavily/Voyage regardless of the turn's LLM billing.
+      await this.usageRepository.recordUsage({
+        userId: params.userId,
+        action: params.action,
+        model: params.model,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: params.costUsd,
+        byok: false,
+      });
+    } catch (error) {
+      this.logger.warn('Side-cost PG record failed', error);
+    }
+    if (!this.rateLimitProvider) {
+      return;
+    }
+    try {
+      if (params.byokTurn) {
+        await this.rateLimitProvider.recordByokCost(
+          params.userId,
+          params.costUsd
+        );
+      } else {
+        await this.rateLimitProvider.correctUsage(
+          params.userId,
+          0,
+          0,
+          0,
+          params.costUsd
+        );
+      }
+    } catch (error) {
+      this.logger.warn('Side-cost Redis routing failed', error);
+    }
+  }
+
+  private async isFlagOn(
+    key: keyof typeof FEATURE_FLAG_KEYS
+  ): Promise<boolean> {
+    if (!this.featureFlags) {
+      return false;
+    }
+    try {
+      return await this.featureFlags.isEnabled(FEATURE_FLAG_KEYS[key]);
+    } catch (error) {
+      this.logger.warn(`Flag lookup for ${key} failed, treating as off`, error);
+      return false;
+    }
   }
 
   private async effectiveEstimatedCost(

@@ -95,6 +95,23 @@ describe('RedisRateLimitService', () => {
     });
   });
 
+  describe('recordByokCost', () => {
+    it('increments the byok counter and sets its TTL in a single atomic eval', async () => {
+      vi.spyOn(mockRedis.client, 'eval').mockResolvedValue('0.123400');
+
+      await service.recordByokCost('user-123', 0.1234);
+
+      expect(mockRedis.client.eval).toHaveBeenCalledTimes(1);
+      expect(mockRedis.client.eval).toHaveBeenCalledWith(
+        expect.stringContaining('INCRBYFLOAT'),
+        1,
+        expect.stringContaining('ai:ratelimit:user-123:byok_cost:'),
+        '0.123400',
+        expect.any(Number)
+      );
+    });
+  });
+
   describe('checkAndIncrement cost reserve (sliding-window Lua semantics)', () => {
     const limits = { tokenLimit: 1_000_000, costLimit: 1.0 };
     const today = new Date().toISOString().slice(0, 10);
