@@ -136,5 +136,41 @@ describe('JwtTokenService', () => {
       );
       expect(result.isOk()).toBe(true);
     });
+
+    it('should reject refresh tokens with a wrong issuer', async () => {
+      const tampered = await jwtService.signAsync(
+        {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'user@example.com',
+        },
+        {
+          secret: REFRESH_SECRET,
+          expiresIn: '7d',
+          algorithm: 'HS256',
+          issuer: 'evil-api',
+          audience: JWT_AUDIENCE_REFRESH,
+        }
+      );
+      const result = await service.verifyRefreshToken(tampered);
+      expect(result.isErr()).toBe(true);
+    });
+
+    it('should reject refresh tokens with a mismatched audience', async () => {
+      const tampered = await jwtService.signAsync(
+        {
+          sub: '11111111-1111-1111-1111-111111111111',
+          email: 'user@example.com',
+        },
+        {
+          secret: REFRESH_SECRET,
+          expiresIn: '7d',
+          algorithm: 'HS256',
+          issuer: JWT_ISSUER,
+          audience: JWT_AUDIENCE_ACCESS,
+        }
+      );
+      const result = await service.verifyRefreshToken(tampered);
+      expect(result.isErr()).toBe(true);
+    });
   });
 });

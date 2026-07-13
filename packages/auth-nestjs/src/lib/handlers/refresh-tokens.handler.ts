@@ -72,7 +72,14 @@ export class RefreshTokensHandler {
 
     const rotatedResult = await this.issueRotatedTokens(payload, session);
     if (rotatedResult.isOk()) {
-      await this.sessionRepository.markRotated(session.id);
+      try {
+        await this.sessionRepository.markRotated(session.id);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to mark session ${session.id} rotated after refresh`,
+          error
+        );
+      }
     }
     return rotatedResult;
   }

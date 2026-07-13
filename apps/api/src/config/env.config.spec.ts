@@ -110,6 +110,28 @@ describe('validateEnv', () => {
     );
   });
 
+  it('should accept BCRYPT_ROUNDS at the minimum boundary (10)', () => {
+    const config = validateEnv({ ...validEnv, BCRYPT_ROUNDS: '10' });
+    expect(config.BCRYPT_ROUNDS).toBe(10);
+  });
+
+  it('should accept BCRYPT_ROUNDS at the maximum boundary (15)', () => {
+    const config = validateEnv({ ...validEnv, BCRYPT_ROUNDS: '15' });
+    expect(config.BCRYPT_ROUNDS).toBe(15);
+  });
+
+  it('should reject BCRYPT_ROUNDS above 15', () => {
+    expect(() => validateEnv({ ...validEnv, BCRYPT_ROUNDS: '16' })).toThrow(
+      /BCRYPT_ROUNDS/
+    );
+  });
+
+  it('should reject non-numeric BCRYPT_ROUNDS', () => {
+    expect(() => validateEnv({ ...validEnv, BCRYPT_ROUNDS: 'abc' })).toThrow(
+      /BCRYPT_ROUNDS/
+    );
+  });
+
   it('should reject equal access and refresh secrets', () => {
     expect(() =>
       validateEnv({ ...validEnv, JWT_REFRESH_SECRET: validEnv.JWT_SECRET })
