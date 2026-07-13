@@ -1,7 +1,10 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../../config/env.config';
+import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   AI_USAGE_REPOSITORY,
   type AIUsageRepository,
@@ -52,16 +55,21 @@ export class AIRateLimitService {
     private readonly alerts?: WebhookAlertService,
     @Optional()
     @Inject(AI_REDIS)
-    private readonly aiRedis?: AIRedisProvider
+    private readonly aiRedis?: AIRedisProvider,
+    @Optional()
+    private readonly featureFlags?: FeatureFlagsService
   ) {}
 
   async checkLimit(
     userId: string,
     estimatedTokens: number,
     isAnonymous = false,
-    byok = false
+    byok = false,
+    estimatedCostUsd = 0
   ): Promise<RateLimitResult> {
     const limits = this.effectiveLimits(isAnonymous);
+    const effectiveCostUsd =
+      await this.effectiveEstimatedCost(estimatedCostUsd);
 
     if (this.rateLimitProvider) {
       let rpmChecked = false;
@@ -86,13 +94,14 @@ export class AIRateLimitService {
       if (byok) {
         return rpmChecked
           ? { allowed: true }
-          : this.checkLimitViaPg(userId, estimatedTokens, limits, true);
+          : this.checkLimitViaPg(userId, estimatedTokens, 0, limits, true);
       }
 
       try {
         const result = await this.rateLimitProvider.checkAndIncrement(
           userId,
           estimatedTokens,
+          effectiveCostUsd,
           limits
         );
         return {
@@ -107,7 +116,33 @@ export class AIRateLimitService {
       }
     }
 
-    return this.checkLimitViaPg(userId, estimatedTokens, limits, byok);
+    return this.checkLimitViaPg(
+      userId,
+      estimatedTokens,
+      effectiveCostUsd,
+      limits,
+      byok
+    );
+  }
+
+  private async effectiveEstimatedCost(
+    estimatedCostUsd: number
+  ): Promise<number> {
+    if (estimatedCostUsd <= 0 || !this.featureFlags) {
+      return 0;
+    }
+    try {
+      const enabled = await this.featureFlags.isEnabled(
+        FEATURE_FLAG_KEYS.AI_COST_RESERVE
+      );
+      return enabled ? estimatedCostUsd : 0;
+    } catch (error) {
+      this.logger.warn(
+        'Cost reserve flag lookup failed, treating as off',
+        error
+      );
+      return 0;
+    }
   }
 
   private effectiveLimits(isAnonymous: boolean): RateLimits {
@@ -126,20 +161,32 @@ export class AIRateLimitService {
   /** Never rejects — release failures are logged and swallowed, so callers may fire-and-forget. */
   async releaseReservation(
     userId: string,
-    estimatedTokens: number
+    estimatedTokens: number,
+    estimatedCostUsd = 0
   ): Promise<void> {
     if (!this.rateLimitProvider) {
       return;
     }
+    const effectiveCostUsd =
+      await this.effectiveEstimatedCost(estimatedCostUsd);
     try {
-      await this.rateLimitProvider.correctUsage(userId, estimatedTokens, 0, 0);
+      await this.rateLimitProvider.correctUsage(
+        userId,
+        estimatedTokens,
+        0,
+        effectiveCostUsd,
+        0
+      );
     } catch (error) {
       this.logger.warn('Redis reservation release failed', error);
     }
   }
 
   async recordUsage(
-    params: RecordUsageInput & { readonly estimatedTokens: number }
+    params: RecordUsageInput & {
+      readonly estimatedTokens: number;
+      readonly estimatedCostUsd?: number;
+    }
   ): Promise<void> {
     await this.usageRepository.recordUsage(params);
 
@@ -150,11 +197,15 @@ export class AIRateLimitService {
     }
 
     if (this.rateLimitProvider) {
+      const effectiveCostUsd = await this.effectiveEstimatedCost(
+        params.estimatedCostUsd ?? 0
+      );
       try {
         await this.rateLimitProvider.correctUsage(
           params.userId,
           params.estimatedTokens,
           params.inputTokens + params.outputTokens,
+          effectiveCostUsd,
           params.costUsd
         );
       } catch (error) {
@@ -248,6 +299,7 @@ export class AIRateLimitService {
   private async checkLimitViaPg(
     userId: string,
     estimatedTokens: number,
+    estimatedCostUsd: number,
     limits: RateLimits,
     byok = false
   ): Promise<RateLimitResult> {
@@ -279,7 +331,10 @@ export class AIRateLimitService {
       };
     }
 
-    if (usage.totalCostUsd >= costLimit) {
+    if (
+      usage.totalCostUsd >= costLimit ||
+      usage.totalCostUsd + estimatedCostUsd > costLimit
+    ) {
       this.logger.warn(
         `Daily cost limit exceeded for user ${userId} ($${usage.totalCostUsd.toFixed(2)}/$${costLimit.toFixed(2)})`
       );

@@ -3,15 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIErrors } from '../../domain/errors/ai.errors';
 import type { AICache } from '../../domain/ports/ai-cache.port';
+import { createTestCatalog } from '../../testing/create-test-catalog';
 import { AICompletionPipeline } from './ai-completion-pipeline.service';
 import type { AIOrchestrator } from './ai-orchestrator.service';
 import type { AIRateLimitService } from './ai-rate-limit.service';
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
+const MODEL_INPUT_COST_PER_TOKEN = 0.000003;
 
 function createPipeline(overrides?: {
   checkLimit?: ReturnType<typeof vi.fn>;
   recordUsage?: ReturnType<typeof vi.fn>;
+  releaseReservation?: ReturnType<typeof vi.fn>;
   selectModel?: ReturnType<typeof vi.fn>;
   cache?: AICache | undefined;
   withoutCache?: boolean;
@@ -28,6 +31,8 @@ function createPipeline(overrides?: {
     checkLimit:
       overrides?.checkLimit ?? vi.fn().mockResolvedValue({ allowed: true }),
     recordUsage: overrides?.recordUsage ?? vi.fn().mockResolvedValue(undefined),
+    releaseReservation:
+      overrides?.releaseReservation ?? vi.fn().mockResolvedValue(undefined),
   } as unknown as AIRateLimitService;
 
   const cache =
@@ -41,6 +46,7 @@ function createPipeline(overrides?: {
   const pipeline = new AICompletionPipeline(
     orchestrator,
     rateLimitService,
+    createTestCatalog(),
     overrides?.withoutCache ? undefined : cache
   );
 
@@ -97,7 +103,7 @@ describe('AICompletionPipeline', () => {
       expect(result.isErr()).toBe(true);
     });
 
-    it('should reject when the rate limit is exceeded, before model selection', async () => {
+    it('should reject when the rate limit is exceeded, after model selection', async () => {
       const { pipeline, orchestrator } = createPipeline({
         checkLimit: vi
           .fn()
@@ -110,7 +116,54 @@ describe('AICompletionPipeline', () => {
       if (result.isErr()) {
         expect(result.error).toEqual(AIErrors.rateLimitExceeded());
       }
-      expect(orchestrator.selectModel).not.toHaveBeenCalled();
+      expect(orchestrator.selectModel).toHaveBeenCalled();
+    });
+
+    it('should surface model-selection errors without consuming the rate limit', async () => {
+      const modelError = AIErrors.invalidModel('bad-model');
+      const { pipeline, rateLimitService } = createPipeline({
+        selectModel: vi.fn().mockResolvedValue(err(modelError)),
+      });
+
+      const result = await pipeline.preflight(baseInput);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toEqual(modelError);
+      }
+      expect(rateLimitService.checkLimit).not.toHaveBeenCalled();
+    });
+
+    it('should pass the estimated cost of the selected model to the rate-limit check', async () => {
+      const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+      const { pipeline } = createPipeline({ checkLimit });
+
+      await pipeline.preflight(baseInput);
+
+      const [userId, estimatedTokens, isAnonymous, byok, estimatedCostUsd] =
+        checkLimit.mock.calls[0];
+      expect(userId).toBe('user-1');
+      expect(estimatedTokens).toBeGreaterThan(0);
+      expect(isAnonymous).toBe(false);
+      expect(byok).toBe(false);
+      expect(estimatedCostUsd).toBeCloseTo(
+        estimatedTokens * MODEL_INPUT_COST_PER_TOKEN,
+        12
+      );
+    });
+
+    it('should expose the estimated cost on the preflight context', async () => {
+      const { pipeline } = createPipeline();
+
+      const result = await pipeline.preflight(baseInput);
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.context.estimatedCostUsd).toBeCloseTo(
+          result.value.context.estimatedTokens * MODEL_INPUT_COST_PER_TOKEN,
+          12
+        );
+      }
     });
 
     it('should propagate model selection errors before touching the cache', async () => {
@@ -213,10 +266,30 @@ describe('AICompletionPipeline', () => {
         action: 'summarize',
         model: MODEL,
         estimatedTokens: context.estimatedTokens,
+        estimatedCostUsd: context.estimatedCostUsd,
         inputTokens: 100,
         outputTokens: 40,
         costUsd: 0.002,
       });
+    });
+
+    it('should release the reserved cost together with the token estimate', async () => {
+      const releaseReservation = vi.fn().mockResolvedValue(undefined);
+      const { pipeline } = createPipeline({ releaseReservation });
+
+      const preflight = await pipeline.preflight(baseInput);
+      if (preflight.isErr() || preflight.value.kind !== 'ready') {
+        throw new Error('expected ready preflight');
+      }
+      const { context } = preflight.value;
+
+      pipeline.releaseReservation(context, baseInput);
+
+      expect(releaseReservation).toHaveBeenCalledWith(
+        'user-1',
+        context.estimatedTokens,
+        context.estimatedCostUsd
+      );
     });
 
     it('should not throw when usage recording fails', async () => {

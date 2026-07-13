@@ -12,18 +12,20 @@ export interface RateLimits {
 
 export interface RateLimitProvider {
   checkAndIncrement(
-    userId: string,
+    subject: string,
     estimatedTokens: number,
+    estimatedCostUsd: number,
     limits: RateLimits
   ): Promise<RateLimitCheckResult>;
 
-  checkRpm(userId: string): Promise<RateLimitCheckResult>;
+  checkRpm(subject: string): Promise<RateLimitCheckResult>;
 
   correctUsage(
-    userId: string,
+    subject: string,
     estimatedTokens: number,
     actualTokens: number,
-    costUsd: number
+    estimatedCostUsd: number,
+    actualCostUsd: number
   ): Promise<void>;
 }
 

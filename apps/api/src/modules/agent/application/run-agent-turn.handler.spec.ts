@@ -183,6 +183,70 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
   });
 
+  it('reserves the estimated model cost with the token reservation', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const call = vi.mocked(rateLimit.checkLimit).mock.calls[0] as unknown[];
+    const estimatedTokens = call[1] as number;
+    expect(estimatedTokens).toBeGreaterThan(0);
+    expect(call[4]).toBeCloseTo(estimatedTokens * 0.000003, 12);
+  });
+
+  it('forwards the reserved cost estimate into usage recording', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const checkCall = vi.mocked(rateLimit.checkLimit).mock
+      .calls[0] as unknown[];
+    const recorded = vi.mocked(rateLimit.recordUsage).mock.calls[0][0];
+    expect(recorded.estimatedCostUsd).toBeCloseTo(checkCall[4] as number, 12);
+  });
+
   it('denies and never calls the orchestrator when rate-limited', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({
       allowed: false,
@@ -1502,6 +1566,7 @@ describe('RunAgentTurnHandler', () => {
 
     expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
       USER,
+      expect.any(Number),
       expect.any(Number)
     );
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();

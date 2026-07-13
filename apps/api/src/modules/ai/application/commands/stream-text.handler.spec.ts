@@ -106,7 +106,12 @@ describe('StreamTextHandler', () => {
       createTestCatalog()
     );
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    pipeline = new AICompletionPipeline(orchestrator, rateLimitService, cache);
+    pipeline = new AICompletionPipeline(
+      orchestrator,
+      rateLimitService,
+      createTestCatalog(),
+      cache
+    );
     return new StreamTextHandler(
       mockProvider,
       createTestCatalog(),

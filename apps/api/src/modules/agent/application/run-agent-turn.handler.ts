@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
+  computeTokenCostUsd,
   detectPromptInjection,
   estimateTokenCount,
   MODEL_CATALOG,
@@ -83,6 +84,7 @@ type TurnEventOutcome = 'continue' | 'stop';
 
 interface TurnLoopContext {
   readonly estimatedTokens: number;
+  readonly estimatedCostUsd: number;
   readonly model: string;
   readonly isByok: boolean;
 }
@@ -156,7 +158,8 @@ export class RunAgentTurnHandler {
           userId,
           ctx.estimatedTokens,
           event.usage,
-          ctx.isByok
+          ctx.isByok,
+          ctx.estimatedCostUsd
         );
         await this.pendingStore.save({
           userId,
@@ -337,7 +340,8 @@ export class RunAgentTurnHandler {
           userId,
           ctx.estimatedTokens,
           event.usage,
-          ctx.isByok
+          ctx.isByok,
+          ctx.estimatedCostUsd
         );
         callbacks.onDone({
           inputTokens: event.usage.inputTokens,
@@ -505,6 +509,14 @@ export class RunAgentTurnHandler {
       return;
     }
 
+    const pricing = this.modelCatalog.getPricing(model);
+    const estimatedCostUsd = pricing
+      ? computeTokenCostUsd(
+          { inputTokens: estimatedTokens, outputTokens: 0 },
+          pricing
+        )
+      : 0;
+
     const provider = providerOf(model);
     const shouldUseByok = byokProviders.has(provider);
     let byokApiKey: string | null = null;
@@ -530,7 +542,8 @@ export class RunAgentTurnHandler {
       input.userId,
       estimatedTokens,
       input.isAnonymous ?? false,
-      isByok
+      isByok,
+      estimatedCostUsd
     );
     if (!limit.allowed) {
       callbacks.onError(AIErrors.rateLimitExceeded(limit.reason));
@@ -538,7 +551,12 @@ export class RunAgentTurnHandler {
     }
 
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    const ctx: TurnLoopContext = { estimatedTokens, model, isByok };
+    const ctx: TurnLoopContext = {
+      estimatedTokens,
+      estimatedCostUsd,
+      model,
+      isByok,
+    };
 
     let assistantText = '';
     try {
@@ -566,7 +584,8 @@ export class RunAgentTurnHandler {
               input.userId,
               estimatedTokens,
               event.usage ?? { inputTokens: 0, outputTokens: 0, model },
-              isByok
+              isByok,
+              estimatedCostUsd
             );
             callbacks.onError(event.error);
             return;
@@ -575,7 +594,8 @@ export class RunAgentTurnHandler {
               input.userId,
               estimatedTokens,
               event.usage,
-              isByok
+              isByok,
+              estimatedCostUsd
             );
             return;
           case 'done': {
@@ -585,7 +605,8 @@ export class RunAgentTurnHandler {
                 input.userId,
                 estimatedTokens,
                 event.usage,
-                isByok
+                isByok,
+                estimatedCostUsd
               );
             } catch (error) {
               this.logger.warn({
@@ -692,16 +713,27 @@ export class RunAgentTurnHandler {
     userId: string,
     estimatedTokens: number,
     usage: AgentTurnUsage,
-    isByok = false
+    isByok = false,
+    estimatedCostUsd = 0
   ): Promise<void> {
     if (usage.inputTokens + usage.outputTokens === 0) {
       if (!isByok) {
-        await this.rateLimit.releaseReservation(userId, estimatedTokens);
+        await this.rateLimit.releaseReservation(
+          userId,
+          estimatedTokens,
+          estimatedCostUsd
+        );
       }
       return;
     }
     try {
-      await this.recordUsage(userId, estimatedTokens, usage, isByok);
+      await this.recordUsage(
+        userId,
+        estimatedTokens,
+        usage,
+        isByok,
+        estimatedCostUsd
+      );
     } catch (error) {
       this.logger.warn({
         event: 'agent.usage.record_failed',
@@ -715,7 +747,8 @@ export class RunAgentTurnHandler {
     userId: string,
     estimatedTokens: number,
     usage: AgentTurnUsage,
-    isByok = false
+    isByok = false,
+    estimatedCostUsd = 0
   ): Promise<number> {
     const pricing = this.modelCatalog.getPricing(usage.model);
     const tokenUsage = TokenUsage.create(
@@ -734,6 +767,7 @@ export class RunAgentTurnHandler {
       model: usage.model,
       costUsd: tokenUsage.costUsd,
       estimatedTokens,
+      estimatedCostUsd,
       byok: isByok,
     });
     return tokenUsage.costUsd;

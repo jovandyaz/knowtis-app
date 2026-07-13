@@ -9,6 +9,7 @@ interface HandlerOverrides {
   transcribe?: ReturnType<typeof vi.fn>;
   selectModel?: ReturnType<typeof vi.fn>;
   generateStructuredOutput?: ReturnType<typeof vi.fn>;
+  pricing?: { inputCostPerSecond?: number };
 }
 
 function makeHandler(
@@ -30,7 +31,9 @@ function makeHandler(
   const releaseReservation = vi.fn().mockResolvedValue(undefined);
   const rateLimit = { checkLimit, recordUsage, releaseReservation };
   const config = { get: () => 'model' };
-  const catalog = { getPricing: () => ({ inputCostPerSecond: 0 }) };
+  const catalog = {
+    getPricing: () => overrides.pricing ?? { inputCostPerSecond: 0 },
+  };
   const structured = {
     generateStructuredOutput: overrides.generateStructuredOutput ?? vi.fn(),
   };
@@ -81,7 +84,13 @@ describe('VoiceNoteHandler anonymous budget', () => {
       isAnonymous: true,
     });
 
-    expect(checkLimit).toHaveBeenCalledWith('anon-1', expect.any(Number), true);
+    expect(checkLimit).toHaveBeenCalledWith(
+      'anon-1',
+      expect.any(Number),
+      true,
+      false,
+      expect.any(Number)
+    );
   });
 
   it('defaults isAnonymous to false for registered users', async () => {
@@ -97,7 +106,9 @@ describe('VoiceNoteHandler anonymous budget', () => {
     expect(checkLimit).toHaveBeenCalledWith(
       'user-1',
       expect.any(Number),
-      false
+      false,
+      false,
+      expect.any(Number)
     );
   });
 
@@ -169,6 +180,7 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledTimes(1);
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
+      expect.any(Number),
       expect.any(Number)
     );
   });
@@ -188,6 +200,7 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledTimes(1);
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
+      expect.any(Number),
       expect.any(Number)
     );
   });
@@ -211,6 +224,7 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledTimes(1);
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
+      expect.any(Number),
       expect.any(Number)
     );
     const estimatedArgs = recordUsage.mock.calls.map(
@@ -236,11 +250,87 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledTimes(1);
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
+      expect.any(Number),
       expect.any(Number)
     );
     const structuring = recordUsage.mock.calls.find(
       (c) => c[0].action === AI_ACTION.STRUCTURE_VOICE_NOTE
     );
     expect(structuring).toBeUndefined();
+  });
+});
+
+describe('VoiceNoteHandler cost reserve', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const audio = Buffer.alloc(120_000);
+  const estimatedDurationSeconds = 10;
+  const pricing = { inputCostPerSecond: 0.0001 };
+  const reservedCostUsd = estimatedDurationSeconds * pricing.inputCostPerSecond;
+  const input = {
+    userId: 'user-1',
+    audio,
+    mode: 'create-note' as const,
+  };
+
+  it('reserves the estimated transcription cost in the rate-limit check', async () => {
+    const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    const { handler } = makeHandler(checkLimit, { pricing });
+
+    await handler.execute(input);
+
+    const call = checkLimit.mock.calls[0];
+    expect(call[4]).toBeCloseTo(reservedCostUsd, 12);
+  });
+
+  it('reconciles the cost reserve on the whisper leg and none on the structuring leg', async () => {
+    const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    const { handler, recordUsage } = makeHandler(checkLimit, {
+      pricing,
+      transcribe: okTranscribe(),
+      selectModel: okSelectModel(),
+      generateStructuredOutput: okStructured(),
+    });
+
+    const result = await handler.execute(input);
+
+    expect(result.isOk()).toBe(true);
+    const whisper = recordUsage.mock.calls.find(
+      (c) => c[0].action === AI_ACTION.VOICE_TRANSCRIPTION
+    )?.[0];
+    const structuring = recordUsage.mock.calls.find(
+      (c) => c[0].action === AI_ACTION.STRUCTURE_VOICE_NOTE
+    )?.[0];
+    expect(whisper?.estimatedCostUsd).toBeCloseTo(reservedCostUsd, 12);
+    expect(structuring?.estimatedCostUsd).toBe(0);
+  });
+
+  it('releases the cost reserve when transcription fails before the whisper leg', async () => {
+    const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    const { handler, releaseReservation } = makeHandler(checkLimit, {
+      pricing,
+    });
+
+    const result = await handler.execute(input);
+
+    expect(result.isErr()).toBe(true);
+    const [, , releasedCost] = releaseReservation.mock.calls[0];
+    expect(releasedCost).toBeCloseTo(reservedCostUsd, 12);
+  });
+
+  it('releases only the token reserve once the whisper leg reconciled the cost', async () => {
+    const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    const { handler, releaseReservation } = makeHandler(checkLimit, {
+      pricing,
+      transcribe: okTranscribe(),
+      selectModel: okSelectModel(),
+      generateStructuredOutput: vi.fn().mockRejectedValue(new Error('boom')),
+    });
+
+    const result = await handler.execute(input);
+
+    expect(result.isOk()).toBe(true);
+    const [, , releasedCost] = releaseReservation.mock.calls[0];
+    expect(releasedCost).toBe(0);
   });
 });

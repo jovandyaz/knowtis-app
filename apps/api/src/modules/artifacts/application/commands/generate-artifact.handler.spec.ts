@@ -145,6 +145,9 @@ describe('GenerateArtifactHandler', () => {
 
       expect(rateLimitService.checkLimit).toHaveBeenCalledWith(
         MOCK_USER_ID,
+        expect.any(Number),
+        false,
+        false,
         expect.any(Number)
       );
       expect(orchestrator.selectModel).toHaveBeenCalledWith(
@@ -263,6 +266,9 @@ describe('GenerateArtifactHandler', () => {
 
   describe('rate limit rejection', () => {
     it('should return an error when rate limit is exceeded', async () => {
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
       rateLimitService.checkLimit.mockResolvedValue({
         allowed: false,
         reason: 'Daily usage limit exceeded. Please try again tomorrow.',
@@ -276,7 +282,6 @@ describe('GenerateArtifactHandler', () => {
         expect(result.error.message).toContain('Daily usage limit exceeded');
       }
 
-      expect(orchestrator.selectModel).not.toHaveBeenCalled();
       expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
       expect(repository.create).not.toHaveBeenCalled();
     });

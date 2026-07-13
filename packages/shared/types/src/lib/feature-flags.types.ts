@@ -5,6 +5,7 @@ export const FEATURE_FLAG_KEYS = {
   AGENT_WEB_SEARCH: 'agent_web_search',
   AGENT_BYOK: 'agent_byok',
   AGENT_LONGTERM_MEMORY: 'agent_longterm_memory',
+  AI_COST_RESERVE: 'ai_cost_reserve',
 } as const;
 
 export type FeatureFlagKey =

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type { AIUsageRepository } from '../../domain/ports/ai-usage.repository';
 import type { RateLimitProvider } from '../../domain/ports/rate-limit.port';
 import type { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert.service';
@@ -187,6 +188,7 @@ describe('AIRateLimitService', () => {
         'user-123',
         1700,
         0,
+        0,
         0
       );
       expect(mockUsageRepo.recordUsage).not.toHaveBeenCalled();
@@ -264,7 +266,7 @@ describe('AIRateLimitService', () => {
 
       await service.checkLimit('anon-1', 1000, true);
 
-      expect(checkAndIncrement).toHaveBeenCalledWith('anon-1', 1000, {
+      expect(checkAndIncrement).toHaveBeenCalledWith('anon-1', 1000, 0, {
         tokenLimit: 33000,
         costLimit: 0.33,
       });
@@ -286,7 +288,7 @@ describe('AIRateLimitService', () => {
 
       await service.checkLimit('user-123', 1000);
 
-      expect(checkAndIncrement).toHaveBeenCalledWith('user-123', 1000, {
+      expect(checkAndIncrement).toHaveBeenCalledWith('user-123', 1000, 0, {
         tokenLimit: 100000,
         costLimit: 1.0,
       });
@@ -486,8 +488,224 @@ describe('AIRateLimitService', () => {
         'user-123',
         200,
         150,
+        0,
         9.0
       );
+    });
+  });
+
+  describe('cost reserve flag (ai_cost_reserve)', () => {
+    let mockRateLimitProvider: RateLimitProvider;
+
+    beforeEach(() => {
+      mockRateLimitProvider = {
+        checkRpm: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        checkAndIncrement: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+      };
+      vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0,
+        requestCount: 0,
+      });
+    });
+
+    function makeFlags(enabled: boolean) {
+      return {
+        isEnabled: vi.fn().mockResolvedValue(enabled),
+      } as unknown as FeatureFlagsService;
+    }
+
+    function makeService(featureFlags?: FeatureFlagsService) {
+      return new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        mockRateLimitProvider,
+        undefined,
+        undefined,
+        featureFlags
+      );
+    }
+
+    it('forwards the estimated cost to the reserve when the flag is on', async () => {
+      const svc = makeService(makeFlags(true));
+
+      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        1000,
+        0.25,
+        expect.anything()
+      );
+    });
+
+    it('zeroes the estimated cost when the flag is off', async () => {
+      const svc = makeService(makeFlags(false));
+
+      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        1000,
+        0,
+        expect.anything()
+      );
+    });
+
+    it('treats a missing flags service as flag off', async () => {
+      const svc = makeService(undefined);
+
+      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        1000,
+        0,
+        expect.anything()
+      );
+    });
+
+    it('treats a failing flag lookup as flag off', async () => {
+      const failingFlags = {
+        isEnabled: vi.fn().mockRejectedValue(new Error('db down')),
+      } as unknown as FeatureFlagsService;
+      const svc = makeService(failingFlags);
+
+      await svc.checkLimit('user-1', 1000, false, false, 0.25);
+
+      expect(mockRateLimitProvider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        1000,
+        0,
+        expect.anything()
+      );
+    });
+
+    it('reconciles against the estimated cost in recordUsage when the flag is on', async () => {
+      const svc = makeService(makeFlags(true));
+
+      await svc.recordUsage({
+        userId: 'user-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0.25,
+      });
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-1',
+        200,
+        150,
+        0.25,
+        0.4
+      );
+    });
+
+    it('zeroes the estimated cost in recordUsage when the flag is off', async () => {
+      const svc = makeService(makeFlags(false));
+
+      await svc.recordUsage({
+        userId: 'user-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0.25,
+      });
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-1',
+        200,
+        150,
+        0,
+        0.4
+      );
+    });
+
+    it('releases the reserved cost when the flag is on', async () => {
+      const svc = makeService(makeFlags(true));
+
+      await svc.releaseReservation('user-1', 200, 0.25);
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-1',
+        200,
+        0,
+        0.25,
+        0
+      );
+    });
+
+    it('releases only tokens when the flag is off', async () => {
+      const svc = makeService(makeFlags(false));
+
+      await svc.releaseReservation('user-1', 200, 0.25);
+
+      expect(mockRateLimitProvider.correctUsage).toHaveBeenCalledWith(
+        'user-1',
+        200,
+        0,
+        0,
+        0
+      );
+    });
+
+    it('rejects via the PG fallback when the estimated cost would exceed the cost limit', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0.9,
+        requestCount: 1,
+      });
+      const svc = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        undefined,
+        undefined,
+        undefined,
+        makeFlags(true)
+      );
+
+      const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
+
+      expect(result.allowed).toBe(false);
+    });
+
+    it('keeps the PG fallback decision unchanged when the flag is off', async () => {
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0.9,
+        requestCount: 1,
+      });
+      const svc = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        undefined,
+        undefined,
+        undefined,
+        makeFlags(false)
+      );
+
+      const result = await svc.checkLimit('user-1', 100, false, false, 0.2);
+
+      expect(result.allowed).toBe(true);
     });
   });
 });
