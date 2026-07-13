@@ -8,6 +8,12 @@ const baseEnv = {
   JWT_REFRESH_SECRET: 'y'.repeat(32),
 };
 
+const validEnv = {
+  DATABASE_URL: 'postgres://localhost:5432/knowtis_test',
+  JWT_SECRET: 'a'.repeat(40) + '-access-secret-x',
+  JWT_REFRESH_SECRET: 'b'.repeat(40) + '-refresh-secret-x',
+};
+
 describe('env.config agent vars', () => {
   it('defaults AI_AGENT_MAX_STEPS to 8 and AI_AGENT_MAX_MS to 120000', () => {
     const env = validateEnv(baseEnv);
@@ -89,5 +95,43 @@ describe('env.config oauth vars', () => {
     expect(() =>
       validateEnv({ ...baseEnv, MCP_RESOURCE_URL: 'not-a-url' })
     ).toThrow();
+  });
+});
+
+describe('validateEnv', () => {
+  it('should accept a valid config and default BCRYPT_ROUNDS to 12', () => {
+    const config = validateEnv(validEnv);
+    expect(config.BCRYPT_ROUNDS).toBe(12);
+  });
+
+  it('should reject BCRYPT_ROUNDS below 10', () => {
+    expect(() => validateEnv({ ...validEnv, BCRYPT_ROUNDS: '8' })).toThrow(
+      /BCRYPT_ROUNDS/
+    );
+  });
+
+  it('should reject equal access and refresh secrets', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, JWT_REFRESH_SECRET: validEnv.JWT_SECRET })
+    ).toThrow(/must be different/);
+  });
+
+  it('should reject placeholder secrets in production', () => {
+    expect(() =>
+      validateEnv({
+        ...validEnv,
+        NODE_ENV: 'production',
+        JWT_SECRET: 'your-super-secret-jwt-key-change-in-production',
+      })
+    ).toThrow(/placeholder/);
+  });
+
+  it('should allow placeholder secrets outside production', () => {
+    const config = validateEnv({
+      ...validEnv,
+      NODE_ENV: 'development',
+      JWT_SECRET: 'your-super-secret-jwt-key-change-in-production',
+    });
+    expect(config.NODE_ENV).toBe('development');
   });
 });

@@ -12,6 +12,7 @@ const envSchemaBase = z.object({
   JWT_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
+  BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
   RESEND_API_KEY: z.string().optional(),
@@ -88,6 +89,18 @@ const envSchemaBase = z.object({
   MCP_RESOURCE_URL: z.url().optional(),
 });
 
+const PLACEHOLDER_MARKERS = [
+  'change-in-production',
+  'your-super-secret',
+  'changeme',
+  'placeholder',
+];
+
+function isPlaceholderSecret(value: string): boolean {
+  const normalized = value.toLowerCase();
+  return PLACEHOLDER_MARKERS.some((marker) => normalized.includes(marker));
+}
+
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
   if (data.EMAIL_PROVIDER === 'resend' && !data.RESEND_API_KEY) {
     ctx.addIssue({
@@ -96,6 +109,29 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
       path: ['RESEND_API_KEY'],
       input: data.RESEND_API_KEY,
     });
+  }
+
+  if (data.JWT_SECRET === data.JWT_REFRESH_SECRET) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'JWT_SECRET and JWT_REFRESH_SECRET must be different values — equal secrets let refresh tokens act as access tokens',
+      path: ['JWT_REFRESH_SECRET'],
+      input: data.JWT_REFRESH_SECRET,
+    });
+  }
+
+  if (data.NODE_ENV === 'production') {
+    for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const) {
+      if (isPlaceholderSecret(data[key])) {
+        ctx.addIssue({
+          code: 'custom',
+          message: `${key} looks like a placeholder value — generate a real secret: openssl rand -base64 48`,
+          path: [key],
+          input: data[key],
+        });
+      }
+    }
   }
 });
 
