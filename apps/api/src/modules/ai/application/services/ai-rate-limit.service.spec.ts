@@ -173,6 +173,8 @@ describe('AIRateLimitService', () => {
         checkAndIncrement: vi.fn(),
         recordByokCost: vi.fn().mockResolvedValue(undefined),
         getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
         correctUsage: vi.fn(),
       };
       const mockConfig = createMockConfig();
@@ -406,6 +408,8 @@ describe('AIRateLimitService', () => {
         checkAndIncrement: vi.fn(),
         recordByokCost: vi.fn().mockResolvedValue(undefined),
         getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
         correctUsage: vi.fn().mockResolvedValue(undefined),
       };
       alerts = { notify: vi.fn() };
@@ -516,6 +520,8 @@ describe('AIRateLimitService', () => {
         correctUsage: vi.fn().mockResolvedValue(undefined),
         recordByokCost: vi.fn().mockResolvedValue(undefined),
         getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
       };
       vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
       vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
@@ -731,6 +737,8 @@ describe('AIRateLimitService', () => {
         correctUsage: vi.fn().mockResolvedValue(undefined),
         recordByokCost: vi.fn().mockResolvedValue(undefined),
         getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
       };
       flags = { isEnabled: vi.fn().mockResolvedValue(true) };
       gated = new AIRateLimitService(
@@ -853,6 +861,119 @@ describe('AIRateLimitService', () => {
       ).resolves.toBeUndefined();
 
       expect(provider.correctUsage).toHaveBeenCalledWith('u1', 0, 0, 0, 0.002);
+    });
+  });
+
+  describe('global daily-spend breaker (ai_global_spend_breaker)', () => {
+    let provider: RateLimitProvider;
+    let flags: { isEnabled: ReturnType<typeof vi.fn> };
+    let alerts: { notify: ReturnType<typeof vi.fn> };
+    let breakered: AIRateLimitService;
+
+    beforeEach(() => {
+      provider = {
+        checkRpm: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        checkAndIncrement: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+      };
+      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+      alerts = { notify: vi.fn() };
+      breakered = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        provider,
+        alerts as unknown as WebhookAlertService,
+        undefined,
+        flags as unknown as FeatureFlagsService
+      );
+    });
+
+    it('rejects a server-billed turn once global spend reaches the limit', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      const result = await breakered.checkLimit('user-1', 1000);
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe(
+        'Daily usage limit exceeded. Please try again tomorrow.'
+      );
+      expect(provider.checkAndIncrement).not.toHaveBeenCalled();
+    });
+
+    it('rejects byok turns too — server side-costs are still at stake', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(30);
+
+      const result = await breakered.checkLimit('user-1', 1000, false, true);
+
+      expect(result.allowed).toBe(false);
+      expect(provider.getByokCostUsd).not.toHaveBeenCalled();
+    });
+
+    it('fires the breaker alert exactly once across consecutive rejections', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(25);
+
+      await breakered.checkLimit('user-1', 1000);
+      await breakered.checkLimit('user-2', 1000);
+
+      expect(alerts.notify).toHaveBeenCalledTimes(1);
+      expect(alerts.notify).toHaveBeenCalledWith(
+        'budget.global_breaker',
+        expect.objectContaining({ spentUsd: 25, limitUsd: 25 })
+      );
+    });
+
+    it('allows turns while global spend sits under the limit', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(24.99);
+
+      const result = await breakered.checkLimit('user-1', 1000);
+
+      expect(result.allowed).toBe(true);
+    });
+
+    it('never reads the global counter when the flag is off', async () => {
+      flags.isEnabled.mockResolvedValue(false);
+      vi.mocked(provider.getGlobalSpendUsd).mockResolvedValue(100);
+
+      const result = await breakered.checkLimit('user-1', 1000);
+
+      expect(result.allowed).toBe(true);
+      expect(provider.getGlobalSpendUsd).not.toHaveBeenCalled();
+    });
+
+    it('degrades open when the global spend lookup fails', async () => {
+      vi.mocked(provider.getGlobalSpendUsd).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      const result = await breakered.checkLimit('user-1', 1000);
+
+      expect(result.allowed).toBe(true);
+    });
+
+    it('records a non-attributed global cost through the provider', async () => {
+      await breakered.recordGlobalCost(0.004);
+
+      expect(provider.recordGlobalCost).toHaveBeenCalledWith(0.004);
+    });
+
+    it('never throws when the global cost record fails', async () => {
+      vi.mocked(provider.recordGlobalCost).mockRejectedValue(
+        new Error('redis down')
+      );
+
+      await expect(breakered.recordGlobalCost(0.004)).resolves.toBeUndefined();
     });
   });
 });

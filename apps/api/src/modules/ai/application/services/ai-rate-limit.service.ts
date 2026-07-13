@@ -44,6 +44,9 @@ export class AIRateLimitService {
   // Per-instance fallback for the once-a-day budget warning when Redis is down.
   private readonly budgetWarnedOn = new Map<string, string>();
 
+  // Per-instance fallback for the once-a-day global breaker alert when Redis is down.
+  private globalBreakerFiredOn?: string;
+
   constructor(
     @Inject(AI_USAGE_REPOSITORY)
     private readonly usageRepository: AIUsageRepository,
@@ -72,6 +75,13 @@ export class AIRateLimitService {
       await this.effectiveEstimatedCost(estimatedCostUsd);
 
     if (this.rateLimitProvider) {
+      // The global breaker bounds ALL server-billed spend, so it runs before any
+      // reservation and before the byok branch (byok turns still incur side costs).
+      const breaker = await this.checkGlobalSpendBreaker();
+      if (!breaker.allowed) {
+        return breaker;
+      }
+
       let rpmChecked = false;
       try {
         const rpmCheck = await this.rateLimitProvider.checkRpm(userId);
@@ -153,6 +163,81 @@ export class AIRateLimitService {
       this.logger.warn('BYOK cost ceiling check unavailable, allowing', error);
     }
     return { allowed: true };
+  }
+
+  private async checkGlobalSpendBreaker(): Promise<RateLimitResult> {
+    if (
+      !this.rateLimitProvider ||
+      !(await this.isFlagOn('AI_GLOBAL_SPEND_BREAKER'))
+    ) {
+      return { allowed: true };
+    }
+    try {
+      const spentUsd = await this.rateLimitProvider.getGlobalSpendUsd();
+      const limitUsd = this.configService.get('AI_GLOBAL_DAILY_COST_LIMIT_USD');
+      if (spentUsd >= limitUsd) {
+        this.logger.error({
+          event: 'ai.budget.global_breaker',
+          spentUsd,
+          limitUsd,
+        });
+        if (await this.claimGlobalBreakerFlag()) {
+          this.alerts?.notify('budget.global_breaker', { spentUsd, limitUsd });
+        }
+        return {
+          allowed: false,
+          reason: 'Daily usage limit exceeded. Please try again tomorrow.',
+        };
+      }
+    } catch (error) {
+      this.logger.warn(
+        'Global spend breaker check unavailable, allowing',
+        error
+      );
+    }
+    return { allowed: true };
+  }
+
+  private async claimGlobalBreakerFlag(): Promise<boolean> {
+    const dayKey = new Date().toISOString().slice(0, 10);
+    const redis = this.aiRedis?.client;
+    if (redis) {
+      try {
+        const claimed = await redis.set(
+          `ai:global-breaker-fired:${dayKey}`,
+          '1',
+          'EX',
+          BUDGET_FLAG_TTL_SECONDS,
+          'NX'
+        );
+        return claimed === 'OK';
+      } catch (error) {
+        this.logger.warn(
+          'Global breaker flag via Redis failed, using memory',
+          error
+        );
+      }
+    }
+    if (this.globalBreakerFiredOn === dayKey) {
+      return false;
+    }
+    this.globalBreakerFiredOn = dayKey;
+    return true;
+  }
+
+  /**
+   * Records server-billed spend with no per-user attribution (background jobs)
+   * into the global daily counter. Never throws — failures are logged, not propagated.
+   */
+  async recordGlobalCost(costUsd: number): Promise<void> {
+    if (!this.rateLimitProvider) {
+      return;
+    }
+    try {
+      await this.rateLimitProvider.recordGlobalCost(costUsd);
+    } catch (error) {
+      this.logger.warn('Global cost record failed', error);
+    }
   }
 
   /**

@@ -248,6 +248,8 @@ Per-user daily limits enforced by `AIRateLimitService`.
 
 **Usage correction:** After the request completes, Redis counters are corrected with actual token counts (the pre-request check used an estimate).
 
+**Global daily-spend circuit breaker** (flag `ai_global_spend_breaker`, ships dark): a single Redis counter (`ai:spend:global:{day}`, 25h TTL) accumulates ALL server-billed spend across every user — server-key LLM turns (reserved on accept, corrected to actual), Tavily/Voyage side costs (including those incurred during BYOK turns), and background embedding jobs (memory extraction, note-embedding reconcile), which charge the global counter only, with no per-user attribution. When the flag is on, `checkLimit` reads the counter before any reservation and rejects every turn — **including BYOK turns**, whose side costs are still server-billed — once it reaches `AI_GLOBAL_DAILY_COST_LIMIT_USD`. **BYOK carve-out:** LLM usage billed to the user's own key never counts toward `AI_GLOBAL_DAILY_COST_LIMIT_USD`; all server-billed spend — server-key LLM, Tavily, Voyage — always does. The breaker degrades open: a Redis error in the check logs a warning and allows the turn, and the PG fallback path has no global view.
+
 **Daily reset:** Midnight UTC (`setUTCHours(0,0,0,0)`).
 
 ---
@@ -409,7 +411,9 @@ A per-conversation choice rides on the agent WebSocket payload (`{ conversationI
 
 **Budget warning:** when a user's daily usage crosses 80% of the token or USD budget, `ai.budget.warning` is logged once per user per day (Redis `SET NX` flag with 25h TTL; per-instance in-memory fallback when Redis is down).
 
-**Webhook:** if `AI_ALERT_WEBHOOK_URL` is set, `budget.warning` and `cooldown_start` events POST a JSON payload to it — fire-and-forget with a 5s timeout; failures are logged and never block the request.
+**Global breaker:** when the global daily-spend circuit breaker trips (see [Rate Limiting](#rate-limiting)), every rejection logs `ai.budget.global_breaker` at error level, and the `budget.global_breaker` webhook alert fires once per day (Redis `SET NX` on `ai:global-breaker-fired:{day}` with 25h TTL; per-instance in-memory fallback when Redis is down).
+
+**Webhook:** if `AI_ALERT_WEBHOOK_URL` is set, `budget.warning`, `budget.global_breaker`, and `cooldown_start` events POST a JSON payload to it — fire-and-forget with a 5s timeout; failures are logged and never block the request.
 
 ---
 
@@ -439,45 +443,47 @@ Non-Anthropic models receive the system prompt as a plain string (no caching met
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
 
-| Variable                       | Required | Default                                | Description                                             |
-| ------------------------------ | -------- | -------------------------------------- | ------------------------------------------------------- |
-| `AI_GATEWAY_API_KEY`           | No       | —                                      | Vercel AI Gateway key; enables gateway mode when set    |
-| `ANTHROPIC_API_KEY`            | No       | —                                      | Anthropic API key (validated at runtime)                |
-| `OPENAI_API_KEY`               | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
-| `GOOGLE_GENERATIVE_AI_API_KEY` | No       | —                                      | Google AI Studio key (chain fallback)                   |
-| `AI_DEFAULT_MODEL`             | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
-| `AI_FAST_MODEL`                | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
-| `AI_EVAL_MODEL`                | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
-| `AI_FALLBACK_CHAIN`            | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
-| `AI_COOLDOWN_ALLOWED_FAILS`    | No       | `3`                                    | Failures per minute that start a provider cooldown      |
-| `AI_COOLDOWN_SECONDS`          | No       | `120`                                  | Provider cooldown duration (seconds)                    |
-| `AI_TRANSCRIPTION_MODEL`       | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)    |
-| `AI_PRICING_REFRESH_ENABLED`   | No       | `false`                                | Refresh model pricing from LiteLLM's JSON at boot       |
-| `AI_ALERT_WEBHOOK_URL`         | No       | —                                      | Webhook for `budget.warning` / `cooldown_start` alerts  |
-| `AI_DAILY_TOKEN_LIMIT`         | No       | `100000`                               | Per-user daily token cap                                |
-| `AI_DAILY_COST_LIMIT_USD`      | No       | `1.0`                                  | Per-user daily cost cap (USD)                           |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT` | No       | `0.33`                                 | Fraction of daily limits for anonymous users            |
-| `AI_MAX_RETRIES`               | No       | `3`                                    | Provider retry count                                    |
-| `AI_TIMEOUT_MS`                | No       | `30000`                                | Total request timeout (ms) — REST completions only      |
-| `AI_STREAM_MAX_MS`             | No       | `180000`                               | Total streaming cap (ms); generous for long generations |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`   | No       | `10000`                                | Per-chunk (stall) timeout for streaming (ms)            |
-| `AI_CACHE_ENABLED`             | No       | `true`                                 | Enable response cache                                   |
-| `AI_CACHE_TTL_SECONDS`         | No       | `3600`                                 | Cache TTL (seconds)                                     |
-| `AI_RPM_LIMIT`                 | No       | `15`                                   | Max requests per minute per user                        |
-| `AI_MAX_CONCURRENT_STREAMS`    | No       | `2`                                    | Max simultaneous AI streams per user                    |
+| Variable                         | Required | Default                                | Description                                             |
+| -------------------------------- | -------- | -------------------------------------- | ------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`             | No       | —                                      | Vercel AI Gateway key; enables gateway mode when set    |
+| `ANTHROPIC_API_KEY`              | No       | —                                      | Anthropic API key (validated at runtime)                |
+| `OPENAI_API_KEY`                 | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
+| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                   |
+| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
+| `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
+| `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
+| `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
+| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                    | Failures per minute that start a provider cooldown      |
+| `AI_COOLDOWN_SECONDS`            | No       | `120`                                  | Provider cooldown duration (seconds)                    |
+| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)    |
+| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                                | Refresh model pricing from LiteLLM's JSON at boot       |
+| `AI_ALERT_WEBHOOK_URL`           | No       | —                                      | Webhook for `budget.warning` / `cooldown_start` alerts  |
+| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                               | Per-user daily token cap                                |
+| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                  | Per-user daily cost cap (USD)                           |
+| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                   | Global daily cap on ALL server-billed spend (USD)       |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                 | Fraction of daily limits for anonymous users            |
+| `AI_MAX_RETRIES`                 | No       | `3`                                    | Provider retry count                                    |
+| `AI_TIMEOUT_MS`                  | No       | `30000`                                | Total request timeout (ms) — REST completions only      |
+| `AI_STREAM_MAX_MS`               | No       | `180000`                               | Total streaming cap (ms); generous for long generations |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                                | Per-chunk (stall) timeout for streaming (ms)            |
+| `AI_CACHE_ENABLED`               | No       | `true`                                 | Enable response cache                                   |
+| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                 | Cache TTL (seconds)                                     |
+| `AI_RPM_LIMIT`                   | No       | `15`                                   | Max requests per minute per user                        |
+| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                    | Max simultaneous AI streams per user                    |
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                 | Description                                                                          |
-| ------------------------ | ------------------------------------------------------------------------------------ |
-| `ai_enabled`             | Global AI feature gate                                                               |
-| `voice_notes_enabled`    | Voice-to-note feature gate                                                           |
-| `agent_hybrid_retrieval` | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))              |
-| `agent_web_search`       | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                |
-| `agent_byok`             | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                |
-| `agent_longterm_memory`  | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))            |
-| `ai_cost_reserve`        | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))    |
-| `ai_byok_cost_gate`      | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok)) |
+| Flag Key                  | Description                                                                                                   |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `ai_enabled`              | Global AI feature gate                                                                                        |
+| `voice_notes_enabled`     | Voice-to-note feature gate                                                                                    |
+| `agent_hybrid_retrieval`  | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                       |
+| `agent_web_search`        | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                         |
+| `agent_byok`              | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                         |
+| `agent_longterm_memory`   | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                     |
+| `ai_cost_reserve`         | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                             |
+| `ai_byok_cost_gate`       | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                          |
+| `ai_global_spend_breaker` | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 

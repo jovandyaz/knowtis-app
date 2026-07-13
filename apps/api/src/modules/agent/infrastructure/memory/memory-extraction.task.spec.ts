@@ -45,8 +45,10 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     embedDocuments: vi.fn().mockResolvedValue({
       embeddings: [new Array(1024).fill(0)],
       totalTokens: 1,
+      costUsd: 0.004,
     }),
   };
+  const rateLimit = { recordGlobalCost: vi.fn().mockResolvedValue(undefined) };
   const task = new MemoryExtractionTask(
     db as never,
     config as never,
@@ -54,9 +56,10 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     conversations as never,
     memory as never,
     structured as never,
-    embed as never
+    embed as never,
+    rateLimit as never
   );
-  return { task, conversations, memory, structured, flags, embed };
+  return { task, conversations, memory, structured, flags, embed, rateLimit };
 }
 
 describe('MemoryExtractionTask', () => {
@@ -113,6 +116,12 @@ describe('MemoryExtractionTask', () => {
     expect(memory.applyReconcile).toHaveBeenCalledWith(
       expect.objectContaining({ inserts: [], updates: [] })
     );
+  });
+
+  it('records the embedding cost against the global spend counter only', async () => {
+    const { task, rateLimit } = make();
+    await task.reconcile();
+    expect(rateLimit.recordGlobalCost).toHaveBeenCalledWith(0.004);
   });
 
   it('does not mark the conversation extracted when persistence fails', async () => {

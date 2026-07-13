@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
+import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -41,7 +42,8 @@ export class EmbeddingReconcileTask {
     @Inject(NOTE_EMBEDDING_REPOSITORY)
     private readonly repo: NoteEmbeddingRepository,
     @Inject(EMBEDDING_PORT)
-    private readonly embed: EmbeddingPort
+    private readonly embed: EmbeddingPort,
+    private readonly rateLimit: AIRateLimitService
   ) {}
 
   @Interval(INTERVAL_MS)
@@ -114,9 +116,9 @@ export class EmbeddingReconcileTask {
   ): Promise<number> {
     let embeddings: number[][];
     try {
-      ({ embeddings } = await this.embed.embedDocuments(
-        chunk.map((c) => c.text)
-      ));
+      const result = await this.embed.embedDocuments(chunk.map((c) => c.text));
+      embeddings = result.embeddings;
+      void this.rateLimit.recordGlobalCost(result.costUsd);
     } catch (error) {
       this.logger.warn(
         `Failed to embed a batch of ${chunk.length} notes`,

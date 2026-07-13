@@ -95,35 +95,33 @@ describe('RedisRateLimitService', () => {
     });
   });
 
-  describe('recordByokCost', () => {
-    it('increments the byok counter and sets its TTL in a single atomic eval', async () => {
-      vi.spyOn(mockRedis.client, 'eval').mockResolvedValue('0.123400');
-
-      await service.recordByokCost('user-123', 0.1234);
-
-      expect(mockRedis.client.eval).toHaveBeenCalledTimes(1);
-      expect(mockRedis.client.eval).toHaveBeenCalledWith(
-        expect.stringContaining('INCRBYFLOAT'),
-        1,
-        expect.stringContaining('ai:ratelimit:user-123:byok_cost:'),
-        '0.123400',
-        expect.any(Number)
-      );
-    });
-  });
-
   describe('checkAndIncrement cost reserve (sliding-window Lua semantics)', () => {
     const limits = { tokenLimit: 1_000_000, costLimit: 1.0 };
     const today = new Date().toISOString().slice(0, 10);
 
     function createLuaFake() {
       const store = new Map<string, string>();
+      const incr = (key: string, by: number) => {
+        const next = Number(store.get(key) ?? '0') + by;
+        store.set(key, String(next));
+        return next;
+      };
       const evalFn = vi.fn(async (...args: unknown[]) => {
         const numKeys = Number(args[1]);
         const keys = args.slice(2, 2 + numKeys).map(String);
         const argv = args.slice(2 + numKeys).map(Number);
-        if (numKeys !== 2 || argv.length !== 5) {
-          throw new Error('sliding-window Lua expects 2 keys and 5 ARGV');
+        if (numKeys !== 3) {
+          throw new Error('budget Luas expect 3 keys (tokens, cost, global)');
+        }
+        if (argv.length === 3) {
+          const [tokenDelta, costIncrement] = argv;
+          const tokens = incr(keys[0], tokenDelta);
+          const cost = incr(keys[1], costIncrement);
+          incr(keys[2], costIncrement);
+          return [tokens, String(cost)];
+        }
+        if (argv.length !== 5) {
+          throw new Error('sliding-window Lua expects 5 ARGV');
         }
         const [estimatedTokens, estimatedCost, tokenLimit, costLimit] = argv;
         const currentTokens = Number(store.get(keys[0]) ?? '0');
@@ -137,10 +135,9 @@ describe('RedisRateLimitService', () => {
         ) {
           return [0, currentTokens, String(currentCost), 'cost'];
         }
-        const newTokens = currentTokens + estimatedTokens;
-        const newCost = currentCost + estimatedCost;
-        store.set(keys[0], String(newTokens));
-        store.set(keys[1], String(newCost));
+        const newTokens = incr(keys[0], estimatedTokens);
+        const newCost = incr(keys[1], estimatedCost);
+        incr(keys[2], estimatedCost);
         return [1, newTokens, String(newCost), ''];
       });
       const redis = { client: { eval: evalFn } } as unknown as AIRedisProvider;
@@ -206,6 +203,36 @@ describe('RedisRateLimitService', () => {
       expect(result.allowed).toBe(false);
       expect(result.reason).toMatch(/token/i);
     });
+
+    it('accumulates accepted reservations into the global spend key', async () => {
+      const { store, service } = createLuaFake();
+
+      const first = await service.checkAndIncrement('u1', 10, 0.3, limits);
+      const second = await service.checkAndIncrement('u2', 10, 0.2, limits);
+
+      expect(first.allowed).toBe(true);
+      expect(second.allowed).toBe(true);
+      expect(Number(store.get(`ai:spend:global:${today}`))).toBeCloseTo(0.5);
+    });
+
+    it('leaves the global spend key untouched when the reservation is rejected', async () => {
+      const { store, service } = createLuaFake();
+      store.set(`ai:ratelimit:u1:cost:${today}`, '1.0');
+
+      const result = await service.checkAndIncrement('u1', 10, 0.2, limits);
+
+      expect(result.allowed).toBe(false);
+      expect(store.has(`ai:spend:global:${today}`)).toBe(false);
+    });
+
+    it('moves the global spend key by the cost delta on correction', async () => {
+      const { store, service } = createLuaFake();
+      store.set(`ai:spend:global:${today}`, '1.0');
+
+      await service.correctUsage('u1', 1000, 400, 0.5, 0.2);
+
+      expect(Number(store.get(`ai:spend:global:${today}`))).toBeCloseTo(0.7);
+    });
   });
 
   describe('correctUsage', () => {
@@ -216,12 +243,71 @@ describe('RedisRateLimitService', () => {
 
       expect(mockRedis.client.eval).toHaveBeenCalledWith(
         expect.any(String),
-        2,
+        3,
         expect.stringContaining('user-123:tokens'),
         expect.stringContaining('user-123:cost'),
+        expect.stringContaining('ai:spend:global:'),
         -600,
         '-0.300000',
         expect.any(Number)
+      );
+    });
+  });
+
+  describe('global spend counter', () => {
+    const today = new Date().toISOString().slice(0, 10);
+    let client: {
+      eval: ReturnType<typeof vi.fn>;
+      get: ReturnType<typeof vi.fn>;
+    };
+    let counterService: RedisRateLimitService;
+
+    beforeEach(() => {
+      client = {
+        eval: vi.fn().mockResolvedValue('0'),
+        get: vi.fn().mockResolvedValue(null),
+      };
+      counterService = new RedisRateLimitService(
+        { client } as unknown as AIRedisProvider,
+        mockConfig
+      );
+    });
+
+    it('increments the global key with its TTL in a single atomic eval', async () => {
+      await counterService.recordGlobalCost(0.002);
+
+      expect(client.eval).toHaveBeenCalledTimes(1);
+      expect(client.eval).toHaveBeenCalledWith(
+        expect.stringContaining('INCRBYFLOAT'),
+        1,
+        `ai:spend:global:${today}`,
+        '0.002000',
+        25 * 60 * 60
+      );
+    });
+
+    it('reads the global spend as a float', async () => {
+      client.get.mockResolvedValue('3.5');
+
+      await expect(counterService.getGlobalSpendUsd()).resolves.toBe(3.5);
+      expect(client.get).toHaveBeenCalledWith(`ai:spend:global:${today}`);
+    });
+
+    it('reads zero when the global key is missing', async () => {
+      await expect(counterService.getGlobalSpendUsd()).resolves.toBe(0);
+    });
+
+    it('routes byok side costs into the global key in the same atomic eval', async () => {
+      await counterService.recordByokCost('u1', 0.008);
+
+      expect(client.eval).toHaveBeenCalledTimes(1);
+      expect(client.eval).toHaveBeenCalledWith(
+        expect.stringContaining('INCRBYFLOAT'),
+        2,
+        `ai:ratelimit:u1:byok_cost:${today}`,
+        `ai:spend:global:${today}`,
+        '0.008000',
+        25 * 60 * 60
       );
     });
   });
