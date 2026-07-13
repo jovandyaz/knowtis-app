@@ -666,4 +666,27 @@ describe('AiSdkAgentOrchestrator', () => {
       error: { code: 'AI_PROVIDER_ERROR' },
     });
   });
+
+  it('records a cooldown failure when the last candidate ends in an error event', async () => {
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config);
+    const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
+    const recordSuccess = vi.spyOn(chain.cooldown, 'recordSuccess');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain
+    );
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(() => {
+      throw new Error('provider down');
+    });
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({ type: 'error' });
+    expect(recordFailure).toHaveBeenCalledWith('anthropic');
+    expect(recordSuccess).not.toHaveBeenCalled();
+  });
 });
