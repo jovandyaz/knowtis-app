@@ -8,6 +8,8 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts'],
+    // Each fork boots full Nest apps; unbounded forks OOM-kill CI runners.
+    ...(process.env.CI ? { maxWorkers: 2 } : {}),
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
