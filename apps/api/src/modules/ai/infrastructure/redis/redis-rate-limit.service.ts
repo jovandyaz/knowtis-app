@@ -13,27 +13,32 @@ const SLIDING_WINDOW_LUA = `
 local token_key = KEYS[1]
 local cost_key = KEYS[2]
 local estimated_tokens = tonumber(ARGV[1])
-local token_limit = tonumber(ARGV[2])
-local cost_limit = tonumber(ARGV[3])
-local ttl = tonumber(ARGV[4])
+local estimated_cost = tonumber(ARGV[2])
+local token_limit = tonumber(ARGV[3])
+local cost_limit = tonumber(ARGV[4])
+local ttl = tonumber(ARGV[5])
 
 local current_tokens = tonumber(redis.call('GET', token_key) or '0')
 local current_cost = tonumber(redis.call('GET', cost_key) or '0')
 
 if (current_tokens + estimated_tokens) > token_limit then
-  return {0, current_tokens, tostring(current_cost)}
+  return {0, current_tokens, tostring(current_cost), 'tokens'}
 end
 
-if current_cost >= cost_limit then
-  return {0, current_tokens, tostring(current_cost)}
+if current_cost >= cost_limit or (current_cost + estimated_cost) > cost_limit then
+  return {0, current_tokens, tostring(current_cost), 'cost'}
 end
 
 redis.call('INCRBY', token_key, estimated_tokens)
 if redis.call('TTL', token_key) == -1 then
   redis.call('EXPIRE', token_key, ttl)
 end
+local new_cost = redis.call('INCRBYFLOAT', cost_key, estimated_cost)
+if redis.call('TTL', cost_key) == -1 then
+  redis.call('EXPIRE', cost_key, ttl)
+end
 
-return {1, current_tokens + estimated_tokens, tostring(current_cost)}
+return {1, current_tokens + estimated_tokens, tostring(new_cost), ''}
 `;
 
 const CORRECT_USAGE_LUA = `
@@ -89,15 +94,16 @@ export class RedisRateLimitService implements RateLimitProvider {
   ) {}
 
   async checkAndIncrement(
-    userId: string,
+    subject: string,
     estimatedTokens: number,
+    estimatedCostUsd: number,
     limits: RateLimits
   ): Promise<RateLimitCheckResult> {
     const { tokenLimit, costLimit } = limits;
 
     const today = new Date().toISOString().slice(0, 10);
-    const tokenKey = `ai:ratelimit:${userId}:tokens:${today}`;
-    const costKey = `ai:ratelimit:${userId}:cost:${today}`;
+    const tokenKey = `ai:ratelimit:${subject}:tokens:${today}`;
+    const costKey = `ai:ratelimit:${subject}:cost:${today}`;
 
     const result = (await this.redis.client.eval(
       SLIDING_WINDOW_LUA,
@@ -105,10 +111,11 @@ export class RedisRateLimitService implements RateLimitProvider {
       tokenKey,
       costKey,
       estimatedTokens,
+      estimatedCostUsd,
       tokenLimit,
       costLimit,
       KEY_TTL_SECONDS
-    )) as [number, number, string];
+    )) as [number, number, string, string];
 
     const allowed = result[0] === 1;
     const currentTokens = result[1];
@@ -116,7 +123,7 @@ export class RedisRateLimitService implements RateLimitProvider {
 
     if (!allowed) {
       const reason =
-        currentCostUsd >= costLimit
+        result[3] === 'cost'
           ? `Daily cost limit exceeded ($${currentCostUsd.toFixed(2)}/$${costLimit.toFixed(2)})`
           : `Daily token limit exceeded (${currentTokens}/${tokenLimit})`;
       return { allowed: false, reason, currentTokens, currentCostUsd };
@@ -125,9 +132,9 @@ export class RedisRateLimitService implements RateLimitProvider {
     return { allowed: true, currentTokens, currentCostUsd };
   }
 
-  async checkRpm(userId: string): Promise<RateLimitCheckResult> {
+  async checkRpm(subject: string): Promise<RateLimitCheckResult> {
     const minute = Math.floor(Date.now() / 60000);
-    const rpmKey = `ai:ratelimit:${userId}:rpm:${minute}`;
+    const rpmKey = `ai:ratelimit:${subject}:rpm:${minute}`;
 
     const result = (await this.redis.client.eval(
       RPM_CHECK_LUA,
@@ -150,15 +157,17 @@ export class RedisRateLimitService implements RateLimitProvider {
   }
 
   async correctUsage(
-    userId: string,
+    subject: string,
     estimatedTokens: number,
     actualTokens: number,
-    costUsd: number
+    estimatedCostUsd: number,
+    actualCostUsd: number
   ): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
-    const tokenKey = `ai:ratelimit:${userId}:tokens:${today}`;
-    const costKey = `ai:ratelimit:${userId}:cost:${today}`;
+    const tokenKey = `ai:ratelimit:${subject}:tokens:${today}`;
+    const costKey = `ai:ratelimit:${subject}:cost:${today}`;
     const tokenDelta = actualTokens - estimatedTokens;
+    const costDelta = actualCostUsd - estimatedCostUsd;
 
     try {
       await this.redis.client.eval(
@@ -167,7 +176,7 @@ export class RedisRateLimitService implements RateLimitProvider {
         tokenKey,
         costKey,
         tokenDelta,
-        costUsd.toFixed(6),
+        costDelta.toFixed(6),
         KEY_TTL_SECONDS
       );
     } catch (error) {

@@ -56,10 +56,17 @@ export class VoiceNoteHandler {
     const startTime = Date.now();
 
     const estimatedTokens = this.estimateTokensFromAudio(input.audio);
+    const transcriptionModel = this.configService.get('AI_TRANSCRIPTION_MODEL');
+    const estimatedCostUsd =
+      this.estimateAudioDurationSeconds(input.audio) *
+      (this.modelCatalog.getPricing(transcriptionModel)?.inputCostPerSecond ??
+        0);
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
       estimatedTokens,
-      input.isAnonymous ?? false
+      input.isAnonymous ?? false,
+      false,
+      estimatedCostUsd
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -93,7 +100,8 @@ export class VoiceNoteHandler {
       });
       await this.rateLimitService.releaseReservation(
         input.userId,
-        estimatedTokens
+        estimatedTokens,
+        estimatedCostUsd
       );
       return err(transcriptionResult.error);
     }
@@ -109,7 +117,8 @@ export class VoiceNoteHandler {
       });
       await this.rateLimitService.releaseReservation(
         input.userId,
-        estimatedTokens
+        estimatedTokens,
+        estimatedCostUsd
       );
       return err(
         AIErrors.invalidInput(
@@ -118,7 +127,6 @@ export class VoiceNoteHandler {
       );
     }
 
-    const transcriptionModel = this.configService.get('AI_TRANSCRIPTION_MODEL');
     const billedSeconds =
       durationInSeconds ?? this.estimateAudioDurationSeconds(input.audio);
     const costPerSecond =
@@ -129,9 +137,10 @@ export class VoiceNoteHandler {
         userId: input.userId,
         action: AI_ACTION.VOICE_TRANSCRIPTION,
         model: transcriptionModel,
-        // The structuring leg reconciles the token reserve; a nonzero estimate
-        // here would subtract the reservation twice per voice note.
+        // The structuring leg reconciles the token reserve; this leg reconciles
+        // the cost reserve. Crossing them would subtract each reserve twice.
         estimatedTokens: 0,
+        estimatedCostUsd,
         inputTokens: 0,
         outputTokens: 0,
         costUsd: whisperCostUsd,
@@ -162,7 +171,8 @@ export class VoiceNoteHandler {
       if (modelResult.isErr()) {
         await this.rateLimitService.releaseReservation(
           input.userId,
-          estimatedTokens
+          estimatedTokens,
+          0
         );
         return err(modelResult.error);
       }
@@ -196,6 +206,7 @@ export class VoiceNoteHandler {
           action: AI_ACTION.STRUCTURE_VOICE_NOTE,
           model,
           estimatedTokens,
+          estimatedCostUsd: 0,
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
@@ -237,7 +248,8 @@ export class VoiceNoteHandler {
 
       await this.rateLimitService.releaseReservation(
         input.userId,
-        estimatedTokens
+        estimatedTokens,
+        0
       );
 
       const fallbackTitle = this.buildFallbackTitle(transcript);

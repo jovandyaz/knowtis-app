@@ -5,7 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+import {
+  computeTokenCostUsd,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIOrchestrator } from '../../../ai/application/services/ai-orchestrator.service';
@@ -59,9 +63,28 @@ export class AIGenerationPipeline {
     const requestId = randomUUID();
     const startTime = Date.now();
 
+    const modelResult = await this.orchestrator.selectModel(request.action);
+    if (modelResult.isErr()) {
+      return err(ArtifactErrors.generationFailed(modelResult.error.message));
+    }
+    const model = modelResult.value.toPrimitive();
+
+    const systemPrompt = this.orchestrator.getSystemPrompt(request.action);
+
+    const pricing = this.modelCatalog.getPricing(model);
+    const estimatedCostUsd = pricing
+      ? computeTokenCostUsd(
+          { inputTokens: request.estimatedTokens, outputTokens: 0 },
+          pricing
+        )
+      : 0;
+
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       request.userId,
-      request.estimatedTokens
+      request.estimatedTokens,
+      false,
+      false,
+      estimatedCostUsd
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -87,14 +110,6 @@ export class AIGenerationPipeline {
       estimatedTokens: request.estimatedTokens,
       ...request.logContext,
     });
-
-    const modelResult = await this.orchestrator.selectModel(request.action);
-    if (modelResult.isErr()) {
-      return err(ArtifactErrors.generationFailed(modelResult.error.message));
-    }
-    const model = modelResult.value.toPrimitive();
-
-    const systemPrompt = this.orchestrator.getSystemPrompt(request.action);
 
     try {
       const result = await this.structuredOutput.generateStructuredOutput(
@@ -127,6 +142,7 @@ export class AIGenerationPipeline {
           action: request.action,
           model: servedModel,
           estimatedTokens: request.estimatedTokens,
+          estimatedCostUsd,
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
@@ -172,7 +188,8 @@ export class AIGenerationPipeline {
 
       void this.rateLimitService.releaseReservation(
         request.userId,
-        request.estimatedTokens
+        request.estimatedTokens,
+        estimatedCostUsd
       );
 
       return err(ArtifactErrors.generationFailed(GENERATION_FAILED_MESSAGE));

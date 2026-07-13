@@ -3,7 +3,13 @@ import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import { detectPromptInjection, estimateTokenCount } from '@knowtis/ai-gateway';
+import {
+  computeTokenCostUsd,
+  detectPromptInjection,
+  estimateTokenCount,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 
 import { AIErrors, type AIDomainError } from '../../domain/errors/ai.errors';
 import {
@@ -35,6 +41,7 @@ export interface PreflightContext {
   readonly systemPrompt: string;
   readonly userPrompt: string;
   readonly estimatedTokens: number;
+  readonly estimatedCostUsd: number;
 }
 
 interface PreflightReady {
@@ -68,6 +75,8 @@ export class AICompletionPipeline {
   constructor(
     private readonly orchestrator: AIOrchestrator,
     private readonly rateLimitService: AIRateLimitService,
+    @Inject(MODEL_CATALOG)
+    private readonly modelCatalog: ModelCatalog,
     @Optional()
     @Inject(AI_CACHE)
     private readonly cache?: AICache
@@ -110,10 +119,27 @@ export class AICompletionPipeline {
     }
 
     const estimatedTokens = estimateTokenCount(input.content);
+
+    const modelResult = await this.orchestrator.selectModel(action);
+    if (modelResult.isErr()) {
+      return err(modelResult.error);
+    }
+    const model = modelResult.value.toPrimitive();
+
+    const pricing = this.modelCatalog.getPricing(model);
+    const estimatedCostUsd = pricing
+      ? computeTokenCostUsd(
+          { inputTokens: estimatedTokens, outputTokens: 0 },
+          pricing
+        )
+      : 0;
+
     const rateLimitCheck = await this.rateLimitService.checkLimit(
       input.userId,
       estimatedTokens,
-      input.isAnonymous ?? false
+      input.isAnonymous ?? false,
+      false,
+      estimatedCostUsd
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -126,12 +152,6 @@ export class AICompletionPipeline {
       return err(AIErrors.rateLimitExceeded());
     }
 
-    const modelResult = await this.orchestrator.selectModel(action);
-    if (modelResult.isErr()) {
-      return err(modelResult.error);
-    }
-    const model = modelResult.value.toPrimitive();
-
     const systemPrompt = this.orchestrator.getSystemPrompt(action);
     const userPrompt = this.orchestrator.buildUserPrompt(input, action);
 
@@ -143,6 +163,7 @@ export class AICompletionPipeline {
       systemPrompt,
       userPrompt,
       estimatedTokens,
+      estimatedCostUsd,
     };
 
     this.logger.log({
@@ -188,6 +209,7 @@ export class AICompletionPipeline {
         action: context.action,
         model: result.model,
         estimatedTokens: context.estimatedTokens,
+        estimatedCostUsd: context.estimatedCostUsd,
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd,
@@ -208,7 +230,8 @@ export class AICompletionPipeline {
   ): void {
     void this.rateLimitService.releaseReservation(
       input.userId,
-      context.estimatedTokens
+      context.estimatedTokens,
+      context.estimatedCostUsd
     );
   }
 
