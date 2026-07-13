@@ -206,11 +206,7 @@ export class StreamTextHandler {
         mode: 'stream',
       });
       this.pipeline.releaseReservation(context, input);
-      callbacks.onError(
-        AIErrors.providerError(
-          error instanceof Error ? error.message : 'AI streaming failed'
-        )
-      );
+      callbacks.onError(AIErrors.providerError('AI streaming failed'));
     }
   }
 }

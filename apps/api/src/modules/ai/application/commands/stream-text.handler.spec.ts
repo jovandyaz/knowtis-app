@@ -254,8 +254,9 @@ describe('StreamTextHandler', () => {
       callbacks
     );
 
-    expect(errorResult?.code).toBe('AI_PROVIDER_ERROR');
-    expect(errorResult!.message).toContain('Provider connection failed');
+    expect(errorResult).toBeTruthy();
+    expect(errorResult!.code).toBe('AI_PROVIDER_ERROR');
+    expect(errorResult!.message).toBe('AI provider error: AI streaming failed');
   });
 
   it('should stop streaming when signal is aborted', async () => {
