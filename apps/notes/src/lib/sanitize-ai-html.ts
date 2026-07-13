@@ -1,21 +1,6 @@
 import DOMPurify from 'dompurify';
 
-const FORBID_TAGS = [
-  'img',
-  'picture',
-  'source',
-  'audio',
-  'video',
-  'iframe',
-  'svg',
-  'math',
-  'form',
-  'link',
-  'meta',
-  'base',
-];
-
-const FORBID_ATTR = ['style', 'srcset', 'ping', 'background', 'formaction'];
+import { AI_HTML_FORBID_ATTR, AI_HTML_FORBID_TAGS } from '@knowtis/shared-util';
 
 /**
  * Sanitizes LLM-produced HTML for rendering via dangerouslySetInnerHTML.
@@ -25,7 +10,7 @@ const FORBID_ATTR = ['style', 'srcset', 'ping', 'background', 'formaction'];
  */
 export function sanitizeAiHtml(html: string): string {
   return DOMPurify.sanitize(html, {
-    FORBID_TAGS,
-    FORBID_ATTR,
+    FORBID_TAGS: AI_HTML_FORBID_TAGS,
+    FORBID_ATTR: AI_HTML_FORBID_ATTR,
   });
 }
