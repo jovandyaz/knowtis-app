@@ -170,6 +170,11 @@ export class AIGenerationPipeline {
         ...request.logContext,
       });
 
+      void this.rateLimitService.releaseReservation(
+        request.userId,
+        request.estimatedTokens
+      );
+
       return err(ArtifactErrors.generationFailed(GENERATION_FAILED_MESSAGE));
     }
   }

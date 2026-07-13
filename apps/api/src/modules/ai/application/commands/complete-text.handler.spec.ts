@@ -18,6 +18,7 @@ import { CompleteTextHandler } from './complete-text.handler';
 
 describe('CompleteTextHandler', () => {
   let handler: CompleteTextHandler;
+  let pipeline: AICompletionPipeline;
   let mockProvider: AICompletionProvider;
   let mockUsageRepo: AIUsageRepository;
 
@@ -74,11 +75,7 @@ describe('CompleteTextHandler', () => {
       createTestCatalog()
     );
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    const pipeline = new AICompletionPipeline(
-      orchestrator,
-      rateLimitService,
-      cache
-    );
+    pipeline = new AICompletionPipeline(orchestrator, rateLimitService, cache);
     return new CompleteTextHandler(
       mockProvider,
       createTestCatalog(),
@@ -153,6 +150,28 @@ describe('CompleteTextHandler', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe('AI_RATE_LIMIT_EXCEEDED');
     }
+  });
+
+  it('releases the reservation when the provider fails', async () => {
+    vi.spyOn(mockProvider, 'generateCompletion').mockRejectedValue(
+      new Error('provider exploded')
+    );
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    const result = await handler.execute({
+      userId: 'user-123',
+      action: AI_ACTION.SUMMARIZE,
+      content: 'Some content',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe('AI_PROVIDER_ERROR');
+    }
+    expect(releaseSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ estimatedTokens: expect.any(Number) }),
+      expect.objectContaining({ userId: 'user-123' })
+    );
   });
 
   it('should fail for invalid action', async () => {

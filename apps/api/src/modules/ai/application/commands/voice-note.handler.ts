@@ -91,6 +91,10 @@ export class VoiceNoteHandler {
         error: transcriptionResult.error.message,
         latencyMs: Date.now() - startTime,
       });
+      await this.rateLimitService.releaseReservation(
+        input.userId,
+        estimatedTokens
+      );
       return err(transcriptionResult.error);
     }
 
@@ -103,6 +107,10 @@ export class VoiceNoteHandler {
         userId: input.userId,
         latencyMs: Date.now() - startTime,
       });
+      await this.rateLimitService.releaseReservation(
+        input.userId,
+        estimatedTokens
+      );
       return err(
         AIErrors.invalidInput(
           'Transcription produced no text. Please try again with clearer audio.'
@@ -121,7 +129,9 @@ export class VoiceNoteHandler {
         userId: input.userId,
         action: AI_ACTION.VOICE_TRANSCRIPTION,
         model: transcriptionModel,
-        estimatedTokens,
+        // The structuring leg reconciles the token reserve; a nonzero estimate
+        // here would subtract the reservation twice per voice note.
+        estimatedTokens: 0,
         inputTokens: 0,
         outputTokens: 0,
         costUsd: whisperCostUsd,
@@ -150,6 +160,10 @@ export class VoiceNoteHandler {
         AI_ACTION.STRUCTURE_VOICE_NOTE
       );
       if (modelResult.isErr()) {
+        await this.rateLimitService.releaseReservation(
+          input.userId,
+          estimatedTokens
+        );
         return err(modelResult.error);
       }
       const model = modelResult.value.toPrimitive();
@@ -220,6 +234,11 @@ export class VoiceNoteHandler {
         error: error instanceof Error ? error.message : 'Unknown error',
         latencyMs: Date.now() - startTime,
       });
+
+      await this.rateLimitService.releaseReservation(
+        input.userId,
+        estimatedTokens
+      );
 
       const fallbackTitle = this.buildFallbackTitle(transcript);
 

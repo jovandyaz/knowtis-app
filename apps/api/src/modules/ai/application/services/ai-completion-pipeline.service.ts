@@ -202,6 +202,16 @@ export class AICompletionPipeline {
       );
   }
 
+  releaseReservation(
+    context: PreflightContext,
+    input: TextCompletionInput
+  ): void {
+    void this.rateLimitService.releaseReservation(
+      input.userId,
+      context.estimatedTokens
+    );
+  }
+
   recordCompletion(
     context: PreflightContext,
     input: TextCompletionInput,
