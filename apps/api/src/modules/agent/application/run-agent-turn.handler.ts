@@ -615,6 +615,8 @@ export class RunAgentTurnHandler {
                   inputTokens: event.usage.inputTokens,
                   outputTokens: event.usage.outputTokens,
                   model: event.usage.model,
+                  cacheReadTokens: event.usage.cacheReadTokens,
+                  cacheWriteTokens: event.usage.cacheWriteTokens,
                 },
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
@@ -743,6 +745,8 @@ export class RunAgentTurnHandler {
         inputTokens: usage.inputTokens,
         outputTokens: usage.outputTokens,
         model: usage.model,
+        cacheReadTokens: usage.cacheReadTokens,
+        cacheWriteTokens: usage.cacheWriteTokens,
       },
       pricing
     );

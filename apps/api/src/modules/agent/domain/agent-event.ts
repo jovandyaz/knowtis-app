@@ -5,6 +5,8 @@ export interface AgentTurnUsage {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly model: string;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
 }
 
 export interface AgentSource {

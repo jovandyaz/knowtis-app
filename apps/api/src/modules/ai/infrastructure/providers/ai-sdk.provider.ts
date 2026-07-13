@@ -9,6 +9,7 @@ import type {
   CompletionResult,
   StreamCompletionResult,
 } from '../../domain/ports/ai-provider.port';
+import { cacheableSystem } from './anthropic-cache';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
@@ -40,18 +41,7 @@ export class AISDKProvider implements AICompletionProvider {
     if (!system) {
       return {};
     }
-    if (model.startsWith('anthropic:')) {
-      return {
-        system: {
-          role: 'system' as const,
-          content: system,
-          providerOptions: {
-            anthropic: { cacheControl: { type: 'ephemeral' as const } },
-          },
-        },
-      };
-    }
-    return { system };
+    return cacheableSystem(model, system);
   }
 
   private buildTelemetryParam(telemetry: CompletionOptions['telemetry']) {
