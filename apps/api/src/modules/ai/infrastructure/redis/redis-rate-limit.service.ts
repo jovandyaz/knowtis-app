@@ -82,6 +82,19 @@ end
 return {1, current + 1}
 `;
 
+const BYOK_COST_LUA = `
+local key = KEYS[1]
+local increment = ARGV[1]
+local ttl = tonumber(ARGV[2])
+
+local new_cost = redis.call('INCRBYFLOAT', key, increment)
+if redis.call('TTL', key) == -1 then
+  redis.call('EXPIRE', key, ttl)
+end
+
+return new_cost
+`;
+
 const KEY_TTL_SECONDS = 25 * 60 * 60;
 
 @Injectable()
@@ -186,11 +199,13 @@ export class RedisRateLimitService implements RateLimitProvider {
 
   async recordByokCost(subject: string, costUsd: number): Promise<void> {
     const key = this.byokCostKey(subject);
-    const client = this.redis.client;
-    await client.incrbyfloat(key, costUsd.toFixed(6));
-    if ((await client.ttl(key)) === -1) {
-      await client.expire(key, KEY_TTL_SECONDS);
-    }
+    await this.redis.client.eval(
+      BYOK_COST_LUA,
+      1,
+      key,
+      costUsd.toFixed(6),
+      KEY_TTL_SECONDS
+    );
   }
 
   async getByokCostUsd(subject: string): Promise<number> {

@@ -94,4 +94,14 @@ describe('HybridRetrievalAdapter.search', () => {
     expect(hits.map((h) => h.id)).toEqual(['a']);
     expect(repo.findAccessibleNotesByEmbedding).not.toHaveBeenCalled();
   });
+
+  it('does not record a side cost when the embedding call fails', async () => {
+    const { adapter, rateLimit } = make({
+      lexical: ['a'],
+      vector: [],
+      embedThrows: true,
+    });
+    await adapter.search('u1', 'q');
+    expect(rateLimit.recordSideCost).not.toHaveBeenCalled();
+  });
 });
