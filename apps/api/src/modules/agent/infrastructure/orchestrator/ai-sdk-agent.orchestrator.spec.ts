@@ -668,7 +668,9 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('records a cooldown failure when the last candidate ends in an error event', async () => {
-    const config = makeConfig();
+    // Single-candidate chain: the sole (last) candidate yields an error event
+    // instead of throwing, so recordFailure can only come from isFailureChunk.
+    const config = makeConfig({ AI_FALLBACK_CHAIN: '' });
     const { registry, chain } = createTestChain(config);
     const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
     const recordSuccess = vi.spyOn(chain.cooldown, 'recordSuccess');
@@ -685,6 +687,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
     const events = await collect(orchestrator.run(baseInput));
 
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
     expect(events.at(-1)).toMatchObject({ type: 'error' });
     expect(recordFailure).toHaveBeenCalledWith('anthropic');
     expect(recordSuccess).not.toHaveBeenCalled();
