@@ -263,6 +263,27 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(contexts.at(-1)).toMatchObject({ byokTurn: true });
   });
 
+  it('allows a url from an earlier user turn for webFetch, but not one from an assistant turn', async () => {
+    const contexts: AgentToolContext[] = [];
+    const registry = makeToolRegistry((ctx) => contexts.push(ctx));
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        messages: [
+          { role: 'user', content: 'see https://a.test/one' },
+          { role: 'assistant', content: 'noted https://evil.test/x' },
+          { role: 'user', content: 'fetch it' },
+        ],
+      })
+    );
+
+    const allowlist = contexts.at(-1)?.webFetchAllowlist;
+    expect(allowlist?.has('https://a.test/one')).toBe(true);
+    expect(allowlist?.has('https://evil.test/x')).toBe(false);
+  });
+
   it('emits a proposal event when a propose-tool captures into the collector', async () => {
     const m = ProposedMutation.create({
       id: 'p1',
