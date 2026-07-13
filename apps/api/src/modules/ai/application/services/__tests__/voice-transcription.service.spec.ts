@@ -107,7 +107,8 @@ describe('VoiceTranscriptionService', () => {
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe(AIErrorCodes.PROVIDER_ERROR);
-    expect(error.message).toBe('AI provider error: API rate limit exceeded');
+    expect(error.message).toBe('AI provider error: Voice transcription failed');
+    expect(error.message).not.toContain('API rate limit exceeded');
   });
 
   it('should return err with generic message for non-Error throws', async () => {
@@ -119,6 +120,22 @@ describe('VoiceTranscriptionService', () => {
     expect(result.isErr()).toBe(true);
     const error = result._unsafeUnwrapErr();
     expect(error.code).toBe(AIErrorCodes.PROVIDER_ERROR);
-    expect(error.message).toBe('AI provider error: Transcription failed');
+    expect(error.message).toBe('AI provider error: Voice transcription failed');
+  });
+
+  it('should not leak sensitive API key info in provider errors', async () => {
+    const audioBuffer = Buffer.from('fake-audio-data');
+    mockTranscribe.mockRejectedValue(
+      new Error('401 invalid api key: sk-proj-abcdef123456')
+    );
+
+    const result = await service.transcribe(audioBuffer);
+
+    expect(result.isErr()).toBe(true);
+    const error = result._unsafeUnwrapErr();
+    expect(error.code).toBe(AIErrorCodes.PROVIDER_ERROR);
+    expect(error.message).toContain('Voice transcription failed');
+    expect(error.message).not.toContain('sk-proj');
+    expect(error.message).not.toContain('401');
   });
 });

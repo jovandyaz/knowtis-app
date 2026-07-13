@@ -1,5 +1,5 @@
 import { createOpenAI } from '@ai-sdk/openai';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { experimental_transcribe as transcribe } from 'ai';
 import { err, ok, type Result } from 'neverthrow';
@@ -15,6 +15,7 @@ export interface TranscriptionOutput {
 
 @Injectable()
 export class VoiceTranscriptionService {
+  private readonly logger = new Logger(VoiceTranscriptionService.name);
   private readonly openai;
   private readonly model: string;
 
@@ -51,9 +52,11 @@ export class VoiceTranscriptionService {
         durationInSeconds: result.durationInSeconds,
       });
     } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Transcription failed';
-      return err(AIErrors.providerError(message));
+      this.logger.error({
+        event: 'ai.transcription.error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return err(AIErrors.providerError('Voice transcription failed'));
     }
   }
 }
