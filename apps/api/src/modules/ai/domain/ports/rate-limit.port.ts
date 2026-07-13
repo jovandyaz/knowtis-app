@@ -35,6 +35,12 @@ export interface RateLimitProvider {
   recordGlobalCost(costUsd: number): Promise<void>;
 
   getGlobalSpendUsd(): Promise<number>;
+
+  /**
+   * Atomically claims the named once-per-UTC-day flag across all instances.
+   * Resolves true only for the first claimant of the day.
+   */
+  claimDailyFlag(name: string): Promise<boolean>;
 }
 
 export const RATE_LIMIT_PROVIDER = Symbol('RATE_LIMIT_PROVIDER');
