@@ -29,6 +29,7 @@ function createAsyncStream(chunks: string[]) {
 
 describe('StreamTextHandler', () => {
   let handler: StreamTextHandler;
+  let pipeline: AICompletionPipeline;
   let mockProvider: AICompletionProvider;
   let mockUsageRepo: AIUsageRepository;
   let callbacks: StreamTextCallbacks;
@@ -105,11 +106,7 @@ describe('StreamTextHandler', () => {
       createTestCatalog()
     );
     const rateLimitService = new AIRateLimitService(mockUsageRepo, mockConfig);
-    const pipeline = new AICompletionPipeline(
-      orchestrator,
-      rateLimitService,
-      cache
-    );
+    pipeline = new AICompletionPipeline(orchestrator, rateLimitService, cache);
     return new StreamTextHandler(
       mockProvider,
       createTestCatalog(),
@@ -425,6 +422,72 @@ describe('StreamTextHandler', () => {
       expect.objectContaining({ inputTokens: 10, outputTokens: 5, costUsd: 0 })
     );
     expect(mockProvider.streamCompletion).not.toHaveBeenCalled();
+  });
+
+  it('releases the reservation when the stream fails with a provider error', async () => {
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial';
+        throw new Error('provider exploded');
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+    const releaseSpy = vi.spyOn(pipeline, 'releaseReservation');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks
+    );
+
+    expect(errorResult).toBeTruthy();
+    expect(errorResult!.code).toBe('AI_PROVIDER_ERROR');
+    expect(releaseSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ estimatedTokens: expect.any(Number) }),
+      expect.objectContaining({ userId: 'user-123' })
+    );
+  });
+
+  it('records estimated partial usage instead of {0,0} when the client aborts', async () => {
+    const controller = new AbortController();
+    vi.spyOn(mockProvider, 'streamCompletion').mockReturnValue({
+      textStream: (async function* () {
+        yield 'partial answer before the cancel arrived';
+        controller.abort();
+        yield 'never delivered';
+      })(),
+      usage: Promise.resolve({
+        promptTokens: 0,
+        completionTokens: 0,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      }),
+    });
+    const recordSpy = vi.spyOn(pipeline, 'recordCompletion');
+
+    await handler.execute(
+      {
+        userId: 'user-123',
+        action: AI_ACTION.SUMMARIZE,
+        content: 'Some content',
+      },
+      callbacks,
+      controller.signal
+    );
+
+    expect(recordSpy).toHaveBeenCalledTimes(1);
+    const recorded = recordSpy.mock.calls[0][2];
+    expect(recorded.inputTokens).toBeGreaterThan(0);
+    expect(recorded.outputTokens).toBeGreaterThan(0);
+    expect(recordSpy.mock.calls[0][3]).toEqual(
+      expect.objectContaining({ aborted: true })
+    );
   });
 
   it('should build tone prompt correctly', async () => {

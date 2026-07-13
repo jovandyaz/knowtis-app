@@ -1,7 +1,11 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+import {
+  estimateTokenCount,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../domain/errors/ai.errors';
@@ -78,6 +82,7 @@ export class StreamTextHandler {
     }
 
     const { context } = preflight;
+    const collectedChunks: string[] = [];
 
     try {
       const streamResult = this.aiProvider.streamCompletion(
@@ -101,8 +106,6 @@ export class StreamTextHandler {
         }
       );
 
-      const collectedChunks: string[] = [];
-
       for await (const chunk of streamResult.textStream) {
         if (signal?.aborted) {
           this.logger.log({
@@ -121,10 +124,21 @@ export class StreamTextHandler {
 
       const actualUsage = await streamResult.usage;
       const servedModel = actualUsage.model;
+      const aborted = signal?.aborted ?? false;
+      const zeroSettled =
+        actualUsage.promptTokens === 0 && actualUsage.completionTokens === 0;
+      const inputTokens =
+        aborted && zeroSettled
+          ? context.estimatedTokens
+          : actualUsage.promptTokens;
+      const outputTokens =
+        aborted && zeroSettled
+          ? estimateTokenCount(collectedChunks.join(''))
+          : actualUsage.completionTokens;
       const usage = TokenUsage.create(
         {
-          inputTokens: actualUsage.promptTokens,
-          outputTokens: actualUsage.completionTokens,
+          inputTokens,
+          outputTokens,
           model: servedModel,
           cacheReadTokens: actualUsage.cacheReadTokens,
           cacheWriteTokens: actualUsage.cacheWriteTokens,
@@ -136,23 +150,43 @@ export class StreamTextHandler {
         context,
         input,
         {
-          inputTokens: actualUsage.promptTokens,
-          outputTokens: actualUsage.completionTokens,
+          inputTokens,
+          outputTokens,
           model: servedModel,
           costUsd: usage.costUsd,
           text: collectedChunks.join(''),
         },
-        { mode: 'stream', aborted: signal?.aborted ?? false }
+        { mode: 'stream', aborted }
       );
 
       callbacks.onDone({
-        inputTokens: actualUsage.promptTokens,
-        outputTokens: actualUsage.completionTokens,
+        inputTokens,
+        outputTokens,
         model: servedModel,
         costUsd: usage.costUsd,
       });
     } catch (error) {
       if (signal?.aborted) {
+        const outputTokens = estimateTokenCount(collectedChunks.join(''));
+        const usage = TokenUsage.create(
+          {
+            inputTokens: context.estimatedTokens,
+            outputTokens,
+            model: context.model,
+          },
+          this.modelCatalog.getPricing(context.model)
+        );
+        this.pipeline.recordCompletion(
+          context,
+          input,
+          {
+            inputTokens: context.estimatedTokens,
+            outputTokens,
+            model: context.model,
+            costUsd: usage.costUsd,
+          },
+          { mode: 'stream', aborted: true }
+        );
         this.logger.log({
           event: 'ai.request.cancelled',
           requestId: context.requestId,
@@ -171,6 +205,7 @@ export class StreamTextHandler {
         latencyMs: Date.now() - context.startTime,
         mode: 'stream',
       });
+      this.pipeline.releaseReservation(context, input);
       callbacks.onError(
         AIErrors.providerError(
           error instanceof Error ? error.message : 'AI streaming failed'

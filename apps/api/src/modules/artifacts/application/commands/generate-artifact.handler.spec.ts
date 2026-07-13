@@ -55,6 +55,7 @@ describe('GenerateArtifactHandler', () => {
   let rateLimitService: {
     checkLimit: ReturnType<typeof vi.fn>;
     recordUsage: ReturnType<typeof vi.fn>;
+    releaseReservation: ReturnType<typeof vi.fn>;
   };
   let pipeline: AIGenerationPipeline;
 
@@ -76,6 +77,7 @@ describe('GenerateArtifactHandler', () => {
     rateLimitService = {
       checkLimit: vi.fn(),
       recordUsage: vi.fn(),
+      releaseReservation: vi.fn().mockResolvedValue(undefined),
     };
 
     pipeline = new AIGenerationPipeline(
