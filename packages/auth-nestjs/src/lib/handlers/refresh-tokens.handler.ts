@@ -70,8 +70,11 @@ export class RefreshTokensHandler {
       return err(AuthErrors.userNotFound(payload.sub));
     }
 
-    await this.sessionRepository.markRotated(session.id);
-    return this.issueRotatedTokens(payload, session);
+    const rotatedResult = await this.issueRotatedTokens(payload, session);
+    if (rotatedResult.isOk()) {
+      await this.sessionRepository.markRotated(session.id);
+    }
+    return rotatedResult;
   }
 
   private async handleMissingSession(
