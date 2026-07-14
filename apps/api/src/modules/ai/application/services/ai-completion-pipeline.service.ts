@@ -31,6 +31,7 @@ export interface TextCompletionInput {
   readonly targetLanguage?: string;
   readonly targetTone?: string;
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
 }
 
 export interface PreflightContext {
@@ -42,6 +43,7 @@ export interface PreflightContext {
   readonly userPrompt: string;
   readonly estimatedTokens: number;
   readonly estimatedCostUsd: number;
+  readonly reservedIpSubject?: string;
 }
 
 interface PreflightReady {
@@ -139,7 +141,8 @@ export class AICompletionPipeline {
       estimatedTokens,
       input.isAnonymous ?? false,
       false,
-      estimatedCostUsd
+      estimatedCostUsd,
+      input.clientIp
     );
     if (!rateLimitCheck.allowed) {
       this.logger.warn({
@@ -164,6 +167,9 @@ export class AICompletionPipeline {
       userPrompt,
       estimatedTokens,
       estimatedCostUsd,
+      ...(rateLimitCheck.reservedIpSubject
+        ? { reservedIpSubject: rateLimitCheck.reservedIpSubject }
+        : {}),
     };
 
     this.logger.log({
@@ -213,6 +219,9 @@ export class AICompletionPipeline {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd,
+        ...(context.reservedIpSubject
+          ? { reservedIpSubject: context.reservedIpSubject }
+          : {}),
       })
       .catch((error) =>
         this.logger.warn({
@@ -231,7 +240,8 @@ export class AICompletionPipeline {
     void this.rateLimitService.releaseReservation(
       input.userId,
       context.estimatedTokens,
-      context.estimatedCostUsd
+      context.estimatedCostUsd,
+      context.reservedIpSubject
     );
   }
 

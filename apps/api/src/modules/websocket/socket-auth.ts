@@ -1,3 +1,5 @@
+import type { IncomingHttpHeaders } from 'node:http';
+
 import { Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import type { Socket } from 'socket.io';
@@ -5,7 +7,18 @@ import type { Socket } from 'socket.io';
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp/mcp-token';
 
 export interface AuthenticatedSocket extends Socket {
-  data: { userId?: string; isAnonymous?: boolean };
+  data: { userId?: string; isAnonymous?: boolean; clientIp?: string };
+}
+
+/**
+ * Client IP from Railway's edge-set X-Real-IP header (single-valued per the
+ * platform contract; first element if it ever arrives as an array).
+ * Returns undefined when the header is absent. Never reads x-forwarded-for.
+ */
+export function realIpOf(headers: IncomingHttpHeaders): string | undefined {
+  const value = headers['x-real-ip'];
+  const first = Array.isArray(value) ? value[0] : value;
+  return first || undefined;
 }
 
 export type SocketAuthFailureReason =
@@ -69,6 +82,11 @@ export function authenticateSocket(
     client.data.userId = payload.sub;
     if (payload.isAnonymous) {
       client.data.isAnonymous = true;
+    }
+    const clientIp =
+      realIpOf(client.handshake.headers ?? {}) ?? client.handshake.address;
+    if (clientIp) {
+      client.data.clientIp = clientIp;
     }
     logger.log({
       event: `${eventPrefix}.client.connected`,

@@ -18,6 +18,7 @@ local estimated_cost = tonumber(ARGV[2])
 local token_limit = tonumber(ARGV[3])
 local cost_limit = tonumber(ARGV[4])
 local ttl = tonumber(ARGV[5])
+local count_global = tonumber(ARGV[6])
 
 local current_tokens = tonumber(redis.call('GET', token_key) or '0')
 local current_cost = tonumber(redis.call('GET', cost_key) or '0')
@@ -38,9 +39,11 @@ local new_cost = redis.call('INCRBYFLOAT', cost_key, estimated_cost)
 if redis.call('TTL', cost_key) == -1 then
   redis.call('EXPIRE', cost_key, ttl)
 end
-redis.call('INCRBYFLOAT', global_key, estimated_cost)
-if redis.call('TTL', global_key) == -1 then
-  redis.call('EXPIRE', global_key, ttl)
+if count_global == 1 then
+  redis.call('INCRBYFLOAT', global_key, estimated_cost)
+  if redis.call('TTL', global_key) == -1 then
+    redis.call('EXPIRE', global_key, ttl)
+  end
 end
 
 return {1, current_tokens + estimated_tokens, tostring(new_cost), ''}
@@ -53,6 +56,7 @@ local global_key = KEYS[3]
 local token_delta = tonumber(ARGV[1])
 local cost_increment = ARGV[2]
 local ttl = tonumber(ARGV[3])
+local count_global = tonumber(ARGV[4])
 
 if token_delta ~= 0 then
   redis.call('INCRBY', token_key, token_delta)
@@ -65,9 +69,11 @@ local new_cost = redis.call('INCRBYFLOAT', cost_key, cost_increment)
 if redis.call('TTL', cost_key) == -1 then
   redis.call('EXPIRE', cost_key, ttl)
 end
-redis.call('INCRBYFLOAT', global_key, cost_increment)
-if redis.call('TTL', global_key) == -1 then
-  redis.call('EXPIRE', global_key, ttl)
+if count_global == 1 then
+  redis.call('INCRBYFLOAT', global_key, cost_increment)
+  if redis.call('TTL', global_key) == -1 then
+    redis.call('EXPIRE', global_key, ttl)
+  end
 end
 
 return {tonumber(redis.call('GET', token_key)), new_cost}
@@ -121,7 +127,8 @@ export class RedisRateLimitService implements RateLimitProvider {
     subject: string,
     estimatedTokens: number,
     estimatedCostUsd: number,
-    limits: RateLimits
+    limits: RateLimits,
+    countGlobal = true
   ): Promise<RateLimitCheckResult> {
     const { tokenLimit, costLimit } = limits;
 
@@ -139,7 +146,8 @@ export class RedisRateLimitService implements RateLimitProvider {
       estimatedCostUsd,
       tokenLimit,
       costLimit,
-      KEY_TTL_SECONDS
+      KEY_TTL_SECONDS,
+      countGlobal ? 1 : 0
     )) as [number, number, string, string];
 
     const allowed = result[0] === 1;
@@ -186,7 +194,8 @@ export class RedisRateLimitService implements RateLimitProvider {
     estimatedTokens: number,
     actualTokens: number,
     estimatedCostUsd: number,
-    actualCostUsd: number
+    actualCostUsd: number,
+    countGlobal = true
   ): Promise<void> {
     const today = new Date().toISOString().slice(0, 10);
     const tokenKey = `ai:ratelimit:${subject}:tokens:${today}`;
@@ -203,7 +212,8 @@ export class RedisRateLimitService implements RateLimitProvider {
         this.globalSpendKey(),
         tokenDelta,
         costDelta.toFixed(6),
-        KEY_TTL_SECONDS
+        KEY_TTL_SECONDS,
+        countGlobal ? 1 : 0
       );
     } catch (error) {
       this.logger.warn('Redis usage correction failed', error);

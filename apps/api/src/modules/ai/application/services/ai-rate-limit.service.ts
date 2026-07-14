@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -20,6 +22,13 @@ import { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert
 interface RateLimitResult {
   readonly allowed: boolean;
   readonly reason?: string;
+  /**
+   * The hashed per-IP subject that was actually reserved this turn, or absent
+   * when no IP reservation was made (not anonymous, flag off, or the IP reserve
+   * degraded open). Callers thread it back into recordUsage/releaseReservation
+   * so reconciliation touches exactly what was reserved — never a re-derived set.
+   */
+  readonly reservedIpSubject?: string;
 }
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
@@ -60,7 +69,8 @@ export class AIRateLimitService {
     estimatedTokens: number,
     isAnonymous = false,
     byok = false,
-    estimatedCostUsd = 0
+    estimatedCostUsd = 0,
+    clientIp?: string
   ): Promise<RateLimitResult> {
     const limits = this.effectiveLimits(isAnonymous);
     const effectiveCostUsd =
@@ -110,10 +120,20 @@ export class AIRateLimitService {
           effectiveCostUsd,
           limits
         );
-        return {
-          allowed: result.allowed,
-          ...(result.reason !== undefined ? { reason: result.reason } : {}),
-        };
+        if (!result.allowed) {
+          return {
+            allowed: false,
+            ...(result.reason !== undefined ? { reason: result.reason } : {}),
+          };
+        }
+        return this.checkAnonymousIpBudget(
+          userId,
+          estimatedTokens,
+          effectiveCostUsd,
+          limits,
+          isAnonymous,
+          clientIp
+        );
       } catch (error) {
         this.logger.warn(
           'Redis rate limit unavailable, falling back to PG',
@@ -129,6 +149,69 @@ export class AIRateLimitService {
       limits,
       byok
     );
+  }
+
+  private async checkAnonymousIpBudget(
+    userId: string,
+    estimatedTokens: number,
+    effectiveCostUsd: number,
+    limits: RateLimits,
+    isAnonymous: boolean,
+    clientIp?: string
+  ): Promise<RateLimitResult> {
+    const ipSubject = await this.anonymousIpSubject(isAnonymous, clientIp);
+    if (!ipSubject || !this.rateLimitProvider) {
+      return { allowed: true };
+    }
+    try {
+      const result = await this.rateLimitProvider.checkAndIncrement(
+        ipSubject,
+        estimatedTokens,
+        effectiveCostUsd,
+        limits,
+        false
+      );
+      if (result.allowed) {
+        return { allowed: true, reservedIpSubject: ipSubject };
+      }
+      try {
+        await this.rateLimitProvider.correctUsage(
+          userId,
+          estimatedTokens,
+          0,
+          effectiveCostUsd,
+          0
+        );
+      } catch (error) {
+        this.logger.warn('Redis reservation release failed', error);
+      }
+      return {
+        allowed: false,
+        ...(result.reason !== undefined ? { reason: result.reason } : {}),
+      };
+    } catch (error) {
+      this.logger.warn(
+        'Per-IP anonymous budget check unavailable, allowing',
+        error
+      );
+      return { allowed: true };
+    }
+  }
+
+  // Derived once, at reserve time. The reserved subject is threaded back to
+  // reconciliation as a receipt (see RateLimitResult.reservedIpSubject), so a
+  // mid-turn flag flip can never desync reserve and reconcile.
+  private async anonymousIpSubject(
+    isAnonymous: boolean,
+    clientIp: string | undefined
+  ): Promise<string | undefined> {
+    if (!isAnonymous || !clientIp) {
+      return undefined;
+    }
+    if (!(await this.isFlagOn('AI_ANON_IP_BUDGET'))) {
+      return undefined;
+    }
+    return `ip:${createHash('sha256').update(clientIp).digest('hex').slice(0, 16)}`;
   }
 
   private async checkByokCostCeiling(userId: string): Promise<RateLimitResult> {
@@ -328,23 +411,29 @@ export class AIRateLimitService {
   async releaseReservation(
     userId: string,
     estimatedTokens: number,
-    estimatedCostUsd = 0
+    estimatedCostUsd = 0,
+    reservedIpSubject?: string
   ): Promise<void> {
     if (!this.rateLimitProvider) {
       return;
     }
     const effectiveCostUsd =
       await this.effectiveEstimatedCost(estimatedCostUsd);
-    try {
-      await this.rateLimitProvider.correctUsage(
-        userId,
-        estimatedTokens,
-        0,
-        effectiveCostUsd,
-        0
-      );
-    } catch (error) {
-      this.logger.warn('Redis reservation release failed', error);
+    for (const subject of reservedIpSubject
+      ? [userId, reservedIpSubject]
+      : [userId]) {
+      try {
+        await this.rateLimitProvider.correctUsage(
+          subject,
+          estimatedTokens,
+          0,
+          effectiveCostUsd,
+          0,
+          ...(subject === reservedIpSubject ? ([false] as const) : [])
+        );
+      } catch (error) {
+        this.logger.warn('Redis reservation release failed', error);
+      }
     }
   }
 
@@ -352,6 +441,7 @@ export class AIRateLimitService {
     params: RecordUsageInput & {
       readonly estimatedTokens: number;
       readonly estimatedCostUsd?: number;
+      readonly reservedIpSubject?: string;
     }
   ): Promise<void> {
     await this.usageRepository.recordUsage(params);
@@ -366,16 +456,21 @@ export class AIRateLimitService {
       const effectiveCostUsd = await this.effectiveEstimatedCost(
         params.estimatedCostUsd ?? 0
       );
-      try {
-        await this.rateLimitProvider.correctUsage(
-          params.userId,
-          params.estimatedTokens,
-          params.inputTokens + params.outputTokens,
-          effectiveCostUsd,
-          params.costUsd
-        );
-      } catch (error) {
-        this.logger.warn('Redis usage correction failed', error);
+      for (const subject of params.reservedIpSubject
+        ? [params.userId, params.reservedIpSubject]
+        : [params.userId]) {
+        try {
+          await this.rateLimitProvider.correctUsage(
+            subject,
+            params.estimatedTokens,
+            params.inputTokens + params.outputTokens,
+            effectiveCostUsd,
+            params.costUsd,
+            ...(subject === params.reservedIpSubject ? ([false] as const) : [])
+          );
+        } catch (error) {
+          this.logger.warn('Redis usage correction failed', error);
+        }
       }
     }
 

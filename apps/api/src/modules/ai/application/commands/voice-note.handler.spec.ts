@@ -89,7 +89,8 @@ describe('VoiceNoteHandler anonymous budget', () => {
       expect.any(Number),
       true,
       false,
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     );
   });
 
@@ -108,7 +109,30 @@ describe('VoiceNoteHandler anonymous budget', () => {
       expect.any(Number),
       false,
       false,
-      expect.any(Number)
+      expect.any(Number),
+      undefined
+    );
+  });
+
+  it('threads the client IP into the rate-limit check', async () => {
+    const checkLimit = vi.fn().mockResolvedValue({ allowed: true });
+    const { handler } = makeHandler(checkLimit);
+
+    await handler.execute({
+      userId: 'anon-1',
+      audio: Buffer.from('x'),
+      mode: 'create-note',
+      isAnonymous: true,
+      clientIp: '203.0.113.7',
+    });
+
+    expect(checkLimit).toHaveBeenCalledWith(
+      'anon-1',
+      expect.any(Number),
+      true,
+      false,
+      expect.any(Number),
+      '203.0.113.7'
     );
   });
 
@@ -181,7 +205,8 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     );
   });
 
@@ -201,7 +226,8 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     );
   });
 
@@ -225,7 +251,8 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     );
     const estimatedArgs = recordUsage.mock.calls.map(
       (c) => c[0].estimatedTokens as number
@@ -251,7 +278,8 @@ describe('VoiceNoteHandler reservation accounting', () => {
     expect(releaseReservation).toHaveBeenCalledWith(
       'user-1',
       expect.any(Number),
-      expect.any(Number)
+      expect.any(Number),
+      undefined
     );
     const structuring = recordUsage.mock.calls.find(
       (c) => c[0].action === AI_ACTION.STRUCTURE_VOICE_NOTE

@@ -25,6 +25,7 @@ interface StreamTextInput {
   readonly targetLanguage?: string;
   readonly targetTone?: string;
   readonly isAnonymous?: boolean;
+  readonly clientIp?: string;
 }
 
 export interface StreamTextCallbacks {

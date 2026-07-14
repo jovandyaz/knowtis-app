@@ -901,6 +901,305 @@ describe('AIRateLimitService', () => {
     });
   });
 
+  describe('per-IP anonymous budget (ai_anon_ip_budget)', () => {
+    const CLIENT_IP = '203.0.113.7';
+    const IP_SUBJECT = 'ip:fec52565aa0cf18f';
+    const ANON_LIMITS = { tokenLimit: 33000, costLimit: 0.33 };
+
+    let provider: RateLimitProvider;
+    let flags: { isEnabled: ReturnType<typeof vi.fn> };
+    let svc: AIRateLimitService;
+
+    beforeEach(() => {
+      provider = {
+        checkRpm: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        checkAndIncrement: vi.fn().mockResolvedValue({
+          allowed: true,
+          currentTokens: 0,
+          currentCostUsd: 0,
+        }),
+        correctUsage: vi.fn().mockResolvedValue(undefined),
+        recordByokCost: vi.fn().mockResolvedValue(undefined),
+        getByokCostUsd: vi.fn().mockResolvedValue(0),
+        recordGlobalCost: vi.fn().mockResolvedValue(undefined),
+        getGlobalSpendUsd: vi.fn().mockResolvedValue(0),
+        claimDailyFlag: vi.fn().mockResolvedValue(true),
+      };
+      flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+      svc = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig(),
+        provider,
+        undefined,
+        flags as unknown as FeatureFlagsService
+      );
+      vi.spyOn(mockUsageRepo, 'recordUsage').mockResolvedValue(undefined);
+      vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0,
+        requestCount: 0,
+      });
+    });
+
+    it('reserves against both the user and the hashed IP subject for anonymous turns', async () => {
+      const result = await svc.checkLimit(
+        'anon-1',
+        1000,
+        true,
+        false,
+        0,
+        CLIENT_IP
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(result.reservedIpSubject).toBe(IP_SUBJECT);
+      expect(provider.checkAndIncrement).toHaveBeenCalledTimes(2);
+      expect(provider.checkAndIncrement).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        1000,
+        0,
+        ANON_LIMITS
+      );
+      expect(provider.checkAndIncrement).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        1000,
+        0,
+        ANON_LIMITS,
+        false
+      );
+    });
+
+    it('rejects and releases the user reservation when the IP budget is exhausted', async () => {
+      vi.mocked(provider.checkAndIncrement).mockImplementation(
+        async (subject: string) =>
+          subject.startsWith('ip:')
+            ? {
+                allowed: false,
+                reason:
+                  'Daily usage limit exceeded. Please try again tomorrow.',
+                currentTokens: 0,
+                currentCostUsd: 0,
+              }
+            : { allowed: true, currentTokens: 0, currentCostUsd: 0 }
+      );
+
+      const result = await svc.checkLimit(
+        'anon-1',
+        1000,
+        true,
+        false,
+        0,
+        CLIENT_IP
+      );
+
+      expect(result.allowed).toBe(false);
+      expect(result.reason).toBe(
+        'Daily usage limit exceeded. Please try again tomorrow.'
+      );
+      expect(provider.correctUsage).toHaveBeenCalledWith(
+        'anon-1',
+        1000,
+        0,
+        0,
+        0
+      );
+    });
+
+    it('runs a single user-subject reservation when the flag is off', async () => {
+      flags.isEnabled.mockResolvedValue(false);
+
+      const result = await svc.checkLimit(
+        'anon-1',
+        1000,
+        true,
+        false,
+        0,
+        CLIENT_IP
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
+      expect(provider.checkAndIncrement).toHaveBeenCalledWith(
+        'anon-1',
+        1000,
+        0,
+        expect.anything()
+      );
+    });
+
+    it('never checks the IP subject for authenticated users', async () => {
+      await svc.checkLimit('user-1', 1000, false, false, 0, CLIENT_IP);
+
+      expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
+      expect(provider.checkAndIncrement).toHaveBeenCalledWith(
+        'user-1',
+        1000,
+        0,
+        expect.anything()
+      );
+    });
+
+    it('never checks the IP subject when no client IP is available', async () => {
+      await svc.checkLimit('anon-1', 1000, true);
+
+      expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
+    });
+
+    it('degrades open without a receipt when the IP-subject check fails, so reconciliation never corrects a nonexistent IP reservation', async () => {
+      vi.mocked(provider.checkAndIncrement).mockImplementation(
+        async (subject: string) => {
+          if (subject.startsWith('ip:')) {
+            throw new Error('redis down');
+          }
+          return { allowed: true, currentTokens: 0, currentCostUsd: 0 };
+        }
+      );
+
+      const result = await svc.checkLimit(
+        'anon-1',
+        1000,
+        true,
+        false,
+        0,
+        CLIENT_IP
+      );
+
+      expect(result.allowed).toBe(true);
+      expect(result.reservedIpSubject).toBeUndefined();
+
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 1000,
+        estimatedCostUsd: 0,
+        ...(result.reservedIpSubject
+          ? { reservedIpSubject: result.reservedIpSubject }
+          : {}),
+      });
+      await svc.releaseReservation('anon-1', 1000, 0, result.reservedIpSubject);
+
+      for (const call of vi.mocked(provider.correctUsage).mock.calls) {
+        expect(call[0]).toBe('anon-1');
+      }
+    });
+
+    it('reconciles both subjects in recordUsage for a dual reservation', async () => {
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0,
+        reservedIpSubject: IP_SUBJECT,
+      });
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        150,
+        0,
+        0.4
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
+    it('reconciles only the user subject in recordUsage without a reserved IP subject', async () => {
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0,
+      });
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(1);
+      expect(provider.correctUsage).toHaveBeenCalledWith(
+        'anon-1',
+        200,
+        150,
+        0,
+        0.4
+      );
+    });
+
+    it('reconciles the receipt IP subject without re-reading the flag', async () => {
+      flags.isEnabled.mockResolvedValue(false);
+
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0,
+        reservedIpSubject: IP_SUBJECT,
+      });
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
+    it('releases both subjects when releasing a dual reservation', async () => {
+      await svc.releaseReservation('anon-1', 200, 0, IP_SUBJECT);
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        1,
+        'anon-1',
+        200,
+        0,
+        0,
+        0
+      );
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        0,
+        0,
+        0,
+        false
+      );
+    });
+  });
+
   describe('global daily-spend breaker (ai_global_spend_breaker)', () => {
     let provider: RateLimitProvider;
     let flags: { isEnabled: ReturnType<typeof vi.fn> };

@@ -165,6 +165,7 @@ export class AgentGateway
           message: { content: data.message.content },
           ...(data.conversationId && { conversationId: data.conversationId }),
           ...(client.data.isAnonymous && { isAnonymous: true }),
+          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),
           ...(data.model && { model: data.model }),
         },
@@ -301,6 +302,8 @@ export class AgentGateway
         {
           userId,
           conversationId,
+          ...(client.data.isAnonymous && { isAnonymous: true }),
+          ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),
           resume: outcome,
         },

@@ -246,6 +246,8 @@ Per-user daily limits enforced by `AIRateLimitService`.
 
 **Anonymous users:** receive a reduced fraction of the daily token/cost limits, configured via `AI_ANONYMOUS_DAILY_LIMIT_PCT` (default `0.33`). Anonymous identities are cheap to mint, so they warrant stricter quotas (OWASP LLM A04). The scaled limits are computed in `AIRateLimitService` and forwarded to both the Redis and PostgreSQL paths.
 
+**Per-IP anonymous budget** (flag `ai_anon_ip_budget`, ships dark): because anonymous identities are free to mint, an anonymous turn also makes a SECOND reservation keyed by the hashed client IP (`ip:{sha256(ip)[:16]}`, read from Railway's edge-set `X-Real-IP` header — never `x-forwarded-for`) with the same scaled anonymous limits, capping combined spend across every anonymous identity behind one IP. If the IP budget rejects, the per-user reservation is released and the turn is denied; both subjects are reconciled on completion. The IP-side reservation never touches the global daily-spend counter — the user-side reservation already counted that spend, so the breaker sees each dollar exactly once. Redis-only (the PG fallback has no per-IP view) and degrades open on Redis errors.
+
 **Usage correction:** After the request completes, Redis counters are corrected with actual token counts (the pre-request check used an estimate).
 
 **Global daily-spend circuit breaker** (flag `ai_global_spend_breaker`, ships dark): a single Redis counter (`ai:spend:global:{day}`, 25h TTL) accumulates ALL server-billed spend across every user — server-key LLM turns (reserved on accept, corrected to actual), Tavily/Voyage side costs (including those incurred during BYOK turns), and background embedding jobs (memory extraction, note-embedding reconcile), which charge the global counter only, with no per-user attribution. When the flag is on, `checkLimit` reads the counter before any reservation and rejects every turn — **including BYOK turns**, whose side costs are still server-billed — once it reaches `AI_GLOBAL_DAILY_COST_LIMIT_USD`. **BYOK carve-out:** LLM usage billed to the user's own key never counts toward `AI_GLOBAL_DAILY_COST_LIMIT_USD`; all server-billed spend — server-key LLM, Tavily, Voyage — always does. The breaker degrades open: a Redis error in the check logs a warning and allows the turn, and the PG fallback path has no global view.
@@ -484,6 +486,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `ai_cost_reserve`         | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                             |
 | `ai_byok_cost_gate`       | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                          |
 | `ai_global_spend_breaker` | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark |
+| `ai_anon_ip_budget`       | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting)); ships dark                         |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
