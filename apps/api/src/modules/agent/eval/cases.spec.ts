@@ -7,6 +7,7 @@ const FIXTURE_NAMES = new Set([
   'topic',
   'empty',
   'injection',
+  'injection-es',
   'benign-es',
   'exfiltration',
 ]);
