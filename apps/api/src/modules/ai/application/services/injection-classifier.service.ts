@@ -103,6 +103,8 @@ export class InjectionClassifierService {
     }
   }
 
+  // Never throws — cost accounting is a side effect that must not flip a
+  // classifier verdict into fail-open when pricing lookup or recording fails.
   private recordCost(
     userId: string,
     model: string,
@@ -110,20 +112,26 @@ export class InjectionClassifierService {
       | { inputTokens?: number | undefined; outputTokens?: number | undefined }
       | undefined
   ): void {
-    const costUsd = TokenUsage.create(
-      {
-        inputTokens: usage?.inputTokens ?? 0,
-        outputTokens: usage?.outputTokens ?? 0,
+    try {
+      const costUsd = TokenUsage.create(
+        {
+          inputTokens: usage?.inputTokens ?? 0,
+          outputTokens: usage?.outputTokens ?? 0,
+          model,
+        },
+        this.modelCatalog.getPricing(model)
+      ).costUsd;
+      void this.rateLimit.recordSideCost({
+        userId,
+        action: 'injection_classifier',
         model,
-      },
-      this.modelCatalog.getPricing(model)
-    ).costUsd;
-    void this.rateLimit.recordSideCost({
-      userId,
-      action: 'injection_classifier',
-      model,
-      costUsd,
-      byokTurn: false,
-    });
+        costUsd,
+        byokTurn: false,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Injection classifier cost record failed: ${error instanceof Error ? error.message : 'unknown'}`
+      );
+    }
   }
 }

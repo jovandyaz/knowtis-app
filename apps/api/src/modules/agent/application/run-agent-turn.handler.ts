@@ -14,10 +14,6 @@ import { FEATURE_FLAG_KEYS, type ByokProvider } from '@knowtis/shared-types';
 import type { EnvConfig } from '../../../config/env.config';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
-import {
-  INJECTION_GRAY_ZONE_MIN,
-  InjectionClassifierService,
-} from '../../ai/application/services/injection-classifier.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
@@ -54,6 +50,7 @@ import type {
   MutationKind,
   ProposedMutation,
 } from '../domain/proposed-mutation';
+import { InjectionGuardService } from './injection-guard.service';
 
 interface RunAgentTurnInput {
   readonly userId: string;
@@ -136,7 +133,7 @@ export class RunAgentTurnHandler {
     private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
-    private readonly injectionClassifier: InjectionClassifierService
+    private readonly injectionGuard: InjectionGuardService
   ) {}
 
   async execute(
@@ -452,23 +449,13 @@ export class RunAgentTurnHandler {
         );
         return;
       }
-      const check = detectPromptInjection(lastUserMessage.content);
-      if (!check.safe) {
+      const verdict = await this.injectionGuard.guard(
+        lastUserMessage.content,
+        input.userId
+      );
+      if (!verdict.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
         return;
-      }
-      if (
-        check.score >= INJECTION_GRAY_ZONE_MIN &&
-        (await this.classifierFlagOn())
-      ) {
-        const verdict = await this.injectionClassifier.classify(
-          lastUserMessage.content,
-          input.userId
-        );
-        if (!verdict.safe) {
-          callbacks.onError(AIErrors.promptInjectionDetected());
-          return;
-        }
       }
     }
     // Unsafe older messages are dropped instead of failing the turn: the
@@ -774,20 +761,6 @@ export class RunAgentTurnHandler {
         : {}),
     });
     return tokenUsage.costUsd;
-  }
-
-  private async classifierFlagOn(): Promise<boolean> {
-    try {
-      return await this.featureFlags.isEnabled(
-        FEATURE_FLAG_KEYS.AGENT_INJECTION_CLASSIFIER
-      );
-    } catch (error) {
-      this.logger.warn(
-        'Injection classifier flag lookup failed, treating as off',
-        error instanceof Error ? error.message : String(error)
-      );
-      return false;
-    }
   }
 
   private isSafeHistoryMessage(message: AgentMessage, userId: string): boolean {

@@ -9,6 +9,7 @@ import { NotesModule } from '../notes/notes.module';
 import { UsersModule } from '../users/users.module';
 import { AgentGateway } from './agent.gateway';
 import { ApproveMutationHandler } from './application/approve-mutation.handler';
+import { InjectionGuardService } from './application/injection-guard.service';
 import { RejectMutationHandler } from './application/reject-mutation.handler';
 import { RunAgentTurnHandler } from './application/run-agent-turn.handler';
 import { AGENT_ORCHESTRATOR } from './domain/ports/agent-orchestrator.port';
@@ -71,6 +72,7 @@ import { MemoryController } from './memory.controller';
     { provide: MEMORY_REPOSITORY, useClass: DrizzleMemoryRepository },
     EmbeddingReconcileTask,
     MemoryExtractionTask,
+    InjectionGuardService,
     NoteReadToolGroup,
     NoteMutateToolGroup,
     WebToolGroup,

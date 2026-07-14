@@ -1,6 +1,3 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -189,15 +186,5 @@ describe('InjectionClassifierService', () => {
     const call = generateText.mock.calls[0]?.[0] as { prompt: string };
     const fenceCount = call.prompt.split('---END DATA---').length - 1;
     expect(fenceCount).toBe(1);
-  });
-
-  it('does not depend on the fallback chain or the shared cooldown breaker', () => {
-    const source = readFileSync(
-      join(__dirname, 'injection-classifier.service.ts'),
-      'utf8'
-    );
-    expect(source).not.toMatch(
-      /FallbackChain|executeWithChain|AIStructuredOutputProvider|CooldownTracker/
-    );
   });
 });

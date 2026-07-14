@@ -14,7 +14,6 @@ import {
 } from '../../../database';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
-import type { InjectionClassifierService } from '../../ai/application/services/injection-classifier.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
@@ -25,6 +24,7 @@ import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port'
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { DrizzleConversationRepository } from '../infrastructure/persistence/drizzle-conversation.repository';
+import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
 const USER = '00000000-0000-4000-8000-0000000000d1';
@@ -55,9 +55,9 @@ const byokStub = {
   enabledProviders: vi.fn().mockResolvedValue(new Set()),
   markUsed: vi.fn().mockResolvedValue(undefined),
 } as unknown as ByokService;
-const classifierStub = {
-  classify: vi.fn().mockResolvedValue({ safe: true }),
-} as unknown as InjectionClassifierService;
+const guardStub = {
+  guard: vi.fn().mockResolvedValue({ safe: true }),
+} as unknown as InjectionGuardService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -137,7 +137,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       flagsOff,
       modelPreferenceStub,
       byokStub,
-      classifierStub
+      guardStub
     );
 
     let conversationId: string | undefined;
@@ -202,7 +202,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       flagsOff,
       modelPreferenceStub,
       byokStub,
-      classifierStub
+      guardStub
     );
 
     const onError = vi.fn();
