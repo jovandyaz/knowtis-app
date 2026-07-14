@@ -40,15 +40,17 @@ describe('WebFetchAllowlist', () => {
     expect(allow.has('https://example.com/a')).toBe(true);
   });
 
-  it('seeds urls from every user turn, ignoring assistant turns', () => {
+  it('seeds urls from every user turn, ignoring all non-user turns', () => {
     const allow = new WebFetchAllowlist();
     allow.seedFromMessages([
       { role: 'user', content: 'see https://a.test/one' },
       { role: 'assistant', content: 'noted https://evil.test/x' },
+      { role: 'tool', content: 'retrieved note says https://evil.test/tool' },
       { role: 'user', content: 'and https://b.test/two — fetch it' },
     ]);
     expect(allow.has('https://a.test/one')).toBe(true);
     expect(allow.has('https://b.test/two')).toBe(true);
     expect(allow.has('https://evil.test/x')).toBe(false);
+    expect(allow.has('https://evil.test/tool')).toBe(false);
   });
 });
