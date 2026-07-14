@@ -121,6 +121,39 @@ const INJECTION_PATTERNS: {
     weight: 0.85,
     reason: 'System prompt extraction attempt (es)',
   },
+
+  // Weak signals — a lone match stays under the threshold; they only
+  // contribute via cumulative scoring. No '/' in the base64 class: with it
+  // the run matches long URLs, repo paths, and JWT-ish blobs (benign FPs).
+  {
+    // Lookarounds (not \b) bound the run: '+'/'=' are non-word chars, so \b
+    // would drop an edge char and let a 60-char payload fall under threshold.
+    pattern: /(?<![A-Za-z0-9+/=])[A-Za-z0-9+]{60,}={0,2}(?![A-Za-z0-9+/=])/,
+    weight: 0.3,
+    reason: 'Long base64-like payload',
+  },
+  {
+    pattern: /\bnew\s+(?:system\s+)?instructions?\s*:/i,
+    weight: 0.4,
+    reason: 'Instruction re-anchoring',
+  },
+  {
+    pattern: /\bi[\s_.-]+g[\s_.-]+n[\s_.-]+o[\s_.-]+r[\s_.-]+e\b/i,
+    weight: 0.4,
+    reason: 'Obfuscated override keyword',
+  },
+  {
+    pattern:
+      /ignore[-_]+(?:all[-_]+)?(?:previous|prior)[-_]+(?:instructions|rules)/i,
+    weight: 0.85,
+    reason: 'Instruction override attempt (punctuated)',
+  },
+  {
+    pattern:
+      /\b(?:override|bypass|supersede)\s+(?:your|the|all)\s+(?:instructions|rules|guidelines|system\s+prompt)/i,
+    weight: 0.7,
+    reason: 'Instruction override attempt (synonym)',
+  },
 ];
 
 const INJECTION_THRESHOLD = 0.6;
@@ -169,23 +202,26 @@ export function detectPromptInjection(text: string): PromptGuardResult {
 
   const normalized = normalizeForGuard(text);
 
-  let maxScore = 0;
+  let score = 0;
+  let topWeight = 0;
   let matchedReason: string | undefined;
 
   for (const { pattern, weight, reason } of INJECTION_PATTERNS) {
     if (pattern.test(normalized)) {
-      if (weight > maxScore) {
-        maxScore = weight;
+      score += weight;
+      if (weight > topWeight) {
+        topWeight = weight;
         matchedReason = reason;
       }
     }
   }
+  score = Math.min(score, 1);
 
-  const safe = maxScore < INJECTION_THRESHOLD;
+  const safe = score < INJECTION_THRESHOLD;
 
   if (!safe && matchedReason) {
-    return { safe, score: maxScore, reason: matchedReason };
+    return { safe, score, reason: matchedReason };
   }
 
-  return { safe, score: maxScore };
+  return { safe, score };
 }
