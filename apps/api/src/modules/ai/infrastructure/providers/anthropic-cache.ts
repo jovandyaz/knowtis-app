@@ -22,6 +22,17 @@ export function cacheableSystem(
   };
 }
 
+function readProviderOptions(message: object): Record<string, unknown> {
+  if (
+    'providerOptions' in message &&
+    typeof message.providerOptions === 'object' &&
+    message.providerOptions !== null
+  ) {
+    return { ...message.providerOptions };
+  }
+  return {};
+}
+
 export function withLastMessageCache<T extends object>(
   model: string,
   messages: readonly T[]
@@ -30,5 +41,19 @@ export function withLastMessageCache<T extends object>(
   if (providerOf(model) !== 'anthropic' || !last) {
     return [...messages];
   }
-  return [...messages.slice(0, -1), { ...last, providerOptions: EPHEMERAL }];
+  const existing = readProviderOptions(last);
+  const anthropic =
+    typeof existing.anthropic === 'object' && existing.anthropic !== null
+      ? existing.anthropic
+      : {};
+  return [
+    ...messages.slice(0, -1),
+    {
+      ...last,
+      providerOptions: {
+        ...existing,
+        anthropic: { ...anthropic, ...EPHEMERAL.anthropic },
+      },
+    },
+  ];
 }

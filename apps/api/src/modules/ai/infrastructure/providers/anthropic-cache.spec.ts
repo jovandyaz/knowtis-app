@@ -76,4 +76,35 @@ describe('withLastMessageCache', () => {
   it('handles an empty message array safely', () => {
     expect(withLastMessageCache('anthropic:claude-sonnet-4-6', [])).toEqual([]);
   });
+
+  it('merges cacheControl into existing providerOptions instead of replacing them', () => {
+    const withOptions = [
+      { role: 'user' as const, content: 'first' },
+      {
+        role: 'user' as const,
+        content: 'last',
+        providerOptions: {
+          openai: { store: true },
+          anthropic: { thinking: { type: 'enabled' } },
+        },
+      },
+    ];
+
+    const result = withLastMessageCache(
+      'anthropic:claude-sonnet-4-6',
+      withOptions
+    );
+
+    expect(result[1]).toEqual({
+      role: 'user',
+      content: 'last',
+      providerOptions: {
+        openai: { store: true },
+        anthropic: {
+          thinking: { type: 'enabled' },
+          cacheControl: { type: 'ephemeral' },
+        },
+      },
+    });
+  });
 });
