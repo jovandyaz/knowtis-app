@@ -79,6 +79,7 @@ export class VoiceNoteHandler {
       });
       return err(AIErrors.rateLimitExceeded());
     }
+    const reservedIpSubject = rateLimitCheck.reservedIpSubject;
 
     this.logger.log({
       event: 'ai.voice-note.start',
@@ -104,8 +105,7 @@ export class VoiceNoteHandler {
         input.userId,
         estimatedTokens,
         estimatedCostUsd,
-        input.isAnonymous ?? false,
-        input.clientIp
+        reservedIpSubject
       );
       return err(transcriptionResult.error);
     }
@@ -123,8 +123,7 @@ export class VoiceNoteHandler {
         input.userId,
         estimatedTokens,
         estimatedCostUsd,
-        input.isAnonymous ?? false,
-        input.clientIp
+        reservedIpSubject
       );
       return err(
         AIErrors.invalidInput(
@@ -150,8 +149,7 @@ export class VoiceNoteHandler {
         inputTokens: 0,
         outputTokens: 0,
         costUsd: whisperCostUsd,
-        ...(input.isAnonymous ? { isAnonymous: true } : {}),
-        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+        ...(reservedIpSubject ? { reservedIpSubject } : {}),
       })
       .catch((err) =>
         this.logger.warn({
@@ -181,8 +179,7 @@ export class VoiceNoteHandler {
           input.userId,
           estimatedTokens,
           0,
-          input.isAnonymous ?? false,
-          input.clientIp
+          reservedIpSubject
         );
         return err(modelResult.error);
       }
@@ -220,8 +217,7 @@ export class VoiceNoteHandler {
           inputTokens,
           outputTokens,
           costUsd: usage.costUsd,
-          ...(input.isAnonymous ? { isAnonymous: true } : {}),
-          ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+          ...(reservedIpSubject ? { reservedIpSubject } : {}),
         })
         .catch((err) =>
           this.logger.warn({
@@ -262,8 +258,7 @@ export class VoiceNoteHandler {
         input.userId,
         estimatedTokens,
         0,
-        input.isAnonymous ?? false,
-        input.clientIp
+        reservedIpSubject
       );
 
       const fallbackTitle = this.buildFallbackTitle(transcript);

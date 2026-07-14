@@ -206,7 +206,6 @@ describe('VoiceNoteHandler reservation accounting', () => {
       'user-1',
       expect.any(Number),
       expect.any(Number),
-      false,
       undefined
     );
   });
@@ -228,7 +227,6 @@ describe('VoiceNoteHandler reservation accounting', () => {
       'user-1',
       expect.any(Number),
       expect.any(Number),
-      false,
       undefined
     );
   });
@@ -254,7 +252,6 @@ describe('VoiceNoteHandler reservation accounting', () => {
       'user-1',
       expect.any(Number),
       expect.any(Number),
-      false,
       undefined
     );
     const estimatedArgs = recordUsage.mock.calls.map(
@@ -282,7 +279,6 @@ describe('VoiceNoteHandler reservation accounting', () => {
       'user-1',
       expect.any(Number),
       expect.any(Number),
-      false,
       undefined
     );
     const structuring = recordUsage.mock.calls.find(

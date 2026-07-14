@@ -88,8 +88,7 @@ interface TurnLoopContext {
   readonly estimatedCostUsd: number;
   readonly model: string;
   readonly isByok: boolean;
-  readonly isAnonymous: boolean;
-  readonly clientIp?: string;
+  readonly reservedIpSubject?: string;
 }
 
 interface PersistenceContext {
@@ -558,8 +557,9 @@ export class RunAgentTurnHandler {
       estimatedCostUsd,
       model,
       isByok,
-      isAnonymous: input.isAnonymous ?? false,
-      ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+      ...(limit.reservedIpSubject
+        ? { reservedIpSubject: limit.reservedIpSubject }
+        : {}),
     };
 
     let assistantText = '';
@@ -710,8 +710,7 @@ export class RunAgentTurnHandler {
           userId,
           ctx.estimatedTokens,
           ctx.estimatedCostUsd,
-          ctx.isAnonymous,
-          ctx.clientIp
+          ctx.reservedIpSubject
         );
       }
       return;
@@ -751,8 +750,9 @@ export class RunAgentTurnHandler {
       estimatedTokens: ctx.estimatedTokens,
       estimatedCostUsd: ctx.estimatedCostUsd,
       byok: ctx.isByok,
-      ...(ctx.isAnonymous ? { isAnonymous: true } : {}),
-      ...(ctx.clientIp ? { clientIp: ctx.clientIp } : {}),
+      ...(ctx.reservedIpSubject
+        ? { reservedIpSubject: ctx.reservedIpSubject }
+        : {}),
     });
     return tokenUsage.costUsd;
   }

@@ -22,6 +22,13 @@ import { WebhookAlertService } from '../../infrastructure/alerting/webhook-alert
 interface RateLimitResult {
   readonly allowed: boolean;
   readonly reason?: string;
+  /**
+   * The hashed per-IP subject that was actually reserved this turn, or absent
+   * when no IP reservation was made (not anonymous, flag off, or the IP reserve
+   * degraded open). Callers thread it back into recordUsage/releaseReservation
+   * so reconciliation touches exactly what was reserved — never a re-derived set.
+   */
+  readonly reservedIpSubject?: string;
 }
 
 const PG_RPM_SWEEP_THRESHOLD = 1000;
@@ -165,7 +172,7 @@ export class AIRateLimitService {
         false
       );
       if (result.allowed) {
-        return { allowed: true };
+        return { allowed: true, reservedIpSubject: ipSubject };
       }
       try {
         await this.rateLimitProvider.correctUsage(
@@ -191,8 +198,9 @@ export class AIRateLimitService {
     }
   }
 
-  // Re-evaluated at every call: a flag flip mid-request may leave the IP
-  // counter uncorrected for in-flight turns — acceptable drift.
+  // Derived once, at reserve time. The reserved subject is threaded back to
+  // reconciliation as a receipt (see RateLimitResult.reservedIpSubject), so a
+  // mid-turn flag flip can never desync reserve and reconcile.
   private async anonymousIpSubject(
     isAnonymous: boolean,
     clientIp: string | undefined
@@ -404,16 +412,16 @@ export class AIRateLimitService {
     userId: string,
     estimatedTokens: number,
     estimatedCostUsd = 0,
-    isAnonymous = false,
-    clientIp?: string
+    reservedIpSubject?: string
   ): Promise<void> {
     if (!this.rateLimitProvider) {
       return;
     }
     const effectiveCostUsd =
       await this.effectiveEstimatedCost(estimatedCostUsd);
-    const ipSubject = await this.anonymousIpSubject(isAnonymous, clientIp);
-    for (const subject of ipSubject ? [userId, ipSubject] : [userId]) {
+    for (const subject of reservedIpSubject
+      ? [userId, reservedIpSubject]
+      : [userId]) {
       try {
         await this.rateLimitProvider.correctUsage(
           subject,
@@ -421,7 +429,7 @@ export class AIRateLimitService {
           0,
           effectiveCostUsd,
           0,
-          ...(subject === ipSubject ? ([false] as const) : [])
+          ...(subject === reservedIpSubject ? ([false] as const) : [])
         );
       } catch (error) {
         this.logger.warn('Redis reservation release failed', error);
@@ -433,8 +441,7 @@ export class AIRateLimitService {
     params: RecordUsageInput & {
       readonly estimatedTokens: number;
       readonly estimatedCostUsd?: number;
-      readonly isAnonymous?: boolean;
-      readonly clientIp?: string;
+      readonly reservedIpSubject?: string;
     }
   ): Promise<void> {
     await this.usageRepository.recordUsage(params);
@@ -449,12 +456,8 @@ export class AIRateLimitService {
       const effectiveCostUsd = await this.effectiveEstimatedCost(
         params.estimatedCostUsd ?? 0
       );
-      const ipSubject = await this.anonymousIpSubject(
-        params.isAnonymous ?? false,
-        params.clientIp
-      );
-      for (const subject of ipSubject
-        ? [params.userId, ipSubject]
+      for (const subject of params.reservedIpSubject
+        ? [params.userId, params.reservedIpSubject]
         : [params.userId]) {
         try {
           await this.rateLimitProvider.correctUsage(
@@ -463,7 +466,7 @@ export class AIRateLimitService {
             params.inputTokens + params.outputTokens,
             effectiveCostUsd,
             params.costUsd,
-            ...(subject === ipSubject ? ([false] as const) : [])
+            ...(subject === params.reservedIpSubject ? ([false] as const) : [])
           );
         } catch (error) {
           this.logger.warn('Redis usage correction failed', error);

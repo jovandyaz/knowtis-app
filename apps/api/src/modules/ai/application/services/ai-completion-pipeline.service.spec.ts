@@ -10,6 +10,7 @@ import type { AIRateLimitService } from './ai-rate-limit.service';
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 const MODEL_INPUT_COST_PER_TOKEN = 0.000003;
+const IP_SUBJECT = 'ip:fec52565aa0cf18f';
 
 function createPipeline(overrides?: {
   checkLimit?: ReturnType<typeof vi.fn>;
@@ -303,14 +304,18 @@ describe('AICompletionPipeline', () => {
         'user-1',
         context.estimatedTokens,
         context.estimatedCostUsd,
-        false,
         undefined
       );
     });
 
-    it('should forward anonymity and client IP into usage recording', async () => {
+    it('should forward the reserved IP subject into usage recording', async () => {
       const recordUsage = vi.fn().mockResolvedValue(undefined);
-      const { pipeline } = createPipeline({ recordUsage });
+      const { pipeline } = createPipeline({
+        recordUsage,
+        checkLimit: vi
+          .fn()
+          .mockResolvedValue({ allowed: true, reservedIpSubject: IP_SUBJECT }),
+      });
       const input = {
         ...baseInput,
         isAnonymous: true,
@@ -331,15 +336,19 @@ describe('AICompletionPipeline', () => {
 
       expect(recordUsage).toHaveBeenCalledWith(
         expect.objectContaining({
-          isAnonymous: true,
-          clientIp: '203.0.113.7',
+          reservedIpSubject: IP_SUBJECT,
         })
       );
     });
 
-    it('should release the reservation with anonymity and client IP', async () => {
+    it('should release the reservation with the reserved IP subject', async () => {
       const releaseReservation = vi.fn().mockResolvedValue(undefined);
-      const { pipeline } = createPipeline({ releaseReservation });
+      const { pipeline } = createPipeline({
+        releaseReservation,
+        checkLimit: vi
+          .fn()
+          .mockResolvedValue({ allowed: true, reservedIpSubject: IP_SUBJECT }),
+      });
       const input = {
         ...baseInput,
         isAnonymous: true,
@@ -358,8 +367,7 @@ describe('AICompletionPipeline', () => {
         'user-1',
         context.estimatedTokens,
         context.estimatedCostUsd,
-        true,
-        '203.0.113.7'
+        IP_SUBJECT
       );
     });
 

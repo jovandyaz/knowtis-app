@@ -957,6 +957,7 @@ describe('AIRateLimitService', () => {
       );
 
       expect(result.allowed).toBe(true);
+      expect(result.reservedIpSubject).toBe(IP_SUBJECT);
       expect(provider.checkAndIncrement).toHaveBeenCalledTimes(2);
       expect(provider.checkAndIncrement).toHaveBeenNthCalledWith(
         1,
@@ -1051,7 +1052,7 @@ describe('AIRateLimitService', () => {
       expect(provider.checkAndIncrement).toHaveBeenCalledTimes(1);
     });
 
-    it('degrades open when the IP-subject check fails', async () => {
+    it('degrades open without a receipt when the IP-subject check fails, so reconciliation never corrects a nonexistent IP reservation', async () => {
       vi.mocked(provider.checkAndIncrement).mockImplementation(
         async (subject: string) => {
           if (subject.startsWith('ip:')) {
@@ -1071,6 +1072,26 @@ describe('AIRateLimitService', () => {
       );
 
       expect(result.allowed).toBe(true);
+      expect(result.reservedIpSubject).toBeUndefined();
+
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 1000,
+        estimatedCostUsd: 0,
+        ...(result.reservedIpSubject
+          ? { reservedIpSubject: result.reservedIpSubject }
+          : {}),
+      });
+      await svc.releaseReservation('anon-1', 1000, 0, result.reservedIpSubject);
+
+      for (const call of vi.mocked(provider.correctUsage).mock.calls) {
+        expect(call[0]).toBe('anon-1');
+      }
     });
 
     it('reconciles both subjects in recordUsage for a dual reservation', async () => {
@@ -1083,8 +1104,7 @@ describe('AIRateLimitService', () => {
         costUsd: 0.4,
         estimatedTokens: 200,
         estimatedCostUsd: 0,
-        isAnonymous: true,
-        clientIp: CLIENT_IP,
+        reservedIpSubject: IP_SUBJECT,
       });
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(2);
@@ -1107,7 +1127,7 @@ describe('AIRateLimitService', () => {
       );
     });
 
-    it('reconciles only the user subject in recordUsage without a client IP', async () => {
+    it('reconciles only the user subject in recordUsage without a reserved IP subject', async () => {
       await svc.recordUsage({
         userId: 'anon-1',
         action: 'agent',
@@ -1117,7 +1137,6 @@ describe('AIRateLimitService', () => {
         costUsd: 0.4,
         estimatedTokens: 200,
         estimatedCostUsd: 0,
-        isAnonymous: true,
       });
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(1);
@@ -1130,8 +1149,35 @@ describe('AIRateLimitService', () => {
       );
     });
 
+    it('reconciles the receipt IP subject without re-reading the flag', async () => {
+      flags.isEnabled.mockResolvedValue(false);
+
+      await svc.recordUsage({
+        userId: 'anon-1',
+        action: 'agent',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        inputTokens: 100,
+        outputTokens: 50,
+        costUsd: 0.4,
+        estimatedTokens: 200,
+        estimatedCostUsd: 0,
+        reservedIpSubject: IP_SUBJECT,
+      });
+
+      expect(provider.correctUsage).toHaveBeenCalledTimes(2);
+      expect(provider.correctUsage).toHaveBeenNthCalledWith(
+        2,
+        IP_SUBJECT,
+        200,
+        150,
+        0,
+        0.4,
+        false
+      );
+    });
+
     it('releases both subjects when releasing a dual reservation', async () => {
-      await svc.releaseReservation('anon-1', 200, 0, true, CLIENT_IP);
+      await svc.releaseReservation('anon-1', 200, 0, IP_SUBJECT);
 
       expect(provider.correctUsage).toHaveBeenCalledTimes(2);
       expect(provider.correctUsage).toHaveBeenNthCalledWith(

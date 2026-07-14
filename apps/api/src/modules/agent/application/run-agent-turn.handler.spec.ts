@@ -36,6 +36,7 @@ function makeProposal(id: string): ProposedMutation {
 }
 
 const USER = '11111111-1111-1111-1111-111111111111';
+const IP_SUBJECT = 'ip:fec52565aa0cf18f';
 
 function orchestratorYielding(events: AgentEvent[]): AgentOrchestrator {
   return {
@@ -255,8 +256,12 @@ describe('RunAgentTurnHandler', () => {
     expect(call[5]).toBe('203.0.113.7');
   });
 
-  it('threads anonymity and client IP into usage recording', async () => {
+  it('threads the reserved IP subject from checkLimit into usage recording', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    vi.mocked(rateLimit.checkLimit).mockResolvedValue({
+      allowed: true,
+      reservedIpSubject: IP_SUBJECT,
+    });
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -287,13 +292,52 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(vi.mocked(rateLimit.recordUsage).mock.calls[0][0]).toMatchObject({
-      isAnonymous: true,
-      clientIp: '203.0.113.7',
+      reservedIpSubject: IP_SUBJECT,
     });
   });
 
-  it('threads anonymity and client IP into the reservation release', async () => {
+  it('does not thread an IP subject into usage recording when checkLimit made no IP reservation', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        isAnonymous: true,
+        clientIp: '203.0.113.7',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(
+      vi.mocked(rateLimit.recordUsage).mock.calls[0][0]
+    ).not.toHaveProperty('reservedIpSubject');
+  });
+
+  it('threads the reserved IP subject into the reservation release', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
+    vi.mocked(rateLimit.checkLimit).mockResolvedValue({
+      allowed: true,
+      reservedIpSubject: IP_SUBJECT,
+    });
     const orchestrator = orchestratorYielding([
       {
         type: 'aborted',
@@ -337,8 +381,7 @@ describe('RunAgentTurnHandler', () => {
       USER,
       expect.any(Number),
       expect.any(Number),
-      true,
-      '203.0.113.7'
+      IP_SUBJECT
     );
   });
 
@@ -1695,7 +1738,6 @@ describe('RunAgentTurnHandler', () => {
       USER,
       expect.any(Number),
       expect.any(Number),
-      false,
       undefined
     );
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();

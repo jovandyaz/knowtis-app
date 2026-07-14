@@ -43,6 +43,7 @@ export interface PreflightContext {
   readonly userPrompt: string;
   readonly estimatedTokens: number;
   readonly estimatedCostUsd: number;
+  readonly reservedIpSubject?: string;
 }
 
 interface PreflightReady {
@@ -166,6 +167,9 @@ export class AICompletionPipeline {
       userPrompt,
       estimatedTokens,
       estimatedCostUsd,
+      ...(rateLimitCheck.reservedIpSubject
+        ? { reservedIpSubject: rateLimitCheck.reservedIpSubject }
+        : {}),
     };
 
     this.logger.log({
@@ -215,8 +219,9 @@ export class AICompletionPipeline {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costUsd: result.costUsd,
-        ...(input.isAnonymous ? { isAnonymous: true } : {}),
-        ...(input.clientIp ? { clientIp: input.clientIp } : {}),
+        ...(context.reservedIpSubject
+          ? { reservedIpSubject: context.reservedIpSubject }
+          : {}),
       })
       .catch((error) =>
         this.logger.warn({
@@ -236,8 +241,7 @@ export class AICompletionPipeline {
       input.userId,
       context.estimatedTokens,
       context.estimatedCostUsd,
-      input.isAnonymous ?? false,
-      input.clientIp
+      context.reservedIpSubject
     );
   }
 
