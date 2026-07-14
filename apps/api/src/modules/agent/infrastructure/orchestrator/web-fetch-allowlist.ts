@@ -9,6 +9,17 @@ export class WebFetchAllowlist {
     }
   }
 
+  // User turns are victim-authored; injected URLs arrive via assistant/tool content.
+  seedFromMessages(
+    messages: readonly { role: string; content: string }[]
+  ): void {
+    for (const message of messages) {
+      if (message.role === 'user') {
+        this.seedFromText(message.content);
+      }
+    }
+  }
+
   add(url: string): void {
     try {
       this.urls.add(new URL(url).href);
