@@ -14,6 +14,7 @@ const envSchemaBase = z.object({
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
+  BACKOFFICE_URL: z.url().optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().default(DEFAULT_FROM_ADDRESS),

@@ -53,7 +53,8 @@ async function bootstrap() {
     configService.get<string>('FRONTEND_URL') || 'http://localhost:4200';
   const allowedOrigins = buildAllowedOrigins(
     configService.get<string>('NODE_ENV') ?? 'development',
-    frontendUrl
+    frontendUrl,
+    configService.get<string>('BACKOFFICE_URL')
   );
   app.enableCors({
     origin: allowedOrigins,
