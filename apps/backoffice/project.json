@@ -1,0 +1,75 @@
+{
+  "name": "backoffice",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "apps/backoffice/src",
+  "projectType": "application",
+  "tags": ["type:app", "scope:backoffice"],
+  "implicitDependencies": ["design-system"],
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "defaultConfiguration": "production",
+      "options": {
+        "outputPath": "dist/apps/backoffice"
+      },
+      "configurations": {
+        "development": {
+          "mode": "development"
+        },
+        "production": {
+          "mode": "production"
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/vite:dev-server",
+      "defaultConfiguration": "development",
+      "dependsOn": ["^build"],
+      "options": {
+        "buildTarget": "backoffice:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "backoffice:build:development",
+          "hmr": true
+        },
+        "production": {
+          "buildTarget": "backoffice:build:production",
+          "hmr": false
+        }
+      }
+    },
+    "preview": {
+      "executor": "@nx/vite:preview-server",
+      "defaultConfiguration": "development",
+      "options": {
+        "buildTarget": "backoffice:build"
+      },
+      "configurations": {
+        "development": {
+          "buildTarget": "backoffice:build:development"
+        },
+        "production": {
+          "buildTarget": "backoffice:build:production"
+        }
+      }
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{workspaceRoot}/coverage/{projectRoot}"],
+      "options": {
+        "reportsDirectory": "../../coverage/apps/backoffice",
+        "passWithNoTests": true,
+        "configFile": "apps/backoffice/vitest.config.ts"
+      }
+    },
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "bash $(git rev-parse --show-toplevel)/tools/typecheck-project.sh",
+        "cwd": "{projectRoot}"
+      }
+    }
+  }
+}
