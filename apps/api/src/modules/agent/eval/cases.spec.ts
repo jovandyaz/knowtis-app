@@ -2,11 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import { COPILOT_EVAL_CASES } from './cases';
 
-const FIXTURE_NAMES = new Set(['recent', 'topic', 'empty', 'injection']);
+const FIXTURE_NAMES = new Set([
+  'recent',
+  'topic',
+  'empty',
+  'injection',
+  'injection-es',
+  'benign-es',
+  'exfiltration',
+]);
 
 describe('COPILOT_EVAL_CASES', () => {
-  it('defines the six behavior cases', () => {
-    expect(COPILOT_EVAL_CASES).toHaveLength(6);
+  it('defines the eight behavior cases', () => {
+    expect(COPILOT_EVAL_CASES).toHaveLength(8);
   });
 
   it('every case has a message, a known fixtureSet, and at least one assertion', () => {

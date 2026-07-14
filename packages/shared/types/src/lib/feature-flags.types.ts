@@ -6,6 +6,7 @@ export const FEATURE_FLAG_KEYS = {
   AGENT_BYOK: 'agent_byok',
   AGENT_LONGTERM_MEMORY: 'agent_longterm_memory',
   AGENT_INJECTION_CLASSIFIER: 'agent_injection_classifier',
+  AGENT_SCAN_RETRIEVED_NOTES: 'agent_scan_retrieved_notes',
   AI_COST_RESERVE: 'ai_cost_reserve',
   AI_BYOK_COST_GATE: 'ai_byok_cost_gate',
   AI_GLOBAL_SPEND_BREAKER: 'ai_global_spend_breaker',
