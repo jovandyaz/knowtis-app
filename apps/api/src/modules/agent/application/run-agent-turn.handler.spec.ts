@@ -1312,6 +1312,52 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('prices cache read/write tokens into the recorded costUsd', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 100,
+          outputTokens: 10,
+          cacheReadTokens: 60,
+          cacheWriteTokens: 20,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard()
+    );
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone, onError: vi.fn(), onProposal: vi.fn() }
+    );
+
+    // 20 uncached * 3e-6 + 60 read * 3e-7 + 20 write * 3.75e-6 + 10 out * 1.5e-5
+    const recorded = vi.mocked(rateLimit.recordUsage).mock.calls[0][0];
+    expect(recorded.costUsd).toBeCloseTo(0.000303, 9);
+    expect(onDone).toHaveBeenCalledWith(
+      expect.objectContaining({ costUsd: recorded.costUsd })
+    );
+  });
+
   it('does not record usage for an aborted turn that consumed no tokens', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([

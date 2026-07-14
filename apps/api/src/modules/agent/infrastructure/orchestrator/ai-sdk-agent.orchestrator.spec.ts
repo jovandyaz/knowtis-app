@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
+import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
 import type { AgentToolRegistry } from './agent-tool.registry';
@@ -89,12 +90,25 @@ function makeToolRegistry(
   } as unknown as AgentToolRegistry;
 }
 
+function makeFlags(enabled = false): FeatureFlagsService {
+  return {
+    isEnabled: vi.fn().mockResolvedValue(enabled),
+  } as unknown as FeatureFlagsService;
+}
+
 function makeOrchestrator(
   config = makeConfig(),
-  toolRegistry = makeToolRegistry()
+  toolRegistry = makeToolRegistry(),
+  flags = makeFlags()
 ): AiSdkAgentOrchestrator {
   const { registry, chain } = createTestChain(config);
-  return new AiSdkAgentOrchestrator(config, toolRegistry, registry, chain);
+  return new AiSdkAgentOrchestrator(
+    config,
+    toolRegistry,
+    registry,
+    chain,
+    flags
+  );
 }
 
 function collect(iter: AsyncIterable<unknown>) {
@@ -636,7 +650,8 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain
+      chain,
+      makeFlags()
     );
 
     const events = await collect(
@@ -689,7 +704,8 @@ describe('AiSdkAgentOrchestrator', () => {
       config,
       makeToolRegistry(),
       registry,
-      chain
+      chain,
+      makeFlags()
     );
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => {
@@ -702,5 +718,135 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'error' });
     expect(recordFailure).toHaveBeenCalledWith('anthropic');
     expect(recordSuccess).not.toHaveBeenCalled();
+  });
+
+  function happyStream() {
+    return {
+      textStream: (async function* () {
+        yield 'Hello';
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    };
+  }
+
+  it('caches the system prompt and the last message when the prompt-caching flag is on', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(happyStream);
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(true)
+    );
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        messages: [
+          { role: 'user', content: 'first' },
+          { role: 'assistant', content: 'second' },
+          { role: 'user', content: 'third' },
+        ],
+      })
+    );
+
+    const opts = streamTextMock.mock.calls.at(-1)?.[0];
+    expect(opts?.system).toMatchObject({
+      role: 'system',
+      providerOptions: {
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
+    });
+    const messages = opts?.messages as Record<string, unknown>[];
+    expect(messages).toHaveLength(3);
+    expect(messages[0]).not.toHaveProperty('providerOptions');
+    expect(messages[1]).not.toHaveProperty('providerOptions');
+    expect(messages[2]).toMatchObject({
+      role: 'user',
+      content: 'third',
+      providerOptions: {
+        anthropic: { cacheControl: { type: 'ephemeral' } },
+      },
+    });
+  });
+
+  it('sends a plain system string and unmarked messages when the flag is off', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(happyStream);
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const opts = streamTextMock.mock.calls.at(-1)?.[0];
+    expect(typeof opts?.system).toBe('string');
+    const messages = opts?.messages as Record<string, unknown>[];
+    for (const message of messages) {
+      expect(message).not.toHaveProperty('providerOptions');
+    }
+  });
+
+  it('does not cache on BYOK turns even when the flag is on', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(happyStream);
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(true)
+    );
+
+    await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
+
+    const opts = streamTextMock.mock.calls.at(-1)?.[0];
+    expect(typeof opts?.system).toBe('string');
+    const messages = opts?.messages as Record<string, unknown>[];
+    for (const message of messages) {
+      expect(message).not.toHaveProperty('providerOptions');
+    }
+  });
+
+  it('treats a failing flag lookup as caching off', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(happyStream);
+    const flags = {
+      isEnabled: vi.fn().mockRejectedValue(new Error('redis down')),
+    } as unknown as FeatureFlagsService;
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      flags
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    const opts = streamTextMock.mock.calls.at(-1)?.[0];
+    expect(typeof opts?.system).toBe('string');
+  });
+
+  it('carries cache read/write tokens from totalUsage into the done event', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(() => ({
+      textStream: (async function* () {
+        yield 'Hello';
+      })(),
+      totalUsage: Promise.resolve({
+        inputTokens: 100,
+        outputTokens: 10,
+        inputTokenDetails: { cacheReadTokens: 60, cacheWriteTokens: 20 },
+      }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheReadTokens: 60,
+        cacheWriteTokens: 20,
+        model: MODEL,
+      },
+    });
   });
 });

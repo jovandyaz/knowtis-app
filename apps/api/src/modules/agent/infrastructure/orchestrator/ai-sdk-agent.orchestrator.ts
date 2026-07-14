@@ -7,12 +7,18 @@ import {
   isOverloadedError,
   streamWithChain,
 } from '@knowtis/ai-gateway';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
+import {
+  cacheableSystem,
+  withLastMessageCache,
+} from '../../../ai/infrastructure/providers/anthropic-cache';
 import { FallbackChainService } from '../../../ai/infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../../ai/infrastructure/providers/redacted-telemetry';
+import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import type {
   AgentEvent,
   AgentSource,
@@ -57,7 +63,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly toolRegistry: AgentToolRegistry,
     private readonly providerRegistry: ProviderRegistryFactory,
-    private readonly fallbackChain: FallbackChainService
+    private readonly fallbackChain: FallbackChainService,
+    private readonly featureFlags: FeatureFlagsService
   ) {}
 
   async *run(input: AgentRunInput): AsyncIterable<AgentEvent> {
@@ -123,31 +130,37 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     };
     const tools = await this.toolRegistry.resolve(toolContext);
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
+    // BYOK turns never cache: cache writes bill 1.25x to the key owner.
+    const cache = !input.byokApiKey && (await this.promptCachingEnabled());
+    const systemPrompt = this.buildSystemPrompt(
+      input.noteId,
+      input.knownNotes,
+      input.userMemories
+    );
+    const messages = input.resume
+      ? [
+          ...input.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          })),
+          {
+            role: 'user' as const,
+            content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
+          },
+        ]
+      : input.messages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
     let progressed = false;
     let result;
     try {
       result = streamText({
         model: this.providerRegistry.languageModel(model, input.byokApiKey),
-        system: this.buildSystemPrompt(
-          input.noteId,
-          input.knownNotes,
-          input.userMemories
-        ),
-        messages: input.resume
-          ? [
-              ...input.messages.map((m) => ({
-                role: m.role,
-                content: m.content,
-              })),
-              {
-                role: 'user' as const,
-                content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
-              },
-            ]
-          : input.messages.map((m) => ({
-              role: m.role,
-              content: m.content,
-            })),
+        ...(cache
+          ? cacheableSystem(model, systemPrompt)
+          : { system: systemPrompt }),
+        messages: cache ? withLastMessageCache(model, messages) : messages,
         tools,
         stopWhen: stepCountIs(input.maxSteps),
         maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
@@ -204,6 +217,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       const turnUsage = {
         inputTokens: usage.inputTokens ?? 0,
         outputTokens: usage.outputTokens ?? 0,
+        cacheReadTokens: usage.inputTokenDetails?.cacheReadTokens ?? 0,
+        cacheWriteTokens: usage.inputTokenDetails?.cacheWriteTokens ?? 0,
         model,
       };
       const captured = proposals.captured;
@@ -286,6 +301,20 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       outputTokens: stepUsage.outputTokens,
       model,
     };
+  }
+
+  private async promptCachingEnabled(): Promise<boolean> {
+    try {
+      return await this.featureFlags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_PROMPT_CACHING
+      );
+    } catch (error) {
+      this.logger.warn(
+        'Prompt caching flag lookup failed, treating as off',
+        error instanceof Error ? error.message : String(error)
+      );
+      return false;
+    }
   }
 
   private buildSystemPrompt(

@@ -433,15 +433,20 @@ All four AI paths emit OpenTelemetry spans consumed by Langfuse (see `modules/ob
 
 ## Anthropic Prompt Caching
 
-System prompts are automatically cached by Anthropic using `cacheControl: { type: 'ephemeral' }` via Vercel AI SDK `providerOptions`. This is applied only for Anthropic models (prefix `anthropic:`).
+Anthropic caching is a **prefix match**: the request renders as `tools → system → messages`, and a `cacheControl: { type: 'ephemeral' }` breakpoint (sent via AI SDK `providerOptions`, 5-minute TTL) caches everything up to that point. Cache reads bill at ~0.1× the input price; cache writes at 1.25×. Non-Anthropic models always receive plain strings — the helpers in `anthropic-cache.ts` are no-ops for them.
 
-**Benefits:**
+**Agent path (flag `agent_prompt_caching`).** `AiSdkAgentOrchestrator` places two breakpoints per turn:
 
-- 90% reduction on input token costs for cache hits (0.1× base price)
-- Up to 85% latency reduction on repeated system prompts
-- 5-minute cache TTL (Anthropic default for ephemeral)
+- on the **system message** (`cacheableSystem`) — caches the tool definitions + system prompt prefix
+- on the **last conversation message** (`withLastMessageCache`) — caches the entire prefix including history, so each loop step and each follow-up turn re-reads instead of re-billing the whole conversation
 
-Non-Anthropic models receive the system prompt as a plain string (no caching metadata).
+Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `AgentTurnUsage` and priced by `TokenUsage.create` (Anthropic cache rates from the model catalog, with 0.1×/1.25× fallbacks), so `costUsd` no longer over-bills cache reads at the full input price.
+
+**BYOK turns never cache**, even with the flag on: cache writes bill the 1.25× premium to the key owner's Anthropic account, and we don't silently charge users a premium. BYOK caching would be a separate per-user opt-in — never a flip of this flag.
+
+**Minimum cacheable prefix.** Anthropic ignores breakpoints below a per-model minimum (≈1024–4096 tokens depending on the model; **2048 for `claude-sonnet-4-6`**, the default agent model). Breakpoints are free, so an under-minimum turn 1 is harmless — multi-turn conversations clear the minimum quickly. This is also why **single-shot completions** (`AISDKProvider`, ~60–150-token rendered prompts) still carry the breakpoint but typically don't cache.
+
+**Before flipping the flag:** run a 3-turn dev conversation against Anthropic and confirm `cacheReadTokens > 0` on turns 2–3 (visible in the recorded usage). If reads stay at zero, a prefix invalidator (non-deterministic tool order, per-request content in the system prompt) is at work — fix that first; flipping otherwise only pays the 1.25× write premium.
 
 ---
 
@@ -490,6 +495,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                      |
 | `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)); ships dark |
 | `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense)); ships dark        |
+| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)); ships dark |
 | `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                              |
 | `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                           |
 | `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark  |
