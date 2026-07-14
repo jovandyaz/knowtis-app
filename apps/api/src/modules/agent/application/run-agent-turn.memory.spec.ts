@@ -24,6 +24,7 @@ import type { AgentOrchestrator } from '../domain/ports/agent-orchestrator.port'
 import type { MemoryRepository } from '../domain/ports/memory.repository';
 import type { PendingMutationStore } from '../domain/ports/pending-mutation.store';
 import { DrizzleConversationRepository } from '../infrastructure/persistence/drizzle-conversation.repository';
+import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
 const USER = '00000000-0000-4000-8000-0000000000d1';
@@ -54,6 +55,9 @@ const byokStub = {
   enabledProviders: vi.fn().mockResolvedValue(new Set()),
   markUsed: vi.fn().mockResolvedValue(undefined),
 } as unknown as ByokService;
+const guardStub = {
+  guard: vi.fn().mockResolvedValue({ safe: true }),
+} as unknown as InjectionGuardService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -132,7 +136,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       embedStub,
       flagsOff,
       modelPreferenceStub,
-      byokStub
+      byokStub,
+      guardStub
     );
 
     let conversationId: string | undefined;
@@ -196,7 +201,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       embedStub,
       flagsOff,
       modelPreferenceStub,
-      byokStub
+      byokStub,
+      guardStub
     );
 
     const onError = vi.fn();

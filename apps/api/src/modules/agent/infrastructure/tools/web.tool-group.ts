@@ -14,11 +14,14 @@ import {
   WEB_SEARCH_PORT,
   type WebSearchPort,
 } from '../../../ai/domain/ports/web-search.port';
+import { InjectionGuardService } from '../../application/injection-guard.service';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
 
 const MAX_WEB_HITS = 5;
 const MAX_WEB_SNIPPET_CHARS = 1500;
 const MAX_WEB_FETCH_CHARS = 8000;
+const FETCH_DROPPED_NOTE =
+  'Fetched content failed the safety check and was dropped.';
 
 @Injectable()
 export class WebToolGroup implements AgentToolGroup {
@@ -28,7 +31,8 @@ export class WebToolGroup implements AgentToolGroup {
 
   constructor(
     @Inject(WEB_SEARCH_PORT) private readonly web: WebSearchPort,
-    private readonly rateLimit: AIRateLimitService
+    private readonly rateLimit: AIRateLimitService,
+    private readonly injectionGuard: InjectionGuardService
   ) {}
 
   availableIn(): boolean {
@@ -79,11 +83,12 @@ export class WebToolGroup implements AgentToolGroup {
           }
           const result = await this.web.fetch(url);
           await this.recordCost(ctx, result.costUsd);
-          if (!detectPromptInjection(result.content).safe) {
-            return {
-              note: 'Fetched content failed the safety check and was dropped.',
-              url,
-            };
+          const verdict = await this.injectionGuard.guard(
+            result.content,
+            ctx.userId
+          );
+          if (!verdict.safe) {
+            return { note: FETCH_DROPPED_NOTE, url };
           }
           ctx.webSources.add({ title: result.title ?? url, url });
           return {

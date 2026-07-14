@@ -280,9 +280,11 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 - Delimiter injection (`</system>`, `[INST]`)
 - Encoded payload detection (base64 with execute/decode commands)
 
-**Normalization:** input is NFKC-normalized and stripped of zero-width/bidi control codepoints inside the guard before matching, so fullwidth/zero-width obfuscation cannot bypass the patterns. (Homoglyph folding — e.g. Cyrillic look-alikes — is out of scope for the regex layer; the durable fix is a model-based classifier.)
+**Normalization:** input is NFKC-normalized and stripped of zero-width/bidi control codepoints inside the guard before matching, so fullwidth/zero-width obfuscation cannot bypass the patterns. (Homoglyph folding — e.g. Cyrillic look-alikes — is out of scope for the regex layer; the gray-zone classifier below is the model-based backstop.)
 
 **Behavior:** Requests scoring ≥ 0.6 are blocked with `PROMPT_INJECTION_DETECTED` error. Content, selection, and suffix fields are all checked. Inputs over 50,000 characters are rejected as a ReDoS defense (the length guard runs on the raw input, before normalization).
+
+**Gray-zone classifier (flag `agent_injection_classifier`, default off):** heuristic scores in `0.3 ≤ score < 0.6` get a second, language-independent opinion from an LLM judge (`AI_GUARD_CLASSIFIER_MODEL`, default `anthropic:claude-haiku-4-5-20251001`) at the copilot's latest-user-message guard and on `webFetch` content. It is a single direct AI SDK call with its own 5s timeout — deliberately outside the fallback chain so classifier failures never open the shared provider breaker — and it **fails open** on any classifier error. An `injection: true` verdict blocks exactly like a heuristic hit; token spend is recorded as the server-billed `injection_classifier` side cost, and telemetry never records the suspected-hostile content.
 
 **Logged as:** `ai.request.injection_blocked` with score and reason.
 
@@ -453,6 +455,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                   |
 | `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
 | `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
+| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier        |
 | `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
 | `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
 | `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                    | Failures per minute that start a provider cooldown      |
@@ -475,18 +478,19 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                  | Description                                                                                                   |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `ai_enabled`              | Global AI feature gate                                                                                        |
-| `voice_notes_enabled`     | Voice-to-note feature gate                                                                                    |
-| `agent_hybrid_retrieval`  | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                       |
-| `agent_web_search`        | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                         |
-| `agent_byok`              | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                         |
-| `agent_longterm_memory`   | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                     |
-| `ai_cost_reserve`         | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                             |
-| `ai_byok_cost_gate`       | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                          |
-| `ai_global_spend_breaker` | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark |
-| `ai_anon_ip_budget`       | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting)); ships dark                         |
+| Flag Key                     | Description                                                                                                    |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `ai_enabled`                 | Global AI feature gate                                                                                         |
+| `voice_notes_enabled`        | Voice-to-note feature gate                                                                                     |
+| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                        |
+| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                          |
+| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                          |
+| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                      |
+| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)); ships dark |
+| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                              |
+| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                           |
+| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark  |
+| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting)); ships dark                          |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -940,10 +944,10 @@ Registered users can store their own provider API keys so the copilot runs on **
 
 ### Environment variables
 
-| Variable              | Required            | Default | Description                                                                                                                                                                                                                                                                                                                                     |
-| --------------------- | ------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BYOK_ENCRYPTION_KEY` | When the flag is on | —       | AES-256-GCM master key: 32 random bytes, base64 (`openssl rand -base64 32`). The app still boots without it, but with the flag on, saving a key **fails closed** (503) rather than storing plaintext. The env schema refuses a non-32-byte value at boot. **Never rotate it once keys are stored** — existing ciphertext becomes undecryptable. |
-| `AI_BYOK_DAILY_COST_LIMIT_USD` | No | `1.00` | Per-user daily ceiling (USD) for server-billed side costs (Tavily/Voyage) on BYOK turns, tracked in the `ai:ratelimit:{userId}:byok_cost:{day}` counter. Enforced only behind the `ai_byok_cost_gate` flag; the counter stays warm when the flag is off. |
+| Variable                       | Required            | Default | Description                                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BYOK_ENCRYPTION_KEY`          | When the flag is on | —       | AES-256-GCM master key: 32 random bytes, base64 (`openssl rand -base64 32`). The app still boots without it, but with the flag on, saving a key **fails closed** (503) rather than storing plaintext. The env schema refuses a non-32-byte value at boot. **Never rotate it once keys are stored** — existing ciphertext becomes undecryptable. |
+| `AI_BYOK_DAILY_COST_LIMIT_USD` | No                  | `1.00`  | Per-user daily ceiling (USD) for server-billed side costs (Tavily/Voyage) on BYOK turns, tracked in the `ai:ratelimit:{userId}:byok_cost:{day}` counter. Enforced only behind the `ai_byok_cost_gate` flag; the counter stays warm when the flag is off.                                                                                        |
 
 ### Endpoints
 

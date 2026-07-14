@@ -50,6 +50,7 @@ import type {
   MutationKind,
   ProposedMutation,
 } from '../domain/proposed-mutation';
+import { InjectionGuardService } from './injection-guard.service';
 
 interface RunAgentTurnInput {
   readonly userId: string;
@@ -131,7 +132,8 @@ export class RunAgentTurnHandler {
     private readonly embed: EmbeddingPort,
     private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
-    private readonly byok: ByokService
+    private readonly byok: ByokService,
+    private readonly injectionGuard: InjectionGuardService
   ) {}
 
   async execute(
@@ -447,7 +449,11 @@ export class RunAgentTurnHandler {
         );
         return;
       }
-      if (!detectPromptInjection(lastUserMessage.content).safe) {
+      const verdict = await this.injectionGuard.guard(
+        lastUserMessage.content,
+        input.userId
+      );
+      if (!verdict.safe) {
         callbacks.onError(AIErrors.promptInjectionDetected());
         return;
       }
