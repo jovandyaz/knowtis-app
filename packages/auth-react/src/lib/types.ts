@@ -3,6 +3,7 @@ import type {
   AuthTokens,
   LoginInput,
   RegisterInput,
+  UserRole,
 } from '@jovandyaz/auth';
 
 /**
@@ -16,6 +17,7 @@ export interface AuthUserProfile {
   isEmailVerified?: boolean;
   locale?: string;
   isAnonymous?: boolean;
+  role?: UserRole;
 }
 
 /**
