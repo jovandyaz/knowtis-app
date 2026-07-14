@@ -126,7 +126,9 @@ const INJECTION_PATTERNS: {
   // contribute via cumulative scoring. No '/' in the base64 class: with it
   // the run matches long URLs, repo paths, and JWT-ish blobs (benign FPs).
   {
-    pattern: /\b[A-Za-z0-9+]{60,}={0,2}\b/,
+    // Lookarounds (not \b) bound the run: '+'/'=' are non-word chars, so \b
+    // would drop an edge char and let a 60-char payload fall under threshold.
+    pattern: /(?<![A-Za-z0-9+/=])[A-Za-z0-9+]{60,}={0,2}(?![A-Za-z0-9+/=])/,
     weight: 0.3,
     reason: 'Long base64-like payload',
   },
@@ -136,7 +138,7 @@ const INJECTION_PATTERNS: {
     reason: 'Instruction re-anchoring',
   },
   {
-    pattern: /\bi[\s_.-]g[\s_.-]n[\s_.-]o[\s_.-]r[\s_.-]e\b/i,
+    pattern: /\bi[\s_.-]+g[\s_.-]+n[\s_.-]+o[\s_.-]+r[\s_.-]+e\b/i,
     weight: 0.4,
     reason: 'Obfuscated override keyword',
   },
