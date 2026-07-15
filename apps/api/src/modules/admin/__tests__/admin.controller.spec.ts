@@ -82,6 +82,24 @@ describe('AdminController', () => {
       });
       expect(result).toEqual({ items: [], total: 0, page: 3, limit: 50 });
     });
+
+    it('forwards an empty search string as-is', async () => {
+      usersService.findPage.mockResolvedValue({ items: [], total: 0 });
+
+      await controller.listUsers({ page: 1, limit: 25, search: '' });
+
+      expect(usersService.findPage).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: '',
+      });
+    });
+
+    it('propagates a rejection from usersService.findPage', async () => {
+      usersService.findPage.mockRejectedValue(new Error('boom'));
+
+      await expect(controller.listUsers({})).rejects.toThrow('boom');
+    });
   });
 
   describe('updateUserRole', () => {

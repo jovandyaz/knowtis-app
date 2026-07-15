@@ -57,7 +57,9 @@ export function FeatureFlagsPage() {
                   <Switch
                     checked={flag.enabled}
                     aria-label={flag.key}
-                    disabled={upsert.isPending}
+                    disabled={
+                      upsert.isPending && upsert.variables?.key === flag.key
+                    }
                     onCheckedChange={(enabled) =>
                       upsert.mutate({
                         key: flag.key,

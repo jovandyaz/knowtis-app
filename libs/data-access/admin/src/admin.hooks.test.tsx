@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { useState } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -18,10 +19,13 @@ vi.mock('@knowtis/api-client', () => ({
   httpClient: { get: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
 }));
 
-function wrapper({ children }: { children: ReactNode }) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
+function Wrapper({ children }: { children: ReactNode }) {
+  const [client] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      })
+  );
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
 
@@ -49,7 +53,7 @@ describe('useAdminUsers', () => {
     vi.mocked(httpClient.get).mockResolvedValue(PAGE);
 
     const { result } = renderHook(() => useAdminUsers({ page: 1, limit: 25 }), {
-      wrapper,
+      wrapper: Wrapper,
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -66,7 +70,7 @@ describe('useAdminUsers', () => {
     });
 
     renderHook(() => useAdminUsers({ page: 1, limit: 25, search: 'a b' }), {
-      wrapper,
+      wrapper: Wrapper,
     });
 
     await waitFor(() =>
@@ -81,7 +85,9 @@ describe('useUpdateUserRole', () => {
   it('patches the role endpoint', async () => {
     vi.mocked(httpClient.patch).mockResolvedValue(PAGE.items[0]);
 
-    const { result } = renderHook(() => useUpdateUserRole(), { wrapper });
+    const { result } = renderHook(() => useUpdateUserRole(), {
+      wrapper: Wrapper,
+    });
     result.current.mutate({ userId: PAGE.items[0].id, role: 'user' });
 
     await waitFor(() =>
@@ -103,7 +109,9 @@ describe('useUpsertFeatureFlag', () => {
       updatedAt: '2026-07-01T00:00:00.000Z',
     });
 
-    const { result } = renderHook(() => useUpsertFeatureFlag(), { wrapper });
+    const { result } = renderHook(() => useUpsertFeatureFlag(), {
+      wrapper: Wrapper,
+    });
     result.current.mutate({ key: 'ai_enabled', enabled: true });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -118,7 +126,9 @@ describe('useDeleteFeatureFlag', () => {
   it('calls the delete endpoint for the flag key', async () => {
     vi.mocked(httpClient.delete).mockResolvedValue({});
 
-    const { result } = renderHook(() => useDeleteFeatureFlag(), { wrapper });
+    const { result } = renderHook(() => useDeleteFeatureFlag(), {
+      wrapper: Wrapper,
+    });
     result.current.mutate('ai_enabled');
 
     await waitFor(() =>

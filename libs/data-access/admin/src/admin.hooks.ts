@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { httpClient } from '@knowtis/api-client';
 import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
@@ -38,7 +43,7 @@ export function useAdminUsers(params: AdminUsersParams) {
     queryFn: async () =>
       PaginatedUsersSchema.parse(await httpClient.get(usersPath(params))),
     staleTime: 1000 * 60,
-    placeholderData: (previous) => previous,
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -88,7 +93,7 @@ export function useUpsertFeatureFlag() {
       description?: string;
     }) =>
       FeatureFlagSchema.parse(
-        await httpClient.put(`/flags/${input.key}`, {
+        await httpClient.put(`/flags/${encodeURIComponent(input.key)}`, {
           enabled: input.enabled,
           ...(input.description !== undefined && {
             description: input.description,
@@ -104,7 +109,8 @@ export function useUpsertFeatureFlag() {
 export function useDeleteFeatureFlag() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (key: string) => httpClient.delete(`/flags/${key}`),
+    mutationFn: (key: string) =>
+      httpClient.delete(`/flags/${encodeURIComponent(key)}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
     },

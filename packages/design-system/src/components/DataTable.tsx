@@ -23,16 +23,28 @@ import {
   TableRow,
 } from './Table';
 
-export interface DataTableProps<TData, TValue = unknown> {
+interface DataTableBaseProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-  rowCount?: number;
-  pagination?: PaginationState;
-  onPaginationChange?: OnChangeFn<PaginationState>;
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
 }
+
+type DataTablePaginationProps =
+  | {
+      rowCount: number;
+      pagination: PaginationState;
+      onPaginationChange: OnChangeFn<PaginationState>;
+    }
+  | {
+      rowCount?: never;
+      pagination?: never;
+      onPaginationChange?: never;
+    };
+
+export type DataTableProps<TData, TValue = unknown> =
+  DataTableBaseProps<TData, TValue> & DataTablePaginationProps;
 
 export function DataTable<TData, TValue = unknown>({
   columns,
