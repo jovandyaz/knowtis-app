@@ -58,8 +58,19 @@ describe('AuditPage', () => {
             after: null,
             createdAt: new Date('2026-07-02'),
           },
+          {
+            id: '8b241101-e2bb-4255-8caf-4136c566a967',
+            actorId: '5b241101-e2bb-4255-8caf-4136c566a963',
+            actorEmail: 'grace@knowtis.app',
+            action: 'flag.deleted',
+            targetType: 'feature_flag',
+            targetId: 'beta_mode',
+            before: { enabled: true },
+            after: null,
+            createdAt: new Date('2026-07-03'),
+          },
         ],
-        total: 2,
+        total: 3,
         page: 1,
         limit: 25,
       },
@@ -80,6 +91,18 @@ describe('AuditPage', () => {
     expect(
       screen.getByText('6b241101-e2bb-4255-8caf-4136c566a966')
     ).toBeInTheDocument();
+
+    expect(
+      screen.getByText('user: 7b241101-e2bb-4255-8caf-4136c566a964')
+    ).toBeInTheDocument();
+    expect(screen.getByText('feature_flag')).toBeInTheDocument();
+    expect(screen.getByText('feature_flag: beta_mode')).toBeInTheDocument();
+
+    expect(
+      screen.getByText('{"role":"user"} → {"role":"admin"}')
+    ).toBeInTheDocument();
+    expect(screen.getByText('— → —')).toBeInTheDocument();
+    expect(screen.getByText('{"enabled":true} → —')).toBeInTheDocument();
   });
 
   it('shows an error state and retries the failed query', async () => {
