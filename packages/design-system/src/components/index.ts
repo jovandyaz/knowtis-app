@@ -88,3 +88,4 @@ export {
   TableHeader,
   TableRow,
 } from './Table';
+export { DataTable, type DataTableProps } from './DataTable';

@@ -88,6 +88,8 @@ export {
   TableHead,
   TableHeader,
   TableRow,
+  DataTable,
+  type DataTableProps,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 
