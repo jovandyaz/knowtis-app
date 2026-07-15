@@ -47,6 +47,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAdminAuditRepository (database)', () => {
         isAnonymous: false,
       })
       .onConflictDoNothing();
+    await db.delete(adminAuditLog).where(eq(adminAuditLog.actorId, DB_USER_ID));
   });
 
   afterEach(async () => {

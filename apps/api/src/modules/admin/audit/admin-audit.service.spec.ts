@@ -76,7 +76,10 @@ describe('AdminAuditService', () => {
       const entry = createEntry();
 
       await expect(service.record(entry)).resolves.toBeUndefined();
-      expect(loggerErrorSpy).toHaveBeenCalled();
+      expect(loggerErrorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(entry.action),
+        expect.any(String)
+      );
     });
   });
 
