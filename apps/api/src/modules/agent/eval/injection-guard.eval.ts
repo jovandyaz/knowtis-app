@@ -15,7 +15,7 @@ import {
 loadEnv({ path: '.env.local' });
 loadEnv({ path: '.env' });
 
-const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-4-20250514';
+const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-4-6';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5-20251001';
 const EVAL_TIMEOUT_MS = 300_000;
 
