@@ -2,7 +2,7 @@ name: Nightly Evals
 
 on:
   schedule:
-    - cron: '0 8 * * *' # 08:00 UTC daily (~02:00 America/Mexico_City)
+    - cron: '0 8 * * *'
   workflow_dispatch:
 
 permissions:
@@ -34,12 +34,9 @@ jobs:
           --health-retries 5
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_eval
-      # Throwaway secrets: the eval harness only validates env shape (length,
-      # distinctness) and never issues or verifies real tokens.
+      # Throwaway values: the harness validates env shape only, never issues real tokens.
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
-      # Each eval self-skips when its provider key is absent; only the
-      # Anthropic-gated suites (injection-guard, copilot) run by default.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
