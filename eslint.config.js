@@ -64,6 +64,10 @@ export default defineConfig([
               sourceTag: 'scope:api',
               onlyDependOnLibsWithTags: ['scope:shared', 'scope:api'],
             },
+            {
+              sourceTag: 'scope:backoffice',
+              onlyDependOnLibsWithTags: ['scope:shared', 'scope:backoffice'],
+            },
           ],
         },
       ],
@@ -110,6 +114,7 @@ export default defineConfig([
   {
     files: [
       'apps/notes/**/*.{ts,tsx}',
+      'apps/backoffice/**/*.{ts,tsx}',
       'libs/**/*.{ts,tsx}',
       'packages/**/*.{ts,tsx}',
     ],

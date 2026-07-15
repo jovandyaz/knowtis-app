@@ -1,0 +1,53 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "esModuleInterop": false,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "types": ["vite/client", "vitest"],
+    "paths": {
+      "@/*": ["apps/backoffice/src/*"],
+      "@knowtis/design-system": ["packages/design-system/src/index.ts"],
+      "@knowtis/editor-schema": ["packages/editor-schema/src/index.ts"],
+      "@knowtis/shared-hooks": ["packages/shared/hooks/src/index.ts"],
+      "@knowtis/shared-util": ["packages/shared/util/src/index.ts"],
+      "@knowtis/shared-i18n": ["packages/shared/i18n/src/index.ts"],
+      "@knowtis/shared-types": ["packages/shared/types/src/index.ts"],
+      "@knowtis/api-client": ["libs/api-client/src/index.ts"],
+      "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
+      "@knowtis/data-access-artifacts": [
+        "libs/data-access/artifacts/src/index.ts"
+      ],
+      "@knowtis/data-access-users": ["libs/data-access/users/src/index.ts"],
+      "@knowtis/data-access-feature-flags": [
+        "libs/data-access/feature-flags/src/index.ts"
+      ],
+      "@knowtis/data-access-mcp-keys": [
+        "libs/data-access/mcp-keys/src/index.ts"
+      ],
+      "@knowtis/data-access-oauth": ["libs/data-access/oauth/src/index.ts"],
+      "@knowtis/authorization": ["libs/authorization/src/index.ts"],
+      "@jovandyaz/permissions-core": ["packages/permissions/src/index.ts"],
+      "@jovandyaz/permissions-react": [
+        "packages/permissions-react/src/index.ts"
+      ],
+      "@jovandyaz/auth": ["packages/auth/src/index.ts"],
+      "@jovandyaz/auth/server": ["packages/auth/src/server.ts"],
+      "@jovandyaz/auth-react": ["packages/auth-react/src/index.ts"],
+      "@knowtis/crdt": ["packages/crdt/src/index.ts"],
+      "@knowtis/editor": ["packages/editor/src/index.ts"]
+    }
+  },
+  "files": [],
+  "include": [],
+  "references": [
+    {
+      "path": "./tsconfig.app.json"
+    },
+    {
+      "path": "./tsconfig.spec.json"
+    }
+  ],
+  "extends": "../../tsconfig.base.json"
+}

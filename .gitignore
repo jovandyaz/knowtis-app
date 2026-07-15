@@ -93,3 +93,5 @@ e2e-*.png
 
 # CodeGraph local index
 .codegraph/
+
+vite.config.*.timestamp*

@@ -1,17 +1,22 @@
 const LOCAL_DEV_ORIGINS = [
   'http://localhost:4200',
   'http://localhost:4040',
+  'http://localhost:4400',
 ] as const;
 
 export function buildAllowedOrigins(
   nodeEnv: string,
-  frontendUrl: string
+  frontendUrl: string,
+  backofficeUrl?: string
 ): string[] {
+  const appOrigins = backofficeUrl
+    ? [frontendUrl, backofficeUrl]
+    : [frontendUrl];
   if (nodeEnv === 'production') {
-    return [frontendUrl];
+    return appOrigins;
   }
   return [
-    frontendUrl,
-    ...LOCAL_DEV_ORIGINS.filter((origin) => origin !== frontendUrl),
+    ...appOrigins,
+    ...LOCAL_DEV_ORIGINS.filter((origin) => !appOrigins.includes(origin)),
   ];
 }
