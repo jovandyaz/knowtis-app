@@ -127,6 +127,21 @@ describe('useAuditLog', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
+
+  it('accepts an actorEmail that is not a valid email format', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...AUDIT_PAGE,
+      items: [{ ...AUDIT_PAGE.items[0], actorEmail: 'not-an-email' }],
+    });
+
+    const { result } = renderHook(() => useAuditLog({ page: 2, limit: 50 }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.isError).toBe(false);
+    expect(result.current.data?.items[0].actorEmail).toBe('not-an-email');
+  });
 });
 
 describe('useUpdateUserRole', () => {

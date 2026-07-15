@@ -29,8 +29,9 @@ export const adminQueryKeys = {
   aiUsage: () => [...adminQueryKeys.all, 'ai-usage'] as const,
   aiMetrics: (period: MetricsPeriod) =>
     [...adminQueryKeys.all, 'ai-metrics', period] as const,
+  auditLists: () => [...adminQueryKeys.all, 'audit'] as const,
   auditList: (params: AuditParams) =>
-    [...adminQueryKeys.all, 'audit', params] as const,
+    [...adminQueryKeys.auditLists(), params] as const,
 } as const;
 
 function usersPath({ page, limit, search }: AdminUsersParams): string {
