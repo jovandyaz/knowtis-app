@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { useNavigate } from '@tanstack/react-router';
@@ -26,6 +27,7 @@ type LoginFormData = z.infer<typeof LoginSchema>;
 export function LoginPage() {
   const navigate = useNavigate();
   const login = useLogin();
+  const [submitError, setSubmitError] = useState<Error | null>(null);
   const {
     register,
     handleSubmit,
@@ -33,9 +35,17 @@ export function LoginPage() {
   } = useForm<LoginFormData>({ resolver: zodResolver(LoginSchema) });
 
   const onSubmit = handleSubmit(async (data) => {
-    await login.mutateAsync(data);
-    await syncUserProfile();
-    navigate({ to: '/' });
+    setSubmitError(null);
+    try {
+      await login.mutateAsync(data);
+      await syncUserProfile();
+      navigate({ to: '/' });
+    } catch (error) {
+      console.warn('[backoffice-auth] login flow failed', error);
+      setSubmitError(
+        error instanceof Error ? error : new Error('Login failed')
+      );
+    }
   });
 
   return (
@@ -48,6 +58,8 @@ export function LoginPage() {
               id="email"
               type="email"
               autoComplete="email"
+              aria-invalid={!!errors.email}
+              aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
           </FormField>
@@ -59,12 +71,14 @@ export function LoginPage() {
             <PasswordInput
               id="password"
               autoComplete="current-password"
+              aria-invalid={!!errors.password}
+              aria-describedby={errors.password ? 'password-error' : undefined}
               {...register('password')}
             />
           </FormField>
           <MutationErrorAlert
-            error={login.error}
-            isError={login.isError}
+            error={login.error ?? submitError}
+            isError={login.isError || submitError !== null}
             fallbackMessage="Invalid credentials"
           />
           <LoadingButton

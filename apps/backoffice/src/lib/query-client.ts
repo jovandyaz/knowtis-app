@@ -8,7 +8,7 @@ export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
       if (ApiClientError.isApiClientError(error) && error.status === 401) {
-        performLogout();
+        void performLogout();
       }
     },
   }),

@@ -30,7 +30,11 @@ export function AppShell({ children }: AppShellProps) {
           <span className="truncate text-xs text-(--muted-foreground)">
             {user?.email}
           </span>
-          <Button variant="outline" size="sm" onClick={performLogout}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void performLogout()}
+          >
             Sign out
           </Button>
         </div>

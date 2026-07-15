@@ -21,14 +21,19 @@ httpClient.setTokenProvider(tokenStorage);
 
 export const authApi = createBackofficeAuthApi({ httpClient, tokenStorage });
 
-export function performLogout(): void {
+export async function performLogout(): Promise<void> {
+  try {
+    await authApi.logout();
+  } catch (error) {
+    console.warn('[backoffice-auth] server logout failed', error);
+  }
   authStore.getState().logout();
   window.location.assign('/login');
 }
 
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
-  onLogoutDetected: performLogout,
+  onLogoutDetected: () => void performLogout(),
 });
 
 httpClient.setRefreshTokenCallback(async () => {

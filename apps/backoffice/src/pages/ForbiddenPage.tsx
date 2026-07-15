@@ -9,7 +9,9 @@ export function ForbiddenPage() {
         title="Access denied"
         description="This panel is restricted to administrators. Sign in with an admin account."
       >
-        <Button onClick={performLogout}>Sign in with another account</Button>
+        <Button onClick={() => void performLogout()}>
+          Sign in with another account
+        </Button>
       </EmptyState>
     </div>
   );
