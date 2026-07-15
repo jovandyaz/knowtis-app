@@ -62,8 +62,12 @@ export class UsersService {
     return this.usersRepository.update(id, { emailVerifiedAt: new Date() });
   }
 
-  async findAll() {
-    return this.usersRepository.findAll();
+  async findPage(params: {
+    page: number;
+    limit: number;
+    search?: string | undefined;
+  }) {
+    return this.usersRepository.findPage(params);
   }
 
   async updateRole(id: string, role: UserRole) {

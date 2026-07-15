@@ -30,6 +30,8 @@ import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { UsersService } from '../users/users.service';
 import { DailyUsageResponseDto } from './dto/daily-usage-response.dto';
 import { MetricsSummaryResponseDto } from './dto/metrics-summary-response.dto';
+import { PaginatedUsersQueryDto } from './dto/paginated-users-query.dto';
+import { PaginatedUsersResponseDto } from './dto/paginated-users-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
@@ -52,13 +54,13 @@ export class AdminController {
   ) {}
 
   @ApiOperation({
-    summary: 'List all users',
+    summary: 'List users (paginated)',
     description:
-      'Returns all non-anonymous users ordered by creation date. Excludes password hashes from the response.',
+      'Returns non-anonymous users, newest first, with optional case-insensitive email search. Excludes password hashes.',
   })
   @ApiOkResponse({
-    type: [UserResponseDto],
-    description: 'List of all users retrieved successfully',
+    type: PaginatedUsersResponseDto,
+    description: 'One page of users',
   })
   @ApiResponse({
     status: 401,
@@ -69,8 +71,15 @@ export class AdminController {
     description: 'Forbidden — user does not have admin role',
   })
   @Get('users')
-  async listUsers() {
-    return this.usersService.findAll();
+  async listUsers(@Query() query: PaginatedUsersQueryDto) {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 25;
+    const { items, total } = await this.usersService.findPage({
+      page,
+      limit,
+      search: query.search,
+    });
+    return { items, total, page, limit };
   }
 
   @ApiOperation({

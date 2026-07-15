@@ -8,7 +8,7 @@ import { AdminController } from '../admin.controller';
 
 function createMockUsersService() {
   return {
-    findAll: vi.fn(),
+    findPage: vi.fn(),
     updateRole: vi.fn(),
   };
 }
@@ -44,17 +44,43 @@ describe('AdminController', () => {
   });
 
   describe('listUsers', () => {
-    it('should return all users', async () => {
-      const users = [
-        { id: '1', email: 'a@test.com', name: 'A', role: 'user' },
-        { id: '2', email: 'b@test.com', name: 'B', role: 'admin' },
-      ];
-      usersService.findAll.mockResolvedValue(users);
+    it('returns a paginated envelope with defaults', async () => {
+      const page = {
+        items: [{ id: '1', email: 'a@test.com', name: 'A', role: 'user' }],
+        total: 1,
+      };
+      usersService.findPage.mockResolvedValue(page);
 
-      const result = await controller.listUsers();
+      const result = await controller.listUsers({});
 
-      expect(result).toEqual(users);
-      expect(usersService.findAll).toHaveBeenCalled();
+      expect(usersService.findPage).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: undefined,
+      });
+      expect(result).toEqual({
+        items: page.items,
+        total: 1,
+        page: 1,
+        limit: 25,
+      });
+    });
+
+    it('passes page, limit and search through', async () => {
+      usersService.findPage.mockResolvedValue({ items: [], total: 0 });
+
+      const result = await controller.listUsers({
+        page: 3,
+        limit: 50,
+        search: 'ada',
+      });
+
+      expect(usersService.findPage).toHaveBeenCalledWith({
+        page: 3,
+        limit: 50,
+        search: 'ada',
+      });
+      expect(result).toEqual({ items: [], total: 0, page: 3, limit: 50 });
     });
   });
 
