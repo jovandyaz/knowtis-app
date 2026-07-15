@@ -33,14 +33,14 @@ describe('AiModelsController', () => {
   it('PUT /ai/preferences persists and echoes the value', async () => {
     const { ctrl, pref } = make();
     const res = await ctrl.updatePreferences(user, {
-      preferredModel: 'anthropic:claude-sonnet-4-6',
+      preferredModel: 'anthropic:claude-sonnet-5',
     });
     expect(pref.setUserPreference).toHaveBeenCalledWith(
       'u1',
-      'anthropic:claude-sonnet-4-6'
+      'anthropic:claude-sonnet-5'
     );
     expect(res).toEqual({
-      preferredModel: 'anthropic:claude-sonnet-4-6',
+      preferredModel: 'anthropic:claude-sonnet-5',
     });
   });
 

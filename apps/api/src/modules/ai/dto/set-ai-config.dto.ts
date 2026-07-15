@@ -5,7 +5,7 @@ export class SetAIConfigDto {
   @ApiProperty({
     description: 'The configuration value to set',
     maxLength: 500,
-    example: 'anthropic:claude-sonnet-4-20250514',
+    example: 'anthropic:claude-sonnet-5',
   })
   @IsString()
   @IsNotEmpty()
