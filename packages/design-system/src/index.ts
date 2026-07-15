@@ -81,6 +81,13 @@ export {
   SegmentedControl,
   type SegmentedControlItem,
   type SegmentedControlProps,
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 

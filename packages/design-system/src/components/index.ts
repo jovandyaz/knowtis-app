@@ -79,3 +79,12 @@ export {
   type SegmentedControlItem,
   type SegmentedControlProps,
 } from './SegmentedControl';
+export {
+  Table,
+  TableBody,
+  TableCaption,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from './Table';
