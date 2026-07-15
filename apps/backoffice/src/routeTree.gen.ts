@@ -14,6 +14,7 @@ import { Route as ForbiddenRouteImport } from './routes/forbidden'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedFeatureFlagsRouteImport } from './routes/_authenticated/feature-flags'
 import { Route as AuthenticatedAiMetricsRouteImport } from './routes/_authenticated/ai-metrics'
 
 const LoginRoute = LoginRouteImport.update({
@@ -40,6 +41,12 @@ const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
   path: '/users',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedFeatureFlagsRoute =
+  AuthenticatedFeatureFlagsRouteImport.update({
+    id: '/feature-flags',
+    path: '/feature-flags',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedAiMetricsRoute = AuthenticatedAiMetricsRouteImport.update({
   id: '/ai-metrics',
   path: '/ai-metrics',
@@ -51,12 +58,14 @@ export interface FileRoutesByFullPath {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
 }
 export interface FileRoutesByTo {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -66,20 +75,34 @@ export interface FileRoutesById {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/_authenticated/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/_authenticated/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/forbidden' | '/login' | '/ai-metrics' | '/users'
+  fullPaths:
+    | '/'
+    | '/forbidden'
+    | '/login'
+    | '/ai-metrics'
+    | '/feature-flags'
+    | '/users'
   fileRoutesByTo: FileRoutesByTo
-  to: '/forbidden' | '/login' | '/ai-metrics' | '/users' | '/'
+  to:
+    | '/forbidden'
+    | '/login'
+    | '/ai-metrics'
+    | '/feature-flags'
+    | '/users'
+    | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/forbidden'
     | '/login'
     | '/_authenticated/ai-metrics'
+    | '/_authenticated/feature-flags'
     | '/_authenticated/users'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -127,6 +150,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsersRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/feature-flags': {
+      id: '/_authenticated/feature-flags'
+      path: '/feature-flags'
+      fullPath: '/feature-flags'
+      preLoaderRoute: typeof AuthenticatedFeatureFlagsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai-metrics': {
       id: '/_authenticated/ai-metrics'
       path: '/ai-metrics'
@@ -139,12 +169,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAiMetricsRoute: typeof AuthenticatedAiMetricsRoute
+  AuthenticatedFeatureFlagsRoute: typeof AuthenticatedFeatureFlagsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiMetricsRoute: AuthenticatedAiMetricsRoute,
+  AuthenticatedFeatureFlagsRoute: AuthenticatedFeatureFlagsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }
