@@ -1,4 +1,5 @@
-import { JwtAuthGuard } from '@jovandyaz/auth-nestjs';
+import type { RequestUser } from '@jovandyaz/auth';
+import { CurrentUser, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import {
   Body,
   Controller,
@@ -93,11 +94,13 @@ export class FeatureFlagsController {
   @Roles('admin')
   async upsert(
     @Param() params: FeatureFlagKeyParam,
-    @Body() dto: UpsertFeatureFlagDto
+    @Body() dto: UpsertFeatureFlagDto,
+    @CurrentUser() currentUser: RequestUser
   ) {
     return this.featureFlagsService.toggle(
       params.key,
       dto.enabled,
+      currentUser.id,
       dto.description
     );
   }
@@ -119,7 +122,10 @@ export class FeatureFlagsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param() params: FeatureFlagKeyParam) {
-    await this.featureFlagsService.remove(params.key);
+  async remove(
+    @Param() params: FeatureFlagKeyParam,
+    @CurrentUser() currentUser: RequestUser
+  ) {
+    await this.featureFlagsService.remove(params.key, currentUser.id);
   }
 }

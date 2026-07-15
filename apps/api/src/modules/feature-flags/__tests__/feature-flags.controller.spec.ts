@@ -1,9 +1,17 @@
+import type { RequestUser } from '@jovandyaz/auth';
 import { Test } from '@nestjs/testing';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { FeatureFlagEntity } from '../domain/feature-flag.repository';
 import { FeatureFlagsController } from '../feature-flags.controller';
 import { FeatureFlagsService } from '../feature-flags.service';
+
+const CURRENT_USER: RequestUser = {
+  id: 'admin-uuid',
+  email: 'admin@test.com',
+  name: 'Admin',
+  role: 'admin',
+};
 
 function createMockFlag(
   overrides: Partial<FeatureFlagEntity> = {}
@@ -57,7 +65,7 @@ describe('FeatureFlagsController', () => {
   });
 
   describe('upsert', () => {
-    it('should toggle a feature flag', async () => {
+    it('should toggle a feature flag as the current user', async () => {
       const flag = createMockFlag({ enabled: true });
       service.toggle.mockResolvedValue(flag);
 
@@ -66,13 +74,15 @@ describe('FeatureFlagsController', () => {
         {
           enabled: true,
           description: 'A test flag',
-        }
+        },
+        CURRENT_USER
       );
 
       expect(result).toEqual(flag);
       expect(service.toggle).toHaveBeenCalledWith(
         'test_flag',
         true,
+        CURRENT_USER.id,
         'A test flag'
       );
     });
@@ -83,25 +93,27 @@ describe('FeatureFlagsController', () => {
 
       const result = await controller.upsert(
         { key: 'test_flag' },
-        { enabled: false }
+        { enabled: false },
+        CURRENT_USER
       );
 
       expect(result).toEqual(flag);
       expect(service.toggle).toHaveBeenCalledWith(
         'test_flag',
         false,
+        CURRENT_USER.id,
         undefined
       );
     });
   });
 
   describe('remove', () => {
-    it('should remove a feature flag', async () => {
+    it('should remove a feature flag as the current user', async () => {
       service.remove.mockResolvedValue(undefined);
 
-      await controller.remove({ key: 'test_flag' });
+      await controller.remove({ key: 'test_flag' }, CURRENT_USER);
 
-      expect(service.remove).toHaveBeenCalledWith('test_flag');
+      expect(service.remove).toHaveBeenCalledWith('test_flag', CURRENT_USER.id);
     });
   });
 });
