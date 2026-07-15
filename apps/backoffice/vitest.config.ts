@@ -16,6 +16,11 @@ export default defineConfig({
         __dirname,
         '../../packages/design-system/src/index.ts'
       ),
+      '@jovandyaz/auth': resolve(__dirname, '../../packages/auth/src/index.ts'),
+      '@jovandyaz/auth-react': resolve(
+        __dirname,
+        '../../packages/auth-react/src/index.ts'
+      ),
     },
   },
 });
