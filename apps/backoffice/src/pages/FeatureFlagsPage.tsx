@@ -2,6 +2,7 @@ import { useUpsertFeatureFlag } from '@knowtis/data-access-admin';
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
 import {
   EmptyState,
+  ErrorState,
   LoadingState,
   Switch,
   Table,
@@ -19,7 +20,13 @@ export function FeatureFlagsPage() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold">Feature Flags</h1>
-      {flags.isLoading ? (
+      {flags.isError ? (
+        <ErrorState
+          message="Could not load feature flags."
+          onRetry={() => void flags.refetch()}
+          fullHeight={false}
+        />
+      ) : flags.isLoading ? (
         <LoadingState />
       ) : !flags.data || flags.data.length === 0 ? (
         <EmptyState

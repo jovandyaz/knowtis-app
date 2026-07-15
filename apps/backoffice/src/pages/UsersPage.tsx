@@ -1,23 +1,25 @@
 import { useMemo, useState } from 'react';
 
+import { createColumnHelper } from '@tanstack/react-table';
 import type { ColumnDef, PaginationState } from '@tanstack/react-table';
 
 import { RoleSelect } from '@/components/RoleSelect';
 
 import { useAdminUsers, type AdminUser } from '@knowtis/data-access-admin';
-import { Badge, DataTable, Input } from '@knowtis/design-system';
+import { Badge, DataTable, ErrorState, Input } from '@knowtis/design-system';
+import { useDebounce } from '@knowtis/shared-hooks';
+
+const columnHelper = createColumnHelper<AdminUser>();
 
 const columns: ColumnDef<AdminUser, unknown>[] = [
-  { accessorKey: 'email', header: 'Email' },
-  { accessorKey: 'name', header: 'Name' },
-  {
-    accessorKey: 'role',
+  columnHelper.accessor('email', { header: 'Email' }),
+  columnHelper.accessor('name', { header: 'Name' }),
+  columnHelper.accessor('role', {
     header: 'Role',
     cell: ({ row }) => <RoleSelect user={row.original} />,
     enableSorting: false,
-  },
-  {
-    accessorKey: 'emailVerifiedAt',
+  }),
+  columnHelper.accessor('emailVerifiedAt', {
     header: 'Verified',
     cell: ({ getValue }) =>
       getValue() ? (
@@ -26,16 +28,16 @@ const columns: ColumnDef<AdminUser, unknown>[] = [
         <Badge variant="outline">no</Badge>
       ),
     enableSorting: false,
-  },
-  {
-    accessorKey: 'createdAt',
+  }),
+  columnHelper.accessor('createdAt', {
     header: 'Joined',
-    cell: ({ getValue }) => (getValue() as Date).toLocaleDateString(),
-  },
+    cell: ({ getValue }) => getValue().toLocaleDateString(),
+  }),
 ];
 
 export function UsersPage() {
   const [search, setSearch] = useState('');
+  const debouncedSearch = useDebounce(search);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: 25,
@@ -45,9 +47,9 @@ export function UsersPage() {
     () => ({
       page: pagination.pageIndex + 1,
       limit: pagination.pageSize,
-      ...(search ? { search } : {}),
+      ...(debouncedSearch ? { search: debouncedSearch } : {}),
     }),
-    [pagination, search]
+    [pagination, debouncedSearch]
   );
   const users = useAdminUsers(params);
 
@@ -66,16 +68,24 @@ export function UsersPage() {
           }}
         />
       </div>
-      <DataTable
-        columns={columns}
-        data={users.data?.items ?? []}
-        rowCount={users.data?.total ?? 0}
-        pagination={pagination}
-        onPaginationChange={setPagination}
-        isLoading={users.isLoading}
-        emptyTitle="No users found"
-        emptyDescription="Try a different search."
-      />
+      {users.isError ? (
+        <ErrorState
+          message="Could not load users."
+          onRetry={() => void users.refetch()}
+          fullHeight={false}
+        />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={users.data?.items ?? []}
+          rowCount={users.data?.total ?? 0}
+          pagination={pagination}
+          onPaginationChange={setPagination}
+          isLoading={users.isLoading}
+          emptyTitle="No users found"
+          emptyDescription="Try a different search."
+        />
+      )}
     </div>
   );
 }

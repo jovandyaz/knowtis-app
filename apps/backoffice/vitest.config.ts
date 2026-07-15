@@ -37,6 +37,10 @@ export default defineConfig({
         __dirname,
         '../../libs/data-access/feature-flags/src/index.ts'
       ),
+      '@knowtis/shared-hooks': resolve(
+        __dirname,
+        '../../packages/shared/hooks/src/index.ts'
+      ),
     },
   },
 });

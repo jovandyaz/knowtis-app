@@ -8,6 +8,8 @@ import {
 } from '@knowtis/data-access-admin';
 import {
   Card,
+  EmptyState,
+  ErrorState,
   LoadingState,
   SegmentedControl,
   Table,
@@ -47,7 +49,13 @@ export function AiMetricsPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-(--muted-foreground)">Today</h2>
-        {usage.isLoading || !usage.data ? (
+        {usage.isError ? (
+          <ErrorState
+            message="Could not load today's usage."
+            onRetry={() => void usage.refetch()}
+            fullHeight={false}
+          />
+        ) : usage.isLoading || !usage.data ? (
           <LoadingState />
         ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -81,8 +89,19 @@ export function AiMetricsPage() {
             items={METRICS_PERIODS.map((p) => ({ value: p, label: p }))}
           />
         </div>
-        {metrics.isLoading || !metrics.data ? (
+        {metrics.isError ? (
+          <ErrorState
+            message="Could not load metrics."
+            onRetry={() => void metrics.refetch()}
+            fullHeight={false}
+          />
+        ) : metrics.isLoading || !metrics.data ? (
           <LoadingState />
+        ) : Object.keys(metrics.data.byAction).length === 0 ? (
+          <EmptyState
+            title="No activity"
+            description="No AI actions recorded for this period."
+          />
         ) : (
           <Table>
             <TableHeader>

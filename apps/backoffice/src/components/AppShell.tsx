@@ -3,16 +3,10 @@ import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 
 import { performLogout } from '@/auth/setup';
+import { ADMIN_SECTIONS } from '@/config/admin-sections';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { Button } from '@knowtis/design-system';
-
-const NAV_LINKS = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/users', label: 'Users' },
-  { to: '/ai-metrics', label: 'AI Metrics' },
-  { to: '/feature-flags', label: 'Feature Flags' },
-] as const;
 
 interface AppShellProps {
   children: ReactNode;
@@ -26,14 +20,20 @@ export function AppShell({ children }: AppShellProps) {
       <aside className="flex w-full flex-col border-b border-(--border) p-4 md:w-56 md:border-b-0 md:border-r">
         <span className="mb-6 text-sm font-semibold">Knowtis Backoffice</span>
         <nav className="flex flex-1 flex-col gap-1">
-          {NAV_LINKS.map((link) => (
+          <Link
+            to="/"
+            activeOptions={{ exact: true }}
+            className="rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted)"
+          >
+            Dashboard
+          </Link>
+          {ADMIN_SECTIONS.map((section) => (
             <Link
-              key={link.to}
-              to={link.to}
-              activeOptions={{ exact: link.to === '/' }}
+              key={section.to}
+              to={section.to}
               className="rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted)"
             >
-              {link.label}
+              {section.label}
             </Link>
           ))}
         </nav>

@@ -1,6 +1,13 @@
+import { USER_ROLE } from '@jovandyaz/auth';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { useUpdateUserRole, type AdminUser } from '@knowtis/data-access-admin';
+
+const ROLE_OPTIONS = [USER_ROLE.USER, USER_ROLE.ADMIN] as const;
+
+function isAdminUserRole(value: string): value is AdminUser['role'] {
+  return (ROLE_OPTIONS as readonly string[]).includes(value);
+}
 
 interface RoleSelectProps {
   user: AdminUser;
@@ -17,15 +24,18 @@ export function RoleSelect({ user }: RoleSelectProps) {
       value={user.role}
       disabled={isSelf || updateRole.isPending}
       aria-label={`Role for ${user.email}`}
-      onChange={(event) =>
-        updateRole.mutate({
-          userId: user.id,
-          role: event.target.value as AdminUser['role'],
-        })
-      }
+      onChange={(event) => {
+        const { value } = event.target;
+        if (isAdminUserRole(value)) {
+          updateRole.mutate({ userId: user.id, role: value });
+        }
+      }}
     >
-      <option value="user">user</option>
-      <option value="admin">admin</option>
+      {ROLE_OPTIONS.map((role) => (
+        <option key={role} value={role}>
+          {role}
+        </option>
+      ))}
     </select>
   );
 }
