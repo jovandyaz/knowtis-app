@@ -15,6 +15,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedFeatureFlagsRouteImport } from './routes/_authenticated/feature-flags'
+import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedAiMetricsRouteImport } from './routes/_authenticated/ai-metrics'
 
 const LoginRoute = LoginRouteImport.update({
@@ -47,6 +48,11 @@ const AuthenticatedFeatureFlagsRoute =
     path: '/feature-flags',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedAuditRoute = AuthenticatedAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedAiMetricsRoute = AuthenticatedAiMetricsRouteImport.update({
   id: '/ai-metrics',
   path: '/ai-metrics',
@@ -58,6 +64,7 @@ export interface FileRoutesByFullPath {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/audit': typeof AuthenticatedAuditRoute
   '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
 }
@@ -65,6 +72,7 @@ export interface FileRoutesByTo {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/audit': typeof AuthenticatedAuditRoute
   '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/users': typeof AuthenticatedUsersRoute
   '/': typeof AuthenticatedIndexRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
   '/_authenticated/ai-metrics': typeof AuthenticatedAiMetricsRoute
+  '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/feature-flags': typeof AuthenticatedFeatureFlagsRoute
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
     | '/forbidden'
     | '/login'
     | '/ai-metrics'
+    | '/audit'
     | '/feature-flags'
     | '/users'
   fileRoutesByTo: FileRoutesByTo
@@ -93,6 +103,7 @@ export interface FileRouteTypes {
     | '/forbidden'
     | '/login'
     | '/ai-metrics'
+    | '/audit'
     | '/feature-flags'
     | '/users'
     | '/'
@@ -102,6 +113,7 @@ export interface FileRouteTypes {
     | '/forbidden'
     | '/login'
     | '/_authenticated/ai-metrics'
+    | '/_authenticated/audit'
     | '/_authenticated/feature-flags'
     | '/_authenticated/users'
     | '/_authenticated/'
@@ -157,6 +169,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFeatureFlagsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/audit': {
+      id: '/_authenticated/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof AuthenticatedAuditRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/ai-metrics': {
       id: '/_authenticated/ai-metrics'
       path: '/ai-metrics'
@@ -169,6 +188,7 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteChildren {
   AuthenticatedAiMetricsRoute: typeof AuthenticatedAiMetricsRoute
+  AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedFeatureFlagsRoute: typeof AuthenticatedFeatureFlagsRoute
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
@@ -176,6 +196,7 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedAiMetricsRoute: AuthenticatedAiMetricsRoute,
+  AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedFeatureFlagsRoute: AuthenticatedFeatureFlagsRoute,
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,

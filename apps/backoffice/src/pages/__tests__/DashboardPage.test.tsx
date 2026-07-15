@@ -5,11 +5,12 @@ import { describe, expect, it } from 'vitest';
 import { DashboardPage } from '../DashboardPage';
 
 describe('DashboardPage', () => {
-  it('links to the three admin sections', async () => {
+  it('links to the four admin sections', async () => {
     await renderWithRouter(DashboardPage, [
       '/users',
       '/ai-metrics',
       '/feature-flags',
+      '/audit',
     ]);
 
     expect(
@@ -21,6 +22,9 @@ describe('DashboardPage', () => {
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /feature flags/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('link', { name: /audit log/i })
     ).toBeInTheDocument();
   });
 });
