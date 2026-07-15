@@ -72,7 +72,7 @@ const completionResultSchema = {
     text: { type: 'string', example: 'Here is the summary...' },
     inputTokens: { type: 'number', example: 150 },
     outputTokens: { type: 'number', example: 75 },
-    model: { type: 'string', example: 'claude-sonnet-5' },
+    model: { type: 'string', example: 'anthropic:claude-sonnet-5' },
   },
 };
 
