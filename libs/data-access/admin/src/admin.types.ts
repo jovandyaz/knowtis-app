@@ -1,3 +1,4 @@
+import { USER_ROLE } from '@jovandyaz/auth';
 import { z } from 'zod';
 
 export const AdminUserSchema = z.object({
@@ -5,7 +6,7 @@ export const AdminUserSchema = z.object({
   email: z.email(),
   name: z.string(),
   avatarUrl: z.string().nullable(),
-  role: z.enum(['user', 'admin']),
+  role: z.enum([USER_ROLE.USER, USER_ROLE.ADMIN]),
   provider: z.string(),
   isAnonymous: z.boolean(),
   createdAt: z.coerce.date(),
@@ -43,6 +44,15 @@ export type MetricsSummary = z.infer<typeof MetricsSummarySchema>;
 
 export const METRICS_PERIODS = ['day', 'week', 'month'] as const;
 export type MetricsPeriod = (typeof METRICS_PERIODS)[number];
+
+export const FeatureFlagSchema = z.object({
+  key: z.string(),
+  enabled: z.boolean(),
+  description: z.string().nullable(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+export type FeatureFlag = z.infer<typeof FeatureFlagSchema>;
 
 export interface AdminUsersParams {
   page: number;

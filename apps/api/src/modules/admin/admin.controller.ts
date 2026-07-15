@@ -36,6 +36,8 @@ import { UpdateRoleDto } from './dto/update-role.dto';
 import { UserResponseDto } from './dto/user-response.dto';
 
 const VALID_PERIODS: readonly MetricsPeriod[] = ['day', 'week', 'month'];
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 25;
 
 function isMetricsPeriod(value: string): value is MetricsPeriod {
   return (VALID_PERIODS as readonly string[]).includes(value);
@@ -72,8 +74,8 @@ export class AdminController {
   })
   @Get('users')
   async listUsers(@Query() query: PaginatedUsersQueryDto) {
-    const page = query.page ?? 1;
-    const limit = query.limit ?? 25;
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_LIMIT;
     const { items, total } = await this.usersService.findPage({
       page,
       limit,

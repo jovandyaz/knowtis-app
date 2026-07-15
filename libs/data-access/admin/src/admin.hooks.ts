@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { httpClient } from '@knowtis/api-client';
-import type { FeatureFlagDto } from '@knowtis/shared-types';
+import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
 
 import {
   AdminUserSchema,
   DailyUsageSchema,
+  FeatureFlagSchema,
   MetricsSummarySchema,
   PaginatedUsersSchema,
   type AdminUser,
@@ -15,14 +16,13 @@ import {
 
 export const adminQueryKeys = {
   all: ['admin'] as const,
+  usersList: () => [...adminQueryKeys.all, 'users'] as const,
   users: (params: AdminUsersParams) =>
-    [...adminQueryKeys.all, 'users', params] as const,
+    [...adminQueryKeys.usersList(), params] as const,
   aiUsage: () => [...adminQueryKeys.all, 'ai-usage'] as const,
   aiMetrics: (period: MetricsPeriod) =>
     [...adminQueryKeys.all, 'ai-metrics', period] as const,
 } as const;
-
-const FEATURE_FLAGS_KEY = ['feature-flags'] as const;
 
 function usersPath({ page, limit, search }: AdminUsersParams): string {
   const params = [`page=${page}`, `limit=${limit}`];
@@ -53,7 +53,7 @@ export function useUpdateUserRole() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: [...adminQueryKeys.all, 'users'],
+        queryKey: adminQueryKeys.usersList(),
       });
     },
   });
@@ -82,19 +82,21 @@ export function useGlobalAiMetrics(period: MetricsPeriod) {
 export function useUpsertFeatureFlag() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: {
+    mutationFn: async (input: {
       key: string;
       enabled: boolean;
       description?: string;
     }) =>
-      httpClient.put<FeatureFlagDto>(`/flags/${input.key}`, {
-        enabled: input.enabled,
-        ...(input.description !== undefined && {
-          description: input.description,
-        }),
-      }),
+      FeatureFlagSchema.parse(
+        await httpClient.put(`/flags/${input.key}`, {
+          enabled: input.enabled,
+          ...(input.description !== undefined && {
+            description: input.description,
+          }),
+        })
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: FEATURE_FLAGS_KEY });
+      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
     },
   });
 }
@@ -104,7 +106,7 @@ export function useDeleteFeatureFlag() {
   return useMutation({
     mutationFn: (key: string) => httpClient.delete(`/flags/${key}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: FEATURE_FLAGS_KEY });
+      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
     },
   });
 }

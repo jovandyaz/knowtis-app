@@ -7,7 +7,12 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { httpClient } from '@knowtis/api-client';
 
-import { useAdminUsers, useUpdateUserRole } from './admin.hooks';
+import {
+  useAdminUsers,
+  useDeleteFeatureFlag,
+  useUpdateUserRole,
+  useUpsertFeatureFlag,
+} from './admin.hooks';
 
 vi.mock('@knowtis/api-client', () => ({
   httpClient: { get: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -84,6 +89,40 @@ describe('useUpdateUserRole', () => {
         `/admin/users/${PAGE.items[0].id}/role`,
         { role: 'user' }
       )
+    );
+  });
+});
+
+describe('useUpsertFeatureFlag', () => {
+  it('puts the flag endpoint and resolves with the parsed flag', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({
+      key: 'ai_enabled',
+      enabled: true,
+      description: 'Enables AI-powered text completion',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    });
+
+    const { result } = renderHook(() => useUpsertFeatureFlag(), { wrapper });
+    result.current.mutate({ key: 'ai_enabled', enabled: true });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.put).toHaveBeenCalledWith('/flags/ai_enabled', {
+      enabled: true,
+    });
+    expect(result.current.data?.updatedAt).toBeInstanceOf(Date);
+  });
+});
+
+describe('useDeleteFeatureFlag', () => {
+  it('calls the delete endpoint for the flag key', async () => {
+    vi.mocked(httpClient.delete).mockResolvedValue({});
+
+    const { result } = renderHook(() => useDeleteFeatureFlag(), { wrapper });
+    result.current.mutate('ai_enabled');
+
+    await waitFor(() =>
+      expect(httpClient.delete).toHaveBeenCalledWith('/flags/ai_enabled')
     );
   });
 });
