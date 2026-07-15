@@ -55,9 +55,7 @@ export async function syncUserProfile(): Promise<AuthUserProfile> {
 
 /**
  * Restores the session on app start: silent refresh, then profile (with role).
- * Skips the refresh entirely when the persisted store shows no prior session —
- * calling it anyway guarantees a 400 on every anonymous cold boot.
- * Clears auth state when the refresh cookie is absent/expired.
+ * No persisted session → skip the refresh (it would 400 on anonymous cold boot).
  */
 export async function initAuth(): Promise<void> {
   if (!authStore.getState().isAuthenticated) {
