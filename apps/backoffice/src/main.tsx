@@ -3,6 +3,8 @@ import { createRoot } from 'react-dom/client';
 
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 
+import { initAuth } from './auth/setup';
+
 import './index.css';
 
 import { routeTree } from './routeTree.gen';
@@ -21,8 +23,10 @@ if (!rootElement) {
   throw new Error('Root element not found');
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <RouterProvider router={router} />
-  </StrictMode>
-);
+initAuth().finally(() => {
+  createRoot(rootElement).render(
+    <StrictMode>
+      <RouterProvider router={router} />
+    </StrictMode>
+  );
+});

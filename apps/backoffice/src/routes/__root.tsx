@@ -1,5 +1,7 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 
+import { AppProviders } from '@/providers/AppProviders';
+
 import { ErrorState } from '@knowtis/design-system';
 
 export const Route = createRootRoute({
@@ -21,8 +23,10 @@ function RootErrorBoundary({ error }: { error: Error }) {
 
 function RootComponent() {
   return (
-    <div className="min-h-screen bg-(--background)">
-      <Outlet />
-    </div>
+    <AppProviders>
+      <div className="min-h-screen bg-(--background)">
+        <Outlet />
+      </div>
+    </AppProviders>
   );
 }
