@@ -54,7 +54,7 @@ export class DrizzleAdminAuditRepository implements AdminAuditRepository {
         })
         .from(adminAuditLog)
         .leftJoin(users, eq(adminAuditLog.actorId, users.id))
-        .orderBy(desc(adminAuditLog.createdAt))
+        .orderBy(desc(adminAuditLog.createdAt), desc(adminAuditLog.id))
         .limit(params.limit)
         .offset(offset),
       this.db.select({ value: count() }).from(adminAuditLog),

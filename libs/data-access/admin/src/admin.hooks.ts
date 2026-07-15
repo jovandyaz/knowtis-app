@@ -65,6 +65,9 @@ export function useUpdateUserRole() {
       queryClient.invalidateQueries({
         queryKey: adminQueryKeys.usersList(),
       });
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.auditLists(),
+      });
     },
   });
 }
@@ -107,6 +110,9 @@ export function useUpsertFeatureFlag() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.auditLists(),
+      });
     },
   });
 }
@@ -118,6 +124,9 @@ export function useDeleteFeatureFlag() {
       httpClient.delete(`/flags/${encodeURIComponent(key)}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.auditLists(),
+      });
     },
   });
 }
