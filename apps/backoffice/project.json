@@ -4,7 +4,7 @@
   "sourceRoot": "apps/backoffice/src",
   "projectType": "application",
   "tags": ["type:app", "scope:backoffice"],
-  "implicitDependencies": ["design-system"],
+  "implicitDependencies": ["design-system", "data-access-admin"],
   "targets": {
     "build": {
       "executor": "@nx/vite:build",

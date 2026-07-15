@@ -21,6 +21,22 @@ export default defineConfig({
         __dirname,
         '../../packages/auth-react/src/index.ts'
       ),
+      '@knowtis/data-access-admin': resolve(
+        __dirname,
+        '../../libs/data-access/admin/src/index.ts'
+      ),
+      '@knowtis/api-client': resolve(
+        __dirname,
+        '../../libs/api-client/src/index.ts'
+      ),
+      '@knowtis/shared-util': resolve(
+        __dirname,
+        '../../packages/shared/util/src/index.ts'
+      ),
+      '@knowtis/data-access-feature-flags': resolve(
+        __dirname,
+        '../../libs/data-access/feature-flags/src/index.ts'
+      ),
     },
   },
 });
