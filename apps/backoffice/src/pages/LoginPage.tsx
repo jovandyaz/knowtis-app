@@ -2,7 +2,7 @@ import { useForm } from 'react-hook-form';
 
 import { useNavigate } from '@tanstack/react-router';
 
-import { authApi, authStore } from '@/auth/setup';
+import { syncUserProfile } from '@/auth/setup';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLogin } from '@jovandyaz/auth-react';
 import { z } from 'zod';
@@ -34,8 +34,7 @@ export function LoginPage() {
 
   const onSubmit = handleSubmit(async (data) => {
     await login.mutateAsync(data);
-    const profile = await authApi.getProfile();
-    authStore.getState().setUser(profile);
+    await syncUserProfile();
     navigate({ to: '/' });
   });
 

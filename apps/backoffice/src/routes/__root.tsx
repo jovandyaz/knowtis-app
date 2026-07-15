@@ -1,10 +1,12 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
 
+import { initAuthOnce } from '@/auth/setup';
 import { AppProviders } from '@/providers/AppProviders';
 
 import { ErrorState } from '@knowtis/design-system';
 
 export const Route = createRootRoute({
+  beforeLoad: () => initAuthOnce(),
   component: RootComponent,
   errorComponent: RootErrorBoundary,
 });

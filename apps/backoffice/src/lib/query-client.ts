@@ -15,7 +15,9 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60,
-      retry: 1,
+      retry: (failureCount, error) =>
+        !(ApiClientError.isApiClientError(error) && error.status === 401) &&
+        failureCount < 1,
     },
   },
 });
