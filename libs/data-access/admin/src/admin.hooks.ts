@@ -13,9 +13,11 @@ import {
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
+  PaginatedAuditSchema,
   PaginatedUsersSchema,
   type AdminUser,
   type AdminUsersParams,
+  type AuditParams,
   type MetricsPeriod,
 } from './admin.types';
 
@@ -27,6 +29,8 @@ export const adminQueryKeys = {
   aiUsage: () => [...adminQueryKeys.all, 'ai-usage'] as const,
   aiMetrics: (period: MetricsPeriod) =>
     [...adminQueryKeys.all, 'ai-metrics', period] as const,
+  auditList: (params: AuditParams) =>
+    [...adminQueryKeys.all, 'audit', params] as const,
 } as const;
 
 function usersPath({ page, limit, search }: AdminUsersParams): string {
@@ -114,5 +118,19 @@ export function useDeleteFeatureFlag() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
     },
+  });
+}
+
+export function useAuditLog(params: AuditParams) {
+  return useQuery({
+    queryKey: adminQueryKeys.auditList(params),
+    queryFn: async () =>
+      PaginatedAuditSchema.parse(
+        await httpClient.get(
+          `/admin/audit?page=${params.page}&limit=${params.limit}`
+        )
+      ),
+    staleTime: 1000 * 60,
+    placeholderData: keepPreviousData,
   });
 }

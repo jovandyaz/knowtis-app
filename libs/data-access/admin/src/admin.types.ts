@@ -59,3 +59,29 @@ export interface AdminUsersParams {
   limit: number;
   search?: string;
 }
+
+export const AuditEntrySchema = z.object({
+  id: z.uuid(),
+  actorId: z.uuid(),
+  actorEmail: z.email().nullable(),
+  action: z.string(),
+  targetType: z.string(),
+  targetId: z.string().nullable(),
+  before: z.record(z.string(), z.unknown()).nullable(),
+  after: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.coerce.date(),
+});
+export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+export const PaginatedAuditSchema = z.object({
+  items: z.array(AuditEntrySchema),
+  total: z.number().int().nonnegative(),
+  page: z.number().int().positive(),
+  limit: z.number().int().positive(),
+});
+export type PaginatedAudit = z.infer<typeof PaginatedAuditSchema>;
+
+export interface AuditParams {
+  page: number;
+  limit: number;
+}

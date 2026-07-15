@@ -1,6 +1,7 @@
 export {
   adminQueryKeys,
   useAdminUsers,
+  useAuditLog,
   useDeleteFeatureFlag,
   useGlobalAiMetrics,
   useGlobalAiUsage,
@@ -9,16 +10,21 @@ export {
 } from './admin.hooks';
 export {
   AdminUserSchema,
+  AuditEntrySchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   METRICS_PERIODS,
   MetricsSummarySchema,
+  PaginatedAuditSchema,
   PaginatedUsersSchema,
   type AdminUser,
   type AdminUsersParams,
+  type AuditEntry,
+  type AuditParams,
   type DailyUsage,
   type FeatureFlag,
   type MetricsPeriod,
   type MetricsSummary,
+  type PaginatedAudit,
   type PaginatedUsers,
 } from './admin.types';
