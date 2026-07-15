@@ -55,11 +55,16 @@ export async function syncUserProfile(): Promise<AuthUserProfile> {
 
 /**
  * Restores the session on app start: silent refresh, then profile (with role).
- * Clears auth state when the refresh cookie is absent/expired.
+ * No persisted session → skip the refresh (it would 400 on anonymous cold boot).
  */
 export async function initAuth(): Promise<void> {
+  if (!authStore.getState().isAuthenticated) {
+    return;
+  }
   try {
-    await authApi.refreshToken();
+    if (!tokenStorage.hasTokens()) {
+      await authApi.refreshToken();
+    }
     await syncUserProfile();
   } catch (error) {
     console.warn('[backoffice-auth] session restore failed', error);
