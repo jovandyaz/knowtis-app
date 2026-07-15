@@ -82,6 +82,8 @@ export function DataTable<TData, TValue = unknown>({
     );
   }
 
+  const showPagination = isServerPaginated || table.getPageCount() > 1;
+
   return (
     <div className="flex flex-col gap-3">
       <Table>
@@ -141,7 +143,7 @@ export function DataTable<TData, TValue = unknown>({
           ))}
         </TableBody>
       </Table>
-      {isServerPaginated ? (
+      {showPagination ? (
         <div className="flex items-center justify-between">
           <span className="text-xs text-(--muted-foreground)">
             Page {table.getState().pagination.pageIndex + 1} of{' '}

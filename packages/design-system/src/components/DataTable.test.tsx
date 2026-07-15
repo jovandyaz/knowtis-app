@@ -120,4 +120,34 @@ describe('DataTable', () => {
     const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
     expect(within(nameHeader).queryByRole('button')).not.toBeInTheDocument();
   });
+
+  describe('client mode pagination', () => {
+    const manyRows: Row[] = Array.from({ length: 15 }, (_, index) => ({
+      name: `User ${index + 1}`,
+      role: 'user',
+    }));
+
+    it('shows the pagination footer and hides rows beyond the first page', () => {
+      render(<DataTable columns={columns} data={manyRows} />);
+      expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+      expect(screen.getByText('User 1')).toBeInTheDocument();
+      expect(screen.queryByText('User 11')).not.toBeInTheDocument();
+    });
+
+    it('advances to the remaining rows when Next is clicked', () => {
+      render(<DataTable columns={columns} data={manyRows} />);
+      fireEvent.click(screen.getByRole('button', { name: /next page/i }));
+      expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+      expect(screen.getByText('User 11')).toBeInTheDocument();
+      expect(screen.queryByText('User 1')).not.toBeInTheDocument();
+    });
+
+    it('hides the footer when all rows fit on one page', () => {
+      render(<DataTable columns={columns} data={data} />);
+      expect(screen.queryByText(/page \d+ of \d+/i)).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /next page/i })
+      ).not.toBeInTheDocument();
+    });
+  });
 });

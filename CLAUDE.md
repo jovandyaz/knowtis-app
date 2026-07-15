@@ -170,6 +170,8 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 Swagger UI available in development at `/api/docs`
 
+List endpoints paginate with the envelope `{ items, total, page, limit }` (defaults: `page` 1, `limit` 25, max `limit` 100). `GET /admin/users` is the canonical example.
+
 ## Environment Setup
 
 ```bash

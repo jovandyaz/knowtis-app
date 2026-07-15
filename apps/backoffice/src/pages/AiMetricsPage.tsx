@@ -24,6 +24,10 @@ function formatUsd(value: number): string {
   return `$${value.toFixed(4)}`;
 }
 
+function isMetricsPeriod(value: string): value is MetricsPeriod {
+  return (METRICS_PERIODS as readonly string[]).includes(value);
+}
+
 interface StatCardProps {
   label: string;
   value: string;
@@ -85,7 +89,11 @@ export function AiMetricsPage() {
             idBase="ai-metrics-period"
             ariaLabel="Metrics period"
             value={period}
-            onValueChange={(value) => setPeriod(value as MetricsPeriod)}
+            onValueChange={(value) => {
+              if (isMetricsPeriod(value)) {
+                setPeriod(value);
+              }
+            }}
             items={METRICS_PERIODS.map((p) => ({ value: p, label: p }))}
           />
         </div>
