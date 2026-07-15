@@ -5,6 +5,9 @@ on:
     - cron: '0 8 * * *' # 08:00 UTC daily (~02:00 America/Mexico_City)
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: nightly-evals
   cancel-in-progress: false
@@ -42,6 +45,8 @@ jobs:
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - uses: pnpm/action-setup@v3
         with:
