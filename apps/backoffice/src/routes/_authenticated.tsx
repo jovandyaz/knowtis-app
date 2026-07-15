@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { resolveAdminAccess } from '@/auth/admin-gate';
 import { authStore } from '@/auth/setup';
+import { AppShell } from '@/components/AppShell';
 
 export const Route = createFileRoute('/_authenticated')({
   beforeLoad: () => {
@@ -14,5 +15,9 @@ export const Route = createFileRoute('/_authenticated')({
       throw redirect({ to: '/forbidden' });
     }
   },
-  component: () => <Outlet />,
+  component: () => (
+    <AppShell>
+      <Outlet />
+    </AppShell>
+  ),
 });
