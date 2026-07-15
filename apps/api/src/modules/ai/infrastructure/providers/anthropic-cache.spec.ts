@@ -9,7 +9,7 @@ const EPHEMERAL = {
 describe('cacheableSystem', () => {
   it('wraps the system prompt with anthropic cacheControl for anthropic models', () => {
     const result = cacheableSystem(
-      'anthropic:claude-sonnet-4-6',
+      'anthropic:claude-sonnet-5',
       'You are a helpful assistant.'
     );
 
@@ -37,10 +37,7 @@ describe('withLastMessageCache', () => {
   ];
 
   it('marks only the last message with anthropic cacheControl', () => {
-    const result = withLastMessageCache(
-      'anthropic:claude-sonnet-4-6',
-      messages
-    );
+    const result = withLastMessageCache('anthropic:claude-sonnet-5', messages);
 
     expect(result).toHaveLength(3);
     expect(result[0]).toEqual({ role: 'user', content: 'first' });
@@ -54,10 +51,7 @@ describe('withLastMessageCache', () => {
   });
 
   it('does not mutate the input array or its elements', () => {
-    const result = withLastMessageCache(
-      'anthropic:claude-sonnet-4-6',
-      messages
-    );
+    const result = withLastMessageCache('anthropic:claude-sonnet-5', messages);
 
     expect(result).not.toBe(messages);
     expect(messages[2]).toEqual({ role: 'user', content: 'third' });
@@ -74,7 +68,7 @@ describe('withLastMessageCache', () => {
   });
 
   it('handles an empty message array safely', () => {
-    expect(withLastMessageCache('anthropic:claude-sonnet-4-6', [])).toEqual([]);
+    expect(withLastMessageCache('anthropic:claude-sonnet-5', [])).toEqual([]);
   });
 
   it('merges cacheControl into existing providerOptions instead of replacing them', () => {
@@ -91,7 +85,7 @@ describe('withLastMessageCache', () => {
     ];
 
     const result = withLastMessageCache(
-      'anthropic:claude-sonnet-4-6',
+      'anthropic:claude-sonnet-5',
       withOptions
     );
 

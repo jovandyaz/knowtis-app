@@ -126,11 +126,11 @@
     "haiku45": "Respuestas veloces para tareas simples",
     "gpt54mini": "Uso general rápido y económico",
     "gemini31FlashLite": "Las respuestas más rápidas",
-    "sonnet46": "Balance entre calidad y velocidad",
+    "sonnet5": "Balance entre calidad y velocidad",
     "gpt54": "Modelo sólido para todo uso",
     "gemini35Flash": "Ayuda multimodal todoterreno",
     "opus48": "El más capaz para razonamiento complejo",
-    "gpt55": "El modelo más capaz de OpenAI",
+    "gpt56": "El modelo más capaz de OpenAI",
     "gemini31Pro": "Razonamiento avanzado, matemáticas y código"
   },
   "integrations": {

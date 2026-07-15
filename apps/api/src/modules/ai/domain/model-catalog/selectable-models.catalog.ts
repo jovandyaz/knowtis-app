@@ -27,9 +27,9 @@ export const CURATED_MODELS: CuratedModel[] = [
     tier: 'fast',
   },
   {
-    id: 'anthropic:claude-sonnet-4-6',
-    label: 'Sonnet 4.6',
-    descriptionKey: 'aiModels.sonnet46',
+    id: 'anthropic:claude-sonnet-5',
+    label: 'Sonnet 5',
+    descriptionKey: 'aiModels.sonnet5',
     tier: 'balanced',
   },
   {
@@ -51,9 +51,9 @@ export const CURATED_MODELS: CuratedModel[] = [
     tier: 'powerful',
   },
   {
-    id: 'openai:gpt-5.5',
-    label: 'GPT-5.5',
-    descriptionKey: 'aiModels.gpt55',
+    id: 'openai:gpt-5.6',
+    label: 'GPT-5.6',
+    descriptionKey: 'aiModels.gpt56',
     tier: 'powerful',
   },
   {

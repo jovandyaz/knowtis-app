@@ -72,7 +72,7 @@ const completionResultSchema = {
     text: { type: 'string', example: 'Here is the summary...' },
     inputTokens: { type: 'number', example: 150 },
     outputTokens: { type: 'number', example: 75 },
-    model: { type: 'string', example: 'claude-sonnet-4-20250514' },
+    model: { type: 'string', example: 'claude-sonnet-5' },
   },
 };
 
@@ -341,7 +341,7 @@ export class AIController {
       type: 'object',
       additionalProperties: { type: 'string' },
       example: {
-        ai_default_model: 'anthropic:claude-sonnet-4-20250514',
+        ai_default_model: 'anthropic:claude-sonnet-5',
         ai_fast_model: 'anthropic:claude-haiku-4-5-20251001',
       },
     },
@@ -371,7 +371,7 @@ export class AIController {
       properties: {
         value: {
           type: 'string',
-          example: 'anthropic:claude-sonnet-4-20250514',
+          example: 'anthropic:claude-sonnet-5',
         },
         description: {
           type: 'string',

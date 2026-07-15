@@ -15,7 +15,7 @@ AI text assistant integrated into the Tiptap editor. Supports streaming response
 
 | Model                                 | Use case                              |
 | ------------------------------------- | ------------------------------------- |
-| `anthropic:claude-sonnet-4-6`         | All actions (default)                 |
+| `anthropic:claude-sonnet-5`           | All actions (default)                 |
 | `anthropic:claude-haiku-4-5-20251001` | `ghost-text` only (latency-optimized) |
 
 ---
@@ -444,7 +444,7 @@ Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `Agen
 
 **BYOK turns never cache**, even with the flag on: cache writes bill the 1.25× premium to the key owner's Anthropic account, and we don't silently charge users a premium. BYOK caching would be a separate per-user opt-in — never a flip of this flag.
 
-**Minimum cacheable prefix.** Anthropic ignores breakpoints below a per-model minimum (≈1024–4096 tokens depending on the model; **2048 for `claude-sonnet-4-6`**, the default agent model). Breakpoints are free, so an under-minimum turn 1 is harmless — multi-turn conversations clear the minimum quickly. This is also why **single-shot completions** (`AISDKProvider`, ~60–150-token rendered prompts) still carry the breakpoint but typically don't cache.
+**Minimum cacheable prefix.** Anthropic ignores breakpoints below a per-model minimum (≈1024–4096 tokens depending on the model). Breakpoints are free, so an under-minimum turn 1 is harmless — multi-turn conversations clear the minimum quickly. This is also why **single-shot completions** (`AISDKProvider`, ~60–150-token rendered prompts) still carry the breakpoint but typically don't cache.
 
 **Before flipping the flag:** run a 3-turn dev conversation against Anthropic and confirm `cacheReadTokens > 0` on turns 2–3 (visible in the recorded usage). If reads stay at zero, a prefix invalidator (non-deterministic tool order, per-request content in the system prompt) is at work — fix that first; flipping otherwise only pays the 1.25× write premium.
 
@@ -460,7 +460,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `ANTHROPIC_API_KEY`              | No       | —                                      | Anthropic API key (validated at runtime)                |
 | `OPENAI_API_KEY`                 | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
 | `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                   |
-| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-4-6`          | Default copilot model (must be a curated id)            |
+| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-5`            | Default copilot model (must be a curated id)            |
 | `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
 | `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier        |
 | `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
