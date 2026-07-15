@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { refreshToken, getProfile, logout } = vi.hoisted(() => ({
   refreshToken: vi.fn(),
@@ -30,6 +30,10 @@ describe('initAuth', () => {
     vi.clearAllMocks();
     authStore.getState().logout();
     tokenStorage.clearTokens();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('skips the refresh entirely on a cold boot without a prior session', async () => {
@@ -66,12 +70,11 @@ describe('initAuth', () => {
   it('logs out when the silent refresh fails for a persisted session', async () => {
     authStore.getState().setUser(profile);
     refreshToken.mockRejectedValue(new Error('400 refresh'));
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     await initAuth();
 
     expect(authStore.getState().isAuthenticated).toBe(false);
     expect(authStore.getState().user).toBeNull();
-    warn.mockRestore();
   });
 });
