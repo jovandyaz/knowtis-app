@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 
 import { performLogout } from '@/auth/setup';
+import { ADMIN_SECTIONS } from '@/config/admin-sections';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { Button } from '@knowtis/design-system';
@@ -21,10 +22,20 @@ export function AppShell({ children }: AppShellProps) {
         <nav className="flex flex-1 flex-col gap-1">
           <Link
             to="/"
+            activeOptions={{ exact: true }}
             className="rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted)"
           >
             Dashboard
           </Link>
+          {ADMIN_SECTIONS.map((section) => (
+            <Link
+              key={section.to}
+              to={section.to}
+              className="rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted)"
+            >
+              {section.label}
+            </Link>
+          ))}
         </nav>
         <div className="flex flex-col gap-2 border-t border-(--border) pt-4">
           <span className="truncate text-xs text-(--muted-foreground)">

@@ -18,6 +18,7 @@
       "@knowtis/shared-i18n": ["./packages/shared/i18n/src/index.ts"],
       "@knowtis/shared-types": ["./packages/shared/types/src/index.ts"],
       "@knowtis/api-client": ["./libs/api-client/src/index.ts"],
+      "@knowtis/data-access-admin": ["./libs/data-access/admin/src/index.ts"],
       "@knowtis/data-access-notes": ["./libs/data-access/notes/src/index.ts"],
       "@knowtis/data-access-artifacts": [
         "./libs/data-access/artifacts/src/index.ts"

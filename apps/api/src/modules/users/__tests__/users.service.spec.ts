@@ -18,7 +18,6 @@ function createMockRepository() {
     create: vi.fn(),
     update: vi.fn(),
     updateRole: vi.fn(),
-    findAll: vi.fn(),
   };
 }
 

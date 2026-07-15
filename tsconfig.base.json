@@ -28,6 +28,7 @@
       "@knowtis/editor-schema": ["packages/editor-schema/src/index.ts"],
       "@knowtis/shared-hooks": ["packages/shared/hooks/src/index.ts"],
       "@knowtis/shared-util": ["packages/shared/util/src/index.ts"],
+      "@knowtis/data-access-admin": ["libs/data-access/admin/src/index.ts"],
       "@knowtis/data-access-notes": ["libs/data-access/notes/src/index.ts"],
       "@knowtis/data-access-artifacts": [
         "libs/data-access/artifacts/src/index.ts"

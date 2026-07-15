@@ -22,6 +22,7 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { escapeLike } from '../../../../database/escape-like';
 import type {
   AccessibleNotesCount,
   NoteEntity,
@@ -31,10 +32,6 @@ import type {
   NoteViewWithOwner,
 } from '../../domain';
 import { mapToNoteEntity, mapToNoteView } from './note-entity.mapper';
-
-function escapeLike(str: string): string {
-  return str.replace(/[%_\\]/g, '\\$&');
-}
 
 const noteViewColumns = {
   id: notes.id,

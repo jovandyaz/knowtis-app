@@ -86,7 +86,7 @@ Enforced by Nx tags (see Module Boundaries): `type:app → {type:ui, type:data-a
 
 The workspace uses a dual-namespace convention (see `tsconfig.base.json` paths for the full list).
 
-The 16 `@knowtis/*` aliases: `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-artifacts`, `@knowtis/data-access-feature-flags`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/data-access-users`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-i18n`, `@knowtis/shared-types`, `@knowtis/shared-util`.
+The 17 `@knowtis/*` aliases: `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-admin`, `@knowtis/data-access-artifacts`, `@knowtis/data-access-feature-flags`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/data-access-users`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-i18n`, `@knowtis/shared-types`, `@knowtis/shared-util`.
 
 The auth/permissions/email packages publish under the `@jovandyaz/*` namespace and are imported that way: `@jovandyaz/auth` (+ `@jovandyaz/auth/server`), `@jovandyaz/auth-react`, `@jovandyaz/auth-nestjs`, `@jovandyaz/permissions-core`, `@jovandyaz/permissions-react`, `@jovandyaz/permissions-nestjs`, `@jovandyaz/email`, `@jovandyaz/email-nestjs`. There is no `@knowtis/auth`, `@knowtis/permissions`, or `@knowtis/email`.
 
@@ -169,6 +169,8 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 ## API Documentation
 
 Swagger UI available in development at `/api/docs`
+
+List endpoints paginate with the envelope `{ items, total, page, limit }` (defaults: `page` 1, `limit` 25, max `limit` 100). `GET /admin/users` is the canonical example.
 
 ## Environment Setup
 
