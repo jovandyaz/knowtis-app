@@ -58,6 +58,10 @@ export class FeatureFlagsService {
 
     this.logger.log(`Feature flag '${key}' set to ${enabled}`);
 
+    const descriptionChanged = previous
+      ? previous.description !== flag.description
+      : flag.description !== null;
+
     await this.adminAuditService.record({
       actorId,
       action: 'flag.updated',
@@ -67,7 +71,7 @@ export class FeatureFlagsService {
         ? {
             before: {
               enabled: previous.enabled,
-              ...(previous.description !== flag.description
+              ...(descriptionChanged
                 ? { description: previous.description }
                 : {}),
             },
@@ -75,9 +79,7 @@ export class FeatureFlagsService {
         : {}),
       after: {
         enabled: flag.enabled,
-        ...(previous && previous.description !== flag.description
-          ? { description: flag.description }
-          : {}),
+        ...(descriptionChanged ? { description: flag.description } : {}),
       },
     });
 

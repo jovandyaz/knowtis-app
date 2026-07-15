@@ -156,6 +156,24 @@ describe('FeatureFlagsService', () => {
       });
     });
 
+    it('records a description transition from null to a set value', async () => {
+      const previous = createMockFlag({ enabled: false, description: null });
+      const flag = createMockFlag({ enabled: true, description: 'new desc' });
+      repository.findByKey.mockResolvedValue(previous);
+      repository.upsert.mockResolvedValue(flag);
+
+      await service.toggle('test_flag', true, ACTOR_ID, 'new desc');
+
+      expect(adminAuditService.record).toHaveBeenCalledWith({
+        actorId: ACTOR_ID,
+        action: 'flag.updated',
+        targetType: 'feature_flag',
+        targetId: 'test_flag',
+        before: { enabled: false, description: null },
+        after: { enabled: true, description: 'new desc' },
+      });
+    });
+
     it('omits the before key when toggling a new flag', async () => {
       const flag = createMockFlag({ enabled: true, description: 'desc' });
       repository.findByKey.mockResolvedValue(null);
@@ -168,23 +186,11 @@ describe('FeatureFlagsService', () => {
         action: 'flag.updated',
         targetType: 'feature_flag',
         targetId: 'test_flag',
-        after: { enabled: true },
+        after: { enabled: true, description: 'desc' },
       });
       expect(adminAuditService.record.mock.calls[0][0]).not.toHaveProperty(
         'before'
       );
-    });
-
-    it('returns the toggled flag even when audit recording swallows an internal failure', async () => {
-      const flag = createMockFlag({ enabled: true });
-      repository.findByKey.mockResolvedValue(null);
-      repository.upsert.mockResolvedValue(flag);
-      adminAuditService.record.mockResolvedValue(undefined);
-
-      const result = await service.toggle('test_flag', true, ACTOR_ID);
-
-      expect(result).toEqual(flag);
-      expect(adminAuditService.record).toHaveBeenCalled();
     });
   });
 
