@@ -35,21 +35,25 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after e
 
 **Config files:**
 
-| File                       | Purpose                                                  |
-| -------------------------- | -------------------------------------------------------- |
-| `railway.toml`             | Build/start commands, healthcheck, pre-deploy migrations |
-| `.github/workflows/ci.yml` | CI pipeline with deploy step                             |
+| File                                 | Purpose                                                  |
+| ------------------------------------ | -------------------------------------------------------- |
+| `railway.toml`                       | Build/start commands, healthcheck, pre-deploy migrations |
+| `.github/workflows/ci.yml`           | CI pipeline with deploy step                             |
+| `.github/workflows/nightly-eval.yml` | Scheduled AI eval run (no deploy)                        |
 
 **Required GitHub secrets/variables:**
 
-| Name                     | Type     | Purpose                                            |
-| ------------------------ | -------- | -------------------------------------------------- |
-| `RAILWAY_TOKEN`          | Secret   | Project token for Railway CLI (API + MCP deploys)  |
-| `RAILWAY_SERVICE_ID`     | Variable | API service ID for `railway up`                    |
-| `RAILWAY_MCP_SERVICE_ID` | Variable | MCP service ID; `deploy-mcp` is skipped when unset |
-| `VERCEL_TOKEN`           | Secret   | Vercel CLI auth for the `deploy-frontend` job      |
-| `VERCEL_ORG_ID`          | Secret   | Vercel org/team ID                                 |
-| `VERCEL_PROJECT_ID`      | Secret   | Vercel project ID                                  |
+| Name                     | Type     | Purpose                                                       |
+| ------------------------ | -------- | ------------------------------------------------------------- |
+| `RAILWAY_TOKEN`          | Secret   | Project token for Railway CLI (API + MCP deploys)             |
+| `RAILWAY_SERVICE_ID`     | Variable | API service ID for `railway up`                               |
+| `RAILWAY_MCP_SERVICE_ID` | Variable | MCP service ID; `deploy-mcp` is skipped when unset            |
+| `VERCEL_TOKEN`           | Secret   | Vercel CLI auth for the `deploy-frontend` job                 |
+| `VERCEL_ORG_ID`          | Secret   | Vercel org/team ID                                            |
+| `VERCEL_PROJECT_ID`      | Secret   | Vercel project ID                                             |
+| `ANTHROPIC_API_KEY`      | Secret   | Nightly AI eval (`nightly-eval.yml`); funded account required |
+| `VOYAGE_API_KEY`         | Secret   | Optional — lights up the retrieval/memory eval suites         |
+| `TAVILY_API_KEY`         | Secret   | Optional — lights up the web-search eval suite                |
 
 > A third deploy job, `deploy-mcp`, ships the MCP server to Railway (`railway up`) on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
 

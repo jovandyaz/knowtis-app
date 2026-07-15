@@ -246,11 +246,11 @@ Per-user daily limits enforced by `AIRateLimitService`.
 
 **Anonymous users:** receive a reduced fraction of the daily token/cost limits, configured via `AI_ANONYMOUS_DAILY_LIMIT_PCT` (default `0.33`). Anonymous identities are cheap to mint, so they warrant stricter quotas (OWASP LLM A04). The scaled limits are computed in `AIRateLimitService` and forwarded to both the Redis and PostgreSQL paths.
 
-**Per-IP anonymous budget** (flag `ai_anon_ip_budget`, ships dark): because anonymous identities are free to mint, an anonymous turn also makes a SECOND reservation keyed by the hashed client IP (`ip:{sha256(ip)[:16]}`, read from Railway's edge-set `X-Real-IP` header — never `x-forwarded-for`) with the same scaled anonymous limits, capping combined spend across every anonymous identity behind one IP. If the IP budget rejects, the per-user reservation is released and the turn is denied; both subjects are reconciled on completion. The IP-side reservation never touches the global daily-spend counter — the user-side reservation already counted that spend, so the breaker sees each dollar exactly once. Redis-only (the PG fallback has no per-IP view) and degrades open on Redis errors.
+**Per-IP anonymous budget** (flag `ai_anon_ip_budget`, default off): because anonymous identities are free to mint, an anonymous turn also makes a SECOND reservation keyed by the hashed client IP (`ip:{sha256(ip)[:16]}`, read from Railway's edge-set `X-Real-IP` header — never `x-forwarded-for`) with the same scaled anonymous limits, capping combined spend across every anonymous identity behind one IP. If the IP budget rejects, the per-user reservation is released and the turn is denied; both subjects are reconciled on completion. The IP-side reservation never touches the global daily-spend counter — the user-side reservation already counted that spend, so the breaker sees each dollar exactly once. Redis-only (the PG fallback has no per-IP view) and degrades open on Redis errors. Railway's edge overwrites any client-supplied `X-Real-IP` with the true source IP — verified against prod (a forged header is ignored; the edge logs the real `srcIp`) — so the per-IP subject can't be spoofed.
 
 **Usage correction:** After the request completes, Redis counters are corrected with actual token counts (the pre-request check used an estimate).
 
-**Global daily-spend circuit breaker** (flag `ai_global_spend_breaker`, ships dark): a single Redis counter (`ai:spend:global:{day}`, 25h TTL) accumulates ALL server-billed spend across every user — server-key LLM turns (reserved on accept, corrected to actual), Tavily/Voyage side costs (including those incurred during BYOK turns), and background embedding jobs (memory extraction, note-embedding reconcile), which charge the global counter only, with no per-user attribution. When the flag is on, `checkLimit` reads the counter before any reservation and rejects every turn — **including BYOK turns**, whose side costs are still server-billed — once it reaches `AI_GLOBAL_DAILY_COST_LIMIT_USD`. **BYOK carve-out:** LLM usage billed to the user's own key never counts toward `AI_GLOBAL_DAILY_COST_LIMIT_USD`; all server-billed spend — server-key LLM, Tavily, Voyage — always does. The breaker degrades open: a Redis error in the check logs a warning and allows the turn, and the PG fallback path has no global view.
+**Global daily-spend circuit breaker** (flag `ai_global_spend_breaker`, default off): a single Redis counter (`ai:spend:global:{day}`, 25h TTL) accumulates ALL server-billed spend across every user — server-key LLM turns (reserved on accept, corrected to actual), Tavily/Voyage side costs (including those incurred during BYOK turns), and background embedding jobs (memory extraction, note-embedding reconcile), which charge the global counter only, with no per-user attribution. When the flag is on, `checkLimit` reads the counter before any reservation and rejects every turn — **including BYOK turns**, whose side costs are still server-billed — once it reaches `AI_GLOBAL_DAILY_COST_LIMIT_USD`. **BYOK carve-out:** LLM usage billed to the user's own key never counts toward `AI_GLOBAL_DAILY_COST_LIMIT_USD`; all server-billed spend — server-key LLM, Tavily, Voyage — always does. The breaker degrades open: a Redis error in the check logs a warning and allows the turn, and the PG fallback path has no global view.
 
 **Daily reset:** Midnight UTC (`setUTCHours(0,0,0,0)`).
 
@@ -485,21 +485,21 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                     | Description                                                                                                    |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `ai_enabled`                 | Global AI feature gate                                                                                         |
-| `voice_notes_enabled`        | Voice-to-note feature gate                                                                                     |
-| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                        |
-| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                          |
-| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                          |
-| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                      |
-| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)); ships dark |
-| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense)); ships dark        |
-| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)); ships dark |
-| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                              |
-| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                           |
-| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting)); ships dark  |
-| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting)); ships dark                          |
+| Flag Key                     | Description                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ai_enabled`                 | Global AI feature gate                                                                             |
+| `voice_notes_enabled`        | Voice-to-note feature gate                                                                         |
+| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                            |
+| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                              |
+| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                              |
+| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                          |
+| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)) |
+| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))        |
+| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)) |
+| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                  |
+| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))               |
+| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))  |
+| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                          |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -744,8 +744,10 @@ pnpm nx run api:eval
   `emitDecoratorMetadata` that NestJS DI requires (esbuild/`tsx` does not). The config dedupes
   `@nestjs/core`/`@nestjs/common` so `@Inject(Reflector)` resolves to one class identity.
 - **Boot:** `@nestjs/testing` compiles `AgentModule` plus the global infra it needs
-  (`ConfigModule`, `EventEmitterModule`, `I18nModule`, `DatabaseModule`), then `moduleRef.init()`
-  runs lifecycle hooks (e.g. `ProviderRegistryFactory` builds its registry).
+  (`ConfigModule`, `ThrottlerModule`, `EventEmitterModule`, `I18nModule`, `DatabaseModule`), then
+  `moduleRef.init()` runs lifecycle hooks (e.g. `ProviderRegistryFactory` builds its registry).
+  `ThrottlerModule` is required because `AIModule`'s throttled controllers can't instantiate
+  without it.
 - **Determinism:** only two providers are overridden — `RETRIEVAL_PORT` (a fixture adapter that
   serves fixed notes and records tool calls) and `PENDING_MUTATION_STORE` (a no-op).
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
@@ -753,6 +755,17 @@ pnpm nx run api:eval
   injection resistance.
 - **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
   `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
+
+### Nightly CI run
+
+`.github/workflows/nightly-eval.yml` runs `nx eval api` on a schedule (08:00 UTC) and on
+`workflow_dispatch`. It provisions a `pgvector/pgvector:pg16` service (migrations create the
+`vector` extension), applies migrations, then runs the suite against the `ANTHROPIC_API_KEY`
+repository secret. Each suite self-skips without its provider key, so only the Anthropic-gated
+cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` / `TAVILY_API_KEY`
+secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
+silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
+(a zero-credit key surfaces as an eval error, not a skip).
 
 ---
 
