@@ -27,7 +27,7 @@ const GATE =
   !!process.env['TAVILY_API_KEY']?.trim() &&
   !!process.env['ANTHROPIC_API_KEY']?.trim();
 const USER = '00000000-0000-4000-8000-0000000000fa';
-const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-4-20250514';
+const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-4-6';
 
 describe.runIf(GATE)('web search tool quality', () => {
   let orchestrator: AgentOrchestrator;
