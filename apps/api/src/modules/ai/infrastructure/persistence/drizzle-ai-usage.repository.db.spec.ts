@@ -142,4 +142,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
       expect(new Date(bucket.bucketStart).getUTCHours()).toBe(0);
     }
   });
+
+  it('places daily-granularity rows in the bucket matching their truncated UTC day', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
+    threeDaysAgo.setUTCHours(0, 0, 0, 0);
+    const insertedInputTokens = 77;
+
+    await db.insert(aiUsage).values({
+      userId: DB_USER_ID,
+      action: 'agent',
+      model: 'claude-sonnet-5',
+      inputTokens: insertedInputTokens,
+      outputTokens: 5,
+      costUsd: '0.01',
+      createdAt: threeDaysAgo,
+    });
+
+    const buckets = await repo.getGlobalMetricsTimeseries('week');
+    expect(buckets).toHaveLength(8);
+    for (const bucket of buckets) {
+      expect(new Date(bucket.bucketStart).getUTCHours()).toBe(0);
+    }
+
+    const expectedIso = threeDaysAgo.toISOString();
+    const dataBucket = buckets.find((b) => b.bucketStart === expectedIso);
+    expect(dataBucket).toBeDefined();
+    expect(dataBucket?.requests).toBeGreaterThanOrEqual(1);
+    expect(dataBucket?.inputTokens).toBeGreaterThanOrEqual(insertedInputTokens);
+
+    const otherBuckets = buckets.filter((b) => b.bucketStart !== expectedIso);
+    for (const bucket of otherBuckets) {
+      expect(bucket.requests).toBe(0);
+    }
+  });
 });

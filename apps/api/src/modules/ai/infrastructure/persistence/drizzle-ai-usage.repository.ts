@@ -12,6 +12,25 @@ import type {
   RecordUsageInput,
 } from '../../domain/ports/ai-usage.repository';
 
+export function bucketToUtcIso(bucket: string | Date): string {
+  if (bucket instanceof Date) {
+    // postgres.js parses a `timestamp without time zone` value using the
+    // local wall clock, so reassemble the Date's local components as UTC to
+    // recover the truncated bucket instant regardless of the server's TZ.
+    return new Date(
+      Date.UTC(
+        bucket.getFullYear(),
+        bucket.getMonth(),
+        bucket.getDate(),
+        bucket.getHours(),
+        bucket.getMinutes(),
+        bucket.getSeconds()
+      )
+    ).toISOString();
+  }
+  return new Date(`${bucket.replace(' ', 'T')}Z`).toISOString();
+}
+
 @Injectable()
 export class DrizzleAIUsageRepository implements AIUsageRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
@@ -75,7 +94,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       .orderBy(bucketExpr);
 
     const byIso = new Map(
-      rows.map((r) => [this.toUtcIso(r.bucket), r] as const)
+      rows.map((r) => [bucketToUtcIso(r.bucket), r] as const)
     );
 
     return this.buildBucketStarts(since, granularity).map((start) => {
@@ -89,13 +108,6 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
         costUsd: Number(row?.costUsd ?? 0),
       };
     });
-  }
-
-  private toUtcIso(bucket: string | Date): string {
-    if (bucket instanceof Date) {
-      return bucket.toISOString();
-    }
-    return new Date(`${bucket.replace(' ', 'T')}Z`).toISOString();
   }
 
   private buildBucketStarts(since: Date, granularity: 'hour' | 'day'): Date[] {
