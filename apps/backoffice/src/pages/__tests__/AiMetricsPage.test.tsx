@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -39,8 +39,8 @@ const SUMMARY = {
     'ghost-text': { requests: 10, tokens: 500, costUsd: 0.02 },
   },
   byModel: {
-    'claude-sonnet-5': { requests: 30, tokens: 3500, costUsd: 0.15 },
     'claude-haiku-4-5': { requests: 10, tokens: 500, costUsd: 0.05 },
+    'claude-sonnet-5': { requests: 30, tokens: 3500, costUsd: 0.15 },
   },
 };
 
@@ -105,8 +105,9 @@ describe('AiMetricsPage', () => {
     renderPage();
 
     const list = screen.getByRole('list', { name: 'Spend by model' });
-    expect(list).toBeInTheDocument();
-    expect(screen.getByText('claude-sonnet-5')).toBeInTheDocument();
+    const items = within(list).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('claude-sonnet-5');
+    expect(items[1]).toHaveTextContent('claude-haiku-4-5');
     expect(screen.getByText('$0.1500 · 75%')).toBeInTheDocument();
     expect(screen.getByText('$0.0500 · 25%')).toBeInTheDocument();
   });
@@ -165,5 +166,40 @@ describe('AiMetricsPage', () => {
     expect(screen.getByText('Could not load metrics.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a dash average cost and empty states when there is no usage', () => {
+    useGlobalAiMetricsMock.mockReturnValue({
+      data: {
+        totalRequests: 0,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalCostUsd: 0,
+        byAction: {},
+        byModel: {},
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useGlobalAiTimeseriesMock.mockReturnValue({
+      data: { buckets: [] },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText('NaN')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Infinity/)).not.toBeInTheDocument();
+
+    expect(screen.getAllByText('No activity')).toHaveLength(2);
+    expect(
+      screen.getByText('No AI usage recorded for this period.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('No AI actions recorded for this period.')
+    ).toBeInTheDocument();
   });
 });
