@@ -143,6 +143,27 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
     }
   });
 
+  it('counts rows at the first bucket midnight so it covers the full labeled UTC day', async () => {
+    const buckets = await repo.getGlobalMetricsTimeseries('week');
+    const firstBucketStart = new Date(buckets[0].bucketStart);
+    expect(firstBucketStart.getUTCHours()).toBe(0);
+
+    await db.insert(aiUsage).values({
+      userId: DB_USER_ID,
+      action: 'agent',
+      model: 'claude-sonnet-5',
+      inputTokens: 11,
+      outputTokens: 3,
+      costUsd: '0.01',
+      createdAt: firstBucketStart,
+    });
+
+    const refreshed = await repo.getGlobalMetricsTimeseries('week');
+    expect(refreshed[0].bucketStart).toBe(firstBucketStart.toISOString());
+    expect(refreshed[0].requests).toBeGreaterThanOrEqual(1);
+    expect(refreshed[0].inputTokens).toBeGreaterThanOrEqual(11);
+  });
+
   it('places daily-granularity rows in the bucket matching their truncated UTC day', async () => {
     const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
     threeDaysAgo.setUTCHours(0, 0, 0, 0);

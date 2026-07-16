@@ -224,14 +224,16 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
   }
 
   private periodToDate(period: 'day' | 'week' | 'month'): Date {
+    // Anchor every period to UTC midnight so the summary WHERE boundary and the
+    // timeseries first bucket cover the same instant — otherwise week/month
+    // would start mid-day yet the first day bucket would claim a full UTC day.
     const since = new Date();
-    if (period === 'day') {
-      since.setUTCHours(0, 0, 0, 0);
-    } else if (period === 'week') {
+    if (period === 'week') {
       since.setUTCDate(since.getUTCDate() - 7);
-    } else {
+    } else if (period === 'month') {
       since.setUTCDate(since.getUTCDate() - 30);
     }
+    since.setUTCHours(0, 0, 0, 0);
     return since;
   }
 }
