@@ -6,7 +6,7 @@ import { performLogout } from '@/auth/setup';
 import { ADMIN_SECTIONS } from '@/config/admin-sections';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
-import { Button } from '@knowtis/design-system';
+import { Button, ThemeToggle } from '@knowtis/design-system';
 
 interface AppShellProps {
   children: ReactNode;
@@ -38,9 +38,12 @@ export function AppShell({ children }: AppShellProps) {
           ))}
         </nav>
         <div className="flex flex-col gap-2 border-t border-(--border) pt-4">
-          <span className="truncate text-xs text-(--muted-foreground)">
-            {user?.email}
-          </span>
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-xs text-(--muted-foreground)">
+              {user?.email}
+            </span>
+            <ThemeToggle />
+          </div>
           <Button
             variant="outline"
             size="sm"
