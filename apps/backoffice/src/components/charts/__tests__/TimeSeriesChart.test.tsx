@@ -71,4 +71,34 @@ describe('TimeSeriesChart', () => {
     expect(within(table).getByText('120')).toBeInTheDocument();
     expect(within(table).getByText('90')).toBeInTheDocument();
   });
+
+  it('renders a single requests column for the requests metric', () => {
+    render(
+      <TimeSeriesChart buckets={BUCKETS} metric="requests" period="day" />
+    );
+
+    const table = screen.getByRole('table', {
+      name: 'requests over time for the selected period',
+    });
+    const columnHeaders = within(table).getAllByRole('columnheader');
+    expect(columnHeaders.map((header) => header.textContent)).toEqual([
+      'Time',
+      'Requests',
+    ]);
+    expect(within(table).getByText('3')).toBeInTheDocument();
+    expect(within(table).getByText('5')).toBeInTheDocument();
+  });
+
+  it('renders only the header row when there are no buckets', () => {
+    render(<TimeSeriesChart buckets={[]} metric="cost" period="day" />);
+
+    const table = screen.getByRole('table', {
+      name: 'cost over time for the selected period',
+    });
+    expect(
+      within(table).getByRole('columnheader', { name: 'Time' })
+    ).toBeInTheDocument();
+    expect(within(table).getAllByRole('row')).toHaveLength(1);
+    expect(within(table).queryByRole('rowheader')).not.toBeInTheDocument();
+  });
 });
