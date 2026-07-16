@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import { BarList } from '@/components/charts/BarList';
 import { StatCard } from '@/components/charts/StatCard';
+import { StatCardsSkeleton } from '@/components/charts/StatCardsSkeleton';
 import {
   TimeSeriesChart,
   type TimeSeriesMetric,
@@ -18,8 +19,8 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  LoadingState,
   SegmentedControl,
+  Skeleton,
   Table,
   TableBody,
   TableCell,
@@ -92,7 +93,7 @@ export function AiMetricsPage() {
           fullHeight={false}
         />
       ) : metrics.isLoading || !summary ? (
-        <LoadingState />
+        <StatCardsSkeleton />
       ) : (
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           <StatCard
@@ -135,7 +136,7 @@ export function AiMetricsPage() {
             fullHeight={false}
           />
         ) : timeseries.isLoading || !timeseries.data ? (
-          <LoadingState />
+          <Skeleton className="h-64 w-full" />
         ) : (
           <TimeSeriesChart
             buckets={timeseries.data.buckets}

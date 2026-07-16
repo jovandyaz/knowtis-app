@@ -14,7 +14,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
-    useAdminUsers: () => useAdminUsersMock(),
+    useAdminUsers: (params: unknown) => useAdminUsersMock(params),
     useUpdateUserRole: vi
       .fn()
       .mockReturnValue({ mutate: vi.fn(), isPending: false }),
@@ -88,5 +88,55 @@ describe('UsersPage', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters by role and resets to the first page', async () => {
+    useAdminUsersMock.mockReturnValue({
+      data: { items: [], total: 0, page: 1, limit: 25 },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'admin' }));
+
+    await waitFor(() =>
+      expect(useAdminUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ role: 'admin', page: 1 })
+      )
+    );
+  });
+
+  it('shows initials when the user has no avatar', () => {
+    useAdminUsersMock.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: '3b241101-e2bb-4255-8caf-4136c566a962',
+            email: 'ada@knowtis.app',
+            name: 'Ada',
+            avatarUrl: null,
+            role: 'admin',
+            provider: 'local',
+            isAnonymous: false,
+            createdAt: new Date('2026-07-01'),
+            emailVerifiedAt: null,
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 25,
+      },
+      isLoading: false,
+      isError: false,
+      isSuccess: true,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    expect(screen.getByText('AD')).toBeInTheDocument();
   });
 });
