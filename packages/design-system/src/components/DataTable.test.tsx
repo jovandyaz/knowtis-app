@@ -1,6 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import { DataTable } from './DataTable';
@@ -42,9 +43,10 @@ describe('DataTable', () => {
     expect(screen.getByText('No users')).toBeInTheDocument();
   });
 
-  it('shows the loading state while loading', () => {
+  it('shows skeleton rows while loading', () => {
     render(<DataTable columns={columns} data={[]} isLoading />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(6);
+    expect(screen.queryByText('Loading...')).not.toBeInTheDocument();
   });
 
   it('drives server pagination through the callback', () => {
@@ -149,5 +151,54 @@ describe('DataTable', () => {
         screen.queryByRole('button', { name: /next page/i })
       ).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('DataTable row interaction and loading', () => {
+  const columns: ColumnDef<{ id: string; name: string }, unknown>[] = [
+    { accessorKey: 'id', header: 'ID' },
+    { accessorKey: 'name', header: 'Name' },
+  ];
+  const data = [
+    { id: '1', name: 'Ada' },
+    { id: '2', name: 'Grace' },
+  ];
+
+  it('calls onRowClick with the row data on click', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable columns={columns} data={data} onRowClick={onRowClick} />);
+
+    await userEvent.click(screen.getByText('Ada'));
+    expect(onRowClick).toHaveBeenCalledWith({ id: '1', name: 'Ada' });
+  });
+
+  it('supports keyboard activation of rows', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable columns={columns} data={data} onRowClick={onRowClick} />);
+
+    const row = screen.getByText('Grace').closest('tr');
+    expect(row).not.toBeNull();
+    row?.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onRowClick).toHaveBeenCalledWith({ id: '2', name: 'Grace' });
+  });
+
+  it('supports keyboard activation of rows with Space', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable columns={columns} data={data} onRowClick={onRowClick} />);
+
+    const row = screen.getByText('Grace').closest('tr');
+    expect(row).not.toBeNull();
+    row?.focus();
+    await userEvent.keyboard(' ');
+    expect(onRowClick).toHaveBeenCalledWith({ id: '2', name: 'Grace' });
+  });
+
+  it('renders skeleton rows while loading', () => {
+    render(
+      <DataTable columns={columns} data={[]} isLoading skeletonRows={3} />
+    );
+    expect(screen.getAllByRole('row')).toHaveLength(4);
+    expect(screen.queryByText('No results')).not.toBeInTheDocument();
   });
 });

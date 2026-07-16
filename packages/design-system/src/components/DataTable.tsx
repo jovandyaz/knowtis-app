@@ -13,7 +13,7 @@ import type {
 
 import { Button } from './Button';
 import { EmptyState } from './EmptyState';
-import { LoadingState } from './LoadingState';
+import { Skeleton } from './Skeleton';
 import {
   Table,
   TableBody,
@@ -29,6 +29,8 @@ interface DataTableBaseProps<TData, TValue> {
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
+  onRowClick?: (row: TData) => void;
+  skeletonRows?: number;
 }
 
 type DataTablePaginationProps =
@@ -43,8 +45,11 @@ type DataTablePaginationProps =
       onPaginationChange?: never;
     };
 
-export type DataTableProps<TData, TValue = unknown> =
-  DataTableBaseProps<TData, TValue> & DataTablePaginationProps;
+export type DataTableProps<TData, TValue = unknown> = DataTableBaseProps<
+  TData,
+  TValue
+> &
+  DataTablePaginationProps;
 
 export function DataTable<TData, TValue = unknown>({
   columns,
@@ -55,6 +60,8 @@ export function DataTable<TData, TValue = unknown>({
   isLoading = false,
   emptyTitle = 'No results',
   emptyDescription,
+  onRowClick,
+  skeletonRows = 5,
 }: DataTableProps<TData, TValue>) {
   const isServerPaginated =
     pagination !== undefined &&
@@ -80,7 +87,30 @@ export function DataTable<TData, TValue = unknown>({
   });
 
   if (isLoading) {
-    return <LoadingState />;
+    return (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {columns.map((_, index) => (
+              <TableHead key={index}>
+                <Skeleton className="h-4 w-16" />
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {Array.from({ length: skeletonRows }, (_, rowIndex) => (
+            <TableRow key={rowIndex}>
+              {columns.map((_, cellIndex) => (
+                <TableCell key={cellIndex}>
+                  <Skeleton className="h-4 w-full" />
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
   }
 
   if (data.length === 0) {
@@ -145,7 +175,22 @@ export function DataTable<TData, TValue = unknown>({
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow
+              key={row.id}
+              tabIndex={onRowClick ? 0 : undefined}
+              className={onRowClick ? 'cursor-pointer' : undefined}
+              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+              onKeyDown={
+                onRowClick
+                  ? (event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onRowClick(row.original);
+                      }
+                    }
+                  : undefined
+              }
+            >
               {row.getVisibleCells().map((cell) => (
                 <TableCell key={cell.id}>
                   {flexRender(cell.column.columnDef.cell, cell.getContext())}

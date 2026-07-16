@@ -3,16 +3,13 @@ import { useMemo, useState } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import type { ColumnDef, PaginationState } from '@tanstack/react-table';
 
+import { AuditDetailDrawer } from '@/components/AuditDetailDrawer';
+import { formatChangeSummary, formatTarget } from '@/lib/audit-diff';
+
 import { useAuditLog, type AuditEntry } from '@knowtis/data-access-admin';
 import { DataTable, ErrorState } from '@knowtis/design-system';
 
 const columnHelper = createColumnHelper<AuditEntry>();
-
-function formatChange(entry: AuditEntry): string {
-  const before = entry.before ? JSON.stringify(entry.before) : '—';
-  const after = entry.after ? JSON.stringify(entry.after) : '—';
-  return `${before} → ${after}`;
-}
 
 const columns: ColumnDef<AuditEntry, unknown>[] = [
   columnHelper.accessor('createdAt', {
@@ -28,16 +25,13 @@ const columns: ColumnDef<AuditEntry, unknown>[] = [
   columnHelper.display({
     id: 'target',
     header: 'Target',
-    cell: ({ row }) =>
-      row.original.targetId
-        ? `${row.original.targetType}: ${row.original.targetId}`
-        : row.original.targetType,
+    cell: ({ row }) => formatTarget(row.original),
     enableSorting: false,
   }),
   columnHelper.display({
     id: 'change',
     header: 'Change',
-    cell: ({ row }) => formatChange(row.original),
+    cell: ({ row }) => formatChangeSummary(row.original),
     enableSorting: false,
   }),
 ];
@@ -47,6 +41,7 @@ export function AuditPage() {
     pageIndex: 0,
     pageSize: 25,
   });
+  const [selected, setSelected] = useState<AuditEntry | null>(null);
 
   const params = useMemo(
     () => ({
@@ -75,8 +70,10 @@ export function AuditPage() {
           onPaginationChange={setPagination}
           isLoading={audit.isLoading}
           emptyTitle="No audit entries found"
+          onRowClick={setSelected}
         />
       )}
+      <AuditDetailDrawer entry={selected} onClose={() => setSelected(null)} />
     </div>
   );
 }

@@ -8,6 +8,8 @@ import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 
 import { Toaster, TooltipProvider } from '@knowtis/design-system';
 
+import { ThemeProvider } from './ThemeProvider';
+
 function SessionManager() {
   useSessionManager({ refreshMarginMs: 60_000 });
   return null;
@@ -22,10 +24,12 @@ export function AppProviders({ children }: AppProvidersProps) {
     <QueryClientProvider client={queryClient}>
       <AuthProvider api={authApi} tokenStorage={tokenStorage} store={authStore}>
         <SessionManager />
-        <TooltipProvider>
-          {children}
-          <Toaster />
-        </TooltipProvider>
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <TooltipProvider>
+            {children}
+            <Toaster />
+          </TooltipProvider>
+        </ThemeProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

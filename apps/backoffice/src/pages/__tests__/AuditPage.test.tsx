@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -98,11 +98,44 @@ describe('AuditPage', () => {
     expect(screen.getByText('feature_flag')).toBeInTheDocument();
     expect(screen.getByText('feature_flag: beta_mode')).toBeInTheDocument();
 
-    expect(
-      screen.getByText('{"role":"user"} → {"role":"admin"}')
-    ).toBeInTheDocument();
-    expect(screen.getByText('— → —')).toBeInTheDocument();
-    expect(screen.getByText('{"enabled":true} → —')).toBeInTheDocument();
+    expect(screen.getByText('role: user → admin')).toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('enabled: true → —')).toBeInTheDocument();
+  });
+
+  it('opens the detail drawer with the field diff when a row is clicked', async () => {
+    useAuditLogMock.mockReturnValue({
+      data: {
+        items: [
+          {
+            id: '3b241101-e2bb-4255-8caf-4136c566a962',
+            actorId: '5b241101-e2bb-4255-8caf-4136c566a963',
+            actorEmail: 'ada@knowtis.app',
+            action: 'user.role_changed',
+            targetType: 'user',
+            targetId: 'u1',
+            before: { role: 'user' },
+            after: { role: 'admin' },
+            createdAt: new Date('2026-07-01'),
+          },
+        ],
+        total: 1,
+        page: 1,
+        limit: 25,
+      },
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    await userEvent.click(screen.getByText('ada@knowtis.app'));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('user.role_changed')).toBeInTheDocument();
+    expect(within(dialog).getByText('user')).toBeInTheDocument();
+    expect(within(dialog).getByText('admin')).toBeInTheDocument();
+    expect(within(dialog).getByText('Full JSON')).toBeInTheDocument();
   });
 
   it('shows an error state and retries the failed query', async () => {

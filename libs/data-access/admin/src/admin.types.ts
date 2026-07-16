@@ -82,6 +82,7 @@ export interface AdminUsersParams {
   page: number;
   limit: number;
   search?: string;
+  role?: 'user' | 'admin';
 }
 
 export const AuditEntrySchema = z.object({

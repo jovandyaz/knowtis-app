@@ -174,9 +174,15 @@ function DialogOverlay({
 
 interface DialogContentProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
+  side?: 'center' | 'right';
 }
 
-function DialogContent({ className, children, ...props }: DialogContentProps) {
+function DialogContent({
+  className,
+  children,
+  side = 'center',
+  ...props
+}: DialogContentProps) {
   const {
     open,
     onOpenChange,
@@ -297,18 +303,26 @@ function DialogContent({ className, children, ...props }: DialogContentProps) {
         onKeyDown={handleKeyDown}
         className={cn(
           'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg duration-200',
-          'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-6',
-          'md:animate-in md:fade-in-0 md:zoom-in-95 md:slide-in-from-left-1/2 md:slide-in-from-top-[48%]',
-          'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
-          'max-md:animate-in max-md:fade-in-0 max-md:slide-in-from-bottom-full',
+          side === 'center' && [
+            'md:left-1/2 md:top-1/2 md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-lg md:p-6',
+            'md:animate-in md:fade-in-0 md:zoom-in-95 md:slide-in-from-left-1/2 md:slide-in-from-top-[48%]',
+            'max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:rounded-t-xl max-md:border-b-0 max-md:p-5 max-md:pb-[calc(1.25rem+env(safe-area-inset-bottom))]',
+            'max-md:animate-in max-md:fade-in-0 max-md:slide-in-from-bottom-full',
+          ],
+          side === 'right' && [
+            'inset-y-0 right-0 h-full max-w-md content-start overflow-y-auto border-l p-6',
+            'animate-in fade-in-0 slide-in-from-right',
+          ],
           className
         )}
         onClick={(e) => e.stopPropagation()}
         {...props}
       >
-        <div className="mb-1 flex justify-center md:hidden">
-          <div className="h-1 w-8 rounded-full bg-(--muted-foreground)/30" />
-        </div>
+        {side === 'center' ? (
+          <div className="mb-1 flex justify-center md:hidden">
+            <div className="h-1 w-8 rounded-full bg-(--muted-foreground)/30" />
+          </div>
+        ) : null}
         {children}
         <button
           type="button"

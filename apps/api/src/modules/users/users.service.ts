@@ -66,6 +66,7 @@ export class UsersService {
     page: number;
     limit: number;
     search?: string | undefined;
+    role?: UserRole | undefined;
   }) {
     return this.usersRepository.findPage(params);
   }

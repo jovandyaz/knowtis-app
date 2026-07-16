@@ -1,9 +1,10 @@
+import { TableSkeleton } from '@/components/TableSkeleton';
+
 import { useUpsertFeatureFlag } from '@knowtis/data-access-admin';
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
 import {
   EmptyState,
   ErrorState,
-  LoadingState,
   Switch,
   Table,
   TableBody,
@@ -27,7 +28,7 @@ export function FeatureFlagsPage() {
           fullHeight={false}
         />
       ) : flags.isLoading ? (
-        <LoadingState />
+        <TableSkeleton columns={4} />
       ) : !flags.data || flags.data.length === 0 ? (
         <EmptyState
           title="No flags"

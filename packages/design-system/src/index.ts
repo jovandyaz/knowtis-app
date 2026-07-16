@@ -32,6 +32,7 @@ export {
   type EmptyStateProps,
   Switch,
   type SwitchProps,
+  Skeleton,
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,

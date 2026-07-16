@@ -41,10 +41,13 @@ export const adminQueryKeys = {
   selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
 } as const;
 
-function usersPath({ page, limit, search }: AdminUsersParams): string {
+function usersPath({ page, limit, search, role }: AdminUsersParams): string {
   const params = [`page=${page}`, `limit=${limit}`];
   if (search) {
     params.push(`search=${encodeURIComponent(search)}`);
+  }
+  if (role) {
+    params.push(`role=${role}`);
   }
   return `/admin/users?${params.join('&')}`;
 }
