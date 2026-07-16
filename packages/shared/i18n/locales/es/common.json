@@ -106,7 +106,8 @@
     "tier": {
       "fast": "Rápido",
       "balanced": "Equilibrado",
-      "powerful": "Potente"
+      "powerful": "Potente",
+      "open": "Abierto"
     },
     "byok": {
       "title": "Tus claves de API",
@@ -131,7 +132,11 @@
     "gemini35Flash": "Ayuda multimodal todoterreno",
     "opus48": "El más capaz para razonamiento complejo",
     "gpt56": "El modelo más capaz de OpenAI",
-    "gemini31Pro": "Razonamiento avanzado, matemáticas y código"
+    "gemini31Pro": "Razonamiento avanzado, matemáticas y código",
+    "deepseekV32": "Insignia open-weight a una fracción del costo",
+    "qwen3235b": "Contexto enorme, costo ultra bajo",
+    "kimiK25": "El mejor modelo abierto para tareas complejas",
+    "minimaxM25": "Modelo abierto eficiente para el día a día"
   },
   "integrations": {
     "title": "Integraciones",

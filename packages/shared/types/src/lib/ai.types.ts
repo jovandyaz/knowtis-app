@@ -57,7 +57,7 @@ export type AITone = (typeof AI_TONES)[number];
 
 export const MODEL_ID_MAX_LENGTH = 120;
 
-export const MODEL_TIERS = ['fast', 'balanced', 'powerful'] as const;
+export const MODEL_TIERS = ['fast', 'balanced', 'powerful', 'open'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
 export interface SelectableModel {

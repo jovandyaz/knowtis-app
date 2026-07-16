@@ -116,6 +116,9 @@ importers:
       '@nestjs/websockets':
         specifier: ^11.1.10
         version: 11.1.10(@nestjs/common@11.1.23(class-transformer@0.5.1)(class-validator@0.14.3)(reflect-metadata@0.1.14)(rxjs@7.8.2))(@nestjs/core@11.1.23)(@nestjs/platform-socket.io@11.1.10)(reflect-metadata@0.1.14)(rxjs@7.8.2)
+      '@openrouter/ai-sdk-provider':
+        specifier: ^2.10.0
+        version: 2.10.0(ai@6.0.105(zod@4.1.13))(zod@4.1.13)
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -4432,6 +4435,13 @@ packages:
 
   '@opencode-ai/sdk@1.17.5':
     resolution: {integrity: sha512-3+ztjioTYgFRt4BPU6RYOQ0hOr6nb3rjDfjwfDeVrtfgbo8vOudc+LUzR2KtAVruZnbd0lS/k01bcYykLNIbmA==}
+
+  '@openrouter/ai-sdk-provider@2.10.0':
+    resolution: {integrity: sha512-FMsAEjLUt5pWuRE2LDC/LCvVrFjLlrEzUITH5+5SZtfq7KZ2wrOHjQVxzz92sju8S9ltpzW87CLW8/b0oBXVCw==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      ai: ^6.0.0
+      zod: ^3.25.0 || ^4.0.0
 
   '@opentelemetry/api-logs@0.208.0':
     resolution: {integrity: sha512-CjruKY9V6NMssL/T1kAFgzosF1v9o6oeN+aX5JB/C/xPNtmgIJqcXHG7fA82Ou1zCpWGl4lROQUKwUNE1pMCyg==}
@@ -20031,6 +20041,11 @@ snapshots:
     dependencies:
       cross-spawn: 7.0.6
     optional: true
+
+  '@openrouter/ai-sdk-provider@2.10.0(ai@6.0.105(zod@4.1.13))(zod@4.1.13)':
+    dependencies:
+      ai: 6.0.105(zod@4.1.13)
+      zod: 4.1.13
 
   '@opentelemetry/api-logs@0.208.0':
     dependencies:

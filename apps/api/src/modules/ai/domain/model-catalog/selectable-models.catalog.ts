@@ -62,4 +62,28 @@ export const CURATED_MODELS: CuratedModel[] = [
     descriptionKey: 'aiModels.gemini31Pro',
     tier: 'powerful',
   },
+  {
+    id: 'openrouter:deepseek/deepseek-v3.2',
+    label: 'DeepSeek V3.2',
+    descriptionKey: 'aiModels.deepseekV32',
+    tier: 'open',
+  },
+  {
+    id: 'openrouter:qwen/qwen3-235b-a22b-2507',
+    label: 'Qwen3 235B',
+    descriptionKey: 'aiModels.qwen3235b',
+    tier: 'open',
+  },
+  {
+    id: 'openrouter:moonshotai/kimi-k2.5',
+    label: 'Kimi K2.5',
+    descriptionKey: 'aiModels.kimiK25',
+    tier: 'open',
+  },
+  {
+    id: 'openrouter:minimax/minimax-m2.5',
+    label: 'MiniMax M2.5',
+    descriptionKey: 'aiModels.minimaxM25',
+    tier: 'open',
+  },
 ];

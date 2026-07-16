@@ -10,7 +10,7 @@ const OUTPUT = resolve(
   '../packages/ai-gateway/src/catalog/model-prices.snapshot.ts'
 );
 
-const PROVIDERS = new Set(['anthropic', 'openai', 'gemini']);
+const PROVIDERS = new Set(['anthropic', 'openai', 'gemini', 'openrouter']);
 const MODES = new Set(['chat', 'audio_transcription']);
 const FIELDS = [
   'litellm_provider',

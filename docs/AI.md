@@ -346,7 +346,9 @@ After updating a config value, the in-memory cache is invalidated and the new mo
 `ProviderRegistryFactory` (`apps/api/src/modules/ai/infrastructure/providers/provider-registry.factory.ts`) is the single place that resolves model ids to language models. It runs in one of two modes, selected at startup:
 
 - **Gateway mode** — when `AI_GATEWAY_API_KEY` is set, all provider traffic routes through the [Vercel AI Gateway](https://vercel.com/docs/ai-gateway). Colon-format ids (`anthropic:claude-sonnet-4-20250514`) are translated internally to the gateway's slash format (`anthropic/claude-sonnet-4-20250514`). Direct provider keys (`ANTHROPIC_API_KEY`, etc.) are not required — the gateway holds provider credentials. Streaming, tool calling, and `providerOptions` pass through unchanged.
-- **Direct mode** — when `AI_GATEWAY_API_KEY` is absent, the factory builds the direct-SDK registry (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`) exactly as before. This is the default for local development and the rollback path in production.
+- **Direct mode** — when `AI_GATEWAY_API_KEY` is absent, the factory builds the direct-SDK registry (`@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`, `@openrouter/ai-sdk-provider`) exactly as before. This is the default for local development and the rollback path in production.
+
+**OpenRouter models** use the id shape `openrouter:vendor/model` (e.g. `openrouter:deepseek/deepseek-v3.2`) and power the curated **open** tier. They require direct mode plus `OPENROUTER_API_KEY`. In gateway mode they are **unavailable** — `isModelAvailable` returns false (the picker drops them) and `languageModel` throws — because OpenRouter's vendor slugs are a different catalog than the Vercel gateway's and slug equality is not guaranteed. Pricing resolves via LiteLLM's `openrouter/*` entries, which carry OpenRouter's own rates.
 
 The rest of the system always uses colon-format model ids; the mode switch is invisible to callers. Malformed ids (missing the `provider:` prefix) throw `ProviderNotConfiguredError` in both modes.
 
@@ -387,7 +389,7 @@ Pricing and context-window data come from [LiteLLM's public pricing JSON](https:
 
 ## Copilot Model Selection
 
-Users pick which model the copilot uses, per conversation and as an account default. The list is **curated**: `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) intersects three sources — a hand-maintained `CURATED_MODELS` list (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` tiers), the LiteLLM pricing snapshot (context window + cost class), and provider availability (`isModelAvailable` — the provider key is present). A curated model whose id is missing from the snapshot, or whose provider key is absent, is silently dropped from the list.
+Users pick which model the copilot uses, per conversation and as an account default. The list is **curated**: `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) intersects three sources — a hand-maintained `CURATED_MODELS` list (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` / `open` tiers — `open` is the OpenRouter-served open-weight tier: DeepSeek, Qwen, Kimi, MiniMax), the LiteLLM pricing snapshot (context window + cost class), and provider availability (`isModelAvailable` — the provider key is present). A curated model whose id is missing from the snapshot, or whose provider key is absent, is silently dropped from the list.
 
 **Resolution cascade** (highest priority first), in `ModelPreferenceService`:
 
@@ -466,6 +468,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `ANTHROPIC_API_KEY`              | No       | —                                      | Anthropic API key (validated at runtime)                                                                                          |
 | `OPENAI_API_KEY`                 | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription)                                                                           |
 | `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                                                                                             |
+| `OPENROUTER_API_KEY`             | No       | —                                      | OpenRouter key; unlocks the open-weight tier (`openrouter:*` models)                                                              |
 | `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-5`            | Default copilot model — fallback only; a DB `ai_config` row wins ([Runtime AI Config](#runtime-ai-config-database-overrides-env)) |
 | `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text` — fallback only; a DB `ai_config` row wins                                                                 |
 | `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier                                                                                  |

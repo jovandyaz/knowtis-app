@@ -25,7 +25,7 @@ export interface ModelSelectOption {
 
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
 
-const TIER_ORDER = ['fast', 'balanced', 'powerful'] as const;
+const TIER_ORDER = ['fast', 'balanced', 'powerful', 'open'] as const;
 
 const COST_GLYPH = '$';
 const MIN_COST_LEVEL = 1;
