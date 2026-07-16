@@ -105,4 +105,18 @@ describe('Dialog accessibility', () => {
     expect(onInnerChange).toHaveBeenCalledWith(false);
     expect(onOuterChange).not.toHaveBeenCalled();
   });
+
+  it('renders a right-side drawer when side="right"', () => {
+    render(
+      <Dialog open onOpenChange={() => undefined}>
+        <DialogContent side="right">
+          <DialogTitle>Entry details</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('right-0');
+    expect(dialog.className).toContain('inset-y-0');
+  });
 });
