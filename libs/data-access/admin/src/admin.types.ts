@@ -14,12 +14,16 @@ export const AdminUserSchema = z.object({
 });
 export type AdminUser = z.infer<typeof AdminUserSchema>;
 
-export const PaginatedUsersSchema = z.object({
-  items: z.array(AdminUserSchema),
-  total: z.number().int().nonnegative(),
-  page: z.number().int().positive(),
-  limit: z.number().int().positive(),
-});
+function paginatedSchema<T extends z.ZodType>(item: T) {
+  return z.object({
+    items: z.array(item),
+    total: z.number().int().nonnegative(),
+    page: z.number().int().positive(),
+    limit: z.number().int().positive(),
+  });
+}
+
+export const PaginatedUsersSchema = paginatedSchema(AdminUserSchema);
 export type PaginatedUsers = z.infer<typeof PaginatedUsersSchema>;
 
 export const DailyUsageSchema = z.object({
@@ -59,3 +63,21 @@ export interface AdminUsersParams {
   limit: number;
   search?: string;
 }
+
+export const AuditEntrySchema = z.object({
+  id: z.uuid(),
+  actorId: z.uuid(),
+  actorEmail: z.string().nullable(),
+  action: z.string(),
+  targetType: z.string(),
+  targetId: z.string().nullable(),
+  before: z.record(z.string(), z.unknown()).nullable(),
+  after: z.record(z.string(), z.unknown()).nullable(),
+  createdAt: z.coerce.date(),
+});
+export type AuditEntry = z.infer<typeof AuditEntrySchema>;
+
+export const PaginatedAuditSchema = paginatedSchema(AuditEntrySchema);
+export type PaginatedAudit = z.infer<typeof PaginatedAuditSchema>;
+
+export type AuditParams = Pick<AdminUsersParams, 'page' | 'limit'>;

@@ -14,4 +14,9 @@ export const ADMIN_SECTIONS = [
     label: 'Feature Flags',
     description: 'Toggle platform features live.',
   },
+  {
+    to: '/audit',
+    label: 'Audit Log',
+    description: 'Review admin actions.',
+  },
 ] as const;

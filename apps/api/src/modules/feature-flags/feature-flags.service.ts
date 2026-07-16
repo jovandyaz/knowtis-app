@@ -2,6 +2,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
+import { AdminAuditService } from '../admin/audit/admin-audit.service';
 import {
   FEATURE_FLAG_REPOSITORY,
   type FeatureFlagEntity,
@@ -19,7 +20,8 @@ export class FeatureFlagsService {
     @Inject(FEATURE_FLAG_REPOSITORY)
     private readonly repository: FeatureFlagRepository,
     @Inject(CACHE_MANAGER)
-    private readonly cache: Cache
+    private readonly cache: Cache,
+    private readonly adminAuditService: AdminAuditService
   ) {}
 
   async isEnabled(key: string): Promise<boolean> {
@@ -41,17 +43,45 @@ export class FeatureFlagsService {
   async toggle(
     key: string,
     enabled: boolean,
+    actorId: string,
     description?: string
   ): Promise<FeatureFlagEntity> {
+    const previous = await this.repository.findByKey(key);
+
     const flag = await this.repository.upsert({
       key,
       enabled,
       ...(description !== undefined && { description }),
     });
 
-    await this.cache.del(`${CACHE_PREFIX}${key}`);
-
     this.logger.log(`Feature flag '${key}' set to ${enabled}`);
+
+    const descriptionChanged = previous
+      ? previous.description !== flag.description
+      : flag.description !== null;
+
+    await this.adminAuditService.record({
+      actorId,
+      action: 'flag.updated',
+      targetType: 'feature_flag',
+      targetId: key,
+      ...(previous
+        ? {
+            before: {
+              enabled: previous.enabled,
+              ...(descriptionChanged
+                ? { description: previous.description }
+                : {}),
+            },
+          }
+        : {}),
+      after: {
+        enabled: flag.enabled,
+        ...(descriptionChanged ? { description: flag.description } : {}),
+      },
+    });
+
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
 
     return flag;
   }
@@ -60,11 +90,27 @@ export class FeatureFlagsService {
     return this.repository.findAll();
   }
 
-  async remove(key: string): Promise<void> {
+  async remove(key: string, actorId: string): Promise<void> {
+    const existing = await this.repository.findByKey(key);
+    if (!existing) {
+      return;
+    }
+
     await this.repository.delete(key);
 
-    await this.cache.del(`${CACHE_PREFIX}${key}`);
-
     this.logger.log(`Feature flag '${key}' removed`);
+
+    await this.adminAuditService.record({
+      actorId,
+      action: 'flag.deleted',
+      targetType: 'feature_flag',
+      targetId: key,
+      before: {
+        enabled: existing.enabled,
+        description: existing.description,
+      },
+    });
+
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
   }
 }

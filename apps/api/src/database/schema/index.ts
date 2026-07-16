@@ -15,3 +15,4 @@ export * from './user-memories.schema';
 export * from './user-ai-settings.schema';
 export * from './user-provider-keys.schema';
 export * from './oauth-payloads.schema';
+export * from './admin-audit-log.schema';

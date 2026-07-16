@@ -10,6 +10,7 @@ import { httpClient } from '@knowtis/api-client';
 
 import {
   useAdminUsers,
+  useAuditLog,
   useDeleteFeatureFlag,
   useUpdateUserRole,
   useUpsertFeatureFlag,
@@ -78,6 +79,68 @@ describe('useAdminUsers', () => {
         '/admin/users?page=1&limit=25&search=a%20b'
       )
     );
+  });
+});
+
+const AUDIT_PAGE = {
+  items: [
+    {
+      id: '3b241101-e2bb-4255-8caf-4136c566a962',
+      actorId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+      actorEmail: 'ada@knowtis.app',
+      action: 'user.role.updated',
+      targetType: 'user',
+      targetId: '3b241101-e2bb-4255-8caf-4136c566a962',
+      before: { role: 'user' },
+      after: { role: 'admin' },
+      createdAt: '2026-07-01T00:00:00.000Z',
+    },
+  ],
+  total: 1,
+  page: 2,
+  limit: 50,
+};
+
+describe('useAuditLog', () => {
+  it('fetches and validates a page of audit entries', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(AUDIT_PAGE);
+
+    const { result } = renderHook(() => useAuditLog({ page: 2, limit: 50 }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith('/admin/audit?page=2&limit=50');
+    expect(result.current.data?.items[0].action).toBe('user.role.updated');
+    expect(result.current.data?.items[0].createdAt).toBeInstanceOf(Date);
+  });
+
+  it('rejects a payload that does not match the audit shape', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...AUDIT_PAGE,
+      items: [{ ...AUDIT_PAGE.items[0], id: 'not-a-uuid' }],
+    });
+
+    const { result } = renderHook(() => useAuditLog({ page: 2, limit: 50 }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it('accepts an actorEmail that is not a valid email format', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...AUDIT_PAGE,
+      items: [{ ...AUDIT_PAGE.items[0], actorEmail: 'not-an-email' }],
+    });
+
+    const { result } = renderHook(() => useAuditLog({ page: 2, limit: 50 }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.isError).toBe(false);
+    expect(result.current.data?.items[0].actorEmail).toBe('not-an-email');
   });
 });
 

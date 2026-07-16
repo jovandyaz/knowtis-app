@@ -28,8 +28,11 @@ import { AIMetricsService } from '../ai/application/services/ai-metrics.service'
 import type { MetricsPeriod } from '../ai/domain/ports/ai-usage.repository';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { UsersService } from '../users/users.service';
+import { AdminAuditService } from './audit/admin-audit.service';
 import { DailyUsageResponseDto } from './dto/daily-usage-response.dto';
 import { MetricsSummaryResponseDto } from './dto/metrics-summary-response.dto';
+import { PaginatedAuditQueryDto } from './dto/paginated-audit-query.dto';
+import { PaginatedAuditResponseDto } from './dto/paginated-audit-response.dto';
 import { PaginatedUsersQueryDto } from './dto/paginated-users-query.dto';
 import { PaginatedUsersResponseDto } from './dto/paginated-users-response.dto';
 import { UpdateRoleDto } from './dto/update-role.dto';
@@ -52,6 +55,7 @@ export class AdminController {
   constructor(
     private readonly usersService: UsersService,
     private readonly aiMetricsService: AIMetricsService,
+    private readonly adminAuditService: AdminAuditService,
     private readonly i18n: I18nService
   ) {}
 
@@ -127,11 +131,51 @@ export class AdminController {
     if (id === currentUser.id) {
       throw new BadRequestException('Cannot change your own role');
     }
+    const existing = await this.usersService.findById(id);
+    if (!existing) {
+      throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
+    }
     const updated = await this.usersService.updateRole(id, dto.role);
     if (!updated) {
       throw new NotFoundException(this.i18n.t('validation.USER_NOT_FOUND'));
     }
+    await this.adminAuditService.record({
+      actorId: currentUser.id,
+      action: 'user.role_changed',
+      targetType: 'user',
+      targetId: id,
+      before: { role: existing.role },
+      after: { role: updated.role },
+    });
     return updated;
+  }
+
+  @ApiOperation({
+    summary: 'List audit trail entries (paginated)',
+    description:
+      'Returns admin audit log entries, newest first, describing administrative actions such as role changes.',
+  })
+  @ApiOkResponse({
+    type: PaginatedAuditResponseDto,
+    description: 'One page of audit entries',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — missing or invalid JWT',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — user does not have admin role',
+  })
+  @Get('audit')
+  async listAudit(@Query() query: PaginatedAuditQueryDto) {
+    const page = query.page ?? DEFAULT_PAGE;
+    const limit = query.limit ?? DEFAULT_LIMIT;
+    const result = await this.adminAuditService.findPaginated({
+      page,
+      limit,
+    });
+    return { items: result.items, total: result.total, page, limit };
   }
 
   @ApiOperation({
