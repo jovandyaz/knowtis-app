@@ -13,6 +13,7 @@ import {
   useAiConfig,
   useAuditLog,
   useDeleteFeatureFlag,
+  useGlobalAiTimeseries,
   useSelectableModels,
   useSetAiConfig,
   useUpdateUserRole,
@@ -291,5 +292,32 @@ describe('useSelectableModels', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(aiModelsApi.getModels).toHaveBeenCalledTimes(1);
     expect(result.current.data?.[0].id).toBe('anthropic:claude-sonnet-5');
+  });
+});
+
+describe('useGlobalAiTimeseries', () => {
+  it('fetches, validates and coerces bucket dates', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      buckets: [
+        {
+          bucketStart: '2026-07-15T10:00:00.000Z',
+          requests: 3,
+          inputTokens: 120,
+          outputTokens: 60,
+          costUsd: 0.004,
+        },
+      ],
+    });
+
+    const { result } = renderHook(() => useGlobalAiTimeseries('day'), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/admin/ai/metrics/timeseries?period=day'
+    );
+    expect(result.current.data?.buckets[0].bucketStart).toBeInstanceOf(Date);
+    expect(result.current.data?.buckets[0].costUsd).toBe(0.004);
   });
 });

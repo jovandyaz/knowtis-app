@@ -36,20 +36,38 @@ export const DailyUsageSchema = z.object({
 });
 export type DailyUsage = z.infer<typeof DailyUsageSchema>;
 
+const MetricsBreakdownSchema = z.object({
+  requests: z.number(),
+  tokens: z.number(),
+  costUsd: z.number(),
+});
+
 export const MetricsSummarySchema = z.object({
   totalRequests: z.number(),
   totalInputTokens: z.number(),
   totalOutputTokens: z.number(),
   totalCostUsd: z.number(),
-  byAction: z.record(
-    z.string(),
-    z.object({ requests: z.number(), tokens: z.number(), costUsd: z.number() })
-  ),
+  byAction: z.record(z.string(), MetricsBreakdownSchema),
+  byModel: z.record(z.string(), MetricsBreakdownSchema),
 });
 export type MetricsSummary = z.infer<typeof MetricsSummarySchema>;
 
 export const METRICS_PERIODS = ['day', 'week', 'month'] as const;
 export type MetricsPeriod = (typeof METRICS_PERIODS)[number];
+
+export const TimeseriesBucketSchema = z.object({
+  bucketStart: z.coerce.date(),
+  requests: z.number(),
+  inputTokens: z.number(),
+  outputTokens: z.number(),
+  costUsd: z.number(),
+});
+export type TimeseriesBucket = z.infer<typeof TimeseriesBucketSchema>;
+
+export const MetricsTimeseriesSchema = z.object({
+  buckets: z.array(TimeseriesBucketSchema),
+});
+export type MetricsTimeseries = z.infer<typeof MetricsTimeseriesSchema>;
 
 export const FeatureFlagSchema = z.object({
   key: z.string(),
