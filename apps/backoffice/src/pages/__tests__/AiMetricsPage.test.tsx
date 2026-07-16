@@ -168,6 +168,28 @@ describe('AiMetricsPage', () => {
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 
+  it('renders the time series when metrics fail but the series succeeds', () => {
+    useGlobalAiMetricsMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: vi.fn(),
+    });
+    useGlobalAiTimeseriesMock.mockReturnValue({
+      data: TIMESERIES,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    renderPage();
+
+    expect(screen.getByText('Could not load metrics.')).toBeInTheDocument();
+    expect(
+      screen.getByRole('img', { name: 'cost chart stub' })
+    ).toBeInTheDocument();
+    expect(timeSeriesChartSpy).toHaveBeenCalled();
+  });
+
   it('shows a dash average cost and empty states when there is no usage', () => {
     useGlobalAiMetricsMock.mockReturnValue({
       data: {

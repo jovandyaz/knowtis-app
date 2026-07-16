@@ -94,109 +94,109 @@ export function AiMetricsPage() {
       ) : metrics.isLoading || !summary ? (
         <LoadingState />
       ) : (
-        <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <StatCard
-              label="Requests"
-              value={summary.totalRequests.toLocaleString()}
-            />
-            <StatCard
-              label="Tokens"
-              value={(
-                summary.totalInputTokens + summary.totalOutputTokens
-              ).toLocaleString()}
-              hint={`${summary.totalInputTokens.toLocaleString()} in · ${summary.totalOutputTokens.toLocaleString()} out`}
-            />
-            <StatCard label="Cost" value={formatUsd(summary.totalCostUsd)} />
-            <StatCard label="Avg cost / request" value={avgCost} />
-          </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <StatCard
+            label="Requests"
+            value={summary.totalRequests.toLocaleString()}
+          />
+          <StatCard
+            label="Tokens"
+            value={(
+              summary.totalInputTokens + summary.totalOutputTokens
+            ).toLocaleString()}
+            hint={`${summary.totalInputTokens.toLocaleString()} in · ${summary.totalOutputTokens.toLocaleString()} out`}
+          />
+          <StatCard label="Cost" value={formatUsd(summary.totalCostUsd)} />
+          <StatCard label="Avg cost / request" value={avgCost} />
+        </div>
+      )}
 
+      <Card className="flex flex-col gap-3 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-medium text-(--muted-foreground)">
+            Over time
+          </h2>
+          <SegmentedControl
+            idBase="ai-metrics-series"
+            ariaLabel="Time series metric"
+            value={metric}
+            onValueChange={(value) => {
+              if (isTimeSeriesMetric(value)) {
+                setMetric(value);
+              }
+            }}
+            items={TIMESERIES_METRICS.map((m) => ({ value: m, label: m }))}
+          />
+        </div>
+        {timeseries.isError ? (
+          <ErrorState
+            message="Could not load the time series."
+            onRetry={() => void timeseries.refetch()}
+            fullHeight={false}
+          />
+        ) : timeseries.isLoading || !timeseries.data ? (
+          <LoadingState />
+        ) : (
+          <TimeSeriesChart
+            buckets={timeseries.data.buckets}
+            metric={metric}
+            period={period}
+          />
+        )}
+      </Card>
+
+      {summary && !metrics.isError && !metrics.isLoading && (
+        <div className="grid gap-6 lg:grid-cols-2">
           <Card className="flex flex-col gap-3 p-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-medium text-(--muted-foreground)">
-                Over time
-              </h2>
-              <SegmentedControl
-                idBase="ai-metrics-series"
-                ariaLabel="Time series metric"
-                value={metric}
-                onValueChange={(value) => {
-                  if (isTimeSeriesMetric(value)) {
-                    setMetric(value);
-                  }
-                }}
-                items={TIMESERIES_METRICS.map((m) => ({ value: m, label: m }))}
+            <h2 className="text-sm font-medium text-(--muted-foreground)">
+              Spend by model
+            </h2>
+            {Object.keys(summary.byModel).length === 0 ? (
+              <EmptyState
+                title="No activity"
+                description="No AI usage recorded for this period."
               />
-            </div>
-            {timeseries.isError ? (
-              <ErrorState
-                message="Could not load the time series."
-                onRetry={() => void timeseries.refetch()}
-                fullHeight={false}
-              />
-            ) : timeseries.isLoading || !timeseries.data ? (
-              <LoadingState />
             ) : (
-              <TimeSeriesChart
-                buckets={timeseries.data.buckets}
-                metric={metric}
-                period={period}
+              <BarList
+                ariaLabel="Spend by model"
+                items={spendByModelItems(summary)}
               />
             )}
           </Card>
 
-          <div className="grid gap-6 lg:grid-cols-2">
-            <Card className="flex flex-col gap-3 p-4">
-              <h2 className="text-sm font-medium text-(--muted-foreground)">
-                Spend by model
-              </h2>
-              {Object.keys(summary.byModel).length === 0 ? (
-                <EmptyState
-                  title="No activity"
-                  description="No AI usage recorded for this period."
-                />
-              ) : (
-                <BarList
-                  ariaLabel="Spend by model"
-                  items={spendByModelItems(summary)}
-                />
-              )}
-            </Card>
-
-            <Card className="flex flex-col gap-3 p-4">
-              <h2 className="text-sm font-medium text-(--muted-foreground)">
-                By action
-              </h2>
-              {Object.keys(summary.byAction).length === 0 ? (
-                <EmptyState
-                  title="No activity"
-                  description="No AI actions recorded for this period."
-                />
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Requests</TableHead>
-                      <TableHead>Tokens</TableHead>
-                      <TableHead>Cost</TableHead>
+          <Card className="flex flex-col gap-3 p-4">
+            <h2 className="text-sm font-medium text-(--muted-foreground)">
+              By action
+            </h2>
+            {Object.keys(summary.byAction).length === 0 ? (
+              <EmptyState
+                title="No activity"
+                description="No AI actions recorded for this period."
+              />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Action</TableHead>
+                    <TableHead>Requests</TableHead>
+                    <TableHead>Tokens</TableHead>
+                    <TableHead>Cost</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(summary.byAction).map(([action, stats]) => (
+                    <TableRow key={action}>
+                      <TableCell>{action}</TableCell>
+                      <TableCell>{stats.requests}</TableCell>
+                      <TableCell>{stats.tokens.toLocaleString()}</TableCell>
+                      <TableCell>{formatUsd(stats.costUsd)}</TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {Object.entries(summary.byAction).map(([action, stats]) => (
-                      <TableRow key={action}>
-                        <TableCell>{action}</TableCell>
-                        <TableCell>{stats.requests}</TableCell>
-                        <TableCell>{stats.tokens.toLocaleString()}</TableCell>
-                        <TableCell>{formatUsd(stats.costUsd)}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </Card>
-          </div>
-        </>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </Card>
+        </div>
       )}
     </div>
   );
