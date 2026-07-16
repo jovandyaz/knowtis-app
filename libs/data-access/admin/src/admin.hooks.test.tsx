@@ -85,6 +85,24 @@ describe('useAdminUsers', () => {
       )
     );
   });
+
+  it('appends the role filter to the query string', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...PAGE,
+      items: [],
+      total: 0,
+    });
+
+    renderHook(() => useAdminUsers({ page: 1, limit: 25, role: 'admin' }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() =>
+      expect(httpClient.get).toHaveBeenCalledWith(
+        '/admin/users?page=1&limit=25&role=admin'
+      )
+    );
+  });
 });
 
 const AUDIT_PAGE = {

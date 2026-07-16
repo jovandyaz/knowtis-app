@@ -113,6 +113,19 @@ describe('AdminController', () => {
 
       await expect(controller.listUsers({})).rejects.toThrow('boom');
     });
+
+    it('passes the role filter through', async () => {
+      usersService.findPage.mockResolvedValue({ items: [], total: 0 });
+
+      await controller.listUsers({ role: 'admin' });
+
+      expect(usersService.findPage).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: undefined,
+        role: 'admin',
+      });
+    });
   });
 
   describe('updateUserRole', () => {

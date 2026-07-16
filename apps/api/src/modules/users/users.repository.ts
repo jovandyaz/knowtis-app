@@ -78,11 +78,15 @@ export class UsersRepository implements UserReadRepository {
     page: number;
     limit: number;
     search?: string | undefined;
+    role?: UserRole | undefined;
   }) {
-    const { page, limit, search } = params;
+    const { page, limit, search, role } = params;
     const filters = [eq(users.isAnonymous, false)];
     if (search) {
       filters.push(ilike(users.email, `%${escapeLike(search)}%`));
+    }
+    if (role) {
+      filters.push(eq(users.role, role));
     }
     const where = and(...filters);
 

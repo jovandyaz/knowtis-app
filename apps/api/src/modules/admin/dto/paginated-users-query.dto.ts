@@ -1,6 +1,8 @@
+import { USER_ROLE, type UserRole } from '@jovandyaz/auth';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -33,4 +35,9 @@ export class PaginatedUsersQueryDto {
   @MaxLength(200)
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({ enum: [USER_ROLE.USER, USER_ROLE.ADMIN] })
+  @IsIn([USER_ROLE.USER, USER_ROLE.ADMIN])
+  @IsOptional()
+  role?: UserRole;
 }

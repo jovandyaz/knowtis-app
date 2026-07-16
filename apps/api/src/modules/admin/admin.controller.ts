@@ -85,6 +85,7 @@ export class AdminController {
       page,
       limit,
       search: query.search,
+      role: query.role,
     });
     return { items, total, page, limit };
   }
