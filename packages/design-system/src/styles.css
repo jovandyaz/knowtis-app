@@ -57,6 +57,11 @@
   --input: var(--color-semantic-light-input);
   --ring: var(--color-semantic-light-ring);
   --radius: var(--radius-md);
+  --chart-1: var(--color-semantic-light-chart-1);
+  --chart-2: var(--color-semantic-light-chart-2);
+  --chart-3: var(--color-semantic-light-chart-3);
+  --chart-4: var(--color-semantic-light-chart-4);
+  --chart-5: var(--color-semantic-light-chart-5);
 }
 
 .dark {
@@ -79,6 +84,11 @@
   --border: var(--color-semantic-dark-border);
   --input: var(--color-semantic-dark-input);
   --ring: var(--color-semantic-dark-ring);
+  --chart-1: var(--color-semantic-dark-chart-1);
+  --chart-2: var(--color-semantic-dark-chart-2);
+  --chart-3: var(--color-semantic-dark-chart-3);
+  --chart-4: var(--color-semantic-dark-chart-4);
+  --chart-5: var(--color-semantic-dark-chart-5);
 }
 
 @layer base {
