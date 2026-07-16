@@ -31,6 +31,12 @@ export function formatValue(value: unknown): string {
   return String(value);
 }
 
+export function formatTarget(entry: AuditEntry): string {
+  return entry.targetId
+    ? `${entry.targetType}: ${entry.targetId}`
+    : entry.targetType;
+}
+
 export function formatChangeSummary(entry: AuditEntry): string {
   const changes = computeFieldChanges(entry.before, entry.after);
   if (changes.length === 0) {

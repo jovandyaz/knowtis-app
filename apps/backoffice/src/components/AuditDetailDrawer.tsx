@@ -1,4 +1,8 @@
-import { computeFieldChanges, formatValue } from '@/lib/audit-diff';
+import {
+  computeFieldChanges,
+  formatTarget,
+  formatValue,
+} from '@/lib/audit-diff';
 
 import type { AuditEntry } from '@knowtis/data-access-admin';
 import {
@@ -16,6 +20,8 @@ interface AuditDetailDrawerProps {
 }
 
 export function AuditDetailDrawer({ entry, onClose }: AuditDetailDrawerProps) {
+  const changes = entry ? computeFieldChanges(entry.before, entry.after) : [];
+
   return (
     <Dialog open={entry !== null} onOpenChange={(open) => !open && onClose()}>
       {entry ? (
@@ -30,40 +36,32 @@ export function AuditDetailDrawer({ entry, onClose }: AuditDetailDrawerProps) {
 
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
             <dt className="text-(--muted-foreground)">Target</dt>
-            <dd>
-              {entry.targetId
-                ? `${entry.targetType}: ${entry.targetId}`
-                : entry.targetType}
-            </dd>
+            <dd>{formatTarget(entry)}</dd>
           </dl>
 
           <section className="flex flex-col gap-2">
             <h3 className="text-sm font-medium text-(--muted-foreground)">
               Changed fields
             </h3>
-            {computeFieldChanges(entry.before, entry.after).length === 0 ? (
+            {changes.length === 0 ? (
               <p className="text-sm text-(--muted-foreground)">
                 No field-level changes recorded.
               </p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {computeFieldChanges(entry.before, entry.after).map(
-                  (change) => (
-                    <li
-                      key={change.key}
-                      className="flex flex-wrap items-center gap-2 text-sm"
-                    >
-                      <span className="font-medium">{change.key}</span>
-                      <Badge variant="destructive" className="line-through">
-                        {formatValue(change.before)}
-                      </Badge>
-                      <span aria-hidden="true">→</span>
-                      <Badge variant="success">
-                        {formatValue(change.after)}
-                      </Badge>
-                    </li>
-                  )
-                )}
+                {changes.map((change) => (
+                  <li
+                    key={change.key}
+                    className="flex flex-wrap items-center gap-2 text-sm"
+                  >
+                    <span className="font-medium">{change.key}</span>
+                    <Badge variant="destructive" className="line-through">
+                      {formatValue(change.before)}
+                    </Badge>
+                    <span aria-hidden="true">→</span>
+                    <Badge variant="success">{formatValue(change.after)}</Badge>
+                  </li>
+                ))}
               </ul>
             )}
           </section>

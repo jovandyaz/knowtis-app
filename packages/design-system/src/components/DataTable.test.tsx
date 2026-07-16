@@ -183,6 +183,17 @@ describe('DataTable row interaction and loading', () => {
     expect(onRowClick).toHaveBeenCalledWith({ id: '2', name: 'Grace' });
   });
 
+  it('supports keyboard activation of rows with Space', async () => {
+    const onRowClick = vi.fn();
+    render(<DataTable columns={columns} data={data} onRowClick={onRowClick} />);
+
+    const row = screen.getByText('Grace').closest('tr');
+    expect(row).not.toBeNull();
+    row?.focus();
+    await userEvent.keyboard(' ');
+    expect(onRowClick).toHaveBeenCalledWith({ id: '2', name: 'Grace' });
+  });
+
   it('renders skeleton rows while loading', () => {
     render(
       <DataTable columns={columns} data={[]} isLoading skeletonRows={3} />

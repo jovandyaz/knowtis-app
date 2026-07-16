@@ -92,7 +92,24 @@ describe('UsersPage', () => {
 
   it('filters by role and resets to the first page', async () => {
     useAdminUsersMock.mockReturnValue({
-      data: { items: [], total: 0, page: 1, limit: 25 },
+      data: {
+        items: [
+          {
+            id: '3b241101-e2bb-4255-8caf-4136c566a962',
+            email: 'ada@knowtis.app',
+            name: 'Ada',
+            avatarUrl: null,
+            role: 'admin',
+            provider: 'local',
+            isAnonymous: false,
+            createdAt: new Date('2026-07-01'),
+            emailVerifiedAt: null,
+          },
+        ],
+        total: 100,
+        page: 1,
+        limit: 25,
+      },
       isLoading: false,
       isError: false,
       isSuccess: true,
@@ -100,6 +117,14 @@ describe('UsersPage', () => {
     });
 
     renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: /next page/i }));
+
+    await waitFor(() =>
+      expect(useAdminUsersMock).toHaveBeenLastCalledWith(
+        expect.objectContaining({ page: 2 })
+      )
+    );
 
     await userEvent.click(screen.getByRole('tab', { name: 'admin' }));
 

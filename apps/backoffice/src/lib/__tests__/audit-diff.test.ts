@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import type { AuditEntry } from '@knowtis/data-access-admin';
 
-import { computeFieldChanges, formatChangeSummary } from '../audit-diff';
+import {
+  computeFieldChanges,
+  formatChangeSummary,
+  formatTarget,
+} from '../audit-diff';
 
 function entry(
   before: Record<string, unknown> | null,
@@ -80,5 +84,16 @@ describe('formatChangeSummary', () => {
 
   it('returns a dash when nothing changed', () => {
     expect(formatChangeSummary(entry(null, null))).toBe('—');
+  });
+});
+
+describe('formatTarget', () => {
+  it('includes the target id when present', () => {
+    expect(formatTarget(entry(null, null))).toBe('user: u1');
+  });
+
+  it('falls back to just the target type when there is no target id', () => {
+    const withoutTargetId = { ...entry(null, null), targetId: null };
+    expect(formatTarget(withoutTargetId)).toBe('user');
   });
 });

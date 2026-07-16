@@ -4,7 +4,7 @@ import { createColumnHelper } from '@tanstack/react-table';
 import type { ColumnDef, PaginationState } from '@tanstack/react-table';
 
 import { AuditDetailDrawer } from '@/components/AuditDetailDrawer';
-import { formatChangeSummary } from '@/lib/audit-diff';
+import { formatChangeSummary, formatTarget } from '@/lib/audit-diff';
 
 import { useAuditLog, type AuditEntry } from '@knowtis/data-access-admin';
 import { DataTable, ErrorState } from '@knowtis/design-system';
@@ -25,10 +25,7 @@ const columns: ColumnDef<AuditEntry, unknown>[] = [
   columnHelper.display({
     id: 'target',
     header: 'Target',
-    cell: ({ row }) =>
-      row.original.targetId
-        ? `${row.original.targetType}: ${row.original.targetId}`
-        : row.original.targetType,
+    cell: ({ row }) => formatTarget(row.original),
     enableSorting: false,
   }),
   columnHelper.display({
