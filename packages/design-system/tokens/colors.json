@@ -35,7 +35,8 @@
       "yellow": {
         "50": { "value": "oklch(0.97 0.02 85)", "type": "color" },
         "400": { "value": "oklch(0.82 0.12 85)", "type": "color" },
-        "500": { "value": "oklch(0.75 0.15 85)", "type": "color" }
+        "500": { "value": "oklch(0.75 0.15 85)", "type": "color" },
+        "600": { "value": "oklch(0.62 0.15 85)", "type": "color" }
       },
       "blue": {
         "400": { "value": "oklch(0.70 0.13 230)", "type": "color" },
@@ -103,7 +104,7 @@
         "chart-1": { "value": "{color.primitive.purple.500}", "type": "color" },
         "chart-2": { "value": "{color.primitive.blue.500}", "type": "color" },
         "chart-3": { "value": "{color.primitive.green.500}", "type": "color" },
-        "chart-4": { "value": "{color.primitive.yellow.500}", "type": "color" },
+        "chart-4": { "value": "{color.primitive.yellow.600}", "type": "color" },
         "chart-5": { "value": "{color.primitive.pink.500}", "type": "color" }
       },
       "dark": {
