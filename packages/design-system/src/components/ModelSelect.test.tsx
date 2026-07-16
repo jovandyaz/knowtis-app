@@ -41,6 +41,18 @@ describe('ModelSelect', () => {
     expect(onSelect).toHaveBeenCalledWith('a:bal');
   });
 
+  it('disables the trigger when disabled is set', () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        disabled
+      />
+    );
+    expect(screen.getByRole('button')).toBeDisabled();
+  });
+
   it('shows one cost indicator per tier header derived from its costliest model', async () => {
     render(
       <ModelSelect

@@ -57,7 +57,6 @@ describe('VoiceNoteHandler', () => {
       getFallbackModel: vi
         .fn()
         .mockResolvedValue('anthropic:claude-haiku-4-5-20251001'),
-      getAllConfig: vi.fn().mockResolvedValue({}),
       setConfig: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIConfigService;
     const promptLoader = new PromptLoaderService(

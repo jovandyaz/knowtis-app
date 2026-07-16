@@ -1,15 +1,20 @@
 export {
   adminQueryKeys,
   useAdminUsers,
+  useAiConfig,
   useAuditLog,
   useDeleteFeatureFlag,
   useGlobalAiMetrics,
   useGlobalAiUsage,
+  useSelectableModels,
+  useSetAiConfig,
   useUpdateUserRole,
   useUpsertFeatureFlag,
 } from './admin.hooks';
 export {
   AdminUserSchema,
+  AiConfigEntrySchema,
+  AiConfigSchema,
   AuditEntrySchema,
   DailyUsageSchema,
   FeatureFlagSchema,
@@ -17,8 +22,11 @@ export {
   MetricsSummarySchema,
   PaginatedAuditSchema,
   PaginatedUsersSchema,
+  SelectableModelSchema,
+  SelectableModelsSchema,
   type AdminUser,
   type AdminUsersParams,
+  type AiConfigEntry,
   type AuditEntry,
   type AuditParams,
   type DailyUsage,
@@ -27,4 +35,5 @@ export {
   type MetricsSummary,
   type PaginatedAudit,
   type PaginatedUsers,
+  type SelectableModelOption,
 } from './admin.types';

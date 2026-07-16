@@ -3,7 +3,10 @@ import { eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { aiConfig } from '../../../../database/schema';
-import type { AIConfigRepository } from '../../domain/ports/ai-config.repository';
+import type {
+  AIConfigRepository,
+  AIConfigRow,
+} from '../../domain/ports/ai-config.repository';
 
 @Injectable()
 export class DrizzleAIConfigRepository implements AIConfigRepository {
@@ -38,8 +41,13 @@ export class DrizzleAIConfigRepository implements AIConfigRepository {
       });
   }
 
-  async getAll(): Promise<Record<string, string>> {
+  async getAllRows(): Promise<AIConfigRow[]> {
     const rows = await this.db.select().from(aiConfig);
-    return Object.fromEntries(rows.map((r) => [r.key, r.value]));
+    return rows.map((r) => ({
+      key: r.key,
+      value: r.value,
+      description: r.description,
+      updatedAt: r.updatedAt,
+    }));
   }
 }

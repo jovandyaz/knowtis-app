@@ -31,7 +31,6 @@ function createMockAIConfigService(
       .mockResolvedValue(
         overrides?.getFallbackModel ?? 'anthropic:claude-haiku-4-5-20251001'
       ),
-    getAllConfig: vi.fn().mockResolvedValue({}),
     setConfig: vi.fn().mockResolvedValue(undefined),
   } as unknown as AIConfigService;
 }

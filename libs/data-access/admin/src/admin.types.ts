@@ -1,6 +1,8 @@
 import { USER_ROLE } from '@jovandyaz/auth';
 import { z } from 'zod';
 
+import { MODEL_TIERS } from '@knowtis/shared-types';
+
 export const AdminUserSchema = z.object({
   id: z.uuid(),
   email: z.email(),
@@ -81,3 +83,26 @@ export const PaginatedAuditSchema = paginatedSchema(AuditEntrySchema);
 export type PaginatedAudit = z.infer<typeof PaginatedAuditSchema>;
 
 export type AuditParams = Pick<AdminUsersParams, 'page' | 'limit'>;
+
+export const AiConfigEntrySchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  source: z.enum(['database', 'environment']),
+  description: z.string().nullable(),
+  updatedAt: z.coerce.date().nullable(),
+});
+export type AiConfigEntry = z.infer<typeof AiConfigEntrySchema>;
+
+export const AiConfigSchema = z.array(AiConfigEntrySchema);
+
+export const SelectableModelSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  tier: z.enum(MODEL_TIERS),
+  costClass: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  contextWindow: z.number(),
+  billedToUser: z.boolean(),
+});
+export type SelectableModelOption = z.infer<typeof SelectableModelSchema>;
+
+export const SelectableModelsSchema = z.array(SelectableModelSchema);

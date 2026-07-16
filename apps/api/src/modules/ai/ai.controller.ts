@@ -29,6 +29,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -38,7 +39,11 @@ import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { realIpOf } from '../websocket/socket-auth';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
-import { AIConfigService } from './application/services/ai-config.service';
+import {
+  AIConfigService,
+  InvalidAIConfigError,
+  type AIConfigEntry,
+} from './application/services/ai-config.service';
 import { AIErrorCodes } from './domain/errors/ai.errors';
 import {
   AI_USAGE_REPOSITORY,
@@ -48,6 +53,7 @@ import {
 import { AICompleteDto } from './dto/ai.dto';
 import { SetAIConfigDto } from './dto/set-ai-config.dto';
 import { VoiceNoteDto } from './dto/voice-note.dto';
+import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import {
   FallbackChainService,
   type ProviderHealth,
@@ -330,19 +336,32 @@ export class AIController {
   }
 
   @ApiOperation({
-    summary: 'Get all AI configuration values',
+    summary: 'Get the effective AI configuration',
     description:
-      'Returns all dynamic AI configuration key-value pairs from the database.',
+      'Returns every AI config key resolved to its effective value: the database row when present, the environment default otherwise.',
   })
   @ApiResponse({
     status: 200,
-    description: 'AI configuration map',
+    description: 'Effective AI configuration entries',
     schema: {
-      type: 'object',
-      additionalProperties: { type: 'string' },
-      example: {
-        ai_default_model: 'anthropic:claude-sonnet-5',
-        ai_fast_model: 'anthropic:claude-haiku-4-5-20251001',
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          key: { type: 'string', example: 'ai_default_model' },
+          value: { type: 'string', example: 'anthropic:claude-sonnet-5' },
+          source: {
+            type: 'string',
+            enum: ['database', 'environment'],
+            example: 'database',
+          },
+          description: { type: 'string', nullable: true },
+          updatedAt: {
+            type: 'string',
+            format: 'date-time',
+            nullable: true,
+          },
+        },
       },
     },
   })
@@ -351,12 +370,18 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @UseGuards(
+    JwtAuthGuard,
+    FeatureFlagGuard,
+    RolesGuard,
+    UserScopedThrottlerGuard
+  )
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('config')
-  async getConfig(): Promise<Record<string, string>> {
-    return this.aiConfigService.getAllConfig();
+  async getConfig(): Promise<AIConfigEntry[]> {
+    return this.aiConfigService.getEffectiveConfig();
   }
 
   @ApiOperation({
@@ -394,20 +419,33 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @UseGuards(
+    JwtAuthGuard,
+    FeatureFlagGuard,
+    RolesGuard,
+    UserScopedThrottlerGuard
+  )
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Put('config/:key')
   async setConfig(
+    @CurrentUser() user: RequestUser,
     @Param('key') key: string,
     @Body() body: SetAIConfigDto
   ): Promise<{ success: true }> {
     try {
-      await this.aiConfigService.setConfig(key, body.value, body.description);
-    } catch (error) {
-      throw new BadRequestException(
-        error instanceof Error ? error.message : `Invalid config key: '${key}'`
+      await this.aiConfigService.setConfig(
+        key,
+        body.value,
+        user.id,
+        body.description
       );
+    } catch (error) {
+      if (error instanceof InvalidAIConfigError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
     }
     return { success: true };
   }

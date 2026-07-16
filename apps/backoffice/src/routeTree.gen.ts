@@ -17,6 +17,7 @@ import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedFeatureFlagsRouteImport } from './routes/_authenticated/feature-flags'
 import { Route as AuthenticatedAuditRouteImport } from './routes/_authenticated/audit'
 import { Route as AuthenticatedAiMetricsRouteImport } from './routes/_authenticated/ai-metrics'
+import { Route as AuthenticatedAiConfigRouteImport } from './routes/_authenticated/ai-config'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -58,11 +59,17 @@ const AuthenticatedAiMetricsRoute = AuthenticatedAiMetricsRouteImport.update({
   path: '/ai-metrics',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedAiConfigRoute = AuthenticatedAiConfigRouteImport.update({
+  id: '/ai-config',
+  path: '/ai-config',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
+  '/ai-config': typeof AuthenticatedAiConfigRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
+  '/ai-config': typeof AuthenticatedAiConfigRoute
   '/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/audit': typeof AuthenticatedAuditRoute
   '/feature-flags': typeof AuthenticatedFeatureFlagsRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/forbidden': typeof ForbiddenRoute
   '/login': typeof LoginRoute
+  '/_authenticated/ai-config': typeof AuthenticatedAiConfigRoute
   '/_authenticated/ai-metrics': typeof AuthenticatedAiMetricsRoute
   '/_authenticated/audit': typeof AuthenticatedAuditRoute
   '/_authenticated/feature-flags': typeof AuthenticatedFeatureFlagsRoute
@@ -94,6 +103,7 @@ export interface FileRouteTypes {
     | '/'
     | '/forbidden'
     | '/login'
+    | '/ai-config'
     | '/ai-metrics'
     | '/audit'
     | '/feature-flags'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
   to:
     | '/forbidden'
     | '/login'
+    | '/ai-config'
     | '/ai-metrics'
     | '/audit'
     | '/feature-flags'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/forbidden'
     | '/login'
+    | '/_authenticated/ai-config'
     | '/_authenticated/ai-metrics'
     | '/_authenticated/audit'
     | '/_authenticated/feature-flags'
@@ -183,10 +195,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAiMetricsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/ai-config': {
+      id: '/_authenticated/ai-config'
+      path: '/ai-config'
+      fullPath: '/ai-config'
+      preLoaderRoute: typeof AuthenticatedAiConfigRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedAiConfigRoute: typeof AuthenticatedAiConfigRoute
   AuthenticatedAiMetricsRoute: typeof AuthenticatedAiMetricsRoute
   AuthenticatedAuditRoute: typeof AuthenticatedAuditRoute
   AuthenticatedFeatureFlagsRoute: typeof AuthenticatedFeatureFlagsRoute
@@ -195,6 +215,7 @@ interface AuthenticatedRouteChildren {
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedAiConfigRoute: AuthenticatedAiConfigRoute,
   AuthenticatedAiMetricsRoute: AuthenticatedAiMetricsRoute,
   AuthenticatedAuditRoute: AuthenticatedAuditRoute,
   AuthenticatedFeatureFlagsRoute: AuthenticatedFeatureFlagsRoute,
