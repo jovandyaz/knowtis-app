@@ -8,6 +8,7 @@ import type {
   DailyUsageSummary,
   MetricsPeriod,
   MetricsSummary,
+  MetricsTimeseriesBucket,
   RecordUsageInput,
 } from '../../domain/ports/ai-usage.repository';
 
@@ -48,6 +49,68 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
     period: MetricsPeriod
   ): Promise<MetricsSummary> {
     return this.queryMetricsSummary(period);
+  }
+
+  async getGlobalMetricsTimeseries(
+    period: MetricsPeriod
+  ): Promise<MetricsTimeseriesBucket[]> {
+    const since = this.periodToDate(period);
+    const granularity: 'hour' | 'day' = period === 'day' ? 'hour' : 'day';
+    const bucketExpr =
+      granularity === 'hour'
+        ? sql<string>`date_trunc('hour', ${aiUsage.createdAt} at time zone 'utc')`
+        : sql<string>`date_trunc('day', ${aiUsage.createdAt} at time zone 'utc')`;
+
+    const rows = await this.db
+      .select({
+        bucket: bucketExpr,
+        requests: count(),
+        inputTokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int`,
+        outputTokens: sql<number>`coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
+        costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+      })
+      .from(aiUsage)
+      .where(gte(aiUsage.createdAt, since))
+      .groupBy(bucketExpr)
+      .orderBy(bucketExpr);
+
+    const byIso = new Map(
+      rows.map((r) => [this.toUtcIso(r.bucket), r] as const)
+    );
+
+    return this.buildBucketStarts(since, granularity).map((start) => {
+      const iso = start.toISOString();
+      const row = byIso.get(iso);
+      return {
+        bucketStart: iso,
+        requests: row?.requests ?? 0,
+        inputTokens: Number(row?.inputTokens ?? 0),
+        outputTokens: Number(row?.outputTokens ?? 0),
+        costUsd: Number(row?.costUsd ?? 0),
+      };
+    });
+  }
+
+  private toUtcIso(bucket: string | Date): string {
+    if (bucket instanceof Date) {
+      return bucket.toISOString();
+    }
+    return new Date(`${bucket.replace(' ', 'T')}Z`).toISOString();
+  }
+
+  private buildBucketStarts(since: Date, granularity: 'hour' | 'day'): Date[] {
+    const stepMs = granularity === 'hour' ? 3_600_000 : 86_400_000;
+    const start = new Date(since);
+    if (granularity === 'hour') {
+      start.setUTCMinutes(0, 0, 0);
+    } else {
+      start.setUTCHours(0, 0, 0, 0);
+    }
+    const buckets: Date[] = [];
+    for (let t = start.getTime(); t <= Date.now(); t += stepMs) {
+      buckets.push(new Date(t));
+    }
+    return buckets;
   }
 
   private async queryDailyUsage(userFilter?: SQL): Promise<DailyUsageSummary> {

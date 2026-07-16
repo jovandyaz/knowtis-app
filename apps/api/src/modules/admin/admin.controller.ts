@@ -31,6 +31,7 @@ import { UsersService } from '../users/users.service';
 import { AdminAuditService } from './audit/admin-audit.service';
 import { DailyUsageResponseDto } from './dto/daily-usage-response.dto';
 import { MetricsSummaryResponseDto } from './dto/metrics-summary-response.dto';
+import { MetricsTimeseriesResponseDto } from './dto/metrics-timeseries-response.dto';
 import { PaginatedAuditQueryDto } from './dto/paginated-audit-query.dto';
 import { PaginatedAuditResponseDto } from './dto/paginated-audit-response.dto';
 import { PaginatedUsersQueryDto } from './dto/paginated-users-query.dto';
@@ -232,6 +233,42 @@ export class AdminController {
   async getGlobalMetrics(@Query('period') period?: string) {
     const validPeriod = this.parsePeriod(period);
     return this.aiMetricsService.getGlobalMetricsSummary(validPeriod);
+  }
+
+  @ApiOperation({
+    summary: 'Get global AI metrics time series for a period',
+    description:
+      'Returns zero-filled time buckets (hourly for day, daily for week/month) with requests, tokens and cost.',
+  })
+  @ApiQuery({
+    name: 'period',
+    required: false,
+    enum: ['day', 'week', 'month'],
+    description: 'Metrics aggregation period. Defaults to "day" if omitted.',
+    example: 'week',
+  })
+  @ApiOkResponse({
+    type: MetricsTimeseriesResponseDto,
+    description: 'Zero-filled global AI metrics time series',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad request — invalid period value',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized — missing or invalid JWT',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — user does not have admin role',
+  })
+  @Get('ai/metrics/timeseries')
+  async getGlobalMetricsTimeseries(@Query('period') period?: string) {
+    const validPeriod = this.parsePeriod(period);
+    const buckets =
+      await this.aiMetricsService.getGlobalMetricsTimeseries(validPeriod);
+    return { buckets };
   }
 
   private parsePeriod(period?: string): MetricsPeriod {

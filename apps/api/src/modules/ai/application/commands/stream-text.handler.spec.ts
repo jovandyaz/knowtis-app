@@ -75,6 +75,7 @@ describe('StreamTextHandler', () => {
       getMetricsSummary: vi.fn(),
       getGlobalDailyUsage: vi.fn(),
       getGlobalMetricsSummary: vi.fn(),
+      getGlobalMetricsTimeseries: vi.fn(),
     };
 
     handler = buildHandler();

@@ -103,4 +103,43 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
     const summary = await repo.getMetricsSummary(DB_USER_ID, 'day');
     expect(summary.byModel).toEqual({});
   });
+
+  it('buckets global timeseries hourly for the day period, zero-filling empty hours', async () => {
+    await repo.recordUsage({
+      userId: DB_USER_ID,
+      action: 'agent',
+      model: 'claude-sonnet-5',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 0.01,
+    });
+
+    const buckets = await repo.getGlobalMetricsTimeseries('day');
+
+    const expectedCount = new Date().getUTCHours() + 1;
+    expect(buckets).toHaveLength(expectedCount);
+
+    const starts = buckets.map((b) => b.bucketStart);
+    expect(starts).toEqual([...starts].sort());
+    for (const start of starts) {
+      expect(new Date(start).toISOString()).toBe(start);
+    }
+
+    const current = buckets[buckets.length - 1];
+    expect(current.requests).toBeGreaterThanOrEqual(1);
+    expect(current.inputTokens).toBeGreaterThanOrEqual(100);
+
+    const earlier = buckets.slice(0, -1);
+    for (const bucket of earlier) {
+      expect(bucket.requests).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('buckets weekly timeseries daily with 8 buckets covering the window', async () => {
+    const buckets = await repo.getGlobalMetricsTimeseries('week');
+    expect(buckets).toHaveLength(8);
+    for (const bucket of buckets) {
+      expect(new Date(bucket.bucketStart).getUTCHours()).toBe(0);
+    }
+  });
 });

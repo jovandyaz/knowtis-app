@@ -4,6 +4,7 @@ import type {
   DailyUsageSummary,
   MetricsPeriod,
   MetricsSummary,
+  MetricsTimeseriesBucket,
 } from '../../domain/ports/ai-usage.repository';
 import {
   AI_USAGE_REPOSITORY,
@@ -25,5 +26,11 @@ export class AIMetricsService {
     period: MetricsPeriod
   ): Promise<MetricsSummary> {
     return this.usageRepository.getGlobalMetricsSummary(period);
+  }
+
+  async getGlobalMetricsTimeseries(
+    period: MetricsPeriod
+  ): Promise<MetricsTimeseriesBucket[]> {
+    return this.usageRepository.getGlobalMetricsTimeseries(period);
   }
 }
