@@ -24,6 +24,10 @@ export interface MetricsSummary {
     string,
     { requests: number; tokens: number; costUsd: number }
   >;
+  readonly byModel: Record<
+    string,
+    { requests: number; tokens: number; costUsd: number }
+  >;
 }
 
 export type MetricsPeriod = 'day' | 'week' | 'month';

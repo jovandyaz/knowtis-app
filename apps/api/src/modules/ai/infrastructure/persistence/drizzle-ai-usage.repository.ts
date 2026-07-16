@@ -109,10 +109,30 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       .where(conditions)
       .groupBy(aiUsage.action);
 
+    const byModelRows = await this.db
+      .select({
+        model: aiUsage.model,
+        requests: count(),
+        tokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int + coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
+        costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+      })
+      .from(aiUsage)
+      .where(conditions)
+      .groupBy(aiUsage.model);
+
     const row = totals[0];
     const byAction: MetricsSummary['byAction'] = {};
     for (const r of byActionRows) {
       byAction[r.action] = {
+        requests: r.requests,
+        tokens: Number(r.tokens),
+        costUsd: Number(r.costUsd),
+      };
+    }
+
+    const byModel: MetricsSummary['byModel'] = {};
+    for (const r of byModelRows) {
+      byModel[r.model] = {
         requests: r.requests,
         tokens: Number(r.tokens),
         costUsd: Number(r.costUsd),
@@ -125,6 +145,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       totalOutputTokens: Number(row?.totalOutputTokens ?? 0),
       totalCostUsd: Number(row?.totalCostUsd ?? 0),
       byAction,
+      byModel,
     };
   }
 
