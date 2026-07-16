@@ -6,18 +6,22 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { httpClient } from '@knowtis/api-client';
+import { aiModelsApi, httpClient } from '@knowtis/api-client';
 
 import {
   useAdminUsers,
+  useAiConfig,
   useAuditLog,
   useDeleteFeatureFlag,
+  useSelectableModels,
+  useSetAiConfig,
   useUpdateUserRole,
   useUpsertFeatureFlag,
 } from './admin.hooks';
 
 vi.mock('@knowtis/api-client', () => ({
   httpClient: { get: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  aiModelsApi: { getModels: vi.fn() },
 }));
 
 function Wrapper({ children }: { children: ReactNode }) {
@@ -197,5 +201,95 @@ describe('useDeleteFeatureFlag', () => {
     await waitFor(() =>
       expect(httpClient.delete).toHaveBeenCalledWith('/flags/ai_enabled')
     );
+  });
+});
+
+describe('useAiConfig', () => {
+  it('fetches and validates the effective config entries', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      {
+        key: 'ai_default_model',
+        value: 'anthropic:claude-sonnet-5',
+        source: 'database',
+        description: null,
+        updatedAt: '2026-07-15T00:00:00.000Z',
+      },
+      {
+        key: 'ai_fast_model',
+        value: 'anthropic:claude-haiku-4-5-20251001',
+        source: 'environment',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/config');
+    expect(result.current.data?.[0].updatedAt).toBeInstanceOf(Date);
+    expect(result.current.data?.[1].updatedAt).toBeNull();
+  });
+
+  it('rejects a payload with an unknown source', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      {
+        key: 'ai_default_model',
+        value: 'x',
+        source: 'file',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useSetAiConfig', () => {
+  it('puts the config endpoint with the encoded key', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useSetAiConfig(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({
+      key: 'ai_default_model',
+      value: 'anthropic:claude-sonnet-5',
+    });
+
+    await waitFor(() =>
+      expect(httpClient.put).toHaveBeenCalledWith(
+        '/ai/config/ai_default_model',
+        { value: 'anthropic:claude-sonnet-5' }
+      )
+    );
+  });
+});
+
+describe('useSelectableModels', () => {
+  it('fetches the curated model list', async () => {
+    vi.mocked(aiModelsApi.getModels).mockResolvedValue([
+      {
+        id: 'anthropic:claude-sonnet-5',
+        label: 'Sonnet 5',
+        descriptionKey: 'aiModels.sonnet5',
+        tier: 'balanced',
+        costClass: 2,
+        contextWindow: 1000000,
+        isDefault: true,
+        billedToUser: false,
+      },
+    ]);
+
+    const { result } = renderHook(() => useSelectableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(aiModelsApi.getModels).toHaveBeenCalledTimes(1);
+    expect(result.current.data?.[0].id).toBe('anthropic:claude-sonnet-5');
   });
 });

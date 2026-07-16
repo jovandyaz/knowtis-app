@@ -10,6 +10,11 @@ export const ADMIN_SECTIONS = [
     description: 'Track token usage and cost across actions.',
   },
   {
+    to: '/ai-config',
+    label: 'AI Config',
+    description: 'Change the default and fast models live.',
+  },
+  {
     to: '/feature-flags',
     label: 'Feature Flags',
     description: 'Toggle platform features live.',

@@ -252,6 +252,8 @@ Per-user daily limits enforced by `AIRateLimitService`.
 
 **Global daily-spend circuit breaker** (flag `ai_global_spend_breaker`, default off): a single Redis counter (`ai:spend:global:{day}`, 25h TTL) accumulates ALL server-billed spend across every user — server-key LLM turns (reserved on accept, corrected to actual), Tavily/Voyage side costs (including those incurred during BYOK turns), and background embedding jobs (memory extraction, note-embedding reconcile), which charge the global counter only, with no per-user attribution. When the flag is on, `checkLimit` reads the counter before any reservation and rejects every turn — **including BYOK turns**, whose side costs are still server-billed — once it reaches `AI_GLOBAL_DAILY_COST_LIMIT_USD`. **BYOK carve-out:** LLM usage billed to the user's own key never counts toward `AI_GLOBAL_DAILY_COST_LIMIT_USD`; all server-billed spend — server-key LLM, Tavily, Voyage — always does. The breaker degrades open: a Redis error in the check logs a warning and allows the turn, and the PG fallback path has no global view.
 
+**Enforcement semantics (deliberate choice):** budget enforcement is **fast-path / fail-open** — Redis counters are the hot-path source of truth and infrastructure errors admit the turn rather than deny service. This trades bounded over-spend (worst case: one day of traffic while Redis is down, still capped by provider spend) for availability. The alternative — fail-closed, validating every turn against Postgres before admission — is the right call only when the spend cap is a hard compliance bound; revisit if that becomes true.
+
 **Daily reset:** Midnight UTC (`setUTCHours(0,0,0,0)`).
 
 ---
@@ -330,10 +332,10 @@ Cross-provider fallback is the comma-separated `AI_FALLBACK_CHAIN` env var (see 
 
 **REST API** (admin only):
 
-| Method | Path              | Description                                   |
-| ------ | ----------------- | --------------------------------------------- |
-| GET    | `/ai/config`      | Get all DB config values                      |
-| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys only) |
+| Method | Path              | Description                                                                                                        |
+| ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `database` or `environment`) |
+| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; value must be a curated, server-invocable model id)                       |
 
 After updating a config value, the in-memory cache is invalidated and the new model takes effect within 30 seconds across all instances.
 
@@ -450,38 +452,42 @@ Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `Agen
 
 ---
 
+## Runtime AI Config (database overrides env)
+
+`ai_default_model` and `ai_fast_model` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the `AI_DEFAULT_MODEL`/`AI_FAST_MODEL` env vars only when no row exists. **A DB row silently wins over the env var** — changing the Railway env alone does nothing while a row is present. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); values must be curated model ids, changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated`).
+
 ## Environment Variables
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
 
-| Variable                         | Required | Default                                | Description                                             |
-| -------------------------------- | -------- | -------------------------------------- | ------------------------------------------------------- |
-| `AI_GATEWAY_API_KEY`             | No       | —                                      | Vercel AI Gateway key; enables gateway mode when set    |
-| `ANTHROPIC_API_KEY`              | No       | —                                      | Anthropic API key (validated at runtime)                |
-| `OPENAI_API_KEY`                 | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription) |
-| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                   |
-| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-5`            | Default copilot model (must be a curated id)            |
-| `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text`                                  |
-| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier        |
-| `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)     |
-| `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated          |
-| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                    | Failures per minute that start a provider cooldown      |
-| `AI_COOLDOWN_SECONDS`            | No       | `120`                                  | Provider cooldown duration (seconds)                    |
-| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)    |
-| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                                | Refresh model pricing from LiteLLM's JSON at boot       |
-| `AI_ALERT_WEBHOOK_URL`           | No       | —                                      | Webhook for `budget.warning` / `cooldown_start` alerts  |
-| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                               | Per-user daily token cap                                |
-| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                  | Per-user daily cost cap (USD)                           |
-| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                   | Global daily cap on ALL server-billed spend (USD)       |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                 | Fraction of daily limits for anonymous users            |
-| `AI_MAX_RETRIES`                 | No       | `3`                                    | Provider retry count                                    |
-| `AI_TIMEOUT_MS`                  | No       | `30000`                                | Total request timeout (ms) — REST completions only      |
-| `AI_STREAM_MAX_MS`               | No       | `180000`                               | Total streaming cap (ms); generous for long generations |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                                | Per-chunk (stall) timeout for streaming (ms)            |
-| `AI_CACHE_ENABLED`               | No       | `true`                                 | Enable response cache                                   |
-| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                 | Cache TTL (seconds)                                     |
-| `AI_RPM_LIMIT`                   | No       | `15`                                   | Max requests per minute per user                        |
-| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                    | Max simultaneous AI streams per user                    |
+| Variable                         | Required | Default                                | Description                                                                                                                       |
+| -------------------------------- | -------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`             | No       | —                                      | Vercel AI Gateway key; enables gateway mode when set                                                                              |
+| `ANTHROPIC_API_KEY`              | No       | —                                      | Anthropic API key (validated at runtime)                                                                                          |
+| `OPENAI_API_KEY`                 | No       | —                                      | OpenAI API key (chain fallback + Whisper transcription)                                                                           |
+| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                      | Google AI Studio key (chain fallback)                                                                                             |
+| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-5`            | Default copilot model — fallback only; a DB `ai_config` row wins ([Runtime AI Config](#runtime-ai-config-database-overrides-env)) |
+| `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text` — fallback only; a DB `ai_config` row wins                                                                 |
+| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier                                                                                  |
+| `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)                                                                               |
+| `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated                                                                                    |
+| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                    | Failures per minute that start a provider cooldown                                                                                |
+| `AI_COOLDOWN_SECONDS`            | No       | `120`                                  | Provider cooldown duration (seconds)                                                                                              |
+| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)                                                                              |
+| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                                | Refresh model pricing from LiteLLM's JSON at boot                                                                                 |
+| `AI_ALERT_WEBHOOK_URL`           | No       | —                                      | Webhook for `budget.warning` / `cooldown_start` alerts                                                                            |
+| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                               | Per-user daily token cap                                                                                                          |
+| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                  | Per-user daily cost cap (USD)                                                                                                     |
+| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                   | Global daily cap on ALL server-billed spend (USD)                                                                                 |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                 | Fraction of daily limits for anonymous users                                                                                      |
+| `AI_MAX_RETRIES`                 | No       | `3`                                    | Provider retry count                                                                                                              |
+| `AI_TIMEOUT_MS`                  | No       | `30000`                                | Total request timeout (ms) — REST completions only                                                                                |
+| `AI_STREAM_MAX_MS`               | No       | `180000`                               | Total streaming cap (ms); generous for long generations                                                                           |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                                | Per-chunk (stall) timeout for streaming (ms)                                                                                      |
+| `AI_CACHE_ENABLED`               | No       | `true`                                 | Enable response cache                                                                                                             |
+| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                 | Cache TTL (seconds)                                                                                                               |
+| `AI_RPM_LIMIT`                   | No       | `15`                                   | Max requests per minute per user                                                                                                  |
+| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                    | Max simultaneous AI streams per user                                                                                              |
 
 ### Feature Flags (DB-backed)
 
@@ -689,8 +695,8 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 | GET    | `/ai/usage`           | Daily token + cost usage for authenticated user.                                            |
 | GET    | `/ai/metrics`         | Usage summary. Query: `?period=day\|week\|month`.                                           |
 | GET    | `/ai/health`          | Per-provider cooldown snapshot (admin only).                                                |
-| GET    | `/ai/config`          | All dynamic AI config values (admin only).                                                  |
-| PUT    | `/ai/config/:key`     | Update a config value (admin only).                                                         |
+| GET    | `/ai/config`          | Effective config entries with `source: database\|environment` (admin only).                 |
+| PUT    | `/ai/config/:key`     | Update a config value — curated, server-invocable model ids only (admin only).              |
 | GET    | `/ai/models`          | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection). |
 | GET    | `/ai/preferences`     | The caller's account-default copilot model.                                                 |
 | PUT    | `/ai/preferences`     | Set the caller's account-default copilot model.                                             |

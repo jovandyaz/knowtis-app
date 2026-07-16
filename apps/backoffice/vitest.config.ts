@@ -33,6 +33,10 @@ export default defineConfig({
         __dirname,
         '../../packages/shared/util/src/index.ts'
       ),
+      '@knowtis/shared-types': resolve(
+        __dirname,
+        '../../packages/shared/types/src/index.ts'
+      ),
       '@knowtis/data-access-feature-flags': resolve(
         __dirname,
         '../../libs/data-access/feature-flags/src/index.ts'

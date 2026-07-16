@@ -5,16 +5,18 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 
-import { httpClient } from '@knowtis/api-client';
+import { aiModelsApi, httpClient } from '@knowtis/api-client';
 import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
 
 import {
   AdminUserSchema,
+  AiConfigSchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
   PaginatedAuditSchema,
   PaginatedUsersSchema,
+  SelectableModelsSchema,
   type AdminUser,
   type AdminUsersParams,
   type AuditParams,
@@ -32,6 +34,8 @@ export const adminQueryKeys = {
   auditLists: () => [...adminQueryKeys.all, 'audit'] as const,
   auditList: (params: AuditParams) =>
     [...adminQueryKeys.auditLists(), params] as const,
+  aiConfig: () => [...adminQueryKeys.all, 'ai-config'] as const,
+  selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
 } as const;
 
 function usersPath({ page, limit, search }: AdminUsersParams): string {
@@ -128,6 +132,40 @@ export function useDeleteFeatureFlag() {
         queryKey: adminQueryKeys.auditLists(),
       });
     },
+  });
+}
+
+export function useAiConfig() {
+  return useQuery({
+    queryKey: adminQueryKeys.aiConfig(),
+    queryFn: async () =>
+      AiConfigSchema.parse(await httpClient.get('/ai/config')),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useSetAiConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string; value: string }) =>
+      httpClient.put(`/ai/config/${encodeURIComponent(input.key)}`, {
+        value: input.value,
+      }),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.auditLists(),
+      });
+    },
+  });
+}
+
+export function useSelectableModels() {
+  return useQuery({
+    queryKey: adminQueryKeys.selectableModels(),
+    queryFn: async () =>
+      SelectableModelsSchema.parse(await aiModelsApi.getModels()),
+    staleTime: 1000 * 60 * 5,
   });
 }
 
