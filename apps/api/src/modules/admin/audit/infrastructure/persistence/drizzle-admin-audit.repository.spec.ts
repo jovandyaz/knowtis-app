@@ -106,6 +106,33 @@ describe.runIf(DB_AVAILABLE)('DrizzleAdminAuditRepository (database)', () => {
     expect(pageTwo.items).toHaveLength(Math.max(0, Math.min(2, total - 2)));
   });
 
+  it('returns an empty page with the exact total when the page is out of range', async () => {
+    await repo.insert({
+      actorId: DB_USER_ID,
+      action: 'user.role.updated',
+      targetType: 'user',
+      targetId: 'only-entry',
+    });
+
+    const baseline = await repo.findPaginated({ page: 1, limit: 1 });
+    const outOfRange = await repo.findPaginated({ page: 100000, limit: 100 });
+
+    expect(outOfRange.items).toHaveLength(0);
+    expect(outOfRange.total).toBe(baseline.total);
+    expect(outOfRange.total).toBeGreaterThanOrEqual(1);
+  });
+
+  it('rejects an insert whose actorId does not reference an existing user', async () => {
+    await expect(
+      repo.insert({
+        actorId: '00000000-0000-4000-8000-00000000dead',
+        action: 'user.role.updated',
+        targetType: 'user',
+        targetId: 'orphan',
+      })
+    ).rejects.toThrow();
+  });
+
   it('round-trips before/after jsonb payloads and defaults omitted payloads to null', async () => {
     await repo.insert({
       actorId: DB_USER_ID,

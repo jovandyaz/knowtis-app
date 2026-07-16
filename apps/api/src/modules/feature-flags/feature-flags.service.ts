@@ -54,8 +54,6 @@ export class FeatureFlagsService {
       ...(description !== undefined && { description }),
     });
 
-    await this.cache.del(`${CACHE_PREFIX}${key}`);
-
     this.logger.log(`Feature flag '${key}' set to ${enabled}`);
 
     const descriptionChanged = previous
@@ -83,6 +81,8 @@ export class FeatureFlagsService {
       },
     });
 
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
+
     return flag;
   }
 
@@ -98,8 +98,6 @@ export class FeatureFlagsService {
 
     await this.repository.delete(key);
 
-    await this.cache.del(`${CACHE_PREFIX}${key}`);
-
     this.logger.log(`Feature flag '${key}' removed`);
 
     await this.adminAuditService.record({
@@ -112,5 +110,7 @@ export class FeatureFlagsService {
         description: existing.description,
       },
     });
+
+    await this.cache.del(`${CACHE_PREFIX}${key}`);
   }
 }
