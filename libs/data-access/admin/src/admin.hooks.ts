@@ -14,6 +14,7 @@ import {
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
+  MetricsTimeseriesSchema,
   PaginatedAuditSchema,
   PaginatedUsersSchema,
   SelectableModelsSchema,
@@ -31,6 +32,8 @@ export const adminQueryKeys = {
   aiUsage: () => [...adminQueryKeys.all, 'ai-usage'] as const,
   aiMetrics: (period: MetricsPeriod) =>
     [...adminQueryKeys.all, 'ai-metrics', period] as const,
+  aiTimeseries: (period: MetricsPeriod) =>
+    [...adminQueryKeys.all, 'ai-timeseries', period] as const,
   auditLists: () => [...adminQueryKeys.all, 'audit'] as const,
   auditList: (params: AuditParams) =>
     [...adminQueryKeys.auditLists(), params] as const,
@@ -91,6 +94,17 @@ export function useGlobalAiMetrics(period: MetricsPeriod) {
     queryFn: async () =>
       MetricsSummarySchema.parse(
         await httpClient.get(`/admin/ai/metrics?period=${period}`)
+      ),
+    staleTime: 1000 * 60,
+  });
+}
+
+export function useGlobalAiTimeseries(period: MetricsPeriod) {
+  return useQuery({
+    queryKey: adminQueryKeys.aiTimeseries(period),
+    queryFn: async () =>
+      MetricsTimeseriesSchema.parse(
+        await httpClient.get(`/admin/ai/metrics/timeseries?period=${period}`)
       ),
     staleTime: 1000 * 60,
   });

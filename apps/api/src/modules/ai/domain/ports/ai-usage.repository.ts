@@ -24,9 +24,21 @@ export interface MetricsSummary {
     string,
     { requests: number; tokens: number; costUsd: number }
   >;
+  readonly byModel: Record<
+    string,
+    { requests: number; tokens: number; costUsd: number }
+  >;
 }
 
 export type MetricsPeriod = 'day' | 'week' | 'month';
+
+export interface MetricsTimeseriesBucket {
+  readonly bucketStart: string;
+  readonly requests: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly costUsd: number;
+}
 
 export interface AIUsageRepository {
   getDailyUsage(userId: string): Promise<DailyUsageSummary>;
@@ -37,6 +49,9 @@ export interface AIUsageRepository {
   ): Promise<MetricsSummary>;
   getGlobalDailyUsage(): Promise<DailyUsageSummary>;
   getGlobalMetricsSummary(period: MetricsPeriod): Promise<MetricsSummary>;
+  getGlobalMetricsTimeseries(
+    period: MetricsPeriod
+  ): Promise<MetricsTimeseriesBucket[]>;
 }
 
 export const AI_USAGE_REPOSITORY = Symbol('AI_USAGE_REPOSITORY');

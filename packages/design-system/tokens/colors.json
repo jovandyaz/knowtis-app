@@ -35,7 +35,16 @@
       "yellow": {
         "50": { "value": "oklch(0.97 0.02 85)", "type": "color" },
         "400": { "value": "oklch(0.82 0.12 85)", "type": "color" },
-        "500": { "value": "oklch(0.75 0.15 85)", "type": "color" }
+        "500": { "value": "oklch(0.75 0.15 85)", "type": "color" },
+        "600": { "value": "oklch(0.62 0.15 85)", "type": "color" }
+      },
+      "blue": {
+        "400": { "value": "oklch(0.70 0.13 230)", "type": "color" },
+        "500": { "value": "oklch(0.58 0.14 230)", "type": "color" }
+      },
+      "pink": {
+        "400": { "value": "oklch(0.70 0.16 350)", "type": "color" },
+        "500": { "value": "oklch(0.60 0.16 350)", "type": "color" }
       }
     },
     "semantic": {
@@ -91,7 +100,12 @@
         },
         "border": { "value": "{color.primitive.neutral.200}", "type": "color" },
         "input": { "value": "{color.primitive.neutral.200}", "type": "color" },
-        "ring": { "value": "{color.primitive.purple.500}", "type": "color" }
+        "ring": { "value": "{color.primitive.purple.500}", "type": "color" },
+        "chart-1": { "value": "{color.primitive.purple.500}", "type": "color" },
+        "chart-2": { "value": "{color.primitive.blue.500}", "type": "color" },
+        "chart-3": { "value": "{color.primitive.green.500}", "type": "color" },
+        "chart-4": { "value": "{color.primitive.yellow.600}", "type": "color" },
+        "chart-5": { "value": "{color.primitive.pink.500}", "type": "color" }
       },
       "dark": {
         "background": {
@@ -133,7 +147,12 @@
         },
         "border": { "value": "{color.primitive.neutral.700}", "type": "color" },
         "input": { "value": "{color.primitive.neutral.700}", "type": "color" },
-        "ring": { "value": "{color.primitive.purple.400}", "type": "color" }
+        "ring": { "value": "{color.primitive.purple.400}", "type": "color" },
+        "chart-1": { "value": "{color.primitive.purple.400}", "type": "color" },
+        "chart-2": { "value": "{color.primitive.blue.400}", "type": "color" },
+        "chart-3": { "value": "{color.primitive.green.400}", "type": "color" },
+        "chart-4": { "value": "{color.primitive.yellow.400}", "type": "color" },
+        "chart-5": { "value": "{color.primitive.pink.400}", "type": "color" }
       }
     }
   }

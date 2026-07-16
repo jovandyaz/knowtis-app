@@ -19,6 +19,7 @@ function createMockAIMetricsService() {
   return {
     getGlobalDailyUsage: vi.fn(),
     getGlobalMetricsSummary: vi.fn(),
+    getGlobalMetricsTimeseries: vi.fn(),
   };
 }
 
@@ -279,6 +280,34 @@ describe('AdminController', () => {
       );
 
       expect(aiMetricsService.getGlobalMetricsSummary).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getGlobalMetricsTimeseries', () => {
+    it('defaults to the day period and wraps buckets in an envelope', async () => {
+      const buckets = [
+        {
+          bucketStart: '2026-07-15T00:00:00.000Z',
+          requests: 2,
+          inputTokens: 100,
+          outputTokens: 40,
+          costUsd: 0.01,
+        },
+      ];
+      aiMetricsService.getGlobalMetricsTimeseries.mockResolvedValue(buckets);
+
+      const result = await controller.getGlobalMetricsTimeseries(undefined);
+
+      expect(aiMetricsService.getGlobalMetricsTimeseries).toHaveBeenCalledWith(
+        'day'
+      );
+      expect(result).toEqual({ buckets });
+    });
+
+    it('rejects an invalid period', async () => {
+      await expect(
+        controller.getGlobalMetricsTimeseries('year')
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

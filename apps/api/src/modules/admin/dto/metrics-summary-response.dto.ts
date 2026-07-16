@@ -1,6 +1,6 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 
-class ActionMetricsDto {
+class BreakdownMetricsDto {
   @ApiProperty({ example: 100 })
   requests!: number;
 
@@ -11,7 +11,7 @@ class ActionMetricsDto {
   costUsd!: number;
 }
 
-@ApiExtraModels(ActionMetricsDto)
+@ApiExtraModels(BreakdownMetricsDto)
 export class MetricsSummaryResponseDto {
   @ApiProperty({ example: 156 })
   totalRequests!: number;
@@ -27,11 +27,21 @@ export class MetricsSummaryResponseDto {
 
   @ApiProperty({
     type: 'object',
-    additionalProperties: { $ref: getSchemaPath(ActionMetricsDto) },
+    additionalProperties: { $ref: getSchemaPath(BreakdownMetricsDto) },
     example: {
       'text-completion': { requests: 100, tokens: 50000, costUsd: 0.075 },
       'text-streaming': { requests: 56, tokens: 62600, costUsd: 0.0375 },
     },
   })
-  byAction!: Record<string, ActionMetricsDto>;
+  byAction!: Record<string, BreakdownMetricsDto>;
+
+  @ApiProperty({
+    type: 'object',
+    additionalProperties: { $ref: getSchemaPath(BreakdownMetricsDto) },
+    example: {
+      'claude-sonnet-5': { requests: 120, tokens: 90000, costUsd: 0.098 },
+      'claude-haiku-4-5': { requests: 36, tokens: 22600, costUsd: 0.0145 },
+    },
+  })
+  byModel!: Record<string, BreakdownMetricsDto>;
 }

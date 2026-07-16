@@ -37,6 +37,7 @@ describe('VoiceNoteHandler', () => {
       getMetricsSummary: vi.fn(),
       getGlobalDailyUsage: vi.fn(),
       getGlobalMetricsSummary: vi.fn(),
+      getGlobalMetricsTimeseries: vi.fn(),
     };
 
     mockTranscriptionService = {
