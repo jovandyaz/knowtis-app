@@ -114,6 +114,29 @@ const metricsSummarySchema = {
         translate: { requests: 10, tokens: 8600, costUsd: 0.0066 },
       },
     },
+    byModel: {
+      type: 'object',
+      additionalProperties: {
+        type: 'object',
+        properties: {
+          requests: { type: 'number' },
+          tokens: { type: 'number' },
+          costUsd: { type: 'number', format: 'float' },
+        },
+      },
+      example: {
+        'anthropic:claude-sonnet-5': {
+          requests: 15,
+          tokens: 10000,
+          costUsd: 0.012,
+        },
+        'anthropic:claude-haiku-5': {
+          requests: 10,
+          tokens: 8600,
+          costUsd: 0.0066,
+        },
+      },
+    },
   },
 };
 

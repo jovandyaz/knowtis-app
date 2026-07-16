@@ -90,8 +90,7 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       })
       .from(aiUsage)
       .where(gte(aiUsage.createdAt, since))
-      .groupBy(bucketExpr)
-      .orderBy(bucketExpr);
+      .groupBy(bucketExpr);
 
     const byIso = new Map(
       rows.map((r) => [bucketToUtcIso(r.bucket), r] as const)
@@ -163,37 +162,37 @@ export class DrizzleAIUsageRepository implements AIUsageRepository {
       ? and(userFilter, periodFilter)
       : periodFilter;
 
-    const totals = await this.db
-      .select({
-        totalRequests: count(),
-        totalInputTokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int`,
-        totalOutputTokens: sql<number>`coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
-        totalCostUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
-      })
-      .from(aiUsage)
-      .where(conditions);
-
-    const byActionRows = await this.db
-      .select({
-        action: aiUsage.action,
-        requests: count(),
-        tokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int + coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
-        costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
-      })
-      .from(aiUsage)
-      .where(conditions)
-      .groupBy(aiUsage.action);
-
-    const byModelRows = await this.db
-      .select({
-        model: aiUsage.model,
-        requests: count(),
-        tokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int + coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
-        costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
-      })
-      .from(aiUsage)
-      .where(conditions)
-      .groupBy(aiUsage.model);
+    const [totals, byActionRows, byModelRows] = await Promise.all([
+      this.db
+        .select({
+          totalRequests: count(),
+          totalInputTokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int`,
+          totalOutputTokens: sql<number>`coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
+          totalCostUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+        })
+        .from(aiUsage)
+        .where(conditions),
+      this.db
+        .select({
+          action: aiUsage.action,
+          requests: count(),
+          tokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int + coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
+          costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+        })
+        .from(aiUsage)
+        .where(conditions)
+        .groupBy(aiUsage.action),
+      this.db
+        .select({
+          model: aiUsage.model,
+          requests: count(),
+          tokens: sql<number>`coalesce(${sum(aiUsage.inputTokens)}, 0)::int + coalesce(${sum(aiUsage.outputTokens)}, 0)::int`,
+          costUsd: sql<string>`coalesce(${sum(aiUsage.costUsd)}, 0)`,
+        })
+        .from(aiUsage)
+        .where(conditions)
+        .groupBy(aiUsage.model),
+    ]);
 
     const row = totals[0];
     const byAction: MetricsSummary['byAction'] = {};
