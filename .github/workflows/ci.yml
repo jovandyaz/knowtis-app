@@ -48,7 +48,9 @@ jobs:
         run: npx nx affected -t typecheck
 
       - name: Test (affected)
-        run: npx nx affected -t test -- --run
+        # --parallel=2 bounds concurrent vitest projects; 3+ NestJS/jsdom
+        # suites at once exceed hosted-runner memory and get OOM-killed.
+        run: npx nx affected -t test --parallel=2 -- --run
 
       - name: Check for missing DB migrations
         run: |
