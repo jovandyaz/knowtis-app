@@ -72,6 +72,11 @@ export function AiConfigPage() {
                     <span className="font-mono text-xs text-(--muted-foreground)">
                       {entry.key}
                     </span>
+                    {entry.description && (
+                      <span className="text-xs text-(--muted-foreground)">
+                        {entry.description}
+                      </span>
+                    )}
                   </div>
                 </TableCell>
                 <TableCell>
@@ -82,6 +87,7 @@ export function AiConfigPage() {
                       status={modelStatus}
                       onRetry={() => void models.refetch()}
                       triggerVariant="outline"
+                      disabled={setConfig.isPending}
                       onSelect={(id) =>
                         setConfig.mutate({ key: entry.key, value: id })
                       }
@@ -101,7 +107,7 @@ export function AiConfigPage() {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {entry.updatedAt?.toLocaleDateString() ?? '—'}
+                  {entry.updatedAt?.toLocaleString() ?? '—'}
                 </TableCell>
               </TableRow>
             ))}

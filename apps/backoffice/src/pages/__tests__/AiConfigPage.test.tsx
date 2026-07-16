@@ -57,7 +57,7 @@ describe('AiConfigPage', () => {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
           source: 'database',
-          description: null,
+          description: 'Default model for AI completions',
           updatedAt: new Date('2026-07-15T00:00:00.000Z'),
         },
         {
@@ -79,6 +79,9 @@ describe('AiConfigPage', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('Default model')).toBeInTheDocument();
     expect(screen.getByText('anthropic:claude-sonnet-5')).toBeInTheDocument();
+    expect(
+      screen.getByText('Default model for AI completions')
+    ).toBeInTheDocument();
     expect(screen.getByText('database')).toBeInTheDocument();
     expect(screen.getByText('environment')).toBeInTheDocument();
   });

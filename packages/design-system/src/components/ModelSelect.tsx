@@ -68,6 +68,7 @@ export interface ModelSelectProps {
   footer?: ReactNode;
   triggerClassName?: string;
   triggerVariant?: 'ghost' | 'outline';
+  disabled?: boolean;
 }
 
 export function ModelSelect({
@@ -87,11 +88,12 @@ export function ModelSelect({
   footer,
   triggerClassName,
   triggerVariant = 'ghost',
+  disabled = false,
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
   const isEmpty = status === 'ready' && models.length === 0;
-  const triggerDisabled = isLoading || isEmpty;
+  const triggerDisabled = disabled || isLoading || isEmpty;
 
   const active = models.find((m) => m.id === value);
   const known = new Set<string>(TIER_ORDER);

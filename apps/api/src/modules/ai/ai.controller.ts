@@ -29,6 +29,7 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -52,6 +53,7 @@ import {
 import { AICompleteDto } from './dto/ai.dto';
 import { SetAIConfigDto } from './dto/set-ai-config.dto';
 import { VoiceNoteDto } from './dto/voice-note.dto';
+import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import {
   FallbackChainService,
   type ProviderHealth,
@@ -368,9 +370,15 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @UseGuards(
+    JwtAuthGuard,
+    FeatureFlagGuard,
+    RolesGuard,
+    UserScopedThrottlerGuard
+  )
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   @Get('config')
   async getConfig(): Promise<AIConfigEntry[]> {
     return this.aiConfigService.getEffectiveConfig();
@@ -411,9 +419,15 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+  @UseGuards(
+    JwtAuthGuard,
+    FeatureFlagGuard,
+    RolesGuard,
+    UserScopedThrottlerGuard
+  )
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @Put('config/:key')
   async setConfig(
     @CurrentUser() user: RequestUser,

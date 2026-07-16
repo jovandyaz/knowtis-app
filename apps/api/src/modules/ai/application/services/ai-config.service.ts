@@ -83,7 +83,15 @@ export class AIConfigService {
     }
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
-    await this.cache.del(`${CACHE_PREFIX}${key}`);
+    try {
+      await this.cache.del(`${CACHE_PREFIX}${key}`);
+    } catch (error) {
+      // Post-commit: the write is persisted; a failed invalidation self-heals when the 30s TTL expires.
+      this.logger.warn(
+        `Failed to invalidate cache for AI config '${key}' after update`,
+        error
+      );
+    }
     await this.adminAuditService.record({
       actorId,
       action: 'ai_config.updated',
@@ -95,11 +103,9 @@ export class AIConfigService {
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
 
-  /** Resolves every config key to its effective value: the DB row when present, the env default otherwise (no cache — intentional for admin freshness). */
+  /** Resolves every config key to its effective value: the DB row when present, the env default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from env, mirroring the runtime fallback in getConfigValue. */
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
-    const rows = new Map(
-      (await this.repository.getAllRows()).map((r) => [r.key, r])
-    );
+    const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_ENV_FALLBACKS) as ConfigKey[]).map((key) => {
       const row = rows.get(key);
       return {
@@ -112,6 +118,18 @@ export class AIConfigService {
         updatedAt: row?.updatedAt ?? null,
       };
     });
+  }
+
+  private async getAllRowsSafe() {
+    try {
+      return await this.repository.getAllRows();
+    } catch (error) {
+      this.logger.warn(
+        'Failed to read AI config rows from DB, resolving all keys from env',
+        error
+      );
+      return [];
+    }
   }
 
   private async getConfigValue(dbKey: ConfigKey): Promise<string> {

@@ -142,6 +142,15 @@ describe('AIConfigService', () => {
     });
   });
 
+  it('should report success when cache invalidation fails after a persisted write', async () => {
+    mockCache.del.mockRejectedValue(new Error('cache down'));
+    await expect(
+      service.setConfig('ai_default_model', CURATED_DEFAULT, ACTOR)
+    ).resolves.toBeUndefined();
+    expect(mockRepo.set).toHaveBeenCalled();
+    expect(mockAudit.record).toHaveBeenCalled();
+  });
+
   it('should resolve effective config from DB rows and env fallbacks', async () => {
     const updatedAt = new Date('2026-07-15T00:00:00Z');
     mockRepo.getAllRows.mockResolvedValue([
@@ -160,6 +169,27 @@ describe('AIConfigService', () => {
         source: 'database',
         description: null,
         updatedAt,
+      },
+      {
+        key: 'ai_fast_model',
+        value: CURATED_FAST,
+        source: 'environment',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+  });
+
+  it('should resolve every key from env when the DB is unavailable', async () => {
+    mockRepo.getAllRows.mockRejectedValue(new Error('DB down'));
+    const entries = await service.getEffectiveConfig();
+    expect(entries).toEqual([
+      {
+        key: 'ai_default_model',
+        value: CURATED_DEFAULT,
+        source: 'environment',
+        description: null,
+        updatedAt: null,
       },
       {
         key: 'ai_fast_model',
