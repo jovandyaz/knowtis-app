@@ -4,6 +4,7 @@ import { useAISettings, useAvailableModels } from '@/hooks';
 import { useAgentStore } from '@/stores/agent.store';
 
 import { ModelSelect } from '@knowtis/design-system';
+import { MODEL_TIERS } from '@knowtis/shared-types';
 
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
@@ -25,6 +26,7 @@ export function CopilotModelPicker() {
       models={models ?? []}
       value={selected ?? prefs?.preferredModel ?? null}
       onSelect={setSelected}
+      tierOrder={MODEL_TIERS}
       status={status}
       triggerClassName="h-8"
       triggerVariant="ghost"

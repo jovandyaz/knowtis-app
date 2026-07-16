@@ -25,8 +25,6 @@ export interface ModelSelectOption {
 
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
 
-const TIER_ORDER = ['fast', 'balanced', 'powerful', 'open'] as const;
-
 const COST_GLYPH = '$';
 const MIN_COST_LEVEL = 1;
 const MAX_COST_LEVEL = 3;
@@ -55,6 +53,8 @@ export interface ModelSelectProps {
   models: ModelSelectOption[];
   value: string | null;
   onSelect: (id: string) => void;
+  /** Tier group ordering; unlisted tiers append in first-appearance order. Defaults to first-appearance order alone. */
+  tierOrder?: readonly string[];
   status?: ModelSelectStatus;
   onRetry?: () => void;
   renderDescription?: (m: ModelSelectOption) => string;
@@ -75,6 +75,7 @@ export function ModelSelect({
   models,
   value,
   onSelect,
+  tierOrder,
   status = 'ready',
   onRetry,
   renderDescription,
@@ -96,11 +97,12 @@ export function ModelSelect({
   const triggerDisabled = disabled || isLoading || isEmpty;
 
   const active = models.find((m) => m.id === value);
-  const known = new Set<string>(TIER_ORDER);
+  const ordered = tierOrder ?? [];
+  const known = new Set<string>(ordered);
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
     (tier) => !known.has(tier)
   );
-  const groups = [...TIER_ORDER, ...extraTiers]
+  const groups = [...ordered, ...extraTiers]
     .map((tier) => ({
       tier,
       items: models.filter((m) => m.tier === tier),

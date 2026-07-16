@@ -41,6 +41,23 @@ describe('ModelSelect', () => {
     expect(onSelect).toHaveBeenCalledWith('a:bal');
   });
 
+  it('orders tier groups by the tierOrder prop', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        tierOrder={['balanced', 'fast']}
+        tierLabel={(tier) => tier.toUpperCase()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    const labels = screen
+      .getAllByText(/^(BALANCED|FAST)$/)
+      .map((el) => el.textContent);
+    expect(labels).toEqual(['BALANCED', 'FAST']);
+  });
+
   it('disables the trigger when disabled is set', () => {
     render(
       <ModelSelect

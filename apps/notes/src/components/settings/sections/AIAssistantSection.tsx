@@ -8,7 +8,7 @@ import {
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { ModelSelect } from '@knowtis/design-system';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, MODEL_TIERS } from '@knowtis/shared-types';
 
 import { SectionHeader } from '../SectionHeader';
 import { AIKeysManager } from './AIKeysManager';
@@ -33,6 +33,7 @@ export function AIAssistantSection() {
           models={models ?? []}
           value={prefs?.preferredModel ?? null}
           onSelect={(id) => update({ preferredModel: id })}
+          tierOrder={MODEL_TIERS}
           status={status}
           onRetry={() => refetch()}
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}

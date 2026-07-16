@@ -136,8 +136,14 @@ export class ProviderRegistryFactory implements OnModuleInit {
   }
 
   private assertProviderKeyConfigured(modelId: string): void {
-    const envKey = PROVIDER_ENV_KEYS[providerOf(modelId)];
-    if (envKey && !this.configService.get(envKey)) {
+    const provider = providerOf(modelId);
+    const envKey = PROVIDER_ENV_KEYS[provider];
+    if (!envKey) {
+      throw new ProviderNotConfiguredError(
+        `Provider '${provider}' is not supported`
+      );
+    }
+    if (!this.configService.get(envKey)) {
       throw new ProviderNotConfiguredError(`${envKey} is not configured`);
     }
   }

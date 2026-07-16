@@ -92,6 +92,15 @@ describe('ProviderRegistryFactory', () => {
     );
   });
 
+  it('should reject unknown providers instead of deferring to the registry', () => {
+    const factory = makeFactory();
+
+    expect(() => factory.languageModel('mistral:mistral-large')).toThrow(
+      "Provider 'mistral' is not supported"
+    );
+    expect(factory.isModelAvailable('mistral:mistral-large')).toBe(false);
+  });
+
   it('should register only anthropic when google and openai keys are absent', async () => {
     const { createProviderRegistry } = vi.mocked(await import('ai'));
     createProviderRegistry.mockClear();
