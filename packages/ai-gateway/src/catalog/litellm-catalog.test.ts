@@ -45,6 +45,12 @@ describe('toLiteLLMKey', () => {
     );
   });
 
+  it('maps openrouter ids to the openrouter/ prefix', () => {
+    expect(toLiteLLMKey('openrouter:deepseek/deepseek-v3.2')).toBe(
+      'openrouter/deepseek/deepseek-v3.2'
+    );
+  });
+
   it('returns undefined for unknown providers and malformed ids', () => {
     expect(toLiteLLMKey('mistral:mistral-large')).toBeUndefined();
     expect(toLiteLLMKey('no-provider')).toBeUndefined();
@@ -125,6 +131,10 @@ describe('vendored snapshot', () => {
       'google:gemini-2.0-flash',
       'google:gemini-2.5-pro',
       'openai:gpt-4o-mini',
+      'openrouter:deepseek/deepseek-v3.2',
+      'openrouter:qwen/qwen3-235b-a22b-2507',
+      'openrouter:moonshotai/kimi-k2.5',
+      'openrouter:minimax/minimax-m2.5',
     ]) {
       expect(catalog.isSupported(model), model).toBe(true);
       expect(

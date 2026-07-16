@@ -20,6 +20,7 @@ const PROVIDER_TO_LITELLM: Record<string, (model: string) => string> = {
   anthropic: (model) => model,
   openai: (model) => model,
   google: (model) => `gemini/${model}`,
+  openrouter: (model) => `openrouter/${model}`,
 };
 
 export function toLiteLLMKey(modelId: string): string | undefined {

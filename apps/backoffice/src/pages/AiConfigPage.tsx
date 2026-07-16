@@ -16,6 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from '@knowtis/design-system';
+import { MODEL_TIERS } from '@knowtis/shared-types';
 
 const KEY_LABELS: Record<string, string> = {
   ai_default_model: 'Default model',
@@ -84,6 +85,7 @@ export function AiConfigPage() {
                     <ModelSelect
                       models={models.data ?? []}
                       value={entry.value}
+                      tierOrder={MODEL_TIERS}
                       status={modelStatus}
                       onRetry={() => void models.refetch()}
                       triggerVariant="outline"

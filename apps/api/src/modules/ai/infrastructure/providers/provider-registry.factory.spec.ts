@@ -38,6 +38,10 @@ vi.mock('@ai-sdk/openai', () => ({
   createOpenAI: vi.fn(() => vi.fn().mockReturnValue('mock-openai-byok-model')),
 }));
 
+vi.mock('@openrouter/ai-sdk-provider', () => ({
+  createOpenRouter: vi.fn(() => vi.fn().mockReturnValue('mock-openrouter')),
+}));
+
 function makeFactory(overrides?: Record<string, unknown>) {
   const factory = new ProviderRegistryFactory(createMockConfig(overrides));
   factory.onModuleInit();
@@ -88,6 +92,15 @@ describe('ProviderRegistryFactory', () => {
     );
   });
 
+  it('should reject unknown providers instead of deferring to the registry', () => {
+    const factory = makeFactory();
+
+    expect(() => factory.languageModel('mistral:mistral-large')).toThrow(
+      "Provider 'mistral' is not supported"
+    );
+    expect(factory.isModelAvailable('mistral:mistral-large')).toBe(false);
+  });
+
   it('should register only anthropic when google and openai keys are absent', async () => {
     const { createProviderRegistry } = vi.mocked(await import('ai'));
     createProviderRegistry.mockClear();
@@ -115,6 +128,35 @@ describe('ProviderRegistryFactory', () => {
     ]);
   });
 
+  it('should register openrouter when OPENROUTER_API_KEY is configured', async () => {
+    const { createProviderRegistry } = vi.mocked(await import('ai'));
+    createProviderRegistry.mockClear();
+
+    makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const registered = createProviderRegistry.mock.calls.at(-1)?.[0] ?? {};
+    expect(Object.keys(registered).sort()).toEqual(['anthropic', 'openrouter']);
+  });
+
+  it('should throw when an openrouter model is requested without OPENROUTER_API_KEY', () => {
+    const factory = makeFactory();
+
+    expect(() =>
+      factory.languageModel('openrouter:deepseek/deepseek-v3.2')
+    ).toThrow('OPENROUTER_API_KEY is not configured');
+  });
+
+  it('should resolve an openrouter model through the registry when the key is configured', () => {
+    const factory = makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const model = factory.languageModel('openrouter:deepseek/deepseek-v3.2');
+
+    expect(model).toBe('mock-model');
+    expect(languageModel).toHaveBeenCalledWith(
+      'openrouter:deepseek/deepseek-v3.2'
+    );
+  });
+
   describe('gateway mode', () => {
     it('should create the gateway provider with the configured API key', () => {
       createGateway.mockClear();
@@ -133,6 +175,18 @@ describe('ProviderRegistryFactory', () => {
       expect(gatewayLanguageModel).toHaveBeenCalledWith(
         'anthropic/claude-sonnet-4-20250514'
       );
+    });
+
+    it('should reject openrouter models — a different catalog than the gateway', () => {
+      const factory = makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+
+      expect(() =>
+        factory.languageModel('openrouter:deepseek/deepseek-v3.2')
+      ).toThrow('not routable in gateway mode');
+      expect(
+        factory.isModelAvailable('openrouter:deepseek/deepseek-v3.2')
+      ).toBe(false);
+      expect(factory.isModelAvailable('anthropic:claude-sonnet-5')).toBe(true);
     });
 
     it('should not require direct provider API keys', () => {
@@ -199,6 +253,14 @@ describe('ProviderRegistryFactory', () => {
 
       expect(model).toBe('mock-anthropic-byok-model');
       expect(createAnthropic).toHaveBeenCalledWith({ apiKey: 'user-key' });
+    });
+
+    it('should not support openrouter under BYOK yet', () => {
+      const factory = makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+      expect(() =>
+        factory.languageModel('openrouter:deepseek/deepseek-v3.2', 'user-key')
+      ).toThrow("BYOK is not supported for provider 'openrouter'");
     });
   });
 });

@@ -3,8 +3,11 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Injectable, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGateway, createProviderRegistry } from 'ai';
 import type { LanguageModel, ProviderRegistryProvider } from 'ai';
+
+import { providerOf } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
 
@@ -25,6 +28,13 @@ function toGatewayModelId(modelId: QualifiedModelId): string {
   return modelId.replace(':', '/');
 }
 
+const PROVIDER_ENV_KEYS: Partial<Record<string, keyof EnvConfig>> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  google: 'GOOGLE_GENERATIVE_AI_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+};
+
 @Injectable()
 export class ProviderRegistryFactory implements OnModuleInit {
   private registry!: ProviderRegistryProvider;
@@ -42,6 +52,8 @@ export class ProviderRegistryFactory implements OnModuleInit {
     const googleApiKey =
       this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY') || undefined;
     const openaiApiKey = this.configService.get('OPENAI_API_KEY') || undefined;
+    const openrouterApiKey =
+      this.configService.get('OPENROUTER_API_KEY') || undefined;
     this.registry = createProviderRegistry({
       anthropic,
       ...(googleApiKey
@@ -49,6 +61,9 @@ export class ProviderRegistryFactory implements OnModuleInit {
         : {}),
       ...(openaiApiKey
         ? { openai: createOpenAI({ apiKey: openaiApiKey }) }
+        : {}),
+      ...(openrouterApiKey
+        ? { openrouter: createOpenRouter({ apiKey: openrouterApiKey }) }
         : {}),
     });
   }
@@ -59,7 +74,8 @@ export class ProviderRegistryFactory implements OnModuleInit {
    * turn bills the user, never the server/gateway. Otherwise routes through the
    * Vercel AI Gateway when AI_GATEWAY_API_KEY is set, else the direct registry.
    * Throws ProviderNotConfiguredError on malformed ids, unsupported BYOK
-   * providers, or (direct mode only) missing provider keys.
+   * providers, missing provider keys (direct mode), or 'openrouter:*' ids in
+   * gateway mode — OpenRouter slugs are a different catalog than the gateway's.
    */
   languageModel(modelId: string, byokKey?: string): LanguageModel {
     if (!isQualifiedModelId(modelId)) {
@@ -71,6 +87,11 @@ export class ProviderRegistryFactory implements OnModuleInit {
       return this.byokLanguageModel(modelId, byokKey);
     }
     if (this.gateway) {
+      if (providerOf(modelId) === 'openrouter') {
+        throw new ProviderNotConfiguredError(
+          `'${modelId}' is not routable in gateway mode — OpenRouter models require direct mode (unset AI_GATEWAY_API_KEY)`
+        );
+      }
       return this.gateway.languageModel(toGatewayModelId(modelId));
     }
     this.assertProviderKeyConfigured(modelId);
@@ -98,13 +119,13 @@ export class ProviderRegistryFactory implements OnModuleInit {
     }
   }
 
-  /** True when this process can route the model: gateway mode accepts any qualified id; direct mode requires the provider's key. */
+  /** True when this process can route the model: gateway mode accepts any qualified id except 'openrouter:*' (a different catalog); direct mode requires the provider's key. */
   isModelAvailable(modelId: string): boolean {
     if (!isQualifiedModelId(modelId)) {
       return false;
     }
     if (this.gateway) {
-      return true;
+      return providerOf(modelId) !== 'openrouter';
     }
     try {
       this.assertProviderKeyConfigured(modelId);
@@ -115,27 +136,15 @@ export class ProviderRegistryFactory implements OnModuleInit {
   }
 
   private assertProviderKeyConfigured(modelId: string): void {
-    if (
-      modelId.startsWith('anthropic:') &&
-      !this.configService.get('ANTHROPIC_API_KEY')
-    ) {
+    const provider = providerOf(modelId);
+    const envKey = PROVIDER_ENV_KEYS[provider];
+    if (!envKey) {
       throw new ProviderNotConfiguredError(
-        'ANTHROPIC_API_KEY is not configured'
+        `Provider '${provider}' is not supported`
       );
     }
-    if (
-      modelId.startsWith('google:') &&
-      !this.configService.get('GOOGLE_GENERATIVE_AI_API_KEY')
-    ) {
-      throw new ProviderNotConfiguredError(
-        'GOOGLE_GENERATIVE_AI_API_KEY is not configured'
-      );
-    }
-    if (
-      modelId.startsWith('openai:') &&
-      !this.configService.get('OPENAI_API_KEY')
-    ) {
-      throw new ProviderNotConfiguredError('OPENAI_API_KEY is not configured');
+    if (!this.configService.get(envKey)) {
+      throw new ProviderNotConfiguredError(`${envKey} is not configured`);
     }
   }
 }
