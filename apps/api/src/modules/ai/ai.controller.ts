@@ -101,7 +101,7 @@ const effectiveConfigSchema = {
       key: { type: 'string', example: 'ai_default_model' },
       value: {
         type: 'string',
-        example: 'openrouter:deepseek/deepseek-v3.2',
+        example: 'openrouter:minimax/minimax-m2.5',
       },
       source: {
         type: 'string',

@@ -59,7 +59,7 @@ describe('AIConfigService', () => {
   it('should fall back to the code default when no row exists', async () => {
     mockRepo.get.mockResolvedValue(null);
     expect(await service.getDefaultModel()).toBe(
-      'openrouter:deepseek/deepseek-v3.2'
+      'openrouter:minimax/minimax-m2.5'
     );
   });
 
@@ -82,7 +82,7 @@ describe('AIConfigService', () => {
   it('should fall back to the code default on DB error', async () => {
     mockRepo.get.mockRejectedValue(new Error('DB down'));
     expect(await service.getDefaultModel()).toBe(
-      'openrouter:deepseek/deepseek-v3.2'
+      'openrouter:minimax/minimax-m2.5'
     );
   });
 
@@ -278,9 +278,9 @@ describe('AIConfigService', () => {
     it('should parse the code-default chain into a trimmed list of model ids', async () => {
       const chain = await service.getFallbackChain();
       expect(chain).toEqual([
-        'openrouter:deepseek/deepseek-v3.2',
-        'openrouter:qwen/qwen3-235b-a22b-2507',
         'openrouter:minimax/minimax-m2.5',
+        'openrouter:moonshotai/kimi-k2.5',
+        'openrouter:deepseek/deepseek-v3.2',
       ]);
     });
 

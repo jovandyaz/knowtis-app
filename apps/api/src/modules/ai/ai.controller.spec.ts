@@ -68,7 +68,7 @@ describe('AIController resetConfig', () => {
     const effective = [
       {
         key: 'ai_default_model',
-        value: 'openrouter:deepseek/deepseek-v3.2',
+        value: 'openrouter:minimax/minimax-m2.5',
         kind: 'model',
         source: 'default',
         description: null,

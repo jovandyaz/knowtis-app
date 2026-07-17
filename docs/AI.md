@@ -323,11 +323,11 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 
 **Supported keys:**
 
-| Key                 | Code Default                                                                                             | Kind    | Description                         |
-| ------------------- | -------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
-| `ai_default_model`  | `openrouter:deepseek/deepseek-v3.2`                                                                      | `model` | Model for most actions              |
-| `ai_fast_model`     | `openrouter:deepseek/deepseek-v3.2`                                                                      | `model` | Model for ghost-text                |
-| `ai_fallback_chain` | `openrouter:deepseek/deepseek-v3.2,openrouter:qwen/qwen3-235b-a22b-2507,openrouter:minimax/minimax-m2.5` | `chain` | Cross-provider fallback order (CSV) |
+| Key                 | Code Default                                                                                        | Kind    | Description                         |
+| ------------------- | --------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
+| `ai_default_model`  | `openrouter:minimax/minimax-m2.5`                                                                   | `model` | Model for most actions              |
+| `ai_fast_model`     | `openrouter:minimax/minimax-m2.5`                                                                   | `model` | Model for ghost-text                |
+| `ai_fallback_chain` | `openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5,openrouter:deepseek/deepseek-v3.2` | `chain` | Cross-provider fallback order (CSV) |
 
 A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
 
@@ -381,7 +381,7 @@ The probe (both `PUT` and `test`) sends one cheap turn through the provider's cu
 
 ## Cross-Provider Fallback Chain
 
-`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the code default (`openrouter:deepseek/deepseek-v3.2,openrouter:qwen/qwen3-235b-a22b-2507,openrouter:minimax/minimax-m2.5`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). At boot the chain is seeded from the code default (guard-tested against the catalog) so cross-provider fallback works before the first DB refresh; a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
+`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the code default (`openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5,openrouter:deepseek/deepseek-v3.2`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). At boot the chain is seeded from the code default (guard-tested against the catalog) so cross-provider fallback works before the first DB refresh; a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
 
 Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWithChain`):
 
