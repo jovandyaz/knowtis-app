@@ -13,6 +13,15 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
+export const FALLBACK_CHAIN_SOURCE = Symbol('FALLBACK_CHAIN_SOURCE');
+
+/** Supplies the effective cross-provider fallback chain (DB row over env default). */
+export interface FallbackChainSource {
+  getFallbackChain(): Promise<string[]>;
+}
+
+const CHAIN_TTL_MS = 30_000; // matches the AI config cache window
+
 export interface ProviderHealth {
   readonly configured: boolean;
   readonly cooling: boolean;
@@ -23,19 +32,23 @@ export interface ProviderHealth {
 }
 
 /**
- * Resolves the ordered model candidates for a request: primary first, then
- * the configured cross-provider chain, minus providers without credentials
- * or in cooldown. Model availability is resolved per call so a future
- * per-user key source (BYOK) can plug in without touching the chain.
+ * Resolves the ordered model candidates for a request: primary first, then the
+ * cross-provider chain, minus providers without credentials or in cooldown. The
+ * chain refreshes from FallbackChainSource in the background so a runtime
+ * override applies within one TTL without a redeploy.
  */
 @Injectable()
 export class FallbackChainService implements OnModuleInit {
   private readonly logger = new Logger(FallbackChainService.name);
   private chain: string[] = [];
+  private chainRefreshedAt = 0;
+  private chainGeneration = 0;
 
   readonly cooldown: ProviderCooldownTracker;
 
   constructor(
+    @Inject(FALLBACK_CHAIN_SOURCE)
+    private readonly chainSource: FallbackChainSource,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly providerRegistry: ProviderRegistryFactory,
     @Inject(MODEL_CATALOG)
@@ -59,24 +72,27 @@ export class FallbackChainService implements OnModuleInit {
     );
   }
 
+  /** Seeds the chain from env (routing works before the first DB refresh); fails fast on a bad env chain. */
   onModuleInit(): void {
-    const raw = this.configService.get('AI_FALLBACK_CHAIN');
-    const entries = raw
-      .split(',')
-      .map((entry: string) => entry.trim())
-      .filter((entry: string) => entry.length > 0);
+    const entries = parseChain(this.configService.get('AI_FALLBACK_CHAIN'));
     const unknown = entries.filter(
-      (model: string) => !this.modelCatalog.isSupported(model)
+      (model) => !this.modelCatalog.isSupported(model)
     );
     if (unknown.length > 0) {
       throw new Error(
         `AI_FALLBACK_CHAIN contains models missing from the catalog: ${unknown.join(', ')}`
       );
     }
+    if (entries.length === 0) {
+      this.logger.warn(
+        'AI_FALLBACK_CHAIN is empty — cross-provider fallback is disabled until a chain is configured'
+      );
+    }
     this.chain = entries;
   }
 
   candidatesFor(primaryModel: string): string[] {
+    this.refreshChainIfStale();
     return resolveChainCandidates({
       primaryModel,
       chain: this.chain,
@@ -84,6 +100,28 @@ export class FallbackChainService implements OnModuleInit {
         this.providerRegistry.isModelAvailable(model),
       cooldown: this.cooldown,
     });
+  }
+
+  private refreshChainIfStale(): void {
+    const now = Date.now();
+    if (now - this.chainRefreshedAt < CHAIN_TTL_MS) {
+      return;
+    }
+    // Claim the window before the read so a hung read can't pin the snapshot:
+    // after the TTL a new refresh starts even if this one never settles.
+    this.chainRefreshedAt = now;
+    const generation = ++this.chainGeneration;
+    void this.chainSource
+      .getFallbackChain()
+      .then((chain) => {
+        // A slow earlier read must not clobber a newer one.
+        if (generation === this.chainGeneration && chain.length > 0) {
+          this.chain = chain;
+        }
+      })
+      .catch((error) =>
+        this.logger.warn('Failed to refresh fallback chain from config', error)
+      );
   }
 
   /** Passive per-provider health from the cooldown tracker — no probes, no token spend. */
@@ -110,6 +148,13 @@ export class FallbackChainService implements OnModuleInit {
     }
     return result;
   }
+}
+
+function parseChain(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 function toIsoOrNull(epochMs: number | undefined): string | null {
