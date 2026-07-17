@@ -17,6 +17,7 @@ const PROVIDER_LABEL: Record<ByokProvider, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
   google: 'Google',
+  openrouter: 'OpenRouter',
 };
 
 export function AIKeysManager() {

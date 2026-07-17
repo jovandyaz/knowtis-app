@@ -34,7 +34,7 @@ export const userProviderKeys = pgTable(
     primaryKey({ columns: [table.userId, table.provider] }),
     check(
       'user_provider_keys_provider_check',
-      sql`${table.provider} in ('anthropic', 'openai', 'google')`
+      sql`${table.provider} in ('anthropic', 'openai', 'google', 'openrouter')`
     ),
   ]
 );

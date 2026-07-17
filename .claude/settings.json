@@ -10,6 +10,10 @@
           },
           {
             "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/check-magic-values.mjs\""
+          },
+          {
+            "type": "command",
             "command": "npx tsc --noEmit 2>&1 | head -20 || true"
           }
         ]

@@ -94,7 +94,12 @@ export const AI_PROVIDERS = [
 ] as const;
 export type AIProvider = (typeof AI_PROVIDERS)[number];
 
-export const BYOK_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
+export const BYOK_PROVIDERS = [
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',
+] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
 /** Where the server-side key for a provider actually resolves from, in precedence order. */

@@ -180,6 +180,36 @@ describe('ByokService', () => {
     expect(repo.upsert).toHaveBeenCalled();
   });
 
+  it('validates an openrouter key against the first open-tier model', async () => {
+    const registry = { languageModel: vi.fn().mockReturnValue({}) };
+    const config = {
+      get: (k: string) =>
+        k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
+    };
+    const repo = {
+      listForUser: vi.fn().mockResolvedValue([]),
+      getEnabledProviders: vi.fn().mockResolvedValue([]),
+      getEncrypted: vi.fn().mockResolvedValue(null),
+      upsert: vi.fn(),
+      remove: vi.fn(),
+      touchLastUsed: vi.fn(),
+    };
+    const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
+    const service = new ByokService(
+      repo as never,
+      flags as never,
+      config as never,
+      registry as never
+    );
+
+    await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
+
+    expect(registry.languageModel).toHaveBeenCalledWith(
+      'openrouter:deepseek/deepseek-v3.2',
+      'sk-or-v1-valid-key-000'
+    );
+  });
+
   it('does not log the raw provider error when key validation fails', async () => {
     const warn = vi
       .spyOn((await import('@nestjs/common')).Logger.prototype, 'warn')

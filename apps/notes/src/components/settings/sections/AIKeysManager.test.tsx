@@ -3,6 +3,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { BYOK_PROVIDERS } from '@knowtis/shared-types';
+
 import { AIKeysManager } from './AIKeysManager';
 
 const mutateSetKey = vi.fn();
@@ -58,13 +60,19 @@ describe('AIKeysManager', () => {
     expect(screen.getByText('Google')).toBeInTheDocument();
   });
 
+  it('offers an OpenRouter key slot', () => {
+    render(<AIKeysManager />);
+
+    expect(screen.getByText('OpenRouter')).toBeInTheDocument();
+  });
+
   it('Save buttons are disabled when the input is empty', () => {
     render(<AIKeysManager />);
 
     const saveButtons = screen.getAllByRole('button', {
       name: /aiAssistant\.byok\.save/i,
     });
-    expect(saveButtons).toHaveLength(3);
+    expect(saveButtons).toHaveLength(BYOK_PROVIDERS.length);
     saveButtons.forEach((btn) => expect(btn).toBeDisabled());
   });
 
