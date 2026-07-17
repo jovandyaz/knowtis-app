@@ -60,6 +60,9 @@ export const MODEL_ID_MAX_LENGTH = 120;
 export const MODEL_TIERS = ['fast', 'balanced', 'powerful', 'open'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
+export const MODEL_ACCESS = ['granted', 'requires_byok'] as const;
+export type ModelAccess = (typeof MODEL_ACCESS)[number];
+
 export interface SelectableModel {
   id: string;
   label: string;
@@ -75,6 +78,8 @@ export interface SelectableModel {
    * caller's BYOK key reaches it, so it is inert in any server-global config.
    */
   routableByServer: boolean;
+  /** Whether this caller may run the model: open tier is free for everyone; other tiers need the caller's own provider key while tier gating is on. */
+  access: ModelAccess;
 }
 
 export interface AIPreferences {

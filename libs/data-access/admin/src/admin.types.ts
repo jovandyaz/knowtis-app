@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import {
   AI_PROVIDERS,
+  MODEL_ACCESS,
   MODEL_TIERS,
   PROVIDER_KEY_SOURCES,
   PROVIDER_PROBE_FAILURES,
@@ -132,6 +133,9 @@ export const SelectableModelSchema = z.object({
   // Backoffice and API deploy independently; an API that predates this field
   // must not make every chain member look inert.
   routableByServer: z.boolean().default(true),
+  // Backoffice and API deploy independently; an API that predates tier gating
+  // must not make every model look locked.
+  access: z.enum(MODEL_ACCESS).default('granted'),
 });
 export type SelectableModelOption = z.infer<typeof SelectableModelSchema>;
 

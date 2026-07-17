@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
+const NO_BYOK: ReadonlySet<string> = new Set();
+
+function makeOpenService() {
+  const catalog = {
+    isSupported: () => true,
+    getPricing: () => ({ outputCostPerToken: 0.000005 }),
+    getContextWindow: () => ({ maxInputTokens: 1000 }),
+  };
+  const registry = { isModelAvailable: () => true };
+  return new SelectableModelsService(catalog as never, registry as never);
+}
 
 function makeService(opts: {
   supported: Set<string>;
@@ -178,5 +189,34 @@ describe('SelectableModelsService', () => {
     expect(byId['anthropic:claude-sonnet-5']).toBe(2);
     expect(byId['openai:gpt-5.4']).toBe(2);
     expect(byId['anthropic:claude-opus-4-8']).toBe(3);
+  });
+
+  it('should keep a gated premium model visible but marked requires_byok', () => {
+    const service = makeOpenService();
+    const models = service.list(
+      'openrouter:deepseek/deepseek-v3.2',
+      NO_BYOK,
+      true
+    );
+    const premium = models.find((m) => m.tier !== 'open');
+    expect(premium?.access).toBe('requires_byok');
+  });
+
+  it('should refuse to select a gated model and accept it with the key', () => {
+    const service = makeOpenService();
+    const premiumId = 'anthropic:claude-haiku-4-5-20251001';
+    expect(service.isSelectable(premiumId, NO_BYOK, true)).toBe(false);
+    expect(service.isSelectable(premiumId, new Set(['anthropic']), true)).toBe(
+      true
+    );
+  });
+
+  it('should change nothing while the flag is off', () => {
+    const service = makeOpenService();
+    expect(
+      service
+        .list('openrouter:deepseek/deepseek-v3.2', NO_BYOK, false)
+        .every((m) => m.access === 'granted')
+    ).toBe(true);
   });
 });

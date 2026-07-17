@@ -7,6 +7,7 @@ import {
 } from '@knowtis/ai-gateway';
 import type { SelectableModel } from '@knowtis/shared-types';
 
+import { accessFor } from '../../domain/model-catalog/model-access.policy';
 import {
   CURATED_MODELS,
   type CuratedModel,
@@ -49,7 +50,8 @@ export class SelectableModelsService {
 
   list(
     systemDefault: string,
-    byokProviders: ReadonlySet<string> = NO_BYOK
+    byokProviders: ReadonlySet<string> = NO_BYOK,
+    tierGatingOn = false
   ): SelectableModel[] {
     return CURATED_MODELS.filter((m) => this.invocable(m, byokProviders)).map(
       (m) => ({
@@ -62,15 +64,21 @@ export class SelectableModelsService {
         isDefault: m.id === systemDefault,
         billedToUser: byokProviders.has(providerOf(m.id)),
         routableByServer: this.registry.isModelAvailable(m.id),
+        access: accessFor(m, byokProviders, tierGatingOn),
       })
     );
   }
 
   isSelectable(
     modelId: string,
-    byokProviders: ReadonlySet<string> = NO_BYOK
+    byokProviders: ReadonlySet<string> = NO_BYOK,
+    tierGatingOn = false
   ): boolean {
     const curated = CURATED_MODELS.find((m) => m.id === modelId);
-    return curated ? this.invocable(curated, byokProviders) : false;
+    return (
+      !!curated &&
+      this.invocable(curated, byokProviders) &&
+      accessFor(curated, byokProviders, tierGatingOn) === 'granted'
+    );
   }
 }
