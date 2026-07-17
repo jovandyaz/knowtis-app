@@ -107,7 +107,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="icon"
                 aria-label={`Move ${labelFor(id)} earlier`}
-                disabled={index === 0}
+                disabled={index === 0 || setConfig.isPending}
                 onClick={() => edit(move(chain, index, index - 1))}
               >
                 ↑
@@ -116,7 +116,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="icon"
                 aria-label={`Move ${labelFor(id)} later`}
-                disabled={index === chain.length - 1}
+                disabled={index === chain.length - 1 || setConfig.isPending}
                 onClick={() => edit(move(chain, index, index + 1))}
               >
                 ↓
@@ -125,6 +125,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="sm"
                 aria-label={`Remove ${labelFor(id)}`}
+                disabled={setConfig.isPending}
                 onClick={() =>
                   edit(chain.filter((_, position) => position !== index))
                 }

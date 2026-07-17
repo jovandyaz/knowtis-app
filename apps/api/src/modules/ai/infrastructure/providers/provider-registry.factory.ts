@@ -201,6 +201,20 @@ export class ProviderRegistryFactory implements OnModuleInit {
     }
   }
 
+  /** Every secret that could route for this provider, so a caller can scrub the ones a provider echoes back in an error. */
+  routingSecrets(provider: AIProvider): string[] {
+    this.refreshSystemConfigsIfStale();
+    const candidates = this.gateway
+      ? [this.configService.get('AI_GATEWAY_API_KEY')]
+      : [
+          this.systemConfigs.get(provider)?.apiKey,
+          this.configService.get(PROVIDER_ENV_KEYS[provider]),
+        ];
+    return candidates.filter(
+      (secret): secret is string => typeof secret === 'string' && secret !== ''
+    );
+  }
+
   /**
    * Throws when an admin disabled the provider. The gateway's catalog is wider
    * than AI_PROVIDERS, so an untracked provider is the gateway's call, not ours.

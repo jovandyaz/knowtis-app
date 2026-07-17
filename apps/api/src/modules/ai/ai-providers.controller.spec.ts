@@ -38,6 +38,7 @@ function make() {
   const registry = {
     languageModel: vi.fn().mockReturnValue('probe-model'),
     refreshSystemConfigs: vi.fn().mockResolvedValue(undefined),
+    routingSecrets: vi.fn().mockReturnValue([]),
   };
   return {
     controller: new AiProvidersController(
@@ -251,6 +252,26 @@ describe('AiProvidersController', () => {
       expect(result.ok === false && result.message).toContain(
         'credit balance is too low'
       );
+    });
+
+    it('should keep the routing key out of the error the provider echoes back', async () => {
+      await probeFailsWith(
+        apiCallError(401, 'Incorrect API key provided: sk-ant-stored-value.')
+      );
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-stored-value']);
+      const warn = vi
+        .spyOn(controller['logger'], 'warn')
+        .mockImplementation(() => undefined);
+
+      const result = await controller.test(anthropic);
+
+      expect(JSON.stringify(result)).not.toContain('sk-ant-stored-value');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(
+        'sk-ant-stored-value'
+      );
+      expect(result.ok === false && result.message).toContain('[redacted]');
+      expect(registry.routingSecrets).toHaveBeenCalledWith('anthropic');
     });
 
     it.each([401, 403, 400, 404])(

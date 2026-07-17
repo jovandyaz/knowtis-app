@@ -146,7 +146,10 @@ export class AiProvidersController {
       });
       return { ok: true, model: model.id };
     } catch (error) {
-      return this.classifyProbeFailure(provider, model.id, error, apiKey);
+      const secrets = apiKey
+        ? [apiKey]
+        : this.registry.routingSecrets(provider);
+      return this.classifyProbeFailure(provider, model.id, error, secrets);
     }
   }
 
@@ -154,7 +157,7 @@ export class AiProvidersController {
     provider: AIProvider,
     model: string,
     error: unknown,
-    apiKey?: string
+    secrets: string[]
   ): ProviderTestResult {
     if (error instanceof ProviderNotConfiguredError) {
       return { ok: false, reason: 'unconfigured', message: error.message };
@@ -165,7 +168,7 @@ export class AiProvidersController {
     const refused = APICallError.isInstance(error) && !error.isRetryable;
     const detail = redact(
       error instanceof Error ? error.message : 'unknown',
-      apiKey
+      secrets
     );
     this.logger.warn({
       event: 'system_provider_key.probe_failed',
@@ -189,9 +192,12 @@ export class AiProvidersController {
 }
 
 /** Providers echo a rejected credential back in their error text; it must not reach a log or a response. */
-function redact(message: string, apiKey?: string): string {
-  if (!apiKey || apiKey.length < REDACTABLE_KEY_MIN_LENGTH) {
-    return message;
-  }
-  return message.split(apiKey).join('[redacted]');
+function redact(message: string, secrets: string[]): string {
+  return secrets.reduce(
+    (text, secret) =>
+      secret.length < REDACTABLE_KEY_MIN_LENGTH
+        ? text
+        : text.split(secret).join('[redacted]'),
+    message
+  );
 }

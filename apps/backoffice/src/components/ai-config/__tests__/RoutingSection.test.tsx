@@ -7,10 +7,13 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 
 import { RoutingSection } from '../RoutingSection';
 
-const { useSelectableModelsMock, setConfigMutate } = vi.hoisted(() => ({
-  useSelectableModelsMock: vi.fn(),
-  setConfigMutate: vi.fn(),
-}));
+const { useSelectableModelsMock, setConfigMutate, setConfigState } = vi.hoisted(
+  () => ({
+    useSelectableModelsMock: vi.fn(),
+    setConfigMutate: vi.fn(),
+    setConfigState: { isPending: false },
+  })
+);
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -19,7 +22,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useSelectableModels: () => useSelectableModelsMock(),
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
-      isPending: false,
+      isPending: setConfigState.isPending,
       isError: false,
       error: null,
     }),
@@ -71,6 +74,7 @@ function savedValue() {
 describe('RoutingSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
+    setConfigState.isPending = false;
     useSelectableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
@@ -258,6 +262,24 @@ describe('RoutingSection', () => {
 
     expect(screen.getByRole('button', { name: /save chain/i })).toBeDisabled();
     expect(screen.getByText(/chain is empty/i)).toBeInTheDocument();
+  });
+
+  // An edit landing mid-write forks from a value the server is about to
+  // replace, so the draft is dropped on success and the edit vanishes.
+  it('accepts no edit while the write is in flight', () => {
+    setConfigState.isPending = true;
+
+    renderChain();
+
+    expect(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /move sonnet later/i })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: /remove sonnet/i })
+    ).toBeDisabled();
   });
 
   it('cannot move the first model earlier or the last one later', () => {

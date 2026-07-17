@@ -48,9 +48,17 @@ export function ProviderCard({ provider }: ProviderCardProps) {
   // A probe describes the key that was routing when it ran; once the row moves,
   // the verdict is about a key that is no longer there.
   const { reset: resetProbe } = testProvider;
+  // A refetch re-parses into a fresh Date, so compare the instant, not the object.
+  const writtenAt = provider.updatedAt?.getTime() ?? null;
   useEffect(() => {
     resetProbe();
-  }, [resetProbe, provider.keySource, provider.enabled, provider.keyPrefix]);
+  }, [
+    resetProbe,
+    provider.keySource,
+    provider.enabled,
+    provider.keyPrefix,
+    writtenAt,
+  ]);
 
   return (
     <Card className="flex flex-col gap-3 p-4">

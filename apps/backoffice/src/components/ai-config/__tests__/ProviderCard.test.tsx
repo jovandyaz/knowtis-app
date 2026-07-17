@@ -153,19 +153,59 @@ describe('ProviderCard', () => {
   });
 
   it('drops a probe verdict about a key that is no longer there', () => {
+    // The mocked hook is not reactive: reset() clears the verdict the way
+    // react-query would, and the following render is what reveals it.
+    testReset.mockImplementation(() => {
+      state.test.data = undefined;
+    });
+    const routing = providerWith({
+      keySource: 'database',
+      keyPrefix: 'sk-ant-1',
+      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+    });
+    const { rerender } = render(<ProviderCard provider={routing} />);
+
     state.test.data = { ok: true, model: 'anthropic:haiku' };
-    const { rerender } = render(
-      <ProviderCard provider={providerWith({ keySource: 'database' })} />
-    );
-    testReset.mockClear();
+    rerender(<ProviderCard provider={routing} />);
+    expect(
+      screen.getByText(/anthropic answered via anthropic:haiku/i)
+    ).toBeInTheDocument();
 
+    const replaced = {
+      ...routing,
+      updatedAt: new Date('2026-07-02T00:00:00.000Z'),
+    };
+    rerender(<ProviderCard provider={replaced} />);
+    rerender(<ProviderCard provider={replaced} />);
+
+    expect(screen.queryByText(/answered via/i)).not.toBeInTheDocument();
+  });
+
+  it('keeps a probe verdict when a refetch re-parses the same row', () => {
+    testReset.mockImplementation(() => {
+      state.test.data = undefined;
+    });
+    const routing = providerWith({
+      keySource: 'database',
+      keyPrefix: 'sk-ant-1',
+      updatedAt: new Date('2026-07-01T00:00:00.000Z'),
+    });
+    const { rerender } = render(<ProviderCard provider={routing} />);
+
+    state.test.data = { ok: true, model: 'anthropic:haiku' };
+    rerender(<ProviderCard provider={routing} />);
+
+    // Same instant, new object — what a refetch hands back.
     rerender(
-      <ProviderCard provider={providerWith({ keySource: 'database' })} />
+      <ProviderCard
+        provider={{ ...routing, updatedAt: new Date(routing.updatedAt!) }}
+      />
     );
-    expect(testReset).not.toHaveBeenCalled();
+    rerender(<ProviderCard provider={routing} />);
 
-    rerender(<ProviderCard provider={providerWith({ keySource: 'none' })} />);
-    expect(testReset).toHaveBeenCalled();
+    expect(
+      screen.getByText(/anthropic answered via anthropic:haiku/i)
+    ).toBeInTheDocument();
   });
 
   it('shows why a probe failed — a refusal resolves, it does not throw', () => {
