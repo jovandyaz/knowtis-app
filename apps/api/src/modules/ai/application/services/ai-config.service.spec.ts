@@ -9,6 +9,15 @@ const CUSTOM_FAST = 'anthropic:claude-haiku-4-5-20251001';
 const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
 
+function deletedRow(value: string) {
+  return {
+    key: 'ai_default_model',
+    value,
+    description: null,
+    updatedAt: new Date('2026-07-15T00:00:00Z'),
+  };
+}
+
 describe('AIConfigService', () => {
   let service: AIConfigService;
   let mockRepo: {
@@ -30,7 +39,7 @@ describe('AIConfigService', () => {
     mockRepo = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
-      delete: vi.fn().mockResolvedValue(true),
+      delete: vi.fn().mockResolvedValue(null),
       getAllRows: vi.fn().mockResolvedValue([]),
     };
     mockCache = {
@@ -159,15 +168,16 @@ describe('AIConfigService', () => {
   });
 
   it('should delete the row and invalidate the cache on reset', async () => {
-    mockRepo.get.mockResolvedValue(CUSTOM_MODEL);
+    mockRepo.delete.mockResolvedValue(deletedRow(CUSTOM_MODEL));
     await service.resetConfig('ai_default_model', ACTOR);
     expect(mockRepo.delete).toHaveBeenCalledWith('ai_default_model');
     expect(mockCache.del).toHaveBeenCalledWith('ai:config:ai_default_model');
   });
 
-  it('should record an ai_config.reset audit with the removed value and no after', async () => {
-    mockRepo.get.mockResolvedValue(CUSTOM_MODEL);
+  it('should audit the atomically deleted value without a preliminary read', async () => {
+    mockRepo.delete.mockResolvedValue(deletedRow(CUSTOM_MODEL));
     await service.resetConfig('ai_default_model', ACTOR);
+    expect(mockRepo.get).not.toHaveBeenCalled();
     expect(mockAudit.record).toHaveBeenCalledWith({
       actorId: ACTOR,
       action: 'ai_config.reset',
@@ -178,7 +188,7 @@ describe('AIConfigService', () => {
   });
 
   it('should neither audit nor error when resetting a key with no stored row', async () => {
-    mockRepo.delete.mockResolvedValue(false);
+    mockRepo.delete.mockResolvedValue(null);
     await expect(
       service.resetConfig('ai_default_model', ACTOR)
     ).resolves.toBeUndefined();

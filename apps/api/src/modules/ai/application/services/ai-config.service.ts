@@ -132,8 +132,8 @@ export class AIConfigService {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
-    const previous = await this.repository.get(key);
-    if (!(await this.repository.delete(key))) {
+    const deleted = await this.repository.delete(key);
+    if (!deleted) {
       return;
     }
     try {
@@ -150,7 +150,7 @@ export class AIConfigService {
       action: 'ai_config.reset',
       targetType: 'ai_config',
       targetId: key,
-      ...(previous !== null ? { before: { value: previous } } : {}),
+      before: { value: deleted.value },
     });
     this.logger.log(`Reset AI config ${key} to its code default`);
   }
