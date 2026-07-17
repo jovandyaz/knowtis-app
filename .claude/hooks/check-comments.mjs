@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Guards the minimal-comments rule (.claude/rules/comments.md) after Edit/Write
+// Guards the minimal-comments rule (~/.claude/rules/comments.md) after Edit/Write
 // on TS/TSX. Short, useful WHY comments and JSDoc are fine — this only flags the
 // objectively-bad, machine-detectable cases: over-long blocks, task/PR/issue
 // references, section-header dividers, author/date stamps, tombstones, and
@@ -47,6 +47,7 @@ process.stdin.on('end', () => {
     { re: /\/\/\s*(removed|deleted|old (logic|code|impl|version)|kept for reference|commented[- ]out|legacy:)/i, why: 'tombstone — delete dead code, use git history' },
   ];
 
+  const RATIONALE = /\b(because|since|due to|so that|otherwise|would|must|never|always|workaround|quirk|bug|instead|beware|caveat|assumes?|invariant|deliberate|intentional)\b/i;
   // Openers that promise a restatement of the next line rather than a reason.
   const PARAPHRASE_VERB =
     /^(increments?|decrements?|sets?|gets?|returns?|creates?|builds?|initiali[sz]es?|inits?|adds?|removes?|deletes?|updates?|checks?|validates?|loops?|iterates?|calls?|invokes?|declares?|defines?|assigns?|renders?|handles?|maps?|filters?|converts?|parses?|formats?|resets?|clears?|starts?|stops?|fetch(es)?|sends?|saves?|loads?)\b/i;
@@ -90,6 +91,7 @@ process.stdin.on('end', () => {
   // A comment is redundant when its own words are already spelled out in the
   // code it introduces — not merely because it is short.
   const restatesCode = (text, following, maxWords, minShared) => {
+    if (RATIONALE.test(text)) return false;
     const cw = words(text);
     if (cw.length === 0 || cw.length > maxWords) return false;
     const ids = identifierWords(following.join(' '));
@@ -103,11 +105,32 @@ process.stdin.on('end', () => {
 
   for (const block of added) {
     const lines = block.split('\n');
-    const codeAfter = (i) =>
-      lines
-        .slice(i + 1)
-        .filter((l) => isCode(l.trim()))
-        .slice(0, 2);
+    // A blank line ends what a comment can be speaking for; a comment line does
+    // not, since it is part of the same block.
+    const codeAfter = (i) => {
+      const out = [];
+      for (const line of lines.slice(i + 1)) {
+        const t = line.trim();
+        if (t === '') break;
+        if (isCode(t)) out.push(t);
+        if (out.length === 2) break;
+      }
+      return out;
+    };
+
+    const jsdocAt = (i) => {
+      const t = lines[i].trim();
+      if (!t.startsWith('/**')) return null;
+      const single = t.match(/^\/\*\*\s*(.+?)\s*\*\/$/);
+      if (single) return { text: single[1], end: i };
+      const parts = [];
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const inner = lines[j].trim();
+        if (inner.startsWith('*/')) return { text: parts.join(' '), end: j };
+        parts.push(inner.replace(/^\*\s?/, ''));
+      }
+      return null;
+    };
 
     let run = 0; // consecutive non-JSDoc // comment lines
     for (const [i, line] of lines.entries()) {
@@ -116,9 +139,9 @@ process.stdin.on('end', () => {
         if (b.re.test(t)) flag(t, b.why);
       }
 
-      const jsdoc = t.match(/^\/\*\*\s*(.+?)\s*\*\/$/);
-      if (jsdoc && restatesCode(jsdoc[1], codeAfter(i), 5, 2)) {
-        flag(t, 'JSDoc that only respells the signature — say what a caller cannot infer, or drop it');
+      const jsdoc = jsdocAt(i);
+      if (jsdoc && restatesCode(jsdoc.text, codeAfter(jsdoc.end), 5, 2)) {
+        flag(`/** ${jsdoc.text}`, 'JSDoc that only respells the signature — say what a caller cannot infer, or drop it');
       }
 
       if (t.startsWith('//') && !PRAGMA.test(t)) {
@@ -142,7 +165,7 @@ process.stdin.on('end', () => {
 
   const seen = [...new Set(findings)].slice(0, 6).join('\n');
   process.stderr.write(
-    `Minimal-comments rule (.claude/rules/comments.md) — review these in ${file}:\n${seen}\n` +
+    `Minimal-comments rule (~/.claude/rules/comments.md) — review these in ${file}:\n${seen}\n` +
       `Short, useful WHY comments and JSDoc are fine; remove the flagged ones.\n`
   );
   process.exit(2);
