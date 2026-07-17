@@ -147,12 +147,13 @@ export class ByokService {
     provider: ByokProvider,
     apiKey: string
   ): Promise<void> {
-    const probe = CURATED_MODELS.find(
-      (m) => m.tier === 'fast' && providerOf(m.id) === provider
+    const candidates = CURATED_MODELS.filter(
+      (m) => providerOf(m.id) === provider
     );
+    const probe = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
     if (!probe) {
       throw new UnprocessableEntityException(
-        `No curated fast-tier model found for provider '${provider}'`
+        `No curated model found for provider '${provider}'`
       );
     }
     await generateText({
