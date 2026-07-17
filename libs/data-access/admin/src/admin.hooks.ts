@@ -7,6 +7,7 @@ import {
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
 import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
+import type { AIProvider } from '@knowtis/shared-types';
 
 import {
   AdminUserSchema,
@@ -17,7 +18,9 @@ import {
   MetricsTimeseriesSchema,
   PaginatedAuditSchema,
   PaginatedUsersSchema,
+  ProviderTestResultSchema,
   SelectableModelsSchema,
+  SystemProvidersSchema,
   type AdminUser,
   type AdminUsersParams,
   type AuditParams,
@@ -39,6 +42,7 @@ export const adminQueryKeys = {
     [...adminQueryKeys.auditLists(), params] as const,
   aiConfig: () => [...adminQueryKeys.all, 'ai-config'] as const,
   selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
+  systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
 } as const;
 
 function usersPath({ page, limit, search, role }: AdminUsersParams): string {
@@ -183,6 +187,59 @@ export function useSelectableModels() {
     queryFn: async () =>
       SelectableModelsSchema.parse(await aiModelsApi.getModels()),
     staleTime: 1000 * 60 * 5,
+  });
+}
+
+export function useSystemProviders() {
+  return useQuery({
+    queryKey: adminQueryKeys.systemProviders(),
+    queryFn: async () =>
+      SystemProvidersSchema.parse(await httpClient.get('/ai/providers')),
+    staleTime: 1000 * 60,
+  });
+}
+
+/** The response is the applied state for every provider, so it seeds the list cache directly. */
+function useSystemProviderMutation<TInput>(
+  mutationFn: (input: TInput) => Promise<unknown>
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: TInput) =>
+      SystemProvidersSchema.parse(await mutationFn(input)),
+    onSuccess: (providers) =>
+      queryClient.setQueryData(adminQueryKeys.systemProviders(), providers),
+    onSettled: () => {
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.systemProviders(),
+      });
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
+    },
+  });
+}
+
+export function useSetSystemProvider() {
+  return useSystemProviderMutation(
+    (input: { provider: AIProvider; apiKey?: string; enabled?: boolean }) =>
+      httpClient.put(`/ai/providers/${input.provider}`, {
+        ...(input.apiKey !== undefined && { apiKey: input.apiKey }),
+        ...(input.enabled !== undefined && { enabled: input.enabled }),
+      })
+  );
+}
+
+export function useClearSystemProviderKey() {
+  return useSystemProviderMutation((provider: AIProvider) =>
+    httpClient.delete(`/ai/providers/${provider}/key`)
+  );
+}
+
+export function useTestSystemProvider() {
+  return useMutation({
+    mutationFn: async (provider: AIProvider) =>
+      ProviderTestResultSchema.parse(
+        await httpClient.post(`/ai/providers/${provider}/test`, {})
+      ),
   });
 }
 

@@ -9,19 +9,30 @@ import { describe, expect, it, vi } from 'vitest';
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
 
 import {
+  adminQueryKeys,
   useAdminUsers,
   useAiConfig,
   useAuditLog,
+  useClearSystemProviderKey,
   useDeleteFeatureFlag,
   useGlobalAiTimeseries,
   useSelectableModels,
   useSetAiConfig,
+  useSetSystemProvider,
+  useSystemProviders,
+  useTestSystemProvider,
   useUpdateUserRole,
   useUpsertFeatureFlag,
 } from './admin.hooks';
 
 vi.mock('@knowtis/api-client', () => ({
-  httpClient: { get: vi.fn(), patch: vi.fn(), put: vi.fn(), delete: vi.fn() },
+  httpClient: {
+    get: vi.fn(),
+    patch: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+  },
   aiModelsApi: { getModels: vi.fn() },
 }));
 
@@ -340,5 +351,139 @@ describe('useGlobalAiTimeseries', () => {
     );
     expect(result.current.data?.buckets[0].bucketStart).toBeInstanceOf(Date);
     expect(result.current.data?.buckets[0].costUsd).toBe(0.004);
+  });
+});
+
+const PROVIDERS = [
+  {
+    provider: 'anthropic',
+    enabled: true,
+    keySource: 'database',
+    storedKeyUnreadable: false,
+    keyPrefix: 'sk-ant-1',
+    updatedAt: '2026-07-17T00:00:00.000Z',
+  },
+];
+
+describe('useSystemProviders', () => {
+  it('fetches and validates the provider list', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(PROVIDERS);
+
+    const { result } = renderHook(() => useSystemProviders(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/providers');
+    expect(result.current.data?.[0].updatedAt).toBeInstanceOf(Date);
+    expect(result.current.data?.[0].storedKeyUnreadable).toBe(false);
+  });
+});
+
+describe('useSetSystemProvider', () => {
+  it('sends only the fields the caller set', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({ provider: 'anthropic', enabled: false });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.put).toHaveBeenCalledWith('/ai/providers/anthropic', {
+      enabled: false,
+    });
+  });
+
+  it('seeds the list cache with the applied state the mutation returned', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-new' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.put).toHaveBeenCalledWith('/ai/providers/anthropic', {
+      apiKey: 'sk-ant-new',
+    });
+    const cached = client.getQueryData(adminQueryKeys.systemProviders());
+    expect(cached).toEqual(result.current.data);
+  });
+});
+
+describe('useClearSystemProviderKey', () => {
+  it('deletes only the key, leaving the provider row', async () => {
+    vi.mocked(httpClient.delete).mockResolvedValue(PROVIDERS);
+
+    const { result } = renderHook(() => useClearSystemProviderKey(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate('openrouter');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.delete).toHaveBeenCalledWith(
+      '/ai/providers/openrouter/key'
+    );
+  });
+});
+
+describe('useTestSystemProvider', () => {
+  it('reports the model that answered the probe', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ok: true,
+      model: 'anthropic:haiku',
+    });
+
+    const { result } = renderHook(() => useTestSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate('anthropic');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith(
+      '/ai/providers/anthropic/test',
+      {}
+    );
+    expect(result.current.data).toEqual({
+      ok: true,
+      model: 'anthropic:haiku',
+    });
+  });
+
+  it('resolves a refused probe rather than surfacing it as an error', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ok: false,
+      reason: 'rejected',
+      message: 'anthropic refused the probe: bad key',
+    });
+
+    const { result } = renderHook(() => useTestSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate('anthropic');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.isError).toBe(false);
+    expect(result.current.data).toMatchObject({
+      ok: false,
+      reason: 'rejected',
+    });
+  });
+
+  it('rejects a probe result that is neither a success nor a failure', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({ ok: false });
+
+    const { result } = renderHook(() => useTestSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate('anthropic');
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

@@ -1,7 +1,12 @@
 import { USER_ROLE } from '@jovandyaz/auth';
 import { z } from 'zod';
 
-import { MODEL_TIERS } from '@knowtis/shared-types';
+import {
+  AI_PROVIDERS,
+  MODEL_TIERS,
+  PROVIDER_KEY_SOURCES,
+  PROVIDER_PROBE_FAILURES,
+} from '@knowtis/shared-types';
 
 export const AdminUserSchema = z.object({
   id: z.uuid(),
@@ -128,3 +133,25 @@ export const SelectableModelSchema = z.object({
 export type SelectableModelOption = z.infer<typeof SelectableModelSchema>;
 
 export const SelectableModelsSchema = z.array(SelectableModelSchema);
+
+export const SystemProviderSchema = z.object({
+  provider: z.enum(AI_PROVIDERS),
+  enabled: z.boolean(),
+  keySource: z.enum(PROVIDER_KEY_SOURCES),
+  storedKeyUnreadable: z.boolean(),
+  keyPrefix: z.string().nullable(),
+  updatedAt: z.coerce.date().nullable(),
+});
+export type SystemProvider = z.infer<typeof SystemProviderSchema>;
+
+export const SystemProvidersSchema = z.array(SystemProviderSchema);
+
+export const ProviderTestResultSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), model: z.string() }),
+  z.object({
+    ok: z.literal(false),
+    reason: z.enum(PROVIDER_PROBE_FAILURES),
+    message: z.string(),
+  }),
+]);
+export type ProviderTestResult = z.infer<typeof ProviderTestResultSchema>;

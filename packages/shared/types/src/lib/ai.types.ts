@@ -93,7 +93,12 @@ export const BYOK_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
 /** Where the server-side key for a provider actually resolves from, in precedence order. */
-export type ProviderKeySource = 'database' | 'environment' | 'none';
+export const PROVIDER_KEY_SOURCES = [
+  'database',
+  'environment',
+  'none',
+] as const;
+export type ProviderKeySource = (typeof PROVIDER_KEY_SOURCES)[number];
 
 export interface SystemProviderInfo {
   readonly provider: AIProvider;
@@ -107,6 +112,26 @@ export interface SystemProviderInfo {
   readonly keyPrefix: string | null;
   readonly updatedAt: string | null;
 }
+
+/**
+ * Why a provider probe failed. 'rejected' and 'unconfigured' need an admin to
+ * act; 'unavailable' is transient and worth retrying.
+ */
+export const PROVIDER_PROBE_FAILURES = [
+  'rejected',
+  'unavailable',
+  'unconfigured',
+] as const;
+export type ProviderProbeFailure = (typeof PROVIDER_PROBE_FAILURES)[number];
+
+/** A probe that ran and reports what happened — a refusal is an answer, not a transport error. */
+export type ProviderTestResult =
+  | { readonly ok: true; readonly model: string }
+  | {
+      readonly ok: false;
+      readonly reason: ProviderProbeFailure;
+      readonly message: string;
+    };
 
 export interface ProviderKeyInfo {
   readonly provider: ByokProvider;

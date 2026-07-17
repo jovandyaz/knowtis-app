@@ -62,7 +62,11 @@ export {
   BYOK_PROVIDERS,
   type ByokProvider,
   type ProviderKeyInfo,
+  PROVIDER_KEY_SOURCES,
   type ProviderKeySource,
+  PROVIDER_PROBE_FAILURES,
+  type ProviderProbeFailure,
+  type ProviderTestResult,
   type SystemProviderInfo,
   type EncryptedSecret,
 } from './lib/ai.types';

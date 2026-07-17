@@ -6,12 +6,25 @@ import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 
 import { AiConfigPage } from '../AiConfigPage';
 
-const { useAiConfigMock, useSelectableModelsMock, setConfigMutate } =
-  vi.hoisted(() => ({
-    useAiConfigMock: vi.fn(),
-    useSelectableModelsMock: vi.fn(),
-    setConfigMutate: vi.fn(),
-  }));
+const {
+  useAiConfigMock,
+  useSelectableModelsMock,
+  useSystemProvidersMock,
+  setConfigMutate,
+} = vi.hoisted(() => ({
+  useAiConfigMock: vi.fn(),
+  useSelectableModelsMock: vi.fn(),
+  useSystemProvidersMock: vi.fn(),
+  setConfigMutate: vi.fn(),
+}));
+
+const idleMutation = {
+  mutate: vi.fn(),
+  isPending: false,
+  isError: false,
+  error: null,
+  data: undefined,
+};
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -19,12 +32,16 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useAiConfig: () => useAiConfigMock(),
     useSelectableModels: () => useSelectableModelsMock(),
+    useSystemProviders: () => useSystemProvidersMock(),
     useSetAiConfig: vi.fn().mockReturnValue({
       mutate: setConfigMutate,
       isPending: false,
       isError: false,
       error: null,
     }),
+    useSetSystemProvider: () => idleMutation,
+    useClearSystemProviderKey: () => idleMutation,
+    useTestSystemProvider: () => idleMutation,
   };
 });
 
@@ -44,6 +61,12 @@ describe('AiConfigPage', () => {
     setConfigMutate.mockReset();
     useSelectableModelsMock.mockReturnValue({
       data: MODELS,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useSystemProvidersMock.mockReturnValue({
+      data: [],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -88,7 +111,7 @@ describe('AiConfigPage', () => {
     expect(screen.getByText('environment')).toBeInTheDocument();
   });
 
-  it('omits non-model config entries until their editor ships', () => {
+  it('routes each config entry to the editor for its kind', () => {
     useAiConfigMock.mockReturnValue({
       data: [
         {
@@ -101,7 +124,7 @@ describe('AiConfigPage', () => {
         },
         {
           key: 'ai_fallback_chain',
-          value: 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini',
+          value: 'anthropic:claude-haiku-4-5-20251001',
           kind: 'chain',
           source: 'environment',
           description: null,
@@ -114,8 +137,37 @@ describe('AiConfigPage', () => {
     });
 
     render(<AiConfigPage />);
+
     expect(screen.getByText('Default model')).toBeInTheDocument();
-    expect(screen.queryByText('ai_fallback_chain')).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('heading', { name: 'Routing' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('listitem')).toHaveTextContent('Haiku 4.5');
+  });
+
+  it('renders the model editor when the api predates the chain key', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_default_model',
+          value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
+          source: 'database',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    render(<AiConfigPage />);
+
+    expect(screen.getByText('Default model')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('heading', { name: 'Routing' })
+    ).not.toBeInTheDocument();
   });
 
   it('mutates the config key when a model is selected', async () => {
