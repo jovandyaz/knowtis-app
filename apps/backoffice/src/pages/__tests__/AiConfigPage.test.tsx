@@ -56,6 +56,7 @@ describe('AiConfigPage', () => {
         {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
           source: 'database',
           description: 'Default model for AI completions',
           updatedAt: new Date('2026-07-15T00:00:00.000Z'),
@@ -63,6 +64,7 @@ describe('AiConfigPage', () => {
         {
           key: 'ai_fast_model',
           value: 'anthropic:claude-haiku-4-5-20251001',
+          kind: 'model',
           source: 'environment',
           description: null,
           updatedAt: null,
@@ -86,12 +88,43 @@ describe('AiConfigPage', () => {
     expect(screen.getByText('environment')).toBeInTheDocument();
   });
 
+  it('omits non-model config entries until their editor ships', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_default_model',
+          value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
+          source: 'database',
+          description: null,
+          updatedAt: null,
+        },
+        {
+          key: 'ai_fallback_chain',
+          value: 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini',
+          kind: 'chain',
+          source: 'environment',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    render(<AiConfigPage />);
+    expect(screen.getByText('Default model')).toBeInTheDocument();
+    expect(screen.queryByText('ai_fallback_chain')).not.toBeInTheDocument();
+  });
+
   it('mutates the config key when a model is selected', async () => {
     useAiConfigMock.mockReturnValue({
       data: [
         {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
           source: 'database',
           description: null,
           updatedAt: null,

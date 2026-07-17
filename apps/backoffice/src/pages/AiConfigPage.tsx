@@ -65,54 +65,56 @@ export function AiConfigPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {config.data.map((entry) => (
-              <TableRow key={entry.key}>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span>{KEY_LABELS[entry.key] ?? entry.key}</span>
-                    <span className="font-mono text-xs text-(--muted-foreground)">
-                      {entry.key}
-                    </span>
-                    {entry.description && (
-                      <span className="text-xs text-(--muted-foreground)">
-                        {entry.description}
+            {config.data
+              .filter((entry) => entry.kind === 'model')
+              .map((entry) => (
+                <TableRow key={entry.key}>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span>{KEY_LABELS[entry.key] ?? entry.key}</span>
+                      <span className="font-mono text-xs text-(--muted-foreground)">
+                        {entry.key}
                       </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col gap-1">
-                    <ModelSelect
-                      models={models.data ?? []}
-                      value={entry.value}
-                      tierOrder={MODEL_TIERS}
-                      status={modelStatus}
-                      onRetry={() => void models.refetch()}
-                      triggerVariant="outline"
-                      disabled={setConfig.isPending}
-                      onSelect={(id) =>
-                        setConfig.mutate({ key: entry.key, value: id })
+                      {entry.description && (
+                        <span className="text-xs text-(--muted-foreground)">
+                          {entry.description}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col gap-1">
+                      <ModelSelect
+                        models={models.data ?? []}
+                        value={entry.value}
+                        tierOrder={MODEL_TIERS}
+                        status={modelStatus}
+                        onRetry={() => void models.refetch()}
+                        triggerVariant="outline"
+                        disabled={setConfig.isPending}
+                        onSelect={(id) =>
+                          setConfig.mutate({ key: entry.key, value: id })
+                        }
+                      />
+                      <span className="font-mono text-xs text-(--muted-foreground)">
+                        {entry.value}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant={
+                        entry.source === 'database' ? 'default' : 'outline'
                       }
-                    />
-                    <span className="font-mono text-xs text-(--muted-foreground)">
-                      {entry.value}
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge
-                    variant={
-                      entry.source === 'database' ? 'default' : 'outline'
-                    }
-                  >
-                    {entry.source}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {entry.updatedAt?.toLocaleString() ?? '—'}
-                </TableCell>
-              </TableRow>
-            ))}
+                    >
+                      {entry.source}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {entry.updatedAt?.toLocaleString() ?? '—'}
+                  </TableCell>
+                </TableRow>
+              ))}
           </TableBody>
         </Table>
       )}

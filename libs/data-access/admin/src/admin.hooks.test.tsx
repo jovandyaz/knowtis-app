@@ -229,6 +229,7 @@ describe('useAiConfig', () => {
       {
         key: 'ai_default_model',
         value: 'anthropic:claude-sonnet-5',
+        kind: 'model',
         source: 'database',
         description: null,
         updatedAt: '2026-07-15T00:00:00.000Z',
@@ -236,6 +237,7 @@ describe('useAiConfig', () => {
       {
         key: 'ai_fast_model',
         value: 'anthropic:claude-haiku-4-5-20251001',
+        kind: 'model',
         source: 'environment',
         description: null,
         updatedAt: null,
@@ -255,6 +257,7 @@ describe('useAiConfig', () => {
       {
         key: 'ai_default_model',
         value: 'x',
+        kind: 'model',
         source: 'file',
         description: null,
         updatedAt: null,

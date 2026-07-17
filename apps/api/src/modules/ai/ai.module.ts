@@ -48,7 +48,10 @@ import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/dr
 import { DrizzleUserProviderKeysRepository } from './infrastructure/persistence/drizzle-user-provider-keys.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
 import { AIStructuredOutputSDKProvider } from './infrastructure/providers/ai-structured-output-sdk.provider';
-import { FallbackChainService } from './infrastructure/providers/fallback-chain.service';
+import {
+  FALLBACK_CHAIN_SOURCE,
+  FallbackChainService,
+} from './infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
 import {
   AI_REDIS,
@@ -86,6 +89,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     ProviderRegistryFactory,
     WebhookAlertService,
     FallbackChainService,
+    { provide: FALLBACK_CHAIN_SOURCE, useExisting: AIConfigService },
     { provide: MODEL_CATALOG, useClass: ModelCatalogAdapter },
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {

@@ -106,6 +106,7 @@ export type AuditParams = Pick<AdminUsersParams, 'page' | 'limit'>;
 export const AiConfigEntrySchema = z.object({
   key: z.string(),
   value: z.string(),
+  kind: z.enum(['model', 'chain']).default('model'),
   source: z.enum(['database', 'environment']),
   description: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),

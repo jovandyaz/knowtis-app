@@ -4,6 +4,7 @@ import { AIConfigService } from './ai-config.service';
 
 const CURATED_DEFAULT = 'anthropic:claude-sonnet-5';
 const CURATED_FAST = 'anthropic:claude-haiku-4-5-20251001';
+const ENV_CHAIN = 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
 
 describe('AIConfigService', () => {
@@ -21,6 +22,7 @@ describe('AIConfigService', () => {
   let mockConfigService: { get: ReturnType<typeof vi.fn> };
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let mockRegistry: { isModelAvailable: ReturnType<typeof vi.fn> };
+  let mockCatalog: { isSupported: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     mockRepo = {
@@ -38,18 +40,21 @@ describe('AIConfigService', () => {
         const defaults: Record<string, string> = {
           AI_DEFAULT_MODEL: CURATED_DEFAULT,
           AI_FAST_MODEL: CURATED_FAST,
+          AI_FALLBACK_CHAIN: ENV_CHAIN,
         };
         return defaults[key];
       }),
     };
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
     mockRegistry = { isModelAvailable: vi.fn().mockReturnValue(true) };
+    mockCatalog = { isSupported: vi.fn().mockReturnValue(true) };
     service = new AIConfigService(
       mockRepo as any,
       mockCache as any,
       mockConfigService as any,
       mockAudit as any,
-      mockRegistry as any
+      mockRegistry as any,
+      mockCatalog as any
     );
   });
 
@@ -166,6 +171,7 @@ describe('AIConfigService', () => {
       {
         key: 'ai_default_model',
         value: CURATED_DEFAULT,
+        kind: 'model',
         source: 'database',
         description: null,
         updatedAt,
@@ -173,6 +179,15 @@ describe('AIConfigService', () => {
       {
         key: 'ai_fast_model',
         value: CURATED_FAST,
+        kind: 'model',
+        source: 'environment',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_fallback_chain',
+        value: ENV_CHAIN,
+        kind: 'chain',
         source: 'environment',
         description: null,
         updatedAt: null,
@@ -187,6 +202,7 @@ describe('AIConfigService', () => {
       {
         key: 'ai_default_model',
         value: CURATED_DEFAULT,
+        kind: 'model',
         source: 'environment',
         description: null,
         updatedAt: null,
@@ -194,10 +210,73 @@ describe('AIConfigService', () => {
       {
         key: 'ai_fast_model',
         value: CURATED_FAST,
+        kind: 'model',
+        source: 'environment',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_fallback_chain',
+        value: ENV_CHAIN,
+        kind: 'chain',
         source: 'environment',
         description: null,
         updatedAt: null,
       },
     ]);
+  });
+
+  describe('fallback chain', () => {
+    it('should parse the env chain into a trimmed list of model ids', async () => {
+      const chain = await service.getFallbackChain();
+      expect(chain).toEqual([
+        'anthropic:claude-haiku-4-5-20251001',
+        'openai:gpt-4o-mini',
+      ]);
+    });
+
+    it('should return the DB chain over the env default', async () => {
+      mockRepo.get.mockResolvedValue('google:gemini-2.0-flash');
+      const chain = await service.getFallbackChain();
+      expect(chain).toEqual(['google:gemini-2.0-flash']);
+    });
+
+    it('should persist a valid chain', async () => {
+      await service.setConfig('ai_fallback_chain', ENV_CHAIN, ACTOR);
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_fallback_chain',
+        ENV_CHAIN,
+        undefined
+      );
+    });
+
+    it('should reject an empty chain', async () => {
+      await expect(
+        service.setConfig('ai_fallback_chain', '  ', ACTOR)
+      ).rejects.toThrow('Fallback chain must list at least one model');
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('should reject a chain with a model missing from the catalog', async () => {
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== 'openai:ghost-model'
+      );
+      await expect(
+        service.setConfig(
+          'ai_fallback_chain',
+          'anthropic:claude-haiku-4-5-20251001,openai:ghost-model',
+          ACTOR
+        )
+      ).rejects.toThrow('openai:ghost-model');
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('should reject a chain with no model invocable by the server', async () => {
+      mockRegistry.isModelAvailable.mockReturnValue(false);
+      await expect(
+        service.setConfig('ai_fallback_chain', ENV_CHAIN, ACTOR)
+      ).rejects.toThrow('at least one must be routable');
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
   });
 });
