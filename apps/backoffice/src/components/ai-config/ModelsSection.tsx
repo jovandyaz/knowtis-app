@@ -33,6 +33,8 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
   const models = useSelectableModels();
   const setConfig = useSetAiConfig();
   const resetConfig = useResetAiConfig();
+  // Cross-guard: a PUT and a DELETE on the same key must not race.
+  const mutating = setConfig.isPending || resetConfig.isPending;
 
   const modelStatus = models.isLoading
     ? 'loading'
@@ -84,7 +86,7 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                     status={modelStatus}
                     onRetry={() => void models.refetch()}
                     triggerVariant="outline"
-                    disabled={setConfig.isPending}
+                    disabled={mutating}
                     onSelect={(id) =>
                       setConfig.mutate({ key: entry.key, value: id })
                     }
@@ -105,7 +107,7 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                     <Button
                       variant="ghost"
                       size="sm"
-                      disabled={resetConfig.isPending}
+                      disabled={mutating}
                       onClick={() => resetConfig.mutate({ key: entry.key })}
                     >
                       Reset to default
