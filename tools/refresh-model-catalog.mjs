@@ -17,12 +17,14 @@ const MODES = new Set(['chat', 'audio_transcription']);
 // applies only while its key is absent upstream — once LiteLLM adds it, the
 // upstream entry wins. Prices are the provider's current list rates.
 const CURATED_OVERRIDES = {
-  // Source: https://openrouter.ai/z-ai/glm-5.2 (2026-07-17)
+  // z.ai list rates (2026-07-17) — an upper bound across OpenRouter's routed
+  // providers, so the cost breaker never undercounts. OpenRouter's own page
+  // shows a promo price that live requests do not honor on every provider.
   'openrouter/z-ai/glm-5.2': {
     litellm_provider: 'openrouter',
     mode: 'chat',
-    input_cost_per_token: 4.2e-7,
-    output_cost_per_token: 0.00000132,
+    input_cost_per_token: 0.0000014,
+    output_cost_per_token: 0.0000044,
     max_input_tokens: 1000000,
     max_output_tokens: 128000,
   },
