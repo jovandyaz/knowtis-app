@@ -58,6 +58,12 @@ describe('AIKeysManager', () => {
     expect(screen.getByText('Google')).toBeInTheDocument();
   });
 
+  it('offers an OpenRouter key slot', () => {
+    render(<AIKeysManager />);
+
+    expect(screen.getByText('OpenRouter')).toBeInTheDocument();
+  });
+
   it('Save buttons are disabled when the input is empty', () => {
     render(<AIKeysManager />);
 
