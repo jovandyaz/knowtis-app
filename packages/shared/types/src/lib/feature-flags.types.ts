@@ -12,6 +12,7 @@ export const FEATURE_FLAG_KEYS = {
   AI_BYOK_COST_GATE: 'ai_byok_cost_gate',
   AI_GLOBAL_SPEND_BREAKER: 'ai_global_spend_breaker',
   AI_ANON_IP_BUDGET: 'ai_anon_ip_budget',
+  AI_TIER_GATING: 'ai_tier_gating',
 } as const;
 
 export type FeatureFlagKey =

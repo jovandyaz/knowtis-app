@@ -49,6 +49,7 @@ const modelPreferenceStub = {
   isSelectable: vi.fn().mockReturnValue(true),
   isSelectableWith: vi.fn().mockReturnValue(true),
   byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
+  tierGatingOn: vi.fn().mockResolvedValue(false),
 } as unknown as ModelPreferenceService;
 const byokStub = {
   getApiKey: vi.fn().mockResolvedValue(null),

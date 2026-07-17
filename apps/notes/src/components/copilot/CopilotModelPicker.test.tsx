@@ -2,36 +2,43 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AIAssistantSection } from './AIAssistantSection';
+import { CopilotModelPicker } from './CopilotModelPicker';
 
-const update = vi.fn();
+const setSelected = vi.fn();
 const openSettings = vi.fn();
 const modelsData = vi.fn();
-const useFeatureFlag = vi.fn().mockReturnValue(false);
+const byokFlag = vi.fn();
+
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => byokFlag(),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
-vi.mock('@knowtis/data-access-feature-flags', () => ({
-  useFeatureFlag: () => useFeatureFlag(),
+vi.mock('@/hooks', () => ({
+  useAvailableModels: () => ({
+    data: modelsData(),
+    isPending: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
+  useAISettings: () => ({ data: { preferredModel: 'a:bal' } }),
 }));
-vi.mock('./AIKeysManager', () => ({
-  AIKeysManager: () => <div>byok-keys-manager</div>,
+vi.mock('@/stores/agent.store', () => ({
+  useAgentStore: (select: (s: unknown) => unknown) =>
+    select({ selectedModel: null, setSelectedModel: setSelected }),
 }));
 vi.mock('@/stores/settings.store', () => ({
   useSettingsStore: (select: (s: unknown) => unknown) =>
     select({ open: openSettings }),
-}));
-vi.mock('@/hooks', () => ({
-  useAvailableModels: () => ({ data: modelsData() }),
-  useAISettings: () => ({ data: { preferredModel: 'a:bal' } }),
-  useUpdateAISettings: () => ({ mutate: update }),
 }));
 
 const grantedModels = [
   {
     id: 'a:bal',
     label: 'Balanced One',
-    descriptionKey: 'aiModels.sonnet4',
+    descriptionKey: 'aiModels.sonnet5',
     tier: 'balanced',
     contextWindow: 1000000,
     costClass: 2,
@@ -67,23 +74,17 @@ const withLockedModel = [
   },
 ];
 
-describe('AIAssistantSection', () => {
+describe('CopilotModelPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useFeatureFlag.mockReturnValue(false);
+    byokFlag.mockReturnValue(true);
     modelsData.mockReturnValue(grantedModels);
-  });
-
-  it('updates the default model on select', async () => {
-    render(<AIAssistantSection />);
-    await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
-    await userEvent.click(screen.getByText('Fast One'));
-    expect(update).toHaveBeenCalledWith({ preferredModel: 'a:fast' });
   });
 
   it('renders a BYOK-gated model as disabled with the locked badge', async () => {
     modelsData.mockReturnValue(withLockedModel);
-    render(<AIAssistantSection />);
+    render(<CopilotModelPicker />);
+
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
 
     const locked = screen.getByRole('menuitem', { name: /Premium One/ });
@@ -93,47 +94,49 @@ describe('AIAssistantSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('selects a granted model', async () => {
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
+    await userEvent.click(screen.getByText('Fast One'));
+
+    expect(setSelected).toHaveBeenCalledWith('a:fast');
+  });
+
   it('offers a BYOK unlock CTA that opens AI settings when a model is locked', async () => {
-    useFeatureFlag.mockReturnValue(true);
     modelsData.mockReturnValue(withLockedModel);
-    render(<AIAssistantSection />);
+    render(<CopilotModelPicker />);
+
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
     await userEvent.click(
       screen.getByRole('button', { name: 'aiAssistant.byok.unlockCta' })
     );
+
     expect(openSettings).toHaveBeenCalledWith('aiAssistant');
   });
 
   it('hides the unlock CTA when no model is locked', async () => {
-    useFeatureFlag.mockReturnValue(true);
-    render(<AIAssistantSection />);
+    render(<CopilotModelPicker />);
+
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
+
     expect(
       screen.queryByText('aiAssistant.byok.unlockCta')
     ).not.toBeInTheDocument();
   });
 
-  it('hides the unlock CTA when key management is unavailable, keeping the locked badge', async () => {
-    useFeatureFlag.mockReturnValue(false);
+  it('falls back to the account-default hint when key management is unavailable', async () => {
+    byokFlag.mockReturnValue(false);
     modelsData.mockReturnValue(withLockedModel);
-    render(<AIAssistantSection />);
+    render(<CopilotModelPicker />);
+
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
-    expect(
-      screen.getByText('aiAssistant.byok.lockedBadge')
-    ).toBeInTheDocument();
+
     expect(
       screen.queryByText('aiAssistant.byok.unlockCta')
     ).not.toBeInTheDocument();
-  });
-
-  it('does not render the BYOK keys manager when the flag is off', () => {
-    render(<AIAssistantSection />);
-    expect(screen.queryByText('byok-keys-manager')).not.toBeInTheDocument();
-  });
-
-  it('renders the BYOK keys manager when the flag is enabled', () => {
-    useFeatureFlag.mockReturnValue(true);
-    render(<AIAssistantSection />);
-    expect(screen.getByText('byok-keys-manager')).toBeInTheDocument();
+    expect(
+      screen.getByText(/aiAssistant.defaultHint: Balanced One/)
+    ).toBeInTheDocument();
   });
 });

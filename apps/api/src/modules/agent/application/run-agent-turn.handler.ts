@@ -489,13 +489,16 @@ export class RunAgentTurnHandler {
       return;
     }
 
+    const tierGatingOn = await this.modelPreference.tierGatingOn();
+
     let model: string | null;
     try {
       model = await this.resolveModel(
         input,
         persistence?.conversationId,
         callbacks,
-        byokProviders
+        byokProviders,
+        tierGatingOn
       );
     } catch (error) {
       this.logger.error({
@@ -678,10 +681,22 @@ export class RunAgentTurnHandler {
     input: RunAgentTurnInput,
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
-    byokProviders: ReadonlySet<string>
+    byokProviders: ReadonlySet<string>,
+    tierGatingOn: boolean
   ): Promise<string | null> {
     if (input.model) {
-      if (!this.modelPreference.isSelectableWith(input.model, byokProviders)) {
+      if (
+        !this.modelPreference.isSelectableWith(
+          input.model,
+          byokProviders,
+          tierGatingOn
+        )
+      ) {
+        this.logger.warn({
+          event: 'ai.model.access_denied',
+          model: input.model,
+          userId: input.userId,
+        });
         callbacks.onError(AIErrors.invalidModel(input.model));
         return null;
       }
@@ -697,13 +712,14 @@ export class RunAgentTurnHandler {
     const stored = input.conversationModel ?? null;
     if (
       stored &&
-      this.modelPreference.isSelectableWith(stored, byokProviders)
+      this.modelPreference.isSelectableWith(stored, byokProviders, tierGatingOn)
     ) {
       return stored;
     }
     return this.modelPreference.getEffectiveDefault(
       input.userId,
-      byokProviders
+      byokProviders,
+      tierGatingOn
     );
   }
 

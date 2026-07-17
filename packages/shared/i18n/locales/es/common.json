@@ -119,6 +119,8 @@
       "invalid": "La clave fue rechazada. Verifica que sea válida y tenga cuota.",
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
+      "lockedBadge": "Requiere tu clave",
+      "unlockCta": "Guarda tu propia clave para desbloquear los modelos premium",
       "lastUsed": "Último uso {{when}}",
       "neverUsed": "Sin usar todavía"
     }
