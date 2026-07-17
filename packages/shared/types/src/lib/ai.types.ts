@@ -92,21 +92,18 @@ export type AIProvider = (typeof AI_PROVIDERS)[number];
 export const BYOK_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
 
-/**
- * Where the server-side key for a provider resolves from, in precedence order.
- * 'unreadable' means a row holds a secret the server cannot decrypt, so routing
- * silently falls through to the env value — it must be surfaced, not hidden.
- */
-export type ProviderKeySource =
-  | 'database'
-  | 'unreadable'
-  | 'environment'
-  | 'none';
+/** Where the server-side key for a provider actually resolves from, in precedence order. */
+export type ProviderKeySource = 'database' | 'environment' | 'none';
 
 export interface SystemProviderInfo {
   readonly provider: AIProvider;
   readonly enabled: boolean;
   readonly keySource: ProviderKeySource;
+  /**
+   * True when a stored secret exists but cannot be decrypted. Routing silently
+   * falls through to `keySource`, so this must be surfaced, not hidden.
+   */
+  readonly storedKeyUnreadable: boolean;
   readonly keyPrefix: string | null;
   readonly updatedAt: string | null;
 }

@@ -1,5 +1,5 @@
 {
-  "id": "5adca98a-26af-4c9c-bb9b-6eb773e44613",
+  "id": "fa52d2c9-ac8c-4dd2-b944-74bc137768d5",
   "prevId": "1ec5c21a-1335-462e-8138-a4b386f35447",
   "version": "7",
   "dialect": "postgresql",
@@ -2103,7 +2103,7 @@
         },
         "system_provider_keys_secret_complete": {
           "name": "system_provider_keys_secret_complete",
-          "value": "(\"system_provider_keys\".\"ciphertext\" is null and \"system_provider_keys\".\"iv\" is null and \"system_provider_keys\".\"auth_tag\" is null)\n          or (\"system_provider_keys\".\"ciphertext\" is not null and \"system_provider_keys\".\"iv\" is not null and \"system_provider_keys\".\"auth_tag\" is not null)"
+          "value": "(\"system_provider_keys\".\"ciphertext\" is null and \"system_provider_keys\".\"iv\" is null and \"system_provider_keys\".\"auth_tag\" is null and \"system_provider_keys\".\"key_prefix\" is null)\n          or (\"system_provider_keys\".\"ciphertext\" is not null and \"system_provider_keys\".\"iv\" is not null and \"system_provider_keys\".\"auth_tag\" is not null and \"system_provider_keys\".\"key_prefix\" is not null)"
         }
       },
       "isRLSEnabled": false

@@ -79,12 +79,12 @@ export class ProviderRegistryFactory implements OnModuleInit {
       this.configService.get('AI_GATEWAY_API_KEY') || undefined;
     if (gatewayApiKey) {
       this.gateway = createGateway({ apiKey: gatewayApiKey });
-      return;
+    } else {
+      // Build from env first so the registry is never unset, then prime from the
+      // DB before serving: a provider keyed only in the DB would otherwise be
+      // unroutable until the first background refresh lands.
+      this.rebuildRegistry();
     }
-    // Build from env first so the registry is never unset, then prime from the
-    // DB before serving: a provider keyed only in the DB would otherwise be
-    // unroutable until the first background refresh lands.
-    this.rebuildRegistry();
     try {
       await this.refreshSystemConfigs();
     } catch (error) {
@@ -95,16 +95,20 @@ export class ProviderRegistryFactory implements OnModuleInit {
     }
   }
 
-  /** Re-reads the stored config now and rebuilds the registry. Callers that just mutated it need the change live. */
+  /** Re-reads the stored config now and applies it. Callers that just mutated it need the change live. */
   async refreshSystemConfigs(): Promise<void> {
     if (!this.systemKeys) {
       return;
     }
+    // Claim before the read: two concurrent refreshes can resolve out of order,
+    // and an older snapshot must not overwrite a newer admin change.
+    const generation = ++this.configsGeneration;
     const configs = await this.systemKeys.getSystemProviderConfigs();
+    if (generation !== this.configsGeneration) {
+      return;
+    }
     this.systemConfigs = configs;
     this.configsRefreshedAt = Date.now();
-    // Bump the generation so an in-flight background read can't clobber this.
-    this.configsGeneration++;
     this.rebuildRegistry();
   }
 
@@ -133,6 +137,8 @@ export class ProviderRegistryFactory implements OnModuleInit {
           `'${modelId}' is not routable in gateway mode — OpenRouter models require direct mode (unset AI_GATEWAY_API_KEY)`
         );
       }
+      this.refreshSystemConfigsIfStale();
+      this.assertProviderEnabled(modelId);
       return this.gateway.languageModel(toGatewayModelId(modelId));
     }
     this.refreshSystemConfigsIfStale();
@@ -175,7 +181,16 @@ export class ProviderRegistryFactory implements OnModuleInit {
       return false;
     }
     if (this.gateway) {
-      return providerOf(modelId) !== 'openrouter';
+      if (providerOf(modelId) === 'openrouter') {
+        return false;
+      }
+      this.refreshSystemConfigsIfStale();
+      try {
+        this.assertProviderEnabled(modelId);
+        return true;
+      } catch {
+        return false;
+      }
     }
     this.refreshSystemConfigsIfStale();
     try {
@@ -186,6 +201,19 @@ export class ProviderRegistryFactory implements OnModuleInit {
     }
   }
 
+  /**
+   * Throws when an admin disabled the provider. The gateway's catalog is wider
+   * than AI_PROVIDERS, so an untracked provider is the gateway's call, not ours.
+   */
+  private assertProviderEnabled(modelId: string): void {
+    const provider = providerOf(modelId);
+    if (isAIProvider(provider) && !this.isProviderEnabled(provider)) {
+      throw new ProviderNotConfiguredError(
+        `Provider '${provider}' is disabled`
+      );
+    }
+  }
+
   private assertProviderRoutable(modelId: string): void {
     const provider = providerOf(modelId);
     if (!isAIProvider(provider)) {
@@ -193,11 +221,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
         `Provider '${provider}' is not supported`
       );
     }
-    if (!this.isProviderEnabled(provider)) {
-      throw new ProviderNotConfiguredError(
-        `Provider '${provider}' is disabled`
-      );
-    }
+    this.assertProviderEnabled(modelId);
     if (!this.resolveKey(provider)) {
       throw new ProviderNotConfiguredError(
         `No key for '${provider}' — set one via PUT /ai/providers/${provider} or ${PROVIDER_ENV_KEYS[provider]}`
@@ -224,6 +248,9 @@ export class ProviderRegistryFactory implements OnModuleInit {
   }
 
   private rebuildRegistry(): void {
+    if (this.gateway) {
+      return;
+    }
     const anthropicKey = this.routableKey('anthropic');
     const googleKey = this.routableKey('google');
     const openaiKey = this.routableKey('openai');

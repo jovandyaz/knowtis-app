@@ -30,8 +30,9 @@ import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
 
 const PROBE_MAX_OUTPUT_TOKENS = 16;
+const PROBE_TIMEOUT_MS = 10_000;
 
-@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard, UserScopedThrottlerGuard)
 @RequireFeatureFlag('ai_enabled')
 @Roles('admin')
 @Controller('ai/providers')
@@ -44,12 +45,12 @@ export class AiProvidersController {
   ) {}
 
   @Get()
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   list(): Promise<SystemProviderInfo[]> {
     return this.systemKeys.list();
   }
 
   @Put(':provider')
-  @UseGuards(UserScopedThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async set(
     @CurrentUser() user: RequestUser,
@@ -70,7 +71,6 @@ export class AiProvidersController {
   }
 
   @Delete(':provider/key')
-  @UseGuards(UserScopedThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async clearKey(
     @CurrentUser() user: RequestUser,
@@ -102,6 +102,7 @@ export class AiProvidersController {
         model: this.registry.languageModel(probe.id, apiKey),
         prompt: 'ping',
         maxOutputTokens: PROBE_MAX_OUTPUT_TOKENS,
+        abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
     } catch (error) {
       if (error instanceof HttpException) {
@@ -113,16 +114,19 @@ export class AiProvidersController {
         model: probe.id,
         error: error instanceof Error ? error.message : 'unknown',
       });
-      // Only the provider rejecting the credential proves the key is bad; an
-      // outage must not block an emergency rotation.
+      // Only the provider rejecting the credential proves the key is bad; a
+      // timeout or network failure carries no status and must not block an
+      // emergency rotation by masquerading as a bad key.
       const status = (error as { statusCode?: number }).statusCode;
-      if (status !== undefined && status !== 401 && status !== 403) {
-        throw new ServiceUnavailableException(
-          `Could not verify the ${provider} key — ${provider} returned ${status}. Retry shortly.`
+      if (status === 401 || status === 403) {
+        throw new UnprocessableEntityException(
+          `The ${provider} key was rejected. Check it is valid and has quota.`
         );
       }
-      throw new UnprocessableEntityException(
-        `The ${provider} key was rejected. Check it is valid and has quota.`
+      throw new ServiceUnavailableException(
+        `Could not verify the ${provider} key — ${provider} did not answer${
+          status ? ` (HTTP ${status})` : ''
+        }. Retry shortly.`
       );
     }
   }

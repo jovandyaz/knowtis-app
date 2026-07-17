@@ -232,6 +232,36 @@ describe('ProviderRegistryFactory', () => {
       expect(factory.isModelAvailable('anthropic:claude-sonnet-5')).toBe(true);
     });
 
+    it('should not let a slow refresh overwrite a newer admin change', async () => {
+      const configs = [
+        new Map([['anthropic', { enabled: true, apiKey: 'stale-key' }]]),
+        new Map([['anthropic', { enabled: true, apiKey: 'fresh-key' }]]),
+      ];
+      let call = 0;
+      const resolvers: (() => void)[] = [];
+      const systemKeys: SystemProviderKeysSource = {
+        getSystemProviderConfigs: vi.fn(async () => {
+          const configsForCall = configs[call++];
+          await new Promise<void>((resolve) => resolvers.push(resolve));
+          return configsForCall as Map<AIProvider, SystemProviderConfig>;
+        }),
+      };
+      const factory = new ProviderRegistryFactory(
+        createMockConfig({ ANTHROPIC_API_KEY: '' }),
+        systemKeys
+      );
+
+      const stale = factory.refreshSystemConfigs();
+      const fresh = factory.refreshSystemConfigs();
+      resolvers[1]();
+      await fresh;
+      vi.mocked(createAnthropic).mockClear();
+      resolvers[0]();
+      await stale;
+
+      expect(createAnthropic).not.toHaveBeenCalled();
+    });
+
     it('should prime the stored config before serving the first request', async () => {
       // No env key at all: only the primed DB row can make this routable.
       const factory = new ProviderRegistryFactory(
@@ -303,9 +333,38 @@ describe('ProviderRegistryFactory', () => {
       const { createProviderRegistry } = vi.mocked(await import('ai'));
       createProviderRegistry.mockClear();
 
-      makeFactory({ AI_GATEWAY_API_KEY: 'gw-key' });
+      const factory = new ProviderRegistryFactory(
+        createMockConfig({ AI_GATEWAY_API_KEY: 'gw-key' }),
+        sourceOf([['anthropic', { enabled: true, apiKey: 'db-key' }]])
+      );
+      await factory.onModuleInit();
 
       expect(createProviderRegistry).not.toHaveBeenCalled();
+    });
+
+    it('should honor provider disablement — the gateway holds the keys, not the routing policy', async () => {
+      const factory = new ProviderRegistryFactory(
+        createMockConfig({ AI_GATEWAY_API_KEY: 'gw-key' }),
+        sourceOf([['anthropic', { enabled: false, apiKey: null }]])
+      );
+      await factory.onModuleInit();
+
+      expect(() => factory.languageModel('anthropic:claude-sonnet-5')).toThrow(
+        "Provider 'anthropic' is disabled"
+      );
+      expect(factory.isModelAvailable('anthropic:claude-sonnet-5')).toBe(false);
+    });
+
+    it('should keep routing providers it does not track — the gateway catalog is wider', async () => {
+      const factory = new ProviderRegistryFactory(
+        createMockConfig({ AI_GATEWAY_API_KEY: 'gw-key' }),
+        sourceOf([['anthropic', { enabled: false, apiKey: null }]])
+      );
+      await factory.onModuleInit();
+
+      expect(factory.languageModel('mistral:mistral-large')).toBe(
+        'mock-gateway-model'
+      );
     });
   });
 

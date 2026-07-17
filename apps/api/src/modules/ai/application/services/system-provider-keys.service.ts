@@ -76,10 +76,13 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     );
     return AI_PROVIDERS.map((provider) => {
       const row = rows.get(provider);
+      const secret = row?.secret ?? null;
+      const storedKey = this.decrypt(provider, secret);
       return {
         provider,
         enabled: row?.enabled ?? true,
-        keySource: this.keySource(provider, row?.secret ?? null),
+        keySource: this.keySource(provider, storedKey),
+        storedKeyUnreadable: Boolean(secret) && !storedKey,
         keyPrefix: row?.keyPrefix ?? null,
         updatedAt: row?.updatedAt.toISOString() ?? null,
       };
@@ -145,12 +148,10 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
 
   private keySource(
     provider: AIProvider,
-    secret: EncryptedSecret | null
+    storedKey: string | null
   ): ProviderKeySource {
-    if (secret) {
-      // An undecryptable row does not route — reporting 'database' would hide
-      // that the server silently fell back to the env key.
-      return this.decrypt(provider, secret) ? 'database' : 'unreadable';
+    if (storedKey) {
+      return 'database';
     }
     return this.configService.get(PROVIDER_ENV_KEYS[provider])
       ? 'environment'

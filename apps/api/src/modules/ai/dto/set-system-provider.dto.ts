@@ -1,19 +1,22 @@
 import {
   IsBoolean,
-  IsOptional,
   IsString,
   MaxLength,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 
+const isProvided = (_: unknown, value: unknown) => value !== undefined;
+
 export class SetSystemProviderDto {
-  @IsOptional()
+  // @IsOptional() would also skip null, letting `{ apiKey: null }` reach the service.
+  @ValidateIf(isProvided)
   @IsString()
   @MinLength(8)
   @MaxLength(300)
   apiKey?: string;
 
-  @IsOptional()
+  @ValidateIf(isProvided)
   @IsBoolean()
   enabled?: boolean;
 }

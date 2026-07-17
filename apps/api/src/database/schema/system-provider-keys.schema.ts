@@ -36,11 +36,11 @@ export const systemProviderKeys = pgTable(
       sql`${table.provider} in ('anthropic', 'openai', 'google', 'openrouter')`
     ),
     // A row may carry no key (enablement only, env supplies the key); when it
-    // does, the three AES-GCM parts must travel together.
+    // does, the AES-GCM parts and the prefix shown to admins travel together.
     check(
       'system_provider_keys_secret_complete',
-      sql`(${table.ciphertext} is null and ${table.iv} is null and ${table.authTag} is null)
-          or (${table.ciphertext} is not null and ${table.iv} is not null and ${table.authTag} is not null)`
+      sql`(${table.ciphertext} is null and ${table.iv} is null and ${table.authTag} is null and ${table.keyPrefix} is null)
+          or (${table.ciphertext} is not null and ${table.iv} is not null and ${table.authTag} is not null and ${table.keyPrefix} is not null)`
     ),
   ]
 );

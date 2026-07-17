@@ -19,6 +19,13 @@ function rowFor(provider: AIProvider, apiKey: string | null, enabled = true) {
   };
 }
 
+function undecryptableRow(provider: AIProvider) {
+  return {
+    ...rowFor(provider, 'sk-stored'),
+    secret: { ciphertext: 'bogus', iv: 'bogus', authTag: 'bogus' },
+  };
+}
+
 describe('SystemProviderKeysService', () => {
   let service: SystemProviderKeysService;
   let mockRepo: {
@@ -76,12 +83,7 @@ describe('SystemProviderKeysService', () => {
     });
 
     it('should yield a null key when the stored secret cannot be decrypted', async () => {
-      mockRepo.getAll.mockResolvedValue([
-        {
-          ...rowFor('openai', 'sk-openai'),
-          secret: { ciphertext: 'bogus', iv: 'bogus', authTag: 'bogus' },
-        },
-      ]);
+      mockRepo.getAll.mockResolvedValue([undecryptableRow('openai')]);
 
       const configs = await service.getSystemProviderConfigs();
 
@@ -111,6 +113,7 @@ describe('SystemProviderKeysService', () => {
         provider: 'openrouter',
         enabled: true,
         keySource: 'database',
+        storedKeyUnreadable: false,
         keyPrefix: 'sk-or-v1',
         updatedAt: '2026-07-17T00:00:00.000Z',
       });
@@ -133,19 +136,23 @@ describe('SystemProviderKeysService', () => {
       expect(entry?.keySource).toBe('none');
     });
 
-    it('should report an undecryptable row as unreadable rather than database', async () => {
-      // Routing silently falls back to env here, so reporting 'database' would lie.
+    it('should report an undecryptable row as the env source it actually routes from', async () => {
       env['OPENAI_API_KEY'] = 'sk-openai-env';
-      mockRepo.getAll.mockResolvedValue([
-        {
-          ...rowFor('openai', 'sk-openai'),
-          secret: { ciphertext: 'bogus', iv: 'bogus', authTag: 'bogus' },
-        },
-      ]);
+      mockRepo.getAll.mockResolvedValue([undecryptableRow('openai')]);
 
       const entry = (await service.list()).find((p) => p.provider === 'openai');
 
-      expect(entry?.keySource).toBe('unreadable');
+      expect(entry?.keySource).toBe('environment');
+      expect(entry?.storedKeyUnreadable).toBe(true);
+    });
+
+    it('should report an undecryptable row with no env fallback as routing nothing', async () => {
+      mockRepo.getAll.mockResolvedValue([undecryptableRow('openai')]);
+
+      const entry = (await service.list()).find((p) => p.provider === 'openai');
+
+      expect(entry?.keySource).toBe('none');
+      expect(entry?.storedKeyUnreadable).toBe(true);
     });
 
     it('should list every known provider', async () => {
