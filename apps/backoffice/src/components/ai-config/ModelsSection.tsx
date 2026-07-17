@@ -1,10 +1,12 @@
 import {
+  useResetAiConfig,
   useSelectableModels,
   useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
   Badge,
+  Button,
   ModelSelect,
   MutationErrorAlert,
   Table,
@@ -30,6 +32,7 @@ interface ModelsSectionProps {
 export function ModelsSection({ entries }: ModelsSectionProps) {
   const models = useSelectableModels();
   const setConfig = useSetAiConfig();
+  const resetConfig = useResetAiConfig();
 
   const modelStatus = models.isLoading
     ? 'loading'
@@ -40,7 +43,7 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
   return (
     <ConfigSection
       title="Models"
-      description="Which model each kind of turn runs on."
+      description="Which model each kind of turn runs on. The default model is what every free-tier client gets."
     >
       <MutationErrorAlert
         error={setConfig.error}
@@ -92,11 +95,23 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <Badge
-                  variant={entry.source === 'database' ? 'default' : 'outline'}
-                >
-                  {entry.source}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    variant={entry.source === 'custom' ? 'default' : 'outline'}
+                  >
+                    {entry.source}
+                  </Badge>
+                  {entry.source === 'custom' ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={resetConfig.isPending}
+                      onClick={() => resetConfig.mutate({ key: entry.key })}
+                    >
+                      Reset to default
+                    </Button>
+                  ) : null}
+                </div>
               </TableCell>
               <TableCell>{entry.updatedAt?.toLocaleString() ?? '—'}</TableCell>
             </TableRow>

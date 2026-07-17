@@ -181,6 +181,20 @@ export function useSetAiConfig() {
   });
 }
 
+export function useResetAiConfig() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { key: string }) =>
+      httpClient.delete(`/ai/config/${encodeURIComponent(input.key)}`),
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
+      queryClient.invalidateQueries({
+        queryKey: adminQueryKeys.auditLists(),
+      });
+    },
+  });
+}
+
 export function useSelectableModels() {
   return useQuery({
     queryKey: adminQueryKeys.selectableModels(),

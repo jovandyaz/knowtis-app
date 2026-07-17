@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  useResetAiConfig,
   useSelectableModels,
   useSetAiConfig,
   type AiConfigEntry,
@@ -36,6 +37,7 @@ interface RoutingSectionProps {
 export function RoutingSection({ entry }: RoutingSectionProps) {
   const models = useSelectableModels();
   const setConfig = useSetAiConfig();
+  const resetConfig = useResetAiConfig();
   // A draft keeps a reorder to one write, and `base` drops it if another admin
   // writes meanwhile — saving it would silently revert them.
   const [draft, setDraft] = useState<{ base: string; chain: string[] } | null>(
@@ -73,7 +75,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         fallbackMessage="Could not update the chain."
       />
       <div className="flex items-center gap-2">
-        <Badge variant={entry.source === 'database' ? 'default' : 'outline'}>
+        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
           {entry.source}
         </Badge>
         <span className="text-xs text-(--muted-foreground)">
@@ -81,6 +83,16 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             ? `Updated ${entry.updatedAt.toLocaleString()}`
             : 'Never changed'}
         </span>
+        {entry.source === 'custom' ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={resetConfig.isPending}
+            onClick={() => resetConfig.mutate({ key: entry.key })}
+          >
+            Reset to default
+          </Button>
+        ) : null}
       </div>
       {chain.length === 0 ? (
         <p className="text-sm text-(--muted-foreground)">
