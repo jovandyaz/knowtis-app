@@ -60,7 +60,16 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
     embed as never,
     rateLimit as never
   );
-  return { task, conversations, memory, structured, flags, embed, rateLimit };
+  return {
+    task,
+    aiConfig,
+    conversations,
+    memory,
+    structured,
+    flags,
+    embed,
+    rateLimit,
+  };
 }
 
 describe('MemoryExtractionTask', () => {
@@ -85,6 +94,17 @@ describe('MemoryExtractionTask', () => {
       })
     );
     expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+  });
+
+  it('extracts with the fast model resolved from the AI config', async () => {
+    const { task, aiConfig, structured } = make();
+    await task.reconcile();
+    expect(aiConfig.getFastModel).toHaveBeenCalled();
+    expect(structured.generateStructuredOutput).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ model: 'm' })
+    );
   });
 
   it('does nothing when the flag is off', async () => {

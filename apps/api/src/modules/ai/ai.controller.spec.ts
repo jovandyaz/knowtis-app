@@ -1,10 +1,15 @@
 import type { RequestUser } from '@jovandyaz/auth/server';
-import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RolesGuard } from '../authorization/roles.guard';
 import { AIController } from './ai.controller';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 function createContext(role: string | undefined, handler: object) {
@@ -97,5 +102,28 @@ describe('AIController resetConfig', () => {
       'u1'
     );
     expect(result).toBe(effective);
+  });
+
+  it('maps an unknown key to a 400 without resolving the effective config', async () => {
+    const aiConfigService = {
+      resetConfig: vi
+        .fn()
+        .mockRejectedValue(
+          new InvalidAIConfigError("Unknown AI config key: 'ai_bogus_key'")
+        ),
+      getEffectiveConfig: vi.fn(),
+    };
+    const controller = new AIController(
+      {} as never,
+      {} as never,
+      aiConfigService as never,
+      {} as never,
+      {} as never
+    );
+
+    await expect(
+      controller.resetConfig({ id: 'u1' } as RequestUser, 'ai_bogus_key')
+    ).rejects.toThrow(BadRequestException);
+    expect(aiConfigService.getEffectiveConfig).not.toHaveBeenCalled();
   });
 });
