@@ -13,13 +13,13 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
       (
         ({
           VOYAGE_API_KEY: voyageKey,
-          AI_FAST_MODEL: 'm',
           AI_MEMORY_QUIET_SECONDS: 180,
           AI_MEMORY_BATCH_SIZE: 20,
           AI_MEMORY_MAX_PER_USER: 100,
         }) as Record<string, unknown>
       )[k],
   };
+  const aiConfig = { getFastModel: vi.fn().mockResolvedValue('m') };
   const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
   const conversations = {
     findExtractable: vi.fn().mockResolvedValue([{ id: 'c1', userId: 'u1' }]),
@@ -52,6 +52,7 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   const task = new MemoryExtractionTask(
     db as never,
     config as never,
+    aiConfig as never,
     flags as never,
     conversations as never,
     memory as never,

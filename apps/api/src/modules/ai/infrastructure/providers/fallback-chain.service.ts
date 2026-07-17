@@ -2,14 +2,13 @@ import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
 import {
-  MODEL_CATALOG,
   ProviderCooldownTracker,
   providerOf,
   resolveChainCandidates,
-  type ModelCatalog,
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { AI_SETTING_DEFAULTS } from '../../application/services/ai-config.service';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
@@ -51,8 +50,6 @@ export class FallbackChainService implements OnModuleInit {
     private readonly chainSource: FallbackChainSource,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly providerRegistry: ProviderRegistryFactory,
-    @Inject(MODEL_CATALOG)
-    private readonly modelCatalog: ModelCatalog,
     private readonly alerts: WebhookAlertService
   ) {
     this.cooldown = new ProviderCooldownTracker(
@@ -72,23 +69,15 @@ export class FallbackChainService implements OnModuleInit {
     );
   }
 
-  /** Seeds the chain from env (routing works before the first DB refresh); fails fast on a bad env chain. */
-  onModuleInit(): void {
-    const entries = parseChain(this.configService.get('AI_FALLBACK_CHAIN'));
-    const unknown = entries.filter(
-      (model) => !this.modelCatalog.isSupported(model)
-    );
-    if (unknown.length > 0) {
-      throw new Error(
-        `AI_FALLBACK_CHAIN contains models missing from the catalog: ${unknown.join(', ')}`
-      );
-    }
-    if (entries.length === 0) {
-      this.logger.warn(
-        'AI_FALLBACK_CHAIN is empty — cross-provider fallback is disabled until a chain is configured'
-      );
-    }
-    this.chain = entries;
+  /**
+   * Seeds the chain so cross-provider fallback works before the first async
+   * refresh from the source (guard-tested against the catalog). The optional
+   * arg is a test seam; production seeds the code default.
+   */
+  onModuleInit(
+    seedChain: string[] = parseChain(AI_SETTING_DEFAULTS.ai_fallback_chain)
+  ): void {
+    this.chain = seedChain;
   }
 
   candidatesFor(primaryModel: string): string[] {
@@ -128,8 +117,8 @@ export class FallbackChainService implements OnModuleInit {
   healthSnapshot(): Record<string, ProviderHealth> {
     const providers = new Set<string>([
       ...this.chain.map(providerOf),
-      providerOf(this.configService.get('AI_DEFAULT_MODEL')),
-      providerOf(this.configService.get('AI_FAST_MODEL')),
+      providerOf(AI_SETTING_DEFAULTS.ai_default_model),
+      providerOf(AI_SETTING_DEFAULTS.ai_fast_model),
     ]);
     const cooldownState = this.cooldown.snapshot();
     const result: Record<string, ProviderHealth> = {};

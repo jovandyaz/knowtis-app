@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { createMockConfig } from '../../testing/create-mock-config';
-import { createTestCatalog } from '../../testing/create-test-catalog';
+import { TEST_FALLBACK_CHAIN } from '../../testing/create-test-chain';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import {
   FallbackChainService,
@@ -15,27 +15,23 @@ vi.mock('@ai-sdk/google', () => ({
 }));
 vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn(() => vi.fn()) }));
 
+const TEST_CHAIN_MODELS = TEST_FALLBACK_CHAIN.split(',');
+
 function buildService(configOverrides: Record<string, unknown> = {}) {
   const config = createMockConfig(configOverrides);
   const registry = new ProviderRegistryFactory(config);
   registry.onModuleInit();
   const alerts = { notify: vi.fn() } as unknown as WebhookAlertService;
   const chainSource: FallbackChainSource = {
-    getFallbackChain: async () =>
-      config
-        .get('AI_FALLBACK_CHAIN')
-        .split(',')
-        .map((entry: string) => entry.trim())
-        .filter((entry: string) => entry.length > 0),
+    getFallbackChain: async () => TEST_CHAIN_MODELS,
   };
   const service = new FallbackChainService(
     chainSource,
     config,
     registry,
-    createTestCatalog(),
     alerts
   );
-  service.onModuleInit();
+  service.onModuleInit(TEST_CHAIN_MODELS);
   return { service, alerts };
 }
 
@@ -50,6 +46,7 @@ describe('FallbackChainService', () => {
         'anthropic',
         'google',
         'openai',
+        'openrouter',
       ]);
       expect(snapshot['anthropic']).toEqual({
         configured: true,
@@ -61,6 +58,7 @@ describe('FallbackChainService', () => {
       });
       expect(snapshot['openai']?.configured).toBe(true);
       expect(snapshot['google']?.configured).toBe(false);
+      expect(snapshot['openrouter']?.configured).toBe(false);
     });
 
     it('should expose cooldown state after repeated provider failures', () => {
@@ -118,10 +116,9 @@ describe('FallbackChainService', () => {
         chainSource,
         config,
         registry,
-        createTestCatalog(),
         alerts
       );
-      service.onModuleInit();
+      service.onModuleInit(TEST_CHAIN_MODELS);
       return { service, chainSource };
     }
 

@@ -8,28 +8,34 @@ import {
 } from '../infrastructure/providers/fallback-chain.service';
 import { ProviderRegistryFactory } from '../infrastructure/providers/provider-registry.factory';
 import { createMockConfig } from './create-mock-config';
-import { createTestCatalog } from './create-test-catalog';
+
+/** Catalog-compatible fallback chain for tests — the openrouter code default has no pricing in createTestCatalog. */
+export const TEST_FALLBACK_CHAIN =
+  'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash';
+
+function parseChain(value: string): string[] {
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
 
 export function createTestChain(
-  config: ConfigService<EnvConfig, true> = createMockConfig()
+  config: ConfigService<EnvConfig, true> = createMockConfig(),
+  fallbackChain: string = TEST_FALLBACK_CHAIN
 ) {
   const registry = new ProviderRegistryFactory(config);
   registry.onModuleInit();
+  const chainModels = parseChain(fallbackChain);
   const chainSource: FallbackChainSource = {
-    getFallbackChain: async () =>
-      config
-        .get('AI_FALLBACK_CHAIN')
-        .split(',')
-        .map((entry: string) => entry.trim())
-        .filter((entry: string) => entry.length > 0),
+    getFallbackChain: async () => chainModels,
   };
   const chain = new FallbackChainService(
     chainSource,
     config,
     registry,
-    createTestCatalog(),
     new WebhookAlertService(config)
   );
-  chain.onModuleInit();
+  chain.onModuleInit(chainModels);
   return { registry, chain };
 }
