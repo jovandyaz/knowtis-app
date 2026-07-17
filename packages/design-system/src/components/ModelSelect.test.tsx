@@ -189,4 +189,29 @@ describe('ModelSelect', () => {
       'composer-trigger'
     );
   });
+
+  it('shows a locked model but refuses to select it', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[
+          {
+            id: 'anthropic:sonnet',
+            label: 'Sonnet',
+            tier: 'balanced',
+            locked: true,
+          },
+        ]}
+        value={null}
+        onSelect={onSelect}
+        lockedBadgeLabel="Requires your key"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    const item = await screen.findByRole('menuitem', { name: /sonnet/i });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText('Requires your key')).toBeInTheDocument();
+    await userEvent.click(item);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
 });
