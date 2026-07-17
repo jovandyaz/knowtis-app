@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   useClearSystemProviderKey,
@@ -44,6 +44,13 @@ export function ProviderCard({ provider }: ProviderCardProps) {
   const label = PROVIDER_LABEL[provider.provider];
   const isBusy =
     setProvider.isPending || clearKey.isPending || testProvider.isPending;
+
+  // A probe describes the key that was routing when it ran; once the row moves,
+  // the verdict is about a key that is no longer there.
+  const { reset: resetProbe } = testProvider;
+  useEffect(() => {
+    resetProbe();
+  }, [resetProbe, provider.keySource, provider.enabled, provider.keyPrefix]);
 
   return (
     <Card className="flex flex-col gap-3 p-4">

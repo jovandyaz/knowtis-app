@@ -12,12 +12,11 @@ import {
   Param,
   Post,
   Put,
-  ServiceUnavailableException,
   UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { generateText } from 'ai';
+import { APICallError, generateText } from 'ai';
 
 import { providerOf } from '@knowtis/ai-gateway';
 import type {
@@ -40,6 +39,8 @@ import {
 
 const PROBE_MAX_OUTPUT_TOKENS = 16;
 const PROBE_TIMEOUT_MS = 10_000;
+// Below this a "key" is too short to match anything but itself in prose.
+const REDACTABLE_KEY_MIN_LENGTH = 8;
 
 @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard, UserScopedThrottlerGuard)
 @RequireFeatureFlag('ai_enabled')
@@ -72,9 +73,13 @@ export class AiProvidersController {
     if (dto.apiKey !== undefined) {
       const probe = await this.probe(params.provider, dto.apiKey);
       if (!probe.ok) {
-        throw probe.reason === 'unavailable'
-          ? new ServiceUnavailableException(probe.message)
-          : new UnprocessableEntityException(probe.message);
+        // 422 for every outcome, with `reason` carrying the distinction: a 503
+        // would be truer for an outage but the global filter masks 5xx bodies,
+        // so the admin would read 'Internal server error' instead of the cause.
+        throw new UnprocessableEntityException({
+          message: probe.message,
+          code: probe.reason,
+        });
       }
       await this.systemKeys.setKey(params.provider, dto.apiKey, user.id);
     }
@@ -141,42 +146,52 @@ export class AiProvidersController {
       });
       return { ok: true, model: model.id };
     } catch (error) {
-      return this.classifyProbeFailure(provider, model.id, error);
+      return this.classifyProbeFailure(provider, model.id, error, apiKey);
     }
   }
 
   private classifyProbeFailure(
     provider: AIProvider,
     model: string,
-    error: unknown
+    error: unknown,
+    apiKey?: string
   ): ProviderTestResult {
-    const detail = error instanceof Error ? error.message : 'unknown';
+    if (error instanceof ProviderNotConfiguredError) {
+      return { ok: false, reason: 'unconfigured', message: error.message };
+    }
+    // The SDK already classifies which statuses deserve a retry and exhausts
+    // them before rethrowing, so a non-retryable APICallError is the only shape
+    // that proves the provider answered and refused.
+    const refused = APICallError.isInstance(error) && !error.isRetryable;
+    const detail = redact(
+      error instanceof Error ? error.message : 'unknown',
+      apiKey
+    );
     this.logger.warn({
       event: 'system_provider_key.probe_failed',
       provider,
       model,
+      reason: refused ? 'rejected' : 'unavailable',
       error: detail,
     });
-    if (error instanceof ProviderNotConfiguredError) {
-      return { ok: false, reason: 'unconfigured', message: error.message };
-    }
-    const status = (error as { statusCode?: number }).statusCode;
-    // The provider answering at all — to reject the key, to report an empty
-    // balance — means someone must act; only silence and overload are worth a
-    // retry, and those carry no status at all when the socket never answers.
-    if (status !== undefined && status < 500 && status !== 429) {
-      return {
-        ok: false,
-        reason: 'rejected',
-        message: `${provider} refused the probe: ${detail}`,
-      };
-    }
-    return {
-      ok: false,
-      reason: 'unavailable',
-      message: `${provider} is unavailable right now${
-        status ? ` (HTTP ${status})` : ''
-      }. Retry shortly.`,
-    };
+    return refused
+      ? {
+          ok: false,
+          reason: 'rejected',
+          message: `${provider} refused the probe: ${detail}`,
+        }
+      : {
+          ok: false,
+          reason: 'unavailable',
+          message: `${provider} is unavailable right now. Retry shortly.`,
+        };
   }
+}
+
+/** Providers echo a rejected credential back in their error text; it must not reach a log or a response. */
+function redact(message: string, apiKey?: string): string {
+  if (!apiKey || apiKey.length < REDACTABLE_KEY_MIN_LENGTH) {
+    return message;
+  }
+  return message.split(apiKey).join('[redacted]');
 }

@@ -70,6 +70,11 @@ export interface SelectableModel {
   isDefault: boolean;
   /** True when the user has a stored BYOK key for this model's provider, so the turn bills their key. */
   billedToUser: boolean;
+  /**
+   * True when the server's own keys can invoke this model. False means only the
+   * caller's BYOK key reaches it, so it is inert in any server-global config.
+   */
+  routableByServer: boolean;
 }
 
 export interface AIPreferences {

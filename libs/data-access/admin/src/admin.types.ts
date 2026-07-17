@@ -129,6 +129,9 @@ export const SelectableModelSchema = z.object({
   costClass: z.union([z.literal(1), z.literal(2), z.literal(3)]),
   contextWindow: z.number(),
   billedToUser: z.boolean(),
+  // Backoffice and API deploy independently; an API that predates this field
+  // must not make every chain member look inert.
+  routableByServer: z.boolean().default(true),
 });
 export type SelectableModelOption = z.infer<typeof SelectableModelSchema>;
 

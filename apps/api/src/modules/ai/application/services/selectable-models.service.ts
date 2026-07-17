@@ -61,6 +61,7 @@ export class SelectableModelsService {
         costClass: this.costClass(m.id),
         isDefault: m.id === systemDefault,
         billedToUser: byokProviders.has(providerOf(m.id)),
+        routableByServer: this.registry.isModelAvailable(m.id),
       })
     );
   }

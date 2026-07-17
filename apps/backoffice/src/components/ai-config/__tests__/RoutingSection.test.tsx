@@ -27,9 +27,24 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
 });
 
 const MODELS = [
-  { id: 'anthropic:sonnet', label: 'Sonnet', tier: 'balanced' },
-  { id: 'anthropic:haiku', label: 'Haiku', tier: 'fast' },
-  { id: 'google:gemini', label: 'Gemini', tier: 'fast' },
+  {
+    id: 'anthropic:sonnet',
+    label: 'Sonnet',
+    tier: 'balanced',
+    routableByServer: true,
+  },
+  {
+    id: 'anthropic:haiku',
+    label: 'Haiku',
+    tier: 'fast',
+    routableByServer: true,
+  },
+  {
+    id: 'google:gemini',
+    label: 'Gemini',
+    tier: 'fast',
+    routableByServer: true,
+  },
 ];
 
 function entryWith(value: string): AiConfigEntry {
@@ -81,14 +96,37 @@ describe('RoutingSection', () => {
     );
   });
 
-  it('marks a chain member the catalog dropped — the server skips it at routing time', () => {
-    renderChain(`anthropic:sonnet,anthropic:retired-model`);
+  it('marks a member the catalog dropped — routing skips it', () => {
+    renderChain('anthropic:sonnet,anthropic:retired-model');
 
     const items = screen.getAllByRole('listitem');
-    expect(items[0]).not.toHaveTextContent(/not in catalog/i);
-    expect(items[1]).toHaveTextContent(/not in catalog/i);
-    expect(screen.getByRole('alert')).toHaveTextContent(
-      /skipped at routing time/i
+    expect(items[0]).not.toHaveTextContent(/won’t route/i);
+    expect(items[1]).toHaveTextContent(/won’t route/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/are skipped/i);
+  });
+
+  // /ai/models lists a model the caller's own BYOK key unlocks, but a
+  // server-global chain can never reach it.
+  it('marks a member only a personal BYOK key reaches', () => {
+    useSelectableModelsMock.mockReturnValue({
+      data: [
+        ...MODELS,
+        {
+          id: 'openai:gpt',
+          label: 'GPT',
+          tier: 'fast',
+          routableByServer: false,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderChain('anthropic:sonnet,openai:gpt');
+
+    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent(
+      /won’t route/i
     );
   });
 
@@ -102,8 +140,47 @@ describe('RoutingSection', () => {
 
     renderChain();
 
-    expect(screen.queryByText(/not in catalog/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText(/won’t route/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('drops the draft when another admin writes, instead of reverting them', async () => {
+    const { rerender } = render(<RoutingSection entry={entryWith(CHAIN)} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    );
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Haiku');
+
+    rerender(
+      <RoutingSection entry={entryWith('google:gemini,anthropic:sonnet')} />
+    );
+
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Gemini');
+    expect(
+      screen.queryByRole('button', { name: /save chain/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('keeps showing the saved order while the write is in flight', async () => {
+    const { rerender } = render(<RoutingSection entry={entryWith(CHAIN)} />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    );
+    await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
+
+    // The server confirms nothing yet: the cache still holds the old value.
+    rerender(<RoutingSection entry={entryWith(CHAIN)} />);
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Haiku');
+
+    rerender(
+      <RoutingSection entry={entryWith('anthropic:haiku,anthropic:sonnet')} />
+    );
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('Haiku');
+    expect(
+      screen.queryByRole('button', { name: /save chain/i })
+    ).not.toBeInTheDocument();
   });
 
   it('does not write until the order is saved', async () => {

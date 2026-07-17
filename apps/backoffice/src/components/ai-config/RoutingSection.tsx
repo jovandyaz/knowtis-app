@@ -36,22 +36,28 @@ interface RoutingSectionProps {
 export function RoutingSection({ entry }: RoutingSectionProps) {
   const models = useSelectableModels();
   const setConfig = useSetAiConfig();
-  // Reordering is several edits to one value; a draft keeps it to one write
-  // and one audit row instead of one per keystroke of intent.
-  const [draft, setDraft] = useState<string[] | null>(null);
+  // A draft keeps a reorder to one write, and `base` drops it if another admin
+  // writes meanwhile — saving it would silently revert them.
+  const [draft, setDraft] = useState<{ base: string; chain: string[] } | null>(
+    null
+  );
 
   const saved = parseChain(entry.value);
-  const chain = draft ?? saved;
-  const isDirty = draft !== null && draft.join(',') !== saved.join(',');
+  const isForked = draft?.base === entry.value;
+  const chain = isForked ? draft.chain : saved;
+  const isDirty = isForked && draft.chain.join(',') !== entry.value;
+  const edit = (next: string[]) => setDraft({ base: entry.value, chain: next });
   const available = (models.data ?? []).filter(
     (model) => !chain.includes(model.id)
   );
   const labelFor = (id: string) =>
     models.data?.find((model) => model.id === id)?.label ?? id;
-  // The server drops chain members the catalog no longer lists, so showing them
-  // as ordinary entries would advertise fallbacks that never run.
+  // Routing skips members the server cannot invoke — a retired model, a keyless
+  // or disabled provider, or one only a personal BYOK key reaches. Absence from
+  // the catalog covers the first; routableByServer covers the rest.
   const isRoutable = (id: string) =>
-    !models.data || models.data.some((model) => model.id === id);
+    !models.data ||
+    (models.data.find((model) => model.id === id)?.routableByServer ?? false);
   const hasInertMembers = chain.some((id) => !isRoutable(id));
 
   return (
@@ -90,7 +96,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 <span className="flex items-center gap-2 truncate text-sm">
                   {labelFor(id)}
                   {isRoutable(id) ? null : (
-                    <Badge variant="destructive">not in catalog</Badge>
+                    <Badge variant="outline">won’t route</Badge>
                   )}
                 </span>
                 <span className="truncate font-mono text-xs text-(--muted-foreground)">
@@ -102,7 +108,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 size="icon"
                 aria-label={`Move ${labelFor(id)} earlier`}
                 disabled={index === 0}
-                onClick={() => setDraft(move(chain, index, index - 1))}
+                onClick={() => edit(move(chain, index, index - 1))}
               >
                 ↑
               </Button>
@@ -111,7 +117,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 size="icon"
                 aria-label={`Move ${labelFor(id)} later`}
                 disabled={index === chain.length - 1}
-                onClick={() => setDraft(move(chain, index, index + 1))}
+                onClick={() => edit(move(chain, index, index + 1))}
               >
                 ↓
               </Button>
@@ -120,7 +126,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 size="sm"
                 aria-label={`Remove ${labelFor(id)}`}
                 onClick={() =>
-                  setDraft(chain.filter((_, position) => position !== index))
+                  edit(chain.filter((_, position) => position !== index))
                 }
               >
                 Remove
@@ -130,9 +136,10 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         </ol>
       )}
       {hasInertMembers ? (
-        <p role="alert" className="text-xs text-(--destructive)">
-          Models marked “not in catalog” are skipped at routing time. Remove
-          them so the chain reflects what actually runs.
+        <p role="status" className="text-xs text-(--muted-foreground)">
+          Models marked “won’t route” are skipped: their provider has no server
+          key or is disabled, or the model left the catalog. They stay in the
+          chain and resume if that changes.
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -147,17 +154,14 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
           triggerVariant="outline"
           triggerLabel="Add model"
           disabled={setConfig.isPending || available.length === 0}
-          onSelect={(id) => setDraft([...chain, id])}
+          onSelect={(id) => edit([...chain, id])}
         />
         {isDirty ? (
           <>
             <Button
               disabled={setConfig.isPending || chain.length === 0}
               onClick={() =>
-                setConfig.mutate(
-                  { key: entry.key, value: chain.join(',') },
-                  { onSuccess: () => setDraft(null) }
-                )
+                setConfig.mutate({ key: entry.key, value: chain.join(',') })
               }
             >
               Save chain

@@ -7,23 +7,26 @@ import type { SystemProvider } from '@knowtis/data-access-admin';
 
 import { ProviderCard } from '../ProviderCard';
 
-const { setMutate, clearMutate, testMutate, state } = vi.hoisted(() => ({
-  setMutate: vi.fn(),
-  clearMutate: vi.fn(),
-  testMutate: vi.fn(),
-  state: {
-    set: { isPending: false, isError: false, error: null as Error | null },
-    test: {
-      isPending: false,
-      isError: false,
-      error: null as Error | null,
-      data: undefined as
-        | { ok: true; model: string }
-        | { ok: false; reason: string; message: string }
-        | undefined,
+const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
+  () => ({
+    setMutate: vi.fn(),
+    clearMutate: vi.fn(),
+    testMutate: vi.fn(),
+    testReset: vi.fn(),
+    state: {
+      set: { isPending: false, isError: false, error: null as Error | null },
+      test: {
+        isPending: false,
+        isError: false,
+        error: null as Error | null,
+        data: undefined as
+          | { ok: true; model: string }
+          | { ok: false; reason: string; message: string }
+          | undefined,
+      },
     },
-  },
-}));
+  })
+);
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -36,7 +39,11 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
       isError: false,
       error: null,
     }),
-    useTestSystemProvider: () => ({ mutate: testMutate, ...state.test }),
+    useTestSystemProvider: () => ({
+      mutate: testMutate,
+      reset: testReset,
+      ...state.test,
+    }),
   };
 });
 
@@ -143,6 +150,22 @@ describe('ProviderCard', () => {
     expect(
       screen.getByText(/anthropic answered via anthropic:haiku/i)
     ).toBeInTheDocument();
+  });
+
+  it('drops a probe verdict about a key that is no longer there', () => {
+    state.test.data = { ok: true, model: 'anthropic:haiku' };
+    const { rerender } = render(
+      <ProviderCard provider={providerWith({ keySource: 'database' })} />
+    );
+    testReset.mockClear();
+
+    rerender(
+      <ProviderCard provider={providerWith({ keySource: 'database' })} />
+    );
+    expect(testReset).not.toHaveBeenCalled();
+
+    rerender(<ProviderCard provider={providerWith({ keySource: 'none' })} />);
+    expect(testReset).toHaveBeenCalled();
   });
 
   it('shows why a probe failed — a refusal resolves, it does not throw', () => {
