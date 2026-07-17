@@ -137,18 +137,20 @@ export class AiProvidersController {
         message: `No curated model found for provider '${provider}'`,
       };
     }
+    let secrets: string[] = [];
     try {
+      const languageModel = this.registry.languageModel(model.id, apiKey);
+      // Snapshot before the await: an admin rotating the key mid-probe would
+      // otherwise leave the error quoting a secret no longer here to scrub.
+      secrets = apiKey ? [apiKey] : this.registry.routingSecrets(provider);
       await generateText({
-        model: this.registry.languageModel(model.id, apiKey),
+        model: languageModel,
         prompt: 'ping',
         maxOutputTokens: PROBE_MAX_OUTPUT_TOKENS,
         abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       });
       return { ok: true, model: model.id };
     } catch (error) {
-      const secrets = apiKey
-        ? [apiKey]
-        : this.registry.routingSecrets(provider);
       return this.classifyProbeFailure(provider, model.id, error, secrets);
     }
   }

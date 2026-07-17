@@ -282,6 +282,48 @@ describe('RoutingSection', () => {
     ).toBeDisabled();
   });
 
+  // AIConfigService.validateChain rejects a chain with no invocable member, so
+  // offering Save here would only buy the admin a server error.
+  it('refuses to save a chain no model can route', async () => {
+    useSelectableModelsMock.mockReturnValue({
+      data: MODELS.map((model) => ({ ...model, routableByServer: false })),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderChain();
+    await userEvent.click(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    );
+
+    expect(screen.getByRole('button', { name: /save chain/i })).toBeDisabled();
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /server will not accept this chain/i
+    );
+    expect(setConfigMutate).not.toHaveBeenCalled();
+  });
+
+  it('still saves a chain where only some members route', async () => {
+    useSelectableModelsMock.mockReturnValue({
+      data: MODELS.map((model) => ({
+        ...model,
+        routableByServer: model.id === 'anthropic:sonnet',
+      })),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderChain();
+    await userEvent.click(
+      screen.getByRole('button', { name: /move haiku earlier/i })
+    );
+    await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
+
+    expect(savedValue()).toBe('anthropic:haiku,anthropic:sonnet');
+  });
+
   it('cannot move the first model earlier or the last one later', () => {
     renderChain();
 

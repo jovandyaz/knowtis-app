@@ -59,6 +59,8 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
     !models.data ||
     (models.data.find((model) => model.id === id)?.routableByServer ?? false);
   const hasInertMembers = chain.some((id) => !isRoutable(id));
+  // The server rejects a chain no model can route, so Save would only fail.
+  const isInert = chain.length > 0 && !chain.some((id) => isRoutable(id));
 
   return (
     <ConfigSection
@@ -136,7 +138,12 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
           ))}
         </ol>
       )}
-      {hasInertMembers ? (
+      {isInert ? (
+        <p role="status" className="text-xs text-(--destructive)">
+          No model here can route, so the server will not accept this chain.
+          Give at least one member a key and enable its provider.
+        </p>
+      ) : hasInertMembers ? (
         <p role="status" className="text-xs text-(--muted-foreground)">
           Models marked “won’t route” are skipped: their provider has no server
           key or is disabled, or the model left the catalog. They stay in the
@@ -160,7 +167,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         {isDirty ? (
           <>
             <Button
-              disabled={setConfig.isPending || chain.length === 0}
+              disabled={setConfig.isPending || chain.length === 0 || isInert}
               onClick={() =>
                 setConfig.mutate({ key: entry.key, value: chain.join(',') })
               }

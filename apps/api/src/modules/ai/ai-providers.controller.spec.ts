@@ -274,6 +274,24 @@ describe('AiProvidersController', () => {
       expect(registry.routingSecrets).toHaveBeenCalledWith('anthropic');
     });
 
+    it('should scrub the key the probe actually used when another admin rotates it mid-flight', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-in-flight']);
+      const warn = vi
+        .spyOn(controller['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      generateText.mockImplementationOnce(async () => {
+        registry.routingSecrets.mockReturnValue(['sk-ant-rotated-in']);
+        throw apiCallError(401, 'Incorrect API key: sk-ant-in-flight.');
+      });
+
+      const result = await controller.test(anthropic);
+
+      expect(JSON.stringify(result)).not.toContain('sk-ant-in-flight');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('sk-ant-in-flight');
+    });
+
     it.each([401, 403, 400, 404])(
       'should treat HTTP %i as a refusal the admin must act on',
       async (statusCode) => {
