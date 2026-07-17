@@ -1,7 +1,7 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
@@ -67,6 +67,20 @@ function sourceOf(
   return {
     getSystemProviderConfigs: vi.fn(async () => new Map(configs)),
   };
+}
+
+/** Makes the resolved model name carry the key it was built from, so routing is observable. */
+async function routeKeyThroughMocks() {
+  const { createProviderRegistry } = vi.mocked(await import('ai'));
+  vi.mocked(createAnthropic).mockImplementation(
+    ((options: { apiKey: string }) => () =>
+      `model-from:${options.apiKey}`) as never
+  );
+  createProviderRegistry.mockImplementation(((
+    providers: Record<string, () => string>
+  ) => ({
+    languageModel: (id: string) => providers[id.slice(0, id.indexOf(':'))](),
+  })) as never);
 }
 
 describe('ProviderRegistryFactory', () => {
@@ -179,6 +193,13 @@ describe('ProviderRegistryFactory', () => {
   });
 
   describe('system provider keys', () => {
+    // mockReset restores the implementation each vi.mock factory supplied.
+    afterEach(async () => {
+      const { createProviderRegistry } = vi.mocked(await import('ai'));
+      vi.mocked(createAnthropic).mockReset();
+      createProviderRegistry.mockReset();
+    });
+
     it('should route from env when no key source is wired', () => {
       const factory = makeFactory();
 
@@ -232,7 +253,8 @@ describe('ProviderRegistryFactory', () => {
       expect(factory.isModelAvailable('anthropic:claude-sonnet-5')).toBe(true);
     });
 
-    it('should not let a slow refresh overwrite a newer admin change', async () => {
+    it('should keep routing the newer key when a slow refresh lands late', async () => {
+      await routeKeyThroughMocks();
       const configs = [
         new Map([['anthropic', { enabled: true, apiKey: 'stale-key' }]]),
         new Map([['anthropic', { enabled: true, apiKey: 'fresh-key' }]]),
@@ -255,11 +277,12 @@ describe('ProviderRegistryFactory', () => {
       const fresh = factory.refreshSystemConfigs();
       resolvers[1]();
       await fresh;
-      vi.mocked(createAnthropic).mockClear();
       resolvers[0]();
       await stale;
 
-      expect(createAnthropic).not.toHaveBeenCalled();
+      expect(factory.languageModel('anthropic:claude-sonnet-5')).toBe(
+        'model-from:fresh-key'
+      );
     });
 
     it('should prime the stored config before serving the first request', async () => {
