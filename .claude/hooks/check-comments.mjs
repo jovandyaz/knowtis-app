@@ -109,25 +109,42 @@ process.stdin.on('end', () => {
     // not, since it is part of the same block.
     const codeAfter = (i) => {
       const out = [];
-      for (const line of lines.slice(i + 1)) {
-        const t = line.trim();
+      for (let j = i + 1; j < lines.length && out.length < 2; j += 1) {
+        const t = lines[j].trim();
         if (t === '') break;
         if (isCode(t)) out.push(t);
-        if (out.length === 2) break;
       }
       return out;
     };
 
+    const strip = (s) => s.replace(/^\*\s?/, '').trim();
+    // `trailing` is code sharing the closing line — what the block documents
+    // when it is written `/** ... */ export const x`.
     const jsdocAt = (i) => {
       const t = lines[i].trim();
       if (!t.startsWith('/**')) return null;
-      const single = t.match(/^\/\*\*\s*(.+?)\s*\*\/$/);
-      if (single) return { text: single[1], end: i };
+      const closes = t.indexOf('*/', 3);
+      if (closes !== -1) {
+        return {
+          text: t.slice(3, closes).trim(),
+          end: i,
+          trailing: t.slice(closes + 2).trim(),
+        };
+      }
       const parts = [];
       for (let j = i + 1; j < lines.length; j += 1) {
         const inner = lines[j].trim();
-        if (inner.startsWith('*/')) return { text: parts.join(' '), end: j };
-        parts.push(inner.replace(/^\*\s?/, ''));
+        const ends = inner.indexOf('*/');
+        if (ends === -1) {
+          parts.push(strip(inner));
+          continue;
+        }
+        parts.push(strip(inner.slice(0, ends)));
+        return {
+          text: parts.filter(Boolean).join(' '),
+          end: j,
+          trailing: inner.slice(ends + 2).trim(),
+        };
       }
       return null;
     };
@@ -140,7 +157,10 @@ process.stdin.on('end', () => {
       }
 
       const jsdoc = jsdocAt(i);
-      if (jsdoc && restatesCode(jsdoc.text, codeAfter(jsdoc.end), 5, 2)) {
+      const documents = jsdoc
+        ? [jsdoc.trailing, ...codeAfter(jsdoc.end)].filter(Boolean).slice(0, 2)
+        : [];
+      if (jsdoc && restatesCode(jsdoc.text, documents, 5, 2)) {
         flag(`/** ${jsdoc.text}`, 'JSDoc that only respells the signature — say what a caller cannot infer, or drop it');
       }
 
