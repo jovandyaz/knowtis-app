@@ -319,26 +319,27 @@ Per-user requests-per-minute limiting via Redis, enforced before daily token/cos
 
 AI models and the fallback chain can be changed at runtime via the `ai_config` database table, without redeployment.
 
-**Priority:** DB value (cached 30s) → environment variable fallback.
+**Priority:** DB row (cached 30s) → code default (`AI_SETTING_DEFAULTS` in `ai-config.service.ts`). There is no environment layer for these settings.
 
 **Supported keys:**
 
-| Key                 | Env Fallback        | Kind    | Description                         |
-| ------------------- | ------------------- | ------- | ----------------------------------- |
-| `ai_default_model`  | `AI_DEFAULT_MODEL`  | `model` | Model for most actions              |
-| `ai_fast_model`     | `AI_FAST_MODEL`     | `model` | Model for ghost-text                |
-| `ai_fallback_chain` | `AI_FALLBACK_CHAIN` | `chain` | Cross-provider fallback order (CSV) |
+| Key                 | Code Default                                                                                             | Kind    | Description                         |
+| ------------------- | -------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
+| `ai_default_model`  | `openrouter:deepseek/deepseek-v3.2`                                                                      | `model` | Model for most actions              |
+| `ai_fast_model`     | `openrouter:deepseek/deepseek-v3.2`                                                                      | `model` | Model for ghost-text                |
+| `ai_fallback_chain` | `openrouter:deepseek/deepseek-v3.2,openrouter:qwen/qwen3-235b-a22b-2507,openrouter:minimax/minimax-m2.5` | `chain` | Cross-provider fallback order (CSV) |
 
-A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)).
+A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
 
 **REST API** (admin only):
 
-| Method | Path              | Description                                                                                                        |
-| ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------ |
-| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `database` or `environment`) |
-| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; value must be a curated, server-invocable model id)                       |
+| Method | Path              | Description                                                                                                    |
+| ------ | ----------------- | -------------------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `custom` or `default`)   |
+| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; value must be a curated, server-invocable model id)                   |
+| DELETE | `/ai/config/:key` | Reset a key to its code default — deletes the DB row, audits `ai_config.reset`, returns the effective entries. |
 
-After updating a config value, the in-memory cache is invalidated and the new model takes effect within 30 seconds across all instances.
+After updating or resetting a config value, the in-memory cache is invalidated and the change takes effect within 30 seconds across all instances.
 
 ---
 
@@ -380,7 +381,7 @@ The probe (both `PUT` and `test`) sends one cheap turn through the provider's cu
 
 ## Cross-Provider Fallback Chain
 
-`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the `AI_FALLBACK_CHAIN` env var (default `anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). The env chain is validated against the model catalog at boot (fail-fast on unknown models); a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
+`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the code default (`openrouter:deepseek/deepseek-v3.2,openrouter:qwen/qwen3-235b-a22b-2507,openrouter:minimax/minimax-m2.5`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). At boot the chain is seeded from the code default (guard-tested against the catalog) so cross-provider fallback works before the first DB refresh; a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
 
 Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWithChain`):
 
@@ -417,11 +418,11 @@ Each returned model also carries `routableByServer`: `true` when the server's ow
 
 1. `conversations.model` — the per-conversation override from the copilot picker.
 2. `user_ai_settings.preferred_model` — the account default set in **Settings → Asistente IA**.
-3. `ai_default_model` (DB `ai_config`, env `AI_DEFAULT_MODEL`) — the system default.
+3. `ai_default_model` (DB `ai_config` row, else the code default) — the system default.
 
 The resolved model enters the [fallback chain](#cross-provider-fallback-chain) as the primary candidate; if its provider is down or out of credit the chain relays to another model, and the model reported back to the client is the one that actually served the turn.
 
-> `ai_default_model` / `AI_DEFAULT_MODEL` **must be one of the curated ids** for the picker's account-default badge to resolve. A curated model only runs as primary if its provider key has access/billing — otherwise it appears in the picker but falls back at invocation (`isModelAvailable` only checks key presence, not per-model access/quota).
+> `ai_default_model` **must be one of the curated ids** for the picker's account-default badge to resolve (writes are validated; the code default is guard-tested). A curated model only runs as primary if its provider key has access/billing — otherwise it appears in the picker but falls back at invocation (`isModelAvailable` only checks key presence, not per-model access/quota).
 
 **REST API** (gated behind the `ai_enabled` flag):
 
@@ -476,43 +477,40 @@ Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `Agen
 
 ---
 
-## Runtime AI Config (database overrides env)
+## Runtime AI Config (code defaults, database overrides)
 
-`ai_default_model`, `ai_fast_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the `AI_DEFAULT_MODEL`/`AI_FAST_MODEL`/`AI_FALLBACK_CHAIN` env vars when no row exists — or when the table read fails, so a database outage degrades to env values instead of erroring. **A DB row silently wins over the env var** — changing the Railway env alone does nothing while a row is present. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); a `model` key takes a curated model id and `ai_fallback_chain` takes a comma-separated list of them, changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated`).
+`ai_default_model`, `ai_fast_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the code defaults (`AI_SETTING_DEFAULTS`) when no row exists — or when the table read fails, so a database outage degrades to the defaults instead of erroring. There is no environment layer: a stored row is **Custom**, its absence is **Default**, and that is exactly what the backoffice badges show. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); reset to the code default via the page's **Reset to default** button or `DELETE /api/v1/ai/config/:key`. A `model` key takes a curated model id and `ai_fallback_chain` takes a comma-separated list of them; changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated` / `ai_config.reset`).
 
 ## Environment Variables
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables. In direct mode the provider API keys below are the **fallback** source — a key stored in `system_provider_keys` via the backoffice wins (see [System Provider Keys](#system-provider-keys-database-overrides-env)).
 
-| Variable                         | Required | Default                                                                          | Description                                                                                                                       |
-| -------------------------------- | -------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `AI_GATEWAY_API_KEY`             | No       | —                                                                                | Vercel AI Gateway key; enables gateway mode when set                                                                              |
-| `ANTHROPIC_API_KEY`              | No       | —                                                                                | Anthropic API key (validated at runtime)                                                                                          |
-| `OPENAI_API_KEY`                 | No       | —                                                                                | OpenAI API key (chain fallback + Whisper transcription)                                                                           |
-| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                                                                | Google AI Studio key (chain fallback)                                                                                             |
-| `OPENROUTER_API_KEY`             | No       | —                                                                                | OpenRouter key; unlocks the open-weight tier (`openrouter:*` models)                                                              |
-| `AI_DEFAULT_MODEL`               | No       | `anthropic:claude-sonnet-5`                                                      | Default copilot model — fallback only; a DB `ai_config` row wins ([Runtime AI Config](#runtime-ai-config-database-overrides-env)) |
-| `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`                                            | Model for `ghost-text` — fallback only; a DB `ai_config` row wins                                                                 |
-| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`                                            | LLM judge for the gray-zone injection classifier                                                                                  |
-| `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)                                             | Model driving the copilot eval harness (`api:eval`)                                                                               |
-| `AI_FALLBACK_CHAIN`              | No       | `anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash` | Cross-provider fallback chain — fallback only; a DB `ai_config` row wins                                                          |
-| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                                                              | Failures per minute that start a provider cooldown                                                                                |
-| `AI_COOLDOWN_SECONDS`            | No       | `120`                                                                            | Provider cooldown duration (seconds)                                                                                              |
-| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                                                               | Voice transcription model (only `openai:` supported)                                                                              |
-| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                                                                          | Refresh model pricing from LiteLLM's JSON at boot                                                                                 |
-| `AI_ALERT_WEBHOOK_URL`           | No       | —                                                                                | Webhook for `budget.warning` / `cooldown_start` alerts                                                                            |
-| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                                                                         | Per-user daily token cap                                                                                                          |
-| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                                                            | Per-user daily cost cap (USD)                                                                                                     |
-| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                                                             | Global daily cap on ALL server-billed spend (USD)                                                                                 |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                                                           | Fraction of daily limits for anonymous users                                                                                      |
-| `AI_MAX_RETRIES`                 | No       | `3`                                                                              | Provider retry count                                                                                                              |
-| `AI_TIMEOUT_MS`                  | No       | `30000`                                                                          | Total request timeout (ms) — REST completions only                                                                                |
-| `AI_STREAM_MAX_MS`               | No       | `180000`                                                                         | Total streaming cap (ms); generous for long generations                                                                           |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                                                                          | Per-chunk (stall) timeout for streaming (ms)                                                                                      |
-| `AI_CACHE_ENABLED`               | No       | `true`                                                                           | Enable response cache                                                                                                             |
-| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                                                           | Cache TTL (seconds)                                                                                                               |
-| `AI_RPM_LIMIT`                   | No       | `15`                                                                             | Max requests per minute per user                                                                                                  |
-| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                                                              | Max simultaneous AI streams per user                                                                                              |
+| Variable                         | Required | Default                               | Description                                                          |
+| -------------------------------- | -------- | ------------------------------------- | -------------------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`             | No       | —                                     | Vercel AI Gateway key; enables gateway mode when set                 |
+| `ANTHROPIC_API_KEY`              | No       | —                                     | Anthropic API key (validated at runtime)                             |
+| `OPENAI_API_KEY`                 | No       | —                                     | OpenAI API key (chain fallback + Whisper transcription)              |
+| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                     | Google AI Studio key (chain fallback)                                |
+| `OPENROUTER_API_KEY`             | No       | —                                     | OpenRouter key; unlocks the open-weight tier (`openrouter:*` models) |
+| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001` | LLM judge for the gray-zone injection classifier                     |
+| `AI_EVAL_MODEL`                  | No       | — (built-in eval default)             | Model driving the copilot eval harness (`api:eval`)                  |
+| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                   | Failures per minute that start a provider cooldown                   |
+| `AI_COOLDOWN_SECONDS`            | No       | `120`                                 | Provider cooldown duration (seconds)                                 |
+| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                    | Voice transcription model (only `openai:` supported)                 |
+| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                               | Refresh model pricing from LiteLLM's JSON at boot                    |
+| `AI_ALERT_WEBHOOK_URL`           | No       | —                                     | Webhook for `budget.warning` / `cooldown_start` alerts               |
+| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                              | Per-user daily token cap                                             |
+| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                 | Per-user daily cost cap (USD)                                        |
+| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                  | Global daily cap on ALL server-billed spend (USD)                    |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                | Fraction of daily limits for anonymous users                         |
+| `AI_MAX_RETRIES`                 | No       | `3`                                   | Provider retry count                                                 |
+| `AI_TIMEOUT_MS`                  | No       | `30000`                               | Total request timeout (ms) — REST completions only                   |
+| `AI_STREAM_MAX_MS`               | No       | `180000`                              | Total streaming cap (ms); generous for long generations              |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                               | Per-chunk (stall) timeout for streaming (ms)                         |
+| `AI_CACHE_ENABLED`               | No       | `true`                                | Enable response cache                                                |
+| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                | Cache TTL (seconds)                                                  |
+| `AI_RPM_LIMIT`                   | No       | `15`                                  | Max requests per minute per user                                     |
+| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                   | Max simultaneous AI streams per user                                 |
 
 ### Feature Flags (DB-backed)
 
@@ -736,8 +734,9 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 | GET    | `/ai/usage`                    | Daily token + cost usage for authenticated user.                                                                          |
 | GET    | `/ai/metrics`                  | Usage summary. Query: `?period=day\|week\|month`.                                                                         |
 | GET    | `/ai/health`                   | Per-provider cooldown snapshot (admin only).                                                                              |
-| GET    | `/ai/config`                   | Effective config entries with `source: database\|environment` (admin only).                                               |
+| GET    | `/ai/config`                   | Effective config entries with `source: custom\|default` (admin only).                                                     |
 | PUT    | `/ai/config/:key`              | Update a config value — curated model id, or a routable chain for `ai_fallback_chain` (admin only).                       |
+| DELETE | `/ai/config/:key`              | Reset a config key to its code default; audits `ai_config.reset` (admin only).                                            |
 | GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env). |
 | PUT    | `/ai/providers/:provider`      | Store a key (probed first) and/or set `enabled` (admin only).                                                             |
 | DELETE | `/ai/providers/:provider/key`  | Clear the stored key (admin only).                                                                                        |
@@ -786,7 +785,7 @@ pnpm nx run api:eval
   unset. It is opt-in and excluded from CI and `nx affected` (paid + non-deterministic).
 - **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
-- **Model:** drives `AI_DEFAULT_MODEL` (sonnet) by default; set `AI_EVAL_MODEL` to override
+- **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5-20251001` for cheaper local runs).
 
 ### How it works
