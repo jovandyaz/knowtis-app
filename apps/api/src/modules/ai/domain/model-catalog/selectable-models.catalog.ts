@@ -69,9 +69,9 @@ export const CURATED_MODELS: CuratedModel[] = [
     tier: 'open',
   },
   {
-    id: 'openrouter:qwen/qwen3-235b-a22b-2507',
-    label: 'Qwen3 235B',
-    descriptionKey: 'aiModels.qwen3235b',
+    id: 'openrouter:z-ai/glm-5.2',
+    label: 'GLM-5.2',
+    descriptionKey: 'aiModels.glm52',
     tier: 'open',
   },
   {

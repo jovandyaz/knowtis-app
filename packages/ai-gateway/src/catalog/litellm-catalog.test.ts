@@ -132,7 +132,7 @@ describe('vendored snapshot', () => {
       'google:gemini-2.5-pro',
       'openai:gpt-4o-mini',
       'openrouter:deepseek/deepseek-v3.2',
-      'openrouter:qwen/qwen3-235b-a22b-2507',
+      'openrouter:z-ai/glm-5.2',
       'openrouter:moonshotai/kimi-k2.5',
       'openrouter:minimax/minimax-m2.5',
     ]) {
