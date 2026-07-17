@@ -5,9 +5,10 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
+import { useSettingsStore } from '@/stores/settings.store';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
-import { ModelSelect } from '@knowtis/design-system';
+import { Button, ModelSelect } from '@knowtis/design-system';
 import { FEATURE_FLAG_KEYS, MODEL_TIERS } from '@knowtis/shared-types';
 
 import { SectionHeader } from '../SectionHeader';
@@ -19,8 +20,15 @@ export function AIAssistantSection() {
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
+  const openSettings = useSettingsStore((s) => s.open);
 
   const status = isError ? 'error' : isPending ? 'loading' : 'ready';
+
+  const options = (models ?? []).map((m) => ({
+    ...m,
+    locked: m.access === 'requires_byok',
+  }));
+  const hasLocked = options.some((m) => m.locked);
 
   return (
     <div className="space-y-8">
@@ -30,7 +38,7 @@ export function AIAssistantSection() {
           description={t('aiAssistant.copilotDescription')}
         />
         <ModelSelect
-          models={models ?? []}
+          models={options}
           value={prefs?.preferredModel ?? null}
           onSelect={(id) => update({ preferredModel: id })}
           tierOrder={MODEL_TIERS}
@@ -44,6 +52,20 @@ export function AIAssistantSection() {
           emptyLabel={t('aiAssistant.noModels')}
           retryLabel={t('aiAssistant.retry')}
           billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
+          lockedBadgeLabel={t('aiAssistant.byok.lockedBadge')}
+          footer={
+            hasLocked ? (
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto whitespace-normal p-0 text-left text-xs font-normal"
+                onClick={() => openSettings('aiAssistant')}
+              >
+                {t('aiAssistant.byok.unlockCta')}
+              </Button>
+            ) : undefined
+          }
         />
       </section>
 

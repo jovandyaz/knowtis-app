@@ -2,8 +2,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useAISettings, useAvailableModels } from '@/hooks';
 import { useAgentStore } from '@/stores/agent.store';
+import { useSettingsStore } from '@/stores/settings.store';
 
-import { ModelSelect } from '@knowtis/design-system';
+import { Button, ModelSelect } from '@knowtis/design-system';
 import { MODEL_TIERS } from '@knowtis/shared-types';
 
 export function CopilotModelPicker() {
@@ -12,8 +13,15 @@ export function CopilotModelPicker() {
   const { data: prefs } = useAISettings();
   const selected = useAgentStore((s) => s.selectedModel);
   const setSelected = useAgentStore((s) => s.setSelectedModel);
+  const openSettings = useSettingsStore((s) => s.open);
 
   const status = isError ? 'error' : isPending ? 'loading' : 'ready';
+
+  const options = (models ?? []).map((m) => ({
+    ...m,
+    locked: m.access === 'requires_byok',
+  }));
+  const hasLocked = options.some((m) => m.locked);
 
   const accountDefaultId =
     prefs?.preferredModel ?? models?.find((m) => m.isDefault)?.id ?? null;
@@ -23,7 +31,7 @@ export function CopilotModelPicker() {
 
   return (
     <ModelSelect
-      models={models ?? []}
+      models={options}
       value={selected ?? prefs?.preferredModel ?? null}
       onSelect={setSelected}
       tierOrder={MODEL_TIERS}
@@ -39,10 +47,21 @@ export function CopilotModelPicker() {
       emptyLabel={t('aiAssistant.noModels')}
       retryLabel={t('aiAssistant.retry')}
       billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
+      lockedBadgeLabel={t('aiAssistant.byok.lockedBadge')}
       footer={
-        accountDefaultLabel
-          ? `${t('aiAssistant.defaultHint')}: ${accountDefaultLabel}`
-          : undefined
+        hasLocked ? (
+          <Button
+            type="button"
+            variant="link"
+            size="sm"
+            className="h-auto whitespace-normal p-0 text-left text-xs font-normal"
+            onClick={() => openSettings('aiAssistant')}
+          >
+            {t('aiAssistant.byok.unlockCta')}
+          </Button>
+        ) : accountDefaultLabel ? (
+          `${t('aiAssistant.defaultHint')}: ${accountDefaultLabel}`
+        ) : undefined
       }
     />
   );

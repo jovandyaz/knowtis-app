@@ -119,6 +119,8 @@
       "invalid": "That key was rejected. Check it's valid and has quota.",
       "stored": "Key stored ({{prefix}}…)",
       "billedBadge": "Your key",
+      "lockedBadge": "Requires your key",
+      "unlockCta": "Store your own key to unlock premium models",
       "lastUsed": "Last used {{when}}",
       "neverUsed": "Not used yet"
     }
