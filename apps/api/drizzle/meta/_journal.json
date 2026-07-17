@@ -162,6 +162,13 @@
       "when": 1784261022352,
       "tag": "0022_woozy_silver_fox",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1784307956812,
+      "tag": "0023_wide_bedlam",
+      "breakpoints": true
     }
   ]
 }
