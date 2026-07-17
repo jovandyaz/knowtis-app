@@ -155,6 +155,13 @@
       "when": 1784140397156,
       "tag": "0021_brief_boomerang",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1784261022352,
+      "tag": "0022_woozy_silver_fox",
+      "breakpoints": true
     }
   ]
 }

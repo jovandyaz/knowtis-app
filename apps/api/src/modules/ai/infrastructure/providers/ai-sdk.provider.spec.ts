@@ -26,7 +26,7 @@ vi.mock('ai', () => ({
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({
-  anthropic: vi.fn().mockReturnValue('mock-anthropic'),
+  createAnthropic: vi.fn(() => vi.fn().mockReturnValue('mock-anthropic')),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({

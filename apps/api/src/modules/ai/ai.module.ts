@@ -10,6 +10,7 @@ import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 import { AdminAuditModule } from '../admin/audit/admin-audit.module';
 import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
+import { AiProvidersController } from './ai-providers.controller';
 import { AIController } from './ai.controller';
 import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
@@ -28,6 +29,7 @@ import {
   PROMPTS_DIR,
 } from './application/services/prompt-loader.service';
 import { SelectableModelsService } from './application/services/selectable-models.service';
+import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
 import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
@@ -36,6 +38,7 @@ import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-outp
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
+import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
 import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
@@ -44,6 +47,7 @@ import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adap
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
+import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistence/drizzle-system-provider-keys.repository';
 import { DrizzleUserAiSettingsRepository } from './infrastructure/persistence/drizzle-user-ai-settings.repository';
 import { DrizzleUserProviderKeysRepository } from './infrastructure/persistence/drizzle-user-provider-keys.repository';
 import { AISDKProvider } from './infrastructure/providers/ai-sdk.provider';
@@ -52,7 +56,10 @@ import {
   FALLBACK_CHAIN_SOURCE,
   FallbackChainService,
 } from './infrastructure/providers/fallback-chain.service';
-import { ProviderRegistryFactory } from './infrastructure/providers/provider-registry.factory';
+import {
+  ProviderRegistryFactory,
+  SYSTEM_PROVIDER_KEYS_SOURCE,
+} from './infrastructure/providers/provider-registry.factory';
 import {
   AI_REDIS,
   AIRedisProvider,
@@ -73,7 +80,12 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       }),
     }),
   ],
-  controllers: [AIController, AiModelsController, AiKeysController],
+  controllers: [
+    AIController,
+    AiModelsController,
+    AiKeysController,
+    AiProvidersController,
+  ],
   providers: [
     SelectableModelsService,
     ModelPreferenceService,
@@ -90,6 +102,15 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     WebhookAlertService,
     FallbackChainService,
     { provide: FALLBACK_CHAIN_SOURCE, useExisting: AIConfigService },
+    SystemProviderKeysService,
+    {
+      provide: SYSTEM_PROVIDER_KEYS_REPOSITORY,
+      useClass: DrizzleSystemProviderKeysRepository,
+    },
+    {
+      provide: SYSTEM_PROVIDER_KEYS_SOURCE,
+      useExisting: SystemProviderKeysService,
+    },
     { provide: MODEL_CATALOG, useClass: ModelCatalogAdapter },
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {

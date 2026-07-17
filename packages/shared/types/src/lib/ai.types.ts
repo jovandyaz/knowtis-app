@@ -76,8 +76,37 @@ export interface AIPreferences {
   preferredModel: string | null;
 }
 
+/**
+ * Every provider the server can route to. BYOK_PROVIDERS is a subset — not
+ * every provider supports a per-user key yet. Adding one here also needs a
+ * migration widening the `system_provider_keys` provider CHECK.
+ */
+export const AI_PROVIDERS = [
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',
+] as const;
+export type AIProvider = (typeof AI_PROVIDERS)[number];
+
 export const BYOK_PROVIDERS = ['anthropic', 'openai', 'google'] as const;
 export type ByokProvider = (typeof BYOK_PROVIDERS)[number];
+
+/** Where the server-side key for a provider actually resolves from, in precedence order. */
+export type ProviderKeySource = 'database' | 'environment' | 'none';
+
+export interface SystemProviderInfo {
+  readonly provider: AIProvider;
+  readonly enabled: boolean;
+  readonly keySource: ProviderKeySource;
+  /**
+   * True when a stored secret exists but cannot be decrypted. Routing silently
+   * falls through to `keySource`, so this must be surfaced, not hidden.
+   */
+  readonly storedKeyUnreadable: boolean;
+  readonly keyPrefix: string | null;
+  readonly updatedAt: string | null;
+}
 
 export interface ProviderKeyInfo {
   readonly provider: ByokProvider;
