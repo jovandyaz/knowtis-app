@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
-import { AI_SETTING_DEFAULTS, AIConfigService } from './ai-config.service';
+import { AIConfigService } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
 const CUSTOM_FAST = 'anthropic:claude-haiku-4-5-20251001';

@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 
 import type { EnvConfig } from '../../../config/env.config';
+import { parseChain } from '../domain/ai-settings';
 import { WebhookAlertService } from '../infrastructure/alerting/webhook-alert.service';
 import {
   FallbackChainService,
@@ -12,13 +13,6 @@ import { createMockConfig } from './create-mock-config';
 /** Catalog-compatible fallback chain for tests — the openrouter code default has no pricing in createTestCatalog. */
 export const TEST_FALLBACK_CHAIN =
   'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash';
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
 
 export function createTestChain(
   config: ConfigService<EnvConfig, true> = createMockConfig(),

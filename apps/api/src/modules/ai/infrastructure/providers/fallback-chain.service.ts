@@ -8,7 +8,7 @@ import {
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { AI_SETTING_DEFAULTS } from '../../application/services/ai-config.service';
+import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
@@ -137,13 +137,6 @@ export class FallbackChainService implements OnModuleInit {
     }
     return result;
   }
-}
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
 }
 
 function toIsoOrNull(epochMs: number | undefined): string | null {

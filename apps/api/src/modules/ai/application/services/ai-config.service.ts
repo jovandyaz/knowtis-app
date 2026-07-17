@@ -5,6 +5,7 @@ import type { Cache } from 'cache-manager';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -16,14 +17,6 @@ const CACHE_PREFIX = 'ai:config:';
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
 export type AIConfigKind = 'model' | 'chain';
-
-/** Open-tier code defaults every setting resolves to when no DB override exists. Every id here is guard-tested against CURATED_MODELS. */
-export const AI_SETTING_DEFAULTS = {
-  ai_default_model: 'openrouter:deepseek/deepseek-v3.2',
-  ai_fast_model: 'openrouter:deepseek/deepseek-v3.2',
-  ai_fallback_chain:
-    'openrouter:deepseek/deepseek-v3.2,openrouter:qwen/qwen3-235b-a22b-2507,openrouter:minimax/minimax-m2.5',
-} as const;
 
 interface ConfigKeyDef {
   default: string;
@@ -46,13 +39,6 @@ type ConfigKey = keyof typeof CONFIG_KEYS;
 
 function isConfigKey(key: string): key is ConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
-}
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
 }
 
 /** Rejected input (unknown key or invalid value) — maps to a 400 at the controller. */
