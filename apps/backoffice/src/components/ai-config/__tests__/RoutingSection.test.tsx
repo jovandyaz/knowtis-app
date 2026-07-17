@@ -7,13 +7,19 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 
 import { RoutingSection } from '../RoutingSection';
 
-const { useSelectableModelsMock, setConfigMutate, setConfigState } = vi.hoisted(
-  () => ({
-    useSelectableModelsMock: vi.fn(),
-    setConfigMutate: vi.fn(),
-    setConfigState: { isPending: false },
-  })
-);
+const {
+  useSelectableModelsMock,
+  setConfigMutate,
+  setConfigState,
+  resetConfigMutate,
+  resetConfigState,
+} = vi.hoisted(() => ({
+  useSelectableModelsMock: vi.fn(),
+  setConfigMutate: vi.fn(),
+  setConfigState: { isPending: false },
+  resetConfigMutate: vi.fn(),
+  resetConfigState: { isPending: false },
+}));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
@@ -23,6 +29,12 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
       isPending: setConfigState.isPending,
+      isError: false,
+      error: null,
+    }),
+    useResetAiConfig: () => ({
+      mutate: resetConfigMutate,
+      isPending: resetConfigState.isPending,
       isError: false,
       error: null,
     }),
@@ -50,12 +62,15 @@ const MODELS = [
   },
 ];
 
-function entryWith(value: string): AiConfigEntry {
+function entryWith(
+  value: string,
+  source: AiConfigEntry['source'] = 'custom'
+): AiConfigEntry {
   return {
     key: 'ai_fallback_chain',
     value,
     kind: 'chain',
-    source: 'database',
+    source,
     description: null,
     updatedAt: null,
   };
@@ -75,6 +90,8 @@ describe('RoutingSection', () => {
   beforeEach(() => {
     setConfigMutate.mockReset();
     setConfigState.isPending = false;
+    resetConfigMutate.mockReset();
+    resetConfigState.isPending = false;
     useSelectableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
@@ -332,6 +349,56 @@ describe('RoutingSection', () => {
     ).toBeDisabled();
     expect(
       screen.getByRole('button', { name: /move haiku later/i })
+    ).toBeDisabled();
+  });
+
+  it('marks a stored override with a filled custom badge', () => {
+    renderChain();
+
+    expect(screen.getByText('custom')).toHaveClass('bg-(--foreground)');
+  });
+
+  it('marks the code default with an outline badge', () => {
+    render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
+
+    expect(screen.getByText('default')).not.toHaveClass('bg-(--foreground)');
+  });
+
+  it('offers Reset to default when the chain is a stored override', () => {
+    renderChain();
+
+    expect(
+      screen.getByRole('button', { name: /reset to default/i })
+    ).toBeInTheDocument();
+  });
+
+  it('hides Reset when the chain already matches the code default', () => {
+    render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
+
+    expect(
+      screen.queryByRole('button', { name: /reset to default/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it('resets the chain key to its code default on click', async () => {
+    renderChain();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /reset to default/i })
+    );
+
+    expect(resetConfigMutate).toHaveBeenCalledWith({
+      key: 'ai_fallback_chain',
+    });
+  });
+
+  it('disables Reset while the reset is in flight', () => {
+    resetConfigState.isPending = true;
+
+    renderChain();
+
+    expect(
+      screen.getByRole('button', { name: /reset to default/i })
     ).toBeDisabled();
   });
 });

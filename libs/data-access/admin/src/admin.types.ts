@@ -115,7 +115,12 @@ export const AiConfigEntrySchema = z.object({
   // Backoffice and API deploy independently; an API that predates `kind` must
   // not error the whole page.
   kind: z.enum(['model', 'chain']).default('model'),
-  source: z.enum(['database', 'environment']),
+  // Backoffice and API deploy independently; an API still emitting the old
+  // database/environment wire values must keep parsing through the window.
+  source: z.preprocess(
+    (v) => (v === 'database' ? 'custom' : v === 'environment' ? 'default' : v),
+    z.enum(['custom', 'default'])
+  ),
   description: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
 });

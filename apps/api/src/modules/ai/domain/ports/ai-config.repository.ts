@@ -10,5 +10,7 @@ export interface AIConfigRow {
 export interface AIConfigRepository {
   get(key: string): Promise<string | null>;
   set(key: string, value: string, description?: string): Promise<void>;
+  /** Atomically removes the override row for `key`; resolves the deleted row, or null when none existed. */
+  delete(key: string): Promise<AIConfigRow | null>;
   getAllRows(): Promise<AIConfigRow[]>;
 }

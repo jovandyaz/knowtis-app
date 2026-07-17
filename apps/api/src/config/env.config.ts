@@ -23,8 +23,6 @@ const envSchemaBase = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
-  AI_DEFAULT_MODEL: z.string().default('anthropic:claude-sonnet-5'),
-  AI_FAST_MODEL: z.string().default('anthropic:claude-haiku-4-5-20251001'),
   AI_GUARD_CLASSIFIER_MODEL: z
     .string()
     .default('anthropic:claude-haiku-4-5-20251001'),
@@ -34,11 +32,6 @@ const envSchemaBase = z.object({
   AI_GLOBAL_DAILY_COST_LIMIT_USD: z.coerce.number().default(25),
   AI_ANONYMOUS_DAILY_LIMIT_PCT: z.coerce.number().min(0).max(1).default(0.33),
   AI_MAX_RETRIES: z.coerce.number().default(3),
-  AI_FALLBACK_CHAIN: z
-    .string()
-    .default(
-      'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash'
-    ),
   AI_COOLDOWN_ALLOWED_FAILS: z.coerce.number().int().min(1).default(3),
   AI_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(120),
   AI_TRANSCRIPTION_MODEL: z.string().default('openai:whisper-1'),

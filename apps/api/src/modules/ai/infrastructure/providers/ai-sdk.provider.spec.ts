@@ -34,9 +34,10 @@ vi.mock('@ai-sdk/openai', () => ({
 }));
 
 function createProvider(
-  config = createMockConfig({ OPENAI_API_KEY: 'test-openai-key' })
+  config = createMockConfig({ OPENAI_API_KEY: 'test-openai-key' }),
+  fallbackChain?: string
 ) {
-  const { registry, chain } = createTestChain(config);
+  const { registry, chain } = createTestChain(config, fallbackChain);
   return new AISDKProvider(registry, chain);
 }
 
@@ -87,10 +88,8 @@ describe('AISDKProvider', () => {
     mockedGenerateText.mockRejectedValueOnce(new Error('Model unavailable'));
 
     const sameModelProvider = createProvider(
-      createMockConfig({
-        OPENAI_API_KEY: 'test-openai-key',
-        AI_FALLBACK_CHAIN: '',
-      })
+      createMockConfig({ OPENAI_API_KEY: 'test-openai-key' }),
+      ''
     );
 
     await expect(

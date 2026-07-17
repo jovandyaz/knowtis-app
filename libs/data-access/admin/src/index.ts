@@ -8,6 +8,7 @@ export {
   useGlobalAiMetrics,
   useGlobalAiTimeseries,
   useGlobalAiUsage,
+  useResetAiConfig,
   useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,

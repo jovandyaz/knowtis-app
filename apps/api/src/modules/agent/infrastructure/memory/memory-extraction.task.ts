@@ -8,6 +8,7 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
+import { AIConfigService } from '../../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   AI_STRUCTURED_OUTPUT_PROVIDER,
@@ -45,6 +46,7 @@ export class MemoryExtractionTask {
   constructor(
     @Inject(DATABASE_CONNECTION) private readonly db: Database,
     private readonly config: ConfigService<EnvConfig, true>,
+    private readonly aiConfig: AIConfigService,
     private readonly flags: FeatureFlagsService,
     @Inject(CONVERSATION_REPOSITORY)
     private readonly conversations: ConversationRepository,
@@ -119,7 +121,7 @@ export class MemoryExtractionTask {
       buildReconcilePrompt(transcript, existing),
       MemoryReconcileSchema,
       {
-        model: this.config.get('AI_FAST_MODEL'),
+        model: await this.aiConfig.getFastModel(),
         system: MEMORY_RECONCILE_SYSTEM,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
       }

@@ -68,8 +68,6 @@ function makeConfig(
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
     AI_MAX_RETRIES: 3,
-    AI_FALLBACK_CHAIN:
-      'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash',
     AI_COOLDOWN_ALLOWED_FAILS: 3,
     AI_COOLDOWN_SECONDS: 120,
     ...over,
@@ -99,9 +97,10 @@ function makeFlags(enabled = false): FeatureFlagsService {
 function makeOrchestrator(
   config = makeConfig(),
   toolRegistry = makeToolRegistry(),
-  flags = makeFlags()
+  flags = makeFlags(),
+  fallbackChain?: string
 ): AiSdkAgentOrchestrator {
-  const { registry, chain } = createTestChain(config);
+  const { registry, chain } = createTestChain(config, fallbackChain);
   return new AiSdkAgentOrchestrator(
     config,
     toolRegistry,
@@ -159,7 +158,10 @@ describe('AiSdkAgentOrchestrator', () => {
 
   it('yields a single error event (and does not throw) when the model is invalid and the chain is empty', async () => {
     const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_CHAIN: '' })
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
     );
 
     const events = await collect(
@@ -702,7 +704,10 @@ describe('AiSdkAgentOrchestrator', () => {
       totalUsage: new Promise(() => {}),
     }));
     const orchestrator = makeOrchestrator(
-      makeConfig({ AI_FALLBACK_CHAIN: '' })
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
     );
 
     const events = await collect(orchestrator.run(baseInput));
@@ -717,8 +722,8 @@ describe('AiSdkAgentOrchestrator', () => {
   it('records a cooldown failure when the last candidate ends in an error event', async () => {
     // Single-candidate chain: the sole (last) candidate yields an error event
     // instead of throwing, so recordFailure can only come from isFailureChunk.
-    const config = makeConfig({ AI_FALLBACK_CHAIN: '' });
-    const { registry, chain } = createTestChain(config);
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, '');
     const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
     const recordSuccess = vi.spyOn(chain.cooldown, 'recordSuccess');
     const orchestrator = new AiSdkAgentOrchestrator(

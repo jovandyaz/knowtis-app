@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  useResetAiConfig,
   useSelectableModels,
   useSetAiConfig,
   type AiConfigEntry,
@@ -36,6 +37,9 @@ interface RoutingSectionProps {
 export function RoutingSection({ entry }: RoutingSectionProps) {
   const models = useSelectableModels();
   const setConfig = useSetAiConfig();
+  const resetConfig = useResetAiConfig();
+  // Cross-guard: a PUT and a DELETE on the same key must not race.
+  const mutating = setConfig.isPending || resetConfig.isPending;
   // A draft keeps a reorder to one write, and `base` drops it if another admin
   // writes meanwhile — saving it would silently revert them.
   const [draft, setDraft] = useState<{ base: string; chain: string[] } | null>(
@@ -73,7 +77,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         fallbackMessage="Could not update the chain."
       />
       <div className="flex items-center gap-2">
-        <Badge variant={entry.source === 'database' ? 'default' : 'outline'}>
+        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
           {entry.source}
         </Badge>
         <span className="text-xs text-(--muted-foreground)">
@@ -81,6 +85,16 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             ? `Updated ${entry.updatedAt.toLocaleString()}`
             : 'Never changed'}
         </span>
+        {entry.source === 'custom' ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={mutating}
+            onClick={() => resetConfig.mutate({ key: entry.key })}
+          >
+            Reset to default
+          </Button>
+        ) : null}
       </div>
       {chain.length === 0 ? (
         <p className="text-sm text-(--muted-foreground)">
@@ -109,7 +123,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="icon"
                 aria-label={`Move ${labelFor(id)} earlier`}
-                disabled={index === 0 || setConfig.isPending}
+                disabled={index === 0 || mutating}
                 onClick={() => edit(move(chain, index, index - 1))}
               >
                 ↑
@@ -118,7 +132,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="icon"
                 aria-label={`Move ${labelFor(id)} later`}
-                disabled={index === chain.length - 1 || setConfig.isPending}
+                disabled={index === chain.length - 1 || mutating}
                 onClick={() => edit(move(chain, index, index + 1))}
               >
                 ↓
@@ -127,7 +141,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
                 variant="ghost"
                 size="sm"
                 aria-label={`Remove ${labelFor(id)}`}
-                disabled={setConfig.isPending}
+                disabled={mutating}
                 onClick={() =>
                   edit(chain.filter((_, position) => position !== index))
                 }
@@ -161,13 +175,13 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
           onRetry={() => void models.refetch()}
           triggerVariant="outline"
           triggerLabel="Add model"
-          disabled={setConfig.isPending || available.length === 0}
+          disabled={mutating || available.length === 0}
           onSelect={(id) => edit([...chain, id])}
         />
         {isDirty ? (
           <>
             <Button
-              disabled={setConfig.isPending || chain.length === 0 || isInert}
+              disabled={mutating || chain.length === 0 || isInert}
               onClick={() =>
                 setConfig.mutate({ key: entry.key, value: chain.join(',') })
               }
@@ -176,7 +190,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             </Button>
             <Button
               variant="ghost"
-              disabled={setConfig.isPending}
+              disabled={mutating}
               onClick={() => setDraft(null)}
             >
               Discard

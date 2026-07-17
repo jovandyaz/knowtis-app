@@ -1,12 +1,11 @@
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 
-import type { EnvConfig } from '../../../../config/env.config';
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
+import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -20,27 +19,26 @@ const CACHE_TTL_MS = 30_000; // 30 seconds
 export type AIConfigKind = 'model' | 'chain';
 
 interface ConfigKeyDef {
-  env: keyof EnvConfig;
+  default: string;
   kind: AIConfigKind;
 }
 
 const CONFIG_KEYS = {
-  ai_default_model: { env: 'AI_DEFAULT_MODEL', kind: 'model' },
-  ai_fast_model: { env: 'AI_FAST_MODEL', kind: 'model' },
-  ai_fallback_chain: { env: 'AI_FALLBACK_CHAIN', kind: 'chain' },
+  ai_default_model: {
+    default: AI_SETTING_DEFAULTS.ai_default_model,
+    kind: 'model',
+  },
+  ai_fast_model: { default: AI_SETTING_DEFAULTS.ai_fast_model, kind: 'model' },
+  ai_fallback_chain: {
+    default: AI_SETTING_DEFAULTS.ai_fallback_chain,
+    kind: 'chain',
+  },
 } as const satisfies Record<string, ConfigKeyDef>;
 
 type ConfigKey = keyof typeof CONFIG_KEYS;
 
 function isConfigKey(key: string): key is ConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
-}
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
 }
 
 /** Rejected input (unknown key or invalid value) — maps to a 400 at the controller. */
@@ -55,7 +53,7 @@ export interface AIConfigEntry {
   key: ConfigKey;
   value: string;
   kind: AIConfigKind;
-  source: 'database' | 'environment';
+  source: 'custom' | 'default';
   description: string | null;
   updatedAt: Date | null;
 }
@@ -69,7 +67,6 @@ export class AIConfigService {
     private readonly repository: AIConfigRepository,
     @Inject(CACHE_MANAGER)
     private readonly cache: Cache,
-    private readonly configService: ConfigService<EnvConfig, true>,
     private readonly adminAuditService: AdminAuditService,
     private readonly registry: ProviderRegistryFactory,
     @Inject(MODEL_CATALOG)
@@ -131,6 +128,33 @@ export class AIConfigService {
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
 
+  async resetConfig(key: string, actorId: string): Promise<void> {
+    if (!isConfigKey(key)) {
+      throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
+    }
+    const deleted = await this.repository.delete(key);
+    if (!deleted) {
+      return;
+    }
+    try {
+      await this.cache.del(`${CACHE_PREFIX}${key}`);
+    } catch (error) {
+      // Post-commit: the delete is persisted; a failed invalidation self-heals when the 30s TTL expires.
+      this.logger.warn(
+        `Failed to invalidate the AI config cache after resetting ${key}`,
+        error
+      );
+    }
+    await this.adminAuditService.record({
+      actorId,
+      action: 'ai_config.reset',
+      targetType: 'ai_config',
+      targetId: key,
+      before: { value: deleted.value },
+    });
+    this.logger.log(`Reset AI config ${key} to its code default`);
+  }
+
   private validateValue(kind: AIConfigKind, value: string): void {
     switch (kind) {
       case 'model':
@@ -185,18 +209,16 @@ export class AIConfigService {
     }
   }
 
-  /** Resolves every config key to its effective value: the DB row when present, the env default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from env, mirroring the runtime fallback in getConfigValue. */
+  /** Resolves every config key to its effective value: the DB row when present, the code default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from the code defaults, mirroring the runtime fallback in getConfigValue. */
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
       const row = rows.get(key);
       return {
         key,
-        value:
-          row?.value ??
-          (this.configService.get(CONFIG_KEYS[key].env) as string),
+        value: row?.value ?? CONFIG_KEYS[key].default,
         kind: CONFIG_KEYS[key].kind,
-        source: row ? 'database' : 'environment',
+        source: row ? 'custom' : 'default',
         description: row?.description ?? null,
         updatedAt: row?.updatedAt ?? null,
       };
@@ -208,7 +230,7 @@ export class AIConfigService {
       return await this.repository.getAllRows();
     } catch (error) {
       this.logger.warn(
-        'Failed to read AI config rows from DB, resolving all keys from env',
+        'Failed to read AI config rows from DB, resolving all keys from the code defaults',
         error
       );
       return [];
@@ -231,11 +253,11 @@ export class AIConfigService {
       }
     } catch (error) {
       this.logger.warn(
-        `Failed to read AI config '${dbKey}' from DB, using env fallback`,
+        `Failed to read AI config '${dbKey}' from DB, using the code default`,
         error
       );
     }
 
-    return this.configService.get(CONFIG_KEYS[dbKey].env) as string;
+    return CONFIG_KEYS[dbKey].default;
   }
 }

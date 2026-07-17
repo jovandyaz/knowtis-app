@@ -16,6 +16,7 @@ import {
   useClearSystemProviderKey,
   useDeleteFeatureFlag,
   useGlobalAiTimeseries,
+  useResetAiConfig,
   useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,
@@ -24,6 +25,7 @@ import {
   useUpdateUserRole,
   useUpsertFeatureFlag,
 } from './admin.hooks';
+import { AiConfigEntrySchema } from './admin.types';
 
 vi.mock('@knowtis/api-client', () => ({
   httpClient: {
@@ -299,6 +301,59 @@ describe('useSetAiConfig', () => {
         { value: 'anthropic:claude-sonnet-5' }
       )
     );
+  });
+});
+
+describe('AiConfigEntrySchema source skew mapping', () => {
+  const base = {
+    key: 'ai_default_model',
+    value: 'anthropic:claude-sonnet-5',
+    kind: 'model',
+    description: null,
+    updatedAt: null,
+  };
+
+  it('maps the pre-deploy database wire value to custom', () => {
+    expect(
+      AiConfigEntrySchema.parse({ ...base, source: 'database' }).source
+    ).toBe('custom');
+  });
+
+  it('maps the pre-deploy environment wire value to default', () => {
+    expect(
+      AiConfigEntrySchema.parse({ ...base, source: 'environment' }).source
+    ).toBe('default');
+  });
+
+  it('passes the new custom value through unchanged', () => {
+    expect(
+      AiConfigEntrySchema.parse({ ...base, source: 'custom' }).source
+    ).toBe('custom');
+  });
+});
+
+describe('useResetAiConfig', () => {
+  it('deletes the config key and invalidates the config query', async () => {
+    vi.mocked(httpClient.delete).mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useResetAiConfig(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ key: 'ai_default_model' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.delete).toHaveBeenCalledWith(
+      '/ai/config/ai_default_model'
+    );
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.aiConfig(),
+    });
   });
 });
 

@@ -1,9 +1,15 @@
-import { ForbiddenException, type ExecutionContext } from '@nestjs/common';
+import type { RequestUser } from '@jovandyaz/auth/server';
+import {
+  BadRequestException,
+  ForbiddenException,
+  type ExecutionContext,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { RolesGuard } from '../authorization/roles.guard';
 import { AIController } from './ai.controller';
+import { InvalidAIConfigError } from './application/services/ai-config.service';
 import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 function createContext(role: string | undefined, handler: object) {
@@ -22,6 +28,7 @@ describe('AIController config role gating', () => {
   it.each([
     ['getConfig', AIController.prototype.getConfig],
     ['setConfig', AIController.prototype.setConfig],
+    ['resetConfig', AIController.prototype.resetConfig],
   ])('applies RolesGuard to %s', (_name, handler) => {
     const guards: unknown[] = Reflect.getMetadata('__guards__', handler) ?? [];
 
@@ -31,6 +38,7 @@ describe('AIController config role gating', () => {
   it.each([
     ['getConfig', AIController.prototype.getConfig],
     ['setConfig', AIController.prototype.setConfig],
+    ['resetConfig', AIController.prototype.resetConfig],
   ])('applies user-scoped throttling to %s', (_name, handler) => {
     const guards: unknown[] = Reflect.getMetadata('__guards__', handler) ?? [];
 
@@ -57,5 +65,65 @@ describe('AIController config role gating', () => {
         createContext('admin', AIController.prototype.getConfig)
       )
     ).toBe(true);
+  });
+});
+
+describe('AIController resetConfig', () => {
+  it('returns the effective config list after a reset', async () => {
+    const effective = [
+      {
+        key: 'ai_default_model',
+        value: 'openrouter:minimax/minimax-m2.5',
+        kind: 'model',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
+    ];
+    const aiConfigService = {
+      resetConfig: vi.fn().mockResolvedValue(undefined),
+      getEffectiveConfig: vi.fn().mockResolvedValue(effective),
+    };
+    const controller = new AIController(
+      {} as never,
+      {} as never,
+      aiConfigService as never,
+      {} as never,
+      {} as never
+    );
+
+    const result = await controller.resetConfig(
+      { id: 'u1' } as RequestUser,
+      'ai_default_model'
+    );
+
+    expect(aiConfigService.resetConfig).toHaveBeenCalledWith(
+      'ai_default_model',
+      'u1'
+    );
+    expect(result).toBe(effective);
+  });
+
+  it('maps an unknown key to a 400 without resolving the effective config', async () => {
+    const aiConfigService = {
+      resetConfig: vi
+        .fn()
+        .mockRejectedValue(
+          new InvalidAIConfigError("Unknown AI config key: 'ai_bogus_key'")
+        ),
+      getEffectiveConfig: vi.fn(),
+    };
+    const controller = new AIController(
+      {} as never,
+      {} as never,
+      aiConfigService as never,
+      {} as never,
+      {} as never
+    );
+
+    await expect(
+      controller.resetConfig({ id: 'u1' } as RequestUser, 'ai_bogus_key')
+    ).rejects.toThrow(BadRequestException);
+    expect(aiConfigService.getEffectiveConfig).not.toHaveBeenCalled();
   });
 });

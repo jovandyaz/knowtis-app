@@ -29,8 +29,8 @@ vi.mock('@ai-sdk/openai', () => ({
 
 const schema = z.object({ answer: z.number() });
 
-function createProvider(config = createMockConfig()) {
-  const { registry, chain } = createTestChain(config);
+function createProvider(config = createMockConfig(), fallbackChain?: string) {
+  const { registry, chain } = createTestChain(config, fallbackChain);
   return new AIStructuredOutputSDKProvider(registry, chain);
 }
 
@@ -119,9 +119,7 @@ describe('AIStructuredOutputSDKProvider', () => {
   it('should rethrow when the chain has no other candidates', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockRejectedValueOnce(new Error('down'));
-    const provider = createProvider(
-      createMockConfig({ AI_FALLBACK_CHAIN: '' })
-    );
+    const provider = createProvider(createMockConfig(), '');
 
     await expect(
       provider.generateStructuredOutput('prompt', schema, {
@@ -133,7 +131,8 @@ describe('AIStructuredOutputSDKProvider', () => {
 
   it('should throw when an anthropic model is requested without ANTHROPIC_API_KEY', async () => {
     const provider = createProvider(
-      createMockConfig({ ANTHROPIC_API_KEY: '', AI_FALLBACK_CHAIN: '' })
+      createMockConfig({ ANTHROPIC_API_KEY: '' }),
+      ''
     );
 
     await expect(

@@ -41,6 +41,23 @@ export class DrizzleAIConfigRepository implements AIConfigRepository {
       });
   }
 
+  async delete(key: string): Promise<AIConfigRow | null> {
+    const rows = await this.db
+      .delete(aiConfig)
+      .where(eq(aiConfig.key, key))
+      .returning();
+    const row = rows[0];
+    if (!row) {
+      return null;
+    }
+    return {
+      key: row.key,
+      value: row.value,
+      description: row.description,
+      updatedAt: row.updatedAt,
+    };
+  }
+
   async getAllRows(): Promise<AIConfigRow[]> {
     const rows = await this.db.select().from(aiConfig);
     return rows.map((r) => ({

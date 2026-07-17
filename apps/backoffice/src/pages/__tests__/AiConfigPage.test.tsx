@@ -39,6 +39,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
       isError: false,
       error: null,
     }),
+    useResetAiConfig: () => idleMutation,
     useSetSystemProvider: () => idleMutation,
     useClearSystemProviderKey: () => idleMutation,
     useTestSystemProvider: () => idleMutation,
@@ -80,7 +81,7 @@ describe('AiConfigPage', () => {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
           kind: 'model',
-          source: 'database',
+          source: 'custom',
           description: 'Default model for AI completions',
           updatedAt: new Date('2026-07-15T00:00:00.000Z'),
         },
@@ -88,7 +89,7 @@ describe('AiConfigPage', () => {
           key: 'ai_fast_model',
           value: 'anthropic:claude-haiku-4-5-20251001',
           kind: 'model',
-          source: 'environment',
+          source: 'default',
           description: null,
           updatedAt: null,
         },
@@ -107,8 +108,8 @@ describe('AiConfigPage', () => {
     expect(
       screen.getByText('Default model for AI completions')
     ).toBeInTheDocument();
-    expect(screen.getByText('database')).toBeInTheDocument();
-    expect(screen.getByText('environment')).toBeInTheDocument();
+    expect(screen.getByText('custom')).toBeInTheDocument();
+    expect(screen.getByText('default')).toBeInTheDocument();
   });
 
   it('routes each config entry to the editor for its kind', () => {
@@ -118,7 +119,7 @@ describe('AiConfigPage', () => {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
           kind: 'model',
-          source: 'database',
+          source: 'custom',
           description: null,
           updatedAt: null,
         },
@@ -126,7 +127,7 @@ describe('AiConfigPage', () => {
           key: 'ai_fallback_chain',
           value: 'anthropic:claude-haiku-4-5-20251001',
           kind: 'chain',
-          source: 'environment',
+          source: 'default',
           description: null,
           updatedAt: null,
         },
@@ -152,7 +153,7 @@ describe('AiConfigPage', () => {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
           kind: 'model',
-          source: 'database',
+          source: 'custom',
           description: null,
           updatedAt: null,
         },
@@ -177,7 +178,7 @@ describe('AiConfigPage', () => {
           key: 'ai_default_model',
           value: 'anthropic:claude-sonnet-5',
           kind: 'model',
-          source: 'database',
+          source: 'custom',
           description: null,
           updatedAt: null,
         },
