@@ -142,6 +142,33 @@ export class AIConfigService {
     this.logger.log(`AI config '${key}' updated to '${value}'`);
   }
 
+  async resetConfig(key: string, actorId: string): Promise<void> {
+    if (!isConfigKey(key)) {
+      throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
+    }
+    const previous = await this.repository.get(key);
+    if (!(await this.repository.delete(key))) {
+      return;
+    }
+    try {
+      await this.cache.del(`${CACHE_PREFIX}${key}`);
+    } catch (error) {
+      // Post-commit: the delete is persisted; a failed invalidation self-heals when the 30s TTL expires.
+      this.logger.warn(
+        `Failed to invalidate the AI config cache after resetting ${key}`,
+        error
+      );
+    }
+    await this.adminAuditService.record({
+      actorId,
+      action: 'ai_config.reset',
+      targetType: 'ai_config',
+      targetId: key,
+      ...(previous !== null ? { before: { value: previous } } : {}),
+    });
+    this.logger.log(`Reset AI config ${key} to its code default`);
+  }
+
   private validateValue(kind: AIConfigKind, value: string): void {
     switch (kind) {
       case 'model':

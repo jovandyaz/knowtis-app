@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   FileTypeValidator,
   Get,
   HttpStatus,
@@ -89,6 +90,31 @@ const dailyUsageSchema = {
     totalOutputTokens: { type: 'number', example: 830 },
     totalCostUsd: { type: 'number', format: 'float', example: 0.0024 },
     requestCount: { type: 'number', example: 5 },
+  },
+};
+
+const effectiveConfigSchema = {
+  type: 'array' as const,
+  items: {
+    type: 'object',
+    properties: {
+      key: { type: 'string', example: 'ai_default_model' },
+      value: {
+        type: 'string',
+        example: 'openrouter:deepseek/deepseek-v3.2',
+      },
+      source: {
+        type: 'string',
+        enum: ['custom', 'default'],
+        example: 'custom',
+      },
+      description: { type: 'string', nullable: true },
+      updatedAt: {
+        type: 'string',
+        format: 'date-time',
+        nullable: true,
+      },
+    },
   },
 };
 
@@ -366,30 +392,7 @@ export class AIController {
   @ApiResponse({
     status: 200,
     description: 'Effective AI configuration entries',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          key: { type: 'string', example: 'ai_default_model' },
-          value: {
-            type: 'string',
-            example: 'openrouter:deepseek/deepseek-v3.2',
-          },
-          source: {
-            type: 'string',
-            enum: ['custom', 'default'],
-            example: 'custom',
-          },
-          description: { type: 'string', nullable: true },
-          updatedAt: {
-            type: 'string',
-            format: 'date-time',
-            nullable: true,
-          },
-        },
-      },
-    },
+    schema: effectiveConfigSchema,
   })
   @ApiAuthErrors('AI feature is disabled')
   @ApiResponse({
@@ -474,6 +477,47 @@ export class AIController {
       throw error;
     }
     return { success: true };
+  }
+
+  @ApiOperation({
+    summary: 'Reset an AI configuration value to its code default',
+    description:
+      'Deletes the database override for a dynamic AI configuration key so it resolves to its code default. Idempotent when no override exists.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Effective AI configuration entries after the reset',
+    schema: effectiveConfigSchema,
+  })
+  @ApiBadRequest('invalid config key')
+  @ApiAuthErrors('AI feature is disabled')
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden — admin role required',
+  })
+  @UseGuards(
+    JwtAuthGuard,
+    FeatureFlagGuard,
+    RolesGuard,
+    UserScopedThrottlerGuard
+  )
+  @RequireFeatureFlag('ai_enabled')
+  @Roles('admin')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @Delete('config/:key')
+  async resetConfig(
+    @CurrentUser() user: RequestUser,
+    @Param('key') key: string
+  ): Promise<AIConfigEntry[]> {
+    try {
+      await this.aiConfigService.resetConfig(key, user.id);
+    } catch (error) {
+      if (error instanceof InvalidAIConfigError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+    return this.aiConfigService.getEffectiveConfig();
   }
 
   private parsePeriod(period?: string): MetricsPeriod {

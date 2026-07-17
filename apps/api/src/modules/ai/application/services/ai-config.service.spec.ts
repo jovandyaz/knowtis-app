@@ -13,6 +13,7 @@ describe('AIConfigService', () => {
   let mockRepo: {
     get: ReturnType<typeof vi.fn>;
     set: ReturnType<typeof vi.fn>;
+    delete: ReturnType<typeof vi.fn>;
     getAllRows: ReturnType<typeof vi.fn>;
   };
   let mockCache: {
@@ -28,6 +29,7 @@ describe('AIConfigService', () => {
     mockRepo = {
       get: vi.fn().mockResolvedValue(null),
       set: vi.fn(),
+      delete: vi.fn().mockResolvedValue(true),
       getAllRows: vi.fn().mockResolvedValue([]),
     };
     mockCache = {
@@ -145,6 +147,42 @@ describe('AIConfigService', () => {
     ).resolves.toBeUndefined();
     expect(mockRepo.set).toHaveBeenCalled();
     expect(mockAudit.record).toHaveBeenCalled();
+  });
+
+  it('should throw when resetting an unknown config key', async () => {
+    await expect(service.resetConfig('ai_unknown_key', ACTOR)).rejects.toThrow(
+      "Unknown AI config key: 'ai_unknown_key'"
+    );
+    expect(mockRepo.delete).not.toHaveBeenCalled();
+    expect(mockAudit.record).not.toHaveBeenCalled();
+  });
+
+  it('should delete the row and invalidate the cache on reset', async () => {
+    mockRepo.get.mockResolvedValue(CUSTOM_MODEL);
+    await service.resetConfig('ai_default_model', ACTOR);
+    expect(mockRepo.delete).toHaveBeenCalledWith('ai_default_model');
+    expect(mockCache.del).toHaveBeenCalledWith('ai:config:ai_default_model');
+  });
+
+  it('should record an ai_config.reset audit with the removed value and no after', async () => {
+    mockRepo.get.mockResolvedValue(CUSTOM_MODEL);
+    await service.resetConfig('ai_default_model', ACTOR);
+    expect(mockAudit.record).toHaveBeenCalledWith({
+      actorId: ACTOR,
+      action: 'ai_config.reset',
+      targetType: 'ai_config',
+      targetId: 'ai_default_model',
+      before: { value: CUSTOM_MODEL },
+    });
+  });
+
+  it('should neither audit nor error when resetting a key with no stored row', async () => {
+    mockRepo.delete.mockResolvedValue(false);
+    await expect(
+      service.resetConfig('ai_default_model', ACTOR)
+    ).resolves.toBeUndefined();
+    expect(mockAudit.record).not.toHaveBeenCalled();
+    expect(mockCache.del).not.toHaveBeenCalled();
   });
 
   it('should report a rowless key as default and a stored one as custom', async () => {
