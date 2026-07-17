@@ -241,6 +241,19 @@ describe('AIConfigService', () => {
       expect(chain).toEqual(['google:gemini-2.0-flash']);
     });
 
+    it('should drop chain models the catalog no longer supports', async () => {
+      mockRepo.get.mockResolvedValue(
+        'anthropic:claude-haiku-4-5-20251001,openai:ghost-model'
+      );
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== 'openai:ghost-model'
+      );
+
+      const chain = await service.getFallbackChain();
+
+      expect(chain).toEqual(['anthropic:claude-haiku-4-5-20251001']);
+    });
+
     it('should persist a valid chain', async () => {
       await service.setConfig('ai_fallback_chain', ENV_CHAIN, ACTOR);
       expect(mockRepo.set).toHaveBeenCalledWith(

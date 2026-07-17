@@ -42,6 +42,7 @@ export class FallbackChainService implements OnModuleInit {
   private readonly logger = new Logger(FallbackChainService.name);
   private chain: string[] = [];
   private chainRefreshedAt = 0;
+  private chainGeneration = 0;
 
   readonly cooldown: ProviderCooldownTracker;
 
@@ -109,10 +110,12 @@ export class FallbackChainService implements OnModuleInit {
     // Claim the window before the read so a hung read can't pin the snapshot:
     // after the TTL a new refresh starts even if this one never settles.
     this.chainRefreshedAt = now;
+    const generation = ++this.chainGeneration;
     void this.chainSource
       .getFallbackChain()
       .then((chain) => {
-        if (chain.length > 0) {
+        // A slow earlier read must not clobber a newer one.
+        if (generation === this.chainGeneration && chain.length > 0) {
           this.chain = chain;
         }
       })

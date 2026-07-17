@@ -178,6 +178,39 @@ describe('FallbackChainService', () => {
       );
     });
 
+    it('should ignore a stale refresh that resolves after a newer one', async () => {
+      vi.useFakeTimers();
+      try {
+        let resolveStale!: (chain: string[]) => void;
+        const stale = new Promise<string[]>((resolve) => {
+          resolveStale = resolve;
+        });
+        const responses = [
+          stale,
+          Promise.resolve(['anthropic:claude-haiku-4-5-20251001']),
+        ];
+        let call = 0;
+        const { service } = buildWithSource(
+          () => responses[call++] ?? Promise.resolve([]),
+          { OPENAI_API_KEY: 'test-key' }
+        );
+
+        service.candidatesFor('anthropic:claude-sonnet-5');
+        vi.advanceTimersByTime(31_000);
+        service.candidatesFor('anthropic:claude-sonnet-5');
+        await vi.advanceTimersByTimeAsync(0);
+
+        resolveStale(['openai:gpt-4o-mini']);
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(
+          service.candidatesFor('anthropic:claude-sonnet-5')
+        ).not.toContain('openai:gpt-4o-mini');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
     it('should coalesce rapid calls into a single refresh within the TTL', () => {
       const { service, chainSource } = buildWithSource(
         async () => ['anthropic:claude-haiku-4-5-20251001'],

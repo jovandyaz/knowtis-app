@@ -106,6 +106,8 @@ export type AuditParams = Pick<AdminUsersParams, 'page' | 'limit'>;
 export const AiConfigEntrySchema = z.object({
   key: z.string(),
   value: z.string(),
+  // Backoffice and API deploy independently; an API that predates `kind` must
+  // not error the whole page.
   kind: z.enum(['model', 'chain']).default('model'),
   source: z.enum(['database', 'environment']),
   description: z.string().nullable(),

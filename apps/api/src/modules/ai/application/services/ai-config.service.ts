@@ -85,7 +85,18 @@ export class AIConfigService {
   }
 
   async getFallbackChain(): Promise<string[]> {
-    return parseChain(await this.getConfigValue('ai_fallback_chain'));
+    const entries = parseChain(await this.getConfigValue('ai_fallback_chain'));
+    const supported = entries.filter((m) => this.modelCatalog.isSupported(m));
+    if (supported.length < entries.length) {
+      // Writes are validated, but a row written out of band can name a model the
+      // catalog dropped; routing it burns an attempt and trips its provider's cooldown.
+      this.logger.warn(
+        `Ignoring fallback chain models missing from the catalog: ${entries
+          .filter((m) => !supported.includes(m))
+          .join(', ')}`
+      );
+    }
+    return supported;
   }
 
   async setConfig(
