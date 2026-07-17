@@ -103,6 +103,11 @@ const effectiveConfigSchema = {
         type: 'string',
         example: 'openrouter:minimax/minimax-m2.5',
       },
+      kind: {
+        type: 'string',
+        enum: ['model', 'chain'],
+        example: 'model',
+      },
       source: {
         type: 'string',
         enum: ['custom', 'default'],
