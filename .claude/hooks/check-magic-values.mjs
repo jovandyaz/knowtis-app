@@ -167,6 +167,17 @@ process.stdin.on('end', () => {
   const JSX_ATTR_BEFORE = /[A-Za-z_][\w-]*=$/;
   const IGNORE_STRING_LINE =
     /^\s*(import|export)\b|className|@knowtis|@jovandyaz|data-testid|typeof /;
+  // JSON-schema / OpenAPI type names repeat by design in Swagger annotations
+  // and Zod/schema builders — the schema key is the name, not a magic value.
+  const SCHEMA_TYPE_NAMES = new Set([
+    'string',
+    'number',
+    'boolean',
+    'object',
+    'array',
+    'integer',
+    'null',
+  ]);
 
   const findings = [];
   const flag = (text, why) =>
@@ -205,7 +216,11 @@ process.stdin.on('end', () => {
         while ((m = STRING_LITERAL.exec(rawLine)) !== null) {
           if (JSX_ATTR_BEFORE.test(rawLine.slice(0, m.index))) continue;
           const s = m[2];
-          if (s.length >= 4 && !/^[\s\W]*$/.test(s)) {
+          if (
+            s.length >= 4 &&
+            !/^[\s\W]*$/.test(s) &&
+            !SCHEMA_TYPE_NAMES.has(s)
+          ) {
             stringCount.set(s, (stringCount.get(s) ?? 0) + 1);
           }
         }
