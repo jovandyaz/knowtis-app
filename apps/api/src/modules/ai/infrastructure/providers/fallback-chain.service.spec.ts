@@ -9,9 +9,11 @@ import {
 } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 
-vi.mock('@ai-sdk/anthropic', () => ({ anthropic: vi.fn() }));
-vi.mock('@ai-sdk/google', () => ({ createGoogleGenerativeAI: vi.fn() }));
-vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn() }));
+vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: vi.fn(() => vi.fn()) }));
+vi.mock('@ai-sdk/google', () => ({
+  createGoogleGenerativeAI: vi.fn(() => vi.fn()),
+}));
+vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn(() => vi.fn()) }));
 
 function buildService(configOverrides: Record<string, unknown> = {}) {
   const config = createMockConfig(configOverrides);

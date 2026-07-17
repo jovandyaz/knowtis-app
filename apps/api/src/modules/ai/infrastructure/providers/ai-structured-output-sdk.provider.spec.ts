@@ -16,7 +16,7 @@ vi.mock('ai', () => ({
 }));
 
 vi.mock('@ai-sdk/anthropic', () => ({
-  anthropic: vi.fn(),
+  createAnthropic: vi.fn(() => vi.fn()),
 }));
 
 vi.mock('@ai-sdk/google', () => ({
@@ -140,7 +140,7 @@ describe('AIStructuredOutputSDKProvider', () => {
       provider.generateStructuredOutput('prompt', schema, {
         model: 'anthropic:claude-sonnet-4-20250514',
       })
-    ).rejects.toThrow('ANTHROPIC_API_KEY is not configured');
+    ).rejects.toThrow("No key for 'anthropic'");
   });
 });
 
