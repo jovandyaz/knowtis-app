@@ -1,16 +1,31 @@
 import {
   BadRequestException,
-  ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
+import { APICallError, RetryError } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
 import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
+import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
 
-vi.mock('ai', () => ({ generateText: vi.fn() }));
+// Only the call is stubbed; the error classes must stay real because the
+// classifier reads the SDK's own retryability verdict off them.
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('ai')>()),
+  generateText: vi.fn(),
+}));
 
 const user = { id: 'admin-1' } as never;
+
+function apiCallError(statusCode: number, message = 'nope') {
+  return new APICallError({
+    message,
+    url: 'https://provider.test/v1',
+    requestBodyValues: {},
+    statusCode,
+  });
+}
 const anthropic = { provider: 'anthropic' } as never;
 
 function make() {
@@ -23,6 +38,7 @@ function make() {
   const registry = {
     languageModel: vi.fn().mockReturnValue('probe-model'),
     refreshSystemConfigs: vi.fn().mockResolvedValue(undefined),
+    routingSecrets: vi.fn().mockReturnValue([]),
   };
   return {
     controller: new AiProvidersController(
@@ -92,9 +108,9 @@ describe('AiProvidersController', () => {
     });
 
     it.each([401, 403])(
-      'should reject the key when the provider answers %i',
+      'should refuse to store a key the provider answers %i to',
       async (statusCode) => {
-        await probeFailsWith(Object.assign(new Error('nope'), { statusCode }));
+        await probeFailsWith(apiCallError(statusCode));
         const { controller, systemKeys } = make();
 
         await expect(
@@ -104,38 +120,63 @@ describe('AiProvidersController', () => {
       }
     );
 
-    it('should report an outage rather than a bad key when the provider errors', async () => {
+    // A 503 would be truer but the global filter masks 5xx bodies, so the
+    // reason has to ride a 4xx to reach the admin at all.
+    it('should keep an outage distinguishable from a bad key in the response', async () => {
       await probeFailsWith(
-        Object.assign(new Error('boom'), { statusCode: 500 })
+        new RetryError({
+          message: 'Failed after 3 attempts',
+          reason: 'maxRetriesExceeded',
+          errors: [apiCallError(503)],
+        })
       );
-      const { controller } = make();
-
-      await expect(
-        controller.set(user, anthropic, { apiKey: 'sk-ant-good' })
-      ).rejects.toBeInstanceOf(ServiceUnavailableException);
-    });
-
-    it('should report an outage when the probe times out', async () => {
-      // A timeout carries no statusCode; calling it a bad key would block an
-      // emergency rotation.
-      await probeFailsWith(new DOMException('timed out', 'TimeoutError'));
       const { controller, systemKeys } = make();
 
-      await expect(
-        controller.set(user, anthropic, { apiKey: 'sk-ant-good' })
-      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      const error = await controller
+        .set(user, anthropic, { apiKey: 'sk-ant-good' })
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(UnprocessableEntityException);
+      expect(error.getResponse()).toMatchObject({
+        code: 'unavailable',
+        message: expect.stringContaining('unavailable'),
+      });
       expect(systemKeys.setKey).not.toHaveBeenCalled();
     });
 
-    it('should report an outage when the provider is unreachable', async () => {
+    it.each([
+      ['a timeout', new DOMException('timed out', 'TimeoutError')],
+      [
+        'an unreachable host',
+        Object.assign(new Error('getaddrinfo ENOTFOUND'), {
+          code: 'ENOTFOUND',
+        }),
+      ],
+    ])('should not blame the key for %s', async (_label, error) => {
+      await probeFailsWith(error);
+      const { controller, systemKeys } = make();
+
+      const thrown = await controller
+        .set(user, anthropic, { apiKey: 'sk-ant-good' })
+        .catch((e) => e);
+
+      expect(thrown.getResponse()).toMatchObject({ code: 'unavailable' });
+      expect(systemKeys.setKey).not.toHaveBeenCalled();
+    });
+
+    it('should keep the submitted key out of the error the provider echoes back', async () => {
       await probeFailsWith(
-        Object.assign(new Error('getaddrinfo ENOTFOUND'), { code: 'ENOTFOUND' })
+        apiCallError(401, 'Incorrect API key provided: sk-ant-secret-value.')
       );
       const { controller } = make();
 
-      await expect(
-        controller.set(user, anthropic, { apiKey: 'sk-ant-good' })
-      ).rejects.toBeInstanceOf(ServiceUnavailableException);
+      const thrown = await controller
+        .set(user, anthropic, { apiKey: 'sk-ant-secret-value' })
+        .catch((e) => e);
+
+      const body = JSON.stringify(thrown.getResponse());
+      expect(body).not.toContain('sk-ant-secret-value');
+      expect(body).toContain('[redacted]');
     });
 
     it('should not probe when only enablement changes', async () => {
@@ -151,6 +192,140 @@ describe('AiProvidersController', () => {
         'admin-1'
       );
     });
+  });
+
+  describe('test connection', () => {
+    it('should probe the key that currently routes, not a candidate', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const { controller, registry } = make();
+
+      const result = await controller.test(anthropic);
+
+      expect(registry.languageModel).toHaveBeenCalledWith(
+        expect.stringContaining('anthropic:'),
+        undefined
+      );
+      expect(generateText).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({
+        ok: true,
+        model: expect.stringContaining('anthropic:'),
+      });
+    });
+
+    // A failed probe is the answer the caller asked for. Throwing would hand it
+    // to the global filter, which masks 5xx bodies to 'Internal server error'.
+    it('should resolve with the failure instead of throwing', async () => {
+      await probeFailsWith(new DOMException('timed out', 'TimeoutError'));
+      const { controller } = make();
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unavailable',
+        message: expect.stringContaining('unavailable'),
+      });
+    });
+
+    it.each([
+      ['no usable key', "No key for 'anthropic'"],
+      ['a disabled provider', "Provider 'anthropic' is disabled"],
+    ])('should report %s as unconfigured', async (_label, message) => {
+      const { controller, registry } = make();
+      registry.languageModel.mockImplementation(() => {
+        throw new ProviderNotConfiguredError(message);
+      });
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message,
+      });
+    });
+
+    it('should carry the provider’s own words when it refuses', async () => {
+      // The observed case: a valid key on an unfunded account answers 400.
+      await probeFailsWith(apiCallError(400, 'Your credit balance is too low'));
+      const { controller } = make();
+
+      const result = await controller.test(anthropic);
+
+      expect(result).toMatchObject({ ok: false, reason: 'rejected' });
+      expect(result.ok === false && result.message).toContain(
+        'credit balance is too low'
+      );
+    });
+
+    it('should keep the routing key out of the error the provider echoes back', async () => {
+      await probeFailsWith(
+        apiCallError(401, 'Incorrect API key provided: sk-ant-stored-value.')
+      );
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-stored-value']);
+      const warn = vi
+        .spyOn(controller['logger'], 'warn')
+        .mockImplementation(() => undefined);
+
+      const result = await controller.test(anthropic);
+
+      expect(JSON.stringify(result)).not.toContain('sk-ant-stored-value');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain(
+        'sk-ant-stored-value'
+      );
+      expect(result.ok === false && result.message).toContain('[redacted]');
+      expect(registry.routingSecrets).toHaveBeenCalledWith('anthropic');
+    });
+
+    it('should scrub the key the probe actually used when another admin rotates it mid-flight', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-in-flight']);
+      const warn = vi
+        .spyOn(controller['logger'], 'warn')
+        .mockImplementation(() => undefined);
+      generateText.mockImplementationOnce(async () => {
+        registry.routingSecrets.mockReturnValue(['sk-ant-rotated-in']);
+        throw apiCallError(401, 'Incorrect API key: sk-ant-in-flight.');
+      });
+
+      const result = await controller.test(anthropic);
+
+      expect(JSON.stringify(result)).not.toContain('sk-ant-in-flight');
+      expect(JSON.stringify(warn.mock.calls)).not.toContain('sk-ant-in-flight');
+    });
+
+    it.each([401, 403, 400, 404])(
+      'should treat HTTP %i as a refusal the admin must act on',
+      async (statusCode) => {
+        await probeFailsWith(apiCallError(statusCode));
+        const { controller } = make();
+
+        await expect(controller.test(anthropic)).resolves.toMatchObject({
+          ok: false,
+          reason: 'rejected',
+        });
+      }
+    );
+
+    // The SDK retries 429/5xx to exhaustion and rethrows a RetryError, which
+    // carries no statusCode — reading one off the error would classify these as
+    // refusals and tell the admin to fix a key that is fine.
+    it.each([429, 500, 503])(
+      'should treat HTTP %i as transient after the SDK exhausts its retries',
+      async (statusCode) => {
+        await probeFailsWith(
+          new RetryError({
+            message: `Failed after 3 attempts`,
+            reason: 'maxRetriesExceeded',
+            errors: [apiCallError(statusCode)],
+          })
+        );
+        const { controller } = make();
+
+        await expect(controller.test(anthropic)).resolves.toMatchObject({
+          ok: false,
+          reason: 'unavailable',
+        });
+      }
+    );
   });
 
   describe('throttling', () => {

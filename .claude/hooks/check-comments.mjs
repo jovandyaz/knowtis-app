@@ -1,8 +1,14 @@
 #!/usr/bin/env node
-// Guards the minimal-comments rule (.claude/rules/comments.md) after Edit/Write
+// Guards the minimal-comments rule (~/.claude/rules/comments.md) after Edit/Write
 // on TS/TSX. Short, useful WHY comments and JSDoc are fine — this only flags the
 // objectively-bad, machine-detectable cases: over-long blocks, task/PR/issue
-// references, section-header dividers, author/date stamps, and tombstones.
+// references, section-header dividers, author/date stamps, tombstones, and
+// comments that only restate the code they sit on.
+//
+// This hook BLOCKS the edit, so every rule here is tuned for precision over
+// recall: a redundancy rule fires only when the comment's own words are already
+// in the identifiers below it. Judging whether a WHY is *worth* saying is the
+// author's job — a regex that guessed at that would cry wolf and get ignored.
 
 let raw = '';
 process.stdin.on('data', (c) => (raw += c));
@@ -16,7 +22,11 @@ process.stdin.on('end', () => {
 
   const input = payload?.tool_input ?? {};
   const file = input.file_path ?? '';
-  if (!/\.(ts|tsx|js|jsx)$/.test(file) || /\.(spec|test)\.[tj]sx?$/.test(file)) {
+  if (
+    !/\.(ts|tsx|js|jsx)$/.test(file) ||
+    /\.(spec|test)\.[tj]sx?$/.test(file) ||
+    /\.gen\.[tj]sx?$/.test(file)
+  ) {
     process.exit(0);
   }
 
@@ -37,17 +47,130 @@ process.stdin.on('end', () => {
     { re: /\/\/\s*(removed|deleted|old (logic|code|impl|version)|kept for reference|commented[- ]out|legacy:)/i, why: 'tombstone — delete dead code, use git history' },
   ];
 
+  const RATIONALE = /\b(because|since|due to|so that|otherwise|would|must|never|always|workaround|quirk|bug|instead|beware|caveat|assumes?|invariant|deliberate|intentional)\b/i;
+  // Openers that promise a restatement of the next line rather than a reason.
+  const PARAPHRASE_VERB =
+    /^(increments?|decrements?|sets?|gets?|returns?|creates?|builds?|initiali[sz]es?|inits?|adds?|removes?|deletes?|updates?|checks?|validates?|loops?|iterates?|calls?|invokes?|declares?|defines?|assigns?|renders?|handles?|maps?|filters?|converts?|parses?|formats?|resets?|clears?|starts?|stops?|fetch(es)?|sends?|saves?|loads?)\b/i;
+  const SECTION_NAME =
+    /^(helpers?|types?|constants?|state|public api|private (methods?|api)|utils?|imports?|exports?|setup|teardown|props?|hooks?|handlers?|selectors?|actions?|styles?|interfaces?|variables?|methods?|main|misc)$/i;
+  const STOPWORDS = new Set(
+    ('the a an to of for and or if is are be this that it its in on at we should will with from by as not no then so into via when which their they them our all each any new here there do does done use used using one only'
+      .split(' '))
+  );
+  const PRAGMA = /(eslint-disable|@ts-|biome-ignore|prettier-ignore|c8 |istanbul )/;
+
+  const stem = (w) =>
+    w
+      .replace(/ies$/, 'y')
+      .replace(/(sses|shes|ches|xes)$/, (m) => m.slice(0, -2))
+      .replace(/s$/, '')
+      .replace(/(ing|ed|er|or)$/, '');
+
+  const words = (text) =>
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 2 && !STOPWORDS.has(w))
+      .map(stem);
+
+  const identifierWords = (code) => {
+    const out = new Set();
+    for (const id of code.match(/[A-Za-z_$][A-Za-z0-9_$]*/g) ?? []) {
+      for (const part of id
+        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+        .split(/[_$\s]+/)) {
+        if (part.length > 2) out.add(stem(part.toLowerCase()));
+      }
+    }
+    return out;
+  };
+
+  const isCode = (t) =>
+    t.length > 0 && !t.startsWith('//') && !t.startsWith('*') && !t.startsWith('/*');
+
+  // A comment is redundant when its own words are already spelled out in the
+  // code it introduces — not merely because it is short.
+  const restatesCode = (text, following, maxWords, minShared) => {
+    if (RATIONALE.test(text)) return false;
+    const cw = words(text);
+    if (cw.length === 0 || cw.length > maxWords) return false;
+    const ids = identifierWords(following.join(' '));
+    const shared = cw.filter((w) => ids.has(w));
+    return shared.length >= minShared && shared.length / cw.length >= 0.6;
+  };
+
   const findings = [];
+  const flag = (text, why) =>
+    findings.push(`  • ${text.slice(0, 70)} — ${why}`);
 
   for (const block of added) {
     const lines = block.split('\n');
+    // A blank line ends what a comment can be speaking for; a comment line does
+    // not, since it is part of the same block.
+    const codeAfter = (i) => {
+      const out = [];
+      for (let j = i + 1; j < lines.length && out.length < 2; j += 1) {
+        const t = lines[j].trim();
+        if (t === '') break;
+        if (isCode(t)) out.push(t);
+      }
+      return out;
+    };
+
+    const strip = (s) => s.replace(/^\*\s?/, '').trim();
+    // `trailing` is code sharing the closing line — what the block documents
+    // when it is written `/** ... */ export const x`.
+    const jsdocAt = (i) => {
+      const t = lines[i].trim();
+      if (!t.startsWith('/**')) return null;
+      const closes = t.indexOf('*/', 3);
+      if (closes !== -1) {
+        return {
+          text: t.slice(3, closes).trim(),
+          end: i,
+          trailing: t.slice(closes + 2).trim(),
+        };
+      }
+      const parts = [];
+      for (let j = i + 1; j < lines.length; j += 1) {
+        const inner = lines[j].trim();
+        const ends = inner.indexOf('*/');
+        if (ends === -1) {
+          parts.push(strip(inner));
+          continue;
+        }
+        parts.push(strip(inner.slice(0, ends)));
+        return {
+          text: parts.filter(Boolean).join(' '),
+          end: j,
+          trailing: inner.slice(ends + 2).trim(),
+        };
+      }
+      return null;
+    };
+
     let run = 0; // consecutive non-JSDoc // comment lines
-    for (const line of lines) {
+    for (const [i, line] of lines.entries()) {
       const t = line.trim();
       for (const b of BANNED) {
-        if (b.re.test(t)) findings.push(`  • ${t.slice(0, 70)} — ${b.why}`);
+        if (b.re.test(t)) flag(t, b.why);
       }
-      if (t.startsWith('//') && !/(eslint-disable|@ts-|biome-ignore|prettier-ignore)/.test(t)) {
+
+      const jsdoc = jsdocAt(i);
+      const documents = jsdoc
+        ? [jsdoc.trailing, ...codeAfter(jsdoc.end)].filter(Boolean).slice(0, 2)
+        : [];
+      if (jsdoc && restatesCode(jsdoc.text, documents, 5, 2)) {
+        flag(`/** ${jsdoc.text}`, 'JSDoc that only respells the signature — say what a caller cannot infer, or drop it');
+      }
+
+      if (t.startsWith('//') && !PRAGMA.test(t)) {
+        const text = t.replace(/^\/+\s*/, '');
+        if (SECTION_NAME.test(text.replace(/[:.]$/, ''))) {
+          flag(t, 'section header — use whitespace/structure instead');
+        } else if (PARAPHRASE_VERB.test(text) && restatesCode(text, codeAfter(i), 12, 2)) {
+          flag(t, 'restates the code below it — explain a non-obvious WHY or delete it');
+        }
         run += 1;
         if (run === 4) {
           findings.push('  • a // comment block longer than 3 lines — shorten it or move prose to the PR/design doc');
@@ -62,7 +185,7 @@ process.stdin.on('end', () => {
 
   const seen = [...new Set(findings)].slice(0, 6).join('\n');
   process.stderr.write(
-    `Minimal-comments rule (.claude/rules/comments.md) — review these in ${file}:\n${seen}\n` +
+    `Minimal-comments rule (~/.claude/rules/comments.md) — review these in ${file}:\n${seen}\n` +
       `Short, useful WHY comments and JSDoc are fine; remove the flagged ones.\n`
   );
   process.exit(2);

@@ -177,6 +177,12 @@ export class AIConfigService {
         "Fallback chain has no model invocable with the server's provider keys — at least one must be routable"
       );
     }
+    const duplicates = entries.filter((m, i) => entries.indexOf(m) !== i);
+    if (duplicates.length > 0) {
+      throw new InvalidAIConfigError(
+        `Fallback chain repeats models: ${[...new Set(duplicates)].join(', ')}`
+      );
+    }
   }
 
   /** Resolves every config key to its effective value: the DB row when present, the env default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from env, mirroring the runtime fallback in getConfigValue. */
