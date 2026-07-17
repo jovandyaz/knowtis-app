@@ -361,7 +361,7 @@ export class AIController {
   @ApiOperation({
     summary: 'Get the effective AI configuration',
     description:
-      'Returns every AI config key resolved to its effective value: the database row when present, the environment default otherwise.',
+      'Returns every AI config key resolved to its effective value: the database row when present, the code default otherwise.',
   })
   @ApiResponse({
     status: 200,
@@ -372,11 +372,14 @@ export class AIController {
         type: 'object',
         properties: {
           key: { type: 'string', example: 'ai_default_model' },
-          value: { type: 'string', example: 'anthropic:claude-sonnet-5' },
+          value: {
+            type: 'string',
+            example: 'openrouter:deepseek/deepseek-v3.2',
+          },
           source: {
             type: 'string',
-            enum: ['database', 'environment'],
-            example: 'database',
+            enum: ['custom', 'default'],
+            example: 'custom',
           },
           description: { type: 'string', nullable: true },
           updatedAt: {
