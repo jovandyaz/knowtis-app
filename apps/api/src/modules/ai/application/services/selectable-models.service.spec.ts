@@ -219,4 +219,26 @@ describe('SelectableModelsService', () => {
         .every((m) => m.access === 'granted')
     ).toBe(true);
   });
+
+  it('offers the first open model as fallback for a gated keyless caller', () => {
+    const service = makeOpenService();
+    expect(service.firstSelectable(NO_BYOK, true)).toBe(
+      'openrouter:deepseek/deepseek-v3.2'
+    );
+  });
+
+  it('offers the first curated model as fallback while the flag is off', () => {
+    const service = makeOpenService();
+    expect(service.firstSelectable(NO_BYOK, false)).toBe(
+      'anthropic:claude-haiku-4-5-20251001'
+    );
+  });
+
+  it('returns null when no curated model is selectable', () => {
+    const service = makeService({
+      supported: new Set(),
+      available: new Set(),
+    });
+    expect(service.firstSelectable(NO_BYOK, true)).toBeNull();
+  });
 });

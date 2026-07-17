@@ -81,4 +81,16 @@ export class SelectableModelsService {
       accessFor(curated, byokProviders, tierGatingOn) === 'granted'
     );
   }
+
+  /** First curated model this caller may actually run, or null when none — the landing spot when a configured default is gated. */
+  firstSelectable(
+    byokProviders: ReadonlySet<string> = NO_BYOK,
+    tierGatingOn = false
+  ): string | null {
+    return (
+      CURATED_MODELS.find((m) =>
+        this.isSelectable(m.id, byokProviders, tierGatingOn)
+      )?.id ?? null
+    );
+  }
 }

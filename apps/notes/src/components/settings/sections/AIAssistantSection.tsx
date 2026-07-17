@@ -28,7 +28,8 @@ export function AIAssistantSection() {
     ...m,
     locked: m.access === 'requires_byok',
   }));
-  const hasLocked = options.some((m) => m.locked);
+  // Advertise unlocking only when the keys manager below actually renders.
+  const showUnlockCta = options.some((m) => m.locked) && byokEnabled;
 
   return (
     <div className="space-y-8">
@@ -54,7 +55,7 @@ export function AIAssistantSection() {
           billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
           lockedBadgeLabel={t('aiAssistant.byok.lockedBadge')}
           footer={
-            hasLocked ? (
+            showUnlockCta ? (
               <Button
                 type="button"
                 variant="link"

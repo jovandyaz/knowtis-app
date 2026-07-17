@@ -4,12 +4,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { ModelPreferenceService } from './model-preference.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-4-20250514';
+const OPEN_FALLBACK = 'openrouter:deepseek-mock';
 
 function make(
   pref: string | null,
   selectable: string[],
   byokProviders: string[] = [],
-  tierGating = false
+  tierGating = false,
+  openFallback: string | null = OPEN_FALLBACK
 ) {
   const repo = {
     getPreferredModel: vi.fn().mockResolvedValue(pref),
@@ -27,6 +29,7 @@ function make(
       }
       return selectable.includes(id) || hasKey;
     },
+    firstSelectable: () => openFallback,
     list: (_systemDefault: string, providers?: ReadonlySet<string>) => {
       const unlocked = providers
         ? byokProviders
@@ -124,13 +127,23 @@ describe('ModelPreferenceService', () => {
     expect(await svc.tierGatingOn()).toBe(false);
   });
 
-  it('effective default falls back to system when tier gating locks the stored model', async () => {
+  it('effective default swaps both a gated stored model and a gated system default for an accessible model', async () => {
     const { svc } = make(
       'anthropic:claude-opus-4-8',
       ['anthropic:claude-opus-4-8'],
       [],
       true
     );
+    expect(await svc.getEffectiveDefault('u1')).toBe(OPEN_FALLBACK);
+  });
+
+  it('effective default keeps a gated system default when no accessible model exists', async () => {
+    const { svc } = make(null, [SYSTEM_DEFAULT], [], true, null);
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+  });
+
+  it('effective default never validates the system default while the flag is off', async () => {
+    const { svc } = make(null, [], [], false);
     expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
   });
 

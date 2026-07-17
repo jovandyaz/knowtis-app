@@ -4,8 +4,9 @@ import { useAISettings, useAvailableModels } from '@/hooks';
 import { useAgentStore } from '@/stores/agent.store';
 import { useSettingsStore } from '@/stores/settings.store';
 
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { Button, ModelSelect } from '@knowtis/design-system';
-import { MODEL_TIERS } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, MODEL_TIERS } from '@knowtis/shared-types';
 
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
@@ -14,6 +15,7 @@ export function CopilotModelPicker() {
   const selected = useAgentStore((s) => s.selectedModel);
   const setSelected = useAgentStore((s) => s.setSelectedModel);
   const openSettings = useSettingsStore((s) => s.open);
+  const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
 
   const status = isError ? 'error' : isPending ? 'loading' : 'ready';
 
@@ -21,7 +23,8 @@ export function CopilotModelPicker() {
     ...m,
     locked: m.access === 'requires_byok',
   }));
-  const hasLocked = options.some((m) => m.locked);
+  // Advertise unlocking only when settings can actually manage keys.
+  const showUnlockCta = options.some((m) => m.locked) && byokEnabled;
 
   const accountDefaultId =
     prefs?.preferredModel ?? models?.find((m) => m.isDefault)?.id ?? null;
@@ -49,7 +52,7 @@ export function CopilotModelPicker() {
       billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
       lockedBadgeLabel={t('aiAssistant.byok.lockedBadge')}
       footer={
-        hasLocked ? (
+        showUnlockCta ? (
           <Button
             type="button"
             variant="link"

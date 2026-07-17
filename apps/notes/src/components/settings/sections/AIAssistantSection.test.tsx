@@ -94,6 +94,7 @@ describe('AIAssistantSection', () => {
   });
 
   it('offers a BYOK unlock CTA that opens AI settings when a model is locked', async () => {
+    useFeatureFlag.mockReturnValue(true);
     modelsData.mockReturnValue(withLockedModel);
     render(<AIAssistantSection />);
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
@@ -104,8 +105,22 @@ describe('AIAssistantSection', () => {
   });
 
   it('hides the unlock CTA when no model is locked', async () => {
+    useFeatureFlag.mockReturnValue(true);
     render(<AIAssistantSection />);
     await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
+    expect(
+      screen.queryByText('aiAssistant.byok.unlockCta')
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the unlock CTA when key management is unavailable, keeping the locked badge', async () => {
+    useFeatureFlag.mockReturnValue(false);
+    modelsData.mockReturnValue(withLockedModel);
+    render(<AIAssistantSection />);
+    await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
+    expect(
+      screen.getByText('aiAssistant.byok.lockedBadge')
+    ).toBeInTheDocument();
     expect(
       screen.queryByText('aiAssistant.byok.unlockCta')
     ).not.toBeInTheDocument();

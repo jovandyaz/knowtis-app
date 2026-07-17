@@ -7,6 +7,11 @@ import { CopilotModelPicker } from './CopilotModelPicker';
 const setSelected = vi.fn();
 const openSettings = vi.fn();
 const modelsData = vi.fn();
+const byokFlag = vi.fn();
+
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => byokFlag(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -72,6 +77,7 @@ const withLockedModel = [
 describe('CopilotModelPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    byokFlag.mockReturnValue(true);
     modelsData.mockReturnValue(grantedModels);
   });
 
@@ -117,5 +123,20 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.queryByText('aiAssistant.byok.unlockCta')
     ).not.toBeInTheDocument();
+  });
+
+  it('falls back to the account-default hint when key management is unavailable', async () => {
+    byokFlag.mockReturnValue(false);
+    modelsData.mockReturnValue(withLockedModel);
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Balanced One/ }));
+
+    expect(
+      screen.queryByText('aiAssistant.byok.unlockCta')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/aiAssistant.defaultHint: Balanced One/)
+    ).toBeInTheDocument();
   });
 });

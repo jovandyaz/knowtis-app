@@ -79,7 +79,24 @@ export class ModelPreferenceService {
     if (pref && this.selectable.isSelectable(pref, providers, gatingOn)) {
       return pref;
     }
-    return this.aiConfig.getDefaultModel();
+    const systemDefault = await this.aiConfig.getDefaultModel();
+    // Only under gating: dark behavior must stay byte-for-byte status quo.
+    if (
+      !gatingOn ||
+      this.selectable.isSelectable(systemDefault, providers, gatingOn)
+    ) {
+      return systemDefault;
+    }
+    const fallback = this.selectable.firstSelectable(providers, gatingOn);
+    if (!fallback) {
+      return systemDefault;
+    }
+    this.logger.warn({
+      event: 'ai.model.default_gated',
+      systemDefault,
+      fallback,
+    });
+    return fallback;
   }
 
   isSelectable(modelId: string): boolean {
