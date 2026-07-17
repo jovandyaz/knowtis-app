@@ -317,18 +317,19 @@ Per-user requests-per-minute limiting via Redis, enforced before daily token/cos
 
 ## Dynamic Model Configuration
 
-AI models can be changed at runtime via the `ai_config` database table, without redeployment.
+AI models and the fallback chain can be changed at runtime via the `ai_config` database table, without redeployment.
 
 **Priority:** DB value (cached 30s) → environment variable fallback.
 
 **Supported keys:**
 
-| Key                | Env Fallback       | Description            |
-| ------------------ | ------------------ | ---------------------- |
-| `ai_default_model` | `AI_DEFAULT_MODEL` | Model for most actions |
-| `ai_fast_model`    | `AI_FAST_MODEL`    | Model for ghost-text   |
+| Key                 | Env Fallback        | Kind    | Description                         |
+| ------------------- | ------------------- | ------- | ----------------------------------- |
+| `ai_default_model`  | `AI_DEFAULT_MODEL`  | `model` | Model for most actions              |
+| `ai_fast_model`     | `AI_FAST_MODEL`     | `model` | Model for ghost-text                |
+| `ai_fallback_chain` | `AI_FALLBACK_CHAIN` | `chain` | Cross-provider fallback order (CSV) |
 
-Cross-provider fallback is the comma-separated `AI_FALLBACK_CHAIN` env var (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)), not a DB config key.
+A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of them and is rejected on write if unknown ids, duplicates, or a chain no member can route (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)).
 
 **REST API** (admin only):
 
@@ -358,9 +359,28 @@ The app-side cross-provider fallback chain (below) stays active in both modes �
 
 ---
 
+## System Provider Keys (database overrides env)
+
+In **direct mode**, each provider's key resolves **DB → env → none**: `ProviderRegistryFactory.resolveKey` prefers the `system_provider_keys` row over the `*_API_KEY` env var, so an admin can add, rotate, or clear a provider key from the backoffice **AI Config → Providers** cards with no redeploy. Keys are stored AES-256-GCM encrypted (`BYOK_ENCRYPTION_KEY`); only an 8-char prefix is ever read back. A row may also carry no key — the `enabled` toggle alone takes a provider in or out of routing while the env var still supplies the credential. Gateway mode ignores these rows entirely (the gateway holds the credentials).
+
+`keySource` reported per provider is one of `database` (a stored key routes), `environment` (no stored key, the env var routes), or `none` (neither — the provider cannot route). A stored key that fails to decrypt surfaces as `storedKeyUnreadable` and is ignored rather than used.
+
+**REST API** (admin only):
+
+| Method | Path                           | Description                                                                                         |
+| ------ | ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/providers`                | Every provider with its `keySource`, `enabled`, `keyPrefix`, and `storedKeyUnreadable`.             |
+| PUT    | `/ai/providers/:provider`      | Store a key and/or set `enabled`. The key is **probed before it persists** — a bad key is rejected. |
+| DELETE | `/ai/providers/:provider/key`  | Clear the stored key (routing falls back to the env var if present).                                |
+| POST   | `/ai/providers/:provider/test` | Probe whatever key currently routes — answers "is this provider working right now?".                |
+
+The probe (both `PUT` and `test`) sends one cheap turn through the provider's curated fast model. `test` resolves **200** with `{ ok: true, model } | { ok: false, reason: 'rejected' | 'unavailable' | 'unconfigured', message }` rather than throwing — the global exception filter (`core/filters/http-exception.filter.ts`) masks 5xx bodies, so a thrown status would replace the diagnosis with "Internal server error". The failure is classified by the AI SDK's own `APICallError.isRetryable`: a non-retryable answer means the provider refused (a bad or underfunded key → `rejected`), a `RetryError` after exhausted retries means an outage (`unavailable`). The routing key is scrubbed out of both the probe error and the logs.
+
+---
+
 ## Cross-Provider Fallback Chain
 
-`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the `AI_FALLBACK_CHAIN` (default `anthropic:claude-haiku-4-5-20251001 → openai:gpt-4o-mini → google:gemini-2.0-flash`), deduped. Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). The chain is validated against the model catalog at boot (fail-fast on unknown models).
+`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the `AI_FALLBACK_CHAIN` env var (default `anthropic:claude-haiku-4-5-20251001 → openai:gpt-4o-mini → google:gemini-2.0-flash`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). The env chain is validated against the model catalog at boot (fail-fast on unknown models); a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain no member can route with the server's keys).
 
 Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWithChain`):
 
@@ -390,6 +410,8 @@ Pricing and context-window data come from [LiteLLM's public pricing JSON](https:
 ## Copilot Model Selection
 
 Users pick which model the copilot uses, per conversation and as an account default. The list is **curated**: `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) intersects three sources — a hand-maintained `CURATED_MODELS` list (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` / `open` tiers — `open` is the OpenRouter-served open-weight tier: DeepSeek, Qwen, Kimi, MiniMax), the LiteLLM pricing snapshot (context window + cost class), and provider availability (`isModelAvailable` — the provider key is present). A curated model whose id is missing from the snapshot, or whose provider key is absent, is silently dropped from the list.
+
+Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the catalog covers a retired model, `routableByServer` covers a keyless/disabled/BYOK-only one.
 
 **Resolution cascade** (highest priority first), in `ModelPreferenceService`:
 
@@ -456,11 +478,11 @@ Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `Agen
 
 ## Runtime AI Config (database overrides env)
 
-`ai_default_model` and `ai_fast_model` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the `AI_DEFAULT_MODEL`/`AI_FAST_MODEL` env vars only when no row exists. **A DB row silently wins over the env var** — changing the Railway env alone does nothing while a row is present. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); values must be curated model ids, changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated`).
+`ai_default_model`, `ai_fast_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the `AI_DEFAULT_MODEL`/`AI_FAST_MODEL`/`AI_FALLBACK_CHAIN` env vars only when no row exists. **A DB row silently wins over the env var** — changing the Railway env alone does nothing while a row is present. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); a `model` key takes a curated model id and `ai_fallback_chain` takes a comma-separated list of them, changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated`).
 
 ## Environment Variables
 
-All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables.
+All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables. In direct mode the provider API keys below are the **fallback** source — a key stored in `system_provider_keys` via the backoffice wins (see [System Provider Keys](#system-provider-keys-database-overrides-env)).
 
 | Variable                         | Required | Default                                | Description                                                                                                                       |
 | -------------------------------- | -------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
@@ -473,7 +495,7 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `AI_FAST_MODEL`                  | No       | `anthropic:claude-haiku-4-5-20251001`  | Model for `ghost-text` — fallback only; a DB `ai_config` row wins                                                                 |
 | `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001`  | LLM judge for the gray-zone injection classifier                                                                                  |
 | `AI_EVAL_MODEL`                  | No       | — (falls back to `AI_DEFAULT_MODEL`)   | Model driving the copilot eval harness (`api:eval`)                                                                               |
-| `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated                                                                                    |
+| `AI_FALLBACK_CHAIN`              | No       | haiku → gpt-4o-mini → gemini-2.0-flash | Cross-provider fallback chain, comma-separated — fallback only; a DB `ai_config` row wins                                         |
 | `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                    | Failures per minute that start a provider cooldown                                                                                |
 | `AI_COOLDOWN_SECONDS`            | No       | `120`                                  | Provider cooldown duration (seconds)                                                                                              |
 | `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                     | Voice transcription model (only `openai:` supported)                                                                              |
@@ -516,7 +538,7 @@ Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
 ## Database Schema
 
-Three tables: `ai_usage`, `ai_config`, and `user_ai_settings`.
+Four tables: `ai_usage`, `ai_config`, `user_ai_settings`, and `system_provider_keys`.
 
 | Column          | Type              | Notes                                                                                              |
 | --------------- | ----------------- | -------------------------------------------------------------------------------------------------- |
@@ -542,6 +564,22 @@ Indexed on `(user_id, created_at)` for efficient daily aggregation queries. The 
 | `updated_at`  | timestamptz     | Auto-set on upsert    |
 
 Used by `AIConfigService` for dynamic model configuration (see [Dynamic Model Configuration](#dynamic-model-configuration)).
+
+### `system_provider_keys`
+
+| Column       | Type              | Notes                                                                    |
+| ------------ | ----------------- | ------------------------------------------------------------------------ |
+| `provider`   | varchar(20) PK    | `anthropic` \| `openai` \| `google` \| `openrouter` (CHECK-constrained)  |
+| `enabled`    | boolean           | Default `true`; `false` takes the provider out of routing                |
+| `ciphertext` | text              | AES-256-GCM ciphertext of the key (null when the row is enablement-only) |
+| `iv`         | text              | GCM nonce                                                                |
+| `auth_tag`   | text              | GCM auth tag                                                             |
+| `key_prefix` | varchar(12)       | First 8 chars, shown to admins; never the full key                       |
+| `updated_by` | uuid (FK → users) | Admin who last wrote the row (SET NULL on delete)                        |
+| `created_at` | timestamptz       | Auto-set                                                                 |
+| `updated_at` | timestamptz       | Auto-set on upsert                                                       |
+
+A CHECK enforces that the four secret columns are all null or all present — a row is either enablement-only or carries a complete encrypted key. Migration `0022`. See [System Provider Keys](#system-provider-keys-database-overrides-env).
 
 ### `user_ai_settings`
 
@@ -692,24 +730,28 @@ Voice-to-Note is documented separately in [docs/VOICE-NOTE.md](VOICE-NOTE.md). I
 
 All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enabled`.
 
-| Method | Path                  | Description                                                                                 |
-| ------ | --------------------- | ------------------------------------------------------------------------------------------- |
-| POST   | `/ai/complete`        | Non-streaming completion. Body: `AICompleteDto`.                                            |
-| GET    | `/ai/usage`           | Daily token + cost usage for authenticated user.                                            |
-| GET    | `/ai/metrics`         | Usage summary. Query: `?period=day\|week\|month`.                                           |
-| GET    | `/ai/health`          | Per-provider cooldown snapshot (admin only).                                                |
-| GET    | `/ai/config`          | Effective config entries with `source: database\|environment` (admin only).                 |
-| PUT    | `/ai/config/:key`     | Update a config value — curated, server-invocable model ids only (admin only).              |
-| GET    | `/ai/models`          | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection). |
-| GET    | `/ai/preferences`     | The caller's account-default copilot model.                                                 |
-| PUT    | `/ai/preferences`     | Set the caller's account-default copilot model.                                             |
-| GET    | `/ai/keys`            | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                       |
-| PUT    | `/ai/keys/:provider`  | Validate + store a provider key.                                                            |
-| DELETE | `/ai/keys/:provider`  | Remove a stored provider key.                                                               |
-| POST   | `/ai/voice-note`      | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                       |
-| GET    | `/agent/memories`     | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).     |
-| DELETE | `/agent/memories/:id` | Forget one memory.                                                                          |
-| DELETE | `/agent/memories`     | Forget all memories.                                                                        |
+| Method | Path                           | Description                                                                                                               |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/ai/complete`                 | Non-streaming completion. Body: `AICompleteDto`.                                                                          |
+| GET    | `/ai/usage`                    | Daily token + cost usage for authenticated user.                                                                          |
+| GET    | `/ai/metrics`                  | Usage summary. Query: `?period=day\|week\|month`.                                                                         |
+| GET    | `/ai/health`                   | Per-provider cooldown snapshot (admin only).                                                                              |
+| GET    | `/ai/config`                   | Effective config entries with `source: database\|environment` (admin only).                                               |
+| PUT    | `/ai/config/:key`              | Update a config value — curated model id, or a routable chain for `ai_fallback_chain` (admin only).                       |
+| GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env). |
+| PUT    | `/ai/providers/:provider`      | Store a key (probed first) and/or set `enabled` (admin only).                                                             |
+| DELETE | `/ai/providers/:provider/key`  | Clear the stored key (admin only).                                                                                        |
+| POST   | `/ai/providers/:provider/test` | Probe the routing key; resolves 200 with a pass/fail verdict (admin only).                                                |
+| GET    | `/ai/models`                   | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection).                               |
+| GET    | `/ai/preferences`              | The caller's account-default copilot model.                                                                               |
+| PUT    | `/ai/preferences`              | Set the caller's account-default copilot model.                                                                           |
+| GET    | `/ai/keys`                     | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                     |
+| PUT    | `/ai/keys/:provider`           | Validate + store a provider key.                                                                                          |
+| DELETE | `/ai/keys/:provider`           | Remove a stored provider key.                                                                                             |
+| POST   | `/ai/voice-note`               | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                                                     |
+| GET    | `/agent/memories`              | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).                                   |
+| DELETE | `/agent/memories/:id`          | Forget one memory.                                                                                                        |
+| DELETE | `/agent/memories`              | Forget all memories.                                                                                                      |
 
 > Swagger UI available at `/api/docs` in development.
 
