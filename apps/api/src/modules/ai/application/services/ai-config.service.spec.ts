@@ -67,9 +67,7 @@ describe('AIConfigService', () => {
 
   it('should fall back to the code default when no row exists', async () => {
     mockRepo.get.mockResolvedValue(null);
-    expect(await service.getDefaultModel()).toBe(
-      'openrouter:minimax/minimax-m2.5'
-    );
+    expect(await service.getDefaultModel()).toBe('openrouter:z-ai/glm-5.2');
   });
 
   it('should use cache on second call', async () => {
@@ -90,9 +88,7 @@ describe('AIConfigService', () => {
 
   it('should fall back to the code default on DB error', async () => {
     mockRepo.get.mockRejectedValue(new Error('DB down'));
-    expect(await service.getDefaultModel()).toBe(
-      'openrouter:minimax/minimax-m2.5'
-    );
+    expect(await service.getDefaultModel()).toBe('openrouter:z-ai/glm-5.2');
   });
 
   it('should throw on unknown config key', async () => {
@@ -288,8 +284,8 @@ describe('AIConfigService', () => {
     it('should parse the code-default chain into a trimmed list of model ids', async () => {
       const chain = await service.getFallbackChain();
       expect(chain).toEqual([
+        'openrouter:z-ai/glm-5.2',
         'openrouter:minimax/minimax-m2.5',
-        'openrouter:moonshotai/kimi-k2.5',
         'openrouter:deepseek/deepseek-v3.2',
       ]);
     });

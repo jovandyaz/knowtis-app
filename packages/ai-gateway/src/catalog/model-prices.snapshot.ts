@@ -2372,6 +2372,14 @@ export const MODEL_PRICES_SNAPSHOT: Record<string, unknown> = {
     max_input_tokens: 202752,
     max_output_tokens: 65535,
   },
+  'openrouter/z-ai/glm-5.2': {
+    litellm_provider: 'openrouter',
+    mode: 'chat',
+    input_cost_per_token: 0.0000014,
+    output_cost_per_token: 0.0000044,
+    max_input_tokens: 1000000,
+    max_output_tokens: 128000,
+  },
   'whisper-1': {
     litellm_provider: 'openai',
     mode: 'audio_transcription',

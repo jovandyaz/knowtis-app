@@ -136,8 +136,8 @@
     "gpt56": "El modelo más capaz de OpenAI",
     "gemini31Pro": "Razonamiento avanzado, matemáticas y código",
     "deepseekV32": "Insignia open-weight a una fracción del costo",
-    "qwen3235b": "Contexto enorme, costo ultra bajo",
-    "kimiK25": "El mejor modelo abierto para tareas complejas",
+    "glm52": "El modelo abierto más inteligente — rápido y con contexto largo",
+    "kimiK25": "Modelo abierto agéntico con contexto enorme",
     "minimaxM25": "Modelo abierto eficiente para el día a día"
   },
   "integrations": {

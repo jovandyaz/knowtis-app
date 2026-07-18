@@ -101,7 +101,7 @@ const effectiveConfigSchema = {
       key: { type: 'string', example: 'ai_default_model' },
       value: {
         type: 'string',
-        example: 'openrouter:minimax/minimax-m2.5',
+        example: 'openrouter:z-ai/glm-5.2',
       },
       kind: {
         type: 'string',
