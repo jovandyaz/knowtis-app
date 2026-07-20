@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { REASONING_EFFORTS } from '@knowtis/shared-types';
+
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
-import { AIConfigService } from './ai-config.service';
+import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
 const CUSTOM_FAST = 'anthropic:claude-haiku-4-5-20251001';
@@ -246,6 +248,14 @@ describe('AIConfigService', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_reasoning_effort',
+        value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
+        kind: 'choice',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
     ]);
   });
 
@@ -273,6 +283,14 @@ describe('AIConfigService', () => {
         key: 'ai_fallback_chain',
         value: AI_SETTING_DEFAULTS.ai_fallback_chain,
         kind: 'chain',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_reasoning_effort',
+        value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
+        kind: 'choice',
         source: 'default',
         description: null,
         updatedAt: null,
@@ -347,6 +365,33 @@ describe('AIConfigService', () => {
       expect(mockRepo.set).not.toHaveBeenCalled();
     });
   });
+
+  describe('reasoning effort', () => {
+    it('accepts a curated reasoning effort', async () => {
+      await service.setConfig('ai_reasoning_effort', 'low', ACTOR);
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_reasoning_effort',
+        'low',
+        undefined
+      );
+    });
+
+    it('rejects a value outside the effort union', async () => {
+      await expect(
+        service.setConfig('ai_reasoning_effort', 'ultra', ACTOR)
+      ).rejects.toThrow(InvalidAIConfigError);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('resolves the code default when no override row exists', async () => {
+      await expect(service.getReasoningEffort()).resolves.toBe('medium');
+    });
+
+    it('falls back to the default on an out-of-band row value', async () => {
+      mockRepo.get.mockResolvedValueOnce('turbo');
+      await expect(service.getReasoningEffort()).resolves.toBe('medium');
+    });
+  });
 });
 
 describe('AI_SETTING_DEFAULTS', () => {
@@ -362,5 +407,11 @@ describe('AI_SETTING_DEFAULTS', () => {
     for (const id of referenced) {
       expect(curatedIds.has(id)).toBe(true);
     }
+  });
+
+  it('every reasoning default is a member of the effort union', () => {
+    expect(REASONING_EFFORTS).toContain(
+      AI_SETTING_DEFAULTS.ai_reasoning_effort
+    );
   });
 });

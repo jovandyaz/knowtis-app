@@ -63,6 +63,10 @@ export type ModelTier = (typeof MODEL_TIERS)[number];
 export const MODEL_ACCESS = ['granted', 'requires_byok'] as const;
 export type ModelAccess = (typeof MODEL_ACCESS)[number];
 
+/** How much hidden reasoning budget a reasoning model may spend before emitting visible tokens. */
+export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
 export interface SelectableModel {
   id: string;
   label: string;

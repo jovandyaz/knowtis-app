@@ -3,6 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
+import { REASONING_EFFORTS, type ReasoningEffort } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
@@ -16,11 +17,12 @@ import { ProviderRegistryFactory } from '../../infrastructure/providers/provider
 const CACHE_PREFIX = 'ai:config:';
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
-export type AIConfigKind = 'model' | 'chain';
+export type AIConfigKind = 'model' | 'chain' | 'choice';
 
 interface ConfigKeyDef {
   default: string;
   kind: AIConfigKind;
+  allowed?: readonly string[];
 }
 
 const CONFIG_KEYS = {
@@ -33,12 +35,21 @@ const CONFIG_KEYS = {
     default: AI_SETTING_DEFAULTS.ai_fallback_chain,
     kind: 'chain',
   },
+  ai_reasoning_effort: {
+    default: AI_SETTING_DEFAULTS.ai_reasoning_effort,
+    kind: 'choice',
+    allowed: REASONING_EFFORTS,
+  },
 } as const satisfies Record<string, ConfigKeyDef>;
 
 type ConfigKey = keyof typeof CONFIG_KEYS;
 
 function isConfigKey(key: string): key is ConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
+}
+
+function isReasoningEffort(value: string): value is ReasoningEffort {
+  return (REASONING_EFFORTS as readonly string[]).includes(value);
 }
 
 /** Rejected input (unknown key or invalid value) — maps to a 400 at the controller. */
@@ -96,6 +107,17 @@ export class AIConfigService {
     return supported;
   }
 
+  async getReasoningEffort(): Promise<ReasoningEffort> {
+    const value = await this.getConfigValue('ai_reasoning_effort');
+    if (isReasoningEffort(value)) {
+      return value;
+    }
+    this.logger.warn(
+      `Ignoring unknown reasoning effort '${value}', using the code default`
+    );
+    return AI_SETTING_DEFAULTS.ai_reasoning_effort;
+  }
+
   async setConfig(
     key: string,
     value: string,
@@ -105,7 +127,7 @@ export class AIConfigService {
     if (!isConfigKey(key)) {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
-    this.validateValue(CONFIG_KEYS[key].kind, value);
+    this.validateValue(CONFIG_KEYS[key], value);
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
     try {
@@ -155,16 +177,23 @@ export class AIConfigService {
     this.logger.log(`Reset AI config ${key} to its code default`);
   }
 
-  private validateValue(kind: AIConfigKind, value: string): void {
-    switch (kind) {
+  private validateValue(def: ConfigKeyDef, value: string): void {
+    switch (def.kind) {
       case 'model':
         this.validateModel(value);
         return;
       case 'chain':
         this.validateChain(value);
         return;
+      case 'choice':
+        if (!def.allowed?.includes(value)) {
+          throw new InvalidAIConfigError(
+            `'${value}' is not one of: ${def.allowed?.join(', ')}`
+          );
+        }
+        return;
       default: {
-        const _exhaustive: never = kind;
+        const _exhaustive: never = def.kind;
         throw new InvalidAIConfigError(`Unhandled config kind: ${_exhaustive}`);
       }
     }

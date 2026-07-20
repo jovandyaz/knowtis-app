@@ -114,7 +114,7 @@ export const AiConfigEntrySchema = z.object({
   value: z.string(),
   // Backoffice and API deploy independently; an API that predates `kind` must
   // not error the whole page.
-  kind: z.enum(['model', 'chain']).default('model'),
+  kind: z.enum(['model', 'chain', 'choice']).default('model'),
   // Backoffice and API deploy independently; an API still emitting the old
   // database/environment wire values must keep parsing through the window.
   source: z.preprocess(

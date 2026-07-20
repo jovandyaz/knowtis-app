@@ -106,7 +106,7 @@ const effectiveConfigSchema = {
       },
       kind: {
         type: 'string',
-        enum: ['model', 'chain'],
+        enum: ['model', 'chain', 'choice'],
         example: 'model',
       },
       source: {

@@ -1,9 +1,10 @@
-/** Open-tier code defaults every setting resolves to when no DB override exists. Every id here is guard-tested against CURATED_MODELS. */
+/** Open-tier code defaults every AI setting resolves to when no DB override exists. Model ids are guard-tested against CURATED_MODELS. */
 export const AI_SETTING_DEFAULTS = {
   ai_default_model: 'openrouter:z-ai/glm-5.2',
   ai_fast_model: 'openrouter:minimax/minimax-m2.5',
   ai_fallback_chain:
     'openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2',
+  ai_reasoning_effort: 'medium',
 } as const;
 
 /** Splits a comma-separated model chain into trimmed, non-empty ids. */
