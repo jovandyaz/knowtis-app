@@ -120,6 +120,16 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
     });
   }
 
+  if (data.NODE_ENV === 'production' && !data.BACKOFFICE_URL) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'BACKOFFICE_URL is required in production — without it the backoffice and the notes app resolve to the same refresh cookie and hand each other their sessions',
+      path: ['BACKOFFICE_URL'],
+      input: data.BACKOFFICE_URL,
+    });
+  }
+
   if (data.NODE_ENV === 'production') {
     for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const) {
       if (isPlaceholderSecret(data[key])) {

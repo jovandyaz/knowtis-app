@@ -35,6 +35,12 @@ export type {
 
 export { deriveWsBaseUrl } from './lib/ws-url';
 
+export {
+  AUTH_REFRESH_LOCK,
+  refreshSessionTokens,
+  withAuthRefreshLock,
+} from './lib/session-refresh';
+
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
 export type {
   TokenRefreshPolicy,

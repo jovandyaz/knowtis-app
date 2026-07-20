@@ -157,3 +157,23 @@ describe('validateEnv', () => {
     expect(config.NODE_ENV).toBe('development');
   });
 });
+
+describe('env.config BACKOFFICE_URL', () => {
+  const prodEnv = { ...validEnv, NODE_ENV: 'production' };
+
+  it('rejects a production boot without BACKOFFICE_URL', () => {
+    expect(() => validateEnv(prodEnv)).toThrow(/BACKOFFICE_URL is required/);
+  });
+
+  it('accepts a production boot with BACKOFFICE_URL', () => {
+    const env = validateEnv({
+      ...prodEnv,
+      BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+    });
+    expect(env.BACKOFFICE_URL).toBe('https://backoffice.knowtis.app');
+  });
+
+  it('leaves BACKOFFICE_URL optional outside production', () => {
+    expect(validateEnv(validEnv).BACKOFFICE_URL).toBeUndefined();
+  });
+});

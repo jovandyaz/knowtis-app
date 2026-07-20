@@ -10,7 +10,7 @@ import type {
   TokenStorage,
 } from '@jovandyaz/auth-react';
 
-import type { IHttpClient } from '@knowtis/api-client';
+import { refreshSessionTokens, type IHttpClient } from '@knowtis/api-client';
 
 interface CreateBackofficeAuthApiDeps {
   httpClient: IHttpClient;
@@ -49,13 +49,7 @@ export function createBackofficeAuthApi({
     },
 
     async refreshToken(): Promise<AuthTokens> {
-      const tokens = await httpClient.post<AuthTokens>(
-        '/auth/refresh',
-        {},
-        { skipAuth: true }
-      );
-      tokenStorage.setAccessToken(tokens.accessToken);
-      return tokens;
+      return refreshSessionTokens(httpClient, tokenStorage);
     },
 
     async getProfile(): Promise<AuthUserProfile> {

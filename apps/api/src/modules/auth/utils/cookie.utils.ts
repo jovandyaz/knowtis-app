@@ -3,13 +3,43 @@ import type { Response } from 'express';
 
 const logger = new Logger('CookieUtils');
 
-export const REFRESH_TOKEN_COOKIE_NAME = 'rid';
+export const REFRESH_COOKIE_NAMES = {
+  app: 'rid',
+  backoffice: 'rid_bo',
+} as const;
+
+export type RefreshCookieName =
+  (typeof REFRESH_COOKIE_NAMES)[keyof typeof REFRESH_COOKIE_NAMES];
 
 const REFRESH_TOKEN_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 export interface CookieConfig {
   secure: boolean;
   domain?: string | undefined;
+  name: RefreshCookieName;
+}
+
+function isSameOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Returns the refresh-cookie name for the calling frontend. Both frontends
+ * share one API origin, so a single name would make them rotate one token and
+ * hand each other their identities.
+ */
+export function resolveRefreshCookieName(
+  origin: string | undefined,
+  backofficeUrl: string | undefined
+): RefreshCookieName {
+  if (!origin || !backofficeUrl || !isSameOrigin(origin, backofficeUrl)) {
+    return REFRESH_COOKIE_NAMES.app;
+  }
+  return REFRESH_COOKIE_NAMES.backoffice;
 }
 
 export function deriveCookieDomain(frontendUrl: string): string | undefined {
@@ -27,16 +57,22 @@ export function deriveCookieDomain(frontendUrl: string): string | undefined {
   return undefined;
 }
 
+function baseCookieOptions(config: CookieConfig) {
+  return {
+    httpOnly: true,
+    secure: config.secure,
+    sameSite: 'lax',
+    path: '/api/v1/auth',
+  } as const;
+}
+
 export function setRefreshTokenCookie(
   res: Response,
   refreshToken: string,
   config: CookieConfig
 ): void {
-  res.cookie(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-    httpOnly: true,
-    secure: config.secure,
-    sameSite: 'lax',
-    path: '/api/v1/auth',
+  res.cookie(config.name, refreshToken, {
+    ...baseCookieOptions(config),
     maxAge: REFRESH_TOKEN_MAX_AGE_MS,
     ...(config.domain && { domain: config.domain }),
   });
@@ -46,11 +82,8 @@ export function clearRefreshTokenCookie(
   res: Response,
   config: CookieConfig
 ): void {
-  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
-    httpOnly: true,
-    secure: config.secure,
-    sameSite: 'lax',
-    path: '/api/v1/auth',
+  res.clearCookie(config.name, {
+    ...baseCookieOptions(config),
     ...(config.domain && { domain: config.domain }),
   });
 }
@@ -63,10 +96,5 @@ export function clearLegacyHostOnlyCookie(
     return;
   }
 
-  res.clearCookie(REFRESH_TOKEN_COOKIE_NAME, {
-    httpOnly: true,
-    secure: config.secure,
-    sameSite: 'lax',
-    path: '/api/v1/auth',
-  });
+  res.clearCookie(config.name, baseCookieOptions(config));
 }

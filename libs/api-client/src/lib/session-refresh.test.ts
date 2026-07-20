@@ -1,8 +1,7 @@
 import type { TokenStorage } from '@jovandyaz/auth-react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { IHttpClient } from '@knowtis/api-client';
-
+import type { IHttpClient } from './http-client';
 import { refreshSessionTokens } from './session-refresh';
 
 function createHttpClient(accessToken = 'new-access') {

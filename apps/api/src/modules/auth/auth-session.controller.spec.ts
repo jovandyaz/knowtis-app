@@ -5,7 +5,10 @@ import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { AuthSessionController } from './auth-session.controller';
-import { REFRESH_TOKEN_COOKIE_NAME } from './utils/cookie.utils';
+import { REFRESH_COOKIE_NAMES } from './utils/cookie.utils';
+
+const BACKOFFICE_ORIGIN = 'https://backoffice.knowtis.app';
+const NOTES_ORIGIN = 'https://app.knowtis.app';
 
 function createController(refreshResult: unknown) {
   const refreshHandler = {
@@ -16,6 +19,7 @@ function createController(refreshResult: unknown) {
       ({
         NODE_ENV: 'production',
         FRONTEND_URL: 'https://knowtis.app',
+        BACKOFFICE_URL: BACKOFFICE_ORIGIN,
       })[key] ?? fallback,
   } as unknown as ConfigService;
 
@@ -51,7 +55,7 @@ describe('AuthSessionController.refresh', () => {
     await expect(controller.refresh(req, {}, res)).rejects.toThrow();
 
     expect(res.clearCookie).toHaveBeenCalledWith(
-      REFRESH_TOKEN_COOKIE_NAME,
+      REFRESH_COOKIE_NAMES.app,
       expect.objectContaining({
         httpOnly: true,
         sameSite: 'lax',
@@ -71,7 +75,7 @@ describe('AuthSessionController.refresh', () => {
 
     expect(result).toEqual({ accessToken: 'at' });
     expect(res.cookie).toHaveBeenCalledWith(
-      REFRESH_TOKEN_COOKIE_NAME,
+      REFRESH_COOKIE_NAMES.app,
       'rt',
       expect.objectContaining({
         httpOnly: true,
@@ -79,5 +83,103 @@ describe('AuthSessionController.refresh', () => {
         path: '/api/v1/auth',
       })
     );
+  });
+});
+
+describe('AuthSessionController refresh cookie isolation', () => {
+  const bothCookies = {
+    cookies: {
+      [REFRESH_COOKIE_NAMES.app]: 'notes-token',
+      [REFRESH_COOKIE_NAMES.backoffice]: 'backoffice-token',
+    },
+  } as unknown as Request;
+
+  it('consumes the backoffice token when refreshing from the backoffice origin', async () => {
+    const { controller, refreshHandler } = createController(
+      ok({ accessToken: 'at', refreshToken: 'rt' })
+    );
+
+    await controller.refresh(bothCookies, {}, createRes(), BACKOFFICE_ORIGIN);
+
+    expect(refreshHandler.execute).toHaveBeenCalledWith('backoffice-token');
+  });
+
+  it('consumes the notes token when refreshing from the notes origin', async () => {
+    const { controller, refreshHandler } = createController(
+      ok({ accessToken: 'at', refreshToken: 'rt' })
+    );
+
+    await controller.refresh(bothCookies, {}, createRes(), NOTES_ORIGIN);
+
+    expect(refreshHandler.execute).toHaveBeenCalledWith('notes-token');
+  });
+
+  it('rotates only the backoffice cookie when the backoffice refreshes', async () => {
+    const { controller } = createController(
+      ok({ accessToken: 'at', refreshToken: 'rotated' })
+    );
+    const res = createRes();
+
+    await controller.refresh(bothCookies, {}, res, BACKOFFICE_ORIGIN);
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.backoffice,
+      'rotated',
+      expect.anything()
+    );
+    expect(res.cookie).not.toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.app,
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('sets the backoffice cookie when logging in from the backoffice origin', async () => {
+    const { controller } = createController(ok(undefined));
+    const loginHandler = {
+      login: vi.fn().mockResolvedValue(
+        ok({
+          user: { id: 'admin-1' },
+          tokens: { accessToken: 'at', refreshToken: 'rt' },
+        })
+      ),
+    };
+    Object.assign(controller, { loginHandler });
+    const res = createRes();
+
+    await controller.login(
+      { id: 'admin-1', email: 'a@b.com', name: 'Admin' } as never,
+      { email: 'a@b.com', password: 'secret' },
+      res,
+      undefined,
+      undefined,
+      BACKOFFICE_ORIGIN
+    );
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.backoffice,
+      'rt',
+      expect.anything()
+    );
+    expect(res.cookie).not.toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.app,
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it('clears only the backoffice cookie when the backoffice logs out', async () => {
+    const { controller } = createController(ok(undefined));
+    const logoutHandler = { execute: vi.fn().mockResolvedValue(ok(undefined)) };
+    Object.assign(controller, { logoutHandler });
+    const res = createRes();
+
+    await controller.logout(bothCookies, {}, res, BACKOFFICE_ORIGIN);
+
+    const clearedNames = (
+      res.clearCookie as ReturnType<typeof vi.fn>
+    ).mock.calls.map((call) => call[0]);
+    expect(clearedNames).toContain(REFRESH_COOKIE_NAMES.backoffice);
+    expect(clearedNames).not.toContain(REFRESH_COOKIE_NAMES.app);
   });
 });

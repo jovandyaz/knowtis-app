@@ -11,7 +11,8 @@ paths:
 ## JWT Authentication
 
 - Access token: stored in memory (Zustand store), sent via `Authorization: Bearer` header. Short-lived.
-- Refresh token: stored in HttpOnly cookie named `rid`, path `/api/v1/auth`, `SameSite=Lax`. Set and cleared by the backend only. Lax is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests.
+- Refresh token: stored in an HttpOnly cookie, path `/api/v1/auth`, `SameSite=Lax`. Set and cleared by the backend only. Lax is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests.
+- The cookie name is **per frontend**, resolved from the request `Origin`: `rid` for the notes app, `rid_bo` for the backoffice. Both frontends call one API origin, so a single name would make them share and rotate one refresh token — each refresh would then return the other app's identity, leaking an admin token into the notes app. Adding a new frontend means adding a name; never reuse one.
 - Never store tokens in `localStorage` or `sessionStorage` — XSS can exfiltrate them.
 - Token validation must check: signature, expiration, issuer. Use `@nestjs/jwt` `JwtService.verifyAsync()`.
 - WebSocket auth: JWT sent via Socket.IO `auth.token` (not `extraHeaders` — those are stripped by some proxies).

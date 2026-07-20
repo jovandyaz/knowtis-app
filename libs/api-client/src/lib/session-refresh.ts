@@ -1,7 +1,7 @@
 import type { AuthTokens } from '@jovandyaz/auth';
 import type { TokenStorage } from '@jovandyaz/auth-react';
 
-import type { IHttpClient } from '@knowtis/api-client';
+import type { IHttpClient } from './http-client';
 
 /** Web Lock name shared by every refresh path so refreshes serialize across
  *  tabs of the same browser. */
