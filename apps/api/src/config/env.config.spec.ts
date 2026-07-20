@@ -87,7 +87,7 @@ describe('env.config agent vars', () => {
         AI_AGENT_STALL_MS: '120000',
         AI_AGENT_MAX_MS: '120000',
       })
-    ).toThrow();
+    ).toThrow(/AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS/);
   });
 
   it('rejects AI_AGENT_STALL_MS above AI_AGENT_MAX_MS', () => {
@@ -97,13 +97,13 @@ describe('env.config agent vars', () => {
         AI_AGENT_STALL_MS: '200000',
         AI_AGENT_MAX_MS: '120000',
       })
-    ).toThrow();
+    ).toThrow(/AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS/);
   });
 
   it('rejects a lowered AI_AGENT_MAX_MS that falls at or below the default stall budget', () => {
     expect(() =>
       validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '30000' })
-    ).toThrow();
+    ).toThrow(/AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS/);
   });
 
   it('accepts a stall budget strictly below the ceiling', () => {
