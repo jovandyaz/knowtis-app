@@ -588,6 +588,8 @@ export class RunAgentTurnHandler {
         ...(byokApiKey ? { byokApiKey } : {}),
       })) {
         switch (event.type) {
+          case 'thinking':
+            break;
           case 'chunk':
             assistantText += event.text;
             callbacks.onChunk(event.text);

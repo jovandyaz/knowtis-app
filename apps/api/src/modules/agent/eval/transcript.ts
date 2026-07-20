@@ -24,6 +24,8 @@ export async function drainEvents(
 
   for await (const event of events) {
     switch (event.type) {
+      case 'thinking':
+        break;
       case 'chunk':
         text += event.text;
         break;

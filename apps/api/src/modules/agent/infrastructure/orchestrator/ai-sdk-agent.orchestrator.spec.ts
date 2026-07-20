@@ -42,8 +42,9 @@ vi.mock('ai', async (importOriginal) => {
           ],
         });
         return {
-          textStream: (async function* () {
-            yield 'Hello';
+          fullStream: (async function* () {
+            yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
+            yield { type: 'text-delta', id: 't1', text: 'Hello' };
           })(),
           totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
         };
@@ -239,6 +240,51 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(done?.usage.inputTokens).toBe(3);
     expect(done?.usage.outputTokens).toBe(2);
     expect(done?.usage.model).toBe(MODEL);
+  });
+
+  it('yields thinking events for reasoning deltas before the answer chunks', async () => {
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events[0]).toEqual({ type: 'thinking', text: 'pondering' });
+    expect(events[1]).toEqual({ type: 'chunk', text: 'Hello' });
+  });
+
+  it('falls through to the next model when the primary dies after reasoning only', async () => {
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
+          throw new Error('provider exploded');
+        })(),
+        totalUsage: new Promise(() => {}),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(
+      events.some(
+        (e) =>
+          (e as { type: string; text?: string }).type === 'chunk' &&
+          (e as { text?: string }).text === 'fallback answer'
+      )
+    ).toBe(true);
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
   });
 
   it('resolves tools with a full-phase context bound to the userId', async () => {
@@ -438,12 +484,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           controller.abort();
           throw new DOMException('aborted', 'AbortError');
         })(),
@@ -472,12 +518,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 4, outputTokens: 1 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           controller.abort();
         })(),
         totalUsage: new Promise(() => {}),
@@ -506,12 +552,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           throw new Error('boom');
         })(),
         totalUsage: new Promise(() => {}),
@@ -536,12 +582,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 3, outputTokens: 1 },
           });
-          yield 'x';
+          yield { type: 'text-delta', id: 't1', text: 'x' };
           await new Promise((resolve) => setTimeout(resolve, 30));
           throw new DOMException('aborted', 'AbortError');
         })(),
@@ -566,7 +612,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('retries the whole turn on the next chain model when the primary stream fails before any progress', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -611,7 +657,7 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: {
+        fullStream: {
           [Symbol.asyncIterator]: () => ({
             next: () => {
               opts.onStepFinish?.({
@@ -641,7 +687,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => {
             controller.abort();
@@ -696,7 +742,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('does not fall back when the chain has no other candidates', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -748,8 +794,8 @@ describe('AiSdkAgentOrchestrator', () => {
 
   function happyStream() {
     return {
-      textStream: (async function* () {
-        yield 'Hello';
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
     };
@@ -851,8 +897,8 @@ describe('AiSdkAgentOrchestrator', () => {
   it('carries cache read/write tokens from totalUsage into the done event', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
-      textStream: (async function* () {
-        yield 'Hello';
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({
         inputTokens: 100,

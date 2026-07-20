@@ -96,6 +96,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       chunks: (turn) => turn,
       isAborted: () => abortSignal.aborted,
       isFailureChunk: (event) => event.type === 'error',
+      isEphemeralChunk: (event) => event.type === 'thinking',
     });
   }
 
@@ -192,10 +193,25 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
 
     try {
-      for await (const delta of result.textStream) {
-        if (delta) {
-          progressed = true;
-          yield { type: 'chunk', text: delta };
+      for await (const part of result.fullStream) {
+        switch (part.type) {
+          case 'reasoning-delta':
+            if (part.text) {
+              yield { type: 'thinking', text: part.text };
+            }
+            break;
+          case 'text-delta':
+            if (part.text) {
+              progressed = true;
+              yield { type: 'chunk', text: part.text };
+            }
+            break;
+          case 'error':
+            throw part.error instanceof Error
+              ? part.error
+              : new Error(String(part.error));
+          default:
+            break;
         }
       }
       const interrupted = this.interruptionEvent(
