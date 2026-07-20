@@ -122,6 +122,16 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
     });
   }
 
+  if (data.AI_AGENT_STALL_MS >= data.AI_AGENT_MAX_MS) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS — a stall budget at or above the wall-clock ceiling never fires, disabling per-candidate stall detection and failover',
+      path: ['AI_AGENT_STALL_MS'],
+      input: data.AI_AGENT_STALL_MS,
+    });
+  }
+
   if (data.NODE_ENV === 'production' && !data.BACKOFFICE_URL) {
     ctx.addIssue({
       code: 'custom',
