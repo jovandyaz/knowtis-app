@@ -13,7 +13,7 @@ describe('buildAllowedOrigins', () => {
     const origins = buildAllowedOrigins('production', 'https://knowtis.app');
 
     expect(origins).not.toContain('http://localhost:4200');
-    expect(origins).not.toContain('http://localhost:4040');
+    expect(origins).not.toContain('http://localhost:4400');
   });
 
   it('includes localhost dev origins outside production', () => {
@@ -22,18 +22,13 @@ describe('buildAllowedOrigins', () => {
     ).toEqual([
       'https://staging.knowtis.app',
       'http://localhost:4200',
-      'http://localhost:4040',
       'http://localhost:4400',
     ]);
   });
 
   it('does not duplicate the frontend URL when it is a localhost origin', () => {
     expect(buildAllowedOrigins('development', 'http://localhost:4200')).toEqual(
-      [
-        'http://localhost:4200',
-        'http://localhost:4040',
-        'http://localhost:4400',
-      ]
+      ['http://localhost:4200', 'http://localhost:4400']
     );
   });
 });
