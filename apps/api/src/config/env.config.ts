@@ -42,6 +42,7 @@ const envSchemaBase = z.object({
   TAVILY_API_KEY: z.string().optional(),
   AI_WEB_SEARCH_MAX_RESULTS: z.coerce.number().int().min(1).max(10).default(5),
   AI_WEB_SEARCH_DEPTH: z.enum(['basic', 'advanced']).default('basic'),
+  AI_WEB_SEARCH_PRICE_PER_CREDIT_USD: z.coerce.number().min(0).default(0),
   AI_TIMEOUT_MS: z.coerce.number().default(30000),
   AI_STREAM_MAX_MS: z.coerce.number().default(180000),
   AI_STREAM_CHUNK_TIMEOUT_MS: z.coerce.number().default(10000),

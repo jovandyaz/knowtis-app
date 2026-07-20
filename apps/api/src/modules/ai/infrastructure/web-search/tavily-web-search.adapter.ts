@@ -44,6 +44,7 @@ export class TavilyWebSearchAdapter implements WebSearchPort {
       maxResults: this.config.get('AI_WEB_SEARCH_MAX_RESULTS'),
       depth: this.config.get('AI_WEB_SEARCH_DEPTH'),
       timeoutMs: this.config.get('AI_TIMEOUT_MS'),
+      pricePerCreditUsd: this.config.get('AI_WEB_SEARCH_PRICE_PER_CREDIT_USD'),
     });
   }
 }

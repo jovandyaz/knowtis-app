@@ -63,6 +63,7 @@ import {
 const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.RATE_LIMIT_EXCEEDED]: HttpStatus.TOO_MANY_REQUESTS,
   [AIErrorCodes.PROVIDER_ERROR]: HttpStatus.BAD_GATEWAY,
+  [AIErrorCodes.TIMEOUT]: HttpStatus.GATEWAY_TIMEOUT,
   [AIErrorCodes.FEATURE_DISABLED]: HttpStatus.FORBIDDEN,
   [AIErrorCodes.INVALID_MODEL]: HttpStatus.BAD_REQUEST,
   [AIErrorCodes.INVALID_ACTION]: HttpStatus.BAD_REQUEST,

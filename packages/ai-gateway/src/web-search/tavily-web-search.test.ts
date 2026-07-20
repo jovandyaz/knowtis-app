@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TavilyWebSearch } from './tavily-web-search';
 
+const PAY_AS_YOU_GO_CREDIT_USD = 0.008;
+
 const cfg = {
   apiKey: 'tvly-x',
   maxResults: 5,
   depth: 'basic' as const,
   timeoutMs: 30000,
+  pricePerCreditUsd: PAY_AS_YOU_GO_CREDIT_USD,
 };
 
 function mockFetchOnce(status: number, body: unknown): void {
@@ -69,5 +72,23 @@ describe('TavilyWebSearch', () => {
       new TavilyWebSearch(cfg).fetch('javascript:alert(1)')
     ).rejects.toThrow(/non-http/);
     expect(netSpy).not.toHaveBeenCalled();
+  });
+
+  it('should charge two credits for an advanced search', async () => {
+    mockFetchOnce(200, { results: [] });
+    const r = await new TavilyWebSearch({
+      ...cfg,
+      depth: 'advanced',
+    }).search('x');
+    expect(r.costUsd).toBeCloseTo(PAY_AS_YOU_GO_CREDIT_USD * 2, 6);
+  });
+
+  it('should report zero cost on an included-credit plan', async () => {
+    mockFetchOnce(200, { results: [] });
+    const r = await new TavilyWebSearch({
+      ...cfg,
+      pricePerCreditUsd: 0,
+    }).search('x');
+    expect(r.costUsd).toBe(0);
   });
 });

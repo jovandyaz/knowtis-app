@@ -280,7 +280,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       });
       return {
         type: 'error',
-        error: AIErrors.providerError('Agent turn timed out'),
+        error: AIErrors.timeout('Agent turn timed out'),
         usage: this.bestEffortUsage(model, stepUsage),
       };
     }

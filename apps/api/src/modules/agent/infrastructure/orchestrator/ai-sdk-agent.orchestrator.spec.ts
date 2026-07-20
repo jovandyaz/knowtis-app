@@ -558,7 +558,7 @@ describe('AiSdkAgentOrchestrator', () => {
       usage: { inputTokens: number; outputTokens: number };
     };
     expect(last.type).toBe('error');
-    expect(last.error.code).toBe('AI_PROVIDER_ERROR');
+    expect(last.error.code).toBe('AI_TIMEOUT');
     expect(last.error.message).toContain('timed out');
     expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
   });

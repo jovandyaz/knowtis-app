@@ -35,6 +35,8 @@ export interface TavilyConfig {
   readonly maxResults: number;
   readonly depth: 'basic' | 'advanced';
   readonly timeoutMs: number;
+  /** USD per Tavily credit; zero on plans whose monthly credits are included. */
+  readonly pricePerCreditUsd: number;
 }
 
 export interface TavilySearchResponse {
