@@ -23,6 +23,10 @@ export interface AgentChunkPayload {
   text: string;
 }
 
+export interface AgentThinkingPayload {
+  text: string;
+}
+
 interface AgentUsagePayload {
   inputTokens: number;
   outputTokens: number;
@@ -63,6 +67,7 @@ export interface AgentCommittedPayload {
 
 interface AgentStreamCallbacks {
   onChunk: (payload: AgentChunkPayload) => void;
+  onThinking?: (payload: AgentThinkingPayload) => void;
   onDone: (payload: AgentDonePayload) => void;
   onError: (payload: AgentErrorPayload) => void;
   onProposal?: (payload: AgentProposalPayload) => void;
@@ -283,6 +288,10 @@ export class AgentClient {
 
     this.socket.on('agent:chunk', (payload: AgentChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
+    });
+
+    this.socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
+      this.activeCallbacks?.onThinking?.(payload);
     });
 
     this.socket.on('agent:done', (payload: AgentDonePayload) => {
