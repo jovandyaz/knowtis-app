@@ -112,9 +112,10 @@ export type AuditParams = Pick<AdminUsersParams, 'page' | 'limit'>;
 export const AiConfigEntrySchema = z.object({
   key: z.string(),
   value: z.string(),
-  // Backoffice and API deploy independently; an API that predates `kind` must
-  // not error the whole page.
-  kind: z.enum(['model', 'chain', 'choice']).default('model'),
+  // Backoffice and API deploy independently; kept loose so an API that predates
+  // `kind` or emits one this bundle does not know yet renders nothing for that
+  // entry rather than failing the whole page.
+  kind: z.string().default('model'),
   // Backoffice and API deploy independently; an API still emitting the old
   // database/environment wire values must keep parsing through the window.
   source: z.preprocess(
