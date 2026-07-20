@@ -8,13 +8,17 @@ import {
 import { AgentMessage } from './AgentMessage';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
 
+interface AgentMessageListProps {
+  messages: AgentChatMessage[];
+  status: AgentStatus;
+  thinkingDetail?: string;
+}
+
 export function AgentMessageList({
   messages,
   status,
-}: {
-  messages: AgentChatMessage[];
-  status: AgentStatus;
-}) {
+  thinkingDetail,
+}: AgentMessageListProps) {
   const lastAssistant = messages.at(-1);
   const showThinking =
     status === 'streaming' &&
@@ -33,7 +37,7 @@ export function AgentMessageList({
             }
           />
         ))}
-        {showThinking && <AgentStatusIndicator />}
+        {showThinking && <AgentStatusIndicator detail={thinkingDetail} />}
       </ConversationContent>
       <ConversationScrollButton />
     </Conversation>

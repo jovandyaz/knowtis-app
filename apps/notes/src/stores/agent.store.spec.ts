@@ -603,6 +603,21 @@ describe('agent.store thinking tail', () => {
     expect(useAgentStore.getState().thinkingText).toBe('');
   });
 
+  it('accumulates reasoning again once approving resumes the turn', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+
+    useAgentStore.getState().approveProposal();
+    expect(useAgentStore.getState().status).toBe('streaming');
+
+    get().onThinking?.({ text: 'reasoning after approval' });
+    vi.advanceTimersByTime(50);
+    expect(useAgentStore.getState().thinkingText).toBe(
+      'reasoning after approval'
+    );
+  });
+
   it('clears the thinking tail when rejecting re-arms the stream', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('create a note');

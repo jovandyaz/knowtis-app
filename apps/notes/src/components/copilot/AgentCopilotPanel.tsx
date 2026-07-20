@@ -19,6 +19,7 @@ export function AgentCopilotPanel() {
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
+  const thinkingText = useAgentStore((s) => s.thinkingText);
   const pendingProposal = useAgentStore((s) => s.pendingProposal);
   const approveProposal = useAgentStore((s) => s.approveProposal);
   const rejectProposal = useAgentStore((s) => s.rejectProposal);
@@ -36,7 +37,11 @@ export function AgentCopilotPanel() {
         </div>
       ) : (
         <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
-          <AgentMessageList messages={messages} status={status} />
+          <AgentMessageList
+            messages={messages}
+            status={status}
+            thinkingDetail={thinkingText}
+          />
         </div>
       )}
 
