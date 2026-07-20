@@ -35,6 +35,7 @@ export function ReasoningSection({ entry }: ReasoningSectionProps) {
             variant={entry.value === effort ? 'default' : 'outline'}
             size="sm"
             disabled={mutating}
+            aria-pressed={entry.value === effort}
             onClick={() => setConfig.mutate({ key: entry.key, value: effort })}
           >
             {effort}

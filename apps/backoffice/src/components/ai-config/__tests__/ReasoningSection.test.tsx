@@ -77,11 +77,13 @@ describe('ReasoningSection', () => {
   it('marks the effective effort as the active choice', () => {
     renderSection('high');
 
-    expect(screen.getByRole('button', { name: 'high' })).toHaveClass(
-      ACTIVE_CHOICE_CLASS
+    expect(screen.getByRole('button', { name: 'high' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
     );
-    expect(screen.getByRole('button', { name: 'low' })).not.toHaveClass(
-      ACTIVE_CHOICE_CLASS
+    expect(screen.getByRole('button', { name: 'low' })).toHaveAttribute(
+      'aria-pressed',
+      'false'
     );
   });
 
