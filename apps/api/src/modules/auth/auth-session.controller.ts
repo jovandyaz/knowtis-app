@@ -69,15 +69,6 @@ export class AuthSessionController {
       ? deriveCookieDomain(frontendUrl)
       : undefined;
     this.backofficeUrl = configService.get<string>('BACKOFFICE_URL');
-
-    // Without BACKOFFICE_URL every frontend lands on the same refresh cookie
-    // (CORS also blocks the backoffice, since it shares this var). Loud on
-    // boot so the misconfiguration is visible before anyone debugs cookies.
-    if (isProduction && !this.backofficeUrl) {
-      this.logger.error(
-        'BACKOFFICE_URL is not set: backoffice CORS will fail and any frontend reaching the API shares one refresh cookie.'
-      );
-    }
   }
 
   private cookieConfigFor(origin: string | undefined): CookieConfig {
