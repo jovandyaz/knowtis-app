@@ -4,11 +4,15 @@ import {
   type TokenStorage,
 } from '@jovandyaz/auth-react';
 
-import { ApiClientError, httpClient } from '@knowtis/api-client';
+import {
+  ApiClientError,
+  httpClient,
+  refreshSessionTokens,
+  withAuthRefreshLock,
+} from '@knowtis/api-client';
 
 import { ANON_STORAGE_KEY, AUTH_STORAGE_KEY } from './constants';
 import { SessionExpiredError } from './init-auth';
-import { refreshSessionTokens, withAuthRefreshLock } from './session-refresh';
 
 interface StoredAnonymousMarker {
   userId: string;

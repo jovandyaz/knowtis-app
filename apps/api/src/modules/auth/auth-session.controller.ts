@@ -38,7 +38,7 @@ import {
   clearLegacyHostOnlyCookie,
   clearRefreshTokenCookie,
   deriveCookieDomain,
-  REFRESH_TOKEN_COOKIE_NAME,
+  resolveRefreshCookieName,
   setRefreshTokenCookie,
   type CookieConfig,
 } from './utils/cookie.utils';
@@ -48,7 +48,9 @@ import {
 @UseGuards(JwtAuthGuard)
 export class AuthSessionController {
   private readonly logger = new Logger(AuthSessionController.name);
-  private readonly cookieConfig: CookieConfig;
+  private readonly secure: boolean;
+  private readonly cookieDomain: string | undefined;
+  private readonly backofficeUrl: string | undefined;
 
   constructor(
     private readonly registerHandler: RegisterUserHandler,
@@ -62,9 +64,27 @@ export class AuthSessionController {
     const isProduction = configService.get('NODE_ENV') === 'production';
     const frontendUrl = configService.get<string>('FRONTEND_URL') ?? '';
 
-    this.cookieConfig = {
-      secure: isProduction,
-      domain: isProduction ? deriveCookieDomain(frontendUrl) : undefined,
+    this.secure = isProduction;
+    this.cookieDomain = isProduction
+      ? deriveCookieDomain(frontendUrl)
+      : undefined;
+    this.backofficeUrl = configService.get<string>('BACKOFFICE_URL');
+
+    // Without BACKOFFICE_URL every frontend lands on the same refresh cookie,
+    // so the backoffice and the notes app would silently share one rotating
+    // session again. Loud on boot beats a 403 storm in production.
+    if (isProduction && !this.backofficeUrl) {
+      this.logger.error(
+        'BACKOFFICE_URL is not set: the backoffice and the notes app will share one refresh cookie and hand each other their sessions.'
+      );
+    }
+  }
+
+  private cookieConfigFor(origin: string | undefined): CookieConfig {
+    return {
+      secure: this.secure,
+      domain: this.cookieDomain,
+      name: resolveRefreshCookieName(origin, this.backofficeUrl),
     };
   }
 
@@ -76,14 +96,16 @@ export class AuthSessionController {
   @HttpCode(HttpStatus.CREATED)
   async createAnonymousSession(
     @Body() dto: AnonymousSessionDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @Headers('origin') origin?: string
   ) {
     const session = await this.anonymousAuthService.createAnonymousSession(
       dto.anonymousToken
     );
 
-    clearLegacyHostOnlyCookie(res, this.cookieConfig);
-    setRefreshTokenCookie(res, session.refreshToken, this.cookieConfig);
+    const cookieConfig = this.cookieConfigFor(origin);
+    clearLegacyHostOnlyCookie(res, cookieConfig);
+    setRefreshTokenCookie(res, session.refreshToken, cookieConfig);
 
     return { user: session.user, accessToken: session.accessToken };
   }
@@ -101,7 +123,8 @@ export class AuthSessionController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
     @Headers('user-agent') userAgent?: string,
-    @Ip() ipAddress?: string
+    @Ip() ipAddress?: string,
+    @Headers('origin') origin?: string
   ) {
     const result = await this.loginHandler.login(
       {
@@ -129,7 +152,7 @@ export class AuthSessionController {
       }
     }
 
-    return this.respondWithTokens(res, data);
+    return this.respondWithTokens(res, data, origin);
   }
 
   @ApiOperation({ summary: 'Register a new user account' })
@@ -142,7 +165,8 @@ export class AuthSessionController {
     @Body() dto: RegisterDto,
     @Res({ passthrough: true }) res: Response,
     @Headers('user-agent') userAgent?: string,
-    @Ip() ipAddress?: string
+    @Ip() ipAddress?: string,
+    @Headers('origin') origin?: string
   ) {
     const result = await this.registerHandler.execute(dto, {
       userAgent,
@@ -165,7 +189,7 @@ export class AuthSessionController {
       }
     }
 
-    return this.respondWithTokens(res, data);
+    return this.respondWithTokens(res, data, origin);
   }
 
   @ApiOperation({ summary: 'Refresh access token' })
@@ -178,9 +202,11 @@ export class AuthSessionController {
   async refresh(
     @Req() req: Request,
     @Body() dto: RefreshTokenDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @Headers('origin') origin?: string
   ) {
-    const refreshToken = this.extractRefreshToken(req, dto);
+    const cookieConfig = this.cookieConfigFor(origin);
+    const refreshToken = this.extractRefreshToken(req, dto, cookieConfig.name);
 
     if (!refreshToken) {
       throw new BadRequestException('Refresh token is required');
@@ -188,12 +214,12 @@ export class AuthSessionController {
 
     // Drop any stale host-only cookie up front so a reuse error (which throws
     // below) still heals a browser that is sending a duplicate refresh cookie.
-    clearLegacyHostOnlyCookie(res, this.cookieConfig);
+    clearLegacyHostOnlyCookie(res, cookieConfig);
 
     const result = await this.refreshHandler.execute(refreshToken);
     const data = unwrapOrThrow(result);
 
-    setRefreshTokenCookie(res, data.refreshToken, this.cookieConfig);
+    setRefreshTokenCookie(res, data.refreshToken, cookieConfig);
 
     return { accessToken: data.accessToken };
   }
@@ -206,24 +232,27 @@ export class AuthSessionController {
   async logout(
     @Req() req: Request,
     @Body() body: RefreshTokenDto,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @Headers('origin') origin?: string
   ) {
-    const refreshToken = this.extractRefreshToken(req, body);
+    const cookieConfig = this.cookieConfigFor(origin);
+    const refreshToken = this.extractRefreshToken(req, body, cookieConfig.name);
 
     if (refreshToken) {
       const result = await this.logoutHandler.execute(refreshToken);
       unwrapOrThrow(result);
     }
 
-    clearLegacyHostOnlyCookie(res, this.cookieConfig);
-    clearRefreshTokenCookie(res, this.cookieConfig);
+    clearLegacyHostOnlyCookie(res, cookieConfig);
+    clearRefreshTokenCookie(res, cookieConfig);
   }
 
   private extractRefreshToken(
     req: Request,
-    dto: RefreshTokenDto
+    dto: RefreshTokenDto,
+    cookieName: string
   ): string | undefined {
-    return req.cookies?.[REFRESH_TOKEN_COOKIE_NAME] ?? dto.refreshToken;
+    return req.cookies?.[cookieName] ?? dto.refreshToken;
   }
 
   private async verifyAndMigrateAnonymousData(
@@ -253,10 +282,12 @@ export class AuthSessionController {
     data: {
       user: unknown;
       tokens: { accessToken: string; refreshToken: string };
-    }
+    },
+    origin: string | undefined
   ) {
-    clearLegacyHostOnlyCookie(res, this.cookieConfig);
-    setRefreshTokenCookie(res, data.tokens.refreshToken, this.cookieConfig);
+    const cookieConfig = this.cookieConfigFor(origin);
+    clearLegacyHostOnlyCookie(res, cookieConfig);
+    setRefreshTokenCookie(res, data.tokens.refreshToken, cookieConfig);
     return {
       user: data.user,
       tokens: { accessToken: data.tokens.accessToken },

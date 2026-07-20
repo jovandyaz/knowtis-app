@@ -375,7 +375,7 @@ describe('createAuthApiAdapter', () => {
         name: 'Test',
         avatarUrl: null,
       };
-      httpClient.get.mockResolvedValue(profile);
+      httpClient.get.mockResolvedValue({ user: profile });
       const adapter = createAuthApiAdapter({
         httpClient,
         tokenStorage,

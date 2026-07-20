@@ -11,14 +11,13 @@ import type {
   TokenStorage,
 } from '@jovandyaz/auth-react';
 
-import type { IHttpClient } from '@knowtis/api-client';
+import { refreshSessionTokens, type IHttpClient } from '@knowtis/api-client';
 
 import {
   clearAnonymousSession,
   createAnonymousSession,
   getAnonymousUserId,
 } from './anonymous-session';
-import { refreshSessionTokens } from './session-refresh';
 
 interface CreateAuthApiAdapterDeps {
   httpClient: IHttpClient;
@@ -105,7 +104,10 @@ export function createAuthApiAdapter(
     },
 
     async getProfile(): Promise<AuthUserProfile> {
-      return httpClient.get<AuthUserProfile>('/auth/me');
+      const { user } = await httpClient.get<{ user: AuthUserProfile }>(
+        '/auth/me'
+      );
+      return user;
     },
 
     async forgotPassword(email: string): Promise<void> {

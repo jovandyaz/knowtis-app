@@ -6,7 +6,8 @@ import {
   clearLegacyHostOnlyCookie,
   clearRefreshTokenCookie,
   deriveCookieDomain,
-  REFRESH_TOKEN_COOKIE_NAME,
+  REFRESH_COOKIE_NAMES,
+  resolveRefreshCookieName,
   setRefreshTokenCookie,
 } from '../cookie.utils';
 
@@ -17,8 +18,15 @@ function createMockResponse() {
   } as unknown as import('express').Response;
 }
 
-const devConfig: CookieConfig = { secure: false };
-const prodConfig: CookieConfig = { secure: true, domain: '.example.com' };
+const devConfig: CookieConfig = {
+  secure: false,
+  name: REFRESH_COOKIE_NAMES.app,
+};
+const prodConfig: CookieConfig = {
+  secure: true,
+  domain: '.example.com',
+  name: REFRESH_COOKIE_NAMES.app,
+};
 
 describe('deriveCookieDomain', () => {
   it('should extract root domain from standard URL', () => {
@@ -54,14 +62,84 @@ describe('deriveCookieDomain', () => {
   });
 });
 
+describe('resolveRefreshCookieName', () => {
+  const BACKOFFICE_URL = 'https://backoffice.knowtis.app';
+  const NOTES_ORIGIN = 'https://app.knowtis.app';
+
+  it('should give the notes app and the backoffice different cookie names', () => {
+    expect(resolveRefreshCookieName(NOTES_ORIGIN, BACKOFFICE_URL)).not.toBe(
+      resolveRefreshCookieName(BACKOFFICE_URL, BACKOFFICE_URL)
+    );
+  });
+
+  it('should return the backoffice cookie for the backoffice origin', () => {
+    expect(resolveRefreshCookieName(BACKOFFICE_URL, BACKOFFICE_URL)).toBe(
+      REFRESH_COOKIE_NAMES.backoffice
+    );
+  });
+
+  it('should return the default cookie for the notes app origin', () => {
+    expect(resolveRefreshCookieName(NOTES_ORIGIN, BACKOFFICE_URL)).toBe(
+      REFRESH_COOKIE_NAMES.app
+    );
+  });
+
+  it('should return the default cookie when no origin header is present', () => {
+    expect(resolveRefreshCookieName(undefined, BACKOFFICE_URL)).toBe(
+      REFRESH_COOKIE_NAMES.app
+    );
+  });
+
+  it('should return the default cookie when no backoffice URL is configured', () => {
+    expect(resolveRefreshCookieName(BACKOFFICE_URL, undefined)).toBe(
+      REFRESH_COOKIE_NAMES.app
+    );
+  });
+
+  it('should match the backoffice origin regardless of path or trailing slash', () => {
+    expect(resolveRefreshCookieName(BACKOFFICE_URL, `${BACKOFFICE_URL}/`)).toBe(
+      REFRESH_COOKIE_NAMES.backoffice
+    );
+  });
+
+  it('should not match a look-alike host that merely embeds the backoffice domain', () => {
+    expect(
+      resolveRefreshCookieName(
+        'https://backoffice.knowtis.app.attacker.test',
+        BACKOFFICE_URL
+      )
+    ).toBe(REFRESH_COOKIE_NAMES.app);
+  });
+
+  it('should return the default cookie for a malformed origin', () => {
+    expect(resolveRefreshCookieName('not-a-url', BACKOFFICE_URL)).toBe(
+      REFRESH_COOKIE_NAMES.app
+    );
+  });
+});
+
 describe('cookie.utils', () => {
   describe('setRefreshTokenCookie', () => {
+    it('should write the cookie name carried by the config', () => {
+      const res = createMockResponse();
+      setRefreshTokenCookie(res, 'token', {
+        ...prodConfig,
+        name: REFRESH_COOKIE_NAMES.backoffice,
+      });
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        REFRESH_COOKIE_NAMES.backoffice,
+        'token',
+        expect.anything()
+      );
+    });
+
     it('should set cookie with httpOnly, sameSite=lax, path=/api/v1/auth', () => {
       const res = createMockResponse();
       setRefreshTokenCookie(res, 'my-refresh-token', devConfig);
 
       expect(res.cookie).toHaveBeenCalledWith(
-        REFRESH_TOKEN_COOKIE_NAME,
+        REFRESH_COOKIE_NAMES.app,
         'my-refresh-token',
         expect.objectContaining({
           httpOnly: true,
@@ -86,7 +164,7 @@ describe('cookie.utils', () => {
       setRefreshTokenCookie(res, 'token', prodConfig);
 
       expect(res.cookie).toHaveBeenCalledWith(
-        REFRESH_TOKEN_COOKIE_NAME,
+        REFRESH_COOKIE_NAMES.app,
         'token',
         expect.objectContaining({
           secure: true,
@@ -117,7 +195,7 @@ describe('cookie.utils', () => {
       clearRefreshTokenCookie(res, prodConfig);
 
       expect(res.clearCookie).toHaveBeenCalledWith(
-        REFRESH_TOKEN_COOKIE_NAME,
+        REFRESH_COOKIE_NAMES.app,
         expect.objectContaining({
           httpOnly: true,
           secure: true,
@@ -135,7 +213,7 @@ describe('cookie.utils', () => {
       clearLegacyHostOnlyCookie(res, prodConfig);
 
       expect(res.clearCookie).toHaveBeenCalledWith(
-        REFRESH_TOKEN_COOKIE_NAME,
+        REFRESH_COOKIE_NAMES.app,
         expect.objectContaining({
           httpOnly: true,
           secure: true,
