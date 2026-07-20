@@ -29,6 +29,8 @@ export interface StreamChainContext<THandle, TChunk> extends ChainContext {
    * for consumers that surface provider errors as events rather than throws.
    */
   readonly isFailureChunk?: ((chunk: TChunk) => boolean) | undefined;
+  /** Marks chunks that must not finalize the active model — a candidate that fails after only ephemeral chunks still falls through to the next. */
+  readonly isEphemeralChunk?: ((chunk: TChunk) => boolean) | undefined;
 }
 
 export function isAbortError(error: unknown): boolean {
@@ -151,7 +153,9 @@ export async function* streamWithChain<THandle, TChunk>(
       let sawFailure = false;
       try {
         for await (const chunk of context.chunks(active)) {
-          emitted = true;
+          if (!context.isEphemeralChunk?.(chunk)) {
+            emitted = true;
+          }
           if (context.isFailureChunk?.(chunk)) {
             sawFailure = true;
           }
