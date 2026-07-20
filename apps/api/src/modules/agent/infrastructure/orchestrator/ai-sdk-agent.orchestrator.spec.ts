@@ -894,6 +894,181 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(typeof opts?.system).toBe('string');
   });
 
+  // The SDK rejects totalUsage only when no step completed. Attaching a no-op
+  // handler keeps that rejection from surfacing as an unhandled rejection when
+  // the turn fails over before awaiting it.
+  function rejectedUsage(message: string) {
+    const usage = Promise.reject(new Error(message));
+    usage.catch(() => undefined);
+    return usage;
+  }
+
+  it('completes the turn as done when an error part arrives after a step finished', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        fullStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 5, outputTokens: 2 },
+          });
+          yield { type: 'text-delta', id: 't1', text: 'answer' };
+          yield { type: 'error', error: new Error('late provider hiccup') };
+        })(),
+        totalUsage: Promise.resolve({
+          inputTokens: 100,
+          outputTokens: 10,
+          inputTokenDetails: { cacheReadTokens: 60, cacheWriteTokens: 20 },
+        }),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheReadTokens: 60,
+        cacheWriteTokens: 20,
+        model: MODEL,
+      },
+    });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+  });
+
+  it('falls over to the next candidate and surfaces the provider message when an error part arrives with no completed step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'error', error: new Error('upstream refused') };
+        })(),
+        totalUsage: rejectedUsage(
+          'No output generated. Check the stream for errors.'
+        ),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { model: FALLBACK },
+    });
+  });
+
+  it('surfaces the provider error, not NoOutputGeneratedError, when the last candidate emits an error part with no completed step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'error', error: new Error('upstream refused') };
+      })(),
+      totalUsage: rejectedUsage(
+        'No output generated. Check the stream for errors.'
+      ),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const error = (
+      events.at(-1) as { error: { code: string; message: string } }
+    ).error;
+    expect(error.code).toBe('AI_PROVIDER_ERROR');
+    expect(error.message).toContain('upstream refused');
+    expect(error.message).not.toContain('No output generated');
+  });
+
+  it('keeps streaming text after a non-terminal error part and still ends the turn as done', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        fullStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 2, outputTokens: 1 },
+          });
+          yield { type: 'text-delta', id: 't1', text: 'before' };
+          yield { type: 'error', error: 'text part t9 not found' };
+          yield { type: 'text-delta', id: 't1', text: ' after' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 7, outputTokens: 4 }),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'before' });
+    expect(events).toContainEqual({ type: 'chunk', text: ' after' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 7, outputTokens: 4, model: MODEL },
+    });
+  });
+
+  it('maps an error part carrying a transient statusCode to the overloaded code on the last candidate', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'error',
+          error: {
+            name: 'APICallError',
+            message: 'overloaded',
+            statusCode: 503,
+          },
+        };
+      })(),
+      totalUsage: rejectedUsage(
+        'No output generated. Check the stream for errors.'
+      ),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const error = (
+      events.at(-1) as { error: { code: string; message: string } }
+    ).error;
+    expect(error.code).toBe('AI_PROVIDER_OVERLOADED');
+    expect(error.message).toContain('overloaded');
+  });
+
   it('carries cache read/write tokens from totalUsage into the done event', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({

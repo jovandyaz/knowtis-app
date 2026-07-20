@@ -149,6 +149,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           content: m.content,
         }));
     let progressed = false;
+    let streamError: unknown;
     let result;
     try {
       result = streamText({
@@ -207,9 +208,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
             }
             break;
           case 'error':
-            throw part.error instanceof Error
-              ? part.error
-              : new Error(String(part.error));
+            streamError = part.error;
+            break;
           default:
             break;
         }
@@ -255,19 +255,23 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         yield interrupted;
         return;
       }
-      if (options.throwOnFreshFailure && !progressed && !isAbortError(error)) {
-        throw error;
+      // streamText reports provider failures as error parts and then rejects
+      // totalUsage with a generic NoOutputGeneratedError, so the captured part
+      // carries the real cause (and its statusCode).
+      const cause = streamError ?? error;
+      if (options.throwOnFreshFailure && !progressed && !isAbortError(cause)) {
+        throw cause;
       }
       const redact = Boolean(input.byokApiKey);
       this.logger.error({
         event: 'agent.run.error',
         userId: input.userId,
         model,
-        error: this.errorMessage(error, redact),
+        error: this.errorMessage(cause, redact),
       });
       yield {
         type: 'error',
-        error: this.toError(error, redact),
+        error: this.toError(cause, redact),
         usage: this.bestEffortUsage(model, stepUsage),
       };
     }
