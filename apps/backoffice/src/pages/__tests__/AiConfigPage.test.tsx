@@ -131,6 +131,14 @@ describe('AiConfigPage', () => {
           description: null,
           updatedAt: null,
         },
+        {
+          key: 'ai_reasoning_effort',
+          value: 'medium',
+          kind: 'choice',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
       ],
       isLoading: false,
       isError: false,
@@ -144,6 +152,12 @@ describe('AiConfigPage', () => {
       screen.getByRole('heading', { name: 'Routing' })
     ).toBeInTheDocument();
     expect(screen.getByRole('listitem')).toHaveTextContent('Haiku 4.5');
+    expect(
+      screen.getByRole('heading', { name: 'Reasoning' })
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'medium' })).toHaveClass(
+      'bg-(--foreground)'
+    );
   });
 
   it('renders the model editor when the api predates the chain key', () => {

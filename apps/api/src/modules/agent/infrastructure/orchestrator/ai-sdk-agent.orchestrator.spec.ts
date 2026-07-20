@@ -195,6 +195,43 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
+  it('drops providerOptions when an openrouter turn fails over to another provider', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
+          throw new Error('provider exploded');
+        })(),
+        totalUsage: new Promise(() => {}),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        reasoningEffort: 'high',
+      })
+    );
+
+    expect(streamTextMock.mock.calls[0][0]).toHaveProperty('providerOptions');
+    expect(streamTextMock.mock.calls[1][0]).not.toHaveProperty(
+      'providerOptions'
+    );
+  });
+
   it('yields a single error event (and does not throw) when the model is invalid and the chain is empty', async () => {
     const orchestrator = makeOrchestrator(
       makeConfig(),

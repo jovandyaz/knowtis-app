@@ -255,6 +255,14 @@ describe('useAiConfig', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_reasoning_effort',
+        value: 'medium',
+        kind: 'choice',
+        source: 'database',
+        description: null,
+        updatedAt: null,
+      },
     ]);
 
     const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
@@ -263,6 +271,7 @@ describe('useAiConfig', () => {
     expect(httpClient.get).toHaveBeenCalledWith('/ai/config');
     expect(result.current.data?.[0].updatedAt).toBeInstanceOf(Date);
     expect(result.current.data?.[1].updatedAt).toBeNull();
+    expect(result.current.data?.[2].kind).toBe('choice');
   });
 
   it('rejects a payload with an unknown source', async () => {
