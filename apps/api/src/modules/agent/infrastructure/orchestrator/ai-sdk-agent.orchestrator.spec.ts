@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { streamText } from 'ai';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { createTestChain } from '../../../ai/testing/create-test-chain';
@@ -55,6 +55,7 @@ vi.mock('ai', async (importOriginal) => {
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 const FALLBACK = 'anthropic:claude-haiku-4-5-20251001';
+const STALL_MS = 60000;
 
 const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
 
@@ -67,6 +68,7 @@ function makeConfig(
     GOOGLE_GENERATIVE_AI_API_KEY: '',
     OPENAI_API_KEY: '',
     AI_AGENT_MAX_MS: 120000,
+    AI_AGENT_STALL_MS: STALL_MS,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
     AI_MAX_RETRIES: 3,
     AI_COOLDOWN_ALLOWED_FAILS: 3,
@@ -129,6 +131,10 @@ const baseInput = {
 };
 
 describe('AiSdkAgentOrchestrator', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('collects deduped getNote sources and emits them on done', async () => {
     const orchestrator = makeOrchestrator();
 
@@ -607,6 +613,216 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(last.error.code).toBe('AI_TIMEOUT');
     expect(last.error.message).toContain('timed out');
     expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
+  });
+
+  // The hang must reject on abort: a promise that never settles would keep the
+  // turn pending forever once the stall watchdog fires.
+  function hangingAfter(parts: readonly unknown[]) {
+    return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
+      fullStream: (async function* () {
+        for (const part of parts) {
+          yield part;
+        }
+        await new Promise((_, reject) => {
+          const error = new Error('aborted');
+          error.name = 'AbortError';
+          if (abortSignal.aborted) {
+            reject(error);
+            return;
+          }
+          abortSignal.addEventListener('abort', () => reject(error), {
+            once: true,
+          });
+        });
+      })(),
+      totalUsage: new Promise(() => {}),
+    });
+  }
+
+  it('aborts a silent candidate at the stall budget and falls through to the fallback', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        hangingAfter([{ type: 'reasoning-delta', id: 'r1', text: 'hmm' }])
+      )
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+  });
+
+  it('reports AI_TIMEOUT when the last candidate stalls', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(hangingAfter([]));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+  });
+
+  it('a stall after delivered text ends the turn with AI_TIMEOUT instead of switching models', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      hangingAfter([{ type: 'text-delta', id: 't1', text: 'partial ' }])
+    );
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'partial ' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('yields the timeout error instead of failing over when a BYOK turn stalls', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(hangingAfter([]));
+    const orchestrator = makeOrchestrator();
+
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+  });
+
+  // Ignoring the abort makes every deadline fire before the rejection lands, so
+  // the interruption checks are forced to rank a stall against the global ones.
+  function hangsPastEveryDeadline(delayMs: number) {
+    return () => ({
+      fullStream: {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => {
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+            throw new DOMException('aborted', 'AbortError');
+          },
+        }),
+      },
+      totalUsage: new Promise(() => {}),
+    });
+  }
+
+  const RACE_STALL_MS = 5;
+  const RACE_CEILING_MS = 20;
+  const RACE_HANG_MS = 60;
+
+  it('reports a user cancel as aborted even though the stall budget also elapsed', async () => {
+    streamTextMock.mockClear();
+    const controller = new AbortController();
+    streamTextMock.mockImplementationOnce(hangsPastEveryDeadline(RACE_HANG_MS));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_STALL_MS: RACE_STALL_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, signal: controller.signal })
+    );
+    controller.abort();
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events.at(-1)).toMatchObject({ type: 'aborted' });
+  });
+
+  it('reports the wall-clock ceiling as a timeout even though the stall budget elapsed first', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(hangsPastEveryDeadline(RACE_HANG_MS));
+    const orchestrator = makeOrchestrator(
+      makeConfig({
+        AI_AGENT_MAX_MS: RACE_CEILING_MS,
+        AI_AGENT_STALL_MS: RACE_STALL_MS,
+      }),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const error = (
+      events.at(-1) as { error: { code: string; message: string } }
+    ).error;
+    expect(error.code).toBe('AI_TIMEOUT');
+    expect(error.message).toContain('timed out');
+    expect(error.message).not.toContain('stalled');
+  });
+
+  it('re-arms the stall budget on every stream part so a slow but active model runs past it', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    const halfStall = STALL_MS / 2;
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        for (const text of ['one ', 'two ', 'three ']) {
+          await new Promise((resolve) => setTimeout(resolve, halfStall));
+          yield { type: 'reasoning-delta', id: 'r1', text };
+        }
+        yield { type: 'text-delta', id: 't1', text: 'done thinking' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(halfStall * 3);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events).toContainEqual({ type: 'chunk', text: 'done thinking' });
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
   it('retries the whole turn on the next chain model when the primary stream fails before any progress', async () => {
