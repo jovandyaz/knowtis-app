@@ -70,12 +70,12 @@ export class AuthSessionController {
       : undefined;
     this.backofficeUrl = configService.get<string>('BACKOFFICE_URL');
 
-    // Without BACKOFFICE_URL every frontend lands on the same refresh cookie,
-    // so the backoffice and the notes app would silently share one rotating
-    // session again. Loud on boot beats a 403 storm in production.
+    // Without BACKOFFICE_URL every frontend lands on the same refresh cookie
+    // (CORS also blocks the backoffice, since it shares this var). Loud on
+    // boot so the misconfiguration is visible before anyone debugs cookies.
     if (isProduction && !this.backofficeUrl) {
       this.logger.error(
-        'BACKOFFICE_URL is not set: the backoffice and the notes app will share one refresh cookie and hand each other their sessions.'
+        'BACKOFFICE_URL is not set: backoffice CORS will fail and any frontend reaching the API shares one refresh cookie.'
       );
     }
   }

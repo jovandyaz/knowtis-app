@@ -134,6 +134,40 @@ describe('AuthSessionController refresh cookie isolation', () => {
     );
   });
 
+  it('sets the backoffice cookie when logging in from the backoffice origin', async () => {
+    const { controller } = createController(ok(undefined));
+    const loginHandler = {
+      login: vi.fn().mockResolvedValue(
+        ok({
+          user: { id: 'admin-1' },
+          tokens: { accessToken: 'at', refreshToken: 'rt' },
+        })
+      ),
+    };
+    Object.assign(controller, { loginHandler });
+    const res = createRes();
+
+    await controller.login(
+      { id: 'admin-1', email: 'a@b.com', name: 'Admin' } as never,
+      { email: 'a@b.com', password: 'secret' },
+      res,
+      undefined,
+      undefined,
+      BACKOFFICE_ORIGIN
+    );
+
+    expect(res.cookie).toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.backoffice,
+      'rt',
+      expect.anything()
+    );
+    expect(res.cookie).not.toHaveBeenCalledWith(
+      REFRESH_COOKIE_NAMES.app,
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
   it('clears only the backoffice cookie when the backoffice logs out', async () => {
     const { controller } = createController(ok(undefined));
     const logoutHandler = { execute: vi.fn().mockResolvedValue(ok(undefined)) };

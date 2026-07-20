@@ -1,6 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
+import { buildAllowedOrigins } from '../../../../config/cors-origins';
 import type { CookieConfig } from '../cookie.utils';
 import {
   clearLegacyHostOnlyCookie,
@@ -115,6 +116,22 @@ describe('resolveRefreshCookieName', () => {
     expect(resolveRefreshCookieName('not-a-url', BACKOFFICE_URL)).toBe(
       REFRESH_COOKIE_NAMES.app
     );
+  });
+
+  // Guard for the next frontend: every production CORS origin must map to its
+  // own refresh cookie, or two frontends silently share one rotating session.
+  // If this fails, add a name to REFRESH_COOKIE_NAMES before enabling CORS.
+  it('should give every allowed production origin a distinct cookie name', () => {
+    const origins = buildAllowedOrigins(
+      'production',
+      NOTES_ORIGIN,
+      BACKOFFICE_URL
+    );
+    const names = origins.map((origin) =>
+      resolveRefreshCookieName(origin, BACKOFFICE_URL)
+    );
+
+    expect(new Set(names).size).toBe(origins.length);
   });
 });
 
