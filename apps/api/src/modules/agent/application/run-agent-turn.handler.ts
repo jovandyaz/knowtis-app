@@ -12,6 +12,7 @@ import {
 import { FEATURE_FLAG_KEYS, type ByokProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
+import { AIConfigService } from '../../ai/application/services/ai-config.service';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
@@ -134,7 +135,8 @@ export class RunAgentTurnHandler {
     private readonly featureFlags: FeatureFlagsService,
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
-    private readonly injectionGuard: InjectionGuardService
+    private readonly injectionGuard: InjectionGuardService,
+    private readonly aiConfig: AIConfigService
   ) {}
 
   async execute(
@@ -571,6 +573,7 @@ export class RunAgentTurnHandler {
     }
 
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    const reasoningEffort = await this.aiConfig.getReasoningEffort();
     const ctx: TurnLoopContext = {
       estimatedTokens,
       estimatedCostUsd,
@@ -588,6 +591,7 @@ export class RunAgentTurnHandler {
         messages,
         model,
         maxSteps,
+        reasoningEffort,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(input.userMemories?.length

@@ -68,6 +68,7 @@ function makeConfig(
     ANTHROPIC_API_KEY: 'test-anthropic-key',
     GOOGLE_GENERATIVE_AI_API_KEY: '',
     OPENAI_API_KEY: '',
+    OPENROUTER_API_KEY: 'test-openrouter-key',
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_STALL_MS: STALL_MS,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
@@ -162,6 +163,36 @@ describe('AiSdkAgentOrchestrator', () => {
 
     const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].system;
     expect(system).toContain('note-xyz');
+  });
+
+  it('passes the reasoning effort to openrouter models only', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        reasoningEffort: 'low',
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: { openrouter: { reasoning: { effort: 'low' } } },
+      })
+    );
+  });
+
+  it('omits providerOptions for non-openrouter models', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run({ ...baseInput, reasoningEffort: 'low' }));
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ providerOptions: expect.anything() })
+    );
   });
 
   it('yields a single error event (and does not throw) when the model is invalid and the chain is empty', async () => {

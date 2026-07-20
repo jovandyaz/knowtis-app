@@ -380,6 +380,9 @@ describe('AIConfigService', () => {
       await expect(
         service.setConfig('ai_reasoning_effort', 'ultra', ACTOR)
       ).rejects.toThrow(InvalidAIConfigError);
+      await expect(
+        service.setConfig('ai_reasoning_effort', 'ultra', ACTOR)
+      ).rejects.toThrow('is not one of');
       expect(mockRepo.set).not.toHaveBeenCalled();
     });
 
