@@ -339,9 +339,13 @@ export class AgentGateway
   private baseCallbacks(
     client: AuthenticatedSocket,
     controller: AbortController
-  ): Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'> {
+  ): Pick<
+    RunAgentTurnCallbacks,
+    'onChunk' | 'onDone' | 'onError' | 'onThinking'
+  > {
     return {
       onChunk: (text) => client.emit('agent:chunk', { text }),
+      onThinking: (text) => client.emit('agent:thinking', { text }),
       onDone: (usage) =>
         client.emit('agent:done', {
           usage: {
