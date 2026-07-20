@@ -26,6 +26,7 @@ export type {
   AgentSource,
   WebSource,
   AgentChunkPayload,
+  AgentThinkingPayload,
   AgentDonePayload,
   AgentErrorPayload,
   AgentStreamHandle,

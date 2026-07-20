@@ -365,6 +365,50 @@ describe('streamWithChain', () => {
     }
     expect(infos).toEqual([false, false, true]);
   });
+
+  it('advances past a candidate that fails after only ephemeral chunks', async () => {
+    const received: string[] = [];
+    const gen = streamWithChain<string, string>({
+      candidates: ['a', 'b'],
+      logger: { warn: vi.fn(), error: vi.fn() },
+      open: (model) => model,
+      chunks: (model) =>
+        model === 'a'
+          ? (async function* () {
+              yield 'think:hmm';
+              throw new Error('boom');
+            })()
+          : (async function* () {
+              yield 'answer';
+            })(),
+      isEphemeralChunk: (chunk) => chunk.startsWith('think:'),
+    });
+    for await (const chunk of gen) {
+      received.push(chunk);
+    }
+    expect(received).toEqual(['think:hmm', 'answer']);
+  });
+
+  it('still finalizes the model once a non-ephemeral chunk was emitted', async () => {
+    const gen = streamWithChain<string, string>({
+      candidates: ['a', 'b'],
+      logger: { warn: vi.fn(), error: vi.fn() },
+      open: (model) => model,
+      chunks: () =>
+        (async function* () {
+          yield 'answer-part';
+          throw new Error('boom');
+        })(),
+      isEphemeralChunk: (chunk) => chunk.startsWith('think:'),
+    });
+    const received: string[] = [];
+    await expect(async () => {
+      for await (const chunk of gen) {
+        received.push(chunk);
+      }
+    }).rejects.toThrow('boom');
+    expect(received).toEqual(['answer-part']);
+  });
 });
 
 describe('streamWithChain cooldown outcome', () => {

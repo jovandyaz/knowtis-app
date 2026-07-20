@@ -41,6 +41,7 @@ export interface AgentChatMessage {
 }
 
 export const AGENT_STREAM_INACTIVITY_MS = 130000;
+export const THINKING_TAIL_CHARS = 400;
 const CHUNK_FLUSH_MS = 50;
 
 const PROPOSAL_EXPIRED_ERROR: AgentErrorPayload = {
@@ -54,6 +55,8 @@ interface AgentState {
   error: AgentErrorPayload | null;
   pendingProposal: PendingProposal | null;
   selectedModel: string | null;
+  /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
+  thinkingText: string;
   _streamHandle: AgentStreamHandle | null;
   sendMessage: (text: string, noteId?: string, model?: string) => void;
   setSelectedModel: (id: string | null) => void;
@@ -89,8 +92,17 @@ export const useAgentStore = create<AgentState>((set, get) => {
     },
     onInactivity: () => {
       get()._streamHandle?.cancel();
-      set({ status: 'timeout', _streamHandle: null });
+      thinkingBuffer.discard();
+      set({ status: 'timeout', _streamHandle: null, thinkingText: '' });
     },
+  });
+
+  const thinkingBuffer = createChunkBuffer({
+    flushMs: CHUNK_FLUSH_MS,
+    onFlush: (text) =>
+      set((s) => ({
+        thinkingText: (s.thinkingText + text).slice(-THINKING_TAIL_CHARS),
+      })),
   });
 
   const run = (
@@ -110,16 +122,28 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }
           buffer.push(text);
         },
+        onThinking: ({ text }) => {
+          // Reasoning may arrive after the turn is suspended (pendingProposal) or
+          // already terminal; re-arming there would resurrect the watchdog and
+          // time out a proposal the user is still deliberating on.
+          if (version !== streamVersion || get().status !== 'streaming') {
+            return;
+          }
+          buffer.armInactivityTimer();
+          thinkingBuffer.push(text);
+        },
         onDone: ({ sources, webSources }) => {
           if (version !== streamVersion) {
             return;
           }
           buffer.clearInactivityTimer();
           buffer.flush();
+          thinkingBuffer.discard();
           const id = activeAssistantId;
           set((s) => ({
             status: 'done',
             _streamHandle: null,
+            thinkingText: '',
             messages: s.messages.map((m) =>
               m.id === id ? { ...m, sources, webSources } : m
             ),
@@ -131,7 +155,13 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }
           buffer.clearInactivityTimer();
           buffer.flush();
-          set({ status: 'error', error, _streamHandle: null });
+          thinkingBuffer.discard();
+          set({
+            status: 'error',
+            error,
+            _streamHandle: null,
+            thinkingText: '',
+          });
         },
         onProposal: (proposal) => {
           if (version !== streamVersion) {
@@ -139,10 +169,12 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }
           buffer.clearInactivityTimer();
           buffer.flush();
+          thinkingBuffer.discard();
           const id = activeAssistantId;
           set((s) => ({
             status: 'pendingProposal',
             pendingProposal: proposal,
+            thinkingText: '',
             messages: s.messages.map((m) =>
               m.id === id
                 ? {
@@ -200,6 +232,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     error: null,
     pendingProposal: null,
     selectedModel: null,
+    thinkingText: '',
     _streamHandle: null,
 
     sendMessage: (text, noteId, model) => {
@@ -215,6 +248,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       lastNoteId = noteId;
       buffer.clearInactivityTimer();
       buffer.discard();
+      thinkingBuffer.discard();
 
       const userMessage: AgentChatMessage = {
         id: nextId(),
@@ -231,6 +265,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         messages: [...current.messages, userMessage, assistantMessage],
         status: 'streaming',
         error: null,
+        thinkingText: '',
         _streamHandle: null,
       });
 
@@ -250,6 +285,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.discard();
+      thinkingBuffer.discard();
       activeAssistantId = null;
       set({
         messages: [],
@@ -257,6 +293,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         error: null,
         pendingProposal: null,
         selectedModel: null,
+        thinkingText: '',
         _streamHandle: null,
       });
     },
@@ -266,8 +303,14 @@ export const useAgentStore = create<AgentState>((set, get) => {
       streamVersion++;
       buffer.clearInactivityTimer();
       buffer.flush();
+      thinkingBuffer.discard();
       activeAssistantId = null;
-      set({ status: 'idle', pendingProposal: null, _streamHandle: null });
+      set({
+        status: 'idle',
+        pendingProposal: null,
+        thinkingText: '',
+        _streamHandle: null,
+      });
     },
 
     retryLast: () => {
@@ -293,10 +336,12 @@ export const useAgentStore = create<AgentState>((set, get) => {
         return;
       }
       if (!agentClient.approve(p.id)) {
+        thinkingBuffer.discard();
         set({
           status: 'error',
           error: PROPOSAL_EXPIRED_ERROR,
           pendingProposal: null,
+          thinkingText: '',
         });
         return;
       }
@@ -306,9 +351,11 @@ export const useAgentStore = create<AgentState>((set, get) => {
         content: '',
       };
       activeAssistantId = assistant.id;
+      thinkingBuffer.discard();
       set((s) => ({
         status: 'streaming',
         pendingProposal: null,
+        thinkingText: '',
         messages: [...s.messages, assistant],
       }));
       buffer.armInactivityTimer();
@@ -320,10 +367,12 @@ export const useAgentStore = create<AgentState>((set, get) => {
         return;
       }
       if (!agentClient.reject(p.id, reason)) {
+        thinkingBuffer.discard();
         set({
           status: 'error',
           error: PROPOSAL_EXPIRED_ERROR,
           pendingProposal: null,
+          thinkingText: '',
         });
         return;
       }
@@ -333,6 +382,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         content: '',
       };
       activeAssistantId = assistant.id;
+      thinkingBuffer.discard();
       set((s) => {
         let marked = false;
         const messages = [...s.messages];
@@ -347,6 +397,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         return {
           status: 'streaming',
           pendingProposal: null,
+          thinkingText: '',
           messages: marked
             ? [...messages, assistant]
             : [...s.messages, assistant],

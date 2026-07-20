@@ -68,6 +68,7 @@ interface RunAgentTurnInput {
 
 export interface RunAgentTurnCallbacks {
   readonly onChunk: (text: string) => void;
+  readonly onThinking?: (text: string) => void;
   readonly onDone: (usage: {
     inputTokens: number;
     outputTokens: number;
@@ -333,7 +334,10 @@ export class RunAgentTurnHandler {
 
   private resumePolicy(
     userId: string,
-    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>
+    callbacks: Pick<
+      RunAgentTurnCallbacks,
+      'onChunk' | 'onDone' | 'onError' | 'onThinking'
+    >
   ): TurnLoopPolicy {
     return {
       onProposal: async (event, ctx) => {
@@ -374,7 +378,10 @@ export class RunAgentTurnHandler {
     input: RunAgentTurnInput & {
       resume: { toolName: string; outcome: string };
     },
-    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
+    callbacks: Pick<
+      RunAgentTurnCallbacks,
+      'onChunk' | 'onDone' | 'onError' | 'onThinking'
+    >,
     signal?: AbortSignal
   ): Promise<void> {
     if (input.conversationId) {
@@ -430,7 +437,10 @@ export class RunAgentTurnHandler {
   private async runLoop(
     input: RunAgentTurnInput,
     resume: { toolName: string; outcome: string } | undefined,
-    callbacks: Pick<RunAgentTurnCallbacks, 'onChunk' | 'onDone' | 'onError'>,
+    callbacks: Pick<
+      RunAgentTurnCallbacks,
+      'onChunk' | 'onDone' | 'onError' | 'onThinking'
+    >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
     persistence: PersistenceContext | undefined
@@ -588,6 +598,9 @@ export class RunAgentTurnHandler {
         ...(byokApiKey ? { byokApiKey } : {}),
       })) {
         switch (event.type) {
+          case 'thinking':
+            callbacks.onThinking?.(event.text);
+            break;
           case 'chunk':
             assistantText += event.text;
             callbacks.onChunk(event.text);

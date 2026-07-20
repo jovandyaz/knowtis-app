@@ -42,8 +42,9 @@ vi.mock('ai', async (importOriginal) => {
           ],
         });
         return {
-          textStream: (async function* () {
-            yield 'Hello';
+          fullStream: (async function* () {
+            yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
+            yield { type: 'text-delta', id: 't1', text: 'Hello' };
           })(),
           totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
         };
@@ -239,6 +240,51 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(done?.usage.inputTokens).toBe(3);
     expect(done?.usage.outputTokens).toBe(2);
     expect(done?.usage.model).toBe(MODEL);
+  });
+
+  it('yields thinking events for reasoning deltas before the answer chunks', async () => {
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events[0]).toEqual({ type: 'thinking', text: 'pondering' });
+    expect(events[1]).toEqual({ type: 'chunk', text: 'Hello' });
+  });
+
+  it('falls through to the next model when the primary dies after reasoning only', async () => {
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
+          throw new Error('provider exploded');
+        })(),
+        totalUsage: new Promise(() => {}),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(
+      events.some(
+        (e) =>
+          (e as { type: string; text?: string }).type === 'chunk' &&
+          (e as { text?: string }).text === 'fallback answer'
+      )
+    ).toBe(true);
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
   });
 
   it('resolves tools with a full-phase context bound to the userId', async () => {
@@ -438,12 +484,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           controller.abort();
           throw new DOMException('aborted', 'AbortError');
         })(),
@@ -472,12 +518,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 4, outputTokens: 1 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           controller.abort();
         })(),
         totalUsage: new Promise(() => {}),
@@ -506,12 +552,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
-          yield 'partial';
+          yield { type: 'text-delta', id: 't1', text: 'partial' };
           throw new Error('boom');
         })(),
         totalUsage: new Promise(() => {}),
@@ -536,12 +582,12 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: (async function* () {
+        fullStream: (async function* () {
           opts.onStepFinish?.({
             toolResults: [],
             usage: { inputTokens: 3, outputTokens: 1 },
           });
-          yield 'x';
+          yield { type: 'text-delta', id: 't1', text: 'x' };
           await new Promise((resolve) => setTimeout(resolve, 30));
           throw new DOMException('aborted', 'AbortError');
         })(),
@@ -566,7 +612,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('retries the whole turn on the next chain model when the primary stream fails before any progress', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -611,7 +657,7 @@ describe('AiSdkAgentOrchestrator', () => {
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        textStream: {
+        fullStream: {
           [Symbol.asyncIterator]: () => ({
             next: () => {
               opts.onStepFinish?.({
@@ -641,7 +687,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => {
             controller.abort();
@@ -696,7 +742,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('does not fall back when the chain has no other candidates', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      textStream: {
+      fullStream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -748,8 +794,8 @@ describe('AiSdkAgentOrchestrator', () => {
 
   function happyStream() {
     return {
-      textStream: (async function* () {
-        yield 'Hello';
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
     };
@@ -848,11 +894,186 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(typeof opts?.system).toBe('string');
   });
 
+  // The SDK rejects totalUsage only when no step completed. Attaching a no-op
+  // handler keeps that rejection from surfacing as an unhandled rejection when
+  // the turn fails over before awaiting it.
+  function rejectedUsage(message: string) {
+    const usage = Promise.reject(new Error(message));
+    usage.catch(() => undefined);
+    return usage;
+  }
+
+  it('completes the turn as done when an error part arrives after a step finished', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        fullStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 5, outputTokens: 2 },
+          });
+          yield { type: 'text-delta', id: 't1', text: 'answer' };
+          yield { type: 'error', error: new Error('late provider hiccup') };
+        })(),
+        totalUsage: Promise.resolve({
+          inputTokens: 100,
+          outputTokens: 10,
+          inputTokenDetails: { cacheReadTokens: 60, cacheWriteTokens: 20 },
+        }),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: {
+        inputTokens: 100,
+        outputTokens: 10,
+        cacheReadTokens: 60,
+        cacheWriteTokens: 20,
+        model: MODEL,
+      },
+    });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+  });
+
+  it('falls over to the next candidate and surfaces the provider message when an error part arrives with no completed step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'error', error: new Error('upstream refused') };
+        })(),
+        totalUsage: rejectedUsage(
+          'No output generated. Check the stream for errors.'
+        ),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { model: FALLBACK },
+    });
+  });
+
+  it('surfaces the provider error, not NoOutputGeneratedError, when the last candidate emits an error part with no completed step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'error', error: new Error('upstream refused') };
+      })(),
+      totalUsage: rejectedUsage(
+        'No output generated. Check the stream for errors.'
+      ),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const error = (
+      events.at(-1) as { error: { code: string; message: string } }
+    ).error;
+    expect(error.code).toBe('AI_PROVIDER_ERROR');
+    expect(error.message).toContain('upstream refused');
+    expect(error.message).not.toContain('No output generated');
+  });
+
+  it('keeps streaming text after a non-terminal error part and still ends the turn as done', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(
+      (opts: {
+        onStepFinish?: (s: {
+          toolResults: unknown[];
+          usage: { inputTokens: number; outputTokens: number };
+        }) => void;
+      }) => ({
+        fullStream: (async function* () {
+          opts.onStepFinish?.({
+            toolResults: [],
+            usage: { inputTokens: 2, outputTokens: 1 },
+          });
+          yield { type: 'text-delta', id: 't1', text: 'before' };
+          yield { type: 'error', error: 'text part t9 not found' };
+          yield { type: 'text-delta', id: 't1', text: ' after' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 7, outputTokens: 4 }),
+      })
+    );
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events).toContainEqual({ type: 'chunk', text: 'before' });
+    expect(events).toContainEqual({ type: 'chunk', text: ' after' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 7, outputTokens: 4, model: MODEL },
+    });
+  });
+
+  it('maps an error part carrying a transient statusCode to the overloaded code on the last candidate', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'error',
+          error: {
+            name: 'APICallError',
+            message: 'overloaded',
+            statusCode: 503,
+          },
+        };
+      })(),
+      totalUsage: rejectedUsage(
+        'No output generated. Check the stream for errors.'
+      ),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const error = (
+      events.at(-1) as { error: { code: string; message: string } }
+    ).error;
+    expect(error.code).toBe('AI_PROVIDER_OVERLOADED');
+    expect(error.message).toContain('overloaded');
+  });
+
   it('carries cache read/write tokens from totalUsage into the done event', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
-      textStream: (async function* () {
-        yield 'Hello';
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({
         inputTokens: 100,

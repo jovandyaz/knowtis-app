@@ -219,6 +219,29 @@ describe('AgentGateway', () => {
     );
   });
 
+  it('emits agent:thinking when the handler streams reasoning', async () => {
+    const execute = vi.fn(
+      async (
+        _input: unknown,
+        cb: { onThinking?: (text: string) => void }
+      ): Promise<void> => {
+        cb.onThinking?.('weighing the options');
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith('agent:thinking', {
+      text: 'weighing the options',
+    });
+  });
+
   it("cancel aborts only the requesting client's turns", async () => {
     const signals: Record<string, AbortSignal | undefined> = {};
     let release!: () => void;

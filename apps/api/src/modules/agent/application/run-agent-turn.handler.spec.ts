@@ -197,6 +197,61 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledOnce();
   });
 
+  it('forwards thinking events to onThinking and keeps them out of the transcript', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'thinking', text: 'let me see' },
+      { type: 'chunk', text: 'answer' },
+      {
+        type: 'done',
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+        sources: [],
+        knownNotes: [],
+        webSources: [],
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard()
+    );
+    const onThinking = vi.fn();
+    const onChunk = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk,
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+        onThinking,
+      }
+    );
+
+    expect(onThinking).toHaveBeenCalledWith('let me see');
+    expect(onChunk).toHaveBeenCalledWith('answer');
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assistantMessage: expect.objectContaining({ content: 'answer' }),
+      })
+    );
+  });
+
   it('reserves the estimated model cost with the token reservation', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(

@@ -26,6 +26,7 @@ export interface AgentCommitResult {
 }
 
 export type AgentEvent =
+  | { readonly type: 'thinking'; readonly text: string }
   | { readonly type: 'chunk'; readonly text: string }
   | {
       readonly type: 'done';
