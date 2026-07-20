@@ -8,13 +8,10 @@ import { REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ReasoningSection } from '../ReasoningSection';
 
-const { setConfigMutate, setConfigState, resetConfigMutate, resetConfigState } =
-  vi.hoisted(() => ({
-    setConfigMutate: vi.fn(),
-    setConfigState: { isPending: false },
-    resetConfigMutate: vi.fn(),
-    resetConfigState: { isPending: false },
-  }));
+const setConfigMutate = vi.fn();
+const setConfigState = { isPending: false };
+const resetConfigMutate = vi.fn();
+const resetConfigState = { isPending: false };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
