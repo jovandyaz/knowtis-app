@@ -125,6 +125,7 @@ describe('aiErrorMessageKey', () => {
     );
     expect(aiErrorMessageKey('AI_PROVIDER_ERROR')).toBe('ai.errors.provider');
     expect(aiErrorMessageKey('AI_INTERNAL_ERROR')).toBe('ai.errors.provider');
+    expect(aiErrorMessageKey('AI_TIMEOUT')).toBe('ai.errors.timeout');
     expect(aiErrorMessageKey('CONNECTION_FAILED')).toBe('ai.errors.connection');
     expect(aiErrorMessageKey('AI_FEATURE_DISABLED')).toBe(
       'ai.errors.featureDisabled'
