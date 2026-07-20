@@ -14,7 +14,7 @@ export function AiConfigPage() {
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-semibold">AI Config</h1>
         <p className="text-sm text-(--muted-foreground)">
-          Effective runtime configuration. Database values override environment
+          Effective runtime configuration. Stored values override the code
           defaults and apply within a minute — no redeploy.
         </p>
       </div>
