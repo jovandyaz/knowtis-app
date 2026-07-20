@@ -28,10 +28,9 @@ function isSameOrigin(a: string, b: string): boolean {
 }
 
 /**
- * Returns the refresh-cookie name for the calling frontend. The notes app and
- * the backoffice talk to one API origin, so a single cookie name would make
- * them share and rotate one refresh token — each app's refresh would then hand
- * back the other's identity, and an admin token would leak into the notes app.
+ * Returns the refresh-cookie name for the calling frontend. Both frontends
+ * share one API origin, so a single name would make them rotate one token and
+ * hand each other their identities.
  */
 export function resolveRefreshCookieName(
   origin: string | undefined,

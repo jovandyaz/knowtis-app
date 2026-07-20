@@ -4,8 +4,7 @@ import type { TokenStorage } from '@jovandyaz/auth-react';
 import type { IHttpClient } from './http-client';
 
 /** Web Lock name shared by every refresh path so refreshes serialize across
- *  tabs of the same browser. Web Locks are origin-scoped, so each frontend
- *  serializes only against its own tabs. */
+ *  tabs of the same browser. */
 export const AUTH_REFRESH_LOCK = 'knowtis-auth-refresh';
 
 let inflightRefresh: Promise<AuthTokens> | null = null;

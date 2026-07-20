@@ -118,9 +118,7 @@ describe('resolveRefreshCookieName', () => {
     );
   });
 
-  // Guard for the next frontend: every production CORS origin must map to its
-  // own refresh cookie, or two frontends silently share one rotating session.
-  // If this fails, add a name to REFRESH_COOKIE_NAMES before enabling CORS.
+  // Fails when a frontend is added to CORS without its own REFRESH_COOKIE_NAMES entry.
   it('should give every allowed production origin a distinct cookie name', () => {
     const origins = buildAllowedOrigins(
       'production',
