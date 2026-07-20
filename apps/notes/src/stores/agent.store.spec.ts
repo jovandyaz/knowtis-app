@@ -8,10 +8,15 @@ import type {
   AgentErrorPayload,
   AgentProposalPayload,
   AgentStreamHandle,
+  AgentThinkingPayload,
 } from '@knowtis/api-client';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
 
-import { AGENT_STREAM_INACTIVITY_MS, useAgentStore } from './agent.store';
+import {
+  AGENT_STREAM_INACTIVITY_MS,
+  THINKING_TAIL_CHARS,
+  useAgentStore,
+} from './agent.store';
 
 vi.mock('@knowtis/api-client', () => ({
   agentClient: {
@@ -33,6 +38,7 @@ interface Cbs {
   onError: (p: AgentErrorPayload) => void;
   onProposal?: (p: AgentProposalPayload) => void;
   onCommitted?: (p: AgentCommittedPayload) => void;
+  onThinking?: (p: AgentThinkingPayload) => void;
 }
 
 function capture(): {
@@ -453,5 +459,170 @@ describe('agent.store proposals', () => {
     useAgentStore.getState().rejectProposal('reason');
     expect(vi.mocked(agentClient.reject)).not.toHaveBeenCalled();
     expect(useAgentStore.getState().status).toBe('idle');
+  });
+});
+
+describe('agent.store thinking tail', () => {
+  const USAGE = { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 };
+  const DONE: AgentDonePayload = {
+    usage: USAGE,
+    sources: [],
+    knownNotes: [],
+    webSources: [],
+  };
+  const PROPOSAL: AgentProposalPayload = {
+    id: 'p1',
+    kind: 'create',
+    targetNoteId: null,
+    summary: 'Create "My Note"',
+    previewHtml: null,
+    payload: {},
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+    vi.mocked(agentClient.approve).mockReturnValue(true);
+    vi.mocked(agentClient.reject).mockReturnValue(true);
+    useAgentStore.getState().newConversation();
+  });
+
+  afterEach(() => {
+    useAgentStore.getState().newConversation();
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
+  it('accumulates a capped thinking tail after the flush window', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'razonando sobre la nota' });
+    vi.advanceTimersByTime(50);
+    expect(useAgentStore.getState().thinkingText).toBe(
+      'razonando sobre la nota'
+    );
+  });
+
+  it('keeps only the trailing window once reasoning exceeds the cap', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'a'.repeat(300) });
+    vi.advanceTimersByTime(50);
+    get().onThinking?.({ text: 'b'.repeat(300) });
+    vi.advanceTimersByTime(50);
+
+    const { thinkingText } = useAgentStore.getState();
+    expect(thinkingText).toHaveLength(THINKING_TAIL_CHARS);
+    expect(thinkingText).toBe('a'.repeat(100) + 'b'.repeat(300));
+  });
+
+  it('thinking activity resets the stream inactivity timer', () => {
+    const { cancel, get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    for (let i = 0; i < 4; i++) {
+      vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS - 1000);
+      get().onThinking?.({ text: 'x' });
+    }
+    expect(useAgentStore.getState().status).toBe('streaming');
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('ignores thinking from a superseded stream', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    const stale = get().onThinking;
+    useAgentStore.getState().newConversation();
+
+    stale?.({ text: 'stale reasoning' });
+    vi.advanceTimersByTime(50);
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when the turn ends', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'x' });
+    vi.advanceTimersByTime(50);
+    get().onDone(DONE);
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail on error', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'x' });
+    vi.advanceTimersByTime(50);
+    get().onError({ code: 'AI_PROVIDER_ERROR', message: 'boom' });
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when a proposal suspends the turn', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onThinking?.({ text: 'x' });
+    vi.advanceTimersByTime(50);
+    get().onProposal?.(PROPOSAL);
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail on cancel', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'x' });
+    vi.advanceTimersByTime(50);
+    useAgentStore.getState().cancel();
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail on newConversation', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'x' });
+    vi.advanceTimersByTime(50);
+    useAgentStore.getState().newConversation();
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('starts the next turn without the previous turn tail', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'previous turn reasoning' });
+    vi.advanceTimersByTime(50);
+
+    useAgentStore.getState().sendMessage('otra vez');
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when approving re-arms the stream', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.setState({ thinkingText: 'leftover' });
+
+    useAgentStore.getState().approveProposal();
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when rejecting re-arms the stream', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    useAgentStore.setState({ thinkingText: 'leftover' });
+
+    useAgentStore.getState().rejectProposal('nope');
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when the proposal has expired', () => {
+    const { get } = capture();
+    vi.mocked(agentClient.approve).mockReturnValue(false);
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    get().onThinking?.({ text: 'reasoning after the proposal' });
+    vi.advanceTimersByTime(50);
+
+    useAgentStore.getState().approveProposal();
+    expect(useAgentStore.getState().status).toBe('error');
+    expect(useAgentStore.getState().thinkingText).toBe('');
   });
 });

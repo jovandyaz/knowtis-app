@@ -88,4 +88,17 @@ describe('createChunkBuffer', () => {
     vi.advanceTimersByTime(INACTIVITY_MS);
     expect(onInactivity).not.toHaveBeenCalled();
   });
+
+  it('still batches without an inactivity window, arming no timer', () => {
+    const onFlush = vi.fn();
+    const buffer = createChunkBuffer({ flushMs: FLUSH_MS, onFlush });
+
+    buffer.armInactivityTimer();
+    buffer.push('Hel');
+    buffer.push('lo');
+    vi.advanceTimersByTime(FLUSH_MS);
+
+    expect(onFlush).toHaveBeenCalledWith('Hello');
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });

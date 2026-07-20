@@ -1,8 +1,8 @@
 export interface ChunkBufferOptions {
   flushMs: number;
-  inactivityMs: number;
   onFlush: (text: string) => void;
-  onInactivity: () => void;
+  inactivityMs?: number;
+  onInactivity?: () => void;
 }
 
 export interface ChunkBuffer {
@@ -15,9 +15,10 @@ export interface ChunkBuffer {
 
 /**
  * Batches streamed text chunks so consumers update state at most every
- * `flushMs`, and fires `onInactivity` (after flushing) when no chunk arrives
- * within `inactivityMs`. Timers live in this closure — not in store state — so
- * per-chunk arm/clear never re-renders subscribers.
+ * `flushMs` and, when `inactivityMs` is set, fires `onInactivity` (after
+ * flushing) once no chunk arrives within that window. Timers live in this
+ * closure — not in store state — so per-chunk arm/clear never re-renders
+ * subscribers.
  */
 export function createChunkBuffer({
   flushMs,
@@ -55,6 +56,9 @@ export function createChunkBuffer({
   // Re-armed per chunk so long generations aren't cut off mid-stream.
   const armInactivityTimer = () => {
     clearInactivityTimer();
+    if (inactivityMs === undefined || !onInactivity) {
+      return;
+    }
     inactivityTimer = setTimeout(() => {
       inactivityTimer = null;
       flush();
