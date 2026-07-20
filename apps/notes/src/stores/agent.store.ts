@@ -40,7 +40,12 @@ export interface AgentChatMessage {
   discarded?: boolean;
 }
 
-export const AGENT_STREAM_INACTIVITY_MS = 130000;
+/**
+ * Client-side backstop for a server that has gone silent entirely. Must stay
+ * above the server's `AI_AGENT_MAX_MS` ceiling so a real failure surfaces as a
+ * server error instead of a client cancel of a healthy turn.
+ */
+export const AGENT_STREAM_INACTIVITY_MS = 310_000;
 export const THINKING_TAIL_CHARS = 400;
 const CHUNK_FLUSH_MS = 50;
 
