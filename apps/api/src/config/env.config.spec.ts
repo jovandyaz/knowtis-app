@@ -15,10 +15,16 @@ const validEnv = {
 };
 
 describe('env.config agent vars', () => {
-  it('defaults AI_AGENT_MAX_STEPS to 8 and AI_AGENT_MAX_MS to 120000', () => {
+  it('defaults AI_AGENT_MAX_STEPS to 8 and AI_AGENT_MAX_MS to 300000', () => {
     const env = validateEnv(baseEnv);
     expect(env.AI_AGENT_MAX_STEPS).toBe(8);
-    expect(env.AI_AGENT_MAX_MS).toBe(120000);
+    expect(env.AI_AGENT_MAX_MS).toBe(300000);
+  });
+
+  it('defaults AI_AGENT_STALL_MS well below the wall-clock ceiling', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.AI_AGENT_STALL_MS).toBe(60000);
+    expect(env.AI_AGENT_STALL_MS).toBeLessThan(env.AI_AGENT_MAX_MS);
   });
 
   it('coerces overrides from strings', () => {
@@ -61,6 +67,17 @@ describe('env.config agent vars', () => {
 
   it('rejects AI_AGENT_MAX_MS of 500 (below min 1000)', () => {
     expect(() => validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '500' })).toThrow();
+  });
+
+  it('coerces AI_AGENT_STALL_MS from a numeric string', () => {
+    const env = validateEnv({ ...baseEnv, AI_AGENT_STALL_MS: '15000' });
+    expect(env.AI_AGENT_STALL_MS).toBe(15000);
+  });
+
+  it('rejects AI_AGENT_STALL_MS of 4999 (below min 5000)', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_AGENT_STALL_MS: '4999' })
+    ).toThrow();
   });
 });
 
