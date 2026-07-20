@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { streamText } from 'ai';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -781,6 +782,7 @@ describe('AiSdkAgentOrchestrator', () => {
       makeFlags(),
       FALLBACK
     );
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
 
     const consumed = collect(orchestrator.run(baseInput));
     await vi.advanceTimersByTimeAsync(STALL_MS);
@@ -792,6 +794,14 @@ describe('AiSdkAgentOrchestrator', () => {
       false
     );
     expect(events.at(-1)).toMatchObject({ type: 'done' });
+    const stallLogs = warnSpy.mock.calls.filter(
+      ([entry]) =>
+        typeof entry === 'object' &&
+        entry !== null &&
+        (entry as { event?: string }).event === 'agent.turn.stall'
+    );
+    expect(stallLogs).toHaveLength(1);
+    warnSpy.mockRestore();
   });
 
   it('reports AI_TIMEOUT when the last candidate ends gracefully on the stall abort', async () => {

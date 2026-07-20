@@ -280,6 +280,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         webSources: webSourceCollector.all,
       };
     } catch (error) {
+      // The after-loop branch already reported and threw AgentStallError, so
+      // it must pass through here untouched instead of being logged again.
+      if (error instanceof AgentStallError) {
+        throw error;
+      }
       const interrupted = this.interruptionEvent(
         input,
         model,
