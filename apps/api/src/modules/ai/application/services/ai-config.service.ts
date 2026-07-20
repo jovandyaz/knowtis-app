@@ -19,11 +19,9 @@ const CACHE_TTL_MS = 30_000; // 30 seconds
 
 export type AIConfigKind = 'model' | 'chain' | 'choice';
 
-interface ConfigKeyDef {
-  default: string;
-  kind: AIConfigKind;
-  allowed?: readonly string[];
-}
+type ConfigKeyDef =
+  | { default: string; kind: 'model' | 'chain' }
+  | { default: string; kind: 'choice'; allowed: readonly string[] };
 
 const CONFIG_KEYS = {
   ai_default_model: {
@@ -186,15 +184,17 @@ export class AIConfigService {
         this.validateChain(value);
         return;
       case 'choice':
-        if (!def.allowed?.includes(value)) {
+        if (!def.allowed.includes(value)) {
           throw new InvalidAIConfigError(
-            `'${value}' is not one of: ${def.allowed?.join(', ')}`
+            `'${value}' is not one of: ${def.allowed.join(', ')}`
           );
         }
         return;
       default: {
-        const _exhaustive: never = def.kind;
-        throw new InvalidAIConfigError(`Unhandled config kind: ${_exhaustive}`);
+        const _exhaustive: never = def;
+        throw new InvalidAIConfigError(
+          `Unhandled config kind: ${JSON.stringify(_exhaustive)}`
+        );
       }
     }
   }
