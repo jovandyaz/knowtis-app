@@ -9,7 +9,8 @@ import type {
   WebSearchResult,
 } from './web-search.types';
 
-const PRICE_PER_CREDIT_USD = 0.008; // Tavily $8 / 1k credits; basic search/extract = 1 credit
+const BASIC_CREDITS = 1;
+const ADVANCED_SEARCH_CREDITS = 2;
 
 export class TavilyWebSearch implements WebSearchProvider {
   private readonly cfg: TavilyConfig;
@@ -43,7 +44,9 @@ export class TavilyWebSearch implements WebSearchProvider {
         content: r.content,
         score: r.score,
       })),
-      costUsd: (depth === 'advanced' ? 2 : 1) * PRICE_PER_CREDIT_USD,
+      costUsd:
+        (depth === 'advanced' ? ADVANCED_SEARCH_CREDITS : BASIC_CREDITS) *
+        this.cfg.pricePerCreditUsd,
     };
   }
 
@@ -64,7 +67,11 @@ export class TavilyWebSearch implements WebSearchProvider {
       const reason = json.failed_results?.[0]?.error ?? 'no content extracted';
       throw new Error(`Tavily extract failed for ${url}: ${reason}`);
     }
-    return { url, content: first.raw_content, costUsd: PRICE_PER_CREDIT_USD };
+    return {
+      url,
+      content: first.raw_content,
+      costUsd: BASIC_CREDITS * this.cfg.pricePerCreditUsd,
+    };
   }
 
   private async post<T>(endpoint: string, body: unknown): Promise<T> {
