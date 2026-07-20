@@ -47,6 +47,15 @@ interface StepUsageAccumulator {
 
 const AGENT_TEMPERATURE = 0.7;
 
+// Not an AbortError on purpose: the chain must treat a stalled candidate as a
+// retryable provider failure, not as a user cancel.
+class AgentStallError extends Error {
+  constructor(stallMs: number) {
+    super(`No stream activity for ${stallMs}ms`);
+    this.name = 'AgentStallError';
+  }
+}
+
 function isSourceNote(value: unknown): value is { id: string; title: string } {
   if (typeof value !== 'object' || value === null) {
     return false;
@@ -151,6 +160,18 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     let progressed = false;
     let streamError: unknown;
     let result;
+    const stallMs = this.configService.get('AI_AGENT_STALL_MS');
+    const candidate = new AbortController();
+    const runSignal = AbortSignal.any([abortSignal, candidate.signal]);
+    let stalled = false;
+    let stallTimer: NodeJS.Timeout | undefined;
+    const armStallTimer = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        candidate.abort();
+      }, stallMs);
+    };
     try {
       result = streamText({
         model: this.providerRegistry.languageModel(model, input.byokApiKey),
@@ -163,7 +184,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
         temperature: AGENT_TEMPERATURE,
-        abortSignal,
+        abortSignal: runSignal,
         onStepFinish: ({ toolResults, usage }) => {
           progressed = true;
           this.collectSources(toolResults, sources);
@@ -194,7 +215,9 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
 
     try {
+      armStallTimer();
       for await (const part of result.fullStream) {
+        armStallTimer();
         switch (part.type) {
           case 'reasoning-delta':
             if (part.text) {
@@ -214,6 +237,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
             break;
         }
       }
+      clearTimeout(stallTimer);
       const interrupted = this.interruptionEvent(
         input,
         model,
@@ -222,6 +246,17 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       );
       if (interrupted) {
         yield interrupted;
+        return;
+      }
+      if (stalled) {
+        yield this.stallOutcome(
+          input,
+          model,
+          stepUsage,
+          progressed,
+          options,
+          stallMs
+        );
         return;
       }
       const usage = await result.totalUsage;
@@ -245,6 +280,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         webSources: webSourceCollector.all,
       };
     } catch (error) {
+      // The after-loop branch already reported and threw AgentStallError, so
+      // it must pass through here untouched instead of being logged again.
+      if (error instanceof AgentStallError) {
+        throw error;
+      }
       const interrupted = this.interruptionEvent(
         input,
         model,
@@ -253,6 +293,17 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       );
       if (interrupted) {
         yield interrupted;
+        return;
+      }
+      if (stalled) {
+        yield this.stallOutcome(
+          input,
+          model,
+          stepUsage,
+          progressed,
+          options,
+          stallMs
+        );
         return;
       }
       // streamText reports provider failures as error parts and then rejects
@@ -274,7 +325,35 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         error: this.toError(cause, redact),
         usage: this.bestEffortUsage(model, stepUsage),
       };
+    } finally {
+      clearTimeout(stallTimer);
     }
+  }
+
+  // Throws (chain advances) only for a retryable fresh failure; otherwise the
+  // turn ends honestly as a timeout the client can retry.
+  private stallOutcome(
+    input: AgentRunInput,
+    model: string,
+    stepUsage: StepUsageAccumulator,
+    progressed: boolean,
+    options: { throwOnFreshFailure: boolean },
+    stallMs: number
+  ): AgentEvent {
+    this.logger.warn({
+      event: 'agent.turn.stall',
+      userId: input.userId,
+      model,
+      stallMs,
+    });
+    if (options.throwOnFreshFailure && !progressed) {
+      throw new AgentStallError(stallMs);
+    }
+    return {
+      type: 'error',
+      error: AIErrors.timeout('Agent turn stalled'),
+      usage: this.bestEffortUsage(model, stepUsage),
+    };
   }
 
   // totalUsage never settles on an interrupted stream, so terminal events for

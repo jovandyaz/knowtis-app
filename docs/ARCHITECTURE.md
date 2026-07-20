@@ -399,7 +399,7 @@ The **copilot** is a conversational, tool-using agent that lives in its own `age
 
 ### Agent loop
 
-Each turn runs a bounded tool-calling loop (Vercel AI SDK) inside `run-agent-turn.handler.ts`. The model can call read tools (search/fetch notes, web) and propose write tools; the loop is capped by `AI_AGENT_MAX_STEPS`, `AI_AGENT_MAX_MS`, and `AI_AGENT_MAX_OUTPUT_TOKENS`. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently.
+Each turn runs a bounded tool-calling loop (Vercel AI SDK) inside `run-agent-turn.handler.ts`. The model can call read tools (search/fetch notes, web) and propose write tools; the loop is capped by `AI_AGENT_MAX_STEPS`, `AI_AGENT_MAX_OUTPUT_TOKENS`, a per-candidate stream-silence budget (`AI_AGENT_STALL_MS`), and the `AI_AGENT_MAX_MS` wall-clock backstop. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently.
 
 ### Server-authoritative & human-in-the-loop
 
