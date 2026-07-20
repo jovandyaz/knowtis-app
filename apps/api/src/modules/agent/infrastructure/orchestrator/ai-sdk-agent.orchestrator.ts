@@ -237,6 +237,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
             break;
         }
       }
+      clearTimeout(stallTimer);
       const interrupted = this.interruptionEvent(
         input,
         model,

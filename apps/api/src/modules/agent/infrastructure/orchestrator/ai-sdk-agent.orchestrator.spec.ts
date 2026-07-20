@@ -736,6 +736,89 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  // How the SDK really ends an aborted stream: it enqueues a final abort part
+  // and closes, so the turn exits the loop normally instead of rejecting. A
+  // settling totalUsage keeps the after-loop stall check the only way out.
+  function abortsGracefullyAfter(parts: readonly unknown[]) {
+    return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
+      fullStream: (async function* () {
+        for (const part of parts) {
+          yield part;
+        }
+        await new Promise<void>((resolve) => {
+          if (abortSignal.aborted) {
+            resolve();
+            return;
+          }
+          abortSignal.addEventListener('abort', () => resolve(), {
+            once: true,
+          });
+        });
+        yield { type: 'abort' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 9, outputTokens: 9 }),
+    });
+  }
+
+  it('falls through to the fallback when a silent candidate ends gracefully on the stall abort', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        abortsGracefullyAfter([
+          { type: 'reasoning-delta', id: 'r1', text: 'hmm' },
+        ])
+      )
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('reports AI_TIMEOUT when the last candidate ends gracefully on the stall abort', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(abortsGracefullyAfter([]));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    const last = events.at(-1) as {
+      type: string;
+      error: { code: string; message: string };
+    };
+    expect(last.type).toBe('error');
+    expect(last.error.code).toBe('AI_TIMEOUT');
+    expect(last.error.message).toContain('stalled');
+  });
+
   // Ignoring the abort makes every deadline fire before the rejection lands, so
   // the interruption checks are forced to rank a stall against the global ones.
   function hangsPastEveryDeadline(delayMs: number) {
