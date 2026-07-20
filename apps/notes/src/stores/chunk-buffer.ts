@@ -15,10 +15,11 @@ export interface ChunkBuffer {
 
 /**
  * Batches streamed text chunks so consumers update state at most every
- * `flushMs` and, when `inactivityMs` is set, fires `onInactivity` (after
- * flushing) once no chunk arrives within that window. Timers live in this
- * closure — not in store state — so per-chunk arm/clear never re-renders
- * subscribers.
+ * `flushMs`. The inactivity watchdog arms only when BOTH `inactivityMs` and
+ * `onInactivity` are supplied — with either one missing it never fires, and
+ * `armInactivityTimer` is a no-op. It flushes before invoking `onInactivity`.
+ * Timers live in this closure — not in store state — so per-chunk arm/clear
+ * never re-renders subscribers.
  */
 export function createChunkBuffer({
   flushMs,

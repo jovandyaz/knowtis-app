@@ -625,4 +625,41 @@ describe('agent.store thinking tail', () => {
     expect(useAgentStore.getState().status).toBe('error');
     expect(useAgentStore.getState().thinkingText).toBe('');
   });
+
+  it('does not re-arm the inactivity watchdog while a proposal awaits approval', () => {
+    const { cancel, get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    get().onThinking?.({ text: 'reasoning after the proposal' });
+
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+    expect(useAgentStore.getState().status).toBe('pendingProposal');
+    expect(useAgentStore.getState().pendingProposal?.id).toBe('p1');
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('does not repopulate the thinking tail while a proposal awaits approval', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.(PROPOSAL);
+    get().onThinking?.({ text: 'reasoning after the proposal' });
+    vi.advanceTimersByTime(50);
+
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
+
+  it('clears the thinking tail when the stream times out', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola');
+    get().onThinking?.({ text: 'reasoning that stalls' });
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+
+    expect(useAgentStore.getState().status).toBe('timeout');
+    expect(useAgentStore.getState().thinkingText).toBe('');
+
+    get().onThinking?.({ text: 'late reasoning' });
+    vi.advanceTimersByTime(50);
+    expect(useAgentStore.getState().thinkingText).toBe('');
+  });
 });

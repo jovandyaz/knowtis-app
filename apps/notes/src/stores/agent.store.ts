@@ -92,7 +92,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
     },
     onInactivity: () => {
       get()._streamHandle?.cancel();
-      set({ status: 'timeout', _streamHandle: null });
+      thinkingBuffer.discard();
+      set({ status: 'timeout', _streamHandle: null, thinkingText: '' });
     },
   });
 
@@ -122,7 +123,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
           buffer.push(text);
         },
         onThinking: ({ text }) => {
-          if (version !== streamVersion) {
+          // Reasoning may arrive after the turn is suspended (pendingProposal) or
+          // already terminal; re-arming there would resurrect the watchdog and
+          // time out a proposal the user is still deliberating on.
+          if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
           buffer.armInactivityTimer();
