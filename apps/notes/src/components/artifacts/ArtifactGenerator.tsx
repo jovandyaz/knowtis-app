@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
-import { useRightDockStore } from '@/stores/right-dock.store';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import type { TFunction } from 'i18next';
 import { Loader2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -96,7 +96,6 @@ export function ArtifactGeneratorDialog({
   const open = useArtifactSidebarStore((s) => s.generatorOpen);
   const openGenerator = useArtifactSidebarStore((s) => s.openGenerator);
   const closeGenerator = useArtifactSidebarStore((s) => s.closeGenerator);
-  const openDock = useRightDockStore((s) => s.open);
   const generateArtifact = useGenerateArtifact();
 
   const { data: existingArtifacts } = useArtifacts(noteId);
@@ -117,7 +116,7 @@ export function ArtifactGeneratorDialog({
         {
           onSuccess: () => {
             closeGenerator();
-            openDock('estudio');
+            useWorkspaceStore.getState().setTab('estudio');
             toast.success(t('ai.artifacts.generate.success'));
           },
           onError: (error) => {
@@ -130,7 +129,7 @@ export function ArtifactGeneratorDialog({
         }
       );
     },
-    [noteId, generateArtifact, t, closeGenerator, openDock]
+    [noteId, generateArtifact, t, closeGenerator]
   );
 
   const handleOpenChange = useCallback(
