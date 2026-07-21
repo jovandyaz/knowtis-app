@@ -36,7 +36,7 @@ export function WorkspaceTabBar({ noteId }: { noteId: string }) {
   const items: SegmentedControlItem[] = [
     {
       value: 'note',
-      label: t('workspace.tabs.note', { defaultValue: 'Note' }),
+      label: t('workspace.tabs.note'),
       icon: FileText,
     },
     { value: 'estudio', label: studyLabel, icon: BookOpen },
@@ -45,7 +45,7 @@ export function WorkspaceTabBar({ noteId }: { noteId: string }) {
   return (
     <SegmentedControl
       idBase="workspace"
-      ariaLabel={t('workspace.tabsLabel', { defaultValue: 'Workspace tabs' })}
+      ariaLabel={t('workspace.tabsLabel')}
       value={activeTab}
       onValueChange={(v) => setTab(v as WorkspaceTab)}
       items={items}
