@@ -49,7 +49,7 @@ vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
   VoiceNoteRecorder: () => null,
 }));
 
-vi.mock('@/components/artifacts', () => ({
+vi.mock('@/components/artifacts/StudyToolsTab', () => ({
   StudyToolsTab: () => <div data-testid="study-tools" />,
 }));
 

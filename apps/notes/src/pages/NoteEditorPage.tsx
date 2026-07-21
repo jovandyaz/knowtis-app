@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
 
-import { StudyToolsTab } from '@/components/artifacts';
+import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';

@@ -6,13 +6,12 @@ import { PanelLeft, Sparkles } from 'lucide-react';
 export function RightDockToggle() {
   const { t } = useTranslation('common');
   const isOpen = useRightDockStore((s) => s.isOpen);
-  const open = useRightDockStore((s) => s.open);
-  const close = useRightDockStore((s) => s.close);
+  const toggle = useRightDockStore((s) => s.toggle);
 
   return (
     <button
       type="button"
-      onClick={() => (isOpen ? close() : open())}
+      onClick={toggle}
       aria-pressed={isOpen}
       aria-label={t('labels.copilot', 'Copilot')}
       className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
