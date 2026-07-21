@@ -7,6 +7,10 @@ import { StudyToolsTab } from '@/components/artifacts';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
+import {
+  workspacePanelId,
+  workspaceTabId,
+} from '@/components/editor/workspace-tab-ids';
 import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
@@ -230,9 +234,10 @@ function NoteEditor({
       <div
         {...(aiEnabled
           ? {
-              id: 'workspace-panel-note',
+              id: workspacePanelId('note'),
               role: 'tabpanel' as const,
-              'aria-labelledby': 'workspace-tab-note',
+              'aria-labelledby': workspaceTabId('note'),
+              tabIndex: 0,
             }
           : {})}
         className={cn(aiEnabled && workspaceTab !== 'note' && 'hidden')}
@@ -273,9 +278,10 @@ function NoteEditor({
 
       {aiEnabled && (
         <div
-          id="workspace-panel-estudio"
+          id={workspacePanelId('estudio')}
           role="tabpanel"
-          aria-labelledby="workspace-tab-estudio"
+          aria-labelledby={workspaceTabId('estudio')}
+          tabIndex={0}
           className={cn(workspaceTab !== 'estudio' && 'hidden')}
         >
           <StudyToolsTab noteId={noteId} />

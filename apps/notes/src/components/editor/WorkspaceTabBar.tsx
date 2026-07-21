@@ -10,6 +10,8 @@ import {
   type SegmentedControlItem,
 } from '@knowtis/design-system';
 
+import { WORKSPACE_ID_BASE } from './workspace-tab-ids';
+
 export function WorkspaceTabBar({ noteId }: { noteId: string }) {
   const { t } = useTranslation('notes');
   const activeTab = useWorkspaceStore((s) => s.activeTab);
@@ -44,7 +46,7 @@ export function WorkspaceTabBar({ noteId }: { noteId: string }) {
 
   return (
     <SegmentedControl
-      idBase="workspace"
+      idBase={WORKSPACE_ID_BASE}
       ariaLabel={t('workspace.tabsLabel')}
       value={activeTab}
       onValueChange={(v) => setTab(v as WorkspaceTab)}
