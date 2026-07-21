@@ -473,7 +473,7 @@
     "failedToast": "Error al actualizar el perfil"
   },
   "workspace": {
-    "tabs": { "note": "Nota" },
+    "tabs": { "note": "Nota", "study": "Estudio" },
     "tabsLabel": "Espacio de la nota"
   }
 }

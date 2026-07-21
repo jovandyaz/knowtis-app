@@ -473,7 +473,7 @@
     "failedToast": "Failed to update profile"
   },
   "workspace": {
-    "tabs": { "note": "Note" },
+    "tabs": { "note": "Note", "study": "Study" },
     "tabsLabel": "Note workspace"
   }
 }

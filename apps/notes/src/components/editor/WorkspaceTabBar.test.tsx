@@ -31,7 +31,7 @@ describe('WorkspaceTabBar', () => {
   it('shows the artifact count on the study tab', () => {
     render(<WorkspaceTabBar noteId="n1" />);
     const studyTab = screen.getByRole('tab', {
-      name: /ai.artifacts.studyTools/,
+      name: /workspace.tabs.study/,
     });
     expect(studyTab).toHaveTextContent('2');
   });
@@ -40,16 +40,16 @@ describe('WorkspaceTabBar', () => {
     artifactsMock.data = [];
     render(<WorkspaceTabBar noteId="n1" />);
     const studyTab = screen.getByRole('tab', {
-      name: /ai.artifacts.studyTools/,
+      name: /workspace.tabs.study/,
     });
-    expect(studyTab).toHaveTextContent('ai.artifacts.studyTools');
+    expect(studyTab).toHaveTextContent('workspace.tabs.study');
     expect(studyTab).not.toHaveTextContent(/\d/);
   });
 
   it('marks a tab selected and switches the workspace tab when clicked', async () => {
     render(<WorkspaceTabBar noteId="n1" />);
     const studyTab = screen.getByRole('tab', {
-      name: /ai.artifacts.studyTools/,
+      name: /workspace.tabs.study/,
     });
     await userEvent.click(studyTab);
     expect(studyTab).toHaveAttribute('aria-selected', 'true');
