@@ -228,9 +228,13 @@ function NoteEditor({
       {aiEnabled && <WorkspaceTabBar noteId={noteId} />}
 
       <div
-        id="workspace-panel-note"
-        role="tabpanel"
-        aria-labelledby="workspace-tab-note"
+        {...(aiEnabled
+          ? {
+              id: 'workspace-panel-note',
+              role: 'tabpanel' as const,
+              'aria-labelledby': 'workspace-tab-note',
+            }
+          : {})}
         className={cn(aiEnabled && workspaceTab !== 'note' && 'hidden')}
       >
         <div className="mb-4">
