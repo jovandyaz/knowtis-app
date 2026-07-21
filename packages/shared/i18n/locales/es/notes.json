@@ -195,7 +195,6 @@
     "copilot": {
       "tab": "Copilot",
       "title": "Copilot",
-      "dockLabel": "Herramientas de nota",
       "placeholder": "Pregunta sobre tus notas…",
       "send": "Enviar",
       "composerHint": "Enter envía · Shift+Enter salto de línea",
@@ -472,5 +471,9 @@
     "saving": "Guardando...",
     "updatedToast": "Perfil actualizado",
     "failedToast": "Error al actualizar el perfil"
+  },
+  "workspace": {
+    "tabs": { "note": "Nota", "study": "Estudio" },
+    "tabsLabel": "Espacio de la nota"
   }
 }

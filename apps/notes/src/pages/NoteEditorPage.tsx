@@ -3,9 +3,15 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
 
+import { StudyToolsTab } from '@/components/artifacts/StudyToolsTab';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { MobileEditorHeader } from '@/components/editor/MobileEditorHeader';
 import { NoteControlsPortal } from '@/components/editor/NoteControlsPortal';
+import {
+  workspacePanelId,
+  workspaceTabId,
+} from '@/components/editor/workspace-tab-ids';
+import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
@@ -14,11 +20,12 @@ import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
+import { useWorkspaceStore } from '@/stores/workspace.store';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
-import { ErrorState, Input, LoadingState } from '@knowtis/design-system';
+import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import type {
   GeneralAccessLevel,
@@ -100,11 +107,14 @@ function NoteEditor({
 
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
+  const workspaceTab = useWorkspaceStore((s) => s.activeTab);
+  const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
 
   useEffect(() => {
     setActiveNoteId(noteId);
+    setWorkspaceTab('note');
     return () => setActiveNoteId(null);
-  }, [noteId, setActiveNoteId]);
+  }, [noteId, setActiveNoteId, setWorkspaceTab]);
 
   const voiceNoteOpen = useVoiceNoteEditorStore((s) => s.isOpen);
   const voiceNoteClose = useVoiceNoteEditorStore((s) => s.close);
@@ -219,37 +229,63 @@ function NoteEditor({
         onShareDialogOpenChange={setIsShareDialogOpen}
       />
 
-      <div className="mb-4">
-        <Input
-          ref={titleInputRef}
-          value={title}
-          onChange={handleTitleChange}
-          readOnly={!canEdit}
-          placeholder={t('editor.titlePlaceholder')}
-          className="border-0 bg-transparent px-0 text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0"
+      {aiEnabled && <WorkspaceTabBar noteId={noteId} />}
+
+      <div
+        {...(aiEnabled
+          ? {
+              id: workspacePanelId('note'),
+              role: 'tabpanel' as const,
+              'aria-labelledby': workspaceTabId('note'),
+              tabIndex: 0,
+            }
+          : {})}
+        className={cn(aiEnabled && workspaceTab !== 'note' && 'hidden')}
+      >
+        <div className="mb-4">
+          <Input
+            ref={titleInputRef}
+            value={title}
+            onChange={handleTitleChange}
+            readOnly={!canEdit}
+            placeholder={t('editor.titlePlaceholder')}
+            className="border-0 bg-transparent px-0 text-2xl font-bold focus-visible:ring-0 focus-visible:ring-offset-0"
+          />
+        </div>
+
+        <CollaborativeEditor
+          noteId={noteId}
+          initialContent={initialContent}
+          onUpdate={handleContentChange}
+          editable={canEdit}
+          autoFocus={canEdit && isNewNote}
+          localFirst={isNewNote}
+          onEditorReady={handleEditorReady}
+          onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
+          onLiveCollaborationChange={handleLiveCollaborationChange}
         />
+
+        {showVoiceNote && (
+          <VoiceNoteRecorder
+            mode="insert"
+            open={voiceNoteOpen}
+            onClose={voiceNoteClose}
+            onInsert={handleVoiceInsert}
+            preAcquiredStream={preAcquiredStream}
+          />
+        )}
       </div>
 
-      <CollaborativeEditor
-        noteId={noteId}
-        initialContent={initialContent}
-        onUpdate={handleContentChange}
-        editable={canEdit}
-        autoFocus={canEdit && isNewNote}
-        localFirst={isNewNote}
-        onEditorReady={handleEditorReady}
-        onVoiceNote={showVoiceNote ? handleVoiceNoteClick : undefined}
-        onLiveCollaborationChange={handleLiveCollaborationChange}
-      />
-
-      {showVoiceNote && (
-        <VoiceNoteRecorder
-          mode="insert"
-          open={voiceNoteOpen}
-          onClose={voiceNoteClose}
-          onInsert={handleVoiceInsert}
-          preAcquiredStream={preAcquiredStream}
-        />
+      {aiEnabled && (
+        <div
+          id={workspacePanelId('estudio')}
+          role="tabpanel"
+          aria-labelledby={workspaceTabId('estudio')}
+          tabIndex={0}
+          className={cn(workspaceTab !== 'estudio' && 'hidden')}
+        >
+          <StudyToolsTab noteId={noteId} />
+        </div>
       )}
     </div>
   );

@@ -32,6 +32,10 @@ export default defineConfig({
         __dirname,
         '../../libs/data-access/oauth/src/index.ts'
       ),
+      '@knowtis/data-access-artifacts': resolve(
+        __dirname,
+        '../../libs/data-access/artifacts/src/index.ts'
+      ),
       '@knowtis/shared-types': resolve(
         __dirname,
         '../../packages/shared/types/src/index.ts'

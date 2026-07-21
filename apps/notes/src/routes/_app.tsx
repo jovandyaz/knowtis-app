@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
@@ -25,31 +25,12 @@ import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
 
-import { useArtifacts } from '@knowtis/data-access-artifacts';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 function RightDockLayout() {
-  const noteId = useArtifactSidebarStore((s) => s.activeNoteId);
-  const { data: artifacts } = useArtifacts(noteId ?? undefined);
-  const open = useRightDockStore((s) => s.open);
-  const autoShownRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (
-      noteId &&
-      artifacts &&
-      artifacts.length > 0 &&
-      !autoShownRef.current.has(noteId) &&
-      !useRightDockStore.getState().isOpen
-    ) {
-      autoShownRef.current.add(noteId);
-      open('estudio');
-    }
-  }, [noteId, artifacts, open]);
-
-  return <RightDock noteId={noteId} />;
+  return <RightDock />;
 }
 
 function ArtifactGeneratorDialogLayout() {
@@ -98,7 +79,7 @@ function AppLayout() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'j') {
         e.preventDefault();
-        toggleDock('copilot');
+        toggleDock();
       }
     };
     document.addEventListener('keydown', handleKeyDown);
