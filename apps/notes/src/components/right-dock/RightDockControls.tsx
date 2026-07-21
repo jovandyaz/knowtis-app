@@ -12,7 +12,7 @@ export function RightDockToggle() {
   return (
     <button
       type="button"
-      onClick={() => (isOpen ? close() : open('copilot'))}
+      onClick={() => (isOpen ? close() : open())}
       aria-pressed={isOpen}
       aria-label={t('labels.copilot', 'Copilot')}
       className="p-1.5 rounded-md text-(--muted-foreground)/40 hover:text-(--muted-foreground) transition-colors cursor-pointer"
@@ -29,7 +29,7 @@ export function CopilotMobileFAB() {
   return (
     <button
       type="button"
-      onClick={() => open('copilot')}
+      onClick={() => open()}
       className="fixed bottom-20 right-4 z-30 flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 md:hidden"
       aria-label={t('labels.copilot', 'Copilot')}
     >

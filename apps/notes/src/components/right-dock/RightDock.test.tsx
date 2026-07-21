@@ -11,9 +11,6 @@ vi.mock('@knowtis/shared-hooks', () => ({ useMediaQuery: () => true }));
 vi.mock('../copilot', () => ({
   AgentCopilotPanel: () => <div>copilot-panel</div>,
 }));
-vi.mock('../artifacts/StudyToolsTab', () => ({
-  StudyToolsTab: () => <div>study-panel</div>,
-}));
 vi.mock('@/stores/agent.store', () => ({
   useAgentStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -24,28 +21,17 @@ vi.mock('@/stores/agent.store', () => ({
 
 describe('RightDock', () => {
   beforeEach(() => {
-    useRightDockStore.setState({ isOpen: true, activeTab: 'copilot' });
+    useRightDockStore.setState({ isOpen: true });
   });
 
-  it('renders the tabs as a segmented control with two tabs', () => {
-    render(<RightDock noteId="n1" />);
-
-    expect(screen.getByRole('tablist')).toBeInTheDocument();
-
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(2);
+  it('renders only the copilot panel', () => {
+    render(<RightDock />);
+    expect(screen.getByText('copilot-panel')).toBeInTheDocument();
+    expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
   });
 
-  it('marks the active tab as selected', () => {
-    render(<RightDock noteId="n1" />);
-
-    const activeTab = screen.getByRole('tab', { name: /ai.copilot.tab/ });
-    expect(activeTab).toHaveAttribute('aria-selected', 'true');
-  });
-
-  it('renders the new-conversation action in the dock header on the copilot tab', () => {
-    render(<RightDock noteId="n1" />);
-
+  it('renders the new-conversation action', () => {
+    render(<RightDock />);
     expect(
       screen.getByRole('button', { name: /ai.copilot.newConversation/ })
     ).toBeInTheDocument();
