@@ -5,16 +5,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { WorkspaceTabBar } from './WorkspaceTabBar';
 
+const { artifactsMock } = vi.hoisted(() => ({
+  artifactsMock: { data: [] as { id: string }[] },
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 vi.mock('@knowtis/data-access-artifacts', () => ({
-  useArtifacts: () => ({ data: [{ id: 'a' }, { id: 'b' }] }),
+  useArtifacts: () => ({ data: artifactsMock.data }),
 }));
 
 describe('WorkspaceTabBar', () => {
   beforeEach(() => {
     useWorkspaceStore.setState({ activeTab: 'note' });
+    artifactsMock.data = [{ id: 'a' }, { id: 'b' }];
   });
 
   it('renders note and study tabs', () => {
@@ -31,11 +36,23 @@ describe('WorkspaceTabBar', () => {
     expect(studyTab).toHaveTextContent('2');
   });
 
-  it('switches the workspace tab when a tab is clicked', async () => {
+  it('does not render the count badge when there are no artifacts', () => {
+    artifactsMock.data = [];
     render(<WorkspaceTabBar noteId="n1" />);
-    await userEvent.click(
-      screen.getByRole('tab', { name: /ai.artifacts.studyTools/ })
-    );
+    const studyTab = screen.getByRole('tab', {
+      name: /ai.artifacts.studyTools/,
+    });
+    expect(studyTab).toHaveTextContent('ai.artifacts.studyTools');
+    expect(studyTab).not.toHaveTextContent(/\d/);
+  });
+
+  it('marks a tab selected and switches the workspace tab when clicked', async () => {
+    render(<WorkspaceTabBar noteId="n1" />);
+    const studyTab = screen.getByRole('tab', {
+      name: /ai.artifacts.studyTools/,
+    });
+    await userEvent.click(studyTab);
+    expect(studyTab).toHaveAttribute('aria-selected', 'true');
     expect(useWorkspaceStore.getState().activeTab).toBe('estudio');
   });
 });
