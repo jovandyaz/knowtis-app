@@ -11,7 +11,7 @@ vi.mock('@knowtis/shared-hooks', () => ({ useMediaQuery: () => true }));
 vi.mock('../copilot', () => ({
   AgentCopilotPanel: () => <div>copilot-panel</div>,
 }));
-vi.mock('./StudyToolsTab', () => ({
+vi.mock('../artifacts/StudyToolsTab', () => ({
   StudyToolsTab: () => <div>study-panel</div>,
 }));
 vi.mock('@/stores/agent.store', () => ({

@@ -5,9 +5,9 @@ import { ArrowLeft } from 'lucide-react';
 
 import type { Artifact } from '@knowtis/shared-types';
 
-import { ArtifactGeneratorButton } from '../artifacts/ArtifactGenerator';
-import { ArtifactList } from '../artifacts/ArtifactList';
-import { ArtifactViewer } from '../artifacts/ArtifactViewer';
+import { ArtifactGeneratorButton } from './ArtifactGenerator';
+import { ArtifactList } from './ArtifactList';
+import { ArtifactViewer } from './ArtifactViewer';
 
 export function StudyToolsTab({ noteId }: { noteId: string | null }) {
   const { t } = useTranslation('notes');

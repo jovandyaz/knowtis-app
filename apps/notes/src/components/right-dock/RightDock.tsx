@@ -20,8 +20,8 @@ import {
 } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
 
+import { StudyToolsTab } from '../artifacts/StudyToolsTab';
 import { AgentCopilotPanel } from '../copilot';
-import { StudyToolsTab } from './StudyToolsTab';
 
 const DOCK_MIN_WIDTH = 300;
 const DOCK_MAX_WIDTH = 500;
