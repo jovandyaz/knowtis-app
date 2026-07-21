@@ -5,6 +5,7 @@ import { stepCountIs, streamText } from 'ai';
 import {
   isAbortError,
   isOverloadedError,
+  providerOf,
   streamWithChain,
 } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
@@ -184,6 +185,15 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
         temperature: AGENT_TEMPERATURE,
+        // OpenRouter-only: the other providers spell reasoning control
+        // differently, so this key would be ignored or rejected there.
+        ...(input.reasoningEffort && providerOf(model) === 'openrouter'
+          ? {
+              providerOptions: {
+                openrouter: { reasoning: { effort: input.reasoningEffort } },
+              },
+            }
+          : {}),
         abortSignal: runSignal,
         onStepFinish: ({ toolResults, usage }) => {
           progressed = true;

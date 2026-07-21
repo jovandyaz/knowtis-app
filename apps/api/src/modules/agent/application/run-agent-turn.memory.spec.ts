@@ -12,6 +12,7 @@ import {
   users,
   type Database,
 } from '../../../database';
+import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
@@ -59,6 +60,9 @@ const byokStub = {
 const guardStub = {
   guard: vi.fn().mockResolvedValue({ safe: true }),
 } as unknown as InjectionGuardService;
+const aiConfigStub = {
+  getReasoningEffort: vi.fn().mockResolvedValue('medium'),
+} as unknown as AIConfigService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let db: Database;
@@ -138,7 +142,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       flagsOff,
       modelPreferenceStub,
       byokStub,
-      guardStub
+      guardStub,
+      aiConfigStub
     );
 
     let conversationId: string | undefined;
@@ -203,7 +208,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       flagsOff,
       modelPreferenceStub,
       byokStub,
-      guardStub
+      guardStub,
+      aiConfigStub
     );
 
     const onError = vi.fn();

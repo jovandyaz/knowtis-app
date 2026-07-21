@@ -323,13 +323,16 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 
 **Supported keys:**
 
-| Key                 | Code Default                                                                                | Kind    | Description                         |
-| ------------------- | ------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
-| `ai_default_model`  | `openrouter:z-ai/glm-5.2`                                                                   | `model` | Model for most actions              |
-| `ai_fast_model`     | `openrouter:minimax/minimax-m2.5`                                                           | `model` | Model for ghost-text                |
-| `ai_fallback_chain` | `openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2` | `chain` | Cross-provider fallback order (CSV) |
+| Key                   | Code Default                                                                                | Kind     | Description                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
+| `ai_default_model`    | `openrouter:z-ai/glm-5.2`                                                                   | `model`  | Model for most actions                                         |
+| `ai_fast_model`       | `openrouter:minimax/minimax-m2.5`                                                           | `model`  | Model for ghost-text                                           |
+| `ai_fallback_chain`   | `openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2` | `chain`  | Cross-provider fallback order (CSV)                            |
+| `ai_reasoning_effort` | `medium`                                                                                    | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`) |
 
-A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
+A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A `choice` key takes one member of a fixed list. A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
+
+**Reasoning effort** reaches the provider as `providerOptions.openrouter.reasoning.effort` and is sent **only for `openrouter:*` models** — other providers expose incompatible reasoning controls. The gate reads the per-candidate model, so an OpenRouter primary that fails over to Anthropic does not carry the option across. It is a global default and applies to BYOK turns too, since a BYOK turn still consumes the server's stall and ceiling budgets. Lower effort trades depth for a faster first token and less hidden spend: a reasoning model can burn most of its completion tokens before emitting anything visible.
 
 **REST API** (admin only):
 

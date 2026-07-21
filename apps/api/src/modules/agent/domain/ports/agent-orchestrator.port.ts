@@ -1,3 +1,5 @@
+import type { ReasoningEffort } from '@knowtis/shared-types';
+
 import type { AgentEvent, AgentSource } from '../agent-event';
 import type { AgentMessage } from '../agent-message';
 
@@ -17,6 +19,7 @@ export interface AgentRunInput {
   readonly knownNotes?: readonly AgentSource[];
   readonly userMemories?: readonly string[];
   readonly byokApiKey?: string;
+  readonly reasoningEffort?: ReasoningEffort;
 }
 
 export interface AgentOrchestrator {

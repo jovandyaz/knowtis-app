@@ -3,8 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { estimateTokenCount } from '@knowtis/ai-gateway';
+import type { ReasoningEffort } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
+import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
@@ -154,6 +156,12 @@ function makeGuard(safe = true) {
   } as unknown as InjectionGuardService;
 }
 
+function makeAIConfig(effort: ReasoningEffort = 'medium') {
+  return {
+    getReasoningEffort: vi.fn().mockResolvedValue(effort),
+  } as unknown as AIConfigService;
+}
+
 describe('RunAgentTurnHandler', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -173,7 +181,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -227,7 +236,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onThinking = vi.fn();
     const onChunk = vi.fn();
@@ -266,7 +276,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -299,7 +310,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -340,7 +352,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -377,7 +390,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -428,7 +442,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -468,7 +483,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -503,7 +519,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const error = vi.fn();
 
@@ -535,7 +552,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const error = vi.fn();
 
@@ -576,7 +594,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const done = vi.fn();
 
@@ -619,7 +638,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const done = vi.fn();
 
@@ -670,7 +690,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const done = vi.fn();
 
@@ -714,7 +735,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -750,7 +772,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -786,7 +809,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -831,7 +855,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -861,7 +886,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const controller = new AbortController();
     controller.abort();
@@ -898,7 +924,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -945,7 +972,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onProposal = vi.fn();
 
@@ -989,7 +1017,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onDone = vi.fn();
 
@@ -1026,7 +1055,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.resumeTurn(
@@ -1067,7 +1097,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1103,7 +1134,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1150,7 +1182,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onDone = vi.fn();
 
@@ -1201,7 +1234,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1233,7 +1267,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1269,7 +1304,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference('custom:unpriced-model'),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1309,7 +1345,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -1351,7 +1388,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1397,7 +1435,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onDone = vi.fn();
 
@@ -1438,7 +1477,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -1468,7 +1508,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -1506,7 +1547,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -1552,7 +1594,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -1589,7 +1632,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -1609,6 +1653,39 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('passes the configured reasoning effort to the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('high')
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'high' })
+    );
+  });
+
   it('blocks an injected last user message before reserving rate limit or running the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const guard = makeGuard(false);
@@ -1624,7 +1701,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      guard
+      guard,
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1665,7 +1743,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      guard
+      guard,
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1701,7 +1780,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1736,7 +1816,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1772,7 +1853,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1813,7 +1895,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard(false)
+      makeGuard(false),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1859,7 +1942,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onDone = vi.fn();
 
@@ -1905,7 +1989,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -1941,7 +2026,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference('not-a-model'),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -1970,7 +2056,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const done = vi.fn();
     await handler.execute(
@@ -2008,7 +2095,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     await handler.execute(
       {
@@ -2046,7 +2134,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const error = vi.fn();
     await handler.execute(
@@ -2091,7 +2180,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onProposal = vi.fn();
 
@@ -2129,7 +2219,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -2162,7 +2253,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2206,7 +2298,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2243,7 +2336,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2285,7 +2379,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -2318,7 +2413,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -2354,7 +2450,8 @@ describe('RunAgentTurnHandler', () => {
       flags,
       makeModelPreference(),
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2394,7 +2491,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2437,7 +2535,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2487,7 +2586,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -2543,7 +2643,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       byok,
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(
@@ -2591,7 +2692,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       byok,
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -2632,7 +2734,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
     const onError = vi.fn();
 
@@ -2681,7 +2784,8 @@ describe('RunAgentTurnHandler', () => {
       makeFlags(),
       modelPreference,
       makeByok(),
-      makeGuard()
+      makeGuard(),
+      makeAIConfig()
     );
 
     await handler.execute(

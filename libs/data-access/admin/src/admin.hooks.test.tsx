@@ -255,6 +255,14 @@ describe('useAiConfig', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_reasoning_effort',
+        value: 'medium',
+        kind: 'choice',
+        source: 'database',
+        description: null,
+        updatedAt: null,
+      },
     ]);
 
     const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
@@ -263,6 +271,7 @@ describe('useAiConfig', () => {
     expect(httpClient.get).toHaveBeenCalledWith('/ai/config');
     expect(result.current.data?.[0].updatedAt).toBeInstanceOf(Date);
     expect(result.current.data?.[1].updatedAt).toBeNull();
+    expect(result.current.data?.[2].kind).toBe('choice');
   });
 
   it('rejects a payload with an unknown source', async () => {
@@ -329,6 +338,53 @@ describe('AiConfigEntrySchema source skew mapping', () => {
     expect(
       AiConfigEntrySchema.parse({ ...base, source: 'custom' }).source
     ).toBe('custom');
+  });
+
+  it('defaults a missing kind to model', () => {
+    expect(
+      AiConfigEntrySchema.parse({ ...base, kind: undefined, source: 'custom' })
+        .kind
+    ).toBe('model');
+  });
+
+  it('keeps a kind this bundle does not know instead of rejecting the entry', () => {
+    expect(
+      AiConfigEntrySchema.parse({
+        ...base,
+        kind: 'future-kind',
+        source: 'custom',
+      }).kind
+    ).toBe('future-kind');
+  });
+});
+
+describe('useAiConfig kind skew tolerance', () => {
+  it('keeps the known entries when a newer API emits an unknown kind', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      {
+        key: 'ai_default_model',
+        value: 'anthropic:claude-sonnet-5',
+        kind: 'model',
+        source: 'custom',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_future_setting',
+        value: 'on',
+        kind: 'future-kind',
+        source: 'custom',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.data?.[0].kind).toBe('model');
+    expect(result.current.data?.[1].kind).toBe('future-kind');
   });
 });
 
