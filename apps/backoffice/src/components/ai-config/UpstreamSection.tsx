@@ -105,6 +105,9 @@ export function UpstreamSection({ entry }: UpstreamSectionProps) {
           spellCheck={false}
           autoComplete="off"
           aria-invalid={error !== null}
+          aria-describedby={
+            error !== null ? `${UPSTREAMS_INPUT_ID}-error` : undefined
+          }
           placeholder="fireworks,baseten"
           onChange={(event) =>
             setDraft({ base: entry.value, value: event.target.value })
