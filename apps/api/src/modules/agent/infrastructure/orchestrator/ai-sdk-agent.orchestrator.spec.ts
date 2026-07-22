@@ -1571,6 +1571,34 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
+  it('logs a zero-activity health error and rethrows when tool setup rejects before the stream starts', async () => {
+    streamTextMock.mockClear();
+    const setupError = new Error('tool registry exploded');
+    const registry = {
+      resolve: vi.fn().mockRejectedValue(setupError),
+    } as unknown as AgentToolRegistry;
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      registry,
+      makeFlags(),
+      ''
+    );
+
+    await expect(collect(orchestrator.run(baseInput))).rejects.toBe(setupError);
+
+    expect(streamTextMock).not.toHaveBeenCalled();
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'error',
+      parts: 0,
+      ttfpMs: null,
+    });
+    logSpy.mockRestore();
+  });
+
   it('logs agent.turn.health with outcome empty when a completed turn delivers no text', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({

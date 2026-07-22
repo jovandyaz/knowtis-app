@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { stepCountIs, streamText } from 'ai';
+import { stepCountIs, streamText, type ToolSet } from 'ai';
 
 import {
   isAbortError,
@@ -25,6 +25,7 @@ import type {
   AgentSource,
   AgentTurnUsage,
 } from '../../domain/agent-event';
+import type { AgentRole } from '../../domain/agent-message';
 import type {
   AgentOrchestrator,
   AgentRunInput,
@@ -160,62 +161,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     timeoutSignal: AbortSignal,
     options: { throwOnFreshFailure: boolean }
   ): AsyncGenerator<AgentEvent> {
-    const sources = new Map<string, AgentSource>();
-    const knownNotes = new Map<string, AgentSource>();
-    for (const note of input.knownNotes ?? []) {
-      knownNotes.set(note.id, note);
-    }
-    const proposals = new ProposalCollector();
-    const webSourceCollector = new WebSourceCollector();
-    const webFetchAllowlist = new WebFetchAllowlist();
-    webFetchAllowlist.seedFromMessages(input.messages);
-    const toolContext: AgentToolContext = {
-      userId: input.userId,
-      phase: input.resume ? 'readonly' : 'full',
-      byokTurn: Boolean(input.byokApiKey),
-      proposals,
-      webSources: webSourceCollector,
-      webFetchAllowlist,
-    };
-    const tools = await this.toolRegistry.resolve(toolContext);
-    const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
-    // BYOK turns never cache: cache writes bill 1.25x to the key owner.
-    const cache = !input.byokApiKey && (await this.promptCachingEnabled());
-    const systemPrompt = this.buildSystemPrompt(
-      input.noteId,
-      input.knownNotes,
-      input.userMemories
-    );
-    const messages = input.resume
-      ? [
-          ...input.messages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
-          {
-            role: 'user' as const,
-            content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
-          },
-        ]
-      : input.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-    let progressed = false;
-    let streamError: unknown;
-    let result;
-    const stallMs = this.configService.get('AI_AGENT_STALL_MS');
-    const candidate = new AbortController();
-    const runSignal = AbortSignal.any([abortSignal, candidate.signal]);
-    let stalled = false;
-    let stallTimer: NodeJS.Timeout | undefined;
-    const armStallTimer = () => {
-      clearTimeout(stallTimer);
-      stallTimer = setTimeout(() => {
-        stalled = true;
-        candidate.abort();
-      }, stallMs);
-    };
     const turnStartedAt = Date.now();
     const health: StreamHealth = {
       ttfpMs: null,
@@ -245,6 +190,77 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         upstream: health.upstream,
         elapsedMs: Date.now() - turnStartedAt,
       });
+    };
+
+    const sources = new Map<string, AgentSource>();
+    const knownNotes = new Map<string, AgentSource>();
+    for (const note of input.knownNotes ?? []) {
+      knownNotes.set(note.id, note);
+    }
+    const proposals = new ProposalCollector();
+    const webSourceCollector = new WebSourceCollector();
+    const webFetchAllowlist = new WebFetchAllowlist();
+    webFetchAllowlist.seedFromMessages(input.messages);
+    const toolContext: AgentToolContext = {
+      userId: input.userId,
+      phase: input.resume ? 'readonly' : 'full',
+      byokTurn: Boolean(input.byokApiKey),
+      proposals,
+      webSources: webSourceCollector,
+      webFetchAllowlist,
+    };
+    const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
+
+    // Setup runs before the stream starts, so a rejection here still owes the
+    // once-per-attempt health event; log the zero-activity outcome and rethrow
+    // unchanged so streamWithChain treats it as a fresh failure.
+    let tools: ToolSet;
+    let cache: boolean;
+    let systemPrompt: string;
+    let messages: { role: AgentRole; content: string }[];
+    try {
+      tools = await this.toolRegistry.resolve(toolContext);
+      // BYOK turns never cache: cache writes bill 1.25x to the key owner.
+      cache = !input.byokApiKey && (await this.promptCachingEnabled());
+      systemPrompt = this.buildSystemPrompt(
+        input.noteId,
+        input.knownNotes,
+        input.userMemories
+      );
+      messages = input.resume
+        ? [
+            ...input.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            {
+              role: 'user' as const,
+              content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
+            },
+          ]
+        : input.messages.map((m) => ({
+            role: m.role,
+            content: m.content,
+          }));
+    } catch (error) {
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
+      throw error;
+    }
+
+    let progressed = false;
+    let streamError: unknown;
+    let result;
+    const stallMs = this.configService.get('AI_AGENT_STALL_MS');
+    const candidate = new AbortController();
+    const runSignal = AbortSignal.any([abortSignal, candidate.signal]);
+    let stalled = false;
+    let stallTimer: NodeJS.Timeout | undefined;
+    const armStallTimer = () => {
+      clearTimeout(stallTimer);
+      stallTimer = setTimeout(() => {
+        stalled = true;
+        candidate.abort();
+      }, stallMs);
     };
     try {
       result = streamText({
