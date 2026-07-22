@@ -1473,4 +1473,125 @@ describe('AiSdkAgentOrchestrator', () => {
       },
     });
   });
+
+  function healthLogsFrom(
+    spy: ReturnType<typeof vi.spyOn>
+  ): Record<string, unknown>[] {
+    const calls = spy.mock.calls as unknown as unknown[][];
+    return calls
+      .map((call) => call[0])
+      .filter(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'agent.turn.health'
+      );
+  }
+
+  it('logs agent.turn.health with ttfp and part counts on a completed turn', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'done',
+      parts: 3,
+      textDeltas: 1,
+      finishReason: 'stop',
+    });
+    expect(healthLogs[0].ttfpMs).not.toBeNull();
+    logSpy.mockRestore();
+  });
+
+  it('logs agent.turn.health with outcome stall when the watchdog fires', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(hangingAfter([]));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    await consumed;
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'stall',
+    });
+    logSpy.mockRestore();
+  });
+
+  it('logs agent.turn.health exactly once per candidate attempt', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        fullStream: {
+          [Symbol.asyncIterator]: () => ({
+            next: () => Promise.reject(new Error('primary down')),
+          }),
+        },
+        totalUsage: new Promise(() => {}),
+      }))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'Hello' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(2);
+    expect(healthLogs.map((entry) => entry.outcome)).toEqual(['error', 'done']);
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    logSpy.mockRestore();
+  });
+
+  it('logs agent.turn.health with outcome empty when a completed turn delivers no text', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'empty',
+      textDeltas: 0,
+    });
+    logSpy.mockRestore();
+  });
 });

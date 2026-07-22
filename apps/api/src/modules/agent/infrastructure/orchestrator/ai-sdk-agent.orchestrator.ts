@@ -46,7 +46,27 @@ interface StepUsageAccumulator {
   outputTokens: number;
 }
 
+interface StreamHealth {
+  ttfpMs: number | null;
+  maxGapMs: number;
+  parts: number;
+  textDeltas: number;
+  finishReason: string | null;
+}
+
 const AGENT_TEMPERATURE = 0.7;
+
+const AGENT_TURN_OUTCOME = {
+  DONE: 'done',
+  PROPOSAL: 'proposal',
+  ERROR: 'error',
+  STALL: 'stall',
+  TIMEOUT: 'timeout',
+  ABORTED: 'aborted',
+  EMPTY: 'empty',
+} as const;
+type AgentTurnOutcome =
+  (typeof AGENT_TURN_OUTCOME)[keyof typeof AGENT_TURN_OUTCOME];
 
 // Not an AbortError on purpose: the chain must treat a stalled candidate as a
 // retryable provider failure, not as a user cancel.
@@ -173,6 +193,34 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         candidate.abort();
       }, stallMs);
     };
+    const turnStartedAt = Date.now();
+    const health: StreamHealth = {
+      ttfpMs: null,
+      maxGapMs: 0,
+      parts: 0,
+      textDeltas: 0,
+      finishReason: null,
+    };
+    let lastPartAt = turnStartedAt;
+    let healthLogged = false;
+    const logHealth = (outcome: AgentTurnOutcome) => {
+      if (healthLogged) {
+        return;
+      }
+      healthLogged = true;
+      this.logger.log({
+        event: 'agent.turn.health',
+        userId: input.userId,
+        model,
+        outcome,
+        ttfpMs: health.ttfpMs,
+        maxGapMs: health.maxGapMs,
+        parts: health.parts,
+        textDeltas: health.textDeltas,
+        finishReason: health.finishReason,
+        elapsedMs: Date.now() - turnStartedAt,
+      });
+    };
     try {
       result = streamText({
         model: this.providerRegistry.languageModel(model, input.byokApiKey),
@@ -214,6 +262,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         ),
       });
     } catch (error) {
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
       if (options.throwOnFreshFailure && !isAbortError(error)) {
         throw error;
       }
@@ -228,6 +277,14 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       armStallTimer();
       for await (const part of result.fullStream) {
         armStallTimer();
+        const partAt = Date.now();
+        if (health.ttfpMs === null) {
+          health.ttfpMs = partAt - turnStartedAt;
+        } else {
+          health.maxGapMs = Math.max(health.maxGapMs, partAt - lastPartAt);
+        }
+        lastPartAt = partAt;
+        health.parts += 1;
         switch (part.type) {
           case 'reasoning-delta':
             if (part.text) {
@@ -237,8 +294,12 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           case 'text-delta':
             if (part.text) {
               progressed = true;
+              health.textDeltas += 1;
               yield { type: 'chunk', text: part.text };
             }
+            break;
+          case 'finish':
+            health.finishReason = part.finishReason;
             break;
           case 'error':
             streamError = part.error;
@@ -255,10 +316,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         stepUsage
       );
       if (interrupted) {
+        logHealth(
+          input.signal?.aborted
+            ? AGENT_TURN_OUTCOME.ABORTED
+            : AGENT_TURN_OUTCOME.TIMEOUT
+        );
         yield interrupted;
         return;
       }
       if (stalled) {
+        logHealth(AGENT_TURN_OUTCOME.STALL);
         yield this.stallOutcome(
           input,
           model,
@@ -279,9 +346,13 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       };
       const captured = proposals.captured;
       if (captured) {
+        logHealth(AGENT_TURN_OUTCOME.PROPOSAL);
         yield { type: 'proposal', proposal: captured, usage: turnUsage };
         return;
       }
+      logHealth(
+        health.textDeltas > 0 ? AGENT_TURN_OUTCOME.DONE : AGENT_TURN_OUTCOME.EMPTY
+      );
       yield {
         type: 'done',
         usage: turnUsage,
@@ -302,10 +373,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         stepUsage
       );
       if (interrupted) {
+        logHealth(
+          input.signal?.aborted
+            ? AGENT_TURN_OUTCOME.ABORTED
+            : AGENT_TURN_OUTCOME.TIMEOUT
+        );
         yield interrupted;
         return;
       }
       if (stalled) {
+        logHealth(AGENT_TURN_OUTCOME.STALL);
         yield this.stallOutcome(
           input,
           model,
@@ -321,6 +398,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       // carries the real cause (and its statusCode).
       const cause = streamError ?? error;
       if (options.throwOnFreshFailure && !progressed && !isAbortError(cause)) {
+        logHealth(AGENT_TURN_OUTCOME.ERROR);
         throw cause;
       }
       const redact = Boolean(input.byokApiKey);
@@ -330,6 +408,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         model,
         error: this.errorMessage(cause, redact),
       });
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
       yield {
         type: 'error',
         error: this.toError(cause, redact),
