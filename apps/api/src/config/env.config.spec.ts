@@ -75,7 +75,11 @@ describe('env.config agent vars', () => {
   });
 
   it('coerces AI_AGENT_STALL_MS from a numeric string', () => {
-    const env = validateEnv({ ...baseEnv, AI_AGENT_STALL_MS: '15000' });
+    const env = validateEnv({
+      ...baseEnv,
+      AI_AGENT_STALL_MS: '15000',
+      AI_AGENT_TTFT_MS: '5000',
+    });
     expect(env.AI_AGENT_STALL_MS).toBe(15000);
   });
 
@@ -106,19 +110,61 @@ describe('env.config agent vars', () => {
   });
 
   it('rejects a lowered AI_AGENT_MAX_MS that falls at or below the default stall budget', () => {
-    expect(() =>
-      validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '30000' })
-    ).toThrow(/AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS/);
+    expect(() => validateEnv({ ...baseEnv, AI_AGENT_MAX_MS: '30000' })).toThrow(
+      /AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS/
+    );
   });
 
   it('accepts a stall budget strictly below the ceiling', () => {
     const env = validateEnv({
       ...baseEnv,
+      AI_AGENT_TTFT_MS: '15000',
       AI_AGENT_STALL_MS: '30000',
       AI_AGENT_MAX_MS: '120000',
     });
     expect(env.AI_AGENT_STALL_MS).toBe(30000);
     expect(env.AI_AGENT_MAX_MS).toBe(120000);
+  });
+
+  it('defaults AI_AGENT_TTFT_MS below the stall budget', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.AI_AGENT_TTFT_MS).toBe(30000);
+    expect(env.AI_AGENT_TTFT_MS).toBeLessThan(env.AI_AGENT_STALL_MS);
+  });
+
+  it('coerces AI_AGENT_TTFT_MS from a numeric string', () => {
+    const env = validateEnv({ ...baseEnv, AI_AGENT_TTFT_MS: '10000' });
+    expect(env.AI_AGENT_TTFT_MS).toBe(10000);
+  });
+
+  it('rejects AI_AGENT_TTFT_MS equal to AI_AGENT_STALL_MS', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        AI_AGENT_TTFT_MS: '60000',
+        AI_AGENT_STALL_MS: '60000',
+      })
+    ).toThrow(/AI_AGENT_TTFT_MS must be less than AI_AGENT_STALL_MS/);
+  });
+
+  it('rejects AI_AGENT_TTFT_MS above AI_AGENT_STALL_MS', () => {
+    expect(() =>
+      validateEnv({
+        ...baseEnv,
+        AI_AGENT_TTFT_MS: '90000',
+        AI_AGENT_STALL_MS: '60000',
+      })
+    ).toThrow(/AI_AGENT_TTFT_MS must be less than AI_AGENT_STALL_MS/);
+  });
+
+  it('accepts a TTFT budget strictly below the stall budget', () => {
+    const env = validateEnv({
+      ...baseEnv,
+      AI_AGENT_TTFT_MS: '15000',
+      AI_AGENT_STALL_MS: '30000',
+    });
+    expect(env.AI_AGENT_TTFT_MS).toBe(15000);
+    expect(env.AI_AGENT_STALL_MS).toBe(30000);
   });
 });
 

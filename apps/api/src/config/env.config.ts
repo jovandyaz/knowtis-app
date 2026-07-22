@@ -60,6 +60,7 @@ const envSchemaBase = z.object({
   AI_AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),
   AI_AGENT_MAX_MS: z.coerce.number().int().min(1000).default(300000),
   AI_AGENT_STALL_MS: z.coerce.number().int().min(5000).default(60000),
+  AI_AGENT_TTFT_MS: z.coerce.number().int().min(1000).default(30000),
   AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(8192),
   AI_AGENT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(200).default(40),
   AI_MEMORY_QUIET_SECONDS: z.coerce.number().int().min(10).default(180),
@@ -129,6 +130,16 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'AI_AGENT_STALL_MS must be less than AI_AGENT_MAX_MS — a stall budget at or above the wall-clock ceiling never fires, disabling per-candidate stall detection and failover',
       path: ['AI_AGENT_STALL_MS'],
       input: data.AI_AGENT_STALL_MS,
+    });
+  }
+
+  if (data.AI_AGENT_TTFT_MS >= data.AI_AGENT_STALL_MS) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'AI_AGENT_TTFT_MS must be less than AI_AGENT_STALL_MS — a first-part budget at or above the stall budget never fires, disabling zero-output retry',
+      path: ['AI_AGENT_TTFT_MS'],
+      input: data.AI_AGENT_TTFT_MS,
     });
   }
 

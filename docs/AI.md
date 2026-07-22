@@ -953,6 +953,7 @@ When a turn proposes a mutation (create/update note), the pending proposal is pa
 | Variable                        | Required | Default  | Description                                                                                                                    |
 | ------------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `AI_AGENT_MAX_STEPS`            | No       | `8`      | Max tool-call loop iterations per turn.                                                                                        |
+| `AI_AGENT_TTFT_MS`              | No       | `30000`  | Budget for the first stream part to arrive (ms) — below `AI_AGENT_STALL_MS`.                                                   |
 | `AI_AGENT_STALL_MS`             | No       | `60000`  | Stream-silence budget per candidate (ms) — the operative limit.                                                                |
 | `AI_AGENT_MAX_MS`               | No       | `300000` | Per-turn wall-clock ceiling (ms) — a backstop, not the budget.                                                                 |
 | `AI_AGENT_MAX_OUTPUT_TOKENS`    | No       | `8192`   | Max output tokens per LLM response — leaves headroom for reasoning-model thinking tokens, which count against the same budget. |
