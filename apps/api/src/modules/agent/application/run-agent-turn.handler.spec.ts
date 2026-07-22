@@ -1770,6 +1770,77 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('forwards an empty openrouter provider order as no routing preference', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('medium', [])
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ openrouterProviderOrder: [] })
+    );
+  });
+
+  it('resolves turn settings before reserving quota so a settings failure holds no reservation', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const aiConfig = makeAIConfig();
+    vi.mocked(aiConfig.getOpenRouterProviderOrder).mockRejectedValue(
+      new Error('config cache unavailable')
+    );
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      aiConfig
+    );
+
+    await expect(
+      handler.execute(
+        { userId: USER, message: { content: 'hi' } },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      )
+    ).rejects.toThrow('config cache unavailable');
+
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(orchestrator.run).not.toHaveBeenCalled();
+  });
+
   it('blocks an injected last user message before reserving rate limit or running the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const guard = makeGuard(false);

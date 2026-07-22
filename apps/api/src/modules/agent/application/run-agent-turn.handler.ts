@@ -559,6 +559,15 @@ export class RunAgentTurnHandler {
     }
     const isByok = shouldUseByok;
 
+    // Resolve turn settings BEFORE reserving quota: a settings-store failure
+    // must escape before any reservation exists, else the held reservation
+    // leaks with no client-facing error (the gateway turn slot has no catch).
+    const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
+      this.aiConfig.getReasoningEffort(),
+      this.aiConfig.getOpenRouterProviderOrder(),
+    ]);
+
     const limit = await this.rateLimit.checkLimit(
       input.userId,
       estimatedTokens,
@@ -572,11 +581,6 @@ export class RunAgentTurnHandler {
       return;
     }
 
-    const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.aiConfig.getReasoningEffort(),
-      this.aiConfig.getOpenRouterProviderOrder(),
-    ]);
     const ctx: TurnLoopContext = {
       estimatedTokens,
       estimatedCostUsd,
