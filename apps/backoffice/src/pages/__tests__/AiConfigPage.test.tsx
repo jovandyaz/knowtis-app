@@ -160,6 +160,30 @@ describe('AiConfigPage', () => {
     );
   });
 
+  it('routes the list kind to the upstream editor', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_openrouter_providers',
+          value: 'fireworks,baseten',
+          kind: 'list',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    render(<AiConfigPage />);
+
+    expect(
+      screen.getByRole('heading', { name: 'OpenRouter upstreams' })
+    ).toBeInTheDocument();
+  });
+
   it('renders the model editor when the api predates the chain key', () => {
     useAiConfigMock.mockReturnValue({
       data: [
