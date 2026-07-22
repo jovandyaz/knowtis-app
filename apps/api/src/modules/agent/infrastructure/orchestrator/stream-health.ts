@@ -69,7 +69,8 @@ export function emitTurnHealth(
   model: string,
   health: StreamHealth,
   outcome: AgentTurnOutcome,
-  startedAt: number
+  startedAt: number,
+  modelsUsed: readonly string[]
 ): void {
   logger.log({
     event: 'agent.turn.health',
@@ -82,6 +83,7 @@ export function emitTurnHealth(
     textDeltas: health.textDeltas,
     finishReason: health.finishReason,
     upstream: health.upstream,
+    modelsUsed: [...modelsUsed],
     elapsedMs: Date.now() - startedAt,
   });
 }

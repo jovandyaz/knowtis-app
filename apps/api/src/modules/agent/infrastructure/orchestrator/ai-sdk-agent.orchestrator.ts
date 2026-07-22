@@ -51,17 +51,22 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     if (input.byokApiKey) {
       yield* this.runTurn(input, input.model, abortSignal, timeoutSignal, {
         throwOnFreshFailure: false,
+        stepFailoverCandidates: [],
       });
       return;
     }
 
+    const candidates = this.fallbackChain.candidatesFor(input.model);
     yield* streamWithChain({
-      candidates: this.fallbackChain.candidatesFor(input.model),
+      candidates,
       cooldown: this.fallbackChain.cooldown,
       logger: this.logger,
       open: (model, info) =>
         this.runTurn(input, model, abortSignal, timeoutSignal, {
           throwOnFreshFailure: !info.isLast,
+          stepFailoverCandidates: candidates.slice(
+            candidates.indexOf(model) + 1
+          ),
         }),
       chunks: (turn) => turn,
       isAborted: () => abortSignal.aborted,
@@ -75,7 +80,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     model: string,
     abortSignal: AbortSignal,
     timeoutSignal: AbortSignal,
-    options: { throwOnFreshFailure: boolean }
+    options: {
+      throwOnFreshFailure: boolean;
+      stepFailoverCandidates: readonly string[];
+    }
   ): AsyncGenerator<AgentEvent> {
     const turnStartedAt = Date.now();
     const sources = new Map<string, AgentSource>();
@@ -130,7 +138,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         model,
         createHealth(),
         AGENT_TURN_OUTCOME.ERROR,
-        turnStartedAt
+        turnStartedAt,
+        [model]
       );
       throw error;
     }
@@ -143,6 +152,8 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       abortSignal,
       timeoutSignal,
       throwOnFreshFailure: options.throwOnFreshFailure,
+      stepFailoverCandidates: options.stepFailoverCandidates,
+      cooldown: this.fallbackChain.cooldown,
       system,
       cache,
       tools,

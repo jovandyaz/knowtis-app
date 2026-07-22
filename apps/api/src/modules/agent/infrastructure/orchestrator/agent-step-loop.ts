@@ -1,7 +1,11 @@
 import { Logger } from '@nestjs/common';
 import type { ModelMessage, TelemetrySettings, ToolSet } from 'ai';
 
-import { isAbortError } from '@knowtis/ai-gateway';
+import {
+  isAbortError,
+  providerOf,
+  type ProviderCooldown,
+} from '@knowtis/ai-gateway';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
@@ -62,6 +66,20 @@ function canRetrySilentStep(health: StreamHealth, attempt: number): boolean {
   return health.parts === 0 && attempt + 1 < MAX_STEP_ATTEMPTS;
 }
 
+function eligibleForStepFailover(
+  health: StreamHealth,
+  completedSteps: number,
+  byok: boolean,
+  failoverCandidates: readonly string[]
+): boolean {
+  return (
+    completedSteps > 0 &&
+    health.parts === 0 &&
+    !byok &&
+    failoverCandidates.length > 0
+  );
+}
+
 function stallOutcome(
   input: AgentRunInput,
   model: string,
@@ -94,6 +112,8 @@ export interface AgentStepLoopParams {
   readonly abortSignal: AbortSignal;
   readonly timeoutSignal: AbortSignal;
   readonly throwOnFreshFailure: boolean;
+  readonly stepFailoverCandidates: readonly string[];
+  readonly cooldown: ProviderCooldown;
   readonly system: string;
   readonly cache: boolean;
   readonly tools: ToolSet;
@@ -114,19 +134,23 @@ export interface AgentStepLoopParams {
 
 /**
  * Runs a turn as one streamText call per step, threading each call's messages
- * into history; throws `AgentStallError` on a fresh first-call stall.
+ * into history; a first-call stall throws, a dead continuation fails over.
  */
 export async function* runAgentStepLoop(
   params: AgentStepLoopParams
 ): AsyncGenerator<AgentEvent> {
-  const { input, model, logger } = params;
+  const { input, logger } = params;
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
-  const providerOptions = openrouterProviderOptions(
-    model,
+
+  let currentModel = params.model;
+  let providerOptions = openrouterProviderOptions(
+    currentModel,
     input.reasoningEffort,
     input.openrouterProviderOrder
   );
+  const modelsUsed: string[] = [currentModel];
+  const failoverCandidates = [...params.stepFailoverCandidates];
 
   const history: ModelMessage[] = [...params.initialMessages];
   const turn: TurnState = {
@@ -146,6 +170,7 @@ export async function* runAgentStepLoop(
 
   while (completedSteps < input.maxSteps) {
     let advanceToNextStep = false;
+    let failedOver = false;
 
     stepAttempts: for (
       let attempt = 0;
@@ -155,7 +180,7 @@ export async function* runAgentStepLoop(
       const result = yield* runStepCall({
         logger,
         input,
-        model,
+        model: currentModel,
         providerRegistry: params.providerRegistry,
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
@@ -174,12 +199,13 @@ export async function* runAgentStepLoop(
           emitTurnHealth(
             logger,
             input.userId,
-            model,
+            currentModel,
             result.health,
             input.signal?.aborted
               ? AGENT_TURN_OUTCOME.ABORTED
               : AGENT_TURN_OUTCOME.TIMEOUT,
-            result.callStartedAt
+            result.callStartedAt,
+            modelsUsed
           );
           yield result.event;
           return;
@@ -188,18 +214,47 @@ export async function* runAgentStepLoop(
           emitTurnHealth(
             logger,
             input.userId,
-            model,
+            currentModel,
             result.health,
             AGENT_TURN_OUTCOME.STALL,
-            result.callStartedAt
+            result.callStartedAt,
+            modelsUsed
           );
           if (canRetrySilentStep(result.health, attempt)) {
-            logRetry(logger, input.userId, model, attempt + 1);
+            logRetry(logger, input.userId, currentModel, attempt + 1);
             continue;
+          }
+          const nextModel = eligibleForStepFailover(
+            result.health,
+            completedSteps,
+            byok,
+            failoverCandidates
+          )
+            ? failoverCandidates.shift()
+            : undefined;
+          if (nextModel !== undefined) {
+            params.cooldown.recordFailure(providerOf(currentModel));
+            logger.warn({
+              event: 'ai.chain.step_failed',
+              model: currentModel,
+              provider: providerOf(currentModel),
+              nextModel,
+              atStep: completedSteps,
+              reason: 'continuation stall',
+            });
+            currentModel = nextModel;
+            providerOptions = openrouterProviderOptions(
+              currentModel,
+              input.reasoningEffort,
+              input.openrouterProviderOrder
+            );
+            modelsUsed.push(currentModel);
+            failedOver = true;
+            break stepAttempts;
           }
           yield stallOutcome(
             input,
-            model,
+            currentModel,
             turn.stepUsage,
             turn.progressed,
             params.throwOnFreshFailure,
@@ -219,10 +274,11 @@ export async function* runAgentStepLoop(
             emitTurnHealth(
               logger,
               input.userId,
-              model,
+              currentModel,
               result.health,
               AGENT_TURN_OUTCOME.ERROR,
-              result.callStartedAt
+              result.callStartedAt,
+              modelsUsed
             );
             throw cause;
           }
@@ -230,21 +286,24 @@ export async function* runAgentStepLoop(
             logger.error({
               event: 'agent.run.error',
               userId: input.userId,
-              model,
+              model: currentModel,
               error: errorMessage(cause, byok),
             });
           }
           emitTurnHealth(
             logger,
             input.userId,
-            model,
+            currentModel,
             result.health,
             AGENT_TURN_OUTCOME.ERROR,
-            result.callStartedAt
+            result.callStartedAt,
+            modelsUsed
           );
           yield errorEvent(
             toError(cause, byok),
-            fromStream ? bestEffortUsage(model, turn.stepUsage) : undefined
+            fromStream
+              ? bestEffortUsage(currentModel, turn.stepUsage)
+              : undefined
           );
           return;
         }
@@ -255,15 +314,16 @@ export async function* runAgentStepLoop(
             emitTurnHealth(
               logger,
               input.userId,
-              model,
+              currentModel,
               result.health,
               AGENT_TURN_OUTCOME.PROPOSAL,
-              result.callStartedAt
+              result.callStartedAt,
+              modelsUsed
             );
             yield {
               type: 'proposal',
               proposal: captured,
-              usage: turnUsageEvent(turnUsage, model),
+              usage: turnUsageEvent(turnUsage, currentModel),
             };
             return;
           }
@@ -274,10 +334,11 @@ export async function* runAgentStepLoop(
             emitTurnHealth(
               logger,
               input.userId,
-              model,
+              currentModel,
               result.health,
               AGENT_TURN_OUTCOME.CONTINUED,
-              result.callStartedAt
+              result.callStartedAt,
+              modelsUsed
             );
             const { messages } = await result.response;
             history.push(...messages);
@@ -291,30 +352,32 @@ export async function* runAgentStepLoop(
             emitTurnHealth(
               logger,
               input.userId,
-              model,
+              currentModel,
               result.health,
               AGENT_TURN_OUTCOME.EMPTY,
-              result.callStartedAt
+              result.callStartedAt,
+              modelsUsed
             );
             yield errorEvent(
               AIErrors.emptyCompletion(),
-              turnUsageEvent(turnUsage, model)
+              turnUsageEvent(turnUsage, currentModel)
             );
             return;
           }
           emitTurnHealth(
             logger,
             input.userId,
-            model,
+            currentModel,
             result.health,
             turn.textDeltas > 0
               ? AGENT_TURN_OUTCOME.DONE
               : AGENT_TURN_OUTCOME.EMPTY,
-            result.callStartedAt
+            result.callStartedAt,
+            modelsUsed
           );
           yield {
             type: 'done',
-            usage: turnUsageEvent(turnUsage, model),
+            usage: turnUsageEvent(turnUsage, currentModel),
             sources: [...params.sources.values()],
             knownNotes: [...params.knownNotes.values()],
             webSources: params.webSources.all,
@@ -328,6 +391,9 @@ export async function* runAgentStepLoop(
       }
     }
 
+    if (failedOver) {
+      continue;
+    }
     if (advanceToNextStep) {
       completedSteps += 1;
       continue;

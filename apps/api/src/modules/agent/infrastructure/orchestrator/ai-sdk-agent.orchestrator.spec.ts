@@ -2163,24 +2163,32 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
-  it('reports AI_TIMEOUT without advancing the chain when a continuation stalls twice after tool work', async () => {
-    vi.useFakeTimers();
-    streamTextMock.mockClear();
-    // Tool work on call 1 marks the turn progressed: the twice-silent continuation
-    // must end as a retryable timeout, never a chain advance or AgentStallError.
-    const fallbackCall = vi.fn(() => ({
+  function failoverAnswer(usage = { inputTokens: 20, outputTokens: 8 }) {
+    return () => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
-    }));
+      totalUsage: Promise.resolve(usage),
+    });
+  }
+
+  function stalledContinuationThenAnswer(
+    usage = { inputTokens: 20, outputTokens: 8 }
+  ) {
     streamTextMock
       .mockImplementationOnce(
         toolCallStep({ inputTokens: 10, outputTokens: 5 })
       )
       .mockImplementationOnce(hangingAfter([]))
       .mockImplementationOnce(hangingAfter([]))
-      .mockImplementation(fallbackCall);
+      .mockImplementationOnce(failoverAnswer(usage));
+  }
+
+  it('fails a twice-silent continuation over to the next candidate, threading history without re-running tools', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
     const orchestrator = makeOrchestrator(
       makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
@@ -2193,8 +2201,261 @@ describe('AiSdkAgentOrchestrator', () => {
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
 
+    expect(streamTextMock).toHaveBeenCalledTimes(4);
+    const models = streamTextMock.mock.calls.map(
+      (call) => (call[0].model as { modelId: string }).modelId
+    );
+    expect(models).toEqual([
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-haiku-4-5-20251001',
+    ]);
+    // The failover call runs the intact threaded history — the tool call and its
+    // result — never a partial and never a re-executed tool step.
+    const failoverMessages = streamTextMock.mock.calls[3][0]
+      .messages as unknown[];
+    expect(failoverMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 1);
+    expect(failoverMessages).toEqual(
+      expect.arrayContaining(TOOL_CALL_MESSAGES)
+    );
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('attributes accumulated usage across models to the final answering model on the done event', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 30, outputTokens: 13, model: FALLBACK },
+    });
+  });
+
+  it('records a cooldown failure for the dead model when a continuation fails over', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const config = makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS });
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(recordFailure).toHaveBeenCalledWith('anthropic');
+  });
+
+  it('logs ai.chain.step_failed with the step index when a continuation fails over', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    const stepFailedLogs = (warnSpy.mock.calls as unknown as unknown[][])
+      .map((call) => call[0])
+      .filter(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'ai.chain.step_failed' &&
+          'atStep' in (entry as object)
+      );
+    expect(stepFailedLogs).toHaveLength(1);
+    expect(stepFailedLogs[0]).toMatchObject({ atStep: 1, model: MODEL });
+    warnSpy.mockRestore();
+  });
+
+  it('carries the model of each llm call and the models used on the health events across a failover', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs.map((entry) => entry.outcome)).toEqual([
+      'continued',
+      'stall',
+      'stall',
+      'done',
+    ]);
+    expect(healthLogs.map((entry) => entry.model)).toEqual([
+      MODEL,
+      MODEL,
+      MODEL,
+      FALLBACK,
+    ]);
+    expect(healthLogs[0].modelsUsed).toEqual([MODEL]);
+    expect(healthLogs.at(-1)?.modelsUsed).toEqual([MODEL, FALLBACK]);
+    logSpy.mockRestore();
+  });
+
+  it('recomputes provider options after an in-loop failover to a non-openrouter model', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer({ inputTokens: 1, outputTokens: 1 });
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        reasoningEffort: 'high',
+      })
+    );
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(4);
+    expect(streamTextMock.mock.calls[0][0]).toHaveProperty('providerOptions');
+    expect(streamTextMock.mock.calls[3][0]).not.toHaveProperty(
+      'providerOptions'
+    );
+  });
+
+  it('reports AI_TIMEOUT without advancing when a continuation stalls twice on the last candidate', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
     expect(streamTextMock).toHaveBeenCalledTimes(3);
-    expect(fallbackCall).not.toHaveBeenCalled();
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+  });
+
+  it('does not fail a stalled BYOK continuation over to another model', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]));
+    const config = makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS });
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(3);
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(
+      languageModelSpy.mock.calls.every(([, key]) => key === 'user-key')
+    ).toBe(true);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+  });
+
+  it('ends the turn with AI_TIMEOUT when a continuation emits text then stalls, instead of failing over', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(
+        hangingAfter([{ type: 'text-delta', id: 't1', text: 'partial ' }])
+      );
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(STALL_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'partial ' });
     expect(events.at(-1)).toMatchObject({
       type: 'error',
       error: { code: 'AI_TIMEOUT' },
