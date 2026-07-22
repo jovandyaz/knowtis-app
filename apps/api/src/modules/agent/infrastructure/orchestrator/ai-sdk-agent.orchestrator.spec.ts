@@ -1595,6 +1595,95 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
+  it('fails with AI_EMPTY_COMPLETION carrying usage when reasoning burns the whole budget and no text is produced', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'thinking hard' };
+        yield { type: 'reasoning-delta', id: 'r2', text: 'still thinking' };
+        yield { type: 'finish', finishReason: 'length' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 4096 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_EMPTY_COMPLETION' },
+      usage: { inputTokens: 10, outputTokens: 4096, model: MODEL },
+    });
+    expect(events.some((e) => (e as { type: string }).type === 'done')).toBe(
+      false
+    );
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'empty',
+      finishReason: 'length',
+    });
+    logSpy.mockRestore();
+  });
+
+  it('keeps a zero-text completion that finished on stop as a done, not an empty-completion error', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+  });
+
+  it('yields the proposal (not an empty-completion error) when a no-text turn hits the length cap with a captured proposal', async () => {
+    const m = ProposedMutation.create({
+      id: 'p9',
+      kind: 'create',
+      payload: { title: 'GTD', contentHtml: '<p>x</p>' },
+      summary: 'Create GTD',
+    });
+    if (m.isErr()) {
+      throw new Error('setup');
+    }
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'deciding' };
+        yield { type: 'finish', finishReason: 'length' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 2, outputTokens: 4096 }),
+    }));
+    const registry = makeToolRegistry((ctx) => {
+      ctx.proposals.capture(m.value);
+    });
+    const orchestrator = makeOrchestrator(makeConfig(), registry);
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(events.at(-1)).toMatchObject({ type: 'proposal' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+  });
+
   it('records the openrouter upstream on the health event when a finish-step carries it', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({

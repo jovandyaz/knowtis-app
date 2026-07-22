@@ -8,6 +8,7 @@ export const AIErrorCodes = {
   PROVIDER_ERROR: 'AI_PROVIDER_ERROR',
   PROVIDER_OVERLOADED: 'AI_PROVIDER_OVERLOADED',
   TIMEOUT: 'AI_TIMEOUT',
+  EMPTY_COMPLETION: 'AI_EMPTY_COMPLETION',
   FEATURE_DISABLED: 'AI_FEATURE_DISABLED',
   INVALID_MODEL: 'AI_INVALID_MODEL',
   INVALID_ACTION: 'AI_INVALID_ACTION',
@@ -39,6 +40,12 @@ export const AIErrors = {
     ),
 
   timeout: (reason: string) => createAIError(AIErrorCodes.TIMEOUT, reason),
+
+  emptyCompletion: () =>
+    createAIError(
+      AIErrorCodes.EMPTY_COMPLETION,
+      'The model spent its entire response budget on reasoning and produced no answer.'
+    ),
 
   featureDisabled: () =>
     createAIError(AIErrorCodes.FEATURE_DISABLED, 'AI features are not enabled'),

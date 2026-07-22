@@ -184,6 +184,7 @@
       "validation": "That request couldn't be processed. Please adjust your input.",
       "injection": "Your input was flagged and couldn't be processed.",
       "timeout": "The AI request timed out. Please retry.",
+      "emptyCompletion": "The model ran out of room while thinking and didn't answer. Please retry.",
       "staleNote": "The note changed — ask me again.",
       "proposalExpired": "That request expired — ask again.",
       "permissionDenied": "You don't have permission to do that.",

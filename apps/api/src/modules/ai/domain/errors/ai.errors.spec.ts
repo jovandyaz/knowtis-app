@@ -32,4 +32,10 @@ describe('AIErrors', () => {
     expect(error.code).toBe(AIErrorCodes.INVALID_ACTION);
     expect(error.message).toContain('fly');
   });
+
+  it('should create an empty completion error', () => {
+    const error = AIErrors.emptyCompletion();
+    expect(error.code).toBe(AIErrorCodes.EMPTY_COMPLETION);
+    expect(error.message.length).toBeGreaterThan(0);
+  });
 });

@@ -57,6 +57,9 @@ interface StreamHealth {
 
 const AGENT_TEMPERATURE = 0.7;
 
+// AI SDK finishReason when the completion was truncated at the output-token cap.
+const FINISH_REASON_LENGTH = 'length';
+
 const AGENT_TURN_OUTCOME = {
   DONE: 'done',
   PROPOSAL: 'proposal',
@@ -374,6 +377,20 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       if (captured) {
         logHealth(AGENT_TURN_OUTCOME.PROPOSAL);
         yield { type: 'proposal', proposal: captured, usage: turnUsage };
+        return;
+      }
+      // Reasoning that consumes the whole output cap leaves zero visible text:
+      // the tokens were billed, so fail honestly instead of an empty done.
+      if (
+        health.textDeltas === 0 &&
+        health.finishReason === FINISH_REASON_LENGTH
+      ) {
+        logHealth(AGENT_TURN_OUTCOME.EMPTY);
+        yield {
+          type: 'error',
+          error: AIErrors.emptyCompletion(),
+          usage: turnUsage,
+        };
         return;
       }
       logHealth(
