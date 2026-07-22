@@ -939,18 +939,24 @@ When a turn proposes a mutation (create/update note), the pending proposal is pa
 
 ### Environment variables
 
-| Variable                        | Required | Default  | Description                                                     |
-| ------------------------------- | -------- | -------- | --------------------------------------------------------------- |
-| `AI_AGENT_MAX_STEPS`            | No       | `8`      | Max tool-call loop iterations per turn.                         |
-| `AI_AGENT_STALL_MS`             | No       | `60000`  | Stream-silence budget per candidate (ms) — the operative limit. |
-| `AI_AGENT_MAX_MS`               | No       | `300000` | Per-turn wall-clock ceiling (ms) — a backstop, not the budget.  |
-| `AI_AGENT_MAX_OUTPUT_TOKENS`    | No       | `4096`   | Max output tokens per LLM response.                             |
-| `AI_AGENT_HISTORY_LIMIT`        | No       | `40`     | Max prior conversation messages loaded per turn.                |
-| `AI_AGENT_PROPOSAL_TTL_SECONDS` | No       | `600`    | TTL of a pending HITL proposal in Redis (the approval window).  |
+| Variable                        | Required | Default  | Description                                                                                                                    |
+| ------------------------------- | -------- | -------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `AI_AGENT_MAX_STEPS`            | No       | `8`      | Max tool-call loop iterations per turn.                                                                                        |
+| `AI_AGENT_STALL_MS`             | No       | `60000`  | Stream-silence budget per candidate (ms) — the operative limit.                                                                |
+| `AI_AGENT_MAX_MS`               | No       | `300000` | Per-turn wall-clock ceiling (ms) — a backstop, not the budget.                                                                 |
+| `AI_AGENT_MAX_OUTPUT_TOKENS`    | No       | `8192`   | Max output tokens per LLM response — leaves headroom for reasoning-model thinking tokens, which count against the same budget. |
+| `AI_AGENT_HISTORY_LIMIT`        | No       | `40`     | Max prior conversation messages loaded per turn.                                                                               |
+| `AI_AGENT_PROPOSAL_TTL_SECONDS` | No       | `600`    | TTL of a pending HITL proposal in Redis (the approval window).                                                                 |
 
 **Stall detection, not a wall-clock budget.** A reasoning model can legitimately work for minutes, so the operative limit is **silence**, not elapsed time — the orchestrator caps how long a candidate can go quiet, not how long the turn runs. Each candidate gets its own `AbortController` and a `AI_AGENT_STALL_MS` timer that every `fullStream` part re-arms (reasoning, text, tool and step events all count as activity). Only a candidate that emits nothing for the whole budget is aborted; `AI_AGENT_MAX_MS` stays enforced as an absolute wall-clock ceiling — a backstop against a runaway turn that never stops producing parts.
 
 Because the stall aborts only the per-candidate signal, the turn-level signal survives and the chain can fail over: a stalled candidate that has made **no** progress (no answer text and no completed tool step) throws `AgentStallError`, which `streamWithChain` records as a cooldown failure before opening the next model. A stalled candidate that already streamed text or finished a tool step — retrying it would re-bill that work on another model — or that is the last candidate (or a BYOK turn, which never falls back), instead ends the turn with `AI_TIMEOUT` (`agent.turn.stall` is logged either way) — a stall is never reported as a provider outage.
+
+### Stream health telemetry
+
+Every turn attempt logs a structured `agent.turn.health` event exactly once, regardless of how it ends: `outcome` (`'done'` | `'proposal'` | `'error'` | `'stall'` | `'timeout'` | `'aborted'` | `'empty'`), `ttfpMs` (time to first stream part, `null` if none arrived), `maxGapMs` (the largest silence between two parts), `parts` (total stream parts seen), `textDeltas` (visible-text chunks), `finishReason`, `upstream` (the OpenRouter upstream slug when routed through OpenRouter, else `null`), and `elapsedMs`.
+
+**Empty-answer guard.** A turn that finishes with `finishReason: 'length'` (truncated at `AI_AGENT_MAX_OUTPUT_TOKENS`) but zero visible text — the whole budget spent on reasoning — yields `AI_EMPTY_COMPLETION` instead of an empty `done`.
 
 ## Long-term user memory (A6b)
 

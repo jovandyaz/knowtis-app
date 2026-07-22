@@ -60,7 +60,7 @@ const envSchemaBase = z.object({
   AI_AGENT_MAX_STEPS: z.coerce.number().int().min(1).max(20).default(8),
   AI_AGENT_MAX_MS: z.coerce.number().int().min(1000).default(300000),
   AI_AGENT_STALL_MS: z.coerce.number().int().min(5000).default(60000),
-  AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(4096),
+  AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(8192),
   AI_AGENT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(200).default(40),
   AI_MEMORY_QUIET_SECONDS: z.coerce.number().int().min(10).default(180),
   AI_MEMORY_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),

@@ -21,6 +21,11 @@ describe('env.config agent vars', () => {
     expect(env.AI_AGENT_MAX_MS).toBe(300000);
   });
 
+  it('defaults AI_AGENT_MAX_OUTPUT_TOKENS to 8192', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.AI_AGENT_MAX_OUTPUT_TOKENS).toBe(8192);
+  });
+
   it('defaults AI_AGENT_STALL_MS well below the wall-clock ceiling', () => {
     const env = validateEnv(baseEnv);
     expect(env.AI_AGENT_STALL_MS).toBe(60000);
