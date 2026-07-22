@@ -52,6 +52,7 @@ interface StreamHealth {
   parts: number;
   textDeltas: number;
   finishReason: string | null;
+  upstream: string | null;
 }
 
 const AGENT_TEMPERATURE = 0.7;
@@ -83,6 +84,25 @@ function isSourceNote(value: unknown): value is { id: string; title: string } {
   }
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && typeof record.title === 'string';
+}
+
+// OpenRouter routes to a rotating upstream (Fireworks, Together, …) and reports
+// it on the finish-step part's providerMetadata; other parts carry an openrouter
+// block without `provider`, so only a string value counts.
+function openrouterUpstreamOf(part: unknown): string | null {
+  if (typeof part !== 'object' || part === null) {
+    return null;
+  }
+  const metadata = (part as { providerMetadata?: unknown }).providerMetadata;
+  if (typeof metadata !== 'object' || metadata === null) {
+    return null;
+  }
+  const openrouter = (metadata as { openrouter?: unknown }).openrouter;
+  if (typeof openrouter !== 'object' || openrouter === null) {
+    return null;
+  }
+  const provider = (openrouter as { provider?: unknown }).provider;
+  return typeof provider === 'string' ? provider : null;
 }
 
 @Injectable()
@@ -200,6 +220,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       parts: 0,
       textDeltas: 0,
       finishReason: null,
+      upstream: null,
     };
     let lastPartAt = turnStartedAt;
     let healthLogged = false;
@@ -218,6 +239,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         parts: health.parts,
         textDeltas: health.textDeltas,
         finishReason: health.finishReason,
+        upstream: health.upstream,
         elapsedMs: Date.now() - turnStartedAt,
       });
     };
@@ -285,6 +307,10 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         }
         lastPartAt = partAt;
         health.parts += 1;
+        const upstream = openrouterUpstreamOf(part);
+        if (upstream !== null) {
+          health.upstream = upstream;
+        }
         switch (part.type) {
           case 'reasoning-delta':
             if (part.text) {

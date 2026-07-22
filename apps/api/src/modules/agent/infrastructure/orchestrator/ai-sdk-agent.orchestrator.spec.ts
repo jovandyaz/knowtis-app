@@ -1594,4 +1594,55 @@ describe('AiSdkAgentOrchestrator', () => {
     });
     logSpy.mockRestore();
   });
+
+  it('records the openrouter upstream on the health event when a finish-step carries it', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
+        yield {
+          type: 'finish-step',
+          finishReason: 'stop',
+          providerMetadata: { openrouter: { provider: 'Fireworks' } },
+        };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({ ...baseInput, model: 'openrouter:z-ai/glm-5.2' })
+    );
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({
+      event: 'agent.turn.health',
+      outcome: 'done',
+      upstream: 'Fireworks',
+    });
+    logSpy.mockRestore();
+  });
+
+  it('records a null upstream on the health event when the stream carries no provider metadata', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0].upstream).toBeNull();
+    logSpy.mockRestore();
+  });
 });
