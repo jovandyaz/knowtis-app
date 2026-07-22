@@ -680,6 +680,11 @@ export class RunAgentTurnHandler {
             break;
           case 'committed':
             if (policy.onCommitted(ctx) === 'stop') {
+              await this.recordUsageSafe(input.userId, ctx, {
+                inputTokens: 0,
+                outputTokens: 0,
+                model: ctx.model,
+              });
               return;
             }
             break;
@@ -689,14 +694,36 @@ export class RunAgentTurnHandler {
           }
         }
       }
+      this.logger.error({
+        event: 'agent.turn.no_terminal',
+        userId: input.userId,
+      });
+      await this.recordUsageSafe(input.userId, ctx, {
+        inputTokens: 0,
+        outputTokens: 0,
+        model: ctx.model,
+      });
+      callbacks.onError(
+        AIErrors.providerError('Agent turn ended without a terminal event')
+      );
     } catch (error) {
       if (signal?.aborted) {
+        await this.recordUsageSafe(input.userId, ctx, {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: ctx.model,
+        });
         return;
       }
       this.logger.error({
         event: 'agent.turn.unexpected_error',
         userId: input.userId,
         error: error instanceof Error ? error.message : 'unknown',
+      });
+      await this.recordUsageSafe(input.userId, ctx, {
+        inputTokens: 0,
+        outputTokens: 0,
+        model: ctx.model,
       });
       callbacks.onError(AIErrors.providerError('Agent turn failed'));
     }
