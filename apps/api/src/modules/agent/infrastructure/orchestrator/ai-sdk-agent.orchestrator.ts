@@ -82,7 +82,6 @@ const MAX_TURN_ATTEMPTS = 2;
 // ('start-step' is excluded — the SDK flips it only on the first provider chunk.)
 const STREAM_MARKER_PART_TYPES = new Set<string>(['start', 'abort']);
 
-// AI SDK finishReason when the completion was truncated at the output-token cap.
 const FINISH_REASON_LENGTH = 'length';
 
 const AGENT_TURN_OUTCOME = {
@@ -118,9 +117,7 @@ function isSourceNote(value: unknown): value is { id: string; title: string } {
 // down, allow_fallbacks lets OpenRouter route elsewhere rather than hard-fail.
 const OPENROUTER_ALLOW_FALLBACKS = true;
 
-// OpenRouter-only: other providers ignore or reject these keys. Merges reasoning
-// effort and the vetted upstream allowlist into one spread-able `openrouter`
-// block; `provider` is omitted when the order list is empty.
+// Non-OpenRouter providers reject these providerOptions keys.
 function openrouterProviderOptions(
   model: string,
   reasoningEffort: ReasoningEffort | undefined,
@@ -363,8 +360,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       try {
         armStallTimer();
         for await (const part of result.fullStream) {
-          // Skip local control markers: counting them would make health.parts
-          // never reach 0 (retry) and swap the TTFT budget for the stall budget.
           if (STREAM_MARKER_PART_TYPES.has(part.type)) {
             continue;
           }
