@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { stepCountIs, streamText } from 'ai';
+import { stepCountIs, streamText, type ToolSet } from 'ai';
 
 import {
   isAbortError,
@@ -25,6 +25,7 @@ import type {
   AgentSource,
   AgentTurnUsage,
 } from '../../domain/agent-event';
+import type { AgentRole } from '../../domain/agent-message';
 import type {
   AgentOrchestrator,
   AgentRunInput,
@@ -46,7 +47,31 @@ interface StepUsageAccumulator {
   outputTokens: number;
 }
 
+interface StreamHealth {
+  ttfpMs: number | null;
+  maxGapMs: number;
+  parts: number;
+  textDeltas: number;
+  finishReason: string | null;
+  upstream: string | null;
+}
+
 const AGENT_TEMPERATURE = 0.7;
+
+// AI SDK finishReason when the completion was truncated at the output-token cap.
+const FINISH_REASON_LENGTH = 'length';
+
+const AGENT_TURN_OUTCOME = {
+  DONE: 'done',
+  PROPOSAL: 'proposal',
+  ERROR: 'error',
+  STALL: 'stall',
+  TIMEOUT: 'timeout',
+  ABORTED: 'aborted',
+  EMPTY: 'empty',
+} as const;
+type AgentTurnOutcome =
+  (typeof AGENT_TURN_OUTCOME)[keyof typeof AGENT_TURN_OUTCOME];
 
 // Not an AbortError on purpose: the chain must treat a stalled candidate as a
 // retryable provider failure, not as a user cancel.
@@ -63,6 +88,25 @@ function isSourceNote(value: unknown): value is { id: string; title: string } {
   }
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && typeof record.title === 'string';
+}
+
+// OpenRouter routes to a rotating upstream (Fireworks, Together, …) and reports
+// it on the finish-step part's providerMetadata; other parts carry an openrouter
+// block without `provider`, so only a string value counts.
+function openrouterUpstreamOf(part: unknown): string | null {
+  if (typeof part !== 'object' || part === null) {
+    return null;
+  }
+  const metadata = (part as { providerMetadata?: unknown }).providerMetadata;
+  if (typeof metadata !== 'object' || metadata === null) {
+    return null;
+  }
+  const openrouter = (metadata as { openrouter?: unknown }).openrouter;
+  if (typeof openrouter !== 'object' || openrouter === null) {
+    return null;
+  }
+  const provider = (openrouter as { provider?: unknown }).provider;
+  return typeof provider === 'string' ? provider : null;
 }
 
 @Injectable()
@@ -117,6 +161,37 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     timeoutSignal: AbortSignal,
     options: { throwOnFreshFailure: boolean }
   ): AsyncGenerator<AgentEvent> {
+    const turnStartedAt = Date.now();
+    const health: StreamHealth = {
+      ttfpMs: null,
+      maxGapMs: 0,
+      parts: 0,
+      textDeltas: 0,
+      finishReason: null,
+      upstream: null,
+    };
+    let lastPartAt = turnStartedAt;
+    let healthLogged = false;
+    const logHealth = (outcome: AgentTurnOutcome) => {
+      if (healthLogged) {
+        return;
+      }
+      healthLogged = true;
+      this.logger.log({
+        event: 'agent.turn.health',
+        userId: input.userId,
+        model,
+        outcome,
+        ttfpMs: health.ttfpMs,
+        maxGapMs: health.maxGapMs,
+        parts: health.parts,
+        textDeltas: health.textDeltas,
+        finishReason: health.finishReason,
+        upstream: health.upstream,
+        elapsedMs: Date.now() - turnStartedAt,
+      });
+    };
+
     const sources = new Map<string, AgentSource>();
     const knownNotes = new Map<string, AgentSource>();
     for (const note of input.knownNotes ?? []) {
@@ -134,30 +209,44 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       webSources: webSourceCollector,
       webFetchAllowlist,
     };
-    const tools = await this.toolRegistry.resolve(toolContext);
     const stepUsage: StepUsageAccumulator = { inputTokens: 0, outputTokens: 0 };
-    // BYOK turns never cache: cache writes bill 1.25x to the key owner.
-    const cache = !input.byokApiKey && (await this.promptCachingEnabled());
-    const systemPrompt = this.buildSystemPrompt(
-      input.noteId,
-      input.knownNotes,
-      input.userMemories
-    );
-    const messages = input.resume
-      ? [
-          ...input.messages.map((m) => ({
+
+    // Setup runs before the stream starts, so a rejection here still owes the
+    // once-per-attempt health event; log the zero-activity outcome and rethrow
+    // unchanged so streamWithChain treats it as a fresh failure.
+    let tools: ToolSet;
+    let cache: boolean;
+    let systemPrompt: string;
+    let messages: { role: AgentRole; content: string }[];
+    try {
+      tools = await this.toolRegistry.resolve(toolContext);
+      // BYOK turns never cache: cache writes bill 1.25x to the key owner.
+      cache = !input.byokApiKey && (await this.promptCachingEnabled());
+      systemPrompt = this.buildSystemPrompt(
+        input.noteId,
+        input.knownNotes,
+        input.userMemories
+      );
+      messages = input.resume
+        ? [
+            ...input.messages.map((m) => ({
+              role: m.role,
+              content: m.content,
+            })),
+            {
+              role: 'user' as const,
+              content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
+            },
+          ]
+        : input.messages.map((m) => ({
             role: m.role,
             content: m.content,
-          })),
-          {
-            role: 'user' as const,
-            content: `(Action result — ${input.resume.outcome}) Reply to me briefly in my language to acknowledge this. Do not re-propose or restate the action as a new proposal, and do not call any tool.`,
-          },
-        ]
-      : input.messages.map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
+          }));
+    } catch (error) {
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
+      throw error;
+    }
+
     let progressed = false;
     let streamError: unknown;
     let result;
@@ -214,6 +303,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         ),
       });
     } catch (error) {
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
       if (options.throwOnFreshFailure && !isAbortError(error)) {
         throw error;
       }
@@ -228,6 +318,18 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       armStallTimer();
       for await (const part of result.fullStream) {
         armStallTimer();
+        const partAt = Date.now();
+        if (health.ttfpMs === null) {
+          health.ttfpMs = partAt - turnStartedAt;
+        } else {
+          health.maxGapMs = Math.max(health.maxGapMs, partAt - lastPartAt);
+        }
+        lastPartAt = partAt;
+        health.parts += 1;
+        const upstream = openrouterUpstreamOf(part);
+        if (upstream !== null) {
+          health.upstream = upstream;
+        }
         switch (part.type) {
           case 'reasoning-delta':
             if (part.text) {
@@ -237,8 +339,12 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
           case 'text-delta':
             if (part.text) {
               progressed = true;
+              health.textDeltas += 1;
               yield { type: 'chunk', text: part.text };
             }
+            break;
+          case 'finish':
+            health.finishReason = part.finishReason;
             break;
           case 'error':
             streamError = part.error;
@@ -255,10 +361,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         stepUsage
       );
       if (interrupted) {
+        logHealth(
+          input.signal?.aborted
+            ? AGENT_TURN_OUTCOME.ABORTED
+            : AGENT_TURN_OUTCOME.TIMEOUT
+        );
         yield interrupted;
         return;
       }
       if (stalled) {
+        logHealth(AGENT_TURN_OUTCOME.STALL);
         yield this.stallOutcome(
           input,
           model,
@@ -279,9 +391,27 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       };
       const captured = proposals.captured;
       if (captured) {
+        logHealth(AGENT_TURN_OUTCOME.PROPOSAL);
         yield { type: 'proposal', proposal: captured, usage: turnUsage };
         return;
       }
+      // Reasoning that consumes the whole output cap leaves zero visible text:
+      // the tokens were billed, so fail honestly instead of an empty done.
+      if (
+        health.textDeltas === 0 &&
+        health.finishReason === FINISH_REASON_LENGTH
+      ) {
+        logHealth(AGENT_TURN_OUTCOME.EMPTY);
+        yield {
+          type: 'error',
+          error: AIErrors.emptyCompletion(),
+          usage: turnUsage,
+        };
+        return;
+      }
+      logHealth(
+        health.textDeltas > 0 ? AGENT_TURN_OUTCOME.DONE : AGENT_TURN_OUTCOME.EMPTY
+      );
       yield {
         type: 'done',
         usage: turnUsage,
@@ -302,10 +432,16 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         stepUsage
       );
       if (interrupted) {
+        logHealth(
+          input.signal?.aborted
+            ? AGENT_TURN_OUTCOME.ABORTED
+            : AGENT_TURN_OUTCOME.TIMEOUT
+        );
         yield interrupted;
         return;
       }
       if (stalled) {
+        logHealth(AGENT_TURN_OUTCOME.STALL);
         yield this.stallOutcome(
           input,
           model,
@@ -321,6 +457,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       // carries the real cause (and its statusCode).
       const cause = streamError ?? error;
       if (options.throwOnFreshFailure && !progressed && !isAbortError(cause)) {
+        logHealth(AGENT_TURN_OUTCOME.ERROR);
         throw cause;
       }
       const redact = Boolean(input.byokApiKey);
@@ -330,6 +467,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         model,
         error: this.errorMessage(cause, redact),
       });
+      logHealth(AGENT_TURN_OUTCOME.ERROR);
       yield {
         type: 'error',
         error: this.toError(cause, redact),

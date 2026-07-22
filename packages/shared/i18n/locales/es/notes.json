@@ -184,6 +184,7 @@
       "validation": "No se pudo procesar esa solicitud. Ajusta tu entrada.",
       "injection": "Tu entrada fue marcada y no se pudo procesar.",
       "timeout": "La solicitud de IA agotó el tiempo de espera. Reinténtalo.",
+      "emptyCompletion": "El modelo se quedó sin espacio mientras pensaba y no respondió. Reinténtalo.",
       "staleNote": "La nota cambió — pídemelo de nuevo.",
       "proposalExpired": "La propuesta expiró — pídemelo otra vez.",
       "permissionDenied": "No tienes permiso para hacer eso.",

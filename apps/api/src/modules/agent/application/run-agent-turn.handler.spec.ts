@@ -10,6 +10,7 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { AIErrorCodes, AIErrors } from '../../ai/domain/errors/ai.errors';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
@@ -1403,6 +1404,50 @@ describe('RunAgentTurnHandler', () => {
     );
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('bills best-effort usage when a stalled turn ends in a timeout error', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'partial' },
+      {
+        type: 'error',
+        error: AIErrors.timeout('Agent turn stalled'),
+        usage: {
+          inputTokens: 100,
+          outputTokens: 50,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({ inputTokens: 100, outputTokens: 50 })
+    );
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: AIErrorCodes.TIMEOUT })
     );
   });
 
