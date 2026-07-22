@@ -4,14 +4,6 @@ import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 
-// Design-fidelity spike for PR4's agent-owned step loop: one streamText call per
-// step, with tool results threaded back through message history so retry/failover
-// can happen at step boundaries without re-running tools. These assert the real
-// AI SDK (v6) contract against a real-shape mock model; they become the loop spec.
-
-// The provider (v3) stream-part types are transitive under `ai`, so derive them
-// from the mock model's own doStream signature rather than importing the
-// non-resolvable `@ai-sdk/provider` directly.
 type StreamResult = Awaited<ReturnType<MockLanguageModelV3['doStream']>>;
 type StreamPart = StreamResult extends { stream: ReadableStream<infer P> }
   ? P

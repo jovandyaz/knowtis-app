@@ -78,8 +78,6 @@ function makeConfig(
     AI_COOLDOWN_SECONDS: 120,
     ...over,
   };
-  // Absent an explicit override, the first-part budget mirrors the stall budget
-  // so pre-existing timing specs behave exactly as they did before TTFT existed.
   if (values.AI_AGENT_TTFT_MS === undefined) {
     values.AI_AGENT_TTFT_MS = values.AI_AGENT_STALL_MS;
   }
@@ -918,9 +916,8 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
-  // How the SDK really ends an aborted stream: it enqueues a final abort part
-  // and closes, so the turn exits the loop normally instead of rejecting. A
-  // settling totalUsage keeps the after-loop stall check the only way out.
+  // The real SDK ends an aborted stream by enqueuing an abort part and closing,
+  // never by rejecting; totalUsage settles so the after-loop check is the exit.
   function abortsGracefullyAfter(parts: readonly unknown[]) {
     return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
       fullStream: (async function* () {
@@ -1100,9 +1097,8 @@ describe('AiSdkAgentOrchestrator', () => {
   it('switches from the ttft budget to the stall budget after the first part arrives', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    // Leads with the SDK's local 'start' marker, then the real first part only
-    // after half the TTFT budget: the switch must key off the real part (so the
-    // ttfp measures from it), not the instantly-emitted marker.
+    // The budget switch must key off the real first part, not the SDK's
+    // instantly-emitted local 'start' marker that leads the stream.
     streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
         yield { type: 'start' };
@@ -1509,9 +1505,8 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(typeof opts?.system).toBe('string');
   });
 
-  // The SDK rejects totalUsage only when no step completed. Attaching a no-op
-  // handler keeps that rejection from surfacing as an unhandled rejection when
-  // the turn fails over before awaiting it.
+  // The no-op handler keeps the SDK's totalUsage rejection from surfacing as an
+  // unhandled rejection when the turn fails over before awaiting it.
   function rejectedUsage(message: string) {
     const usage = Promise.reject(new Error(message));
     usage.catch(() => undefined);
@@ -2171,9 +2166,8 @@ describe('AiSdkAgentOrchestrator', () => {
   it('reports AI_TIMEOUT without advancing the chain when a continuation stalls twice after tool work', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    // Tool work on call 1 marks the turn as progressed, so the twice-silent
-    // continuation must end as a timeout the client can retry — never a chain
-    // advance and never a thrown AgentStallError.
+    // Tool work on call 1 marks the turn progressed: the twice-silent continuation
+    // must end as a retryable timeout, never a chain advance or AgentStallError.
     const fallbackCall = vi.fn(() => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'fallback answer' };

@@ -114,9 +114,7 @@ export interface AgentStepLoopParams {
 
 /**
  * Runs a turn as one streamText call per step, threading each call's messages
- * into history. Yields `thinking`/`chunk` then one terminal event
- * (`done`/`proposal`/`aborted`/`error`); throws `AgentStallError` to advance the
- * fallback chain on a fresh first-call stall.
+ * into history; throws `AgentStallError` on a fresh first-call stall.
  */
 export async function* runAgentStepLoop(
   params: AgentStepLoopParams
