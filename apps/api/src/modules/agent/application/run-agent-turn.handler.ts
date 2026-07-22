@@ -92,6 +92,7 @@ interface TurnLoopContext {
   readonly model: string;
   readonly isByok: boolean;
   readonly reservedIpSubject?: string;
+  reconciled: boolean;
 }
 
 interface PersistenceContext {
@@ -162,6 +163,7 @@ export class RunAgentTurnHandler {
     return {
       onProposal: async (event, ctx) => {
         await this.recordUsage(userId, ctx, event.usage);
+        ctx.reconciled = true;
         await this.pendingStore.save({
           userId,
           mutation: event.proposal,
@@ -350,6 +352,7 @@ export class RunAgentTurnHandler {
           summary: event.proposal.summary,
         });
         const costUsd = await this.recordUsage(userId, ctx, event.usage);
+        ctx.reconciled = true;
         callbacks.onDone({
           inputTokens: event.usage.inputTokens,
           outputTokens: event.usage.outputTokens,
@@ -586,6 +589,7 @@ export class RunAgentTurnHandler {
       estimatedCostUsd,
       model,
       isByok,
+      reconciled: false,
       ...(limit.reservedIpSubject
         ? { reservedIpSubject: limit.reservedIpSubject }
         : {}),
@@ -623,10 +627,12 @@ export class RunAgentTurnHandler {
               ctx,
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
+            ctx.reconciled = true;
             callbacks.onError(event.error);
             return;
           case 'aborted':
             await this.recordUsageSafe(input.userId, ctx, event.usage);
+            ctx.reconciled = true;
             return;
           case 'done': {
             let costUsd: number;
@@ -649,6 +655,7 @@ export class RunAgentTurnHandler {
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
+            ctx.reconciled = true;
             if (isByok) {
               void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
@@ -685,6 +692,7 @@ export class RunAgentTurnHandler {
                 outputTokens: 0,
                 model: ctx.model,
               });
+              ctx.reconciled = true;
               return;
             }
             break;
@@ -698,21 +706,25 @@ export class RunAgentTurnHandler {
         event: 'agent.turn.no_terminal',
         userId: input.userId,
       });
-      await this.recordUsageSafe(input.userId, ctx, {
-        inputTokens: 0,
-        outputTokens: 0,
-        model: ctx.model,
-      });
-      callbacks.onError(
-        AIErrors.providerError('Agent turn ended without a terminal event')
-      );
-    } catch (error) {
-      if (signal?.aborted) {
+      if (!ctx.reconciled) {
         await this.recordUsageSafe(input.userId, ctx, {
           inputTokens: 0,
           outputTokens: 0,
           model: ctx.model,
         });
+      }
+      callbacks.onError(
+        AIErrors.providerError('Agent turn ended without a terminal event')
+      );
+    } catch (error) {
+      if (signal?.aborted) {
+        if (!ctx.reconciled) {
+          await this.recordUsageSafe(input.userId, ctx, {
+            inputTokens: 0,
+            outputTokens: 0,
+            model: ctx.model,
+          });
+        }
         return;
       }
       this.logger.error({
@@ -720,11 +732,13 @@ export class RunAgentTurnHandler {
         userId: input.userId,
         error: error instanceof Error ? error.message : 'unknown',
       });
-      await this.recordUsageSafe(input.userId, ctx, {
-        inputTokens: 0,
-        outputTokens: 0,
-        model: ctx.model,
-      });
+      if (!ctx.reconciled) {
+        await this.recordUsageSafe(input.userId, ctx, {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: ctx.model,
+        });
+      }
       callbacks.onError(AIErrors.providerError('Agent turn failed'));
     }
   }

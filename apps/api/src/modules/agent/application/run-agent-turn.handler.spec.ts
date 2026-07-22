@@ -3179,6 +3179,7 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
@@ -3252,5 +3253,52 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-refund when the proposal store write fails after usage is recorded', async () => {
+    const { rateLimit, config } = makeDeps({});
+    const proposal = makeProposal('55555555-5555-5555-5555-555555555555');
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const pendingStore = {
+      save: vi.fn().mockRejectedValue(new Error('redis down')),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+    const onProposal = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'create a note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onProposal).not.toHaveBeenCalled();
   });
 });
