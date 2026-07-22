@@ -2003,4 +2003,193 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(healthLogs[0].upstream).toBeNull();
     logSpy.mockRestore();
   });
+
+  const TOOL_CALL_MESSAGES = [
+    {
+      role: 'assistant',
+      content: [
+        {
+          type: 'tool-call',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+        },
+      ],
+    },
+    {
+      role: 'tool',
+      content: [
+        {
+          type: 'tool-result',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          output: { type: 'json', value: { id: 'n1', title: 'T' } },
+        },
+      ],
+    },
+  ];
+
+  function toolCallStep(usage: { inputTokens: number; outputTokens: number }) {
+    return (opts: {
+      onStepFinish?: (s: {
+        toolResults: { toolName: string; output: unknown }[];
+        usage: { inputTokens: number; outputTokens: number };
+      }) => void;
+    }) => {
+      opts.onStepFinish?.({
+        toolResults: [
+          { toolName: 'getNote', output: { id: 'n1', title: 'T' } },
+        ],
+        usage,
+      });
+      return {
+        fullStream: (async function* () {
+          yield { type: 'finish', finishReason: 'tool-calls' };
+        })(),
+        totalUsage: Promise.resolve(usage),
+        response: Promise.resolve({ messages: TOOL_CALL_MESSAGES }),
+      };
+    };
+  }
+
+  it('threads a completed step into the next call and continues until the model answers', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'answer' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    const secondCallMessages = streamTextMock.mock.calls[1][0]
+      .messages as unknown[];
+    expect(secondCallMessages).toEqual(
+      expect.arrayContaining(TOOL_CALL_MESSAGES)
+    );
+    expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 30, outputTokens: 13, model: MODEL },
+      sources: [{ id: 'n1', title: 'T' }],
+    });
+  });
+
+  it('logs one health event per llm call, marking the continuing step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'answer' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+      }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    await collect(orchestrator.run(baseInput));
+
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(2);
+    expect(healthLogs.map((entry) => entry.outcome)).toEqual([
+      'continued',
+      'done',
+    ]);
+    expect(healthLogs[0]).toMatchObject({ finishReason: 'tool-calls' });
+    logSpy.mockRestore();
+  });
+
+  it('retries a stalled continuation with the same model, re-running from the intact threaded history', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'answer' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(3);
+    const models = streamTextMock.mock.calls.map(
+      (call) => (call[0].model as { modelId: string }).modelId
+    );
+    expect(models).toEqual([
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+    ]);
+    // The stalled attempt appended nothing: its retry sees only the user turn
+    // plus the first step's threaded call/result pair, never a partial.
+    const retryMessages = streamTextMock.mock.calls[2][0].messages as unknown[];
+    expect(retryMessages).toHaveLength(TOOL_CALL_MESSAGES.length + 1);
+    expect(retryMessages).toEqual(expect.arrayContaining(TOOL_CALL_MESSAGES));
+    expect(events).toContainEqual({ type: 'chunk', text: 'answer' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 30, outputTokens: 13, model: MODEL },
+    });
+  });
+
+  it('stops at the maxSteps cap even when the final call still requests tools', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 5, outputTokens: 1 })
+      );
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, maxSteps: 2 })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { inputTokens: 10, outputTokens: 2, model: MODEL },
+    });
+  });
 });
