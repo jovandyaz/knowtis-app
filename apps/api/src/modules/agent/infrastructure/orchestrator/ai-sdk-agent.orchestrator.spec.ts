@@ -195,6 +195,93 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
+  it('merges reasoning effort and provider order under one openrouter object', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        reasoningEffort: 'low',
+        openrouterProviderOrder: ['fireworks', 'together'],
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          openrouter: {
+            reasoning: { effort: 'low' },
+            provider: {
+              order: ['fireworks', 'together'],
+              allow_fallbacks: true,
+            },
+          },
+        },
+      })
+    );
+  });
+
+  it('passes the provider order without reasoning when no effort is set', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        openrouterProviderOrder: ['fireworks'],
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          openrouter: {
+            provider: { order: ['fireworks'], allow_fallbacks: true },
+          },
+        },
+      })
+    );
+  });
+
+  it('omits the provider key when the order list is empty', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        model: 'openrouter:z-ai/glm-5.2',
+        reasoningEffort: 'low',
+        openrouterProviderOrder: [],
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: { openrouter: { reasoning: { effort: 'low' } } },
+      })
+    );
+  });
+
+  it('omits providerOptions for non-openrouter models even with a provider order', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        openrouterProviderOrder: ['fireworks'],
+      })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ providerOptions: expect.anything() })
+    );
+  });
+
   it('drops providerOptions when an openrouter turn fails over to another provider', async () => {
     streamTextMock.mockClear();
     streamTextMock

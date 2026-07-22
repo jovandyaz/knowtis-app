@@ -323,14 +323,15 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 
 **Supported keys:**
 
-| Key                   | Code Default                                                                                | Kind     | Description                                                    |
-| --------------------- | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------- |
-| `ai_default_model`    | `openrouter:z-ai/glm-5.2`                                                                   | `model`  | Model for most actions                                         |
-| `ai_fast_model`       | `openrouter:minimax/minimax-m2.5`                                                           | `model`  | Model for ghost-text                                           |
-| `ai_fallback_chain`   | `openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2` | `chain`  | Cross-provider fallback order (CSV)                            |
-| `ai_reasoning_effort` | `medium`                                                                                    | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`) |
+| Key                       | Code Default                                                                                | Kind     | Description                                                                                        |
+| ------------------------- | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `ai_default_model`        | `openrouter:z-ai/glm-5.2`                                                                   | `model`  | Model for most actions                                                                             |
+| `ai_fast_model`           | `openrouter:minimax/minimax-m2.5`                                                           | `model`  | Model for ghost-text                                                                               |
+| `ai_fallback_chain`       | `openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2` | `chain`  | Cross-provider fallback order (CSV)                                                                |
+| `ai_reasoning_effort`     | `medium`                                                                                    | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`)                                     |
+| `ai_openrouter_providers` | `fireworks,baseten`                                                                         | `list`   | Ordered OpenRouter upstream allowlist for `openrouter:*` turns; empty = OpenRouter default routing |
 
-A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A `choice` key takes one member of a fixed list. A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
+A `model` key takes a single curated, server-invocable model id; the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A `choice` key takes one member of a fixed list. A `list` key takes a comma-separated allowlist of up to 8 lowercase provider slugs with no duplicates; empty is valid and means no preference (see [OpenRouter Upstream Allowlist](#openrouter-upstream-allowlist)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
 
 **Reasoning effort** reaches the provider as `providerOptions.openrouter.reasoning.effort` and is sent **only for `openrouter:*` models** — other providers expose incompatible reasoning controls. The gate reads the per-candidate model, so an OpenRouter primary that fails over to Anthropic does not carry the option across. It is a global default and applies to BYOK turns too, since a BYOK turn still consumes the server's stall and ceiling budgets. Lower effort trades depth for a faster first token and less hidden spend: a reasoning model can burn most of its completion tokens before emitting anything visible.
 
@@ -397,6 +398,16 @@ Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWith
 **Circuit breaker:** `ProviderCooldownTracker` puts a provider in cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling providers are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
 
 Model availability is an injected function, so the per-user key source (BYOK) plugs in without touching the chain — see [Bring-your-own-key (BYOK)](#bring-your-own-key-byok).
+
+---
+
+## OpenRouter Upstream Allowlist
+
+OpenRouter's default routing load-balances a model's traffic across upstream hosts by price, filtering out only very recent outages — it can route to a cheap upstream with poor tail behavior. Direct measurement (2026-07) found the vetted upstreams (`fireworks`, `baseten`) reliably completed answers where price-routed upstreams burned the full completion budget on reasoning without ever emitting a visible answer.
+
+The `ai_openrouter_providers` config key (see [Dynamic Model Configuration](#dynamic-model-configuration)) pins an ordered upstream allowlist, sent as `providerOptions.openrouter.provider: { order, allow_fallbacks: true }` on `openrouter:*` requests only — other providers ignore the option. `allow_fallbacks: true` keeps OpenRouter's own failover as the safety net when every vetted upstream is down, so a request never hard-fails just because the allowlist is unavailable. It applies to BYOK OpenRouter turns too — routing shapes answer quality and costs nothing extra to enforce.
+
+**Runbook:** an upstream degrades → edit `ai_openrouter_providers` in the backoffice AI Config page; effective within 30s (the config cache TTL), no deploy.
 
 ---
 

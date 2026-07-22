@@ -8,7 +8,7 @@ import {
   providerOf,
   streamWithChain,
 } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, type ReasoningEffort } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
@@ -88,6 +88,38 @@ function isSourceNote(value: unknown): value is { id: string; title: string } {
   }
   const record = value as Record<string, unknown>;
   return typeof record.id === 'string' && typeof record.title === 'string';
+}
+
+// A pinned upstream order must still permit backups: if the whole allowlist is
+// down, allow_fallbacks lets OpenRouter route elsewhere rather than hard-fail.
+const OPENROUTER_ALLOW_FALLBACKS = true;
+
+// OpenRouter-only: other providers ignore or reject these keys. Merges reasoning
+// effort and the vetted upstream allowlist into one spread-able `openrouter`
+// block; `provider` is omitted when the order list is empty.
+function openrouterProviderOptions(
+  model: string,
+  reasoningEffort: ReasoningEffort | undefined,
+  providerOrder: readonly string[] | undefined
+) {
+  if (providerOf(model) !== 'openrouter') {
+    return {};
+  }
+  const order =
+    providerOrder && providerOrder.length > 0 ? [...providerOrder] : null;
+  if (!reasoningEffort && !order) {
+    return {};
+  }
+  return {
+    providerOptions: {
+      openrouter: {
+        ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
+        ...(order
+          ? { provider: { order, allow_fallbacks: OPENROUTER_ALLOW_FALLBACKS } }
+          : {}),
+      },
+    },
+  };
 }
 
 // OpenRouter routes to a rotating upstream (Fireworks, Together, …) and reports
@@ -274,15 +306,11 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
         maxOutputTokens: this.configService.get('AI_AGENT_MAX_OUTPUT_TOKENS'),
         maxRetries: this.configService.get('AI_MAX_RETRIES'),
         temperature: AGENT_TEMPERATURE,
-        // OpenRouter-only: the other providers spell reasoning control
-        // differently, so this key would be ignored or rejected there.
-        ...(input.reasoningEffort && providerOf(model) === 'openrouter'
-          ? {
-              providerOptions: {
-                openrouter: { reasoning: { effort: input.reasoningEffort } },
-              },
-            }
-          : {}),
+        ...openrouterProviderOptions(
+          model,
+          input.reasoningEffort,
+          input.openrouterProviderOrder
+        ),
         abortSignal: runSignal,
         onStepFinish: ({ toolResults, usage }) => {
           progressed = true;

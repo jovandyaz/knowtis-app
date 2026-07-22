@@ -5,6 +5,7 @@ export const AI_SETTING_DEFAULTS = {
   ai_fallback_chain:
     'openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2',
   ai_reasoning_effort: 'medium',
+  ai_openrouter_providers: 'fireworks,baseten',
 } as const;
 
 /** Splits a comma-separated model chain into trimmed, non-empty ids. */
