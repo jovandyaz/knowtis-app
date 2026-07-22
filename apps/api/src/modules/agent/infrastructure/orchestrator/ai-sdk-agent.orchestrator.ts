@@ -57,17 +57,24 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     }
 
     const candidates = this.fallbackChain.candidatesFor(input.model);
+    const served = { model: input.model };
     yield* streamWithChain({
       candidates,
       cooldown: this.fallbackChain.cooldown,
+      settledModel: () => served.model,
       logger: this.logger,
-      open: (model, info) =>
-        this.runTurn(input, model, abortSignal, timeoutSignal, {
+      open: (model, info) => {
+        served.model = model;
+        return this.runTurn(input, model, abortSignal, timeoutSignal, {
           throwOnFreshFailure: !info.isLast,
           stepFailoverCandidates: candidates.slice(
             candidates.indexOf(model) + 1
           ),
-        }),
+          onModelSettled: (settled) => {
+            served.model = settled;
+          },
+        });
+      },
       chunks: (turn) => turn,
       isAborted: () => abortSignal.aborted,
       isFailureChunk: (event) => event.type === 'error',
@@ -83,6 +90,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
     options: {
       throwOnFreshFailure: boolean;
       stepFailoverCandidates: readonly string[];
+      onModelSettled?: (model: string) => void;
     }
   ): AsyncGenerator<AgentEvent> {
     const turnStartedAt = Date.now();
@@ -153,6 +161,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       timeoutSignal,
       throwOnFreshFailure: options.throwOnFreshFailure,
       stepFailoverCandidates: options.stepFailoverCandidates,
+      onModelSettled: options.onModelSettled,
       cooldown: this.fallbackChain.cooldown,
       system,
       cache,

@@ -113,6 +113,7 @@ export interface AgentStepLoopParams {
   readonly timeoutSignal: AbortSignal;
   readonly throwOnFreshFailure: boolean;
   readonly stepFailoverCandidates: readonly string[];
+  readonly onModelSettled?: ((model: string) => void) | undefined;
   readonly cooldown: ProviderCooldown;
   readonly system: string;
   readonly cache: boolean;
@@ -243,6 +244,7 @@ export async function* runAgentStepLoop(
               reason: 'continuation stall',
             });
             currentModel = nextModel;
+            params.onModelSettled?.(currentModel);
             providerOptions = openrouterProviderOptions(
               currentModel,
               input.reasoningEffort,

@@ -2462,6 +2462,107 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  it('persists the dead provider cooldown across a cross-provider in-loop failover', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const config = makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS });
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const recordFailure = vi.spyOn(chain.cooldown, 'recordFailure');
+    const recordSuccess = vi.spyOn(chain.cooldown, 'recordSuccess');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const consumed = collect(
+      orchestrator.run({ ...baseInput, model: 'openrouter:z-ai/glm-5.2' })
+    );
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(recordFailure).toHaveBeenCalledWith('openrouter');
+    expect(recordSuccess).toHaveBeenCalledWith('anthropic');
+    expect(recordSuccess).not.toHaveBeenCalledWith('openrouter');
+  });
+
+  it('attributes terminal success to the opened candidate on a turn without failover', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+    }));
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const recordSuccess = vi.spyOn(chain.cooldown, 'recordSuccess');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(recordSuccess).toHaveBeenCalledWith('anthropic');
+    expect(recordSuccess).not.toHaveBeenCalledWith('openrouter');
+  });
+
+  it('advances a fresh silent double-stall via turn-initial candidacy, not in-loop failover', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(3);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    const inLoopFailovers = (warnSpy.mock.calls as unknown as unknown[][])
+      .map((call) => call[0])
+      .filter(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'ai.chain.step_failed' &&
+          'atStep' in (entry as object)
+      );
+    expect(inLoopFailovers).toHaveLength(0);
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs.at(-1)).toMatchObject({
+      outcome: 'done',
+      modelsUsed: [FALLBACK],
+    });
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
   it('stops at the maxSteps cap even when the final call still requests tools', async () => {
     streamTextMock.mockClear();
     streamTextMock

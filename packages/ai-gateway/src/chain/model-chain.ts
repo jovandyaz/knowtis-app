@@ -23,6 +23,7 @@ export interface StreamChainContext<THandle, TChunk> extends ChainContext {
   readonly chunks: (handle: THandle) => AsyncIterable<TChunk>;
   readonly isAborted?: (() => boolean) | undefined;
   readonly onSettle?: ((active: THandle) => void) | undefined;
+  readonly settledModel?: (() => string | undefined) | undefined;
   /**
    * Marks a yielded chunk as a terminal failure. When any chunk matches, a
    * normally-completed stream records a cooldown failure instead of success —
@@ -161,17 +162,20 @@ export async function* streamWithChain<THandle, TChunk>(
           }
           yield chunk;
         }
+        const served = providerOf(context.settledModel?.() ?? model);
         if (sawFailure) {
-          context.cooldown?.recordFailure(providerOf(model));
+          context.cooldown?.recordFailure(served);
         } else {
-          context.cooldown?.recordSuccess(providerOf(model));
+          context.cooldown?.recordSuccess(served);
         }
         return;
       } catch (error) {
         if (emitted || context.isAborted?.() || isAbortError(error)) {
           throw error;
         }
-        context.cooldown?.recordFailure(providerOf(model));
+        context.cooldown?.recordFailure(
+          providerOf(context.settledModel?.() ?? model)
+        );
         logChainStep(context.logger, model, candidates[i + 1], error);
         if (isLast) {
           throw error;
