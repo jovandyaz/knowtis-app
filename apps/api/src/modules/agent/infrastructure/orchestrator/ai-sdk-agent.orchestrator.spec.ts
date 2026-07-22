@@ -2168,6 +2168,45 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  it('reports AI_TIMEOUT without advancing the chain when a continuation stalls twice after tool work', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    // Tool work on call 1 marks the turn as progressed, so the twice-silent
+    // continuation must end as a timeout the client can retry — never a chain
+    // advance and never a thrown AgentStallError.
+    const fallbackCall = vi.fn(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+    }));
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementation(fallbackCall);
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(3);
+    expect(fallbackCall).not.toHaveBeenCalled();
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_TIMEOUT' },
+    });
+  });
+
   it('stops at the maxSteps cap even when the final call still requests tools', async () => {
     streamTextMock.mockClear();
     streamTextMock

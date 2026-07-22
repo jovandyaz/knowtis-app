@@ -16,15 +16,15 @@ import type {
   AgentRunInput,
 } from '../../domain/ports/agent-orchestrator.port';
 import type { AgentToolContext } from '../tools/agent-tool';
+import { runAgentStepLoop } from './agent-step-loop';
+import { AgentToolRegistry } from './agent-tool.registry';
+import { composeSystemPrompt } from './compose-system-prompt';
+import { ProposalCollector } from './proposal-collector';
 import {
   AGENT_TURN_OUTCOME,
   createHealth,
   emitTurnHealth,
-  runAgentStepLoop,
-} from './agent-step-loop';
-import { AgentToolRegistry } from './agent-tool.registry';
-import { composeSystemPrompt } from './compose-system-prompt';
-import { ProposalCollector } from './proposal-collector';
+} from './stream-health';
 import { WebFetchAllowlist } from './web-fetch-allowlist';
 import { WebSourceCollector } from './web-source.collector';
 
@@ -49,9 +49,6 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       : timeoutSignal;
 
     if (input.byokApiKey) {
-      // BYOK runs a single turn with the user's key — throwOnFreshFailure:false
-      // surfaces a key failure as an error event instead of falling back to a
-      // server-billed provider.
       yield* this.runTurn(input, input.model, abortSignal, timeoutSignal, {
         throwOnFreshFailure: false,
       });
@@ -99,16 +96,12 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       webFetchAllowlist,
     };
 
-    // Setup runs before the stream starts, so a rejection here still owes the
-    // once-per-attempt health event; log the zero-activity outcome and rethrow
-    // unchanged so streamWithChain treats it as a fresh failure.
     let tools: ToolSet;
     let cache: boolean;
     let system: string;
     let initialMessages: ModelMessage[];
     try {
       tools = await this.toolRegistry.resolve(toolContext);
-      // BYOK turns never cache: cache writes bill 1.25x to the key owner.
       cache = !input.byokApiKey && (await this.promptCachingEnabled());
       system = this.buildSystemPrompt(
         input.noteId,
