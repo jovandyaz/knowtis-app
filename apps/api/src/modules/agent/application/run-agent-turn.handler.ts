@@ -638,6 +638,7 @@ export class RunAgentTurnHandler {
             let costUsd: number;
             try {
               costUsd = await this.recordUsage(input.userId, ctx, event.usage);
+              ctx.reconciled = true;
             } catch (error) {
               this.logger.warn({
                 event: 'agent.usage.record_failed',
@@ -655,7 +656,6 @@ export class RunAgentTurnHandler {
                 this.modelCatalog.getPricing(event.usage.model)
               ).costUsd;
             }
-            ctx.reconciled = true;
             if (isByok) {
               void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
