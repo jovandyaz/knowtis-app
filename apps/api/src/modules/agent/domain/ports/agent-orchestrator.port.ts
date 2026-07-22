@@ -20,6 +20,7 @@ export interface AgentRunInput {
   readonly userMemories?: readonly string[];
   readonly byokApiKey?: string;
   readonly reasoningEffort?: ReasoningEffort;
+  readonly openrouterProviderOrder?: readonly string[];
 }
 
 export interface AgentOrchestrator {

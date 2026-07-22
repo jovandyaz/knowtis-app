@@ -62,6 +62,7 @@ const guardStub = {
 } as unknown as InjectionGuardService;
 const aiConfigStub = {
   getReasoningEffort: vi.fn().mockResolvedValue('medium'),
+  getOpenRouterProviderOrder: vi.fn().mockResolvedValue([]),
 } as unknown as AIConfigService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {

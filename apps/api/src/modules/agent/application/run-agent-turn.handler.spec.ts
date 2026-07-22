@@ -157,9 +157,13 @@ function makeGuard(safe = true) {
   } as unknown as InjectionGuardService;
 }
 
-function makeAIConfig(effort: ReasoningEffort = 'medium') {
+function makeAIConfig(
+  effort: ReasoningEffort = 'medium',
+  providerOrder: readonly string[] = []
+) {
   return {
     getReasoningEffort: vi.fn().mockResolvedValue(effort),
+    getOpenRouterProviderOrder: vi.fn().mockResolvedValue(providerOrder),
   } as unknown as AIConfigService;
 }
 
@@ -1728,6 +1732,41 @@ describe('RunAgentTurnHandler', () => {
 
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ reasoningEffort: 'high' })
+    );
+  });
+
+  it('passes the configured openrouter provider order to the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('medium', ['fireworks', 'together'])
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({
+        openrouterProviderOrder: ['fireworks', 'together'],
+      })
     );
   });
 

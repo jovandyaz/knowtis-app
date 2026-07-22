@@ -573,7 +573,10 @@ export class RunAgentTurnHandler {
     }
 
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
-    const reasoningEffort = await this.aiConfig.getReasoningEffort();
+    const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
+      this.aiConfig.getReasoningEffort(),
+      this.aiConfig.getOpenRouterProviderOrder(),
+    ]);
     const ctx: TurnLoopContext = {
       estimatedTokens,
       estimatedCostUsd,
@@ -592,6 +595,7 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         reasoningEffort,
+        openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
         ...(input.userMemories?.length
