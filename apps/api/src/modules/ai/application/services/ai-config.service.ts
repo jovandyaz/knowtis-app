@@ -152,7 +152,9 @@ export class AIConfigService {
     this.logger.warn(
       `Ignoring invalid OpenRouter provider list '${value}', using the code default`
     );
-    return parseProviderOrder(AI_SETTING_DEFAULTS.ai_openrouter_providers) ?? [];
+    return (
+      parseProviderOrder(AI_SETTING_DEFAULTS.ai_openrouter_providers) ?? []
+    );
   }
 
   async setConfig(

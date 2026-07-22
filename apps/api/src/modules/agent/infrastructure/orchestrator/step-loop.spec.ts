@@ -104,7 +104,9 @@ async function drain<T>(stream: AsyncIterable<T>): Promise<T[]> {
   return parts;
 }
 
-interface ContentPart { type: string }
+interface ContentPart {
+  type: string;
+}
 function contentParts(message: ModelMessage): ContentPart[] {
   return Array.isArray(message.content)
     ? (message.content as ContentPart[])
