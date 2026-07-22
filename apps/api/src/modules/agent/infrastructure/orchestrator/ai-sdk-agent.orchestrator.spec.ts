@@ -2226,6 +2226,45 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
+  it('yields an error event without reopening the turn when a progressed continuation throws synchronously before streaming', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => {
+        throw new Error('provider unroutable');
+      });
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    const models = streamTextMock.mock.calls.map(
+      (call) => (call[0].model as { modelId: string }).modelId
+    );
+    expect(models).toEqual([
+      'claude-sonnet-4-20250514',
+      'claude-sonnet-4-20250514',
+    ]);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+    });
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs.map((entry) => entry.outcome)).toEqual([
+      'continued',
+      'error',
+    ]);
+    logSpy.mockRestore();
+  });
+
   it('attributes accumulated usage across models to the final answering model on the done event', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();

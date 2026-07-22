@@ -267,11 +267,10 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.ERRORED: {
           const { cause, fromStream } = result;
-          const throwFreshFailure = fromStream
-            ? params.throwOnFreshFailure &&
-              !turn.progressed &&
-              !isAbortError(cause)
-            : params.throwOnFreshFailure && !isAbortError(cause);
+          const throwFreshFailure =
+            params.throwOnFreshFailure &&
+            !turn.progressed &&
+            !isAbortError(cause);
           if (throwFreshFailure) {
             emitTurnHealth(
               logger,
