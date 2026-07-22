@@ -149,4 +149,25 @@ describe('UpstreamSection', () => {
 
     expect(screen.getByRole('textbox')).toBeDisabled();
   });
+
+  it('drops the draft and hides Save/Discard when another admin writes the entry', async () => {
+    const { rerender } = renderSection('fireworks', 'custom');
+
+    const input = screen.getByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'baseten');
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeInTheDocument();
+
+    rerender(<UpstreamSection entry={entryWith('together', 'custom')} />);
+
+    expect(screen.getByRole('textbox')).toHaveValue('together');
+    expect(
+      screen.queryByRole('button', { name: 'Save' })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Discard' })
+    ).not.toBeInTheDocument();
+  });
 });
