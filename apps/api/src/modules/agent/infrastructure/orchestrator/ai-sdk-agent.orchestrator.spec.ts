@@ -57,6 +57,7 @@ vi.mock('ai', async (importOriginal) => {
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
 const FALLBACK = 'anthropic:claude-haiku-4-5-20251001';
 const STALL_MS = 60000;
+const TTFT_MS = STALL_MS / 2;
 
 const streamTextMock = streamText as unknown as ReturnType<typeof vi.fn>;
 
@@ -77,6 +78,11 @@ function makeConfig(
     AI_COOLDOWN_SECONDS: 120,
     ...over,
   };
+  // Absent an explicit override, the first-part budget mirrors the stall budget
+  // so pre-existing timing specs behave exactly as they did before TTFT existed.
+  if (values.AI_AGENT_TTFT_MS === undefined) {
+    values.AI_AGENT_TTFT_MS = values.AI_AGENT_STALL_MS;
+  }
   return {
     get: vi.fn((key: string) => values[key]),
   } as unknown as ConfigService<EnvConfig, true>;
@@ -826,22 +832,25 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('reports AI_TIMEOUT when the last candidate stalls', async () => {
+  it('reports AI_TIMEOUT when both attempts of the last candidate stay silent', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    streamTextMock.mockImplementationOnce(hangingAfter([]));
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]));
     const orchestrator = makeOrchestrator(
-      makeConfig(),
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
       makeFlags(),
       ''
     );
 
     const consumed = collect(orchestrator.run(baseInput));
-    await vi.advanceTimersByTimeAsync(STALL_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
 
-    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
     expect(events.at(-1)).toMatchObject({
       type: 'error',
       error: { code: 'AI_TIMEOUT' },
@@ -873,19 +882,36 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock).toHaveBeenCalledTimes(1);
   });
 
-  it('yields the timeout error instead of failing over when a BYOK turn stalls', async () => {
+  it('retries a silent BYOK turn once with the same key, then reports AI_TIMEOUT without advancing the chain', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    streamTextMock.mockImplementationOnce(hangingAfter([]));
-    const orchestrator = makeOrchestrator();
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]));
+    const config = makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS });
+    const { registry, chain } = createTestChain(config);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
 
     const consumed = collect(
       orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
     );
-    await vi.advanceTimersByTimeAsync(STALL_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
 
-    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(
+      languageModelSpy.mock.calls.every(([, key]) => key === 'user-key')
+    ).toBe(true);
     expect(events.at(-1)).toMatchObject({
       type: 'error',
       error: { code: 'AI_TIMEOUT' },
@@ -959,22 +985,25 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
-  it('reports AI_TIMEOUT when the last candidate ends gracefully on the stall abort', async () => {
+  it('retries then reports AI_TIMEOUT when both attempts of the last candidate end gracefully on the abort', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    streamTextMock.mockImplementationOnce(abortsGracefullyAfter([]));
+    streamTextMock
+      .mockImplementationOnce(abortsGracefullyAfter([{ type: 'start' }]))
+      .mockImplementationOnce(abortsGracefullyAfter([{ type: 'start' }]));
     const orchestrator = makeOrchestrator(
-      makeConfig(),
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
       makeFlags(),
       ''
     );
 
     const consumed = collect(orchestrator.run(baseInput));
-    await vi.advanceTimersByTimeAsync(STALL_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
 
-    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
     const last = events.at(-1) as {
       type: string;
       error: { code: string; message: string };
@@ -982,6 +1011,128 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(last.type).toBe('error');
     expect(last.error.code).toBe('AI_TIMEOUT');
     expect(last.error.message).toContain('stalled');
+  });
+
+  function retryLogsFrom(
+    spy: ReturnType<typeof vi.spyOn>
+  ): Record<string, unknown>[] {
+    const calls = spy.mock.calls as unknown as unknown[][];
+    return calls
+      .map((call) => call[0])
+      .filter(
+        (entry): entry is Record<string, unknown> =>
+          typeof entry === 'object' &&
+          entry !== null &&
+          (entry as { event?: string }).event === 'agent.turn.retry'
+      );
+  }
+
+  it('retries the same candidate once when the first attempt is silent through the ttft budget', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    // The dead stream still emits the SDK's local 'start' marker: the retry must
+    // fire despite it, proving parts/ttfp exclude the marker.
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'Hello' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS })
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(healthLogsFrom(logSpy)).toHaveLength(2);
+    const retryLogs = retryLogsFrom(warnSpy);
+    expect(retryLogs).toHaveLength(1);
+    expect(retryLogs[0]).toMatchObject({ attempt: 1, reason: 'ttft' });
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('advances the chain when both attempts of a non-last candidate stay silent', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
+      .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(3);
+    expect(events).toContainEqual({ type: 'chunk', text: 'fallback answer' });
+    expect(events.some((e) => (e as { type: string }).type === 'error')).toBe(
+      false
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      usage: { model: FALLBACK },
+    });
+  });
+
+  it('switches from the ttft budget to the stall budget after the first part arrives', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    // Leads with the SDK's local 'start' marker, then the real first part only
+    // after half the TTFT budget: the switch must key off the real part (so the
+    // ttfp measures from it), not the instantly-emitted marker.
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'start' };
+        await new Promise((resolve) => setTimeout(resolve, TTFT_MS / 2));
+        yield { type: 'text-delta', id: 't1', text: 'Hello' };
+        await new Promise((resolve) =>
+          setTimeout(resolve, TTFT_MS + TTFT_MS / 2)
+        );
+        yield { type: 'text-delta', id: 't2', text: ' world' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+    }));
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS })
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS * 3);
+    const events = await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
+    expect(events).toContainEqual({ type: 'chunk', text: ' world' });
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+    const healthLogs = healthLogsFrom(logSpy);
+    expect(healthLogs).toHaveLength(1);
+    expect(healthLogs[0]).toMatchObject({ parts: 2, textDeltas: 2 });
+    expect(healthLogs[0].ttfpMs).toBeGreaterThanOrEqual(TTFT_MS / 2);
+    logSpy.mockRestore();
   });
 
   // Ignoring the abort makes every deadline fire before the rejection lands, so
@@ -1577,8 +1728,11 @@ describe('AiSdkAgentOrchestrator', () => {
 
   it('logs agent.turn.health with ttfp and part counts on a completed turn', async () => {
     streamTextMock.mockClear();
+    // Leads with the SDK's local 'start' marker; parts must stay 3 (marker
+    // excluded), not 4.
     streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
+        yield { type: 'start' };
         yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
         yield { type: 'finish', finishReason: 'stop' };
@@ -1603,28 +1757,28 @@ describe('AiSdkAgentOrchestrator', () => {
     logSpy.mockRestore();
   });
 
-  it('logs agent.turn.health with outcome stall when the watchdog fires', async () => {
+  it('logs a stall health event for each silent attempt before failing over', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
-    streamTextMock.mockImplementationOnce(hangingAfter([]));
+    streamTextMock
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
     const orchestrator = makeOrchestrator(
-      makeConfig(),
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
       makeToolRegistry(),
       makeFlags(),
       ''
     );
 
     const consumed = collect(orchestrator.run(baseInput));
-    await vi.advanceTimersByTimeAsync(STALL_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
     await consumed;
 
     const healthLogs = healthLogsFrom(logSpy);
-    expect(healthLogs).toHaveLength(1);
-    expect(healthLogs[0]).toMatchObject({
-      event: 'agent.turn.health',
-      outcome: 'stall',
-    });
+    expect(healthLogs).toHaveLength(2);
+    expect(healthLogs.every((entry) => entry.outcome === 'stall')).toBe(true);
     logSpy.mockRestore();
   });
 
