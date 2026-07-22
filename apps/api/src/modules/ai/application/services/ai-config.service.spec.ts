@@ -256,6 +256,14 @@ describe('AIConfigService', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_openrouter_providers',
+        value: AI_SETTING_DEFAULTS.ai_openrouter_providers,
+        kind: 'list',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
     ]);
   });
 
@@ -291,6 +299,14 @@ describe('AIConfigService', () => {
         key: 'ai_reasoning_effort',
         value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
         kind: 'choice',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_openrouter_providers',
+        value: AI_SETTING_DEFAULTS.ai_openrouter_providers,
+        kind: 'list',
         source: 'default',
         description: null,
         updatedAt: null,
@@ -393,6 +409,107 @@ describe('AIConfigService', () => {
     it('falls back to the default on an out-of-band row value', async () => {
       mockRepo.get.mockResolvedValueOnce('turbo');
       await expect(service.getReasoningEffort()).resolves.toBe('medium');
+    });
+  });
+
+  describe('openrouter provider allowlist', () => {
+    it('accepts a comma-separated pair of provider slugs', async () => {
+      await service.setConfig(
+        'ai_openrouter_providers',
+        'fireworks,baseten',
+        ACTOR
+      );
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_openrouter_providers',
+        'fireworks,baseten',
+        undefined
+      );
+    });
+
+    it('accepts a slug carrying a variant suffix', async () => {
+      await service.setConfig('ai_openrouter_providers', 'novita/fp8', ACTOR);
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_openrouter_providers',
+        'novita/fp8',
+        undefined
+      );
+    });
+
+    it('accepts an empty string as "no preference"', async () => {
+      await service.setConfig('ai_openrouter_providers', '', ACTOR);
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_openrouter_providers',
+        '',
+        undefined
+      );
+    });
+
+    it('rejects a duplicated slug', async () => {
+      await expect(
+        service.setConfig(
+          'ai_openrouter_providers',
+          'fireworks,fireworks',
+          ACTOR
+        )
+      ).rejects.toThrow(InvalidAIConfigError);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('rejects an uppercase slug', async () => {
+      await expect(
+        service.setConfig('ai_openrouter_providers', 'Fireworks', ACTOR)
+      ).rejects.toThrow(InvalidAIConfigError);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('rejects more than eight providers', async () => {
+      await expect(
+        service.setConfig(
+          'ai_openrouter_providers',
+          'a,b,c,d,e,f,g,h,i',
+          ACTOR
+        )
+      ).rejects.toThrow(InvalidAIConfigError);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('rejects an empty entry from a double comma', async () => {
+      await expect(
+        service.setConfig(
+          'ai_openrouter_providers',
+          'fireworks,,baseten',
+          ACTOR
+        )
+      ).rejects.toThrow(InvalidAIConfigError);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('parses the code default into an ordered slug array', async () => {
+      await expect(service.getOpenRouterProviderOrder()).resolves.toEqual([
+        'fireworks',
+        'baseten',
+      ]);
+    });
+
+    it('parses a custom stored allowlist', async () => {
+      mockRepo.get.mockResolvedValue('novita,cerebras');
+      await expect(service.getOpenRouterProviderOrder()).resolves.toEqual([
+        'novita',
+        'cerebras',
+      ]);
+    });
+
+    it('resolves a stored empty string to no preference', async () => {
+      mockRepo.get.mockResolvedValue('');
+      await expect(service.getOpenRouterProviderOrder()).resolves.toEqual([]);
+    });
+
+    it('falls back to the code default on an out-of-band row value', async () => {
+      mockRepo.get.mockResolvedValue('BAD SLUG!');
+      await expect(service.getOpenRouterProviderOrder()).resolves.toEqual([
+        'fireworks',
+        'baseten',
+      ]);
     });
   });
 });

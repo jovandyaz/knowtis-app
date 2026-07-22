@@ -17,11 +17,33 @@ import { ProviderRegistryFactory } from '../../infrastructure/providers/provider
 const CACHE_PREFIX = 'ai:config:';
 const CACHE_TTL_MS = 30_000; // 30 seconds
 
-export type AIConfigKind = 'model' | 'chain' | 'choice';
+/** OpenRouter upstream slug, optionally carrying a variant suffix (e.g. `novita/fp8`). */
+const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
+const MAX_OPENROUTER_PROVIDERS = 8;
+
+export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list';
 
 type ConfigKeyDef =
-  | { default: string; kind: 'model' | 'chain' }
+  | { default: string; kind: 'model' | 'chain' | 'list' }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
+
+/**
+ * Parses an OpenRouter provider allowlist CSV into an ordered, de-duplicated
+ * slug list. An empty (or whitespace-only) value means "no preference" and
+ * yields `[]`. Returns `null` when the value is not a valid allowlist.
+ */
+function parseProviderOrder(value: string): readonly string[] | null {
+  const trimmed = value.trim();
+  if (trimmed === '') {
+    return [];
+  }
+  const entries = trimmed.split(',').map((entry) => entry.trim());
+  const valid =
+    entries.length <= MAX_OPENROUTER_PROVIDERS &&
+    entries.every((entry) => OPENROUTER_PROVIDER_SLUG.test(entry)) &&
+    new Set(entries).size === entries.length;
+  return valid ? entries : null;
+}
 
 const CONFIG_KEYS = {
   ai_default_model: {
@@ -37,6 +59,10 @@ const CONFIG_KEYS = {
     default: AI_SETTING_DEFAULTS.ai_reasoning_effort,
     kind: 'choice',
     allowed: REASONING_EFFORTS,
+  },
+  ai_openrouter_providers: {
+    default: AI_SETTING_DEFAULTS.ai_openrouter_providers,
+    kind: 'list',
   },
 } as const satisfies Record<string, ConfigKeyDef>;
 
@@ -116,6 +142,19 @@ export class AIConfigService {
     return AI_SETTING_DEFAULTS.ai_reasoning_effort;
   }
 
+  /** Resolves the OpenRouter upstream allowlist; `[]` means no preference (OpenRouter default routing). */
+  async getOpenRouterProviderOrder(): Promise<readonly string[]> {
+    const value = await this.getConfigValue('ai_openrouter_providers');
+    const parsed = parseProviderOrder(value);
+    if (parsed !== null) {
+      return parsed;
+    }
+    this.logger.warn(
+      `Ignoring invalid OpenRouter provider list '${value}', using the code default`
+    );
+    return parseProviderOrder(AI_SETTING_DEFAULTS.ai_openrouter_providers) ?? [];
+  }
+
   async setConfig(
     key: string,
     value: string,
@@ -187,6 +226,13 @@ export class AIConfigService {
         if (!def.allowed.includes(value)) {
           throw new InvalidAIConfigError(
             `'${value}' is not one of: ${def.allowed.join(', ')}`
+          );
+        }
+        return;
+      case 'list':
+        if (parseProviderOrder(value) === null) {
+          throw new InvalidAIConfigError(
+            `'${value}' is not a valid provider allowlist: 1–${MAX_OPENROUTER_PROVIDERS} comma-separated lowercase slugs, no duplicates (empty allowed for default routing)`
           );
         }
         return;
@@ -276,7 +322,9 @@ export class AIConfigService {
 
     try {
       const dbValue = await this.repository.get(dbKey);
-      if (dbValue) {
+      // An empty string is a valid stored value (the "no preference" allowlist);
+      // only a null row means "unset" and falls through to the code default.
+      if (dbValue !== null) {
         await this.cache.set(cacheKey, dbValue, CACHE_TTL_MS);
         return dbValue;
       }
