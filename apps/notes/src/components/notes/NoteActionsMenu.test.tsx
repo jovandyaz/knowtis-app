@@ -11,7 +11,7 @@ import { NoteActionsMenu } from './NoteActionsMenu';
 const deleteMutate = vi.fn();
 const restoreMutate = vi.fn();
 const navigate = vi.fn();
-const toastSuccess = vi.fn();
+const toastFn = vi.fn();
 const params = vi.fn<() => { noteId?: string }>();
 
 vi.mock('@knowtis/data-access-notes', () => ({
@@ -23,7 +23,7 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => params(),
 }));
 vi.mock('sonner', () => ({
-  toast: { success: (...a: unknown[]) => toastSuccess(...a) },
+  toast: (...a: unknown[]) => toastFn(...a),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -63,7 +63,7 @@ describe('NoteActionsMenu', () => {
     expect(deleteMutate).toHaveBeenCalledWith('n1', expect.any(Object));
   });
 
-  it('fires a success toast with a working undo action on delete', async () => {
+  it('fires a toast with a working undo action on delete', async () => {
     const user = userEvent.setup();
     render(<NoteActionsMenu noteId="n1" noteTitle="My note" />, { wrapper });
 
@@ -78,8 +78,8 @@ describe('NoteActionsMenu', () => {
     ];
     options.onSuccess();
 
-    expect(toastSuccess).toHaveBeenCalledTimes(1);
-    const [message, config] = toastSuccess.mock.calls[0] as [
+    expect(toastFn).toHaveBeenCalledTimes(1);
+    const [message, config] = toastFn.mock.calls[0] as [
       string,
       { action: { onClick: () => void }; duration: number },
     ];

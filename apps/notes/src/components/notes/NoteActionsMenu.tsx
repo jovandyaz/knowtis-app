@@ -36,7 +36,7 @@ export function NoteActionsMenu({ noteId, noteTitle }: NoteActionsMenuProps) {
         if (isOpenNote) {
           navigate({ to: ROUTES.NOTES });
         }
-        toast.success(t('delete.deleted'), {
+        toast(t('delete.deleted'), {
           action: {
             label: t('delete.undo'),
             onClick: () => restoreNote.mutate(noteId),
