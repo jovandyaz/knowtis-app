@@ -5,6 +5,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ROUTES, STORAGE_KEYS } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
+import { canPerformNoteAction } from '@/lib';
 import { preloadEditorChunk } from '@/lib/preload-editor';
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react';
 
@@ -85,12 +86,14 @@ export function SidebarNotesSection() {
                     {note.title || t('sidebar.untitled')}
                   </span>
                 </Link>
-                <div className="absolute right-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover/note:opacity-100 md:focus-within:opacity-100">
-                  <NoteActionsMenu
-                    noteId={note.id}
-                    noteTitle={note.title || t('sidebar.untitled')}
-                  />
-                </div>
+                {canPerformNoteAction(note.accessLevel, 'delete') && (
+                  <div className="absolute right-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover/note:opacity-100 md:focus-within:opacity-100">
+                    <NoteActionsMenu
+                      noteId={note.id}
+                      noteTitle={note.title || t('sidebar.untitled')}
+                    />
+                  </div>
+                )}
               </div>
             ))}
 
