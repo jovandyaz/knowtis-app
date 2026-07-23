@@ -10,13 +10,12 @@ import {
   createPreview,
   formatNoteDate,
 } from '@/lib';
-import { Clock, Trash2 } from 'lucide-react';
+import { Clock } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import type { NoteWithAccess } from '@knowtis/api-client';
 import {
   Badge,
-  Button,
   Card,
   CardContent,
   CardHeader,
@@ -24,18 +23,13 @@ import {
 } from '@knowtis/design-system';
 import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
 
-/**
- * Note card props interface
- */
+import { NoteActionsMenu } from './NoteActionsMenu';
+
 interface NoteCardProps {
   note: NoteWithAccess;
-  onDelete: (id: string) => void;
 }
 
-export const NoteCard = memo(function NoteCard({
-  note,
-  onDelete,
-}: NoteCardProps) {
+export const NoteCard = memo(function NoteCard({ note }: NoteCardProps) {
   const { t } = useTranslation('notes');
   const contentPreview = createPreview(note.content);
 
@@ -90,20 +84,8 @@ export const NoteCard = memo(function NoteCard({
         </Link>
 
         {canPerformNoteAction(note.accessLevel, 'delete') && (
-          <div className="absolute right-2 top-2 flex gap-1 opacity-100 md:opacity-0 transition-opacity duration-200 md:group-hover:opacity-100">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-11 w-11 md:h-8 md:w-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                onDelete(note.id);
-              }}
-              aria-label={t('delete.ariaLabel', { title: note.title })}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+          <div className="absolute right-2 top-2 opacity-100 transition-opacity duration-200 md:opacity-0 md:group-hover:opacity-100">
+            <NoteActionsMenu noteId={note.id} noteTitle={note.title} />
           </div>
         )}
       </Card>

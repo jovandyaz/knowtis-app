@@ -2,8 +2,10 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useParams } from '@tanstack/react-router';
 
+import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ROUTES, STORAGE_KEYS } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
+import { canPerformNoteAction } from '@/lib';
 import { preloadEditorChunk } from '@/lib/preload-editor';
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react';
 
@@ -66,21 +68,33 @@ export function SidebarNotesSection() {
         {!isCollapsed && (
           <div className="flex flex-col gap-0.5 pl-2">
             {notes?.map((note) => (
-              <Link
+              <div
                 key={note.id}
-                to={ROUTES.NOTE}
-                params={{ noteId: note.id }}
-                className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer truncate ${
-                  activeNoteId === note.id
-                    ? 'bg-muted text-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
-                }`}
+                className="group/note relative flex items-center"
               >
-                <FileText className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">
-                  {note.title || t('sidebar.untitled')}
-                </span>
-              </Link>
+                <Link
+                  to={ROUTES.NOTE}
+                  params={{ noteId: note.id }}
+                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 pr-8 text-sm transition-colors cursor-pointer truncate ${
+                    activeNoteId === note.id
+                      ? 'bg-muted text-foreground font-medium'
+                      : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">
+                    {note.title || t('sidebar.untitled')}
+                  </span>
+                </Link>
+                {canPerformNoteAction(note.accessLevel, 'delete') && (
+                  <div className="absolute right-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover/note:opacity-100 md:focus-within:opacity-100">
+                    <NoteActionsMenu
+                      noteId={note.id}
+                      noteTitle={note.title || t('sidebar.untitled')}
+                    />
+                  </div>
+                )}
+              </div>
             ))}
 
             {notes?.length === 0 && (

@@ -36,6 +36,7 @@ describe('CreateNoteHandler', () => {
       updateYjsState: vi.fn(),
       updateContentWithYjsState: vi.fn(),
       delete: vi.fn(),
+      restore: vi.fn(),
     };
 
     mockEventEmitter = {

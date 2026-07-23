@@ -169,6 +169,13 @@
       "when": 1784307956812,
       "tag": "0023_wide_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1784832446313,
+      "tag": "0024_low_drax",
+      "breakpoints": true
     }
   ]
 }

@@ -76,6 +76,10 @@ export const notesApi = {
     return httpClient.delete<{ success: boolean }>(`/notes/${id}`);
   },
 
+  async restore(id: string): Promise<Note> {
+    return httpClient.post<Note>(`/notes/${id}/restore`, {});
+  },
+
   async share(noteId: string, input: ShareNoteInput): Promise<NotePermission> {
     return httpClient.post<NotePermission>(`/notes/${noteId}/share`, input);
   },

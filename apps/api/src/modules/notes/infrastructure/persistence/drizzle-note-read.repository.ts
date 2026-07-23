@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ilike,
+  isNull,
   or,
   sql,
   type SQL,
@@ -73,7 +74,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     const result = await this.db
       .select()
       .from(notes)
-      .where(eq(notes.id, id))
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
       .limit(1);
 
     if (!result[0]) {
@@ -87,7 +88,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .select({ note: noteViewColumns, owner: ownerColumns })
       .from(notes)
       .innerJoin(users, eq(notes.ownerId, users.id))
-      .where(eq(notes.id, id))
+      .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
       .limit(1);
 
     if (!result[0]) {
@@ -114,7 +115,10 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
   }
 
   async findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]> {
-    const conditions = [eq(notes.ownerId, ownerId.value)];
+    const conditions = [
+      eq(notes.ownerId, ownerId.value),
+      isNull(notes.deletedAt),
+    ];
 
     const searchCondition = this.searchCondition(search);
     if (searchCondition) {
@@ -233,7 +237,8 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .where(
         and(
           eq(notes.shareToken, token),
-          eq(notes.generalAccess, GENERAL_ACCESS.ANYONE_WITH_LINK)
+          eq(notes.generalAccess, GENERAL_ACCESS.ANYONE_WITH_LINK),
+          isNull(notes.deletedAt)
         )
       )
       .limit(1);
@@ -251,10 +256,14 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     );
   }
 
+  /** Access predicate that also excludes soft-deleted rows (global read invariant). */
   private accessCondition(userId: UserId): SQL | undefined {
-    return or(
-      eq(notes.ownerId, userId.value),
-      eq(notePermissions.userId, userId.value)
+    return and(
+      isNull(notes.deletedAt),
+      or(
+        eq(notes.ownerId, userId.value),
+        eq(notePermissions.userId, userId.value)
+      )
     );
   }
 

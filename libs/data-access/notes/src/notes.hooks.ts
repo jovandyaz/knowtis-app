@@ -144,6 +144,18 @@ export function useDeleteNote() {
   });
 }
 
+export function useRestoreNote() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => notesApi.restore(id),
+    onSettled: (_data, _error, id) => {
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
+    },
+  });
+}
+
 export function useNoteByToken(token: string) {
   return useQuery({
     queryKey: notesQueryKeys.sharedNote(token),

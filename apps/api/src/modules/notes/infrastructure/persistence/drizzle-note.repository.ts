@@ -135,6 +135,13 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.writeRepo.delete(id);
   }
 
+  restore(
+    id: string,
+    ownerId: string
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    return this.writeRepo.restore(id, ownerId);
+  }
+
   findPermission(
     noteId: string,
     userId: UserId

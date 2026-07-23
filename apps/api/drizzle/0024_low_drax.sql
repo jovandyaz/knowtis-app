@@ -1,0 +1,2 @@
+ALTER TABLE "notes" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "notes_active_owner_updated_idx" ON "notes" USING btree ("owner_id","updated_at") WHERE "notes"."deleted_at" IS NULL;

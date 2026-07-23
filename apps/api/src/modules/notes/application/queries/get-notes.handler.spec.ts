@@ -45,6 +45,7 @@ describe('GetNotesHandler', () => {
       updateYjsState: vi.fn(),
       updateContentWithYjsState: vi.fn(),
       delete: vi.fn(),
+      restore: vi.fn(),
       findPermission: vi.fn(),
       findPermissionsByNote: vi.fn(),
       createPermission: vi.fn(),

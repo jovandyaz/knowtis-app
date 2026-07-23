@@ -56,6 +56,7 @@ import {
   GetNoteByTokenHandler,
   GetNoteHandler,
   GetNotesHandler,
+  RestoreNoteHandler,
   RevokeAccessHandler,
   ShareNoteHandler,
   UpdateNoteHandler,
@@ -138,6 +139,7 @@ export class NotesController {
     private readonly getNoteHandler: GetNoteHandler,
     private readonly updateNoteHandler: UpdateNoteHandler,
     private readonly deleteNoteHandler: DeleteNoteHandler,
+    private readonly restoreNoteHandler: RestoreNoteHandler,
     private readonly shareNoteHandler: ShareNoteHandler,
     private readonly revokeAccessHandler: RevokeAccessHandler,
     private readonly getCollaboratorsHandler: GetCollaboratorsHandler,
@@ -313,7 +315,7 @@ export class NotesController {
   @ApiOperation({
     summary: 'Delete a note',
     description:
-      'Permanently deletes a note. Only the owner can delete a note.',
+      'Soft-deletes a note (recoverable via restore). Only the owner can delete a note.',
   })
   @ApiParam({
     name: 'id',
@@ -337,6 +339,38 @@ export class NotesController {
       userId: user.id,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({
+    summary: 'Restore a soft-deleted note',
+    description:
+      'Restores a previously soft-deleted note. Only the owner can restore.',
+  })
+  @ApiParam({
+    name: 'id',
+    type: 'string',
+    format: 'uuid',
+    description: 'The UUID of the note to restore',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Note restored successfully',
+    schema: noteSchema,
+  })
+  @ApiAuthErrors('only the owner can restore a note')
+  @ApiNotFound('note does not exist or is not deleted')
+  @Post(':id/restore')
+  @RequirePermission('delete', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.WRITE)
+  async restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.restoreNoteHandler.execute({
+      noteId: id,
+      userId: user.id,
+    });
+    return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);
   }
 
   @ApiOperation({
