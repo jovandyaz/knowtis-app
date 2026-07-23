@@ -207,6 +207,8 @@ function NoteEditor({
   return (
     <div className="mx-auto max-w-4xl">
       <MobileEditorHeader
+        noteId={noteId}
+        noteTitle={title}
         accessLevel={accessLevel}
         editorsCanShare={editorsCanShare}
         onShareClick={openShareDialog}

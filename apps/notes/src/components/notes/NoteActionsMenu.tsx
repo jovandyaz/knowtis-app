@@ -1,3 +1,4 @@
+import type { ComponentProps } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useNavigate, useParams } from '@tanstack/react-router';
@@ -9,6 +10,7 @@ import { toast } from 'sonner';
 import { useDeleteNote, useRestoreNote } from '@knowtis/data-access-notes';
 import {
   Button,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -20,9 +22,16 @@ const DELETE_TOAST_DURATION_MS = 6000;
 interface NoteActionsMenuProps {
   noteId: string;
   noteTitle: string;
+  triggerVariant?: ComponentProps<typeof Button>['variant'];
+  triggerClassName?: string;
 }
 
-export function NoteActionsMenu({ noteId, noteTitle }: NoteActionsMenuProps) {
+export function NoteActionsMenu({
+  noteId,
+  noteTitle,
+  triggerVariant = 'ghost',
+  triggerClassName,
+}: NoteActionsMenuProps) {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
   const params = useParams({ strict: false }) as { noteId?: string };
@@ -62,9 +71,12 @@ export function NoteActionsMenu({ noteId, noteTitle }: NoteActionsMenuProps) {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
+          variant={triggerVariant}
           size="icon"
-          className="h-11 w-11 md:h-8 md:w-8 text-(--muted-foreground) hover:text-(--foreground)"
+          className={cn(
+            'text-(--muted-foreground) hover:text-(--foreground)',
+            triggerClassName ?? 'h-11 w-11 md:h-8 md:w-8'
+          )}
           aria-label={t('delete.menuLabel', { title: noteTitle })}
           onClick={(e) => {
             e.preventDefault();
