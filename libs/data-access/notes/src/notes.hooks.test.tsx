@@ -8,7 +8,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
 
-import { notesQueryKeys, useCreateNote, useNotes } from './notes.hooks';
+import {
+  notesQueryKeys,
+  useCreateNote,
+  useNotes,
+  useRestoreNote,
+} from './notes.hooks';
 
 // Mock the API
 vi.mock('@knowtis/api-client', () => ({
@@ -18,6 +23,7 @@ vi.mock('@knowtis/api-client', () => ({
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    restore: vi.fn(),
   },
 }));
 
@@ -119,6 +125,18 @@ describe('Notes Hooks', () => {
       });
 
       expect(notesApi.create).toHaveBeenCalledWith({ title: 'New Note' });
+    });
+  });
+
+  describe('useRestoreNote', () => {
+    it('useRestoreNote calls the restore endpoint and invalidates lists', async () => {
+      vi.mocked(notesApi.restore).mockResolvedValue({ id: 'n1' } as never);
+      const { result } = renderHook(() => useRestoreNote(), { wrapper });
+
+      result.current.mutate('n1');
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(notesApi.restore).toHaveBeenCalledWith('n1');
     });
   });
 
