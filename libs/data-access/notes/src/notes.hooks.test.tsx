@@ -129,14 +129,21 @@ describe('Notes Hooks', () => {
   });
 
   describe('useRestoreNote', () => {
-    it('useRestoreNote calls the restore endpoint and invalidates lists', async () => {
+    it('useRestoreNote calls the restore endpoint and invalidates list and detail caches', async () => {
       vi.mocked(notesApi.restore).mockResolvedValue({ id: 'n1' } as never);
+      const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
       const { result } = renderHook(() => useRestoreNote(), { wrapper });
 
       result.current.mutate('n1');
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(notesApi.restore).toHaveBeenCalledWith('n1');
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: notesQueryKeys.lists(),
+      });
+      expect(invalidateSpy).toHaveBeenCalledWith({
+        queryKey: notesQueryKeys.detail('n1'),
+      });
     });
   });
 
