@@ -97,8 +97,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
       .update(notes)
       .set({ deletedAt: new Date() })
       .where(eq(notes.id, NOTE));
-    const stale = await repo.findStaleNotes('voyage-9', 0, 200);
-    expect(stale.map((s) => s.noteId)).not.toContain(NOTE);
-    await db.update(notes).set({ deletedAt: null }).where(eq(notes.id, NOTE));
+    try {
+      const stale = await repo.findStaleNotes('voyage-9', 0, 200);
+      expect(stale.map((s) => s.noteId)).not.toContain(NOTE);
+    } finally {
+      await db.update(notes).set({ deletedAt: null }).where(eq(notes.id, NOTE));
+    }
   });
 });
