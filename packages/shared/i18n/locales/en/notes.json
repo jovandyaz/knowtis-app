@@ -79,12 +79,7 @@
     "buttonLoading": "Creating..."
   },
   "delete": {
-    "title": "Delete Note",
-    "confirmMessage": "Are you sure you want to delete",
-    "warning": "This action cannot be undone.",
     "button": "Delete",
-    "buttonLoading": "Deleting...",
-    "ariaLabel": "Delete {{title}}",
     "deleted": "Note deleted",
     "undo": "Undo",
     "menuLabel": "Options for {{title}}"

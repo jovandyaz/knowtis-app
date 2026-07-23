@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
@@ -13,7 +13,6 @@ import { useNotes } from '@knowtis/data-access-notes';
 import { Button, ErrorState, Input } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
 
-import { DeleteNoteDialog } from './DeleteNoteDialog';
 import { EmptyState } from './EmptyState';
 import { FloatingCreateButton } from './FloatingCreateButton';
 import { NoteCard } from './NoteCard';
@@ -22,7 +21,6 @@ import { NoteCardSkeleton } from './NoteCardSkeleton';
 export function NoteList() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
-  const [noteToDelete, setNoteToDelete] = useState<string | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const { createNote } = useCreateNoteAction();
@@ -45,12 +43,6 @@ export function NoteList() {
     isError,
     error,
   } = useNotes(debouncedSearch);
-
-  const noteToDeleteData = notes.find((n) => n.id === noteToDelete);
-
-  const handleDelete = useCallback((id: string) => {
-    setNoteToDelete(id);
-  }, []);
 
   const renderNotes = () => {
     if (isLoading) {
@@ -90,9 +82,7 @@ export function NoteList() {
               <EmptyState hasSearch={!!debouncedSearch} />
             </motion.div>
           ) : (
-            notes.map((note) => (
-              <NoteCard key={note.id} note={note} onDelete={handleDelete} />
-            ))
+            notes.map((note) => <NoteCard key={note.id} note={note} />)
           )}
         </AnimatePresence>
       </motion.div>
@@ -123,13 +113,6 @@ export function NoteList() {
       </div>
 
       {renderNotes()}
-
-      <DeleteNoteDialog
-        open={!!noteToDelete}
-        onOpenChange={(open) => !open && setNoteToDelete(null)}
-        noteId={noteToDelete}
-        noteTitle={noteToDeleteData?.title ?? ''}
-      />
 
       <FloatingCreateButton onCreateNote={createNote} />
     </div>

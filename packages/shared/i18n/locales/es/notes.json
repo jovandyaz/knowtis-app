@@ -79,12 +79,7 @@
     "buttonLoading": "Creando..."
   },
   "delete": {
-    "title": "Eliminar nota",
-    "confirmMessage": "¿Estás seguro de que deseas eliminar",
-    "warning": "Esta acción no se puede deshacer.",
     "button": "Eliminar",
-    "buttonLoading": "Eliminando...",
-    "ariaLabel": "Eliminar {{title}}",
     "deleted": "Nota eliminada",
     "undo": "Deshacer",
     "menuLabel": "Opciones de {{title}}"
