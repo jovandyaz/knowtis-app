@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   customType,
@@ -47,12 +48,16 @@ export const notes = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
     index('notes_owner_id_idx').on(table.ownerId),
     index('notes_updated_at_idx').on(table.updatedAt),
     index('notes_general_access_idx').on(table.generalAccess),
     index('notes_share_token_idx').on(table.shareToken),
+    index('notes_active_owner_updated_idx')
+      .on(table.ownerId, table.updatedAt)
+      .where(sql`${table.deletedAt} IS NULL`),
   ]
 );
 
