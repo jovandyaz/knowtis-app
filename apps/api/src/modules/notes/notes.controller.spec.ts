@@ -32,6 +32,7 @@ function createController(overrides: Partial<Record<string, unknown>> = {}) {
     handler() as never,
     handler() as never,
     handler() as never,
+    handler() as never,
     handler() as never
   );
 }
