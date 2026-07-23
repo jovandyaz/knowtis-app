@@ -19,6 +19,7 @@ import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 
 const OWNER = '00000000-0000-4000-8000-0000000000a1';
 const NOTE = '00000000-0000-4000-8000-0000000000a2';
+const ACTIVE_NOTE = '00000000-0000-4000-8000-0000000000a4';
 const TOKEN = 'softdelete-tok-a2';
 
 loadEnv({ path: ['.env.local', '.env'] });
@@ -53,6 +54,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {
       })
       .onConflictDoNothing();
     await db.delete(notes).where(eq(notes.id, NOTE));
+    await db.delete(notes).where(eq(notes.id, ACTIVE_NOTE));
     await db.insert(notes).values({
       id: NOTE,
       ownerId: OWNER,
@@ -62,10 +64,18 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {
       generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
       deletedAt: new Date(),
     });
+    await db.insert(notes).values({
+      id: ACTIVE_NOTE,
+      ownerId: OWNER,
+      title: 'still active',
+      content: 'body',
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
+    });
   });
 
   afterAll(async () => {
     await db.delete(notes).where(eq(notes.id, NOTE));
+    await db.delete(notes).where(eq(notes.id, ACTIVE_NOTE));
     await db.delete(users).where(eq(users.id, OWNER));
   });
 
@@ -75,6 +85,16 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {
 
   it('findByIdForUser excludes a soft-deleted note', async () => {
     expect(await repo.findByIdForUser(NOTE, ownerId)).toBeNull();
+  });
+
+  it('findByIdWithOwner excludes a soft-deleted note', async () => {
+    expect(await repo.findByIdWithOwner(NOTE)).toBeNull();
+  });
+
+  it('findByOwner excludes soft-deleted notes but keeps active ones', async () => {
+    const ids = (await repo.findByOwner(ownerId)).map((note) => note.id);
+    expect(ids).toContain(ACTIVE_NOTE);
+    expect(ids).not.toContain(NOTE);
   });
 
   it('findAccessibleSummariesByUser excludes a soft-deleted note', async () => {
