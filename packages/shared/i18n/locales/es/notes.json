@@ -82,6 +82,8 @@
     "button": "Eliminar",
     "deleted": "Nota eliminada",
     "undo": "Deshacer",
+    "error": "No se pudo eliminar la nota",
+    "undoError": "No se pudo restaurar la nota",
     "menuLabel": "Opciones de {{title}}"
   },
   "share": {

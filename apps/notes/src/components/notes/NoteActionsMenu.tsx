@@ -29,6 +29,14 @@ export function NoteActionsMenu({ noteId, noteTitle }: NoteActionsMenuProps) {
   const deleteNote = useDeleteNote();
   const restoreNote = useRestoreNote();
 
+  const handleUndo = () => {
+    restoreNote.mutate(noteId, {
+      onError: () => {
+        toast.error(t('delete.undoError'));
+      },
+    });
+  };
+
   const handleDelete = () => {
     const isOpenNote = params.noteId === noteId;
     deleteNote.mutate(noteId, {
@@ -39,10 +47,13 @@ export function NoteActionsMenu({ noteId, noteTitle }: NoteActionsMenuProps) {
         toast(t('delete.deleted'), {
           action: {
             label: t('delete.undo'),
-            onClick: () => restoreNote.mutate(noteId),
+            onClick: handleUndo,
           },
           duration: DELETE_TOAST_DURATION_MS,
         });
+      },
+      onError: () => {
+        toast.error(t('delete.error'));
       },
     });
   };

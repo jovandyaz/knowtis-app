@@ -82,6 +82,8 @@
     "button": "Delete",
     "deleted": "Note deleted",
     "undo": "Undo",
+    "error": "Couldn't delete the note",
+    "undoError": "Couldn't restore the note",
     "menuLabel": "Options for {{title}}"
   },
   "share": {

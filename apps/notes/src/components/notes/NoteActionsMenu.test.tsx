@@ -12,6 +12,7 @@ const deleteMutate = vi.fn();
 const restoreMutate = vi.fn();
 const navigate = vi.fn();
 const toastFn = vi.fn();
+const toastError = vi.fn();
 const params = vi.fn<() => { noteId?: string }>();
 
 vi.mock('@knowtis/data-access-notes', () => ({
@@ -23,7 +24,9 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => params(),
 }));
 vi.mock('sonner', () => ({
-  toast: (...a: unknown[]) => toastFn(...a),
+  toast: Object.assign((...a: unknown[]) => toastFn(...a), {
+    error: (...a: unknown[]) => toastError(...a),
+  }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -32,6 +35,8 @@ vi.mock('react-i18next', () => ({
         'delete.button': 'Delete',
         'delete.deleted': 'Note deleted',
         'delete.undo': 'Undo',
+        'delete.error': 'Delete failed',
+        'delete.undoError': 'Restore failed',
         'delete.menuLabel': `Options for ${opts?.title ?? ''}`,
       };
       return dictionary[key] ?? key;
@@ -87,7 +92,7 @@ describe('NoteActionsMenu', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     config.action.onClick();
-    expect(restoreMutate).toHaveBeenCalledWith('n1');
+    expect(restoreMutate).toHaveBeenCalledWith('n1', expect.any(Object));
   });
 
   it('redirects to the notes list when the deleted note is the open one', async () => {
@@ -107,5 +112,53 @@ describe('NoteActionsMenu', () => {
     options.onSuccess();
 
     expect(navigate).toHaveBeenCalledWith({ to: '/notes' });
+  });
+
+  it('shows an error toast when the delete fails', async () => {
+    const user = userEvent.setup();
+    render(<NoteActionsMenu noteId="n1" noteTitle="My note" />, { wrapper });
+
+    await user.click(
+      screen.getByRole('button', { name: /options for my note/i })
+    );
+    await user.click(await screen.findByRole('menuitem', { name: /delete/i }));
+
+    const [, options] = deleteMutate.mock.calls[0] as [
+      string,
+      { onError: () => void },
+    ];
+    options.onError();
+
+    expect(toastError).toHaveBeenCalledWith('Delete failed');
+  });
+
+  it('shows an error toast when the undo restore fails', async () => {
+    const user = userEvent.setup();
+    render(<NoteActionsMenu noteId="n1" noteTitle="My note" />, { wrapper });
+
+    await user.click(
+      screen.getByRole('button', { name: /options for my note/i })
+    );
+    await user.click(await screen.findByRole('menuitem', { name: /delete/i }));
+
+    const [, deleteOptions] = deleteMutate.mock.calls[0] as [
+      string,
+      { onSuccess: () => void },
+    ];
+    deleteOptions.onSuccess();
+
+    const [, config] = toastFn.mock.calls[0] as [
+      string,
+      { action: { onClick: () => void } },
+    ];
+    config.action.onClick();
+
+    const [, restoreOptions] = restoreMutate.mock.calls[0] as [
+      string,
+      { onError: () => void },
+    ];
+    restoreOptions.onError();
+
+    expect(toastError).toHaveBeenCalledWith('Restore failed');
   });
 });
