@@ -4,6 +4,7 @@ export {
   useCreateNote,
   useUpdateNote,
   useDeleteNote,
+  useRestoreNote,
   useNoteByToken,
   notesQueryKeys,
 } from './notes.hooks';

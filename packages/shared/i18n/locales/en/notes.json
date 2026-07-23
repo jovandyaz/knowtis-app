@@ -84,7 +84,10 @@
     "warning": "This action cannot be undone.",
     "button": "Delete",
     "buttonLoading": "Deleting...",
-    "ariaLabel": "Delete {{title}}"
+    "ariaLabel": "Delete {{title}}",
+    "deleted": "Note deleted",
+    "undo": "Undo",
+    "menuLabel": "Options for {{title}}"
   },
   "share": {
     "title": "Share \"{{noteTitle}}\"",
