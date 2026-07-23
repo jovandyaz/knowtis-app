@@ -464,11 +464,7 @@ describe('AIConfigService', () => {
 
     it('rejects more than eight providers', async () => {
       await expect(
-        service.setConfig(
-          'ai_openrouter_providers',
-          'a,b,c,d,e,f,g,h,i',
-          ACTOR
-        )
+        service.setConfig('ai_openrouter_providers', 'a,b,c,d,e,f,g,h,i', ACTOR)
       ).rejects.toThrow(InvalidAIConfigError);
       expect(mockRepo.set).not.toHaveBeenCalled();
     });

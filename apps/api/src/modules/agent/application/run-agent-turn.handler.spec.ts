@@ -2966,4 +2966,339 @@ describe('RunAgentTurnHandler', () => {
       expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
     );
   });
+
+  it('releases the reservation and reports the error once when the orchestrator throws a non-abort error', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const throwingOrchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('orchestrator failed');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const handler = new RunAgentTurnHandler(
+      throwingOrchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number),
+      expect.any(Number),
+      undefined
+    );
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('releases the reservation without an error callback when the turn is aborted mid-throw', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const controller = new AbortController();
+    const orchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        controller.abort();
+        throw new Error('aborted mid-stream');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() },
+      controller.signal
+    );
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number),
+      expect.any(Number),
+      undefined
+    );
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reports an error and releases the reservation when the orchestrator ends without a terminal event', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'partial' },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number),
+      expect.any(Number),
+      undefined
+    );
+  });
+
+  it('reconciles the reservation and completes once when a resume turn stops on a committed event', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'committed',
+        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onDone = vi.fn();
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone, onError: vi.fn() }
+    );
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
+      USER,
+      expect.any(Number),
+      expect.any(Number),
+      undefined
+    );
+    expect(onDone).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports the error without releasing when a BYOK turn throws a non-abort error', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const throwingOrchestrator: AgentOrchestrator = {
+      run: vi.fn(async function* () {
+        throw new Error('orchestrator failed');
+        yield { type: 'chunk', text: '' } as AgentEvent;
+      }),
+    };
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set(['google'])
+    );
+    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    const handler = new RunAgentTurnHandler(
+      throwingOrchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok,
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: 'google:gemini-2.0-flash',
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'AI_PROVIDER_ERROR' })
+    );
+  });
+
+  it('records usage once and never releases on a normal done path', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reconciles once via the error event and does not double-reconcile in the catch', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'error',
+        error: { code: 'AI_PROVIDER_ERROR', message: 'timed out' },
+        usage: {
+          inputTokens: 5,
+          outputTokens: 1,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not double-refund when the proposal store write fails after usage is recorded', async () => {
+    const { rateLimit, config } = makeDeps({});
+    const proposal = makeProposal('55555555-5555-5555-5555-555555555555');
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const pendingStore = {
+      save: vi.fn().mockRejectedValue(new Error('redis down')),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+    const onProposal = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'create a note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal }
+    );
+
+    expect(rateLimit.recordUsage).toHaveBeenCalledTimes(1);
+    expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onProposal).not.toHaveBeenCalled();
+  });
 });

@@ -480,4 +480,45 @@ describe('streamWithChain cooldown outcome', () => {
     expect(cooldown.recordSuccess).toHaveBeenCalledWith('anthropic');
     expect(cooldown.recordFailure).not.toHaveBeenCalled();
   });
+
+  it('attributes terminal success to the model that served the stream, not the opened candidate', async () => {
+    const cooldown = makeCooldown();
+    const served = { model: SONNET };
+    async function* switched(): AsyncGenerator<Event> {
+      yield { type: 'chunk' };
+      served.model = GPT;
+      yield { type: 'done' };
+    }
+    const stream = streamWithChain<AsyncGenerator<Event>, Event>({
+      candidates: [SONNET],
+      cooldown,
+      logger,
+      settledModel: () => served.model,
+      open: () => switched(),
+      chunks: (h) => h,
+      isFailureChunk: (c) => c.type === 'error',
+    });
+    for await (const chunk of stream) {
+      void chunk;
+    }
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith('openai');
+    expect(cooldown.recordSuccess).not.toHaveBeenCalledWith('anthropic');
+  });
+
+  it('falls back to the opened candidate when settledModel is absent', async () => {
+    const cooldown = makeCooldown();
+    const stream = streamWithChain<AsyncGenerator<Event>, Event>({
+      candidates: [SONNET],
+      cooldown,
+      logger,
+      settledModel: () => undefined,
+      open: () => eventsOf('chunk', 'done'),
+      chunks: (h) => h,
+      isFailureChunk: (c) => c.type === 'error',
+    });
+    for await (const chunk of stream) {
+      void chunk;
+    }
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith('anthropic');
+  });
 });
