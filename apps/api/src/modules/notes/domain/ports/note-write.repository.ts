@@ -49,6 +49,10 @@ export interface NoteWriteRepository {
     yjsState: Buffer
   ): Promise<Result<NoteEntity, NoteDomainError>>;
   delete(id: string): Promise<Result<boolean, NoteDomainError>>;
+  restore(
+    id: string,
+    ownerId: string
+  ): Promise<Result<NoteEntity, NoteDomainError>>;
 }
 
 export const NOTE_WRITE_REPOSITORY = Symbol('NOTE_WRITE_REPOSITORY');

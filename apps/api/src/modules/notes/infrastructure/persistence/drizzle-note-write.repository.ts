@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -177,8 +177,9 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
   async delete(id: string): Promise<Result<boolean, NoteDomainError>> {
     try {
       const result = await this.db
-        .delete(notes)
-        .where(eq(notes.id, id))
+        .update(notes)
+        .set({ deletedAt: new Date() })
+        .where(and(eq(notes.id, id), isNull(notes.deletedAt)))
         .returning();
 
       if (!result[0]) {
@@ -191,6 +192,36 @@ export class DrizzleNoteWriteRepository implements NoteWriteRepository {
         error instanceof Error ? error.stack : error
       );
       return err(NoteErrors.persistenceError('delete', id));
+    }
+  }
+
+  async restore(
+    id: string,
+    ownerId: string
+  ): Promise<Result<NoteEntity, NoteDomainError>> {
+    try {
+      const result = await this.db
+        .update(notes)
+        .set({ deletedAt: null })
+        .where(
+          and(
+            eq(notes.id, id),
+            eq(notes.ownerId, ownerId),
+            isNotNull(notes.deletedAt)
+          )
+        )
+        .returning();
+
+      if (!result[0]) {
+        return err(NoteErrors.noteNotFound(id));
+      }
+      return ok(mapToNoteEntity(result[0]));
+    } catch (error) {
+      this.logger.error(
+        `Failed to restore note ${id}`,
+        error instanceof Error ? error.stack : error
+      );
+      return err(NoteErrors.persistenceError('restore', id));
     }
   }
 }
