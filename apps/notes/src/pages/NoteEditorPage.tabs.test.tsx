@@ -74,6 +74,8 @@ vi.mock('@knowtis/data-access-notes', () => ({
     error: null,
   }),
   useUpdateNote: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteNote: () => ({ mutate: vi.fn() }),
+  useRestoreNote: () => ({ mutate: vi.fn() }),
 }));
 
 describe('NoteEditorPage workspace tabs', () => {

@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
+import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { ShareDialog } from '@/components/notes/ShareDialog';
 import { usePortalTarget } from '@/hooks/usePortalTarget';
 import { ACCESS_BADGE_CONFIG, canPerformNoteAction } from '@/lib';
@@ -57,6 +58,7 @@ export function NoteControlsPortal({
   const canShare = canPerformNoteAction(note.accessLevel, 'share', {
     editorsCanShare: note.editorsCanShare,
   });
+  const canDelete = canPerformNoteAction(note.accessLevel, 'delete');
 
   if (!portalTarget) {
     return null;
@@ -127,6 +129,8 @@ export function NoteControlsPortal({
           />
         </>
       )}
+
+      {canDelete && <NoteActionsMenu noteId={note.id} noteTitle={note.title} />}
     </>,
     portalTarget
   );
