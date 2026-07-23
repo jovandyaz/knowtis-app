@@ -6,7 +6,7 @@ import {
   Inject,
   Injectable,
 } from '@nestjs/common';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 
 import { ANONYMOUS_LIMITS } from '@knowtis/shared-types';
 
@@ -31,7 +31,7 @@ export class AnonymousNoteLimitGuard implements CanActivate {
     const result = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(notes)
-      .where(eq(notes.ownerId, user.id));
+      .where(and(eq(notes.ownerId, user.id), isNull(notes.deletedAt)));
 
     if (result[0].count >= ANONYMOUS_LIMITS.maxNotes) {
       throw new ForbiddenException({

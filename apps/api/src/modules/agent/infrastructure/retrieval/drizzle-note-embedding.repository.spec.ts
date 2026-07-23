@@ -91,4 +91,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
     const staleForNewModel = await repo.findStaleNotes('voyage-5', 0, 200);
     expect(staleForNewModel.map((s) => s.noteId)).toContain(NOTE);
   });
+
+  it('excludes a soft-deleted note from stale results', async () => {
+    await db
+      .update(notes)
+      .set({ deletedAt: new Date() })
+      .where(eq(notes.id, NOTE));
+    const stale = await repo.findStaleNotes('voyage-9', 0, 200);
+    expect(stale.map((s) => s.noteId)).not.toContain(NOTE);
+    await db.update(notes).set({ deletedAt: null }).where(eq(notes.id, NOTE));
+  });
 });

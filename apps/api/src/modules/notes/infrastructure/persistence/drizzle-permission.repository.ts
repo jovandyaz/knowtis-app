@@ -1,6 +1,6 @@
 import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -234,7 +234,7 @@ export class DrizzlePermissionRepository implements PermissionRepository {
     const note = await this.db
       .select({ ownerId: notes.ownerId, generalAccess: notes.generalAccess })
       .from(notes)
-      .where(eq(notes.id, noteId))
+      .where(and(eq(notes.id, noteId), isNull(notes.deletedAt)))
       .limit(1);
 
     if (!note[0]) {

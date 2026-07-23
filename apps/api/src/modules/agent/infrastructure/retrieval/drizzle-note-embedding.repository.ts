@@ -38,7 +38,8 @@ export class DrizzleNoteEmbeddingRepository implements NoteEmbeddingRepository {
         sql`(${noteEmbeddings.noteId} IS NULL
              OR ${notes.updatedAt} > ${noteEmbeddings.updatedAt}
              OR ${noteEmbeddings.model} <> ${model})
-            AND ${notes.updatedAt} < now() - make_interval(secs => ${quietSeconds})`
+            AND ${notes.updatedAt} < now() - make_interval(secs => ${quietSeconds})
+            AND ${notes.deletedAt} IS NULL`
       )
       .orderBy(notes.updatedAt)
       .limit(limit);
