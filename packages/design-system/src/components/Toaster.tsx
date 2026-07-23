@@ -1,13 +1,23 @@
+import type { ComponentProps } from 'react';
+
 import { Toaster as SonnerToaster } from 'sonner';
 
-export function Toaster() {
+const TOAST_DURATION_MS = 5000;
+
+type ToasterPosition = ComponentProps<typeof SonnerToaster>['position'];
+
+interface ToasterProps {
+  position?: ToasterPosition;
+}
+
+export function Toaster({ position = 'bottom-right' }: ToasterProps) {
   return (
     <SonnerToaster
-      position="bottom-right"
+      position={position}
       richColors
       closeButton
       toastOptions={{
-        duration: 5000,
+        duration: TOAST_DURATION_MS,
       }}
     />
   );
