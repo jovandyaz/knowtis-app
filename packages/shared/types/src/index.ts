@@ -38,8 +38,17 @@ export {
 
 export {
   FEATURE_FLAG_KEYS,
+  FEATURE_FLAG_CATALOG,
+  FLAG_DOMAIN,
+  FLAG_GROUP,
+  REQUIRED_ENV,
+  flagMetaFor,
   type FeatureFlagKey,
   type FeatureFlagDto,
+  type FlagDomain,
+  type FlagGroup,
+  type FlagMeta,
+  type RequiredEnvVar,
 } from './lib/feature-flags.types';
 
 export { ANONYMOUS_LIMITS, type AnonymousLimits } from './lib/anonymous.types';
