@@ -2226,6 +2226,115 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(events.at(-1)).toMatchObject({ type: 'done' });
   });
 
+  it('strips the prior model reasoning from the history threaded to the failover model', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    const assistantWithReasoning = {
+      role: 'assistant',
+      content: [
+        { type: 'reasoning', text: 'primary model private thoughts' },
+        {
+          type: 'tool-call',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+        },
+      ],
+    };
+    streamTextMock
+      .mockImplementationOnce(
+        (opts: {
+          onStepFinish?: (s: {
+            toolResults: { toolName: string; output: unknown }[];
+            usage: { inputTokens: number; outputTokens: number };
+          }) => void;
+        }) => {
+          opts.onStepFinish?.({
+            toolResults: [
+              { toolName: 'getNote', output: { id: 'n1', title: 'T' } },
+            ],
+            usage: { inputTokens: 10, outputTokens: 5 },
+          });
+          return {
+            fullStream: (async function* () {
+              yield {
+                type: 'reasoning-delta',
+                id: 'r1',
+                text: 'primary model private thoughts',
+              };
+              yield { type: 'finish', finishReason: 'tool-calls' };
+            })(),
+            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+            response: Promise.resolve({
+              messages: [
+                assistantWithReasoning,
+                ...TOOL_CALL_MESSAGES.slice(1),
+              ],
+            }),
+          };
+        }
+      )
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(hangingAfter([]))
+      .mockImplementationOnce(failoverAnswer());
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const consumed = collect(orchestrator.run(baseInput));
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(streamTextMock).toHaveBeenCalledTimes(4);
+    const failoverMessages = streamTextMock.mock.calls[3][0].messages as {
+      content: unknown;
+    }[];
+    const partsOf = (type: string) =>
+      failoverMessages
+        .flatMap((m) => (Array.isArray(m.content) ? m.content : []))
+        .filter((p) => (p as { type: string }).type === type);
+    expect(partsOf('reasoning')).toHaveLength(0);
+    expect(partsOf('tool-call')).toHaveLength(1);
+    expect(partsOf('tool-result')).toHaveLength(1);
+  });
+
+  it('fails with AI_EMPTY_COMPLETION when a multi-step turn truncates on length with no text on the final step', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(
+        toolCallStep({ inputTokens: 10, outputTokens: 5 })
+      )
+      .mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
+          yield { type: 'finish', finishReason: 'length' };
+        })(),
+        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
+      }));
+    const orchestrator = makeOrchestrator(
+      makeConfig(),
+      makeToolRegistry(),
+      makeFlags(),
+      ''
+    );
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_EMPTY_COMPLETION' },
+      usage: { inputTokens: 30, outputTokens: 4101, model: MODEL },
+    });
+    expect(events.some((e) => (e as { type: string }).type === 'done')).toBe(
+      false
+    );
+  });
+
   it('yields an error event without reopening the turn when a progressed continuation throws synchronously before streaming', async () => {
     streamTextMock.mockClear();
     streamTextMock

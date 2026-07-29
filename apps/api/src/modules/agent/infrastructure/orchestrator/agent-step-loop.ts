@@ -1,5 +1,10 @@
 import { Logger } from '@nestjs/common';
-import type { ModelMessage, TelemetrySettings, ToolSet } from 'ai';
+import {
+  pruneMessages,
+  type ModelMessage,
+  type TelemetrySettings,
+  type ToolSet,
+} from 'ai';
 
 import {
   isAbortError,
@@ -153,7 +158,7 @@ export async function* runAgentStepLoop(
   const modelsUsed: string[] = [currentModel];
   const failoverCandidates = [...params.stepFailoverCandidates];
 
-  const history: ModelMessage[] = [...params.initialMessages];
+  let history: ModelMessage[] = [...params.initialMessages];
   const turn: TurnState = {
     progressed: false,
     textDeltas: 0,
@@ -251,6 +256,7 @@ export async function* runAgentStepLoop(
               input.openrouterProviderOrder
             );
             modelsUsed.push(currentModel);
+            history = pruneMessages({ messages: history, reasoning: 'all' });
             failedOver = true;
             break stepAttempts;
           }
