@@ -73,6 +73,19 @@ export function providerOf(modelId: string): string {
   return modelId.split(':')[0] ?? modelId;
 }
 
+// OpenRouter multiplexes each model to independent upstreams — failures are per-model.
+const PER_MODEL_COOLDOWN_PROVIDERS: ReadonlySet<string> = new Set(['openrouter']);
+
+/**
+ * The circuit-breaker bucket for a model: the full model id for aggregator
+ * providers (whose models fail independently), the provider otherwise (models
+ * that share one key/quota fail together).
+ */
+export function cooldownKeyOf(modelId: string): string {
+  const provider = providerOf(modelId);
+  return PER_MODEL_COOLDOWN_PROVIDERS.has(provider) ? modelId : provider;
+}
+
 /**
  * Returns the ordered models to attempt: primary first, then the chain,
  * deduped. Models whose provider lacks credentials or is cooling down are
@@ -91,7 +104,7 @@ export function resolveChainCandidates(input: ChainResolutionInput): string[] {
   const usable = available.length > 0 ? available : ordered;
 
   const warm = input.cooldown
-    ? usable.filter((m) => !input.cooldown?.isCooling(providerOf(m)))
+    ? usable.filter((m) => !input.cooldown?.isCooling(cooldownKeyOf(m)))
     : usable;
   return warm.length > 0 ? warm : usable;
 }
@@ -106,13 +119,13 @@ export async function executeWithChain<T>(
     const isLast = i === candidates.length - 1;
     try {
       const result = await attempt(model, { isLast });
-      context.cooldown?.recordSuccess(providerOf(model));
+      context.cooldown?.recordSuccess(cooldownKeyOf(model));
       return result;
     } catch (error) {
       if (isAbortError(error)) {
         throw error;
       }
-      context.cooldown?.recordFailure(providerOf(model));
+      context.cooldown?.recordFailure(cooldownKeyOf(model));
       logChainStep(context.logger, model, candidates[i + 1], error);
       if (isLast) {
         throw error;
@@ -143,7 +156,7 @@ export async function* streamWithChain<THandle, TChunk>(
         if (isAbortError(error)) {
           throw error;
         }
-        context.cooldown?.recordFailure(providerOf(model));
+        context.cooldown?.recordFailure(cooldownKeyOf(model));
         logChainStep(context.logger, model, candidates[i + 1], error);
         if (isLast) {
           throw error;
@@ -162,7 +175,7 @@ export async function* streamWithChain<THandle, TChunk>(
           }
           yield chunk;
         }
-        const served = providerOf(context.settledModel?.() ?? model);
+        const served = cooldownKeyOf(context.settledModel?.() ?? model);
         if (sawFailure) {
           context.cooldown?.recordFailure(served);
         } else {
@@ -174,7 +187,7 @@ export async function* streamWithChain<THandle, TChunk>(
           throw error;
         }
         context.cooldown?.recordFailure(
-          providerOf(context.settledModel?.() ?? model)
+          cooldownKeyOf(context.settledModel?.() ?? model)
         );
         logChainStep(context.logger, model, candidates[i + 1], error);
         if (isLast) {

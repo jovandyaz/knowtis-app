@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  cooldownKeyOf,
   executeWithChain,
   isOverloadedError,
   resolveChainCandidates,
@@ -56,12 +57,27 @@ const SONNET = 'anthropic:claude-sonnet-4-20250514';
 const HAIKU = 'anthropic:claude-haiku-4-5-20251001';
 const GPT = 'openai:gpt-4o-mini';
 const GEMINI = 'google:gemini-2.0-flash';
+const GLM = 'openrouter:z-ai/glm-5.2';
+const MINIMAX = 'openrouter:minimax/minimax-m2.5';
+const DEEPSEEK = 'openrouter:deepseek/deepseek-v3.2';
 
 function abortError(): Error {
   const error = new Error('aborted');
   error.name = 'AbortError';
   return error;
 }
+
+describe('cooldownKeyOf', () => {
+  it('keys OpenRouter models individually so their failures do not collide', () => {
+    expect(cooldownKeyOf(GLM)).toBe(GLM);
+    expect(cooldownKeyOf(GLM)).not.toBe(cooldownKeyOf(MINIMAX));
+  });
+
+  it('keys direct providers by provider so their models share a bucket', () => {
+    expect(cooldownKeyOf(SONNET)).toBe('anthropic');
+    expect(cooldownKeyOf(HAIKU)).toBe('anthropic');
+  });
+});
 
 describe('resolveChainCandidates', () => {
   it('puts the primary first and dedupes chain entries', () => {
@@ -122,6 +138,22 @@ describe('resolveChainCandidates', () => {
         isModelAvailable: () => false,
       })
     ).toEqual([SONNET, GPT]);
+  });
+
+  it('skips a cooling OpenRouter model without cooling its siblings', () => {
+    const cooldown = new ProviderCooldownTracker(
+      { allowedFails: 1, cooldownSeconds: 60 },
+      undefined,
+      () => 0
+    );
+    cooldown.recordFailure(GLM);
+    expect(
+      resolveChainCandidates({
+        primaryModel: GLM,
+        chain: [MINIMAX, DEEPSEEK],
+        cooldown,
+      })
+    ).toEqual([MINIMAX, DEEPSEEK]);
   });
 });
 
@@ -184,6 +216,29 @@ describe('executeWithChain', () => {
       executeWithChain(attempt, { candidates: [SONNET, GPT], logger })
     ).rejects.toThrow('aborted');
     expect(attempt).toHaveBeenCalledTimes(1);
+  });
+
+  it('records an OpenRouter failure under the per-model key, not the shared provider', async () => {
+    const cooldown = {
+      isCooling: vi.fn(),
+      recordFailure: vi.fn(),
+      recordSuccess: vi.fn(),
+    };
+    const attempt = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('glm upstream flaky'))
+      .mockResolvedValueOnce('minimax answer');
+
+    const result = await executeWithChain(attempt, {
+      candidates: [GLM, MINIMAX],
+      logger,
+      cooldown,
+    });
+
+    expect(result).toBe('minimax answer');
+    expect(cooldown.recordFailure).toHaveBeenCalledWith(GLM);
+    expect(cooldown.recordFailure).not.toHaveBeenCalledWith('openrouter');
+    expect(cooldown.recordSuccess).toHaveBeenCalledWith(MINIMAX);
   });
 });
 

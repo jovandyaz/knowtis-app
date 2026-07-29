@@ -2633,9 +2633,9 @@ describe('AiSdkAgentOrchestrator', () => {
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     await consumed;
 
-    expect(recordFailure).toHaveBeenCalledWith('openrouter');
+    expect(recordFailure).toHaveBeenCalledWith('openrouter:z-ai/glm-5.2');
     expect(recordSuccess).toHaveBeenCalledWith('anthropic');
-    expect(recordSuccess).not.toHaveBeenCalledWith('openrouter');
+    expect(recordSuccess).not.toHaveBeenCalledWith('openrouter:z-ai/glm-5.2');
   });
 
   it('attributes terminal success to the opened candidate on a turn without failover', async () => {
