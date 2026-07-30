@@ -343,6 +343,48 @@ describe('AiConfigPage', () => {
     expect(screen.queryByText('Web search')).not.toBeInTheDocument();
   });
 
+  it('shows an error state and retries the flags query from the Guardrails tab', async () => {
+    const refetch = vi.fn();
+    useFeatureFlagsMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Network error'),
+      refetch,
+    });
+
+    renderPage();
+    await userEvent.click(
+      screen.getByRole('tab', { name: 'Guardrails & Limits' })
+    );
+
+    expect(
+      screen.getByText('Could not load feature flags.')
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a loading state while the flags query is in flight', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    await userEvent.click(
+      screen.getByRole('tab', { name: 'Guardrails & Limits' })
+    );
+
+    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(
+      screen.queryByText('Could not load feature flags.')
+    ).not.toBeInTheDocument();
+  });
+
   it('shows capabilities with env chips and access flags in their tab, without product flags', async () => {
     renderPage();
     await userEvent.click(

@@ -1,3 +1,5 @@
+import type { ReactNode } from 'react';
+
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
@@ -30,6 +32,15 @@ const AI_CONFIG_TABS = [
   { value: 'capabilities', label: 'Capabilities & Access' },
 ] as const;
 
+type AiConfigTabValue = (typeof AI_CONFIG_TABS)[number]['value'];
+
+const TAB: Record<AiConfigTabValue, AiConfigTabValue> = {
+  models: 'models',
+  guardrails: 'guardrails',
+  providers: 'providers',
+  capabilities: 'capabilities',
+};
+
 export function AiConfigPage() {
   const config = useAiConfig();
   const flags = useFeatureFlags();
@@ -47,6 +58,22 @@ export function AiConfigPage() {
       return meta.domain === FLAG_DOMAIN.AI && meta.group === group;
     });
 
+  const renderFlagPanel = (groups: ReactNode) => {
+    if (flags.isError) {
+      return (
+        <ErrorState
+          message="Could not load feature flags."
+          onRetry={() => void flags.refetch()}
+          fullHeight={false}
+        />
+      );
+    }
+    if (flags.isLoading || !flags.data) {
+      return <LoadingState />;
+    }
+    return groups;
+  };
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1">
@@ -57,7 +84,7 @@ export function AiConfigPage() {
         </p>
       </div>
       <AiConfigStatusHeader defaultModel={defaultModel} />
-      <Tabs defaultValue="models">
+      <Tabs defaultValue={TAB.models}>
         <TabsList>
           {AI_CONFIG_TABS.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
@@ -65,7 +92,7 @@ export function AiConfigPage() {
             </TabsTrigger>
           ))}
         </TabsList>
-        <TabsContent value="models" className="flex flex-col gap-8 pt-4">
+        <TabsContent value={TAB.models} className="flex flex-col gap-8 pt-4">
           {config.isError ? (
             <ErrorState
               message="Could not load AI config."
@@ -84,28 +111,37 @@ export function AiConfigPage() {
             </>
           )}
         </TabsContent>
-        <TabsContent value="guardrails" className="pt-4">
-          <FlagGroupSection
-            title="Guardrails & Limits"
-            description="Safety and spend protections. Numeric limits are env-configured."
-            flags={aiFlagsIn(FLAG_GROUP.GUARDRAIL)}
-          />
+        <TabsContent value={TAB.guardrails} className="pt-4">
+          {renderFlagPanel(
+            <FlagGroupSection
+              title="Guardrails & Limits"
+              description="Safety and spend protections. Numeric limits are env-configured."
+              flags={aiFlagsIn(FLAG_GROUP.GUARDRAIL)}
+            />
+          )}
         </TabsContent>
-        <TabsContent value="providers" className="flex flex-col gap-8 pt-4">
+        <TabsContent value={TAB.providers} className="flex flex-col gap-8 pt-4">
           {upstreams ? <UpstreamSection entry={upstreams} /> : null}
           <ProvidersSection />
         </TabsContent>
-        <TabsContent value="capabilities" className="flex flex-col gap-6 pt-4">
-          <FlagGroupSection
-            title="Capabilities"
-            description="Optional agent features, some gated on an env key."
-            flags={aiFlagsIn(FLAG_GROUP.CAPABILITY)}
-          />
-          <FlagGroupSection
-            title="Access"
-            description="Which users get which AI features."
-            flags={aiFlagsIn(FLAG_GROUP.ACCESS)}
-          />
+        <TabsContent
+          value={TAB.capabilities}
+          className="flex flex-col gap-6 pt-4"
+        >
+          {renderFlagPanel(
+            <>
+              <FlagGroupSection
+                title="Capabilities"
+                description="Optional agent features, some gated on an env key."
+                flags={aiFlagsIn(FLAG_GROUP.CAPABILITY)}
+              />
+              <FlagGroupSection
+                title="Access"
+                description="Which users get which AI features."
+                flags={aiFlagsIn(FLAG_GROUP.ACCESS)}
+              />
+            </>
+          )}
         </TabsContent>
       </Tabs>
     </div>
