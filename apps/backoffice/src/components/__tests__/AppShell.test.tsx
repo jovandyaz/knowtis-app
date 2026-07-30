@@ -12,6 +12,7 @@ const OPEN_NAV_LABEL = 'Open navigation';
 const NAV_SHEET_TITLE = 'Navigation';
 const SIDEBAR_NAV_GROW_CLASS = 'flex-1';
 const TRIGGER_TAP_TARGET_CLASSES = ['h-11', 'w-11'];
+const APP_BAR_HEIGHT_CLASS = 'h-(--app-bar-height)';
 
 vi.mock('@/auth/setup', () => ({
   performLogout: vi.fn(),
@@ -84,6 +85,14 @@ describe('AppShell', () => {
       expect(trigger).toHaveAttribute('aria-expanded', 'false');
       expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
       expect(screen.getByText('Page content')).toBeInTheDocument();
+    });
+
+    it('sizes the bar from the token page headers offset against', async () => {
+      stubPhoneViewport();
+
+      await renderShell();
+
+      expect(screen.getByRole('banner')).toHaveClass(APP_BAR_HEIGHT_CLASS);
     });
 
     it('gives the menu trigger a 44px tap target that announces the sheet', async () => {

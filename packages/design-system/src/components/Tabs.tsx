@@ -34,8 +34,8 @@ function assignRef(
 export const Tabs = TabsPrimitive.Root;
 
 /**
- * Radix tab strip that publishes its own scroll state as
- * `data-overflow="none" | "left" | "right" | "both"` for consumers to style against.
+ * Radix tab strip that fades the edges it can still be scrolled towards and
+ * reflects that measured state on its own `data-overflow` attribute.
  */
 export const TabsList = forwardRef<
   TabsListElement,

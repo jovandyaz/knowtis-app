@@ -1,15 +1,9 @@
 import { render, screen, within } from '@testing-library/react';
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import type { TimeseriesBucket } from '@knowtis/data-access-admin';
 
 import { TimeSeriesChart } from '../TimeSeriesChart';
-
-class ResizeObserverStub {
-  observe() {}
-  unobserve() {}
-  disconnect() {}
-}
 
 const BUCKETS: TimeseriesBucket[] = [
   {
@@ -29,14 +23,6 @@ const BUCKETS: TimeseriesBucket[] = [
 ];
 
 describe('TimeSeriesChart', () => {
-  beforeAll(() => {
-    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
-  });
-
-  afterAll(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('exposes bucket values through an off-screen data table', () => {
     render(<TimeSeriesChart buckets={BUCKETS} metric="cost" period="day" />);
 
