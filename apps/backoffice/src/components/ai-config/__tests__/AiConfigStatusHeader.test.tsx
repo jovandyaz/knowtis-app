@@ -6,13 +6,13 @@ import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 
 import { AiConfigStatusHeader } from '../AiConfigStatusHeader';
 
-const { useAiHealthMock, useGlobalAiUsageMock, upsertMutate } = vi.hoisted(
-  () => ({
+const { useAiHealthMock, useGlobalAiUsageMock, upsertMutate, upsertState } =
+  vi.hoisted(() => ({
     useAiHealthMock: vi.fn(),
     useGlobalAiUsageMock: vi.fn(),
     upsertMutate: vi.fn(),
-  })
-);
+    upsertState: { isPending: false },
+  }));
 
 const useFeatureFlagsMock = vi.fn();
 
@@ -26,9 +26,10 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     ...actual,
     useAiHealth: () => useAiHealthMock(),
     useGlobalAiUsage: () => useGlobalAiUsageMock(),
-    useUpsertFeatureFlag: vi
-      .fn()
-      .mockReturnValue({ mutate: upsertMutate, isPending: false }),
+    useUpsertFeatureFlag: () => ({
+      mutate: upsertMutate,
+      isPending: upsertState.isPending,
+    }),
   };
 });
 
@@ -52,6 +53,7 @@ const HEALTHY = {
 describe('AiConfigStatusHeader', () => {
   beforeEach(() => {
     upsertMutate.mockReset();
+    upsertState.isPending = false;
     useFeatureFlagsMock.mockReturnValue({
       data: [
         {
@@ -121,6 +123,42 @@ describe('AiConfigStatusHeader', () => {
       key: 'ai_enabled',
       enabled: true,
     });
+  });
+
+  it('carries the existing description through so toggling never blanks it', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_enabled',
+          enabled: true,
+          description: 'Master AI kill switch',
+          updatedAt: '2026-07-01T00:00:00.000Z',
+        },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+
+    render(<AiConfigStatusHeader defaultModel={null} />);
+    await userEvent.click(screen.getByRole('switch', { name: 'AI enabled' }));
+
+    expect(upsertMutate).toHaveBeenCalledWith({
+      key: 'ai_enabled',
+      enabled: false,
+      description: 'Master AI kill switch',
+    });
+  });
+
+  it('locks the master toggle while a previous write is still in flight', async () => {
+    upsertState.isPending = true;
+
+    render(<AiConfigStatusHeader defaultModel={null} />);
+    const master = screen.getByRole('switch', { name: 'AI enabled' });
+
+    expect(master).toBeDisabled();
+
+    await userEvent.click(master);
+    expect(upsertMutate).not.toHaveBeenCalled();
   });
 
   it('locks the master toggle and flags the state as unknown while the flags query loads', () => {
