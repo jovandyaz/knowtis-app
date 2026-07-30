@@ -1,3 +1,4 @@
+import { ROUTES } from '@/config/routes.config';
 import {
   createAuthStore,
   createCrossTabSync,
@@ -28,7 +29,7 @@ export async function performLogout(): Promise<void> {
     console.warn('[backoffice-auth] server logout failed', error);
   }
   authStore.getState().logout();
-  window.location.assign('/login');
+  window.location.assign(ROUTES.LOGIN);
 }
 
 createCrossTabSync({
