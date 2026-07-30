@@ -1,19 +1,19 @@
 import { useState } from 'react';
 
-import { BarList } from '@/components/charts/BarList';
+import { ModelUsageTable } from '@/components/charts/ModelUsageTable';
 import { StatCard } from '@/components/charts/StatCard';
 import { StatCardsSkeleton } from '@/components/charts/StatCardsSkeleton';
 import {
   TimeSeriesChart,
   type TimeSeriesMetric,
 } from '@/components/charts/TimeSeriesChart';
+import { formatUsd } from '@/lib/format';
 
 import {
   METRICS_PERIODS,
   useGlobalAiMetrics,
   useGlobalAiTimeseries,
   type MetricsPeriod,
-  type MetricsSummary,
 } from '@knowtis/data-access-admin';
 import {
   Card,
@@ -31,30 +31,12 @@ import {
 
 const TIMESERIES_METRICS = ['cost', 'tokens', 'requests'] as const;
 
-function formatUsd(value: number): string {
-  return `$${value.toFixed(4)}`;
-}
-
 function isMetricsPeriod(value: string): value is MetricsPeriod {
   return (METRICS_PERIODS as readonly string[]).includes(value);
 }
 
 function isTimeSeriesMetric(value: string): value is TimeSeriesMetric {
   return (TIMESERIES_METRICS as readonly string[]).includes(value);
-}
-
-function spendByModelItems(summary: MetricsSummary) {
-  const entries = Object.entries(summary.byModel).sort(
-    (a, b) => b[1].costUsd - a[1].costUsd
-  );
-  const totalCost = entries.reduce((acc, [, stats]) => acc + stats.costUsd, 0);
-  return entries.map(([model, stats]) => ({
-    label: model,
-    value: stats.costUsd,
-    displayValue: `${formatUsd(stats.costUsd)} · ${
-      totalCost > 0 ? Math.round((stats.costUsd / totalCost) * 100) : 0
-    }%`,
-  }));
 }
 
 export function AiMetricsPage() {
@@ -112,7 +94,7 @@ export function AiMetricsPage() {
         </div>
       )}
 
-      <Card className="flex flex-col gap-3 p-4">
+      <Card className="flex min-w-0 flex-col gap-3 p-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-medium text-(--muted-foreground)">
             Over time
@@ -147,10 +129,12 @@ export function AiMetricsPage() {
       </Card>
 
       {summary && !metrics.isError && !metrics.isLoading && (
+        // min-w-0 on the cards: grid items default to min-width:auto, so a wide
+        // table widens the page instead of scrolling inside its own card.
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="flex flex-col gap-3 p-4">
+          <Card className="flex min-w-0 flex-col gap-3 p-4">
             <h2 className="text-sm font-medium text-(--muted-foreground)">
-              Spend by model
+              By model
             </h2>
             {Object.keys(summary.byModel).length === 0 ? (
               <EmptyState
@@ -158,14 +142,11 @@ export function AiMetricsPage() {
                 description="No AI usage recorded for this period."
               />
             ) : (
-              <BarList
-                ariaLabel="Spend by model"
-                items={spendByModelItems(summary)}
-              />
+              <ModelUsageTable byModel={summary.byModel} />
             )}
           </Card>
 
-          <Card className="flex flex-col gap-3 p-4">
+          <Card className="flex min-w-0 flex-col gap-3 p-4">
             <h2 className="text-sm font-medium text-(--muted-foreground)">
               By action
             </h2>
