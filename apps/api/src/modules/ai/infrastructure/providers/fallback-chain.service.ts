@@ -121,18 +121,32 @@ export class FallbackChainService implements OnModuleInit {
       providerOf(AI_SETTING_DEFAULTS.ai_fast_model),
     ]);
     const cooldownState = this.cooldown.snapshot();
+    // Cooldown keys are per-model for aggregator providers (OpenRouter); fold
+    // them back to the provider so this stays a provider-level view.
+    const byProvider = new Map<string, (typeof cooldownState)[string][]>();
+    for (const [key, state] of Object.entries(cooldownState)) {
+      const group = byProvider.get(providerOf(key)) ?? [];
+      group.push(state);
+      byProvider.set(providerOf(key), group);
+    }
     const result: Record<string, ProviderHealth> = {};
     for (const provider of providers) {
-      const state = cooldownState[provider];
+      const states = byProvider.get(provider) ?? [];
       result[provider] = {
         configured: this.providerRegistry.isModelAvailable(
           `${provider}:health-check`
         ),
-        cooling: state?.cooling ?? false,
-        failureCount: state?.failureCount ?? 0,
-        lastFailureAt: toIsoOrNull(state?.lastFailureAt),
-        lastSuccessAt: toIsoOrNull(state?.lastSuccessAt),
-        cooldownEndsAt: toIsoOrNull(state?.cooldownEndsAt),
+        cooling: states.some((s) => s.cooling),
+        failureCount: states.reduce((total, s) => total + s.failureCount, 0),
+        lastFailureAt: toIsoOrNull(
+          maxDefined(states.map((s) => s.lastFailureAt))
+        ),
+        lastSuccessAt: toIsoOrNull(
+          maxDefined(states.map((s) => s.lastSuccessAt))
+        ),
+        cooldownEndsAt: toIsoOrNull(
+          maxDefined(states.map((s) => s.cooldownEndsAt))
+        ),
       };
     }
     return result;
@@ -141,4 +155,9 @@ export class FallbackChainService implements OnModuleInit {
 
 function toIsoOrNull(epochMs: number | undefined): string | null {
   return epochMs === undefined ? null : new Date(epochMs).toISOString();
+}
+
+function maxDefined(values: (number | undefined)[]): number | undefined {
+  const defined = values.filter((v): v is number => v !== undefined);
+  return defined.length > 0 ? Math.max(...defined) : undefined;
 }

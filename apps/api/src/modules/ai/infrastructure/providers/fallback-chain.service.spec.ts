@@ -73,6 +73,17 @@ describe('FallbackChainService', () => {
       expect(snapshot['anthropic']?.lastFailureAt).toEqual(expect.any(String));
       expect(snapshot['anthropic']?.cooldownEndsAt).toEqual(expect.any(String));
     });
+
+    it('rolls a cooling OpenRouter model up into the provider-level row', () => {
+      const { service } = buildService({ AI_COOLDOWN_ALLOWED_FAILS: 2 });
+
+      service.cooldown.recordFailure('openrouter:z-ai/glm-5.2');
+      service.cooldown.recordFailure('openrouter:z-ai/glm-5.2');
+
+      const snapshot = service.healthSnapshot();
+      expect(snapshot['openrouter']?.cooling).toBe(true);
+      expect(snapshot['openrouter']?.failureCount).toBe(2);
+    });
   });
 
   describe('cooldown alerting', () => {

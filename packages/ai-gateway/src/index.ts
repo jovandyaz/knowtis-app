@@ -19,6 +19,7 @@ export {
 } from './catalog/compute-token-cost';
 export { MODEL_PRICES_SNAPSHOT } from './catalog/model-prices.snapshot';
 export {
+  cooldownKeyOf,
   executeWithChain,
   isAbortError,
   isOverloadedError,

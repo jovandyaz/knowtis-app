@@ -7,6 +7,7 @@ import {
 } from 'ai';
 
 import {
+  cooldownKeyOf,
   isAbortError,
   providerOf,
   type ProviderCooldown,
@@ -239,7 +240,7 @@ export async function* runAgentStepLoop(
             ? failoverCandidates.shift()
             : undefined;
           if (nextModel !== undefined) {
-            params.cooldown.recordFailure(providerOf(currentModel));
+            params.cooldown.recordFailure(cooldownKeyOf(currentModel));
             logger.warn({
               event: 'ai.chain.step_failed',
               model: currentModel,
