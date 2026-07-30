@@ -1,13 +1,17 @@
 import { performLogout } from '@/auth/setup';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
-import { Button, ThemeToggle } from '@knowtis/design-system';
+import { Button, cn, ThemeToggle } from '@knowtis/design-system';
 
-export function AppShellAccount() {
+interface AppShellAccountProps {
+  className?: string;
+}
+
+export function AppShellAccount({ className }: AppShellAccountProps) {
   const user = useAuthUser();
 
   return (
-    <div className="flex flex-col gap-2 border-t border-(--border) pt-4">
+    <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-xs text-(--muted-foreground)">
           {user?.email}
