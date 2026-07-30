@@ -5,7 +5,8 @@
 # Run 'make help' to see all available commands
 # ============================================================================
 
-.PHONY: help install dev dev-api dev-all build build-api test lint format \
+.PHONY: help install dev dev-api dev-backoffice dev-all build build-api \
+        build-backoffice test lint format \
         docker-up docker-down db-push db-generate db-migrate db-studio \
         clean typecheck graph storybook preview prepare
 
@@ -66,7 +67,11 @@ dev-api: ## Start API backend (http://localhost:3333)
 	@echo "$(CYAN)🚀 Starting API server...$(RESET)"
 	pnpm dev:api
 
-dev-all: ## Start both frontend and API simultaneously
+dev-backoffice: ## Start Backoffice frontend (http://localhost:4400)
+	@echo "$(CYAN)🚀 Starting Backoffice app...$(RESET)"
+	pnpm dev:backoffice
+
+dev-all: ## Start Notes, Backoffice and API simultaneously
 	@echo "$(CYAN)🚀 Starting all services...$(RESET)"
 	pnpm dev:all
 
@@ -86,7 +91,11 @@ build-api: ## Build API for production
 	@echo "$(CYAN)🔨 Building API...$(RESET)"
 	pnpm build:api
 
-build-all: build build-api ## Build all projects
+build-backoffice: ## Build Backoffice app for production
+	@echo "$(CYAN)🔨 Building Backoffice app...$(RESET)"
+	pnpm build:backoffice
+
+build-all: build build-backoffice build-api ## Build all projects
 	@echo "$(GREEN)✅ All projects built successfully$(RESET)"
 
 preview: ## Preview production build of Notes app
@@ -282,8 +291,9 @@ info: ## Show project information
 	@echo "$(BOLD)$(CYAN)Knowtis Monorepo$(RESET)"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "$(BOLD)Apps:$(RESET)"
-	@echo "  • notes    - React frontend (Vite)"
-	@echo "  • api      - NestJS backend"
+	@echo "  • notes      - React frontend (Vite)"
+	@echo "  • backoffice - React admin frontend (Vite)"
+	@echo "  • api        - NestJS backend"
 	@echo ""
 	@echo "$(BOLD)Libraries:$(RESET)"
 	@echo "  • api-client     - HTTP/WebSocket client"
@@ -293,6 +303,7 @@ info: ## Show project information
 	@echo ""
 	@echo "$(BOLD)URLs (development):$(RESET)"
 	@echo "  • Frontend:  http://localhost:4200"
+	@echo "  • Backoffice: http://localhost:4400"
 	@echo "  • API:       http://localhost:3333/api"
 	@echo "  • WebSocket: ws://localhost:3333"
 	@echo "  • PostgreSQL: localhost:5432"

@@ -10,7 +10,7 @@ This guide is the ground truth for onboarding. It documents the exact working se
 git clone git@github.com:jovandyaz/knowtis_app.git
 cd knowtis_app
 pnpm setup       # Node/Docker checks, scaffolds .env files, installs deps, starts Docker, pushes schema
-pnpm dev:all     # API (:3333) + frontend (:4200)
+pnpm dev:all     # API (:3333) + Notes (:4200) + Backoffice (:4400)
 ```
 
 Open <http://localhost:4200>, register, and you're in. To also run the MCP server locally:
