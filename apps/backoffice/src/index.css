@@ -1,2 +1,7 @@
 /* Import design system styles (includes Tailwind, tokens, and base theme) */
 @import '@knowtis/design-system/styles.css';
+
+@theme {
+  /* Height of the phone-only app bar; page-level sticky headers offset by it. */
+  --app-bar-height: 3.5rem;
+}

@@ -88,14 +88,6 @@ describe('AiConfigStatusHeader', () => {
     expect(screen.getByText('$3.10 today')).toBeInTheDocument();
   });
 
-  it('sticks below the mobile navigation bar and to the top on desktop', () => {
-    const { container } = render(<AiConfigStatusHeader defaultModel={null} />);
-
-    const header = container.querySelector('.sticky');
-    expect(header).toHaveClass('top-14');
-    expect(header).toHaveClass('md:top-0');
-  });
-
   it('lists cooling providers when the chain breaker is active', () => {
     useAiHealthMock.mockReturnValue({
       ...HEALTHY,

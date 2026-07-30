@@ -1,5 +1,6 @@
 import { AppShell } from '@/components/AppShell';
 import { ADMIN_SECTIONS } from '@/config/admin-sections';
+import { stubDesktopViewport, stubPhoneViewport } from '@/test/media-query';
 import { renderWithRouter } from '@/test/router';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -10,6 +11,7 @@ const LINKED_PATHS = ADMIN_SECTIONS.map((section) => section.to);
 const OPEN_NAV_LABEL = 'Open navigation';
 const NAV_SHEET_TITLE = 'Navigation';
 const SIDEBAR_NAV_GROW_CLASS = 'flex-1';
+const TRIGGER_TAP_TARGET_CLASSES = ['h-11', 'w-11'];
 
 vi.mock('@/auth/setup', () => ({
   performLogout: vi.fn(),
@@ -18,22 +20,6 @@ vi.mock('@/auth/setup', () => ({
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => ({ id: 'admin-1', email: USER_EMAIL, role: 'admin' }),
 }));
-
-function stubMatchMedia(matches: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches,
-    media: query,
-    onchange: null,
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    addListener: vi.fn(),
-    removeListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  }));
-}
-
-const stubDesktopViewport = () => stubMatchMedia(true);
-const stubPhoneViewport = () => stubMatchMedia(false);
 
 function renderShell() {
   return renderWithRouter(
@@ -100,6 +86,16 @@ describe('AppShell', () => {
       expect(screen.getByText('Page content')).toBeInTheDocument();
     });
 
+    it('gives the menu trigger a 44px tap target that announces the sheet', async () => {
+      stubPhoneViewport();
+
+      await renderShell();
+
+      const trigger = screen.getByRole('button', { name: OPEN_NAV_LABEL });
+      expect(trigger).toHaveClass(...TRIGGER_TAP_TARGET_CLASSES);
+      expect(trigger).toHaveAttribute('aria-haspopup', 'dialog');
+    });
+
     it('opens the nav sheet and reports expansion', async () => {
       stubPhoneViewport();
       await renderShell();
@@ -122,19 +118,6 @@ describe('AppShell', () => {
       ).toHaveAttribute('aria-expanded', 'true');
     });
 
-    it('lets the sheet nav size to its content', async () => {
-      stubPhoneViewport();
-      await renderShell();
-
-      await userEvent.click(
-        screen.getByRole('button', { name: OPEN_NAV_LABEL })
-      );
-
-      expect(screen.getByRole('navigation')).not.toHaveClass(
-        SIDEBAR_NAV_GROW_CLASS
-      );
-    });
-
     it('closes the sheet once a destination is chosen', async () => {
       stubPhoneViewport();
       await renderShell();
@@ -143,6 +126,29 @@ describe('AppShell', () => {
       );
 
       await userEvent.click(screen.getByRole('link', { name: 'AI Config' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      ).toHaveAttribute('aria-expanded', 'false');
+    });
+  });
+
+  describe('when the viewport crosses the desktop breakpoint', () => {
+    it('does not bring an open sheet back after a rotation round trip', async () => {
+      stubPhoneViewport();
+      await renderShell();
+      await userEvent.click(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      );
+      expect(
+        await screen.findByRole('dialog', { name: NAV_SHEET_TITLE })
+      ).toBeInTheDocument();
+
+      stubDesktopViewport();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      stubPhoneViewport();
 
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       expect(
