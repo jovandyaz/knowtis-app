@@ -88,6 +88,7 @@ export function AiConfigPage() {
   const aiEnabled =
     (flags.data ?? []).find((flag) => flag.key === FEATURE_FLAG_KEYS.AI_ENABLED)
       ?.enabled ?? false;
+  const aiKnownDisabled = !!flags.data && !aiEnabled;
 
   const aiFlagsIn = (group: FlagGroup) =>
     (flags.data ?? []).filter((flag) => {
@@ -97,16 +98,16 @@ export function AiConfigPage() {
 
   const renderConfigPanel = (panel: ReactNode) => {
     if (config.isError) {
-      return aiEnabled ? (
-        <ErrorState
-          message="Could not load AI config."
-          onRetry={() => void config.refetch()}
-          fullHeight={false}
-        />
-      ) : (
+      return aiKnownDisabled ? (
         <EmptyState
           title="AI is disabled"
           description="Turn AI on with the toggle in the header above to load its configuration."
+          fullHeight={false}
+        />
+      ) : (
+        <ErrorState
+          message="Could not load AI config."
+          onRetry={() => void config.refetch()}
           fullHeight={false}
         />
       );

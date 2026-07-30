@@ -420,15 +420,22 @@ describe('AiConfigPage', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('shows capabilities with env chips and access flags in their tab, without product flags', async () => {
+  it('shows exactly the capability and access flags, with env chips and nothing from other groups', async () => {
     renderPage();
     await userEvent.click(
       screen.getByRole('tab', { name: 'Capabilities & Access' })
     );
-    expect(screen.getByText('Web search')).toBeInTheDocument();
-    expect(screen.getByText('requires TAVILY_API_KEY')).toBeInTheDocument();
-    expect(screen.getByText('Bring your own key')).toBeInTheDocument();
-    expect(screen.queryByText('voice_notes_enabled')).not.toBeInTheDocument();
+
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(panel.getByText('requires TAVILY_API_KEY')).toBeInTheDocument();
+    expect(
+      panel
+        .getAllByRole('switch')
+        .map((toggle) => toggle.getAttribute('aria-label'))
+    ).toEqual([
+      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH].label,
+      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AGENT_BYOK].label,
+    ]);
   });
 
   it('surfaces the config error on the Providers tab while keeping the provider list', async () => {
@@ -496,6 +503,30 @@ describe('AiConfigPage', () => {
       screen.queryByText('Could not load AI config.')
     ).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['loads', { data: undefined, isLoading: true, isError: false }],
+    ['fails', { data: undefined, isLoading: false, isError: true }],
+  ])(
+    'offers a retry instead of claiming AI is off when the config fails while the flags query %s',
+    (_state, flagsQuery) => {
+      useAiConfigMock.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error: new Error('Boom'),
+        refetch: vi.fn(),
+      });
+      useFeatureFlagsMock.mockReturnValue({ ...flagsQuery, refetch: vi.fn() });
+
+      renderPage();
+
+      expect(screen.getByText('Could not load AI config.')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('heading', { name: 'AI is disabled' })
+      ).not.toBeInTheDocument();
+    }
+  );
 
   it('reaches every AI-domain catalog flag from the header or one of the tabs', async () => {
     const aiFlags = Object.entries(FEATURE_FLAG_CATALOG).filter(
