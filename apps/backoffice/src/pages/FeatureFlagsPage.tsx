@@ -1,26 +1,56 @@
+import { FlagGroupSection } from '@/components/flags/FlagGroupSection';
 import { TableSkeleton } from '@/components/TableSkeleton';
 
-import { useUpsertFeatureFlag } from '@knowtis/data-access-admin';
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
+import { EmptyState, ErrorState } from '@knowtis/design-system';
 import {
-  EmptyState,
-  ErrorState,
-  Switch,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@knowtis/design-system';
+  FLAG_DOMAIN,
+  FLAG_GROUP,
+  flagMetaFor,
+  type FlagGroup,
+} from '@knowtis/shared-types';
+
+const PRODUCT_GROUPS: ReadonlyArray<{
+  group: FlagGroup;
+  title: string;
+  description: string;
+}> = [
+  {
+    group: FLAG_GROUP.RELEASE,
+    title: 'Release',
+    description: 'Feature rollouts — retire once fully rolled out.',
+  },
+  {
+    group: FLAG_GROUP.OPS,
+    title: 'Operations',
+    description: 'Operational toggles that protect the platform.',
+  },
+  {
+    group: FLAG_GROUP.PERMISSION,
+    title: 'Permissions',
+    description: 'Gates controlling which users get a feature.',
+  },
+  {
+    group: FLAG_GROUP.OTHER,
+    title: 'Other',
+    description: 'Flags without catalog metadata.',
+  },
+];
 
 export function FeatureFlagsPage() {
   const flags = useFeatureFlags();
-  const upsert = useUpsertFeatureFlag();
+  const productFlags = (flags.data ?? []).filter(
+    (flag) => flagMetaFor(flag.key).domain === FLAG_DOMAIN.PRODUCT
+  );
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold">Feature Flags</h1>
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-semibold">Feature Flags</h1>
+        <p className="text-sm text-(--muted-foreground)">
+          Product flags. AI operational controls live in AI Config.
+        </p>
+      </div>
       {flags.isError ? (
         <ErrorState
           message="Could not load feature flags."
@@ -29,53 +59,22 @@ export function FeatureFlagsPage() {
         />
       ) : flags.isLoading ? (
         <TableSkeleton columns={4} />
-      ) : !flags.data || flags.data.length === 0 ? (
+      ) : productFlags.length === 0 ? (
         <EmptyState
           title="No flags"
           description="Flags appear once they are created via the API."
         />
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Flag</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Updated</TableHead>
-              <TableHead className="text-right">Enabled</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {flags.data.map((flag) => (
-              <TableRow key={flag.key}>
-                <TableCell className="font-mono text-xs">{flag.key}</TableCell>
-                <TableCell className="text-(--muted-foreground)">
-                  {flag.description ?? '—'}
-                </TableCell>
-                <TableCell>
-                  {new Date(flag.updatedAt).toLocaleDateString()}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Switch
-                    checked={flag.enabled}
-                    aria-label={flag.key}
-                    disabled={
-                      upsert.isPending && upsert.variables?.key === flag.key
-                    }
-                    onCheckedChange={(enabled) =>
-                      upsert.mutate({
-                        key: flag.key,
-                        enabled,
-                        ...(flag.description !== null && {
-                          description: flag.description,
-                        }),
-                      })
-                    }
-                  />
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        PRODUCT_GROUPS.map(({ group, title, description }) => (
+          <FlagGroupSection
+            key={group}
+            title={title}
+            description={description}
+            flags={productFlags.filter(
+              (flag) => flagMetaFor(flag.key).group === group
+            )}
+          />
+        ))
       )}
     </div>
   );

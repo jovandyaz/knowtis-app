@@ -22,32 +22,65 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   };
 });
 
+const FLAGS = [
+  {
+    key: 'voice_notes_enabled',
+    enabled: false,
+    description: null,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  },
+  {
+    key: 'ai_enabled',
+    enabled: true,
+    description: 'Master AI switch',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  },
+  {
+    key: 'some_adhoc_flag',
+    enabled: true,
+    description: null,
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  },
+];
+
 describe('FeatureFlagsPage', () => {
   beforeEach(() => {
     useFeatureFlagsMock.mockReset();
+    useFeatureFlagsMock.mockReturnValue({
+      data: FLAGS,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
   });
 
-  it('renders flags with their toggle state', () => {
+  it('groups product flags by type and leaves AI flags out', () => {
+    render(<FeatureFlagsPage />);
+
+    expect(
+      screen.getByRole('heading', { name: 'Release' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Voice notes')).toBeInTheDocument();
+    expect(screen.queryByText('ai_enabled')).not.toBeInTheDocument();
+  });
+
+  it('puts uncatalogued flags under Other', () => {
+    render(<FeatureFlagsPage />);
+
+    expect(screen.getByRole('heading', { name: 'Other' })).toBeInTheDocument();
+    expect(screen.getByText('some_adhoc_flag')).toBeInTheDocument();
+  });
+
+  it('shows the empty state when no product flags exist', () => {
     useFeatureFlagsMock.mockReturnValue({
-      data: [
-        {
-          key: 'ai_enabled',
-          enabled: true,
-          description: 'Master AI switch',
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-      ],
+      data: [FLAGS[1]],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
     });
 
     render(<FeatureFlagsPage />);
-    expect(
-      screen.getByRole('heading', { name: /feature flags/i })
-    ).toBeInTheDocument();
-    expect(screen.getByText('ai_enabled')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: /ai_enabled/i })).toBeChecked();
+    expect(screen.getByText('No flags')).toBeInTheDocument();
   });
 
   it('shows an error state and retries the failed query', async () => {
