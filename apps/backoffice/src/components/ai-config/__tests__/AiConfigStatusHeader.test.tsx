@@ -113,11 +113,44 @@ describe('AiConfigStatusHeader', () => {
     render(<AiConfigStatusHeader defaultModel={null} />);
     const master = screen.getByRole('switch', { name: 'AI enabled' });
     expect(master).not.toBeChecked();
+    expect(master).toBeEnabled();
+    expect(screen.queryByText('state unknown')).not.toBeInTheDocument();
 
     await userEvent.click(master);
     expect(upsertMutate).toHaveBeenCalledWith({
       key: 'ai_enabled',
       enabled: true,
     });
+  });
+
+  it('locks the master toggle and flags the state as unknown while the flags query loads', () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+    });
+
+    render(<AiConfigStatusHeader defaultModel={null} />);
+    const master = screen.getByRole('switch', { name: 'AI enabled' });
+
+    expect(master).toBeDisabled();
+    expect(master).toHaveAccessibleDescription('state unknown');
+  });
+
+  it('locks the master toggle and flags the state as unknown when the flags query fails', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+    });
+
+    render(<AiConfigStatusHeader defaultModel={null} />);
+    const master = screen.getByRole('switch', { name: 'AI enabled' });
+
+    expect(master).toBeDisabled();
+    expect(screen.getByText('state unknown')).toBeInTheDocument();
+
+    await userEvent.click(master);
+    expect(upsertMutate).not.toHaveBeenCalled();
   });
 });

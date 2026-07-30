@@ -11,6 +11,7 @@ import { FlagGroupSection } from '@/components/flags/FlagGroupSection';
 import { useAiConfig } from '@knowtis/data-access-admin';
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
 import {
+  EmptyState,
   ErrorState,
   LoadingState,
   Tabs,
@@ -19,6 +20,7 @@ import {
   TabsTrigger,
 } from '@knowtis/design-system';
 import {
+  FEATURE_FLAG_KEYS,
   FLAG_DOMAIN,
   FLAG_GROUP,
   flagMetaFor,
@@ -48,15 +50,44 @@ export function AiConfigPage() {
   const chain = config.data?.find((entry) => entry.kind === 'chain');
   const effort = config.data?.find((entry) => entry.kind === 'choice');
   const upstreams = config.data?.find((entry) => entry.kind === 'list');
+  const modelEntries = (config.data ?? []).filter(
+    (entry) => entry.kind === 'model'
+  );
   const defaultModel =
     config.data?.find((entry) => entry.key === 'ai_default_model')?.value ??
     null;
+
+  const aiEnabled =
+    (flags.data ?? []).find((flag) => flag.key === FEATURE_FLAG_KEYS.AI_ENABLED)
+      ?.enabled ?? false;
 
   const aiFlagsIn = (group: FlagGroup) =>
     (flags.data ?? []).filter((flag) => {
       const meta = flagMetaFor(flag.key);
       return meta.domain === FLAG_DOMAIN.AI && meta.group === group;
     });
+
+  const renderConfigPanel = (panel: ReactNode) => {
+    if (config.isError) {
+      return aiEnabled ? (
+        <ErrorState
+          message="Could not load AI config."
+          onRetry={() => void config.refetch()}
+          fullHeight={false}
+        />
+      ) : (
+        <EmptyState
+          title="AI is disabled"
+          description="Turn AI on with the toggle in the header above to load its configuration."
+          fullHeight={false}
+        />
+      );
+    }
+    if (config.isLoading || !config.data) {
+      return <LoadingState />;
+    }
+    return panel;
+  };
 
   const renderFlagPanel = (groups: ReactNode) => {
     if (flags.isError) {
@@ -93,19 +124,9 @@ export function AiConfigPage() {
           ))}
         </TabsList>
         <TabsContent value={TAB.models} className="flex flex-col gap-8 pt-4">
-          {config.isError ? (
-            <ErrorState
-              message="Could not load AI config."
-              onRetry={() => void config.refetch()}
-              fullHeight={false}
-            />
-          ) : config.isLoading || !config.data ? (
-            <LoadingState />
-          ) : (
+          {renderConfigPanel(
             <>
-              <ModelsSection
-                entries={config.data.filter((entry) => entry.kind === 'model')}
-              />
+              <ModelsSection entries={modelEntries} />
               {chain ? <RoutingSection entry={chain} /> : null}
               {effort ? <ReasoningSection entry={effort} /> : null}
             </>
@@ -121,7 +142,9 @@ export function AiConfigPage() {
           )}
         </TabsContent>
         <TabsContent value={TAB.providers} className="flex flex-col gap-8 pt-4">
-          {upstreams ? <UpstreamSection entry={upstreams} /> : null}
+          {renderConfigPanel(
+            upstreams ? <UpstreamSection entry={upstreams} /> : null
+          )}
           <ProvidersSection />
         </TabsContent>
         <TabsContent

@@ -4,7 +4,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 import type * as DataAccessFeatureFlags from '@knowtis/data-access-feature-flags';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_CATALOG,
+  FEATURE_FLAG_KEYS,
+  FLAG_DOMAIN,
+} from '@knowtis/shared-types';
 
 import { AiConfigPage } from '../AiConfigPage';
 
@@ -78,6 +82,13 @@ const MODELS = [
 
 const renderPage = () => render(<AiConfigPage />);
 
+const flagRow = (key: string, enabled: boolean) => ({
+  key,
+  enabled,
+  description: null,
+  updatedAt: '2026-07-01T00:00:00.000Z',
+});
+
 describe('AiConfigPage', () => {
   beforeEach(() => {
     useAiConfigMock.mockReset();
@@ -104,36 +115,11 @@ describe('AiConfigPage', () => {
     });
     useFeatureFlagsMock.mockReturnValue({
       data: [
-        {
-          key: FEATURE_FLAG_KEYS.AI_ENABLED,
-          enabled: true,
-          description: null,
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-        {
-          key: FEATURE_FLAG_KEYS.AI_GLOBAL_SPEND_BREAKER,
-          enabled: true,
-          description: null,
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-        {
-          key: FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH,
-          enabled: true,
-          description: null,
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-        {
-          key: FEATURE_FLAG_KEYS.AGENT_BYOK,
-          enabled: false,
-          description: null,
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
-        {
-          key: FEATURE_FLAG_KEYS.VOICE_NOTES_ENABLED,
-          enabled: false,
-          description: null,
-          updatedAt: '2026-07-01T00:00:00.000Z',
-        },
+        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
+        flagRow(FEATURE_FLAG_KEYS.AI_GLOBAL_SPEND_BREAKER, true),
+        flagRow(FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH, true),
+        flagRow(FEATURE_FLAG_KEYS.AGENT_BYOK, false),
+        flagRow(FEATURE_FLAG_KEYS.VOICE_NOTES_ENABLED, false),
       ],
       isLoading: false,
       isError: false,
@@ -394,5 +380,108 @@ describe('AiConfigPage', () => {
     expect(screen.getByText('requires TAVILY_API_KEY')).toBeInTheDocument();
     expect(screen.getByText('Bring your own key')).toBeInTheDocument();
     expect(screen.queryByText('voice_notes_enabled')).not.toBeInTheDocument();
+  });
+
+  it('surfaces the config error on the Providers tab while keeping the provider list', async () => {
+    const refetch = vi.fn();
+    useAiConfigMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Network error'),
+      refetch,
+    });
+
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: 'Providers' }));
+
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(panel.getByText('Could not load AI config.')).toBeInTheDocument();
+    expect(
+      panel.getByRole('heading', { name: 'Providers' })
+    ).toBeInTheDocument();
+
+    await userEvent.click(panel.getByRole('button', { name: /try again/i }));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a loading state on the Providers tab while the config query is in flight', async () => {
+    useAiConfigMock.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    await userEvent.click(screen.getByRole('tab', { name: 'Providers' }));
+
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(panel.getByText('Loading...')).toBeInTheDocument();
+    expect(
+      panel.getByRole('heading', { name: 'Providers' })
+    ).toBeInTheDocument();
+  });
+
+  it('names the disabled master flag instead of a load failure when the config query is forbidden', () => {
+    useAiConfigMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      error: new Error('Forbidden'),
+      refetch: vi.fn(),
+    });
+    useFeatureFlagsMock.mockReturnValue({
+      data: [flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, false)],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(
+      screen.getByRole('heading', { name: 'AI is disabled' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('Could not load AI config.')
+    ).not.toBeInTheDocument();
+  });
+
+  it('reaches every AI-domain catalog flag from the header or one of the tabs', async () => {
+    const aiFlags = Object.entries(FEATURE_FLAG_CATALOG).filter(
+      ([, meta]) => meta.domain === FLAG_DOMAIN.AI
+    );
+    useFeatureFlagsMock.mockReturnValue({
+      data: aiFlags.map(([key]) => flagRow(key, false)),
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    const masterLabel =
+      FEATURE_FLAG_CATALOG[FEATURE_FLAG_KEYS.AI_ENABLED].label;
+    expect(
+      screen.getByRole('switch', { name: masterLabel })
+    ).toBeInTheDocument();
+
+    const unreached = new Set(
+      aiFlags
+        .map(([, meta]) => meta.label)
+        .filter((label) => label !== masterLabel)
+    );
+    for (const tab of screen.getAllByRole('tab')) {
+      await userEvent.click(tab);
+      const panel = within(screen.getByRole('tabpanel'));
+      for (const label of [...unreached]) {
+        if (panel.queryByRole('switch', { name: label })) {
+          unreached.delete(label);
+        }
+      }
+    }
+
+    expect([...unreached]).toEqual([]);
   });
 });

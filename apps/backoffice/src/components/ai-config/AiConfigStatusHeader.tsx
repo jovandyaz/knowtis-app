@@ -1,3 +1,5 @@
+import { useId } from 'react';
+
 import {
   useAiHealth,
   useGlobalAiUsage,
@@ -23,6 +25,8 @@ export function AiConfigStatusHeader({
     (flag) => flag.key === FEATURE_FLAG_KEYS.AI_ENABLED
   );
   const masterEnabled = masterFlag?.enabled ?? false;
+  const masterStateUnknown = !masterFlag && (flags.isLoading || flags.isError);
+  const masterHintId = useId();
   const cooling = Object.entries(health.data?.providers ?? {})
     .filter(([, provider]) => provider.cooling)
     .map(([name]) => name);
@@ -33,7 +37,8 @@ export function AiConfigStatusHeader({
         AI enabled
         <Switch
           checked={masterEnabled}
-          disabled={upsert.isPending}
+          disabled={upsert.isPending || masterStateUnknown}
+          aria-describedby={masterStateUnknown ? masterHintId : undefined}
           onCheckedChange={(enabled) =>
             upsert.mutate({
               key: FEATURE_FLAG_KEYS.AI_ENABLED,
@@ -45,6 +50,11 @@ export function AiConfigStatusHeader({
           }
         />
       </label>
+      {masterStateUnknown ? (
+        <Badge id={masterHintId} variant="outline">
+          state unknown
+        </Badge>
+      ) : null}
       {defaultModel ? (
         <span className="font-mono text-xs text-(--muted-foreground)">
           {defaultModel}

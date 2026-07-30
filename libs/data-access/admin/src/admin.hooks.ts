@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query';
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
@@ -119,6 +120,13 @@ export function useGlobalAiTimeseries(period: MetricsPeriod) {
   });
 }
 
+function invalidateFlagDependents(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiHealth() });
+}
+
 export function useUpsertFeatureFlag() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -136,10 +144,7 @@ export function useUpsertFeatureFlag() {
         })
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
+      invalidateFlagDependents(queryClient);
     },
   });
 }
@@ -150,10 +155,7 @@ export function useDeleteFeatureFlag() {
     mutationFn: (key: string) =>
       httpClient.delete(`/flags/${encodeURIComponent(key)}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
+      invalidateFlagDependents(queryClient);
     },
   });
 }
