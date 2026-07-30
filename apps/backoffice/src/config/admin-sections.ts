@@ -17,7 +17,7 @@ export const ADMIN_SECTIONS = [
   {
     to: '/feature-flags',
     label: 'Feature Flags',
-    description: 'Toggle platform features live.',
+    description: 'Toggle product features live.',
   },
   {
     to: '/audit',

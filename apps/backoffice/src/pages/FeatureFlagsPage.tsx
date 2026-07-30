@@ -1,8 +1,7 @@
 import { FlagGroupSection } from '@/components/flags/FlagGroupSection';
-import { TableSkeleton } from '@/components/TableSkeleton';
 
 import { useFeatureFlags } from '@knowtis/data-access-feature-flags';
-import { EmptyState, ErrorState } from '@knowtis/design-system';
+import { EmptyState, ErrorState, LoadingState } from '@knowtis/design-system';
 import {
   FLAG_DOMAIN,
   FLAG_GROUP,
@@ -33,9 +32,18 @@ const PRODUCT_GROUPS: ReadonlyArray<{
   {
     group: FLAG_GROUP.OTHER,
     title: 'Other',
-    description: 'Flags without catalog metadata.',
+    description: 'Flags without a dedicated section.',
   },
 ];
+
+const SECTION_GROUPS: ReadonlySet<FlagGroup> = new Set(
+  PRODUCT_GROUPS.map(({ group }) => group)
+);
+
+function sectionGroupFor(key: string): FlagGroup {
+  const { group } = flagMetaFor(key);
+  return SECTION_GROUPS.has(group) ? group : FLAG_GROUP.OTHER;
+}
 
 export function FeatureFlagsPage() {
   const flags = useFeatureFlags();
@@ -58,11 +66,11 @@ export function FeatureFlagsPage() {
           fullHeight={false}
         />
       ) : flags.isLoading ? (
-        <TableSkeleton columns={4} />
+        <LoadingState />
       ) : productFlags.length === 0 ? (
         <EmptyState
-          title="No flags"
-          description="Flags appear once they are created via the API."
+          title="No product flags"
+          description="AI controls live in AI Config. New product flags appear once created via the API."
         />
       ) : (
         PRODUCT_GROUPS.map(({ group, title, description }) => (
@@ -71,7 +79,7 @@ export function FeatureFlagsPage() {
             title={title}
             description={description}
             flags={productFlags.filter(
-              (flag) => flagMetaFor(flag.key).group === group
+              (flag) => sectionGroupFor(flag.key) === group
             )}
           />
         ))
