@@ -1,102 +1,88 @@
 import {
   forwardRef,
   useCallback,
-  useEffect,
   useState,
   type ComponentPropsWithoutRef,
   type ComponentRef,
+  type ForwardedRef,
 } from 'react';
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '../utils';
-
-const SCROLL_EDGE_TOLERANCE_PX = 1;
-
-const TABS_OVERFLOW = {
-  NONE: 'none',
-  START: 'start',
-  END: 'end',
-  BOTH: 'both',
-} as const;
-
-type TabsOverflow = (typeof TABS_OVERFLOW)[keyof typeof TABS_OVERFLOW];
+import {
+  readOverflow,
+  TABS_FOCUS_MASK_RESET_CLASS,
+  TABS_OVERFLOW,
+  TABS_OVERFLOW_MASK_CLASS,
+  type TabsOverflow,
+} from './tabs-overflow';
 
 type TabsListElement = ComponentRef<typeof TabsPrimitive.List>;
 
-function readOverflow(element: TabsListElement): TabsOverflow {
-  const canScrollToStart = element.scrollLeft > SCROLL_EDGE_TOLERANCE_PX;
-  const canScrollToEnd =
-    element.scrollWidth - element.clientWidth - element.scrollLeft >
-    SCROLL_EDGE_TOLERANCE_PX;
-
-  if (canScrollToStart && canScrollToEnd) {
-    return TABS_OVERFLOW.BOTH;
+function assignRef(
+  ref: ForwardedRef<TabsListElement>,
+  node: TabsListElement | null
+) {
+  if (typeof ref === 'function') {
+    ref(node);
+  } else if (ref) {
+    ref.current = node;
   }
-  if (canScrollToStart) {
-    return TABS_OVERFLOW.START;
-  }
-  if (canScrollToEnd) {
-    return TABS_OVERFLOW.END;
-  }
-  return TABS_OVERFLOW.NONE;
-}
-
-function useTabsOverflow(element: TabsListElement | null): TabsOverflow {
-  const [overflow, setOverflow] = useState<TabsOverflow>(TABS_OVERFLOW.NONE);
-
-  useEffect(() => {
-    if (!element) {
-      return;
-    }
-
-    const sync = () => setOverflow(readOverflow(element));
-    sync();
-
-    element.addEventListener('scroll', sync, { passive: true });
-    const observer =
-      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(sync);
-    observer?.observe(element);
-
-    return () => {
-      element.removeEventListener('scroll', sync);
-      observer?.disconnect();
-    };
-  }, [element]);
-
-  return overflow;
 }
 
 export const Tabs = TabsPrimitive.Root;
 
+/**
+ * Radix tab strip that publishes its own scroll state as
+ * `data-overflow="none" | "left" | "right" | "both"` for consumers to style against.
+ */
 export const TabsList = forwardRef<
   TabsListElement,
   ComponentPropsWithoutRef<typeof TabsPrimitive.List>
 >(({ className, ...props }, ref) => {
-  const [element, setElement] = useState<TabsListElement | null>(null);
-  const overflow = useTabsOverflow(element);
+  const [overflow, setOverflow] = useState<TabsOverflow>(TABS_OVERFLOW.NONE);
 
-  const attachRef = useCallback(
+  const attachList = useCallback(
     (node: TabsListElement | null) => {
-      setElement(node);
-      if (typeof ref === 'function') {
-        ref(node);
-      } else if (ref) {
-        ref.current = node;
+      assignRef(ref, node);
+      if (!node) {
+        return;
       }
+
+      const sync = () => setOverflow(readOverflow(node));
+      sync();
+
+      node.addEventListener('scroll', sync, { passive: true });
+      const resizeObserver = new ResizeObserver(sync);
+      resizeObserver.observe(node);
+      // The list is w-full, so a changed trigger set moves scrollWidth without
+      // resizing the border box the ResizeObserver watches.
+      const mutationObserver = new MutationObserver(sync);
+      mutationObserver.observe(node, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+
+      return () => {
+        node.removeEventListener('scroll', sync);
+        resizeObserver.disconnect();
+        mutationObserver.disconnect();
+        assignRef(ref, null);
+      };
     },
     [ref]
   );
 
   return (
     <TabsPrimitive.List
-      ref={attachRef}
+      ref={attachList}
       data-overflow={overflow}
       className={cn(
         'inline-flex w-full items-center gap-1 overflow-x-auto rounded-md bg-(--muted) p-1',
-        'data-[overflow=end]:mask-r-from-85%',
-        'data-[overflow=start]:mask-l-from-85%',
-        'data-[overflow=both]:mask-x-from-85%',
+        TABS_OVERFLOW_MASK_CLASS[overflow],
+        TABS_FOCUS_MASK_RESET_CLASS,
         className
       )}
       {...props}

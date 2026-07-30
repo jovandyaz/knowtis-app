@@ -1,8 +1,19 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { triggerResizeObservers } from '../test-setup';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
+import {
+  TABS_FOCUS_MASK_RESET_CLASS,
+  TABS_OVERFLOW_MASK_CLASS,
+} from './tabs-overflow';
 
 function renderTabs() {
   return render(
@@ -59,10 +70,24 @@ describe('Tabs', () => {
   });
 });
 
-function stubScrollMetrics(
-  element: HTMLElement,
-  metrics: { scrollWidth: number; clientWidth: number; scrollLeft: number }
-) {
+interface ScrollMetrics {
+  scrollWidth: number;
+  clientWidth: number;
+  scrollLeft: number;
+}
+
+const FITTING: ScrollMetrics = {
+  scrollWidth: 300,
+  clientWidth: 300,
+  scrollLeft: 0,
+};
+const OVERFLOWING_AT_START: ScrollMetrics = {
+  scrollWidth: 500,
+  clientWidth: 300,
+  scrollLeft: 0,
+};
+
+function stubScrollMetrics(element: HTMLElement, metrics: ScrollMetrics) {
   Object.defineProperty(element, 'scrollWidth', {
     configurable: true,
     value: metrics.scrollWidth,
@@ -78,32 +103,45 @@ function stubScrollMetrics(
   });
 }
 
+function stubScrollMetricsBeforeRender(metrics: ScrollMetrics) {
+  vi.spyOn(Element.prototype, 'scrollWidth', 'get').mockReturnValue(
+    metrics.scrollWidth
+  );
+  vi.spyOn(Element.prototype, 'clientWidth', 'get').mockReturnValue(
+    metrics.clientWidth
+  );
+  vi.spyOn(Element.prototype, 'scrollLeft', 'get').mockReturnValue(
+    metrics.scrollLeft
+  );
+}
+
 describe('TabsList overflow affordance', () => {
-  it('reports no overflow when the triggers fit', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('clears the overflow state again once the triggers fit', () => {
     renderTabs();
     const list = screen.getByRole('tablist');
-    stubScrollMetrics(list, {
-      scrollWidth: 300,
-      clientWidth: 300,
-      scrollLeft: 0,
-    });
+
+    stubScrollMetrics(list, OVERFLOWING_AT_START);
+    fireEvent.scroll(list);
+    expect(list).toHaveAttribute('data-overflow', 'right');
+
+    stubScrollMetrics(list, FITTING);
     fireEvent.scroll(list);
     expect(list).toHaveAttribute('data-overflow', 'none');
   });
 
-  it('reports end overflow when scrolled to the start', () => {
+  it('reports right overflow when scrolled to the left edge', () => {
     renderTabs();
     const list = screen.getByRole('tablist');
-    stubScrollMetrics(list, {
-      scrollWidth: 500,
-      clientWidth: 300,
-      scrollLeft: 0,
-    });
+    stubScrollMetrics(list, OVERFLOWING_AT_START);
     fireEvent.scroll(list);
-    expect(list).toHaveAttribute('data-overflow', 'end');
+    expect(list).toHaveAttribute('data-overflow', 'right');
   });
 
-  it('reports start overflow when scrolled to the far end', () => {
+  it('reports left overflow when scrolled to the right edge', () => {
     renderTabs();
     const list = screen.getByRole('tablist');
     stubScrollMetrics(list, {
@@ -112,7 +150,7 @@ describe('TabsList overflow affordance', () => {
       scrollLeft: 200,
     });
     fireEvent.scroll(list);
-    expect(list).toHaveAttribute('data-overflow', 'start');
+    expect(list).toHaveAttribute('data-overflow', 'left');
   });
 
   it('reports overflow on both sides mid-scroll', () => {
@@ -127,34 +165,99 @@ describe('TabsList overflow affordance', () => {
     expect(list).toHaveAttribute('data-overflow', 'both');
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
+  it('reports overflow already present on first paint', () => {
+    stubScrollMetricsBeforeRender(OVERFLOWING_AT_START);
+    renderTabs();
+    expect(screen.getByRole('tablist')).toHaveAttribute(
+      'data-overflow',
+      'right'
+    );
   });
 
   it('recomputes when the element is resized', () => {
-    const observers: Array<() => void> = [];
-    class FakeResizeObserver {
-      constructor(callback: () => void) {
-        observers.push(callback);
-      }
-      observe() {}
-      disconnect() {}
-    }
-    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
-
     renderTabs();
     const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, OVERFLOWING_AT_START);
+    act(() => {
+      triggerResizeObservers();
+    });
+    expect(list).toHaveAttribute('data-overflow', 'right');
+  });
+
+  it('recomputes when the trigger set changes without a resize', async () => {
+    const { rerender } = render(
+      <Tabs defaultValue="one">
+        <TabsList>
+          <TabsTrigger value="one">One</TabsTrigger>
+        </TabsList>
+        <TabsContent value="one">First panel</TabsContent>
+      </Tabs>
+    );
+    const list = screen.getByRole('tablist');
+    expect(list).toHaveAttribute('data-overflow', 'none');
+
+    stubScrollMetrics(list, OVERFLOWING_AT_START);
+    rerender(
+      <Tabs defaultValue="one">
+        <TabsList>
+          <TabsTrigger value="one">One</TabsTrigger>
+          <TabsTrigger value="two">Two</TabsTrigger>
+        </TabsList>
+        <TabsContent value="one">First panel</TabsContent>
+        <TabsContent value="two">Second panel</TabsContent>
+      </Tabs>
+    );
+
+    await waitFor(() => {
+      expect(list).toHaveAttribute('data-overflow', 'right');
+    });
+  });
+
+  it('applies the edge mask matching the current overflow state', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+
+    stubScrollMetrics(list, OVERFLOWING_AT_START);
+    fireEvent.scroll(list);
+    expect(list).toHaveClass(TABS_OVERFLOW_MASK_CLASS.right);
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.left);
+
     stubScrollMetrics(list, {
       scrollWidth: 500,
       clientWidth: 300,
-      scrollLeft: 0,
+      scrollLeft: 100,
     });
-    act(() => {
-      observers.forEach((notify) => {
-        notify();
-      });
+    fireEvent.scroll(list);
+    expect(list).toHaveClass(TABS_OVERFLOW_MASK_CLASS.both);
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.right);
+
+    stubScrollMetrics(list, {
+      scrollWidth: 500,
+      clientWidth: 300,
+      scrollLeft: 200,
     });
-    expect(list).toHaveAttribute('data-overflow', 'end');
+    fireEvent.scroll(list);
+    expect(list).toHaveClass(TABS_OVERFLOW_MASK_CLASS.left);
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.both);
+  });
+
+  it('applies no edge mask while the triggers fit', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, FITTING);
+    fireEvent.scroll(list);
+
+    expect(list).toHaveAttribute('data-overflow', 'none');
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.left);
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.right);
+    expect(list).not.toHaveClass(TABS_OVERFLOW_MASK_CLASS.both);
+  });
+
+  it('drops the mask while a trigger holds visible focus', () => {
+    renderTabs();
+    expect(screen.getByRole('tablist')).toHaveClass(
+      TABS_FOCUS_MASK_RESET_CLASS
+    );
   });
 
   it('still forwards the ref to the list element', () => {
@@ -168,5 +271,22 @@ describe('TabsList overflow affordance', () => {
       </Tabs>
     );
     expect(ref.current).toBe(screen.getByRole('tablist'));
+  });
+
+  it('releases the forwarded ref when the list unmounts', () => {
+    const ref = { current: null as HTMLElement | null };
+    const { unmount } = render(
+      <Tabs defaultValue="one">
+        <TabsList ref={ref}>
+          <TabsTrigger value="one">One</TabsTrigger>
+        </TabsList>
+        <TabsContent value="one">First panel</TabsContent>
+      </Tabs>
+    );
+    expect(ref.current).not.toBeNull();
+
+    unmount();
+
+    expect(ref.current).toBeNull();
   });
 });

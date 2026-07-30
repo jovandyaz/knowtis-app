@@ -31,7 +31,7 @@ export const Overflow: Story = {
     docs: {
       description: {
         story:
-          'The edge fade is driven by `data-overflow` and appears only while the strip can scroll further in that direction.',
+          'The edge fade is driven by `data-overflow` (`none`, `left`, `right`, `both`) and appears only while the strip can scroll further in that direction.',
       },
     },
   },
