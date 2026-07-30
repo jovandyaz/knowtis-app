@@ -172,7 +172,7 @@ export type ProviderTestResult = z.infer<typeof ProviderTestResultSchema>;
 const ProviderHealthSchema = z.object({
   configured: z.boolean(),
   cooling: z.boolean(),
-  failureCount: z.number(),
+  failureCount: z.number().int().nonnegative(),
   lastFailureAt: z.string().nullable(),
   lastSuccessAt: z.string().nullable(),
   cooldownEndsAt: z.string().nullable(),
