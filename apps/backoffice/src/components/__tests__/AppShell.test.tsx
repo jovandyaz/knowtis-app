@@ -2,10 +2,14 @@ import { AppShell } from '@/components/AppShell';
 import { ADMIN_SECTIONS } from '@/config/admin-sections';
 import { renderWithRouter } from '@/test/router';
 import { screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const USER_EMAIL = 'ada@knowtis.app';
 const LINKED_PATHS = ADMIN_SECTIONS.map((section) => section.to);
+const OPEN_NAV_LABEL = 'Open navigation';
+const NAV_SHEET_TITLE = 'Navigation';
+const SIDEBAR_NAV_GROW_CLASS = 'flex-1';
 
 vi.mock('@/auth/setup', () => ({
   performLogout: vi.fn(),
@@ -15,22 +19,135 @@ vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => ({ id: 'admin-1', email: USER_EMAIL, role: 'admin' }),
 }));
 
-describe('AppShell', () => {
-  it('renders the nav, the account block and its children', async () => {
-    await renderWithRouter(
-      () => (
-        <AppShell>
-          <p>Page content</p>
-        </AppShell>
-      ),
-      LINKED_PATHS
-    );
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
-    expect(screen.getByText(USER_EMAIL)).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Sign out' })
-    ).toBeInTheDocument();
-    expect(screen.getByText('Page content')).toBeInTheDocument();
+const stubDesktopViewport = () => stubMatchMedia(true);
+const stubPhoneViewport = () => stubMatchMedia(false);
+
+function renderShell() {
+  return renderWithRouter(
+    () => (
+      <AppShell>
+        <p>Page content</p>
+      </AppShell>
+    ),
+    LINKED_PATHS
+  );
+}
+
+describe('AppShell', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  describe('on desktop', () => {
+    it('renders the nav, the account block and its children', async () => {
+      stubDesktopViewport();
+
+      await renderShell();
+
+      expect(screen.getByRole('navigation')).toBeInTheDocument();
+      expect(screen.getByText(USER_EMAIL)).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Sign out' })
+      ).toBeInTheDocument();
+      expect(screen.getByText('Page content')).toBeInTheDocument();
+    });
+
+    it('stretches the sidebar nav so the account block stays at the bottom', async () => {
+      stubDesktopViewport();
+
+      await renderShell();
+
+      expect(screen.getByRole('navigation')).toHaveClass(
+        SIDEBAR_NAV_GROW_CLASS
+      );
+    });
+
+    it('leaves the navigation sheet unmounted', async () => {
+      stubDesktopViewport();
+
+      await renderShell();
+
+      expect(
+        screen.queryByRole('button', { name: OPEN_NAV_LABEL })
+      ).not.toBeInTheDocument();
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('on a phone viewport', () => {
+    it('hides the nav behind a menu button in a banner bar', async () => {
+      stubPhoneViewport();
+
+      await renderShell();
+
+      const trigger = screen.getByRole('button', { name: OPEN_NAV_LABEL });
+      expect(screen.getByRole('banner')).toContainElement(trigger);
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+      expect(screen.getByText('Page content')).toBeInTheDocument();
+    });
+
+    it('opens the nav sheet and reports expansion', async () => {
+      stubPhoneViewport();
+      await renderShell();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      );
+
+      expect(
+        await screen.findByRole('dialog', { name: NAV_SHEET_TITLE })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('link', { name: 'Feature Flags' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: 'Sign out' })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      ).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('lets the sheet nav size to its content', async () => {
+      stubPhoneViewport();
+      await renderShell();
+
+      await userEvent.click(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      );
+
+      expect(screen.getByRole('navigation')).not.toHaveClass(
+        SIDEBAR_NAV_GROW_CLASS
+      );
+    });
+
+    it('closes the sheet once a destination is chosen', async () => {
+      stubPhoneViewport();
+      await renderShell();
+      await userEvent.click(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      );
+
+      await userEvent.click(screen.getByRole('link', { name: 'AI Config' }));
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: OPEN_NAV_LABEL })
+      ).toHaveAttribute('aria-expanded', 'false');
+    });
   });
 });

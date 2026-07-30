@@ -6,7 +6,7 @@ import { ROUTES } from '@/config/routes.config';
 import { cn } from '@knowtis/design-system';
 
 const NAV_LINK_CLASS =
-  'rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted)';
+  'rounded px-3 py-2 text-sm hover:bg-(--muted) [&.active]:bg-(--muted) max-md:flex max-md:min-h-11 max-md:items-center';
 
 interface AppShellNavProps {
   className?: string;

@@ -12,12 +12,24 @@ const NAV_LABELS = [
   ...ADMIN_SECTIONS.map((section) => section.label),
 ];
 
+const PHONE_TAP_TARGET_CLASS = 'max-md:min-h-11';
+
 describe('AppShellNav', () => {
   it('renders Dashboard plus every admin section', async () => {
     await renderWithRouter(AppShellNav, LINKED_PATHS);
 
     for (const label of NAV_LABELS) {
       expect(screen.getByRole('link', { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it('gives every destination a 44px tap target on phone viewports', async () => {
+    await renderWithRouter(AppShellNav, LINKED_PATHS);
+
+    for (const label of NAV_LABELS) {
+      expect(screen.getByRole('link', { name: label })).toHaveClass(
+        PHONE_TAP_TARGET_CLASS
+      );
     }
   });
 
