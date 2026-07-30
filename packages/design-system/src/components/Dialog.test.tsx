@@ -116,8 +116,31 @@ describe('Dialog accessibility', () => {
       </Dialog>
     );
 
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Dashboard' })
+    );
+  });
+
+  it('wraps focus at both ends so Tab never leaves the dialog', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent>
+          <DialogTitle>Navigation</DialogTitle>
+          <button type="button">Dashboard</button>
+        </DialogContent>
+      </Dialog>
+    );
+
     const dialog = screen.getByRole('dialog');
-    expect(dialog.contains(document.activeElement)).toBe(true);
+    const first = screen.getByRole('button', { name: 'Dashboard' });
+    const last = screen.getByRole('button', { name: 'Close dialog' });
+
+    last.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
   });
 
   it('renders a right-side drawer when side="right"', () => {

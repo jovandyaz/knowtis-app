@@ -1,5 +1,15 @@
 import '@testing-library/jest-dom/vitest';
 
+// jsdom performs no layout, so `offsetParent` is always null and every
+// visibility filter keyed on it — such as the dialog's focusable-element
+// query — sees an empty list. Approximate it by attachment instead.
+Object.defineProperty(HTMLElement.prototype, 'offsetParent', {
+  configurable: true,
+  get(this: HTMLElement) {
+    return this.isConnected ? this.parentElement : null;
+  },
+});
+
 const resizeObservers = new Set<ResizeObserverPolyfill>();
 
 class ResizeObserverPolyfill implements ResizeObserver {
