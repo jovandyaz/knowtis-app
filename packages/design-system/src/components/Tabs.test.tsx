@@ -12,7 +12,9 @@ import { triggerResizeObservers } from '../test-setup';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 import {
   TABS_FOCUS_MASK_RESET_CLASS,
+  TABS_OVERFLOW,
   TABS_OVERFLOW_MASK_CLASS,
+  type TabsOverflow,
 } from './tabs-overflow';
 
 function renderTabs() {
@@ -114,6 +116,30 @@ function stubScrollMetricsBeforeRender(metrics: ScrollMetrics) {
     metrics.scrollLeft
   );
 }
+
+const EDGE_MASK_UTILITY_PATTERN: Record<TabsOverflow, RegExp> = {
+  [TABS_OVERFLOW.NONE]: /^$/,
+  [TABS_OVERFLOW.LEFT]: /^mask-l-from-\S+$/,
+  [TABS_OVERFLOW.RIGHT]: /^mask-r-from-\S+$/,
+  [TABS_OVERFLOW.BOTH]: /^mask-x-from-\S+$/,
+};
+
+describe('tab strip mask utilities', () => {
+  it.each(Object.values(TABS_OVERFLOW))(
+    'fades the edge the %s state can still scroll towards',
+    (state) => {
+      expect(TABS_OVERFLOW_MASK_CLASS[state]).toMatch(
+        EDGE_MASK_UTILITY_PATTERN[state]
+      );
+    }
+  );
+
+  it('resets a focused strip with a real mask-none utility', () => {
+    expect(TABS_FOCUS_MASK_RESET_CLASS).toMatch(
+      /^has-\[:focus-visible\]:mask-none!?$/
+    );
+  });
+});
 
 describe('TabsList overflow affordance', () => {
   afterEach(() => {

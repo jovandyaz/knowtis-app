@@ -1,5 +1,2 @@
 /* Import design system styles (includes Tailwind, tokens, and base theme) */
 @import '@knowtis/design-system/styles.css';
-
-/* Scan workspace packages for Tailwind classes */
-@source "../../../packages/design-system/src/**/*.tsx";
