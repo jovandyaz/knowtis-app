@@ -90,3 +90,4 @@ export {
   TableRow,
 } from './Table';
 export { DataTable, type DataTableProps } from './DataTable';
+export { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
