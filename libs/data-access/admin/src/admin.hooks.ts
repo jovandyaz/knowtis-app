@@ -12,6 +12,7 @@ import type { AIProvider } from '@knowtis/shared-types';
 import {
   AdminUserSchema,
   AiConfigSchema,
+  AiHealthSchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
@@ -43,6 +44,7 @@ export const adminQueryKeys = {
   aiConfig: () => [...adminQueryKeys.all, 'ai-config'] as const,
   selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
+  aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
 } as const;
 
 function usersPath({ page, limit, search, role }: AdminUsersParams): string {
@@ -254,6 +256,18 @@ export function useTestSystemProvider() {
       ProviderTestResultSchema.parse(
         await httpClient.post(`/ai/providers/${provider}/test`, {})
       ),
+  });
+}
+
+const AI_HEALTH_REFETCH_MS = 60_000;
+
+export function useAiHealth() {
+  return useQuery({
+    queryKey: adminQueryKeys.aiHealth(),
+    queryFn: async () =>
+      AiHealthSchema.parse(await httpClient.get('/ai/health')),
+    staleTime: 1000 * 30,
+    refetchInterval: AI_HEALTH_REFETCH_MS,
   });
 }
 

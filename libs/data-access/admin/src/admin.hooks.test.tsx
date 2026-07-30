@@ -12,6 +12,7 @@ import {
   adminQueryKeys,
   useAdminUsers,
   useAiConfig,
+  useAiHealth,
   useAuditLog,
   useClearSystemProviderKey,
   useDeleteFeatureFlag,
@@ -596,5 +597,28 @@ describe('useTestSystemProvider', () => {
     result.current.mutate('anthropic');
 
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+describe('useAiHealth', () => {
+  it('parses the provider health map from /ai/health', async () => {
+    vi.mocked(httpClient.get).mockResolvedValueOnce({
+      providers: {
+        openrouter: {
+          configured: true,
+          cooling: true,
+          failureCount: 3,
+          lastFailureAt: '2026-07-29T10:00:00.000Z',
+          lastSuccessAt: null,
+          cooldownEndsAt: '2026-07-29T10:05:00.000Z',
+        },
+      },
+    });
+
+    const { result } = renderHook(() => useAiHealth(), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/health');
+    expect(result.current.data?.providers['openrouter']?.cooling).toBe(true);
   });
 });
