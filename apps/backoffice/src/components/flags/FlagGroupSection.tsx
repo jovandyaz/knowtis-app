@@ -8,17 +8,36 @@ interface FlagGroupSectionProps {
   flags: FeatureFlagDto[];
 }
 
+function FlagSwitch({ flag, label }: { flag: FeatureFlagDto; label: string }) {
+  const upsert = useUpsertFeatureFlag();
+
+  return (
+    <Switch
+      checked={flag.enabled}
+      aria-label={label}
+      disabled={upsert.isPending}
+      onCheckedChange={(enabled) =>
+        upsert.mutate({
+          key: flag.key,
+          enabled,
+          ...(flag.description !== null && {
+            description: flag.description,
+          }),
+        })
+      }
+    />
+  );
+}
+
 /**
- * Renders one titled group of flag toggles and owns its own upsert mutation, so
- * consumers must not wire one; renders nothing when the group is empty.
+ * Renders one titled group of flag toggles, each owning its own upsert mutation
+ * so consumers must not wire one; renders nothing when the group is empty.
  */
 export function FlagGroupSection({
   title,
   description,
   flags,
 }: FlagGroupSectionProps) {
-  const upsert = useUpsertFeatureFlag();
-
   if (flags.length === 0) {
     return null;
   }
@@ -54,22 +73,7 @@ export function FlagGroupSection({
                   </span>
                 ) : null}
               </div>
-              <Switch
-                checked={flag.enabled}
-                aria-label={meta.label}
-                disabled={
-                  upsert.isPending && upsert.variables?.key === flag.key
-                }
-                onCheckedChange={(enabled) =>
-                  upsert.mutate({
-                    key: flag.key,
-                    enabled,
-                    ...(flag.description !== null && {
-                      description: flag.description,
-                    }),
-                  })
-                }
-              />
+              <FlagSwitch flag={flag} label={meta.label} />
             </li>
           );
         })}
