@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from '@tanstack/react-query';
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
@@ -12,6 +13,7 @@ import type { AIProvider } from '@knowtis/shared-types';
 import {
   AdminUserSchema,
   AiConfigSchema,
+  AiHealthSchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
@@ -43,6 +45,7 @@ export const adminQueryKeys = {
   aiConfig: () => [...adminQueryKeys.all, 'ai-config'] as const,
   selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
+  aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
 } as const;
 
 function usersPath({ page, limit, search, role }: AdminUsersParams): string {
@@ -117,6 +120,13 @@ export function useGlobalAiTimeseries(period: MetricsPeriod) {
   });
 }
 
+function invalidateFlagDependents(queryClient: QueryClient) {
+  queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
+  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiHealth() });
+}
+
 export function useUpsertFeatureFlag() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -134,10 +144,7 @@ export function useUpsertFeatureFlag() {
         })
       ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
+      invalidateFlagDependents(queryClient);
     },
   });
 }
@@ -148,10 +155,7 @@ export function useDeleteFeatureFlag() {
     mutationFn: (key: string) =>
       httpClient.delete(`/flags/${encodeURIComponent(key)}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
+      invalidateFlagDependents(queryClient);
     },
   });
 }
@@ -254,6 +258,18 @@ export function useTestSystemProvider() {
       ProviderTestResultSchema.parse(
         await httpClient.post(`/ai/providers/${provider}/test`, {})
       ),
+  });
+}
+
+const AI_HEALTH_REFETCH_MS = 60_000;
+
+export function useAiHealth() {
+  return useQuery({
+    queryKey: adminQueryKeys.aiHealth(),
+    queryFn: async () =>
+      AiHealthSchema.parse(await httpClient.get('/ai/health')),
+    staleTime: 1000 * 30,
+    refetchInterval: AI_HEALTH_REFETCH_MS,
   });
 }
 

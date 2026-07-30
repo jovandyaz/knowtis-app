@@ -168,3 +168,17 @@ export const ProviderTestResultSchema = z.discriminatedUnion('ok', [
   }),
 ]);
 export type ProviderTestResult = z.infer<typeof ProviderTestResultSchema>;
+
+const ProviderHealthSchema = z.object({
+  configured: z.boolean(),
+  cooling: z.boolean(),
+  failureCount: z.number().int().nonnegative(),
+  lastFailureAt: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
+  cooldownEndsAt: z.string().nullable(),
+});
+
+export const AiHealthSchema = z.object({
+  providers: z.record(z.string(), ProviderHealthSchema),
+});
+export type AiHealth = z.infer<typeof AiHealthSchema>;

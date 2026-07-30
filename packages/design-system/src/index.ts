@@ -91,6 +91,10 @@ export {
   TableRow,
   DataTable,
   type DataTableProps,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from './components';
 export { THEMES, type Theme } from './constants/theme';
 
