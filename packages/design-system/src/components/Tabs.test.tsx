@@ -20,20 +20,39 @@ function renderTabs() {
 describe('Tabs', () => {
   it('shows only the active tab content', () => {
     renderTabs();
-    expect(screen.getByText('First panel')).toBeInTheDocument();
-    expect(screen.queryByText('Second panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { name: 'One' })).toHaveTextContent(
+      'First panel'
+    );
+    expect(
+      screen.queryByRole('tabpanel', { name: 'Two' })
+    ).not.toBeInTheDocument();
   });
 
   it('switches content when another tab is clicked', async () => {
     renderTabs();
     await userEvent.click(screen.getByRole('tab', { name: 'Two' }));
-    expect(screen.getByText('Second panel')).toBeInTheDocument();
-    expect(screen.queryByText('First panel')).not.toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { name: 'Two' })).toHaveTextContent(
+      'Second panel'
+    );
+    expect(
+      screen.queryByRole('tabpanel', { name: 'One' })
+    ).not.toBeInTheDocument();
   });
 
   it('marks the active trigger as selected for assistive tech', () => {
     renderTabs();
     expect(screen.getByRole('tab', { name: 'One' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+  });
+
+  it('moves selection to the next tab with ArrowRight', async () => {
+    const user = userEvent.setup();
+    renderTabs();
+    await user.click(screen.getByRole('tab', { name: 'One' }));
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Two' })).toHaveAttribute(
       'aria-selected',
       'true'
     );

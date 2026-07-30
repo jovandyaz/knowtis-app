@@ -25,3 +25,28 @@ export const Default: Story = {
     </Tabs>
   ),
 };
+
+export const Overflow: Story = {
+  render: () => (
+    <div className="max-w-xs">
+      <Tabs defaultValue="general">
+        <TabsList>
+          <TabsTrigger value="general">General Configuration</TabsTrigger>
+          <TabsTrigger value="models">Model Selection</TabsTrigger>
+          <TabsTrigger value="guardrails">Guardrails & Limits</TabsTrigger>
+          <TabsTrigger value="providers">Provider Failover</TabsTrigger>
+          <TabsTrigger value="observability">
+            Observability & Telemetry
+          </TabsTrigger>
+          <TabsTrigger value="billing">Billing & Usage</TabsTrigger>
+        </TabsList>
+        <TabsContent value="general">General content</TabsContent>
+        <TabsContent value="models">Models content</TabsContent>
+        <TabsContent value="guardrails">Guardrails content</TabsContent>
+        <TabsContent value="providers">Providers content</TabsContent>
+        <TabsContent value="observability">Observability content</TabsContent>
+        <TabsContent value="billing">Billing content</TabsContent>
+      </Tabs>
+    </div>
+  ),
+};
