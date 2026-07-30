@@ -220,6 +220,35 @@ describe('useUpsertFeatureFlag', () => {
     });
     expect(result.current.data?.updatedAt).toBeInstanceOf(Date);
   });
+
+  it('invalidates the ai config and health queries the flag gates', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({
+      key: 'ai_enabled',
+      enabled: true,
+      description: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useUpsertFeatureFlag(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ key: 'ai_enabled', enabled: true });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.aiConfig(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.aiHealth(),
+    });
+  });
 });
 
 describe('useDeleteFeatureFlag', () => {
@@ -234,6 +263,29 @@ describe('useDeleteFeatureFlag', () => {
     await waitFor(() =>
       expect(httpClient.delete).toHaveBeenCalledWith('/flags/ai_enabled')
     );
+  });
+
+  it('invalidates the ai config and health queries the flag gates', async () => {
+    vi.mocked(httpClient.delete).mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useDeleteFeatureFlag(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate('ai_enabled');
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.aiConfig(),
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.aiHealth(),
+    });
   });
 });
 
