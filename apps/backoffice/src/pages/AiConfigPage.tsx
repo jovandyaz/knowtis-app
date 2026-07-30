@@ -43,6 +43,34 @@ const TAB: Record<AiConfigTabValue, AiConfigTabValue> = {
   capabilities: 'capabilities',
 };
 
+interface AiFlagGroup {
+  group: FlagGroup;
+  title: string;
+  description: string;
+}
+
+const GUARDRAIL_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
+  {
+    group: FLAG_GROUP.GUARDRAIL,
+    title: 'Guardrails & Limits',
+    description:
+      'Safety and spend protections. Numeric limits are env-configured.',
+  },
+];
+
+const CAPABILITY_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
+  {
+    group: FLAG_GROUP.CAPABILITY,
+    title: 'Capabilities',
+    description: 'Optional agent features, some gated on an env key.',
+  },
+  {
+    group: FLAG_GROUP.ACCESS,
+    title: 'Access',
+    description: 'Which users get which AI features.',
+  },
+];
+
 export function AiConfigPage() {
   const config = useAiConfig();
   const flags = useFeatureFlags();
@@ -89,7 +117,7 @@ export function AiConfigPage() {
     return panel;
   };
 
-  const renderFlagPanel = (groups: ReactNode) => {
+  const renderFlagPanel = (groups: ReadonlyArray<AiFlagGroup>) => {
     if (flags.isError) {
       return (
         <ErrorState
@@ -102,7 +130,30 @@ export function AiConfigPage() {
     if (flags.isLoading || !flags.data) {
       return <LoadingState />;
     }
-    return groups;
+
+    const sections = groups.map((section) => ({
+      ...section,
+      flags: aiFlagsIn(section.group),
+    }));
+
+    if (sections.every((section) => section.flags.length === 0)) {
+      return (
+        <EmptyState
+          title="No flags in this area"
+          description="Nothing to toggle here yet. These controls appear once their flags are created via the API."
+          fullHeight={false}
+        />
+      );
+    }
+
+    return sections.map((section) => (
+      <FlagGroupSection
+        key={section.group}
+        title={section.title}
+        description={section.description}
+        flags={section.flags}
+      />
+    ));
   };
 
   return (
@@ -133,13 +184,7 @@ export function AiConfigPage() {
           )}
         </TabsContent>
         <TabsContent value={TAB.guardrails} className="pt-4">
-          {renderFlagPanel(
-            <FlagGroupSection
-              title="Guardrails & Limits"
-              description="Safety and spend protections. Numeric limits are env-configured."
-              flags={aiFlagsIn(FLAG_GROUP.GUARDRAIL)}
-            />
-          )}
+          {renderFlagPanel(GUARDRAIL_FLAG_GROUPS)}
         </TabsContent>
         <TabsContent value={TAB.providers} className="flex flex-col gap-8 pt-4">
           {renderConfigPanel(
@@ -151,20 +196,7 @@ export function AiConfigPage() {
           value={TAB.capabilities}
           className="flex flex-col gap-6 pt-4"
         >
-          {renderFlagPanel(
-            <>
-              <FlagGroupSection
-                title="Capabilities"
-                description="Optional agent features, some gated on an env key."
-                flags={aiFlagsIn(FLAG_GROUP.CAPABILITY)}
-              />
-              <FlagGroupSection
-                title="Access"
-                description="Which users get which AI features."
-                flags={aiFlagsIn(FLAG_GROUP.ACCESS)}
-              />
-            </>
-          )}
+          {renderFlagPanel(CAPABILITY_FLAG_GROUPS)}
         </TabsContent>
       </Tabs>
     </div>

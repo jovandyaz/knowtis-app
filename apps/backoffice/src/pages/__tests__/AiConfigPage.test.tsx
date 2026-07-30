@@ -329,6 +329,55 @@ describe('AiConfigPage', () => {
     expect(screen.queryByText('Web search')).not.toBeInTheDocument();
   });
 
+  it('explains the empty guardrail panel when no guardrail flag exists yet', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: [
+        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
+        flagRow(FEATURE_FLAG_KEYS.AGENT_WEB_SEARCH, true),
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    await userEvent.click(
+      screen.getByRole('tab', { name: 'Guardrails & Limits' })
+    );
+
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(
+      panel.getByRole('heading', { name: 'No flags in this area' })
+    ).toBeInTheDocument();
+    expect(panel.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Access section when only access flags exist', async () => {
+    useFeatureFlagsMock.mockReturnValue({
+      data: [
+        flagRow(FEATURE_FLAG_KEYS.AI_ENABLED, true),
+        flagRow(FEATURE_FLAG_KEYS.AGENT_BYOK, false),
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+    await userEvent.click(
+      screen.getByRole('tab', { name: 'Capabilities & Access' })
+    );
+
+    const panel = within(screen.getByRole('tabpanel'));
+    expect(panel.getByRole('heading', { name: 'Access' })).toBeInTheDocument();
+    expect(
+      panel.getByRole('switch', { name: 'Bring your own key' })
+    ).toBeInTheDocument();
+    expect(
+      panel.queryByRole('heading', { name: 'No flags in this area' })
+    ).not.toBeInTheDocument();
+  });
+
   it('shows an error state and retries the flags query from the Guardrails tab', async () => {
     const refetch = vi.fn();
     useFeatureFlagsMock.mockReturnValue({
