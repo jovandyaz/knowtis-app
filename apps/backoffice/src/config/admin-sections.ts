@@ -1,27 +1,36 @@
+import type { AppRoute } from '@/config/routes.config';
+import { ROUTES } from '@/config/routes.config';
+
+interface AdminSection {
+  to: AppRoute;
+  label: string;
+  description: string;
+}
+
 export const ADMIN_SECTIONS = [
   {
-    to: '/users',
+    to: ROUTES.USERS,
     label: 'Users',
     description: 'Search accounts and manage roles.',
   },
   {
-    to: '/ai-metrics',
+    to: ROUTES.AI_METRICS,
     label: 'AI Metrics',
     description: 'Track token usage and cost across actions.',
   },
   {
-    to: '/ai-config',
+    to: ROUTES.AI_CONFIG,
     label: 'AI Config',
     description: 'Change the default and fast models live.',
   },
   {
-    to: '/feature-flags',
+    to: ROUTES.FEATURE_FLAGS,
     label: 'Feature Flags',
     description: 'Toggle product features live.',
   },
   {
-    to: '/audit',
+    to: ROUTES.AUDIT,
     label: 'Audit Log',
     description: 'Review admin actions.',
   },
-] as const;
+] as const satisfies readonly AdminSection[];

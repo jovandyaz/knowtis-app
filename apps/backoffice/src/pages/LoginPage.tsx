@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from '@tanstack/react-router';
 
 import { syncUserProfile } from '@/auth/setup';
+import { ROUTES } from '@/config/routes.config';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLogin } from '@jovandyaz/auth-react';
 import { z } from 'zod';
@@ -39,7 +40,7 @@ export function LoginPage() {
     try {
       await login.mutateAsync(data);
       await syncUserProfile();
-      navigate({ to: '/' });
+      navigate({ to: ROUTES.ROOT });
     } catch (error) {
       console.warn('[backoffice-auth] login flow failed', error);
       setSubmitError(
