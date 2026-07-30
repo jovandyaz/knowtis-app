@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './Tabs';
 
@@ -56,5 +56,117 @@ describe('Tabs', () => {
       'aria-selected',
       'true'
     );
+  });
+});
+
+function stubScrollMetrics(
+  element: HTMLElement,
+  metrics: { scrollWidth: number; clientWidth: number; scrollLeft: number }
+) {
+  Object.defineProperty(element, 'scrollWidth', {
+    configurable: true,
+    value: metrics.scrollWidth,
+  });
+  Object.defineProperty(element, 'clientWidth', {
+    configurable: true,
+    value: metrics.clientWidth,
+  });
+  Object.defineProperty(element, 'scrollLeft', {
+    configurable: true,
+    writable: true,
+    value: metrics.scrollLeft,
+  });
+}
+
+describe('TabsList overflow affordance', () => {
+  it('reports no overflow when the triggers fit', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, {
+      scrollWidth: 300,
+      clientWidth: 300,
+      scrollLeft: 0,
+    });
+    fireEvent.scroll(list);
+    expect(list).toHaveAttribute('data-overflow', 'none');
+  });
+
+  it('reports end overflow when scrolled to the start', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, {
+      scrollWidth: 500,
+      clientWidth: 300,
+      scrollLeft: 0,
+    });
+    fireEvent.scroll(list);
+    expect(list).toHaveAttribute('data-overflow', 'end');
+  });
+
+  it('reports start overflow when scrolled to the far end', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, {
+      scrollWidth: 500,
+      clientWidth: 300,
+      scrollLeft: 200,
+    });
+    fireEvent.scroll(list);
+    expect(list).toHaveAttribute('data-overflow', 'start');
+  });
+
+  it('reports overflow on both sides mid-scroll', () => {
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, {
+      scrollWidth: 500,
+      clientWidth: 300,
+      scrollLeft: 100,
+    });
+    fireEvent.scroll(list);
+    expect(list).toHaveAttribute('data-overflow', 'both');
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('recomputes when the element is resized', () => {
+    const observers: Array<() => void> = [];
+    class FakeResizeObserver {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+
+    renderTabs();
+    const list = screen.getByRole('tablist');
+    stubScrollMetrics(list, {
+      scrollWidth: 500,
+      clientWidth: 300,
+      scrollLeft: 0,
+    });
+    act(() => {
+      observers.forEach((notify) => {
+        notify();
+      });
+    });
+    expect(list).toHaveAttribute('data-overflow', 'end');
+  });
+
+  it('still forwards the ref to the list element', () => {
+    const ref = { current: null as HTMLElement | null };
+    render(
+      <Tabs defaultValue="one">
+        <TabsList ref={ref}>
+          <TabsTrigger value="one">One</TabsTrigger>
+        </TabsList>
+        <TabsContent value="one">First panel</TabsContent>
+      </Tabs>
+    );
+    expect(ref.current).toBe(screen.getByRole('tablist'));
   });
 });

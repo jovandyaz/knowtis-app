@@ -27,6 +27,14 @@ export const Default: Story = {
 };
 
 export const Overflow: Story = {
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'The edge fade is driven by `data-overflow` and appears only while the strip can scroll further in that direction.',
+      },
+    },
+  },
   render: () => (
     <div className="max-w-xs">
       <Tabs defaultValue="general">
