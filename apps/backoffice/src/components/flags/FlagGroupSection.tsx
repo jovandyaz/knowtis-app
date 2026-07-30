@@ -8,6 +8,10 @@ interface FlagGroupSectionProps {
   flags: FeatureFlagDto[];
 }
 
+/**
+ * Renders one titled group of flag toggles and owns its own upsert mutation, so
+ * consumers must not wire one; renders nothing when the group is empty.
+ */
 export function FlagGroupSection({
   title,
   description,
@@ -33,15 +37,17 @@ export function FlagGroupSection({
           return (
             <li key={flag.key} className="flex items-center gap-3 p-3">
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="flex items-center gap-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2 text-sm">
                   {meta.label}
                   {meta.requiresEnv ? (
                     <Badge variant="outline">requires {meta.requiresEnv}</Badge>
                   ) : null}
-                </span>
-                <span className="truncate font-mono text-xs text-(--muted-foreground)">
-                  {flag.key}
-                </span>
+                </div>
+                {meta.label !== flag.key ? (
+                  <span className="truncate font-mono text-xs text-(--muted-foreground)">
+                    {flag.key}
+                  </span>
+                ) : null}
                 {flag.description ? (
                   <span className="text-xs text-(--muted-foreground)">
                     {flag.description}
@@ -50,7 +56,7 @@ export function FlagGroupSection({
               </div>
               <Switch
                 checked={flag.enabled}
-                aria-label={flag.key}
+                aria-label={meta.label}
                 disabled={
                   upsert.isPending && upsert.variables?.key === flag.key
                 }

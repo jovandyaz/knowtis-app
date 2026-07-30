@@ -5,6 +5,13 @@
   "projectType": "library",
   "tags": ["type:util", "scope:shared"],
   "targets": {
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/shared/types",
+        "command": "vitest run --passWithNoTests"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

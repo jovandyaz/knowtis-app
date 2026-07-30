@@ -6,7 +6,7 @@ import {
   FLAG_DOMAIN,
   FLAG_GROUP,
   flagMetaFor,
-} from '@knowtis/shared-types';
+} from './feature-flags.types';
 
 describe('feature flag catalog', () => {
   it('has an entry for every known flag key and nothing else', () => {
