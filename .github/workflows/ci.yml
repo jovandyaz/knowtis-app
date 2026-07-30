@@ -4,7 +4,20 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
+    # Filters the PR's base branch, so stacked PRs need their parent's prefix listed here.
+    branches:
+      - main
+      - develop
+      - feat/**
+      - fix/**
+      - docs/**
+      - chore/**
+      - refactor/**
+      - test/**
+      - build/**
+      - ci/**
+      - perf/**
+      - style/**
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
