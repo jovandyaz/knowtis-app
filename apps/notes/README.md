@@ -76,7 +76,7 @@ The app will be available at **http://localhost:4200**
 ```bash
 # Start everything
 pnpm docker:up    # Database
-pnpm dev:all      # API + Notes app
+pnpm dev:all      # API + Notes + Backoffice
 ```
 
 ---

@@ -71,7 +71,7 @@
 git clone git@github.com:jovandyaz/knowtis_app.git
 cd knowtis_app
 pnpm setup       # installs deps, scaffolds .env files, starts Docker, pushes the schema
-pnpm dev:all     # starts the API + frontend
+pnpm dev:all     # starts the API + Notes + Backoffice
 ```
 
 > `pnpm setup` is idempotent — it never overwrites an existing `.env`. AI features (`/api/ai/*`) need an `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` in `apps/api/.env` after the first run.
@@ -81,21 +81,23 @@ Design-system tokens are regenerated automatically before the app starts (the `s
 To run apps individually instead:
 
 ```bash
-pnpm dev      # Frontend only (http://localhost:4200)
-pnpm dev:api  # Backend only (http://localhost:3333)
-pnpm dev:mcp  # MCP server only (http://localhost:3334)
+pnpm dev             # Notes only (http://localhost:4200)
+pnpm dev:backoffice  # Backoffice only (http://localhost:4400)
+pnpm dev:api         # Backend only (http://localhost:3333)
+pnpm dev:mcp         # MCP server only (http://localhost:3334)
 ```
 
 > New here? [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) is the full onboarding guide — verified boot sequence, how to reach Settings (email verification), and how to connect an MCP client (Claude Desktop, Cursor, VS Code) to your local notes.
 
 ### Access Points
 
-| Service   | URL                            |
-| --------- | ------------------------------ |
-| Frontend  | <http://localhost:4200>        |
-| API       | <http://localhost:3333/api/v1> |
-| WebSocket | ws://localhost:3333            |
-| DB Studio | Run `pnpm db:studio`           |
+| Service    | URL                            |
+| ---------- | ------------------------------ |
+| Frontend   | <http://localhost:4200>        |
+| Backoffice | <http://localhost:4400>        |
+| API        | <http://localhost:3333/api/v1> |
+| WebSocket  | ws://localhost:3333            |
+| DB Studio  | Run `pnpm db:studio`           |
 
 ---
 
@@ -108,7 +110,7 @@ pnpm dev:mcp  # MCP server only (http://localhost:3334)
 ```bash
 # Start all services
 pnpm docker:up      # Database + Redis
-pnpm dev:all        # API + Frontend
+pnpm dev:all        # API + Notes + Backoffice
 ```
 
 #### Frontend Only
@@ -156,19 +158,21 @@ nx test api            # Test API project
 
 ### Development
 
-| Command        | Description                    |
-| -------------- | ------------------------------ |
-| `pnpm dev`     | Start Notes frontend (Vite)    |
-| `pnpm dev:api` | Start API backend (NestJS)     |
-| `pnpm dev:all` | Start both apps simultaneously |
+| Command               | Description                             |
+| --------------------- | --------------------------------------- |
+| `pnpm dev`            | Start Notes frontend (Vite)             |
+| `pnpm dev:api`        | Start API backend (NestJS)              |
+| `pnpm dev:backoffice` | Start Backoffice frontend (Vite)        |
+| `pnpm dev:all`        | Start Notes + Backoffice + API together |
 
 ### Build & Preview
 
-| Command          | Description                |
-| ---------------- | -------------------------- |
-| `pnpm build`     | Build Notes for production |
-| `pnpm build:api` | Build API for production   |
-| `pnpm preview`   | Preview production build   |
+| Command                 | Description                     |
+| ----------------------- | ------------------------------- |
+| `pnpm build`            | Build Notes for production      |
+| `pnpm build:backoffice` | Build Backoffice for production |
+| `pnpm build:api`        | Build API for production        |
+| `pnpm preview`          | Preview production build        |
 
 ### Testing & Quality
 
@@ -225,12 +229,13 @@ make fresh      # Clean install from scratch
 make ci         # Run full CI pipeline locally
 
 # Common commands
-make dev        # Start frontend
-make dev-api    # Start backend
-make dev-all    # Start everything
-make test       # Run tests
-make lint       # Lint code
-make build      # Build for production
+make dev            # Start Notes frontend
+make dev-api        # Start backend
+make dev-backoffice # Start Backoffice frontend
+make dev-all        # Start everything
+make test           # Run tests
+make lint           # Lint code
+make build          # Build for production
 ```
 
 Run `make help` to see all available targets with descriptions.

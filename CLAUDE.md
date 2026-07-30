@@ -20,7 +20,8 @@ Knowtis is a real-time collaborative notes platform built as an Nx monorepo with
 # Development
 pnpm dev              # Start Notes frontend (localhost:4200)
 pnpm dev:api          # Start API backend (localhost:3333)
-pnpm dev:all          # Start both apps simultaneously
+pnpm dev:backoffice   # Start Backoffice frontend (localhost:4400)
+pnpm dev:all          # Start Notes + Backoffice + API simultaneously
 
 # Testing
 pnpm test             # Run all tests (watch mode)
@@ -42,6 +43,7 @@ pnpm db:studio        # Open Drizzle Studio GUI
 
 # Build
 pnpm build            # Build frontend
+pnpm build:backoffice # Build backoffice
 pnpm build:api        # Build backend
 
 # Nx
