@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { useNavigate } from '@tanstack/react-router';
 
 import { syncUserProfile } from '@/auth/setup';
+import { APP_NAME } from '@/config/app.config';
 import { ROUTES } from '@/config/routes.config';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useLogin } from '@jovandyaz/auth-react';
@@ -52,7 +53,7 @@ export function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm p-6">
-        <h1 className="mb-6 text-xl font-semibold">Knowtis Backoffice</h1>
+        <h1 className="mb-6 text-xl font-semibold">{APP_NAME}</h1>
         <form onSubmit={onSubmit} className="flex flex-col gap-4" noValidate>
           <FormField id="email" label="Email" error={errors.email?.message}>
             <Input
