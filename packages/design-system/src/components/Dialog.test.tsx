@@ -106,6 +106,20 @@ describe('Dialog accessibility', () => {
     expect(onOuterChange).not.toHaveBeenCalled();
   });
 
+  it('moves focus into the content on open without waiting for a later frame', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent>
+          <DialogTitle>Navigation</DialogTitle>
+          <button type="button">Dashboard</button>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
   it('renders a right-side drawer when side="right"', () => {
     render(
       <Dialog open onOpenChange={() => undefined}>

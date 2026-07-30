@@ -192,20 +192,20 @@ function DialogContent({
     titlePresent,
     descriptionPresent,
   } = useDialogContext();
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [contentNode, setContentNode] = useState<HTMLDivElement | null>(null);
   const previousActiveElement = useRef<Element | null>(null);
   const escapeToken = useRef(Symbol('dialog-escape'));
 
   const getFocusableElements = useCallback(() => {
-    if (!contentRef.current) {
+    if (!contentNode) {
       return [];
     }
     return Array.from(
-      contentRef.current.querySelectorAll<HTMLElement>(
+      contentNode.querySelectorAll<HTMLElement>(
         'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
       )
     ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
-  }, []);
+  }, [contentNode]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
@@ -261,15 +261,6 @@ function DialogContent({
     if (open) {
       previousActiveElement.current = document.activeElement;
 
-      requestAnimationFrame(() => {
-        const focusableElements = getFocusableElements();
-        if (focusableElements.length > 0) {
-          focusableElements[0].focus();
-        } else {
-          contentRef.current?.focus();
-        }
-      });
-
       const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
       const trigger = triggerRef.current;
@@ -284,7 +275,17 @@ function DialogContent({
       };
     }
     return;
-  }, [open, getFocusableElements, triggerRef]);
+  }, [open, triggerRef]);
+
+  // DialogPortal renders null until its own mount effect runs, so the content node
+  // does not exist yet on the commit that opens the dialog — hence keying off the node.
+  useEffect(() => {
+    if (!open || !contentNode) {
+      return;
+    }
+    const [firstFocusable] = getFocusableElements();
+    (firstFocusable ?? contentNode).focus();
+  }, [open, contentNode, getFocusableElements]);
 
   if (!open) {
     return null;
@@ -294,7 +295,7 @@ function DialogContent({
     <DialogPortal>
       <DialogOverlay />
       <div
-        ref={contentRef}
+        ref={setContentNode}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titlePresent ? titleId : undefined}
