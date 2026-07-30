@@ -106,6 +106,43 @@ describe('Dialog accessibility', () => {
     expect(onOuterChange).not.toHaveBeenCalled();
   });
 
+  it('moves focus into the content on open without waiting for a later frame', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent>
+          <DialogTitle>Navigation</DialogTitle>
+          <button type="button">Dashboard</button>
+        </DialogContent>
+      </Dialog>
+    );
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: 'Dashboard' })
+    );
+  });
+
+  it('wraps focus at both ends so Tab never leaves the dialog', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent>
+          <DialogTitle>Navigation</DialogTitle>
+          <button type="button">Dashboard</button>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    const first = screen.getByRole('button', { name: 'Dashboard' });
+    const last = screen.getByRole('button', { name: 'Close dialog' });
+
+    last.focus();
+    fireEvent.keyDown(dialog, { key: 'Tab' });
+    expect(document.activeElement).toBe(first);
+
+    fireEvent.keyDown(dialog, { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(last);
+  });
+
   it('renders a right-side drawer when side="right"', () => {
     render(
       <Dialog open onOpenChange={() => undefined}>

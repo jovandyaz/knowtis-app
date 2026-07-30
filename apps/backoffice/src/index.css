@@ -1,5 +1,16 @@
 /* Import design system styles (includes Tailwind, tokens, and base theme) */
 @import '@knowtis/design-system/styles.css';
 
-/* Scan workspace packages for Tailwind classes */
-@source "../../../packages/design-system/src/**/*.tsx";
+@theme {
+  /* Height of the phone-only app bar; page-level sticky headers offset by it. */
+  --app-bar-height: 3.5rem;
+
+  /* AppShell branches on a px media query, so `md:` must resolve to the same
+     width whatever the browser's root font size is. Tailwind sorts breakpoint
+     variants by raw value, so the whole scale has to share that unit. */
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+  --breakpoint-2xl: 1536px;
+}

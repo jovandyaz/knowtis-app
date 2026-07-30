@@ -32,7 +32,7 @@ export function AiConfigStatusHeader({
     .map(([name]) => name);
 
   return (
-    <div className="sticky top-0 z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--border) bg-(--background) py-3">
+    <div className="sticky top-(--app-bar-height) z-10 flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-(--border) bg-(--background) py-3 md:top-0">
       <label className="flex items-center gap-2 text-sm font-medium">
         AI enabled
         <Switch

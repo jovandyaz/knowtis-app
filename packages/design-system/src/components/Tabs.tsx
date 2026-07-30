@@ -1,28 +1,94 @@
 import {
   forwardRef,
+  useCallback,
+  useState,
   type ComponentPropsWithoutRef,
   type ComponentRef,
+  type ForwardedRef,
 } from 'react';
 
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '../utils';
+import {
+  readOverflow,
+  TABS_FOCUS_MASK_RESET_CLASS,
+  TABS_OVERFLOW,
+  TABS_OVERFLOW_MASK_CLASS,
+  type TabsOverflow,
+} from './tabs-overflow';
+
+type TabsListElement = ComponentRef<typeof TabsPrimitive.List>;
+
+function assignRef(
+  ref: ForwardedRef<TabsListElement>,
+  node: TabsListElement | null
+) {
+  if (typeof ref === 'function') {
+    ref(node);
+  } else if (ref) {
+    ref.current = node;
+  }
+}
 
 export const Tabs = TabsPrimitive.Root;
 
+/**
+ * Radix tab strip that fades the edges it can still be scrolled towards and
+ * reflects that measured state on its own `data-overflow` attribute.
+ */
 export const TabsList = forwardRef<
-  ComponentRef<typeof TabsPrimitive.List>,
+  TabsListElement,
   ComponentPropsWithoutRef<typeof TabsPrimitive.List>
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      'inline-flex w-full items-center gap-1 overflow-x-auto rounded-md bg-(--muted) p-1',
-      className
-    )}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const [overflow, setOverflow] = useState<TabsOverflow>(TABS_OVERFLOW.NONE);
+
+  const attachList = useCallback(
+    (node: TabsListElement | null) => {
+      assignRef(ref, node);
+      if (!node) {
+        return;
+      }
+
+      const sync = () => setOverflow(readOverflow(node));
+      sync();
+
+      node.addEventListener('scroll', sync, { passive: true });
+      const resizeObserver = new ResizeObserver(sync);
+      resizeObserver.observe(node);
+      // The list is w-full, so a changed trigger set moves scrollWidth without
+      // resizing the border box the ResizeObserver watches.
+      const mutationObserver = new MutationObserver(sync);
+      mutationObserver.observe(node, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+
+      return () => {
+        node.removeEventListener('scroll', sync);
+        resizeObserver.disconnect();
+        mutationObserver.disconnect();
+        assignRef(ref, null);
+      };
+    },
+    [ref]
+  );
+
+  return (
+    <TabsPrimitive.List
+      ref={attachList}
+      data-overflow={overflow}
+      className={cn(
+        'inline-flex w-full items-center gap-1 overflow-x-auto rounded-md bg-(--muted) p-1',
+        TABS_OVERFLOW_MASK_CLASS[overflow],
+        TABS_FOCUS_MASK_RESET_CLASS,
+        className
+      )}
+      {...props}
+    />
+  );
+});
 TabsList.displayName = 'TabsList';
 
 export const TabsTrigger = forwardRef<

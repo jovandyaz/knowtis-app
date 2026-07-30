@@ -33,6 +33,8 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   };
 });
 
+const STICKY_OFFSET_CLASSES = ['top-(--app-bar-height)', 'md:top-0'];
+
 const HEALTHY = {
   data: {
     providers: {
@@ -86,6 +88,16 @@ describe('AiConfigStatusHeader', () => {
     expect(screen.getByText('openrouter:z-ai/glm-5.2')).toBeInTheDocument();
     expect(screen.getByText('Providers healthy')).toBeInTheDocument();
     expect(screen.getByText('$3.10 today')).toBeInTheDocument();
+  });
+
+  it('clears the app bar on phones and sticks to the top on desktop', () => {
+    render(<AiConfigStatusHeader defaultModel={null} />);
+
+    const header = screen
+      .getByRole('switch', { name: 'AI enabled' })
+      .closest('.sticky');
+
+    expect(header).toHaveClass(...STICKY_OFFSET_CLASSES);
   });
 
   it('lists cooling providers when the chain breaker is active', () => {
