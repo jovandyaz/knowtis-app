@@ -4,19 +4,22 @@
 
 AI text assistant integrated into the Tiptap editor. Supports streaming responses over WebSocket and non-streaming over REST. Gated by the `ai_enabled` DB feature flag (managed via `feature_flags` table).
 
-| Layer         | Technology                                          |
-| ------------- | --------------------------------------------------- |
-| Backend       | NestJS 11, Vercel AI SDK, Anthropic Claude          |
-| Caching       | Redis (SHA-256 hash-keyed response cache)           |
-| Rate Limiting | Redis (primary) + PostgreSQL (fallback)             |
-| Persistence   | PostgreSQL 16, Drizzle ORM (`ai_usage` table)       |
-| Frontend      | React 19, Tiptap 3, Zustand, Socket.io client       |
-| Shared Types  | `@knowtis/shared-types` (actions, languages, tones) |
+| Layer         | Technology                                                             |
+| ------------- | ---------------------------------------------------------------------- |
+| Backend       | NestJS 11, Vercel AI SDK (Anthropic, OpenAI, Google, OpenRouter)       |
+| Caching       | Redis (SHA-256 hash-keyed response cache)                              |
+| Rate Limiting | Redis (primary) + PostgreSQL (fallback)                                |
+| Persistence   | PostgreSQL 16, Drizzle ORM (`ai_usage` table)                          |
+| Frontend      | React 19, Tiptap 3, Zustand, Socket.io client                          |
+| Admin surface | Backoffice app (`apps/backoffice`) — AI Config, AI Metrics, flag pages |
+| Shared Types  | `@knowtis/shared-types` (actions, languages, tones, flag catalog)      |
 
-| Model                                 | Use case                              |
-| ------------------------------------- | ------------------------------------- |
-| `anthropic:claude-sonnet-5`           | All actions (default)                 |
-| `anthropic:claude-haiku-4-5-20251001` | `ghost-text` only (latency-optimized) |
+| Role      | Serves                            | Code default (DB-overridable)     |
+| --------- | --------------------------------- | --------------------------------- |
+| `default` | Most actions and copilot fallback | `openrouter:z-ai/glm-5.2`         |
+| `fast`    | `ghost-text` (latency-optimized)  | `openrouter:minimax/minimax-m2.5` |
+
+Both roles resolve at runtime through the `ai_config` table — see [Dynamic Model Configuration](#dynamic-model-configuration). The table above shows the code defaults, not a fixed assignment.
 
 ---
 
@@ -135,7 +138,7 @@ All constants are defined in `packages/shared/types/src/lib/ai.types.ts` and sha
 | `generate-summary`    | default | No        | Generate structured summary from note     |
 | `generate-mind-map`   | default | No        | Generate mind map from note content       |
 
-**Model:** `default` = claude-sonnet, `fast` = claude-haiku. Configured via `FAST_MODEL_ACTIONS` in `ai-orchestrator.service.ts`.
+**Model:** `default` and `fast` resolve at runtime via `ai_config` (see [Dynamic Model Configuration](#dynamic-model-configuration)). Which actions use the fast model is configured via `FAST_MODEL_ACTIONS` in `ai-orchestrator.service.ts`.
 **Note:** `generate-*` actions use the structured output port (Zod schema validation) via the artifacts module, not the streaming text pipeline.
 
 ### Languages
@@ -397,7 +400,9 @@ Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWith
 - Usage, cost, and the `model` reported to clients always reflect the model that **actually served** the request.
 - The copilot agent receives `isLast` per attempt so it can degrade gracefully only on the final candidate.
 
-**Circuit breaker:** `ProviderCooldownTracker` puts a provider in cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling providers are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
+**Circuit breaker:** `ProviderCooldownTracker` opens a cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling entries are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
+
+The cooldown **bucket** (`cooldownKeyOf`) is the provider for direct providers — their models share one key and quota, so they fail together — but the **full model id** for aggregators (`openrouter:*`): OpenRouter multiplexes each model to an independent upstream pool, so one model's outage says nothing about its siblings. Without per-model buckets, one failing OpenRouter model would cool the whole provider and disable failover inside an all-OpenRouter chain — the default chain's exact shape.
 
 Model availability is an injected function, so the per-user key source (BYOK) plugs in without touching the chain — see [Bring-your-own-key (BYOK)](#bring-your-own-key-byok).
 
@@ -497,6 +502,8 @@ Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `Agen
 
 `ai_default_model`, `ai_fast_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the code defaults (`AI_SETTING_DEFAULTS`) when no row exists — or when the table read fails, so a database outage degrades to the defaults instead of erroring. There is no environment layer: a stored row is **Custom**, its absence is **Default**, and that is exactly what the backoffice badges show. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); reset to the code default via the page's **Reset to default** button or `DELETE /api/v1/ai/config/:key`. A `model` key takes a curated model id and `ai_fallback_chain` takes a comma-separated list of them; changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated` / `ai_config.reset`).
 
+The **AI Config** page is the single AI-ops surface: a sticky status header (master `ai_enabled` toggle, provider health, today's spend) over four tabs — **Models** (default/fast/chain/reasoning/upstream allowlist), **Guardrails & Limits**, **Providers** (key management + probes), and **Capabilities & Access** (the AI-domain feature flags). **AI Metrics** is its read-side companion: stat cards, a time-series chart (cost/tokens/requests × day/week/month), and per-model and per-action breakdown tables fed by `GET /admin/ai/metrics` and `GET /admin/ai/metrics/timeseries`.
+
 ## Environment Variables
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables. In direct mode the provider API keys below are the **fallback** source — a key stored in `system_provider_keys` via the backoffice wins (see [System Provider Keys](#system-provider-keys-database-overrides-env)).
@@ -547,6 +554,8 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                          |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
+
+Every flag is described in the static **flag catalog** (`FEATURE_FLAG_CATALOG`, `packages/shared/types/src/lib/feature-flags.types.ts`): a human label, description, `domain` (`ai` | `product`), and `group` (master / capability / guardrail / access / release / ops / permission). The catalog drives the backoffice UI — the **Feature Flags** page shows only `product` flags grouped by type, while every `ai`-domain flag surfaces inside the **AI Config** page's tabs next to the settings it gates. A guard test asserts the catalog and the API's flag keys never drift.
 
 ---
 
@@ -605,7 +614,7 @@ A CHECK enforces that the four secret columns are all null or all present — a 
 
 Holds each user's account-default copilot model. The per-conversation override lives on `conversations.model` (varchar, nullable) in the agent module. See [Copilot Model Selection](#copilot-model-selection).
 
-> After schema changes, run `pnpm db:push`.
+> After schema changes, run `pnpm db:generate` and commit the migration; apply locally with `pnpm db:migrate:run`. Never `db:push` against a shared database — see [MIGRATIONS.md](MIGRATIONS.md).
 
 ---
 
@@ -964,7 +973,7 @@ When a turn proposes a mutation (create/update note), the pending proposal is pa
 
 **Stall detection, not a wall-clock budget.** A reasoning model can legitimately work for minutes, so the operative limit is **silence**, not elapsed time — the orchestrator caps how long a call can go quiet, not how long the turn runs. The turn is an **agent-owned step loop**: one `streamText` call per step (`stopWhen: stepCountIs(1)`), each step's tool results threaded into the message history for the next, so every LLM call is independently budgeted. Each call gets its own `AbortController` and a `AI_AGENT_STALL_MS` timer that every `fullStream` part re-arms (reasoning, text, tool and step events all count as activity). Only a call that emits nothing for the whole budget is aborted; `AI_AGENT_MAX_MS` stays enforced as an absolute wall-clock ceiling — a backstop against a runaway turn that never stops producing parts.
 
-Because the stall aborts only the per-call signal, the turn-level signal survives and the chain can fail over — at two granularities. The **first call** of the turn that stalls with **no** turn-wide progress (no answer text and no completed tool step) throws `AgentStallError`, which the outer `streamWithChain` records as a cooldown failure before opening the next model. A **continuation step** (a call after at least one step already threaded tool results) that stalls silent — zero stream parts, after the one same-model retry below — instead fails over **mid-turn** to the next chain candidate, replaying the same threaded history on the new model: tools are **not** re-executed, cooldown is recorded for the dead model, and `ai.chain.step_failed` is logged with `{ atStep }`. Ineligible cases end the turn with `AI_TIMEOUT` instead: a BYOK turn (never falls back), a step that already emitted parts (retrying would re-bill that work), and the last candidate. `agent.turn.stall` is logged on every stall — a stall is never reported as a provider outage. Usage accounting for a failed-over turn is an approximation: the whole turn records a **single** `ai_usage` row priced at the **finishing** model's rates, so tokens the dead model billed before the switch are attributed to the surviving model (per-model row splitting is deferred work).
+Because the stall aborts only the per-call signal, the turn-level signal survives and the chain can fail over — at two granularities. The **first call** of the turn that stalls with **no** turn-wide progress (no answer text and no completed tool step) throws `AgentStallError`, which the outer `streamWithChain` records as a cooldown failure before opening the next model. A **continuation step** (a call after at least one step already threaded tool results) that stalls silent — zero stream parts, after the one same-model retry below — instead fails over **mid-turn** to the next chain candidate, replaying the same threaded history on the new model: tools are **not** re-executed, cooldown is recorded for the dead model, and `ai.chain.step_failed` is logged with `{ atStep }`. The replayed history is stripped of the dead model's reasoning parts (`pruneMessages`, `reasoning: 'all'`) — reasoning blocks are model-specific, and a successor either rejects them outright or mistakes another model's chain of thought for its own. Ineligible cases end the turn with `AI_TIMEOUT` instead: a BYOK turn (never falls back), a step that already emitted parts (retrying would re-bill that work), and the last candidate. `agent.turn.stall` is logged on every stall — a stall is never reported as a provider outage. Usage accounting for a failed-over turn is an approximation: the whole turn records a **single** `ai_usage` row priced at the **finishing** model's rates, so tokens the dead model billed before the switch are attributed to the surviving model (per-model row splitting is deferred work).
 
 **A shorter budget for the first part.** The first silence window of a call — before any part has arrived — is bounded by `AI_AGENT_TTFT_MS` (default 30 s), not the full `AI_AGENT_STALL_MS`: a call that hasn't said anything yet is far more likely to be dead than one already generating. Every step call opens with its own TTFT window, continuation calls included. The first non-marker part received flips the watchdog over to the `AI_AGENT_STALL_MS` budget for the rest of that call; a stall after that point follows the pre-existing semantics above, unchanged.
 

@@ -26,12 +26,13 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        CLIENT LAYER                             │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    Notes App (React)                       │  │
-│  │  • Rich text editing (Tiptap)                             │  │
-│  │  • Real-time collaboration (Yjs)                          │  │
-│  │  • Offline support (IndexedDB)                            │  │
-│  └───────────────────────────────────────────────────────────┘  │
+│  ┌────────────────────────────────┐ ┌────────────────────────┐  │
+│  │       Notes App (React)        │ │   Backoffice (React)   │  │
+│  │  • Rich text editing (Tiptap)  │ │  • Admin-only (RBAC)   │  │
+│  │  • Real-time collab (Yjs)      │ │  • AI Config & Metrics │  │
+│  │  • Offline support (IndexedDB) │ │  • Users, flags, audit │  │
+│  │  • Copilot dock + Study tabs   │ │                        │  │
+│  └────────────────────────────────┘ └────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                       TRANSPORT LAYER                           │
 │         HTTP/REST                    WebSocket (Hocuspocus)     │
@@ -41,7 +42,7 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  │                    API (NestJS) v1                         │  │
 │  │  • Authentication (JWT)                                    │  │
 │  │  • Authorization (CASL)                                    │  │
-│  │  • Notes CRUD                                              │  │
+│  │  • Notes CRUD (logical delete + restore)                   │  │
 │  │  • AI Assistant (streaming)                                │  │
 │  │  • Study Artifacts (flashcards, quizzes, summaries)        │  │
 │  │  • Collaboration Service (Hocuspocus + Yjs)                │  │
@@ -78,6 +79,7 @@ The codebase is strictly divided into **Apps** (deployable units) and **Libs** (
 knowtis/
 ├── apps/                    # Deployable applications
 │   ├── api/                 # Backend (NestJS)
+│   ├── backoffice/          # Admin frontend (React) — superadmin/ops surface
 │   ├── mcp/                 # MCP server for AI assistants (Hono)
 │   └── notes/               # Frontend (React)
 │
@@ -85,6 +87,7 @@ knowtis/
 │   ├── api-client/          # HTTP/WebSocket client
 │   ├── authorization/       # CASL permission definitions
 │   └── data-access/         # Domain logic & state
+│       ├── admin/           # Backoffice hooks & schemas (users, metrics, config, audit)
 │       ├── artifacts/       # Study artifacts hooks & schemas
 │       ├── feature-flags/   # Feature flags hooks & schemas
 │       ├── mcp-keys/        # MCP API keys hooks & schemas
@@ -221,7 +224,8 @@ Note: `design-system` is `type:ui` and is **not** part of the data-access import
 │  │               Page Components                          │  │
 │  │  • HomePage (notes dashboard)                         │  │
 │  │  • LoginPage / RegisterPage                           │  │
-│  │  • NoteEditorPage (rich text editing)                 │  │
+│  │  • NoteEditorPage — center tabs Nota | Estudio        │  │
+│  │    (study tools), copilot-only right dock             │  │
 │  └───────────────────────────────────────────────────────┘  │
 │                           ↓                                  │
 │  ┌───────────────────────────────────────────────────────┐  │
@@ -399,7 +403,9 @@ The **copilot** is a conversational, tool-using agent that lives in its own `age
 
 ### Agent loop
 
-Each turn runs a bounded tool-calling loop (Vercel AI SDK) inside `run-agent-turn.handler.ts`. The model can call read tools (search/fetch notes, web) and propose write tools; the loop is capped by `AI_AGENT_MAX_STEPS`, `AI_AGENT_MAX_OUTPUT_TOKENS`, a per-candidate stream-silence budget (`AI_AGENT_STALL_MS`), and the `AI_AGENT_MAX_MS` wall-clock backstop. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently.
+Each turn runs an **agent-owned step loop** (`agent-step-loop.ts`, driven from `run-agent-turn.handler.ts`): one `streamText` call per step, each step's tool results threaded into the next call's history, so every LLM call is independently budgeted. A call gets its own TTFT budget (`AI_AGENT_TTFT_MS`), stream-silence budget (`AI_AGENT_STALL_MS` — the operative limit; a reasoning model may legitimately work for minutes, so the loop bounds _silence_, not elapsed time), and the turn is capped by `AI_AGENT_MAX_STEPS`, `AI_AGENT_MAX_OUTPUT_TOKENS`, and the `AI_AGENT_MAX_MS` wall-clock backstop.
+
+Owning the loop is what makes **step-boundary failover** possible: a continuation step whose model goes silent fails over mid-turn to the next fallback-chain candidate, replaying the threaded history (pruned of the dead model's reasoning) on the new model without re-executing tools. Stream health telemetry (`agent.turn.health`) is logged per call. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently. Full semantics: [AI.md → Conversation memory (A6a)](./AI.md#conversation-memory-a6a).
 
 ### Server-authoritative & human-in-the-loop
 
@@ -560,18 +566,22 @@ Strict mode is enabled for maximum type safety:
 
 ### CI/CD Pipeline
 
-The project uses GitHub Actions (`.github/workflows/ci.yml`):
+The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected** — only projects a change touches are linted, typechecked, tested, and built.
 
-| Stage     | Tool                   | Trigger                   |
-| --------- | ---------------------- | ------------------------- |
-| Lint      | ESLint                 | Push/PR to main, develop  |
-| Typecheck | TypeScript `--noEmit`  | Push/PR to main, develop  |
-| Test      | Vitest                 | Push/PR to main, develop  |
-| Build     | Nx (api + notes)       | After lint/typecheck/test |
-| Deploy    | Railway (`railway up`) | Push to main only         |
+**Triggers:** pushes to `main`/`develop`, and pull requests whose **base** branch is `main`, `develop`, or any Conventional-prefixed feature branch (`feat/**`, `fix/**`, …) — the latter so stacked PRs run CI against their parent branch instead of showing up with no checks. For stacked PRs, `nx-set-shas` computes affected against the PR's real base ref (`git merge-base origin/<base> HEAD`), so each level only re-verifies its own changes.
 
-**Frontend**: Vercel auto-deploys on push (no CI gate).
-**Backend**: Railway deploys via CI after all checks pass.
+**CI job** (single job, sequential steps): lint → typecheck → test (`--parallel=2`, hosted runners OOM beyond that) → migration-drift check (`nx db:generate api` must produce no diff) → production build. It then exposes one `*_affected` output per app.
+
+**Deploy jobs** (main push only, each gated on its app being affected):
+
+| Job                 | Target                                                                                              |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `deploy-frontend`   | Vercel (notes) — `vercel pull/build/deploy --prebuilt --prod`                                       |
+| `deploy-backoffice` | Vercel (`knowtis-backoffice` project) — same flow with `--local-config apps/backoffice/vercel.json` |
+| `deploy`            | Railway (api) — `railway up`; migrations run via Railway's pre-deploy command                       |
+| `deploy-mcp`        | Railway (mcp) — pins service vars and asserts OAuth env parity before `railway up`                  |
+
+**Neither frontend auto-deploys from Vercel's Git integration** — `vercel.json` sets `git.deploymentEnabled: false`; every deploy is CI-driven and gated on the checks above. See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
 ---
 
@@ -588,6 +598,6 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`):
 ---
 
 <p align="center">
-  <strong>Knowtis Architecture v1.3</strong><br/>
-  Last updated: June 2026
+  <strong>Knowtis Architecture v1.4</strong><br/>
+  Last updated: July 2026
 </p>

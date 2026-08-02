@@ -1,22 +1,22 @@
 # Knowtis Deployment Guide
 
-How Knowtis is deployed to production: Railway (backend) and Vercel (frontend).
+How Knowtis is deployed to production: Railway (API + MCP) and Vercel (notes frontend + backoffice).
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│     Vercel      │     │     Railway     │
-│   (Frontend)    │────▶│   (Backend)     │
-│  React + Vite   │     │    NestJS       │
-└─────────────────┘     └────────┬────────┘
-                                 │
-                    ┌────────────┼────────────┐
-                    │            │            │
-               ┌────▼────┐ ┌────▼────┐ ┌────▼────┐
-               │PostgreSQL│ │  Redis  │ │WebSocket│
-               │(Railway) │ │(Railway)│ │(Socket.io)│
-               └──────────┘ └─────────┘ └──────────┘
+┌─────────────────┐ ┌─────────────────┐     ┌─────────────────┐
+│     Vercel      │ │     Vercel      │     │     Railway     │
+│  Notes frontend │ │   Backoffice    │────▶│  API (NestJS)   │
+│  knowtis.app    │ │ backoffice.     │     │  + MCP (Hono)   │
+│                 │ │  knowtis.app    │     └────────┬────────┘
+└────────┬────────┘ └─────────────────┘              │
+         └──────────────────────▶───┌────────────────┼────────────┐
+                                    │                │            │
+                               ┌────▼─────┐    ┌─────▼───┐ ┌──────▼────┐
+                               │PostgreSQL│    │  Redis  │ │ WebSocket │
+                               │(Railway) │    │(Railway)│ │(Socket.io)│
+                               └──────────┘    └─────────┘ └───────────┘
 ```
 
 ---
@@ -43,17 +43,18 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after e
 
 **Required GitHub secrets/variables:**
 
-| Name                     | Type     | Purpose                                                       |
-| ------------------------ | -------- | ------------------------------------------------------------- |
-| `RAILWAY_TOKEN`          | Secret   | Project token for Railway CLI (API + MCP deploys)             |
-| `RAILWAY_SERVICE_ID`     | Variable | API service ID for `railway up`                               |
-| `RAILWAY_MCP_SERVICE_ID` | Variable | MCP service ID; `deploy-mcp` is skipped when unset            |
-| `VERCEL_TOKEN`           | Secret   | Vercel CLI auth for the `deploy-frontend` job                 |
-| `VERCEL_ORG_ID`          | Secret   | Vercel org/team ID                                            |
-| `VERCEL_PROJECT_ID`      | Secret   | Vercel project ID                                             |
-| `ANTHROPIC_API_KEY`      | Secret   | Nightly AI eval (`nightly-eval.yml`); funded account required |
-| `VOYAGE_API_KEY`         | Secret   | Optional — lights up the retrieval/memory eval suites         |
-| `TAVILY_API_KEY`         | Secret   | Optional — lights up the web-search eval suite                |
+| Name                           | Type     | Purpose                                                       |
+| ------------------------------ | -------- | ------------------------------------------------------------- |
+| `RAILWAY_TOKEN`                | Secret   | Project token for Railway CLI (API + MCP deploys)             |
+| `RAILWAY_SERVICE_ID`           | Variable | API service ID for `railway up`                               |
+| `RAILWAY_MCP_SERVICE_ID`       | Variable | MCP service ID; `deploy-mcp` is skipped when unset            |
+| `VERCEL_TOKEN`                 | Secret   | Vercel CLI auth for both Vercel deploy jobs                   |
+| `VERCEL_ORG_ID`                | Secret   | Vercel org/team ID                                            |
+| `VERCEL_PROJECT_ID`            | Secret   | Vercel project ID (notes frontend)                            |
+| `VERCEL_PROJECT_ID_BACKOFFICE` | Secret   | Vercel project ID (`knowtis-backoffice`)                      |
+| `ANTHROPIC_API_KEY`            | Secret   | Nightly AI eval (`nightly-eval.yml`); funded account required |
+| `VOYAGE_API_KEY`               | Secret   | Optional — lights up the retrieval/memory eval suites         |
+| `TAVILY_API_KEY`               | Secret   | Optional — lights up the web-search eval suite                |
 
 > A third deploy job, `deploy-mcp`, ships the MCP server to Railway (`railway up`) on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
 
@@ -68,6 +69,14 @@ Push to main → GitHub Actions CI → lint, typecheck, test, build → vercel p
 The `deploy-frontend` job (`.github/workflows/ci.yml`) runs only on `push` to `main` and only when the `notes` app is affected (`needs.ci.outputs.notes_affected`). It installs the Vercel CLI and runs `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.
 
 Config: `vercel.json` at repo root.
+
+### Backoffice (Vercel) — CI-driven
+
+The admin backoffice deploys the same way through the `deploy-backoffice` job, gated on the `backoffice` app being affected. It targets a **separate Vercel project** (`knowtis-backoffice`, secret `VERCEL_PROJECT_ID_BACKOFFICE`) and passes `--local-config apps/backoffice/vercel.json` to both `vercel build` and `vercel deploy`.
+
+- **Domain:** `backoffice.knowtis.app` — DNS is a manual CNAME at the registrar (Porkbun).
+- **API CORS:** the API needs `BACKOFFICE_URL` set on Railway, alongside `FRONTEND_URL`.
+- **Sessions:** each frontend gets its own refresh cookie (isolated per origin) — the backoffice never shares the notes app's session.
 
 ---
 
@@ -106,7 +115,8 @@ restartPolicyMaxRetries = 3
 | `JWT_REFRESH_SECRET`     | Yes      | Refresh token signing key (min 32 chars) |
 | `JWT_EXPIRES_IN`         | No       | Access token TTL (default: `15m`)        |
 | `JWT_REFRESH_EXPIRES_IN` | No       | Refresh token TTL (default: `7d`)        |
-| `FRONTEND_URL`           | Yes      | Frontend URL for CORS                    |
+| `FRONTEND_URL`           | Yes      | Notes frontend URL for CORS              |
+| `BACKOFFICE_URL`         | No       | Backoffice URL for CORS                  |
 | `NODE_ENV`               | No       | Set by railway.toml (`production`)       |
 | `PORT`                   | No       | Set by railway.toml (`3333`)             |
 
@@ -153,7 +163,7 @@ VITE_COLLABORATION_MODE=websocket
 4. Generate a public domain: Settings → Networking → Public Networking
 5. Set `FRONTEND_URL` in Railway to your Vercel URL
 6. Set Vercel's `VITE_API_URL` to the Railway domain + `/api/v1`
-7. Set up GitHub secrets/variables for CI deploys: `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID` (API), `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` (frontend), and optionally `RAILWAY_MCP_SERVICE_ID` (MCP)
+7. Set up GitHub secrets/variables for CI deploys: `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID` (API), `VERCEL_TOKEN`/`VERCEL_ORG_ID`/`VERCEL_PROJECT_ID` (frontend), and optionally `RAILWAY_MCP_SERVICE_ID` (MCP) and `VERCEL_PROJECT_ID_BACKOFFICE` (backoffice)
 
 ---
 
