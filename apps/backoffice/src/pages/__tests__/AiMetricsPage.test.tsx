@@ -39,8 +39,8 @@ const SUMMARY = {
     'ghost-text': { requests: 10, tokens: 500, costUsd: 0.02 },
   },
   byModel: {
-    'claude-haiku-4-5': { requests: 10, tokens: 500, costUsd: 0.05 },
-    'claude-sonnet-5': { requests: 30, tokens: 3500, costUsd: 0.15 },
+    'claude-haiku-4-5': { requests: 15, tokens: 1000, costUsd: 0.03 },
+    'claude-sonnet-5': { requests: 25, tokens: 3000, costUsd: 0.17 },
   },
 };
 
@@ -100,16 +100,24 @@ describe('AiMetricsPage', () => {
     expect(screen.getByText('$0.0050')).toBeInTheDocument();
   });
 
-  it('renders spend by model sorted by cost with share percentages', () => {
+  it('breaks model usage into rows ranked by cost, not just spend share', () => {
     mockSuccess();
     renderPage();
 
-    const list = screen.getByRole('list', { name: 'Spend by model' });
-    const items = within(list).getAllByRole('listitem');
-    expect(items[0]).toHaveTextContent('claude-sonnet-5');
-    expect(items[1]).toHaveTextContent('claude-haiku-4-5');
-    expect(screen.getByText('$0.1500 · 75%')).toBeInTheDocument();
-    expect(screen.getByText('$0.0500 · 25%')).toBeInTheDocument();
+    const [, ...rows] = within(
+      screen.getByRole('table', { name: 'By model' })
+    ).getAllByRole('row');
+
+    expect(
+      rows.map((row) =>
+        within(row)
+          .getAllByRole('cell')
+          .map((cell) => cell.textContent)
+      )
+    ).toEqual([
+      ['claude-sonnet-5', '25', '3,000', '$0.1700', '$0.0068', '85%'],
+      ['claude-haiku-4-5', '15', '1,000', '$0.0300', '$0.0020', '15%'],
+    ]);
   });
 
   it('switches the time series metric through the tabs', async () => {
