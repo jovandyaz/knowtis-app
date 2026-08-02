@@ -51,6 +51,7 @@
 - 🔐 **Secure Authentication** - JWT-based auth with HttpOnly cookie refresh tokens
 - 🌍 **Internationalization** - Full i18n support (English and Spanish)
 - 🔌 **MCP Integration** - Model Context Protocol server for AI assistant workflows
+- 🛠️ **Admin Backoffice** - Ops surface for users, feature flags, runtime AI config, and AI metrics
 - 🎨 **Modern UI** - Tailwind CSS 4 with dark mode, resizable panels, and responsive design
 
 ---
@@ -267,6 +268,7 @@ The workspace follows a unidirectional dependency flow:
 graph TD
     subgraph Apps
         Notes[apps/notes]
+        Backoffice[apps/backoffice]
         API[apps/api]
     end
 
@@ -284,6 +286,8 @@ graph TD
     Notes --> ApiClient
     Notes --> DataAccess
     Notes --> DesignSystem
+    Backoffice --> DataAccess
+    Backoffice --> DesignSystem
     ApiClient --> Shared
     DataAccess --> ApiClient
     DataAccess --> Shared
