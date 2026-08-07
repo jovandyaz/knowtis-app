@@ -125,6 +125,19 @@ describe('ModelPreferenceService', () => {
     });
   });
 
+  it('setUserPreferences skips the write when the patch carries no values', async () => {
+    const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
+    await svc.setUserPreferences('u1', {});
+    // Production DTOs carry both keys as explicit undefined own-properties.
+    const dtoShaped: Parameters<typeof svc.setUserPreferences>[1] = {};
+    Object.assign(dtoShaped, {
+      preferredModel: undefined,
+      preferredIntent: undefined,
+    });
+    await svc.setUserPreferences('u1', dtoShaped);
+    expect(repo.patchSettings).not.toHaveBeenCalled();
+  });
+
   it('listModels includes a BYOK-unlocked provider model', async () => {
     const { svc, byok } = make(null, [SYSTEM_DEFAULT], ['google']);
     const ids = (await svc.listModels('u1')).map((m) => m.id);
