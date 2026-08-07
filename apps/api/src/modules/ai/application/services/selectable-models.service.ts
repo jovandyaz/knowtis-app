@@ -5,7 +5,7 @@ import {
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type { SelectableModel } from '@knowtis/shared-types';
+import type { ModelIntent, SelectableModel } from '@knowtis/shared-types';
 
 import { accessFor } from '../../domain/model-catalog/model-access.policy';
 import {
@@ -92,5 +92,19 @@ export class SelectableModelsService {
         this.isSelectable(m.id, byokProviders, tierGatingOn)
       )?.id ?? null
     );
+  }
+
+  /** First curated model of the tier the caller's own keys can run, or null — catalog order is the rank. */
+  firstOfTier(
+    tier: ModelIntent,
+    byokProviders: ReadonlySet<string>
+  ): string | null {
+    const match = CURATED_MODELS.find(
+      (m) =>
+        m.tier === tier &&
+        byokProviders.has(providerOf(m.id)) &&
+        this.invocable(m, byokProviders)
+    );
+    return match?.id ?? null;
   }
 }

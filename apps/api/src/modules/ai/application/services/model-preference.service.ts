@@ -5,7 +5,13 @@ import {
   Logger,
 } from '@nestjs/common';
 
-import { FEATURE_FLAG_KEYS, type SelectableModel } from '@knowtis/shared-types';
+import {
+  DEFAULT_MODEL_INTENT,
+  FEATURE_FLAG_KEYS,
+  type AIPreferences,
+  type SelectableModel,
+  type UpdateAiPreferencesInput,
+} from '@knowtis/shared-types';
 
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
@@ -39,6 +45,16 @@ export class ModelPreferenceService {
     }
   }
 
+  /** Fail-open to OFF: a flag-store outage must degrade to the pre-intent status quo. */
+  private async intentUxOn(): Promise<boolean> {
+    try {
+      return await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_INTENT_UX);
+    } catch (error) {
+      this.logger.warn('ai_intent_ux lookup failed, treating as off', error);
+      return false;
+    }
+  }
+
   async listModels(userId: string): Promise<SelectableModel[]> {
     const [systemDefault, byokProviders, tierGatingOn] = await Promise.all([
       this.aiConfig.getDefaultModel(),
@@ -63,8 +79,10 @@ export class ModelPreferenceService {
     return this.selectable.isSelectable(modelId, byokProviders, tierGatingOn);
   }
 
-  async getUserPreference(userId: string): Promise<string | null> {
-    return this.settings.getPreferredModel(userId);
+  async getUserPreferences(userId: string): Promise<AIPreferences> {
+    const { preferredModel, preferredIntent } =
+      await this.settings.getSettings(userId);
+    return { preferredModel, preferredIntent };
   }
 
   async getEffectiveDefault(
@@ -75,9 +93,28 @@ export class ModelPreferenceService {
     const providers =
       byokProviders ?? (await this.byok.enabledProviders(userId));
     const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
-    const pref = await this.settings.getPreferredModel(userId);
-    if (pref && this.selectable.isSelectable(pref, providers, gatingOn)) {
-      return pref;
+    const { preferredModel, preferredIntent } =
+      await this.settings.getSettings(userId);
+    if (
+      preferredModel &&
+      this.selectable.isSelectable(preferredModel, providers, gatingOn)
+    ) {
+      return preferredModel;
+    }
+    if (await this.intentUxOn()) {
+      const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
+      const byokPick = this.selectable.firstOfTier(intent, providers);
+      // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
+      if (
+        byokPick &&
+        this.selectable.isSelectable(byokPick, providers, gatingOn)
+      ) {
+        return byokPick;
+      }
+      const configured = await this.aiConfig.getIntentModel(intent);
+      if (this.selectable.isSelectable(configured, providers, gatingOn)) {
+        return configured;
+      }
     }
     const systemDefault = await this.aiConfig.getDefaultModel();
     // Only under gating: dark behavior must stay byte-for-byte status quo.
@@ -103,16 +140,27 @@ export class ModelPreferenceService {
     return this.selectable.isSelectable(modelId);
   }
 
-  async setUserPreference(userId: string, model: string | null): Promise<void> {
-    if (model !== null) {
+  async setUserPreferences(
+    userId: string,
+    patch: UpdateAiPreferencesInput
+  ): Promise<void> {
+    if (typeof patch.preferredModel === 'string') {
       const [byokProviders, tierGatingOn] = await Promise.all([
         this.byok.enabledProviders(userId),
         this.tierGatingOn(),
       ]);
-      if (!this.selectable.isSelectable(model, byokProviders, tierGatingOn)) {
-        throw new BadRequestException(`Model not selectable: ${model}`);
+      if (
+        !this.selectable.isSelectable(
+          patch.preferredModel,
+          byokProviders,
+          tierGatingOn
+        )
+      ) {
+        throw new BadRequestException(
+          `Model not selectable: ${patch.preferredModel}`
+        );
       }
     }
-    await this.settings.setPreferredModel(userId, model);
+    await this.settings.patchSettings(userId, patch);
   }
 }
