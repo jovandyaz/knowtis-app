@@ -109,6 +109,19 @@
       "powerful": "Powerful",
       "open": "Open"
     },
+    "intent": {
+      "label": "Assistant style",
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "powerful": "Deep",
+      "fastHint": "Instant answers",
+      "balancedHint": "The sweet spot",
+      "powerfulHint": "Deep reasoning"
+    },
+    "advanced": {
+      "trigger": "Advanced: choose model",
+      "clearOverride": "Back to style"
+    },
     "byok": {
       "title": "Your API keys",
       "description": "Use your own provider keys. The copilot runs on your account, and your key unlocks that provider's models.",

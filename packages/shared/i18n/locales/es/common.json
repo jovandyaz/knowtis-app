@@ -109,6 +109,19 @@
       "powerful": "Potente",
       "open": "Abierto"
     },
+    "intent": {
+      "label": "Estilo del asistente",
+      "fast": "Rápido",
+      "balanced": "Equilibrado",
+      "powerful": "Profundo",
+      "fastHint": "Respuestas al instante",
+      "balancedHint": "El equilibrio ideal",
+      "powerfulHint": "Razonamiento a fondo"
+    },
+    "advanced": {
+      "trigger": "Avanzado: elegir modelo",
+      "clearOverride": "Volver al estilo"
+    },
     "byok": {
       "title": "Tus claves de API",
       "description": "Usa tus propias claves del proveedor. El copilot se ejecuta en tu cuenta y tu clave desbloquea los modelos de ese proveedor.",
