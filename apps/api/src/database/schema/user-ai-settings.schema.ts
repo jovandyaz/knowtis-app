@@ -9,6 +9,7 @@ export const userAiSettings = pgTable('user_ai_settings', {
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   preferredModel: varchar('preferred_model', { length: MODEL_ID_MAX_LENGTH }),
+  preferredIntent: varchar('preferred_intent', { length: 16 }),
   updatedAt: timestamp('updated_at', { withTimezone: true })
     .notNull()
     .defaultNow(),

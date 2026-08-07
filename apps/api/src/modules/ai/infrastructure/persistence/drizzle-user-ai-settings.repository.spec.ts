@@ -8,6 +8,7 @@ import { validateEnv } from '../../../../config/env.config';
 import {
   DATABASE_CONNECTION,
   DatabaseModule,
+  userAiSettings,
   users,
   type Database,
 } from '../../../../database';
@@ -45,28 +46,62 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
         isAnonymous: false,
       })
       .onConflictDoNothing();
+    await db.delete(userAiSettings).where(eq(userAiSettings.userId, USER_ID));
   });
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER_ID));
   });
 
-  it('returns null when no preference is stored', async () => {
-    expect(await repo.getPreferredModel(USER_ID)).toBeNull();
+  it('returns null settings when no row is stored', async () => {
+    expect(await repo.getSettings(USER_ID)).toEqual({
+      preferredModel: null,
+      preferredIntent: null,
+    });
   });
 
   it('upserts then reads the preferred model', async () => {
-    await repo.setPreferredModel(USER_ID, 'anthropic:claude-sonnet-4-20250514');
-    expect(await repo.getPreferredModel(USER_ID)).toBe(
+    await repo.patchSettings(USER_ID, {
+      preferredModel: 'anthropic:claude-sonnet-4-20250514',
+    });
+    expect((await repo.getSettings(USER_ID)).preferredModel).toBe(
       'anthropic:claude-sonnet-4-20250514'
     );
-    await repo.setPreferredModel(USER_ID, 'openai:gpt-4o-mini');
-    expect(await repo.getPreferredModel(USER_ID)).toBe('openai:gpt-4o-mini');
+    await repo.patchSettings(USER_ID, {
+      preferredModel: 'openai:gpt-4o-mini',
+    });
+    expect((await repo.getSettings(USER_ID)).preferredModel).toBe(
+      'openai:gpt-4o-mini'
+    );
   });
 
-  it('clears the preference with null', async () => {
-    await repo.setPreferredModel(USER_ID, 'openai:gpt-4o-mini');
-    await repo.setPreferredModel(USER_ID, null);
-    expect(await repo.getPreferredModel(USER_ID)).toBeNull();
+  it('clears the preferred model with null', async () => {
+    await repo.patchSettings(USER_ID, {
+      preferredModel: 'openai:gpt-4o-mini',
+    });
+    await repo.patchSettings(USER_ID, { preferredModel: null });
+    expect((await repo.getSettings(USER_ID)).preferredModel).toBeNull();
+  });
+
+  it('reads an unrecognized stored intent as null', async () => {
+    await db
+      .insert(userAiSettings)
+      .values({ userId: USER_ID, preferredIntent: 'not-an-intent' })
+      .onConflictDoUpdate({
+        target: userAiSettings.userId,
+        set: { preferredIntent: 'not-an-intent' },
+      });
+    expect((await repo.getSettings(USER_ID)).preferredIntent).toBeNull();
+  });
+
+  it('patches the intent without touching the preferred model', async () => {
+    await repo.patchSettings(USER_ID, {
+      preferredModel: 'openai:gpt-4o-mini',
+    });
+    await repo.patchSettings(USER_ID, { preferredIntent: 'powerful' });
+    expect(await repo.getSettings(USER_ID)).toEqual({
+      preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'powerful',
+    });
   });
 });

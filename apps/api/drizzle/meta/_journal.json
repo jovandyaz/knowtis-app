@@ -176,6 +176,13 @@
       "when": 1784832446313,
       "tag": "0024_low_drax",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1786135806918,
+      "tag": "0025_wide_wallop",
+      "breakpoints": true
     }
   ]
 }
