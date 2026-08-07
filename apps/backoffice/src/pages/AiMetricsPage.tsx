@@ -31,14 +31,6 @@ import {
 
 const TIMESERIES_METRICS = ['cost', 'tokens', 'requests'] as const;
 
-function isMetricsPeriod(value: string): value is MetricsPeriod {
-  return (METRICS_PERIODS as readonly string[]).includes(value);
-}
-
-function isTimeSeriesMetric(value: string): value is TimeSeriesMetric {
-  return (TIMESERIES_METRICS as readonly string[]).includes(value);
-}
-
 export function AiMetricsPage() {
   const [period, setPeriod] = useState<MetricsPeriod>('day');
   const [metric, setMetric] = useState<TimeSeriesMetric>('cost');
@@ -56,15 +48,10 @@ export function AiMetricsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">AI Metrics</h1>
         <SegmentedControl
-          idBase="ai-metrics-period"
-          ariaLabel="Metrics period"
+          aria-label="Metrics period"
           value={period}
-          onValueChange={(value) => {
-            if (isMetricsPeriod(value)) {
-              setPeriod(value);
-            }
-          }}
-          items={METRICS_PERIODS.map((p) => ({ value: p, label: p }))}
+          onValueChange={setPeriod}
+          options={METRICS_PERIODS.map((p) => ({ value: p, label: p }))}
         />
       </div>
 
@@ -100,15 +87,10 @@ export function AiMetricsPage() {
             Over time
           </h2>
           <SegmentedControl
-            idBase="ai-metrics-series"
-            ariaLabel="Time series metric"
+            aria-label="Time series metric"
             value={metric}
-            onValueChange={(value) => {
-              if (isTimeSeriesMetric(value)) {
-                setMetric(value);
-              }
-            }}
-            items={TIMESERIES_METRICS.map((m) => ({ value: m, label: m }))}
+            onValueChange={setMetric}
+            options={TIMESERIES_METRICS.map((m) => ({ value: m, label: m }))}
           />
         </div>
         {timeseries.isError ? (

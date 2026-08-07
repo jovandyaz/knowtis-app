@@ -120,7 +120,7 @@ describe('AiMetricsPage', () => {
     ]);
   });
 
-  it('switches the time series metric through the tabs', async () => {
+  it('switches the time series metric through the segmented control', async () => {
     mockSuccess();
     renderPage();
 
@@ -128,7 +128,7 @@ describe('AiMetricsPage', () => {
       expect.objectContaining({ metric: 'cost' })
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: 'tokens' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'tokens' }));
     expect(timeSeriesChartSpy).toHaveBeenLastCalledWith(
       expect.objectContaining({ metric: 'tokens' })
     );

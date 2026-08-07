@@ -126,7 +126,7 @@ describe('UsersPage', () => {
       )
     );
 
-    await userEvent.click(screen.getByRole('tab', { name: 'admin' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'admin' }));
 
     await waitFor(() =>
       expect(useAdminUsersMock).toHaveBeenLastCalledWith(

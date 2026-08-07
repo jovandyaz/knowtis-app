@@ -20,10 +20,6 @@ const columnHelper = createColumnHelper<AdminUser>();
 const ROLE_FILTERS = ['all', 'admin', 'user'] as const;
 type RoleFilter = (typeof ROLE_FILTERS)[number];
 
-function isRoleFilter(value: string): value is RoleFilter {
-  return (ROLE_FILTERS as readonly string[]).includes(value);
-}
-
 function initialsOf(name: string, email: string): string {
   const source = name.trim() || email;
   const parts = source.split(/\s+/).filter(Boolean);
@@ -111,16 +107,13 @@ export function UsersPage() {
         <h1 className="text-2xl font-semibold">Users</h1>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <SegmentedControl
-            idBase="users-role-filter"
-            ariaLabel="Filter by role"
+            aria-label="Filter by role"
             value={roleFilter}
             onValueChange={(value) => {
-              if (isRoleFilter(value)) {
-                setRoleFilter(value);
-                setPagination((p) => ({ ...p, pageIndex: 0 }));
-              }
+              setRoleFilter(value);
+              setPagination((p) => ({ ...p, pageIndex: 0 }));
             }}
-            items={ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
+            options={ROLE_FILTERS.map((r) => ({ value: r, label: r }))}
           />
           <Input
             type="search"
