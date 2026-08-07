@@ -23,7 +23,9 @@ vi.mock('@/stores/settings.store', () => ({
 }));
 vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({ data: modelsData() }),
-  useAISettings: () => ({ data: { preferredModel: 'a:bal' } }),
+  useAISettings: () => ({
+    data: { preferredModel: 'a:bal', preferredIntent: null },
+  }),
   useUpdateAISettings: () => ({ mutate: update }),
 }));
 

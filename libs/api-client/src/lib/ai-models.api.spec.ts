@@ -19,16 +19,37 @@ describe('aiModelsApi', () => {
   });
 
   it('getPreferences hits GET /ai/preferences', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({ preferredModel: null });
+    vi.mocked(httpClient.get).mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+    });
     await aiModelsApi.getPreferences();
     expect(httpClient.get).toHaveBeenCalledWith('/ai/preferences');
   });
 
   it('updatePreferences PUTs /ai/preferences', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue({ preferredModel: null });
-    await aiModelsApi.updatePreferences({ preferredModel: null });
+    vi.mocked(httpClient.put).mockResolvedValue({
+      preferredModel: null,
+      preferredIntent: null,
+    });
+    await aiModelsApi.updatePreferences({
+      preferredModel: null,
+      preferredIntent: null,
+    });
     expect(httpClient.put).toHaveBeenCalledWith('/ai/preferences', {
       preferredModel: null,
+      preferredIntent: null,
+    });
+  });
+
+  it('updatePreferences forwards a partial patch untouched', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({
+      preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'fast',
+    });
+    await aiModelsApi.updatePreferences({ preferredIntent: 'fast' });
+    expect(httpClient.put).toHaveBeenCalledWith('/ai/preferences', {
+      preferredIntent: 'fast',
     });
   });
 

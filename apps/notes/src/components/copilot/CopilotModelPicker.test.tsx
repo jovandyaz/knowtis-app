@@ -23,7 +23,9 @@ vi.mock('@/hooks', () => ({
     isError: false,
     refetch: vi.fn(),
   }),
-  useAISettings: () => ({ data: { preferredModel: 'a:bal' } }),
+  useAISettings: () => ({
+    data: { preferredModel: 'a:bal', preferredIntent: null },
+  }),
 }));
 vi.mock('@/stores/agent.store', () => ({
   useAgentStore: (select: (s: unknown) => unknown) =>
