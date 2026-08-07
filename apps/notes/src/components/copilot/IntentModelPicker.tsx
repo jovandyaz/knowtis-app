@@ -10,10 +10,14 @@ import { useAgentStore } from '@/stores/agent.store';
 import { Button, ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
   DEFAULT_MODEL_INTENT,
-  MODEL_INTENTS,
   MODEL_TIERS,
   type ModelIntent,
 } from '@knowtis/shared-types';
+
+import {
+  advancedModelOptions,
+  intentChipOptions,
+} from './intent-picker-options';
 
 export function IntentModelPicker() {
   const { t } = useTranslation('common');
@@ -26,15 +30,8 @@ export function IntentModelPicker() {
   const overrideModel = sessionModel ?? prefs?.preferredModel ?? null;
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
 
-  const advancedOptions = (models ?? []).filter(
-    (m) => m.access === 'granted' && m.billedToUser
-  );
-
-  const intentOptions = MODEL_INTENTS.map((value) => ({
-    value,
-    label: t(`aiAssistant.intent.${value}` as never),
-    title: t(`aiAssistant.intent.${value}Hint` as never),
-  }));
+  const advancedOptions = advancedModelOptions(models);
+  const intentOptions = intentChipOptions(t);
 
   const selectIntent = (value: ModelIntent) => {
     setSessionModel(null);
