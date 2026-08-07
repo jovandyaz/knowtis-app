@@ -20,12 +20,8 @@ export class AiModelsController {
   }
 
   @Get('preferences')
-  async getPreferences(
-    @CurrentUser() user: RequestUser
-  ): Promise<AIPreferences> {
-    return {
-      preferredModel: await this.preferences.getUserPreference(user.id),
-    };
+  getPreferences(@CurrentUser() user: RequestUser): Promise<AIPreferences> {
+    return this.preferences.getUserPreferences(user.id);
   }
 
   @Put('preferences')
@@ -33,7 +29,7 @@ export class AiModelsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateAiPreferencesDto
   ): Promise<AIPreferences> {
-    await this.preferences.setUserPreference(user.id, dto.preferredModel);
-    return { preferredModel: dto.preferredModel };
+    await this.preferences.setUserPreferences(user.id, dto);
+    return this.preferences.getUserPreferences(user.id);
   }
 }

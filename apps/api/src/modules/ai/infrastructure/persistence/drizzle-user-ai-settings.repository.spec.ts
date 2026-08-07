@@ -12,6 +12,7 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import type { UserAiSettings } from '../../domain/ports/user-ai-settings.repository';
 import { DrizzleUserAiSettingsRepository } from './drizzle-user-ai-settings.repository';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000c3';
@@ -98,7 +99,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     await repo.patchSettings(USER_ID, {
       preferredModel: 'openai:gpt-4o-mini',
     });
-    await repo.patchSettings(USER_ID, { preferredIntent: 'powerful' });
+    // Production DTOs carry both keys, the untouched one as an explicit
+    // undefined own-property — which exactOptionalPropertyTypes won't let a
+    // literal express.
+    const patch: Partial<UserAiSettings> = { preferredIntent: 'powerful' };
+    Object.assign(patch, { preferredModel: undefined });
+    await repo.patchSettings(USER_ID, patch);
     expect(await repo.getSettings(USER_ID)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
       preferredIntent: 'powerful',
