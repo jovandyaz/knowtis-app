@@ -200,7 +200,12 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
     const otherBuckets = buckets.filter((b) => b.bucketStart !== expectedIso);
     for (const bucket of otherBuckets) {
       const prior = before.find((b) => b.bucketStart === bucket.bucketStart);
-      expect(bucket.requests).toBe(prior?.requests ?? 0);
+      // A UTC-midnight crossing between the two reads shifts the window; only buckets present in both snapshots are comparable.
+      if (!prior) {
+        continue;
+      }
+      expect(bucket.requests).toBe(prior.requests);
+      expect(bucket.inputTokens).toBe(prior.inputTokens);
     }
   });
 });
