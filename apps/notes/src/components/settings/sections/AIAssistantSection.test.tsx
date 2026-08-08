@@ -9,6 +9,8 @@ import { AIAssistantSection } from './AIAssistantSection';
 const update = vi.fn();
 const openSettings = vi.fn();
 const modelsData = vi.fn();
+const modelsError = vi.fn<() => boolean>();
+const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 const featureFlag = vi.fn<(key: string) => boolean>();
 vi.mock('react-i18next', () => ({
@@ -28,8 +30,8 @@ vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({
     data: modelsData(),
     isPending: false,
-    isError: false,
-    refetch: vi.fn(),
+    isError: modelsError(),
+    refetch: modelsRefetch,
   }),
   useAISettings: () => ({ data: prefsData() }),
   useUpdateAISettings: () => ({ mutate: update }),
@@ -96,6 +98,7 @@ describe('AIAssistantSection', () => {
     vi.clearAllMocks();
     enableFlags();
     modelsData.mockReturnValue(grantedModels);
+    modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
       preferredModel: 'a:bal',
       preferredIntent: null,
@@ -234,9 +237,10 @@ describe('AIAssistantSection', () => {
       ).toHaveAttribute('data-state', 'on');
     });
 
-    it('deactivates every chip while an account model override is in effect', () => {
+    it('deactivates every chip while an advanced account override is in effect', () => {
+      modelsData.mockReturnValue(withByokModel);
       prefsData.mockReturnValue({
-        preferredModel: 'a:fast',
+        preferredModel: 'o:byok',
         preferredIntent: 'fast',
       });
       render(<AIAssistantSection />);
@@ -244,6 +248,37 @@ describe('AIAssistantSection', () => {
       for (const chip of screen.getAllByRole('radio')) {
         expect(chip).toHaveAttribute('data-state', 'off');
       }
+    });
+
+    it('keeps the intent chips active over a legacy non-advanced preferredModel', () => {
+      modelsData.mockReturnValue(withByokModel);
+      prefsData.mockReturnValue({
+        preferredModel: 'a:fast',
+        preferredIntent: 'fast',
+      });
+      render(<AIAssistantSection />);
+
+      expect(
+        screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+      ).toHaveAttribute('data-state', 'on');
+      expect(
+        screen.queryByRole('button', {
+          name: 'aiAssistant.advanced.clearOverride',
+        })
+      ).not.toBeInTheDocument();
+    });
+
+    it('surfaces a model-list load error behind the advanced trigger', async () => {
+      modelsData.mockReturnValue(undefined);
+      modelsError.mockReturnValue(true);
+      render(<AIAssistantSection />);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /aiAssistant.loadError/ })
+      );
+      await userEvent.click(screen.getByText('aiAssistant.retry'));
+
+      expect(modelsRefetch).toHaveBeenCalled();
     });
 
     it('drops any model override when an intent chip is picked', async () => {

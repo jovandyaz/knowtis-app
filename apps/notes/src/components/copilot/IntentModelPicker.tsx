@@ -16,21 +16,23 @@ import {
 
 import {
   advancedModelOptions,
+  advancedOverride,
   intentChipOptions,
 } from './intent-picker-options';
 
 export function IntentModelPicker() {
   const { t } = useTranslation('common');
-  const { data: models } = useAvailableModels();
+  const { data: models, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const sessionModel = useAgentStore((s) => s.selectedModel);
   const setSessionModel = useAgentStore((s) => s.setSelectedModel);
 
-  const overrideModel = sessionModel ?? prefs?.preferredModel ?? null;
+  const advancedOptions = advancedModelOptions(models);
+  const overrideModel =
+    sessionModel ?? advancedOverride(prefs?.preferredModel, advancedOptions);
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
 
-  const advancedOptions = advancedModelOptions(models);
   const intentOptions = intentChipOptions(t);
 
   const selectIntent = (value: ModelIntent) => {
@@ -51,13 +53,16 @@ export function IntentModelPicker() {
         value={overrideModel ? null : intent}
         onValueChange={selectIntent}
       />
-      {advancedOptions.length > 0 ? (
+      {advancedOptions.length > 0 || isError ? (
         <ModelSelect
           models={advancedOptions}
           value={overrideModel}
           onSelect={setSessionModel}
           tierOrder={MODEL_TIERS}
-          status="ready"
+          status={isError ? 'error' : 'ready'}
+          onRetry={() => void refetch()}
+          errorLabel={t('aiAssistant.loadError')}
+          retryLabel={t('aiAssistant.retry')}
           triggerClassName="h-8"
           triggerVariant="ghost"
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}

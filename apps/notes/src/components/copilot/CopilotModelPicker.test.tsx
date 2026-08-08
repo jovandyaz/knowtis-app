@@ -10,6 +10,8 @@ const setSelected = vi.fn();
 const openSettings = vi.fn();
 const updatePreferences = vi.fn();
 const modelsData = vi.fn();
+const modelsError = vi.fn<() => boolean>();
+const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 const sessionModel = vi.fn<() => string | null>();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
@@ -29,8 +31,8 @@ vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({
     data: modelsData(),
     isPending: false,
-    isError: false,
-    refetch: vi.fn(),
+    isError: modelsError(),
+    refetch: modelsRefetch,
   }),
   useAISettings: () => ({ data: prefsData() }),
   useUpdateAISettings: () => ({ mutate: updatePreferences }),
@@ -105,6 +107,7 @@ describe('CopilotModelPicker', () => {
     vi.clearAllMocks();
     enableFlags(FEATURE_FLAG_KEYS.AGENT_BYOK);
     modelsData.mockReturnValue(grantedModels);
+    modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
       preferredModel: 'a:bal',
       preferredIntent: null,
@@ -284,6 +287,55 @@ describe('CopilotModelPicker', () => {
       for (const chip of screen.getAllByRole('radio')) {
         expect(chip).toHaveAttribute('data-state', 'off');
       }
+    });
+
+    it('keeps the intent chips active over a legacy non-advanced preferredModel', () => {
+      modelsData.mockReturnValue(withByokModel);
+      prefsData.mockReturnValue({
+        preferredModel: 'a:bal',
+        preferredIntent: 'powerful',
+      });
+      render(<CopilotModelPicker />);
+
+      expect(
+        screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+      ).toHaveAttribute('data-state', 'on');
+      expect(
+        screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+      ).toBeInTheDocument();
+    });
+
+    it('deactivates the chips for a stored advanced preference', () => {
+      modelsData.mockReturnValue(withByokModel);
+      prefsData.mockReturnValue({
+        preferredModel: 'o:byok',
+        preferredIntent: 'powerful',
+      });
+      render(<CopilotModelPicker />);
+
+      for (const chip of screen.getAllByRole('radio')) {
+        expect(chip).toHaveAttribute('data-state', 'off');
+      }
+      expect(
+        screen.getByRole('button', { name: /Byok One/ })
+      ).toBeInTheDocument();
+    });
+
+    it('surfaces a model-list load error behind the advanced trigger', async () => {
+      modelsData.mockReturnValue(undefined);
+      modelsError.mockReturnValue(true);
+      prefsData.mockReturnValue({
+        preferredModel: null,
+        preferredIntent: null,
+      });
+      render(<CopilotModelPicker />);
+
+      await userEvent.click(
+        screen.getByRole('button', { name: /aiAssistant.loadError/ })
+      );
+      await userEvent.click(screen.getByText('aiAssistant.retry'));
+
+      expect(modelsRefetch).toHaveBeenCalled();
     });
 
     it('clears the override from the advanced footer without touching the intent', async () => {

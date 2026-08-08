@@ -13,6 +13,16 @@ export function advancedModelOptions(
   return (models ?? []).filter((m) => m.access === 'granted' && m.billedToUser);
 }
 
+/** A stored preference counts as an override only while the Advanced picker actually offers it; a legacy pick the server ignores must not deselect the chips. */
+export function advancedOverride(
+  preferredModel: string | null | undefined,
+  options: readonly SelectableModel[]
+): string | null {
+  return preferredModel && options.some((m) => m.id === preferredModel)
+    ? preferredModel
+    : null;
+}
+
 export function intentChipOptions(t: TFunction<'common'>): Array<{
   value: ModelIntent;
   label: string;
