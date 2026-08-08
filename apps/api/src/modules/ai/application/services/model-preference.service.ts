@@ -89,14 +89,15 @@ export class ModelPreferenceService {
   async getEffectiveDefault(
     userId: string,
     byokProviders?: ReadonlySet<string>,
-    tierGatingOn?: boolean
+    tierGatingOn?: boolean,
+    intentUxOn?: boolean
   ): Promise<string> {
     const providers =
       byokProviders ?? (await this.byok.enabledProviders(userId));
     const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
+    const intentUx = intentUxOn ?? (await this.intentUxOn());
     const { preferredModel, preferredIntent } =
       await this.settings.getSettings(userId);
-    const intentUx = await this.intentUxOn();
     // With intent UX on, only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
     if (
       preferredModel &&

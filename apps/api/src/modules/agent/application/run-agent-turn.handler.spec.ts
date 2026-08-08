@@ -2715,7 +2715,13 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
     );
-    expect(modelPreference.getEffectiveDefault).toHaveBeenCalled();
+    expect(modelPreference.intentUxOn).toHaveBeenCalledTimes(1);
+    expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
+      USER,
+      expect.anything(),
+      false,
+      true
+    );
   });
 
   it('resume keeps the stored conversation model while intent UX is on', async () => {
@@ -3053,7 +3059,8 @@ describe('RunAgentTurnHandler', () => {
     expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
       USER,
       expect.any(Set),
-      true
+      true,
+      false
     );
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })

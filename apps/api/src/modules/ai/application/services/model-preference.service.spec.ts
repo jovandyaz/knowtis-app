@@ -339,6 +339,24 @@ describe('ModelPreferenceService', () => {
     expect(await svc.getEffectiveDefault('u1')).toBe(OPEN_FALLBACK);
   });
 
+  it('effective default trusts a supplied intent-ux result over the flag store', async () => {
+    const { svc, flags } = make(
+      null,
+      [SYSTEM_DEFAULT, INTENT_MODELS.fast],
+      [],
+      false,
+      OPEN_FALLBACK,
+      false,
+      'fast'
+    );
+    expect(
+      await svc.getEffectiveDefault('u1', undefined, undefined, true)
+    ).toBe(INTENT_MODELS.fast);
+    expect(flags.isEnabled).not.toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AI_INTENT_UX
+    );
+  });
+
   it('effective default falls through to the legacy cascade when the intent target is unselectable', async () => {
     const { svc } = make(
       null,
