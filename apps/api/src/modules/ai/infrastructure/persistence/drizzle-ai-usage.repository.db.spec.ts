@@ -169,6 +169,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
     threeDaysAgo.setUTCHours(0, 0, 0, 0);
     const insertedInputTokens = 77;
 
+    // The timeseries is global by design, so assert deltas: rows from outside this spec must not fail it.
+    const before = await repo.getGlobalMetricsTimeseries('week');
+
     await db.insert(aiUsage).values({
       userId: DB_USER_ID,
       action: 'agent',
@@ -186,14 +189,23 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
     }
 
     const expectedIso = threeDaysAgo.toISOString();
+    const beforeBucket = before.find((b) => b.bucketStart === expectedIso);
     const dataBucket = buckets.find((b) => b.bucketStart === expectedIso);
     expect(dataBucket).toBeDefined();
-    expect(dataBucket?.requests).toBeGreaterThanOrEqual(1);
-    expect(dataBucket?.inputTokens).toBeGreaterThanOrEqual(insertedInputTokens);
+    expect(dataBucket?.requests).toBe((beforeBucket?.requests ?? 0) + 1);
+    expect(dataBucket?.inputTokens).toBe(
+      (beforeBucket?.inputTokens ?? 0) + insertedInputTokens
+    );
 
     const otherBuckets = buckets.filter((b) => b.bucketStart !== expectedIso);
     for (const bucket of otherBuckets) {
-      expect(bucket.requests).toBe(0);
+      const prior = before.find((b) => b.bucketStart === bucket.bucketStart);
+      // A UTC-midnight crossing between the two reads shifts the window; only buckets present in both snapshots are comparable.
+      if (!prior) {
+        continue;
+      }
+      expect(bucket.requests).toBe(prior.requests);
+      expect(bucket.inputTokens).toBe(prior.inputTokens);
     }
   });
 });
