@@ -128,7 +128,6 @@ describe('ModelPreferenceService', () => {
   it('setUserPreferences skips the write when the patch carries no values', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
     await svc.setUserPreferences('u1', {});
-    // Production DTOs carry both keys as explicit undefined own-properties.
     const dtoShaped: Parameters<typeof svc.setUserPreferences>[1] = {};
     Object.assign(dtoShaped, {
       preferredModel: undefined,

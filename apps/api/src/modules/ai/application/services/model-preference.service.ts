@@ -144,7 +144,6 @@ export class ModelPreferenceService {
     userId: string,
     patch: UpdateAiPreferencesInput
   ): Promise<void> {
-    // By values, not keys: DTO instances carry every field, untouched ones as undefined.
     if (Object.values(patch).every((value) => value === undefined)) {
       return;
     }

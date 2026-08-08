@@ -99,9 +99,6 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
     await repo.patchSettings(USER_ID, {
       preferredModel: 'openai:gpt-4o-mini',
     });
-    // Production DTOs carry both keys, the untouched one as an explicit
-    // undefined own-property — which exactOptionalPropertyTypes won't let a
-    // literal express.
     const patch: Partial<UserAiSettings> = { preferredIntent: 'powerful' };
     Object.assign(patch, { preferredModel: undefined });
     await repo.patchSettings(USER_ID, patch);

@@ -71,8 +71,7 @@ describe('useUpdateAISettings', () => {
   });
 
   it('merges a partial patch over the cached preference', async () => {
-    // Server echo deliberately differs from the optimistic state so the
-    // assertion pins onMutate, not a future onSuccess write.
+    // The echo differs from the optimistic value on purpose: this pins onMutate.
     vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
       preferredModel: 'x',
       preferredIntent: 'balanced',
