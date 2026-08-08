@@ -43,10 +43,7 @@ export function AIAssistantSection() {
   const showUnlockCta = options.some((m) => m.locked) && byokEnabled;
 
   const advancedOptions = advancedModelOptions(models);
-  const accountOverride = advancedOverride(
-    prefs?.preferredModel,
-    advancedOptions
-  );
+  const accountOverride = advancedOverride(prefs?.preferredModel, models);
   const intentOptions = intentChipOptions(t);
 
   const selectIntent = (value: ModelIntent) => {
@@ -85,7 +82,7 @@ export function AIAssistantSection() {
                 onSelect={(id) => update({ preferredModel: id })}
                 tierOrder={MODEL_TIERS}
                 status={isError ? 'error' : 'ready'}
-                onRetry={() => refetch()}
+                onRetry={() => void refetch()}
                 errorLabel={t('aiAssistant.loadError')}
                 retryLabel={t('aiAssistant.retry')}
                 tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}

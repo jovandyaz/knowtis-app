@@ -211,14 +211,14 @@ export function ModelSelect({
                 </div>
               );
             })}
-            {footer && (
-              <>
-                <DropdownMenuSeparator />
-                <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
-                  {footer}
-                </div>
-              </>
-            )}
+          </>
+        )}
+        {footer && (
+          <>
+            <DropdownMenuSeparator />
+            <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
+              {footer}
+            </div>
           </>
         )}
       </DropdownMenuContent>

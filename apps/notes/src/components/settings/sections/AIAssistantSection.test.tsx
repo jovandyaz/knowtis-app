@@ -274,9 +274,11 @@ describe('AIAssistantSection', () => {
       render(<AIAssistantSection />);
 
       await userEvent.click(
-        screen.getByRole('button', { name: /aiAssistant.loadError/ })
+        screen.getByRole('button', { name: 'aiAssistant.loadError' })
       );
-      await userEvent.click(screen.getByText('aiAssistant.retry'));
+      await userEvent.click(
+        screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
+      );
 
       expect(modelsRefetch).toHaveBeenCalled();
     });

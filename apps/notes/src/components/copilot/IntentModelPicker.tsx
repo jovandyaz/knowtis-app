@@ -30,7 +30,7 @@ export function IntentModelPicker() {
 
   const advancedOptions = advancedModelOptions(models);
   const overrideModel =
-    sessionModel ?? advancedOverride(prefs?.preferredModel, advancedOptions);
+    sessionModel ?? advancedOverride(prefs?.preferredModel, models);
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
 
   const intentOptions = intentChipOptions(t);

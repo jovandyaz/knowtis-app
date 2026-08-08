@@ -331,11 +331,27 @@ describe('CopilotModelPicker', () => {
       render(<CopilotModelPicker />);
 
       await userEvent.click(
-        screen.getByRole('button', { name: /aiAssistant.loadError/ })
+        screen.getByRole('button', { name: 'aiAssistant.loadError' })
       );
-      await userEvent.click(screen.getByText('aiAssistant.retry'));
+      await userEvent.click(
+        screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
+      );
 
       expect(modelsRefetch).toHaveBeenCalled();
+    });
+
+    it('keeps the chips deselected for a stored preference while the list is unresolved', () => {
+      modelsData.mockReturnValue(undefined);
+      modelsError.mockReturnValue(true);
+      prefsData.mockReturnValue({
+        preferredModel: 'o:byok',
+        preferredIntent: 'fast',
+      });
+      render(<CopilotModelPicker />);
+
+      for (const chip of screen.getAllByRole('radio')) {
+        expect(chip).toHaveAttribute('data-state', 'off');
+      }
     });
 
     it('clears the override from the advanced footer without touching the intent', async () => {
