@@ -140,6 +140,7 @@ function makeModelPreference(
     isSelectableWith: vi.fn().mockReturnValue(true),
     byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
     tierGatingOn: vi.fn().mockResolvedValue(false),
+    intentUxOn: vi.fn().mockResolvedValue(false),
   } as unknown as ModelPreferenceService;
 }
 
@@ -2670,6 +2671,104 @@ describe('RunAgentTurnHandler', () => {
     expect(modelPreference.getEffectiveDefault).not.toHaveBeenCalled();
   });
 
+  it('ignores the stored conversation model while intent UX is on', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'openai:gpt-4o-mini',
+    });
+    const modelPreference = makeModelPreference(
+      'anthropic:claude-sonnet-4-20250514'
+    );
+    vi.mocked(modelPreference.intentUxOn).mockResolvedValue(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        message: { content: 'hi' },
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })
+    );
+    expect(modelPreference.intentUxOn).toHaveBeenCalledTimes(1);
+    expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
+      USER,
+      expect.anything(),
+      false,
+      true
+    );
+  });
+
+  it('resume keeps the stored conversation model while intent UX is on', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations([
+      { role: 'user', content: 'rename it', sources: [] },
+      { role: 'assistant', content: "I'll rename it, confirm?", sources: [] },
+    ]);
+    vi.mocked(conversations.findByIdForUser).mockResolvedValue({
+      id: 'conv-1',
+      model: 'openai:gpt-4o-mini',
+    });
+    const modelPreference = makeModelPreference(
+      'anthropic:claude-sonnet-4-20250514'
+    );
+    vi.mocked(modelPreference.intentUxOn).mockResolvedValue(true);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'openai:gpt-4o-mini' })
+    );
+    expect(modelPreference.getEffectiveDefault).not.toHaveBeenCalled();
+  });
+
   it('validates, persists, and uses an explicit valid model from the turn', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
@@ -2960,7 +3059,8 @@ describe('RunAgentTurnHandler', () => {
     expect(modelPreference.getEffectiveDefault).toHaveBeenCalledWith(
       USER,
       expect.any(Set),
-      true
+      true,
+      false
     );
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'anthropic:claude-sonnet-4-20250514' })

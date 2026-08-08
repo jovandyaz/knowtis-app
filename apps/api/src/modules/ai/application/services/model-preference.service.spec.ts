@@ -306,11 +306,11 @@ describe('ModelPreferenceService', () => {
     );
   });
 
-  it('effective default keeps an explicit stored model above the intent', async () => {
+  it('effective default keeps an explicit BYOK stored model above the intent', async () => {
     const { svc, aiConfig } = make(
       'openai:gpt-5.6',
       ['openai:gpt-5.6', SYSTEM_DEFAULT],
-      [],
+      ['openai'],
       false,
       OPEN_FALLBACK,
       true,
@@ -318,6 +318,43 @@ describe('ModelPreferenceService', () => {
     );
     expect(await svc.getEffectiveDefault('u1')).toBe('openai:gpt-5.6');
     expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
+  });
+
+  it('effective default ignores a legacy non-BYOK stored model while intent UX is on', async () => {
+    const { svc, aiConfig } = make(
+      OPEN_FALLBACK,
+      [OPEN_FALLBACK, SYSTEM_DEFAULT],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      null
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('balanced');
+  });
+
+  it('effective default keeps a legacy stored model while intent UX is off', async () => {
+    const { svc } = make(OPEN_FALLBACK, [OPEN_FALLBACK, SYSTEM_DEFAULT]);
+    expect(await svc.getEffectiveDefault('u1')).toBe(OPEN_FALLBACK);
+  });
+
+  it('effective default trusts a supplied intent-ux result over the flag store', async () => {
+    const { svc, flags } = make(
+      null,
+      [SYSTEM_DEFAULT, INTENT_MODELS.fast],
+      [],
+      false,
+      OPEN_FALLBACK,
+      false,
+      'fast'
+    );
+    expect(
+      await svc.getEffectiveDefault('u1', undefined, undefined, true)
+    ).toBe(INTENT_MODELS.fast);
+    expect(flags.isEnabled).not.toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AI_INTENT_UX
+    );
   });
 
   it('effective default falls through to the legacy cascade when the intent target is unselectable', async () => {

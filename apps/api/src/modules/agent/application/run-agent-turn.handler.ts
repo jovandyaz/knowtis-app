@@ -505,6 +505,7 @@ export class RunAgentTurnHandler {
     }
 
     const tierGatingOn = await this.modelPreference.tierGatingOn();
+    const intentUxOn = await this.modelPreference.intentUxOn();
 
     let model: string | null;
     try {
@@ -513,7 +514,9 @@ export class RunAgentTurnHandler {
         persistence?.conversationId,
         callbacks,
         byokProviders,
-        tierGatingOn
+        tierGatingOn,
+        Boolean(resume),
+        intentUxOn
       );
     } catch (error) {
       this.logger.error({
@@ -748,7 +751,9 @@ export class RunAgentTurnHandler {
     conversationId: string | undefined,
     callbacks: Pick<RunAgentTurnCallbacks, 'onError'>,
     byokProviders: ReadonlySet<string>,
-    tierGatingOn: boolean
+    tierGatingOn: boolean,
+    resuming: boolean,
+    intentUxOn: boolean
   ): Promise<string | null> {
     if (input.model) {
       if (
@@ -776,8 +781,10 @@ export class RunAgentTurnHandler {
       return input.model;
     }
     const stored = input.conversationModel ?? null;
+    // Intent UX supersedes the conversation-sticky model (a cleared chip must not lose to a stale pick) — except on HITL resume, where it is the only carrier of the model that served the first half of the turn.
     if (
       stored &&
+      (resuming || !intentUxOn) &&
       this.modelPreference.isSelectableWith(stored, byokProviders, tierGatingOn)
     ) {
       return stored;
@@ -785,7 +792,8 @@ export class RunAgentTurnHandler {
     return this.modelPreference.getEffectiveDefault(
       input.userId,
       byokProviders,
-      tierGatingOn
+      tierGatingOn,
+      intentUxOn
     );
   }
 

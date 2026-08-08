@@ -126,6 +126,21 @@ describe('ModelSelect', () => {
     expect(screen.getByText('Account default: Balanced One')).toBeTruthy();
   });
 
+  it('keeps the footer reachable in the error state', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        status="error"
+        errorLabel="Could not load"
+        footer="Clear override"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Clear override')).toBeTruthy();
+  });
+
   it('disables the trigger and shows the loading label while models load', () => {
     render(
       <ModelSelect

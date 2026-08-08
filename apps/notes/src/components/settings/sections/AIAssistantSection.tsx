@@ -18,6 +18,7 @@ import {
 
 import {
   advancedModelOptions,
+  advancedOverride,
   intentChipOptions,
 } from '../../copilot/intent-picker-options';
 import { SectionHeader } from '../SectionHeader';
@@ -42,6 +43,7 @@ export function AIAssistantSection() {
   const showUnlockCta = options.some((m) => m.locked) && byokEnabled;
 
   const advancedOptions = advancedModelOptions(models);
+  const accountOverride = advancedOverride(prefs?.preferredModel, models);
   const intentOptions = intentChipOptions(t);
 
   const selectIntent = (value: ModelIntent) => {
@@ -67,25 +69,28 @@ export function AIAssistantSection() {
               aria-label={t('aiAssistant.intent.label')}
               options={intentOptions}
               value={
-                prefs?.preferredModel
+                accountOverride
                   ? null
                   : (prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT)
               }
               onValueChange={selectIntent}
             />
-            {advancedOptions.length > 0 ? (
+            {advancedOptions.length > 0 || isError ? (
               <ModelSelect
                 models={advancedOptions}
-                value={prefs?.preferredModel ?? null}
+                value={accountOverride}
                 onSelect={(id) => update({ preferredModel: id })}
                 tierOrder={MODEL_TIERS}
-                status="ready"
+                status={isError ? 'error' : 'ready'}
+                onRetry={() => void refetch()}
+                errorLabel={t('aiAssistant.loadError')}
+                retryLabel={t('aiAssistant.retry')}
                 tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
                 renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
                 triggerLabel={t('aiAssistant.advanced.trigger')}
                 billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
                 footer={
-                  prefs?.preferredModel ? (
+                  accountOverride ? (
                     <Button
                       type="button"
                       variant="link"
@@ -107,7 +112,7 @@ export function AIAssistantSection() {
             onSelect={(id) => update({ preferredModel: id })}
             tierOrder={MODEL_TIERS}
             status={status}
-            onRetry={() => refetch()}
+            onRetry={() => void refetch()}
             tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
             renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
             triggerLabel={t('aiAssistant.defaultHint')}
