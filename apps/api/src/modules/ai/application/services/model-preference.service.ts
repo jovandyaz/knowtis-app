@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 
+import { providerOf } from '@knowtis/ai-gateway';
 import {
   DEFAULT_MODEL_INTENT,
   FEATURE_FLAG_KEYS,
@@ -46,7 +47,7 @@ export class ModelPreferenceService {
   }
 
   /** Fail-open to OFF: a flag-store outage must degrade to the pre-intent status quo. */
-  private async intentUxOn(): Promise<boolean> {
+  async intentUxOn(): Promise<boolean> {
     try {
       return await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_INTENT_UX);
     } catch (error) {
@@ -95,13 +96,16 @@ export class ModelPreferenceService {
     const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
     const { preferredModel, preferredIntent } =
       await this.settings.getSettings(userId);
+    const intentUx = await this.intentUxOn();
+    // With intent UX on, only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
     if (
       preferredModel &&
+      (!intentUx || providers.has(providerOf(preferredModel))) &&
       this.selectable.isSelectable(preferredModel, providers, gatingOn)
     ) {
       return preferredModel;
     }
-    if (await this.intentUxOn()) {
+    if (intentUx) {
       const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
       const byokPick = this.selectable.firstOfTier(intent, providers);
       // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.

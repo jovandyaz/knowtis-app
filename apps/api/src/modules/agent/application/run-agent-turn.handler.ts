@@ -776,8 +776,10 @@ export class RunAgentTurnHandler {
       return input.model;
     }
     const stored = input.conversationModel ?? null;
+    // Intent UX supersedes the conversation-sticky model: a cleared chip would otherwise lose to a stale stored pick.
     if (
       stored &&
+      !(await this.modelPreference.intentUxOn()) &&
       this.modelPreference.isSelectableWith(stored, byokProviders, tierGatingOn)
     ) {
       return stored;
