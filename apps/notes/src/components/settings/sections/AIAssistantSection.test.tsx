@@ -268,6 +268,20 @@ describe('AIAssistantSection', () => {
       ).not.toBeInTheDocument();
     });
 
+    it('keeps the chips deselected for a stored preference while the list is unresolved', () => {
+      modelsData.mockReturnValue(undefined);
+      modelsError.mockReturnValue(true);
+      prefsData.mockReturnValue({
+        preferredModel: 'o:byok',
+        preferredIntent: 'fast',
+      });
+      render(<AIAssistantSection />);
+
+      for (const chip of screen.getAllByRole('radio')) {
+        expect(chip).toHaveAttribute('data-state', 'off');
+      }
+    });
+
     it('surfaces a model-list load error behind the advanced trigger', async () => {
       modelsData.mockReturnValue(undefined);
       modelsError.mockReturnValue(true);

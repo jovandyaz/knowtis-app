@@ -112,7 +112,7 @@ export function AIAssistantSection() {
             onSelect={(id) => update({ preferredModel: id })}
             tierOrder={MODEL_TIERS}
             status={status}
-            onRetry={() => refetch()}
+            onRetry={() => void refetch()}
             tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
             renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
             triggerLabel={t('aiAssistant.defaultHint')}

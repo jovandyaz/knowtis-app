@@ -41,7 +41,7 @@ export function ModelListPicker() {
       status={status}
       triggerClassName="h-8"
       triggerVariant="ghost"
-      onRetry={() => refetch()}
+      onRetry={() => void refetch()}
       tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
       renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
       triggerLabel={t('aiAssistant.defaultHint')}
