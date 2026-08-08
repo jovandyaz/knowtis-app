@@ -96,6 +96,8 @@
   "aiAssistant": {
     "copilotTitle": "Copilot model",
     "copilotDescription": "Choose the model your copilot uses by default. Each conversation can change it from the chat.",
+    "intentTitle": "Copilot style",
+    "intentDescription": "Choose how your copilot thinks. Add your own key to pick exact models.",
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "defaultHint": "Account default",
@@ -108,6 +110,19 @@
       "balanced": "Balanced",
       "powerful": "Powerful",
       "open": "Open"
+    },
+    "intent": {
+      "label": "Assistant style",
+      "fast": "Fast",
+      "balanced": "Balanced",
+      "powerful": "Deep",
+      "fastHint": "Instant answers",
+      "balancedHint": "The sweet spot",
+      "powerfulHint": "Deep reasoning"
+    },
+    "advanced": {
+      "trigger": "Advanced: choose model",
+      "clearOverride": "Back to style"
     },
     "byok": {
       "title": "Your API keys",

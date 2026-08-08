@@ -77,7 +77,7 @@ export {
 } from './ModelSelect';
 export {
   SegmentedControl,
-  type SegmentedControlItem,
+  type SegmentedControlOption,
   type SegmentedControlProps,
 } from './SegmentedControl';
 export {

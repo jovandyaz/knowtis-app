@@ -80,7 +80,7 @@ export {
   type ModelSelectProps,
   type ModelSelectOption,
   SegmentedControl,
-  type SegmentedControlItem,
+  type SegmentedControlOption,
   type SegmentedControlProps,
   Table,
   TableBody,

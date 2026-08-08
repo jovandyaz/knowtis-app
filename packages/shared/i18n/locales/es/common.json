@@ -96,6 +96,8 @@
   "aiAssistant": {
     "copilotTitle": "Modelo del copilot",
     "copilotDescription": "Elige el modelo que usa tu copilot por defecto. Cada conversación puede cambiarlo desde el chat.",
+    "intentTitle": "Estilo del copilot",
+    "intentDescription": "Elige cómo piensa tu copilot. Añade tu clave para elegir modelos exactos.",
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "defaultHint": "Predeterminado de la cuenta",
@@ -108,6 +110,19 @@
       "balanced": "Equilibrado",
       "powerful": "Potente",
       "open": "Abierto"
+    },
+    "intent": {
+      "label": "Estilo del asistente",
+      "fast": "Rápido",
+      "balanced": "Equilibrado",
+      "powerful": "Profundo",
+      "fastHint": "Respuestas al instante",
+      "balancedHint": "El equilibrio ideal",
+      "powerfulHint": "Razonamiento a fondo"
+    },
+    "advanced": {
+      "trigger": "Avanzado: elegir modelo",
+      "clearOverride": "Volver al estilo"
     },
     "byok": {
       "title": "Tus claves de API",

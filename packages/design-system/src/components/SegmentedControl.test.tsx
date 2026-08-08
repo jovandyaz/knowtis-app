@@ -1,101 +1,88 @@
-import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { SegmentedControl } from './SegmentedControl';
 
-const items = [
-  { value: 'a', label: 'A' },
-  { value: 'b', label: 'B' },
-];
+const OPTIONS = [
+  { value: 'fast', label: 'Fast' },
+  { value: 'balanced', label: 'Balanced' },
+  { value: 'powerful', label: 'Deep' },
+] as const;
 
 describe('SegmentedControl', () => {
-  it('renders a tablist with the active tab selected', () => {
+  it('renders every option and marks the active one', () => {
     render(
       <SegmentedControl
-        items={items}
-        value="a"
+        aria-label="Style"
+        options={OPTIONS}
+        value="balanced"
         onValueChange={vi.fn()}
-        idBase="t"
-        ariaLabel="modes"
       />
     );
-    expect(screen.getByRole('tablist', { name: 'modes' })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'A' })).toHaveAttribute(
-      'aria-selected',
-      'true'
+    expect(screen.getByRole('radio', { name: 'Balanced' })).toHaveAttribute(
+      'data-state',
+      'on'
     );
-    expect(screen.getByRole('tab', { name: 'B' })).toHaveAttribute(
-      'aria-selected',
-      'false'
-    );
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
   });
 
-  it('wires tab ids and aria-controls from idBase', () => {
-    render(
-      <SegmentedControl
-        items={items}
-        value="a"
-        onValueChange={vi.fn()}
-        idBase="dock"
-      />
-    );
-    const tab = screen.getByRole('tab', { name: 'A' });
-    expect(tab).toHaveAttribute('id', 'dock-tab-a');
-    expect(tab).toHaveAttribute('aria-controls', 'dock-panel-a');
-  });
-
-  it('uses roving tabindex (active=0, others=-1)', () => {
-    render(
-      <SegmentedControl
-        items={items}
-        value="a"
-        onValueChange={vi.fn()}
-        idBase="t"
-      />
-    );
-    expect(screen.getByRole('tab', { name: 'A' })).toHaveAttribute(
-      'tabindex',
-      '0'
-    );
-    expect(screen.getByRole('tab', { name: 'B' })).toHaveAttribute(
-      'tabindex',
-      '-1'
-    );
-  });
-
-  it('selects on click', async () => {
+  it('fires onValueChange with the clicked value', () => {
     const onValueChange = vi.fn();
-    const user = userEvent.setup();
     render(
       <SegmentedControl
-        items={items}
-        value="a"
+        aria-label="Style"
+        options={OPTIONS}
+        value="balanced"
         onValueChange={onValueChange}
-        idBase="t"
       />
     );
-    await user.click(screen.getByRole('tab', { name: 'B' }));
-    expect(onValueChange).toHaveBeenCalledWith('b');
+    fireEvent.click(screen.getByRole('radio', { name: 'Deep' }));
+    expect(onValueChange).toHaveBeenCalledWith('powerful');
   });
 
-  it('moves selection with ArrowRight / Home / End', async () => {
+  it('does not fire when the active segment is clicked again (no deselect)', () => {
     const onValueChange = vi.fn();
-    const user = userEvent.setup();
     render(
       <SegmentedControl
-        items={items}
-        value="a"
+        aria-label="Style"
+        options={OPTIONS}
+        value="balanced"
         onValueChange={onValueChange}
-        idBase="t"
       />
     );
-    screen.getByRole('tab', { name: 'A' }).focus();
-    await user.keyboard('{ArrowRight}');
-    expect(onValueChange).toHaveBeenLastCalledWith('b');
-    await user.keyboard('{Home}');
-    expect(onValueChange).toHaveBeenLastCalledWith('a');
-    await user.keyboard('{End}');
-    expect(onValueChange).toHaveBeenLastCalledWith('b');
+    fireEvent.click(screen.getByRole('radio', { name: 'Balanced' }));
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it('renders no active segment when value is null', () => {
+    render(
+      <SegmentedControl
+        aria-label="Style"
+        options={OPTIONS}
+        value={null}
+        onValueChange={vi.fn()}
+      />
+    );
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).toHaveAttribute('data-state', 'off');
+    }
+  });
+
+  it('disables every segment and ignores clicks when disabled', () => {
+    const onValueChange = vi.fn();
+    render(
+      <SegmentedControl
+        aria-label="Style"
+        options={OPTIONS}
+        value="balanced"
+        onValueChange={onValueChange}
+        disabled
+      />
+    );
+    for (const radio of screen.getAllByRole('radio')) {
+      expect(radio).toBeDisabled();
+    }
+    fireEvent.click(screen.getByRole('radio', { name: 'Deep' }));
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });
