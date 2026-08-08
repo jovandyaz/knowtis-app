@@ -69,6 +69,11 @@ const CAPABILITY_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
     title: 'Access',
     description: 'Which users get which AI features.',
   },
+  {
+    group: FLAG_GROUP.RELEASE,
+    title: 'Rollouts',
+    description: 'Ship-dark features staged for release.',
+  },
 ];
 
 export function AiConfigPage() {

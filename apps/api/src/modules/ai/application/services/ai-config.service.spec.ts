@@ -241,6 +241,14 @@ describe('AIConfigService', () => {
         updatedAt: null,
       },
       {
+        key: 'ai_deep_model',
+        value: AI_SETTING_DEFAULTS.ai_deep_model,
+        kind: 'model',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
+      {
         key: 'ai_fallback_chain',
         value: AI_SETTING_DEFAULTS.ai_fallback_chain,
         kind: 'chain',
@@ -282,6 +290,14 @@ describe('AIConfigService', () => {
       {
         key: 'ai_fast_model',
         value: AI_SETTING_DEFAULTS.ai_fast_model,
+        kind: 'model',
+        source: 'default',
+        description: null,
+        updatedAt: null,
+      },
+      {
+        key: 'ai_deep_model',
+        value: AI_SETTING_DEFAULTS.ai_deep_model,
         kind: 'model',
         source: 'default',
         description: null,
@@ -508,6 +524,20 @@ describe('AIConfigService', () => {
       ]);
     });
   });
+
+  describe('getIntentModel', () => {
+    it('maps each intent to its config key default', async () => {
+      expect(await service.getIntentModel('fast')).toBe(
+        'openrouter:minimax/minimax-m2.5'
+      );
+      expect(await service.getIntentModel('balanced')).toBe(
+        'openrouter:z-ai/glm-5.2'
+      );
+      expect(await service.getIntentModel('powerful')).toBe(
+        'openrouter:moonshotai/kimi-k2.5'
+      );
+    });
+  });
 });
 
 describe('AI_SETTING_DEFAULTS', () => {
@@ -516,6 +546,7 @@ describe('AI_SETTING_DEFAULTS', () => {
     const referenced = [
       AI_SETTING_DEFAULTS.ai_default_model,
       AI_SETTING_DEFAULTS.ai_fast_model,
+      AI_SETTING_DEFAULTS.ai_deep_model,
       ...AI_SETTING_DEFAULTS.ai_fallback_chain
         .split(',')
         .map((id) => id.trim()),

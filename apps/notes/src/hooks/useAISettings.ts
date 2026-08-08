@@ -1,7 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { aiModelsApi } from '@knowtis/api-client';
-import type { AIPreferences } from '@knowtis/shared-types';
+import type {
+  AIPreferences,
+  UpdateAiPreferencesInput,
+} from '@knowtis/shared-types';
 
 import { aiModelsQueryKeys } from './useAvailableModels';
 
@@ -16,7 +19,8 @@ export function useAISettings() {
 export function useUpdateAISettings() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: AIPreferences) => aiModelsApi.updatePreferences(input),
+    mutationFn: (input: UpdateAiPreferencesInput) =>
+      aiModelsApi.updatePreferences(input),
     onMutate: async (input) => {
       await queryClient.cancelQueries({
         queryKey: aiModelsQueryKeys.preferences(),
@@ -24,7 +28,12 @@ export function useUpdateAISettings() {
       const previous = queryClient.getQueryData<AIPreferences>(
         aiModelsQueryKeys.preferences()
       );
-      queryClient.setQueryData(aiModelsQueryKeys.preferences(), input);
+      if (previous) {
+        queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
+          ...previous,
+          ...input,
+        });
+      }
       return { previous };
     },
     onError: (_err, _input, context) => {
@@ -33,10 +42,6 @@ export function useUpdateAISettings() {
           aiModelsQueryKeys.preferences(),
           context.previous
         );
-      } else {
-        queryClient.removeQueries({
-          queryKey: aiModelsQueryKeys.preferences(),
-        });
       }
     },
     onSettled: () => {

@@ -1,21 +1,41 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
+import { FEATURE_FLAG_KEYS, type ModelIntent } from '@knowtis/shared-types';
+
 import { ModelPreferenceService } from './model-preference.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-4-20250514';
 const OPEN_FALLBACK = 'openrouter:deepseek-mock';
+const INTENT_MODELS: Record<ModelIntent, string> = {
+  fast: 'openrouter:fast-mock',
+  balanced: SYSTEM_DEFAULT,
+  powerful: 'openrouter:deep-mock',
+};
+/** Stand-ins for the catalog's open tier: free to everyone even under gating. */
+const OPEN_IDS: readonly string[] = [
+  OPEN_FALLBACK,
+  INTENT_MODELS.fast,
+  INTENT_MODELS.powerful,
+];
 
 function make(
   pref: string | null,
   selectable: string[],
   byokProviders: string[] = [],
   tierGating = false,
-  openFallback: string | null = OPEN_FALLBACK
+  openFallback: string | null = OPEN_FALLBACK,
+  intentUx = false,
+  preferredIntent: ModelIntent | null = null,
+  intentModels: Record<ModelIntent, string> = INTENT_MODELS,
+  firstOfTier: (tier: ModelIntent) => string | null = () => null
 ) {
   const repo = {
-    getPreferredModel: vi.fn().mockResolvedValue(pref),
-    setPreferredModel: vi.fn().mockResolvedValue(undefined),
+    getSettings: vi.fn().mockResolvedValue({
+      preferredModel: pref,
+      preferredIntent,
+    }),
+    patchSettings: vi.fn().mockResolvedValue(undefined),
   };
   const selectableSvc = {
     isSelectable: (
@@ -25,11 +45,12 @@ function make(
     ) => {
       const hasKey = Boolean(providers?.has(id.split(':')[0]));
       if (tierGatingOn) {
-        return hasKey;
+        return OPEN_IDS.includes(id) || hasKey;
       }
       return selectable.includes(id) || hasKey;
     },
     firstSelectable: () => openFallback,
+    firstOfTier,
     list: (_systemDefault: string, providers?: ReadonlySet<string>) => {
       const unlocked = providers
         ? byokProviders
@@ -41,12 +62,23 @@ function make(
   };
   const aiConfig = {
     getDefaultModel: vi.fn().mockResolvedValue(SYSTEM_DEFAULT),
+    getIntentModel: vi
+      .fn()
+      .mockImplementation((intent: ModelIntent) =>
+        Promise.resolve(intentModels[intent])
+      ),
   };
   const byok = {
     enabledProviders: vi.fn().mockResolvedValue(new Set(byokProviders)),
   };
   const flags = {
-    isEnabled: vi.fn().mockResolvedValue(tierGating),
+    isEnabled: vi
+      .fn()
+      .mockImplementation((key: string) =>
+        Promise.resolve(
+          key === FEATURE_FLAG_KEYS.AI_TIER_GATING ? tierGating : intentUx
+        )
+      ),
   };
   const svc = new ModelPreferenceService(
     repo as never,
@@ -55,7 +87,7 @@ function make(
     byok as never,
     flags as never
   );
-  return { svc, repo, byok, flags };
+  return { svc, repo, aiConfig, byok, flags };
 }
 
 describe('ModelPreferenceService', () => {
@@ -77,18 +109,32 @@ describe('ModelPreferenceService', () => {
     expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
   });
 
-  it('setUserPreference rejects an unselectable model', async () => {
+  it('setUserPreferences rejects an unselectable model', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
-    await expect(svc.setUserPreference('u1', 'openai:nope')).rejects.toThrow(
-      BadRequestException
-    );
-    expect(repo.setPreferredModel).not.toHaveBeenCalled();
+    await expect(
+      svc.setUserPreferences('u1', { preferredModel: 'openai:nope' })
+    ).rejects.toThrow(BadRequestException);
+    expect(repo.patchSettings).not.toHaveBeenCalled();
   });
 
-  it('setUserPreference(null) clears without validation', async () => {
+  it('setUserPreferences clears the model without validation', async () => {
     const { svc, repo } = make('x', [SYSTEM_DEFAULT]);
-    await svc.setUserPreference('u1', null);
-    expect(repo.setPreferredModel).toHaveBeenCalledWith('u1', null);
+    await svc.setUserPreferences('u1', { preferredModel: null });
+    expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
+      preferredModel: null,
+    });
+  });
+
+  it('setUserPreferences skips the write when the patch carries no values', async () => {
+    const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
+    await svc.setUserPreferences('u1', {});
+    const dtoShaped: Parameters<typeof svc.setUserPreferences>[1] = {};
+    Object.assign(dtoShaped, {
+      preferredModel: undefined,
+      preferredIntent: undefined,
+    });
+    await svc.setUserPreferences('u1', dtoShaped);
+    expect(repo.patchSettings).not.toHaveBeenCalled();
   });
 
   it('listModels includes a BYOK-unlocked provider model', async () => {
@@ -107,13 +153,38 @@ describe('ModelPreferenceService', () => {
     expect(await svc.getEffectiveDefault('u1')).toBe('google:gemini-3.5-flash');
   });
 
-  it('setUserPreference accepts a model unlocked by a BYOK key', async () => {
+  it('setUserPreferences accepts a model unlocked by a BYOK key', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT], ['google']);
-    await svc.setUserPreference('u1', 'google:gemini-3.5-flash');
-    expect(repo.setPreferredModel).toHaveBeenCalledWith(
-      'u1',
-      'google:gemini-3.5-flash'
+    await svc.setUserPreferences('u1', {
+      preferredModel: 'google:gemini-3.5-flash',
+    });
+    expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
+      preferredModel: 'google:gemini-3.5-flash',
+    });
+  });
+
+  it('setUserPreferences passes an intent-only patch through unvalidated', async () => {
+    const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
+    await svc.setUserPreferences('u1', { preferredIntent: 'fast' });
+    expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
+      preferredIntent: 'fast',
+    });
+  });
+
+  it('getUserPreferences returns the stored model and intent', async () => {
+    const { svc } = make(
+      'openai:gpt-4o-mini',
+      [SYSTEM_DEFAULT],
+      [],
+      false,
+      OPEN_FALLBACK,
+      false,
+      'powerful'
     );
+    expect(await svc.getUserPreferences('u1')).toEqual({
+      preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'powerful',
+    });
   });
 
   it('reports tier gating as enabled when the flag is on', async () => {
@@ -174,5 +245,142 @@ describe('ModelPreferenceService', () => {
         true
       )
     ).toBe(true);
+  });
+
+  it('effective default ignores the stored intent while ai_intent_ux is off', async () => {
+    const { svc, aiConfig } = make(
+      null,
+      [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
+      [],
+      false,
+      OPEN_FALLBACK,
+      false,
+      'powerful'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+    expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
+  });
+
+  it('effective default resolves the intent through its ai_config key for a keyless caller', async () => {
+    const { svc, aiConfig } = make(
+      null,
+      [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      'powerful'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
+    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('powerful');
+  });
+
+  it('effective default treats a null intent as the balanced default', async () => {
+    const { svc, aiConfig } = make(
+      null,
+      [SYSTEM_DEFAULT],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      null
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('balanced');
+  });
+
+  it('effective default prefers a BYOK model of the intent tier over its ai_config key', async () => {
+    const { svc } = make(
+      null,
+      ['anthropic:claude-opus-4-8', 'openrouter:deep-mock'],
+      ['anthropic'],
+      false,
+      OPEN_FALLBACK,
+      true,
+      'powerful',
+      INTENT_MODELS,
+      () => 'anthropic:claude-opus-4-8'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(
+      'anthropic:claude-opus-4-8'
+    );
+  });
+
+  it('effective default keeps an explicit stored model above the intent', async () => {
+    const { svc, aiConfig } = make(
+      'openai:gpt-5.6',
+      ['openai:gpt-5.6', SYSTEM_DEFAULT],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      'fast'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('openai:gpt-5.6');
+    expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
+  });
+
+  it('effective default falls through to the legacy cascade when the intent target is unselectable', async () => {
+    const { svc } = make(
+      null,
+      [SYSTEM_DEFAULT],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      'powerful',
+      {
+        fast: 'openrouter:not-selectable',
+        balanced: 'openrouter:not-selectable',
+        powerful: 'openrouter:not-selectable',
+      }
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+  });
+
+  it('effective default lands a gated keyless caller on the open model of the intent', async () => {
+    const { svc, aiConfig } = make(
+      null,
+      [SYSTEM_DEFAULT],
+      [],
+      true,
+      OPEN_FALLBACK,
+      true,
+      'powerful'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
+    expect(aiConfig.getIntentModel).toHaveBeenCalledWith('powerful');
+  });
+
+  it('effective default keeps the BYOK model of the intent tier under gating', async () => {
+    const { svc, aiConfig } = make(
+      null,
+      ['anthropic:claude-opus-4-8'],
+      ['anthropic'],
+      true,
+      OPEN_FALLBACK,
+      true,
+      'powerful',
+      INTENT_MODELS,
+      () => 'anthropic:claude-opus-4-8'
+    );
+    expect(await svc.getEffectiveDefault('u1')).toBe(
+      'anthropic:claude-opus-4-8'
+    );
+    expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
+  });
+
+  it('effective default ignores the intent when the flag store errors', async () => {
+    const { svc, flags } = make(
+      null,
+      [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
+      [],
+      false,
+      OPEN_FALLBACK,
+      true,
+      'powerful'
+    );
+    flags.isEnabled.mockRejectedValue(new Error('flag store down'));
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
   });
 });

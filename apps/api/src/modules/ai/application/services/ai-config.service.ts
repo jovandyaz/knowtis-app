@@ -3,7 +3,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
-import { REASONING_EFFORTS, type ReasoningEffort } from '@knowtis/shared-types';
+import {
+  REASONING_EFFORTS,
+  type ModelIntent,
+  type ReasoningEffort,
+} from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
@@ -51,6 +55,7 @@ const CONFIG_KEYS = {
     kind: 'model',
   },
   ai_fast_model: { default: AI_SETTING_DEFAULTS.ai_fast_model, kind: 'model' },
+  ai_deep_model: { default: AI_SETTING_DEFAULTS.ai_deep_model, kind: 'model' },
   ai_fallback_chain: {
     default: AI_SETTING_DEFAULTS.ai_fallback_chain,
     kind: 'chain',
@@ -67,6 +72,12 @@ const CONFIG_KEYS = {
 } as const satisfies Record<string, ConfigKeyDef>;
 
 type ConfigKey = keyof typeof CONFIG_KEYS;
+
+const INTENT_CONFIG_KEYS = {
+  fast: 'ai_fast_model',
+  balanced: 'ai_default_model',
+  powerful: 'ai_deep_model',
+} as const satisfies Record<ModelIntent, ConfigKey>;
 
 function isConfigKey(key: string): key is ConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
@@ -114,6 +125,10 @@ export class AIConfigService {
 
   async getFastModel(): Promise<string> {
     return this.getConfigValue('ai_fast_model');
+  }
+
+  async getIntentModel(intent: ModelIntent): Promise<string> {
+    return this.getConfigValue(INTENT_CONFIG_KEYS[intent]);
   }
 
   async getFallbackChain(): Promise<string[]> {

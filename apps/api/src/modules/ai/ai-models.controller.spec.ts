@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { AiModelsController } from './ai-models.controller';
+import type { ModelPreferenceService } from './application/services/model-preference.service';
 
 const user = { id: 'u1' } as never;
 
@@ -9,9 +10,12 @@ function make() {
     listModels: vi
       .fn()
       .mockResolvedValue([{ id: 'anthropic:claude-sonnet-4-20250514' }]),
-    getUserPreference: vi.fn().mockResolvedValue('openai:gpt-4o-mini'),
-    setUserPreference: vi.fn().mockResolvedValue(undefined),
-  };
+    getUserPreferences: vi.fn().mockResolvedValue({
+      preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'balanced',
+    }),
+    setUserPreferences: vi.fn().mockResolvedValue(undefined),
+  } satisfies Partial<Record<keyof ModelPreferenceService, unknown>>;
   return { ctrl: new AiModelsController(pref as never), pref };
 }
 
@@ -23,36 +27,63 @@ describe('AiModelsController', () => {
     expect(pref.listModels).toHaveBeenCalledWith('u1');
   });
 
-  it('GET /ai/preferences returns the stored preference', async () => {
+  it('GET /ai/preferences returns both stored preferences', async () => {
     const { ctrl } = make();
     expect(await ctrl.getPreferences(user)).toEqual({
       preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: 'balanced',
     });
   });
 
-  it('PUT /ai/preferences persists and echoes the value', async () => {
+  it('PUT /ai/preferences persists the patch and returns the re-read preferences', async () => {
     const { ctrl, pref } = make();
+    pref.getUserPreferences.mockResolvedValueOnce({
+      preferredModel: 'anthropic:claude-sonnet-5',
+      preferredIntent: 'balanced',
+    });
     const res = await ctrl.updatePreferences(user, {
       preferredModel: 'anthropic:claude-sonnet-5',
     });
-    expect(pref.setUserPreference).toHaveBeenCalledWith(
-      'u1',
-      'anthropic:claude-sonnet-5'
-    );
+    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+      preferredModel: 'anthropic:claude-sonnet-5',
+    });
     expect(res).toEqual({
       preferredModel: 'anthropic:claude-sonnet-5',
+      preferredIntent: 'balanced',
     });
   });
 
-  it('GET /ai/preferences returns null when no preference is set', async () => {
+  it('PUT /ai/preferences forwards an intent-only patch without touching the model', async () => {
     const { ctrl, pref } = make();
-    pref.getUserPreference.mockResolvedValueOnce(null);
-    expect(await ctrl.getPreferences(user)).toEqual({ preferredModel: null });
+    await ctrl.updatePreferences(user, { preferredIntent: 'fast' });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+      preferredIntent: 'fast',
+    });
+  });
+
+  it('PUT /ai/preferences forwards a null model as a clear', async () => {
+    const { ctrl, pref } = make();
+    await ctrl.updatePreferences(user, { preferredModel: null });
+    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+      preferredModel: null,
+    });
+  });
+
+  it('GET /ai/preferences returns nulls when nothing is set', async () => {
+    const { ctrl, pref } = make();
+    pref.getUserPreferences.mockResolvedValueOnce({
+      preferredModel: null,
+      preferredIntent: null,
+    });
+    expect(await ctrl.getPreferences(user)).toEqual({
+      preferredModel: null,
+      preferredIntent: null,
+    });
   });
 
   it('PUT /ai/preferences propagates a rejected invalid model', async () => {
     const { ctrl, pref } = make();
-    pref.setUserPreference.mockRejectedValueOnce(
+    pref.setUserPreferences.mockRejectedValueOnce(
       new Error('Model not selectable: bogus')
     );
     await expect(

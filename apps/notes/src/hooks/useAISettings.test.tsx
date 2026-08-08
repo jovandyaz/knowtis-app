@@ -35,6 +35,7 @@ describe('useAISettings', () => {
   it('fetches the stored preference', async () => {
     vi.mocked(aiModelsApi.getPreferences).mockResolvedValue({
       preferredModel: 'openai:gpt-4o-mini',
+      preferredIntent: null,
     });
     const { wrapper } = createWrapper();
     const { result } = renderHook(() => useAISettings(), { wrapper });
@@ -51,10 +52,12 @@ describe('useUpdateAISettings', () => {
   it('applies an optimistic write before the server responds', async () => {
     vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
       preferredModel: 'b',
+      preferredIntent: null,
     });
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
       preferredModel: 'a',
+      preferredIntent: null,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -62,7 +65,29 @@ describe('useUpdateAISettings', () => {
 
     await waitFor(() =>
       expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual(
-        { preferredModel: 'b' }
+        { preferredModel: 'b', preferredIntent: null }
+      )
+    );
+  });
+
+  it('merges a partial patch over the cached preference', async () => {
+    // The echo differs from the optimistic value on purpose: this pins onMutate.
+    vi.mocked(aiModelsApi.updatePreferences).mockResolvedValue({
+      preferredModel: 'x',
+      preferredIntent: 'balanced',
+    });
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
+      preferredModel: 'x',
+      preferredIntent: null,
+    });
+
+    const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
+    result.current.mutate({ preferredIntent: 'fast' });
+
+    await waitFor(() =>
+      expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual(
+        { preferredModel: 'x', preferredIntent: 'fast' }
       )
     );
   });
@@ -74,6 +99,7 @@ describe('useUpdateAISettings', () => {
     const { wrapper, queryClient } = createWrapper();
     queryClient.setQueryData(aiModelsQueryKeys.preferences(), {
       preferredModel: 'a',
+      preferredIntent: null,
     });
 
     const { result } = renderHook(() => useUpdateAISettings(), { wrapper });
@@ -82,10 +108,11 @@ describe('useUpdateAISettings', () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(queryClient.getQueryData(aiModelsQueryKeys.preferences())).toEqual({
       preferredModel: 'a',
+      preferredIntent: null,
     });
   });
 
-  it('clears the optimistic value when rejecting on a cold cache', async () => {
+  it('leaves the cache empty when rejecting on a cold cache', async () => {
     vi.mocked(aiModelsApi.updatePreferences).mockRejectedValue(
       new Error('network error')
     );

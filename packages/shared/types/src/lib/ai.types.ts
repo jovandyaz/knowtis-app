@@ -60,6 +60,20 @@ export const MODEL_ID_MAX_LENGTH = 120;
 export const MODEL_TIERS = ['fast', 'balanced', 'powerful', 'open'] as const;
 export type ModelTier = (typeof MODEL_TIERS)[number];
 
+/** User-facing capability choice; the `open` tier is the free pool backing these, never a selectable intent. */
+export const MODEL_INTENTS = [
+  'fast',
+  'balanced',
+  'powerful',
+] as const satisfies readonly ModelTier[];
+export type ModelIntent = (typeof MODEL_INTENTS)[number];
+
+export const DEFAULT_MODEL_INTENT: ModelIntent = 'balanced';
+
+export function isModelIntent(value: string): value is ModelIntent {
+  return (MODEL_INTENTS as readonly string[]).includes(value);
+}
+
 export const MODEL_ACCESS = ['granted', 'requires_byok'] as const;
 export type ModelAccess = (typeof MODEL_ACCESS)[number];
 
@@ -88,7 +102,10 @@ export interface SelectableModel {
 
 export interface AIPreferences {
   preferredModel: string | null;
+  preferredIntent: ModelIntent | null;
 }
+
+export type UpdateAiPreferencesInput = Partial<AIPreferences>;
 
 /**
  * Every provider the server can route to. BYOK_PROVIDERS is a subset — not

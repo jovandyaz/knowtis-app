@@ -241,4 +241,42 @@ describe('SelectableModelsService', () => {
     });
     expect(service.firstSelectable(NO_BYOK, true)).toBeNull();
   });
+
+  describe('firstOfTier', () => {
+    it('returns the first curated model of the tier the caller has a key for', () => {
+      const service = makeOpenService();
+      expect(service.firstOfTier('powerful', new Set(['anthropic']))).toBe(
+        'anthropic:claude-opus-4-8'
+      );
+      expect(service.firstOfTier('powerful', new Set(['openai']))).toBe(
+        'openai:gpt-5.6'
+      );
+    });
+
+    it('ranks by catalog order when the caller holds keys for several providers of the tier', () => {
+      const service = makeOpenService();
+      expect(
+        service.firstOfTier('powerful', new Set(['openai', 'anthropic']))
+      ).toBe('anthropic:claude-opus-4-8');
+      expect(service.firstOfTier('fast', new Set(['google', 'openai']))).toBe(
+        'openai:gpt-5.4-mini'
+      );
+    });
+
+    it('returns null when no curated model of the tier matches the BYOK set', () => {
+      const service = makeOpenService();
+      expect(service.firstOfTier('powerful', NO_BYOK)).toBeNull();
+      expect(
+        service.firstOfTier('powerful', new Set(['openrouter']))
+      ).toBeNull();
+    });
+
+    it('returns null when the tier model the caller holds a key for is uninvocable', () => {
+      const service = makeService({
+        supported: new Set(),
+        available: new Set(),
+      });
+      expect(service.firstOfTier('fast', new Set(['anthropic']))).toBeNull();
+    });
+  });
 });

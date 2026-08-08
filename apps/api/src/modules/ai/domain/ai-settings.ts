@@ -2,6 +2,7 @@
 export const AI_SETTING_DEFAULTS = {
   ai_default_model: 'openrouter:z-ai/glm-5.2',
   ai_fast_model: 'openrouter:minimax/minimax-m2.5',
+  ai_deep_model: 'openrouter:moonshotai/kimi-k2.5',
   ai_fallback_chain:
     'openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2',
   ai_reasoning_effort: 'medium',
