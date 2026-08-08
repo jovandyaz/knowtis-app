@@ -121,9 +121,9 @@ Scope constraints:
 Pipeline uses **Nx affected** to optimize builds and deploys:
 
 1. **Single CI job**: `nx affected -t lint test build` — only impacted projects
-2. **Typecheck global**: `tsc --noEmit` on entire workspace
+2. **Typecheck**: `nx affected -t typecheck` — covers every project the change can type-impact (affected includes dependents)
 3. **Conditional deploy**: Deploys frontend (Vercel) and API/MCP (Railway) when affected
-4. **SHA detection**: `nrwl/nx-set-shas@v4` auto-detects comparison commits
+4. **SHA detection**: `nrwl/nx-set-shas@v5` auto-detects comparison commits
 
 ### Vercel (Frontend)
 
