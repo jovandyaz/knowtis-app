@@ -30,6 +30,11 @@ export const useRightDockStore = create<RightDockStore>()(
         isOpen: s.isOpen,
         hasAutoOpened: s.hasAutoOpened,
       }),
+      onRehydrateStorage: () => (state) => {
+        if (state?.isOpen && !window.matchMedia('(min-width: 768px)').matches) {
+          state.close();
+        }
+      },
     }
   )
 );

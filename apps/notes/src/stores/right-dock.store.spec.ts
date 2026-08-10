@@ -1,11 +1,28 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRightDockStore } from './right-dock.store';
+
+function stubMatchMedia(matches: boolean) {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+}
 
 describe('useRightDockStore', () => {
   beforeEach(() => {
     localStorage.clear();
     useRightDockStore.setState({ isOpen: false, hasAutoOpened: false });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('opens the dock', () => {
@@ -46,5 +63,37 @@ describe('useRightDockStore', () => {
     expect(raw).not.toBeNull();
     const stored: { state: Record<string, unknown> } = JSON.parse(raw ?? '');
     expect(stored.state).toEqual({ isOpen: true, hasAutoOpened: false });
+  });
+
+  it('forces isOpen to false on rehydrate when the persisted state is open but the viewport is below desktop width', async () => {
+    localStorage.setItem(
+      'right-dock',
+      JSON.stringify({
+        state: { isOpen: true, hasAutoOpened: true },
+        version: 0,
+      })
+    );
+    stubMatchMedia(false);
+
+    await useRightDockStore.persist.rehydrate();
+
+    expect(useRightDockStore.getState().isOpen).toBe(false);
+    expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
+  });
+
+  it('keeps isOpen true on rehydrate when the persisted state is open and the viewport is desktop width', async () => {
+    localStorage.setItem(
+      'right-dock',
+      JSON.stringify({
+        state: { isOpen: true, hasAutoOpened: true },
+        version: 0,
+      })
+    );
+    stubMatchMedia(true);
+
+    await useRightDockStore.persist.rehydrate();
+
+    expect(useRightDockStore.getState().isOpen).toBe(true);
+    expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
   });
 });
