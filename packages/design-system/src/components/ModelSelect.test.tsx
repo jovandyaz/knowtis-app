@@ -41,6 +41,27 @@ describe('ModelSelect', () => {
     expect(onSelect).toHaveBeenCalledWith('a:bal');
   });
 
+  it('omits the description element when the option has no description to render', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        renderDescription={(m) => (m.id === 'a:fast' ? 'has one' : '')}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Fast One/ }));
+
+    // An empty description span is invisible to textContent but still consumes
+    // the item's row gap, so the assertion has to be structural.
+    expect(
+      screen.getByRole('menuitem', { name: /Fast One/ }).children
+    ).toHaveLength(2);
+    expect(
+      screen.getByRole('menuitem', { name: /Balanced One/ }).children
+    ).toHaveLength(1);
+  });
+
   it('orders tier groups by the tierOrder prop', async () => {
     render(
       <ModelSelect

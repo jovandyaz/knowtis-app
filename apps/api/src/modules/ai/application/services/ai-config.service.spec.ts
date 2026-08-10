@@ -2,14 +2,23 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { REASONING_EFFORTS } from '@knowtis/shared-types';
 
+import type { AiCatalogModelRow } from '../../../../database';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
+import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
+import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
+import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
+import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
+import { createMockConfig } from '../../testing/create-mock-config';
 import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
 const CUSTOM_FAST = 'anthropic:claude-haiku-4-5-20251001';
 const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
+const PROMOTED_ID = 'openrouter:vendor/promoted-one';
+const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
 
 function deletedRow(value: string) {
   return {
@@ -36,6 +45,29 @@ describe('AIConfigService', () => {
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let mockRegistry: { isModelAvailable: ReturnType<typeof vi.fn> };
   let mockCatalog: { isSupported: ReturnType<typeof vi.fn> };
+  let mockPromoted: { snapshot: ReturnType<typeof vi.fn> };
+
+  /** Wires the real promoted cache and composite catalog so promoted rows reach validation exactly as they do at runtime. */
+  async function serviceWith(rows: readonly AiCatalogModelRow[]) {
+    const promoted = new PromotedModelsCache(
+      createCatalogRepositoryStub(async () => [...rows])
+    );
+    await promoted.onModuleInit();
+    const catalog = new CompositeModelCatalog(
+      promoted,
+      new ModelCatalogAdapter(
+        createMockConfig({ AI_PRICING_REFRESH_ENABLED: false })
+      )
+    );
+    return new AIConfigService(
+      mockRepo as never,
+      mockCache as never,
+      mockAudit as never,
+      mockRegistry as never,
+      catalog,
+      promoted
+    );
+  }
 
   beforeEach(() => {
     mockRepo = {
@@ -52,12 +84,14 @@ describe('AIConfigService', () => {
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
     mockRegistry = { isModelAvailable: vi.fn().mockReturnValue(true) };
     mockCatalog = { isSupported: vi.fn().mockReturnValue(true) };
+    mockPromoted = { snapshot: vi.fn().mockReturnValue([]) };
     service = new AIConfigService(
-      mockRepo as any,
-      mockCache as any,
-      mockAudit as any,
-      mockRegistry as any,
-      mockCatalog as any
+      mockRepo as never,
+      mockCache as never,
+      mockAudit as never,
+      mockRegistry as never,
+      mockCatalog as never,
+      mockPromoted as never
     );
   });
 
@@ -100,10 +134,10 @@ describe('AIConfigService', () => {
     expect(mockRepo.set).not.toHaveBeenCalled();
   });
 
-  it('should reject a value that is not a curated model id', async () => {
+  it('should reject a value that is neither curated nor promoted', async () => {
     await expect(
       service.setConfig('ai_default_model', 'anthropic:not-a-model', ACTOR)
-    ).rejects.toThrow("'anthropic:not-a-model' is not a curated model id");
+    ).rejects.toThrow("'anthropic:not-a-model' is not a selectable model id");
     expect(mockRepo.set).not.toHaveBeenCalled();
     expect(mockAudit.record).not.toHaveBeenCalled();
   });
@@ -394,6 +428,65 @@ describe('AIConfigService', () => {
       await expect(
         service.setConfig('ai_fallback_chain', A_VALID_CHAIN, ACTOR)
       ).rejects.toThrow('at least one must be routable');
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('promoted catalog models', () => {
+    it('accepts a promoted model as a global default', async () => {
+      const withPromoted = await serviceWith([
+        createCatalogModelRow({ id: PROMOTED_ID }),
+      ]);
+
+      await expect(
+        withPromoted.setConfig('ai_default_model', PROMOTED_ID, ACTOR)
+      ).resolves.toBeUndefined();
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_default_model',
+        PROMOTED_ID,
+        undefined
+      );
+    });
+
+    it('accepts a fallback chain naming a promoted model', async () => {
+      const withPromoted = await serviceWith([
+        createCatalogModelRow({ id: PROMOTED_ID }),
+      ]);
+
+      await expect(
+        withPromoted.setConfig(
+          'ai_fallback_chain',
+          `${CUSTOM_FAST},${PROMOTED_ID}`,
+          ACTOR
+        )
+      ).resolves.toBeUndefined();
+      expect(mockRepo.set).toHaveBeenCalled();
+    });
+
+    it('rejects a chain naming a model that was never promoted', async () => {
+      const withPromoted = await serviceWith([
+        createCatalogModelRow({ id: PROMOTED_ID }),
+      ]);
+
+      await expect(
+        withPromoted.setConfig(
+          'ai_fallback_chain',
+          `${CUSTOM_FAST},${UNKNOWN_ID}`,
+          ACTOR
+        )
+      ).rejects.toThrow(UNKNOWN_ID);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('rejects a promoted model the server cannot invoke as a global default', async () => {
+      mockRegistry.isModelAvailable.mockReturnValue(false);
+      const withPromoted = await serviceWith([
+        createCatalogModelRow({ id: PROMOTED_ID }),
+      ]);
+
+      await expect(
+        withPromoted.setConfig('ai_default_model', PROMOTED_ID, ACTOR)
+      ).rejects.toThrow('is not invocable');
       expect(mockRepo.set).not.toHaveBeenCalled();
     });
   });

@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { SelectableModel } from '@knowtis/shared-types';
+
 import { CopilotModelPicker } from './CopilotModelPicker';
 
 const setSelected = vi.fn();
@@ -52,6 +54,7 @@ const grantedModels = [
     costClass: 2,
     isDefault: true,
     billedToUser: false,
+    routableByServer: true,
     access: 'granted',
   },
   {
@@ -63,9 +66,10 @@ const grantedModels = [
     costClass: 1,
     isDefault: false,
     billedToUser: false,
+    routableByServer: true,
     access: 'granted',
   },
-];
+] satisfies SelectableModel[];
 
 const lockedModel = {
   id: 'x:premium',
@@ -76,8 +80,9 @@ const lockedModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: false,
+  routableByServer: true,
   access: 'requires_byok',
-};
+} satisfies SelectableModel;
 
 const byokModel = {
   id: 'o:byok',
@@ -88,11 +93,27 @@ const byokModel = {
   costClass: 3,
   isDefault: false,
   billedToUser: true,
+  routableByServer: true,
   access: 'granted',
-};
+} satisfies SelectableModel;
+
+const promotedModel = {
+  id: 'o:promoted',
+  label: 'Promoted One',
+  descriptionKey: '',
+  description: 'Promoted from the open catalog',
+  tier: 'powerful',
+  contextWindow: 200000,
+  costClass: 1,
+  isDefault: false,
+  billedToUser: true,
+  routableByServer: true,
+  access: 'granted',
+} satisfies SelectableModel;
 
 const withLockedModel = [...grantedModels, lockedModel];
 const withByokModel = [...grantedModels, lockedModel, byokModel];
+const withPromotedModel = [...withByokModel, promotedModel];
 
 describe('CopilotModelPicker', () => {
   beforeEach(() => {
@@ -161,6 +182,22 @@ describe('CopilotModelPicker', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
+  });
+
+  it('describes a keyless catalog model with its own text instead of a key echo', async () => {
+    modelsData.mockReturnValue(withPromotedModel);
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    );
+
+    expect(
+      screen.getByRole('menuitem', { name: /Promoted One/ })
+    ).toHaveTextContent('Promoted from the open catalog');
+    expect(
+      screen.getByRole('menuitem', { name: /Byok One/ })
+    ).toHaveTextContent('aiModels.gpt56');
   });
 
   it('picks an advanced model into the session only', async () => {

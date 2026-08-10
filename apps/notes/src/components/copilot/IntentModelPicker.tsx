@@ -62,7 +62,11 @@ export function IntentModelPicker({
           retryLabel={t('aiAssistant.retry')}
           triggerClassName={triggerClassName}
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
-          renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
+          renderDescription={(m) =>
+            m.descriptionKey
+              ? t(m.descriptionKey as never)
+              : (m.description ?? '')
+          }
           triggerLabel={t('aiAssistant.advanced.trigger')}
           billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
           footer={

@@ -85,6 +85,8 @@ export interface SelectableModel {
   id: string;
   label: string;
   descriptionKey: string;
+  /** Free text served by catalog models that have no i18n key; the UI renders it when `descriptionKey` is empty. */
+  description?: string;
   tier: ModelTier;
   contextWindow: number;
   costClass: 1 | 2 | 3;

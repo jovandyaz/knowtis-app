@@ -1,18 +1,33 @@
 import { describe, expect, it } from 'vitest';
 
+import type { AiCatalogModelRow } from '../../../../database';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
+const PROMOTED_ID = 'openrouter:vendor/promoted-one';
+const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
+const PORT_CONTEXT_WINDOW = 262_144;
+const ROW_CONTEXT_WINDOW = 4_096;
 
-function makeOpenService() {
+function promotedCache(rows: readonly AiCatalogModelRow[]) {
+  return { snapshot: () => rows };
+}
+
+function makeOpenService(promoted: readonly AiCatalogModelRow[] = []) {
   const catalog = {
     isSupported: () => true,
     getPricing: () => ({ outputCostPerToken: 0.000005 }),
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
   const registry = { isModelAvailable: () => true };
-  return new SelectableModelsService(catalog as never, registry as never);
+  return new SelectableModelsService(
+    catalog as never,
+    registry as never,
+    promotedCache(promoted) as never
+  );
 }
 
 function makeService(opts: {
@@ -23,6 +38,7 @@ function makeService(opts: {
     string,
     { inputCostPerToken: number; outputCostPerToken: number }
   >;
+  promoted?: readonly AiCatalogModelRow[];
 }) {
   const catalog = {
     isSupported: (id: string) => opts.supported.has(id),
@@ -38,7 +54,11 @@ function makeService(opts: {
         : undefined),
   };
   const registry = { isModelAvailable: (id: string) => opts.available.has(id) };
-  return new SelectableModelsService(catalog as never, registry as never);
+  return new SelectableModelsService(
+    catalog as never,
+    registry as never,
+    promotedCache(opts.promoted ?? []) as never
+  );
 }
 
 describe('SelectableModelsService', () => {
@@ -63,7 +83,8 @@ describe('SelectableModelsService', () => {
     };
     const svc = new SelectableModelsService(
       catalog as never,
-      registry as never
+      registry as never,
+      promotedCache([]) as never
     );
     const withByok = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
     expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
@@ -72,16 +93,7 @@ describe('SelectableModelsService', () => {
   });
 
   it('flags billedToUser only for models whose provider has a BYOK key', () => {
-    const registry = { isModelAvailable: () => true };
-    const catalog = {
-      isSupported: () => true,
-      getPricing: () => ({ outputCostPerToken: 0.000005 }),
-      getContextWindow: () => ({ maxInputTokens: 1000 }),
-    };
-    const svc = new SelectableModelsService(
-      catalog as never,
-      registry as never
-    );
+    const svc = makeOpenService();
     const models = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
     expect(models.find((m) => m.id.startsWith('google:'))?.billedToUser).toBe(
       true
@@ -240,6 +252,150 @@ describe('SelectableModelsService', () => {
       available: new Set(),
     });
     expect(service.firstSelectable(NO_BYOK, true)).toBeNull();
+  });
+
+  describe('promoted catalog models', () => {
+    it('lists exactly the curated set while nothing is promoted', () => {
+      const service = makeOpenService();
+      expect(service.list(SYSTEM_DEFAULT).map((m) => m.id)).toEqual(
+        CURATED_MODELS.map((m) => m.id)
+      );
+    });
+
+    it('serves a promoted row as a free open-tier model with its description', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({
+          id: PROMOTED_ID,
+          label: 'Promoted One',
+          description: PROMOTED_DESCRIPTION,
+          tier: 'open',
+        }),
+      ]);
+
+      const listed = service.list(SYSTEM_DEFAULT, NO_BYOK, true);
+      const promoted = listed.find((m) => m.id === PROMOTED_ID);
+
+      // List order is display order: ModelSelect keeps item order within a tier group.
+      expect(listed.map((m) => m.id)).toEqual([
+        ...CURATED_MODELS.map((m) => m.id),
+        PROMOTED_ID,
+      ]);
+      expect(promoted).toMatchObject({
+        label: 'Promoted One',
+        descriptionKey: '',
+        description: PROMOTED_DESCRIPTION,
+        tier: 'open',
+        access: 'granted',
+        billedToUser: false,
+        routableByServer: true,
+      });
+    });
+
+    it('reads promoted pricing and context through the catalog port, not the row', () => {
+      const service = makeService({
+        supported: new Set([PROMOTED_ID]),
+        available: new Set([PROMOTED_ID]),
+        context: { [PROMOTED_ID]: PORT_CONTEXT_WINDOW },
+        pricing: {
+          [PROMOTED_ID]: {
+            inputCostPerToken: 0.000001,
+            outputCostPerToken: 0.000025,
+          },
+        },
+        promoted: [
+          createCatalogModelRow({
+            id: PROMOTED_ID,
+            maxInputTokens: ROW_CONTEXT_WINDOW,
+            outputCostPerToken: 0.0000001,
+          }),
+        ],
+      });
+
+      const promoted = service
+        .list(SYSTEM_DEFAULT)
+        .find((m) => m.id === PROMOTED_ID);
+
+      expect(promoted?.contextWindow).toBe(PORT_CONTEXT_WINDOW);
+      expect(promoted?.costClass).toBe(3);
+    });
+
+    it('bills a promoted model to the user holding its provider key', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({ id: PROMOTED_ID, tier: 'open' }),
+      ]);
+
+      const promoted = service
+        .list(SYSTEM_DEFAULT, new Set(['openrouter']))
+        .find((m) => m.id === PROMOTED_ID);
+
+      expect(promoted?.billedToUser).toBe(true);
+    });
+
+    it('omits the description of a promoted row that carries none', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({ id: PROMOTED_ID, description: '' }),
+      ]);
+
+      const promoted = service
+        .list(SYSTEM_DEFAULT)
+        .find((m) => m.id === PROMOTED_ID);
+
+      expect(promoted?.description).toBeUndefined();
+    });
+
+    it('keeps the curated entry when a promoted row repeats its id', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({
+          id: SYSTEM_DEFAULT,
+          label: 'Shadowed',
+          description: PROMOTED_DESCRIPTION,
+          tier: 'open',
+        }),
+      ]);
+
+      const matches = service
+        .list(SYSTEM_DEFAULT)
+        .filter((m) => m.id === SYSTEM_DEFAULT);
+
+      expect(matches).toHaveLength(1);
+      expect(matches[0]).toMatchObject({
+        label: 'Sonnet 5',
+        descriptionKey: 'aiModels.sonnet5',
+        tier: 'balanced',
+      });
+      expect(matches[0]?.description).toBeUndefined();
+    });
+
+    it('selects a promoted model the curated catalog does not know', () => {
+      const service = makeService({
+        supported: new Set([PROMOTED_ID]),
+        available: new Set([PROMOTED_ID]),
+        promoted: [createCatalogModelRow({ id: PROMOTED_ID })],
+      });
+
+      expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(true);
+      expect(service.firstSelectable(NO_BYOK, true)).toBe(PROMOTED_ID);
+    });
+
+    it('offers a promoted model of a tier no curated key of the caller reaches', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({ id: PROMOTED_ID, tier: 'powerful' }),
+      ]);
+
+      expect(service.firstOfTier('powerful', new Set(['openrouter']))).toBe(
+        PROMOTED_ID
+      );
+    });
+
+    it('ranks curated models of a tier above promoted ones', () => {
+      const service = makeOpenService([
+        createCatalogModelRow({ id: PROMOTED_ID, tier: 'powerful' }),
+      ]);
+
+      expect(
+        service.firstOfTier('powerful', new Set(['anthropic', 'openrouter']))
+      ).toBe('anthropic:claude-opus-4-8');
+    });
   });
 
   describe('firstOfTier', () => {
