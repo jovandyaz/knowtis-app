@@ -1,3 +1,4 @@
+import { encode } from 'gpt-tokenizer';
 import { describe, expect, it } from 'vitest';
 
 import { estimateTokenCount } from './token-estimator';
@@ -18,5 +19,46 @@ describe('estimateTokenCount', () => {
     const count = estimateTokenCount(text);
     expect(count).toBeGreaterThan(5);
     expect(count).toBeLessThan(text.length);
+  });
+
+  it(
+    'should count a long run of one character without quadratic blow-up',
+    { timeout: 500 },
+    () => {
+      expect(estimateTokenCount('a'.repeat(48_000))).toBe(6000);
+    }
+  );
+
+  it('should survive a chunk boundary that splits a surrogate pair', () => {
+    const text = `${'a'.repeat(3_999)}\u{1F600}${'b'.repeat(100)}`;
+    const exact = encode(text).length;
+
+    expect(text.charCodeAt(3_999)).toBeGreaterThanOrEqual(0xd800);
+
+    const drift = Math.abs(estimateTokenCount(text) - exact) / exact;
+
+    expect(drift).toBeLessThan(0.01);
+  });
+
+  it('should count a reserved special token as ordinary text wherever it falls', () => {
+    const inside = `${'a'.repeat(100)}<|endoftext|>${'b'.repeat(100)}`;
+    const straddling = `${'a'.repeat(3_994)}<|endoftext|>${'b'.repeat(100)}`;
+    const asOrdinaryText = encode(inside, {
+      disallowedSpecial: new Set<string>(),
+    }).length;
+
+    expect(estimateTokenCount(inside)).toBe(asOrdinaryText);
+    expect(estimateTokenCount(straddling)).toBeGreaterThan(0);
+  });
+
+  it('should stay within 1% of an exact encode for prose', () => {
+    const sentence =
+      'the quick brown fox jumps over a lazy dog while writing notes ';
+    const text = sentence.repeat(Math.ceil(48_000 / sentence.length));
+    const exact = encode(text).length;
+
+    const drift = Math.abs(estimateTokenCount(text) - exact) / exact;
+
+    expect(drift).toBeLessThan(0.01);
   });
 });
