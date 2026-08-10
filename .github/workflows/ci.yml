@@ -85,7 +85,9 @@ jobs:
       - name: Test (affected)
         # --parallel=2 bounds concurrent vitest projects; 3+ NestJS/jsdom
         # suites at once exceed hosted-runner memory and get OOM-killed.
-        run: npx nx affected -t test --parallel=2 -- --run
+        # Streamed output survives a killed child; nx's buffered default
+        # truncates mid-line and loses the vitest summary that names the failure.
+        run: npx nx affected -t test --parallel=2 --outputStyle=stream -- --run
 
       - name: Check for missing DB migrations
         run: |
