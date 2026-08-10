@@ -183,6 +183,13 @@
       "when": 1786135806918,
       "tag": "0025_wide_wallop",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1786330673652,
+      "tag": "0026_peaceful_blue_blade",
+      "breakpoints": true
     }
   ]
 }
