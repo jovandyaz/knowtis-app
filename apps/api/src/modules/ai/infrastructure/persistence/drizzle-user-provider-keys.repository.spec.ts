@@ -1,6 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -12,12 +11,10 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleUserProviderKeysRepository } from './drizzle-user-provider-keys.repository';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000c4';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserProviderKeysRepository', () => {
   let moduleRef: TestingModule;

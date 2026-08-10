@@ -27,6 +27,26 @@ jobs:
   ci:
     name: CI
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        # pgvector image: migrations create the `vector` extension for embeddings.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: knowtis_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/knowtis_test
+      # Throwaway values: specs validate env shape only, they never issue real tokens.
+      JWT_SECRET: ci-jwt-secret-0000000000000000000000
+      JWT_REFRESH_SECRET: ci-jwt-refresh-secret-1111111111111111
     outputs:
       api_affected: ${{ steps.check-api.outputs.affected }}
       notes_affected: ${{ steps.check-notes.outputs.affected }}
@@ -59,10 +79,15 @@ jobs:
       - name: Typecheck (affected)
         run: npx nx affected -t typecheck
 
+      - name: Apply migrations
+        run: npx nx db:migrate:run api
+
       - name: Test (affected)
         # --parallel=2 bounds concurrent vitest projects; 3+ NestJS/jsdom
         # suites at once exceed hosted-runner memory and get OOM-killed.
-        run: npx nx affected -t test --parallel=2 -- --run
+        # Streamed output survives a killed child; nx's buffered default
+        # truncates mid-line and loses the vitest summary that names the failure.
+        run: npx nx affected -t test --parallel=2 --outputStyle=stream -- --run
 
       - name: Check for missing DB migrations
         run: |

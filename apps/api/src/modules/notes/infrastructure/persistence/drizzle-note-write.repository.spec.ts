@@ -1,6 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { and, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -12,14 +11,12 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
 
 const OWNER = '00000000-0000-4000-8000-0000000000f1';
 const OTHER = '00000000-0000-4000-8000-0000000000f2';
 const NOTE = '00000000-0000-4000-8000-0000000000f3';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
   let db: Database;
