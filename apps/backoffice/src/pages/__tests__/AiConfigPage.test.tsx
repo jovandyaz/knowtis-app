@@ -376,6 +376,12 @@ describe('AiConfigPage', () => {
     expect(
       panel.queryByRole('heading', { name: 'No flags in this area' })
     ).not.toBeInTheDocument();
+    expect(
+      panel.queryByRole('heading', { name: 'Capabilities' })
+    ).not.toBeInTheDocument();
+    expect(
+      panel.queryByRole('heading', { name: 'Rollouts' })
+    ).not.toBeInTheDocument();
   });
 
   it('shows an error state and retries the flags query from the Guardrails tab', async () => {

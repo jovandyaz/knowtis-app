@@ -8,11 +8,12 @@ import type {
 
 import { aiModelsQueryKeys } from './useAvailableModels';
 
-export function useAISettings() {
+export function useAISettings(enabled = true) {
   return useQuery({
     queryKey: aiModelsQueryKeys.preferences(),
     queryFn: () => aiModelsApi.getPreferences(),
     staleTime: 1000 * 60,
+    enabled,
   });
 }
 

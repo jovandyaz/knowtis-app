@@ -9,6 +9,8 @@ const updatePreferences = vi.fn();
 const modelsData = vi.fn();
 const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
+const modelsEnabled = vi.fn<(enabled?: boolean) => void>();
+const prefsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsData = vi.fn();
 const sessionModel = vi.fn<() => string | null>();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
@@ -20,13 +22,19 @@ vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
 }));
 vi.mock('@/hooks', () => ({
-  useAvailableModels: () => ({
-    data: modelsData(),
-    isPending: false,
-    isError: modelsError(),
-    refetch: modelsRefetch,
-  }),
-  useAISettings: () => ({ data: prefsData() }),
+  useAvailableModels: (enabled?: boolean) => {
+    modelsEnabled(enabled);
+    return {
+      data: modelsData(),
+      isPending: false,
+      isError: modelsError(),
+      refetch: modelsRefetch,
+    };
+  },
+  useAISettings: (enabled?: boolean) => {
+    prefsEnabled(enabled);
+    return { data: prefsData() };
+  },
   useUpdateAISettings: () => ({ mutate: updatePreferences }),
 }));
 vi.mock('@/stores/agent.store', () => ({
@@ -260,5 +268,20 @@ describe('CopilotModelPicker', () => {
     const { container } = render(<CopilotModelPicker />);
 
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('never queries models or preferences for an anonymous user', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+    render(<CopilotModelPicker />);
+
+    expect(modelsEnabled).toHaveBeenCalledWith(false);
+    expect(prefsEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('queries models and preferences for a signed-in user', () => {
+    render(<CopilotModelPicker />);
+
+    expect(modelsEnabled).toHaveBeenCalledWith(true);
+    expect(prefsEnabled).toHaveBeenCalledWith(true);
   });
 });

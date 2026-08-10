@@ -24,8 +24,10 @@ import {
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
   const user = useAuthUser();
-  const { data: models, isError, refetch } = useAvailableModels();
-  const { data: prefs } = useAISettings();
+  // Anonymous users cannot persist preferences, so they run on the server default intent and get no picker.
+  const showPicker = !user?.isAnonymous;
+  const { data: models, isError, refetch } = useAvailableModels(showPicker);
+  const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
   const sessionModel = useAgentStore((s) => s.selectedModel);
   const setSessionModel = useAgentStore((s) => s.setSelectedModel);
@@ -47,8 +49,7 @@ export function CopilotModelPicker() {
     update({ preferredModel: null });
   };
 
-  // Anonymous users cannot persist preferences, so they run on the server default intent.
-  if (user?.isAnonymous) {
+  if (!showPicker) {
     return null;
   }
 
