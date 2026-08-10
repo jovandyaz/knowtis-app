@@ -20,8 +20,7 @@ export interface CatalogModelDto {
   outputCostPerToken: number;
   maxInputTokens: number;
   maxOutputTokens: number | null;
-  elo: number | null;
-  popularityRank: number | null;
+  intelligenceIndex: number | null;
   upstreamCreatedAt: string | null;
   upstreamExpirationDate: string | null;
   lastSeenAt: string;

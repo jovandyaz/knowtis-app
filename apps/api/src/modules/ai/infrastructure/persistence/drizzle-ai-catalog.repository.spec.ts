@@ -33,9 +33,8 @@ const ADMIN_DESCRIPTION = 'Curated description';
 const SYNCED_INPUT_COST = 0.0000005;
 const SYNCED_OUTPUT_COST = 0.0000015;
 const REFRESHED_INPUT_COST = 0.0000009;
-const SYNCED_ELO = 1200;
-const REFRESHED_ELO = 1345;
-const SYNCED_POPULARITY_RANK = 7;
+const SYNCED_INTELLIGENCE_INDEX = 45.1;
+const REFRESHED_INTELLIGENCE_INDEX = 52.6;
 const SYNCED_MAX_INPUT_TOKENS = 128_000;
 const SYNCED_MAX_OUTPUT_TOKENS = 8_192;
 const UPSTREAM_CREATED_AT = new Date('2026-01-01T00:00:00.000Z');
@@ -59,8 +58,7 @@ function candidate(
     outputCostPerToken: SYNCED_OUTPUT_COST,
     maxInputTokens: SYNCED_MAX_INPUT_TOKENS,
     maxOutputTokens: SYNCED_MAX_OUTPUT_TOKENS,
-    elo: SYNCED_ELO,
-    popularityRank: SYNCED_POPULARITY_RANK,
+    intelligenceIndex: SYNCED_INTELLIGENCE_INDEX,
     upstreamCreatedAt: UPSTREAM_CREATED_AT,
     upstreamExpirationDate: null,
     ...overrides,
@@ -144,8 +142,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       outputCostPerToken: SYNCED_OUTPUT_COST,
       maxInputTokens: SYNCED_MAX_INPUT_TOKENS,
       maxOutputTokens: SYNCED_MAX_OUTPUT_TOKENS,
-      elo: SYNCED_ELO,
-      popularityRank: SYNCED_POPULARITY_RANK,
+      intelligenceIndex: SYNCED_INTELLIGENCE_INDEX,
       upstreamExpirationDate: null,
       promotedBy: null,
       promotedAt: null,
@@ -201,9 +198,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
         label: UPSTREAM_RENAMED_LABEL,
         description: UPSTREAM_RENAMED_DESCRIPTION,
         inputCostPerToken: REFRESHED_INPUT_COST,
-        elo: REFRESHED_ELO,
+        intelligenceIndex: REFRESHED_INTELLIGENCE_INDEX,
         maxOutputTokens: null,
-        popularityRank: null,
       })
     );
     const afterUpsert = Date.now();
@@ -213,9 +209,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(row.label).toBe(SYNCED_LABEL);
     expect(row.description).toBe(SYNCED_DESCRIPTION);
     expect(row.inputCostPerToken).toBe(REFRESHED_INPUT_COST);
-    expect(row.elo).toBe(REFRESHED_ELO);
+    expect(row.intelligenceIndex).toBe(REFRESHED_INTELLIGENCE_INDEX);
     expect(row.maxOutputTokens).toBeNull();
-    expect(row.popularityRank).toBeNull();
     expect(row.lastSeenAt.getTime()).toBeGreaterThanOrEqual(
       beforeUpsert - CLOCK_SKEW_TOLERANCE_MS
     );
@@ -237,7 +232,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       candidate(PRIMARY_MODEL_ID, {
         label: UPSTREAM_RENAMED_LABEL,
         description: UPSTREAM_RENAMED_DESCRIPTION,
-        elo: REFRESHED_ELO,
+        intelligenceIndex: REFRESHED_INTELLIGENCE_INDEX,
       })
     );
 
@@ -245,7 +240,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(row.label).toBe(ADMIN_LABEL);
     expect(row.description).toBe(ADMIN_DESCRIPTION);
     expect(row.status).toBe('promoted');
-    expect(row.elo).toBe(REFRESHED_ELO);
+    expect(row.intelligenceIndex).toBe(REFRESHED_INTELLIGENCE_INDEX);
   });
 
   it('should stamp promotedBy and promotedAt when promoting', async () => {

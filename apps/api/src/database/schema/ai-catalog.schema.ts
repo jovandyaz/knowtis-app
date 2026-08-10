@@ -58,8 +58,11 @@ export const aiCatalogModels = pgTable(
     }).notNull(),
     maxInputTokens: integer('max_input_tokens').notNull(),
     maxOutputTokens: integer('max_output_tokens'),
-    elo: integer('elo'),
-    popularityRank: integer('popularity_rank'),
+    intelligenceIndex: numeric('intelligence_index', {
+      precision: 4,
+      scale: 1,
+      mode: 'number',
+    }),
     upstreamCreatedAt: timestamp('upstream_created_at', { withTimezone: true }),
     upstreamExpirationDate: timestamp('upstream_expiration_date', {
       withTimezone: true,

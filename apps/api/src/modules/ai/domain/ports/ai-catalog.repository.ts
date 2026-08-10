@@ -18,8 +18,7 @@ export interface CandidateUpsert {
   outputCostPerToken: number;
   maxInputTokens: number;
   maxOutputTokens: number | null;
-  elo: number | null;
-  popularityRank: number | null;
+  intelligenceIndex: number | null;
   upstreamCreatedAt: Date | null;
   upstreamExpirationDate: Date | null;
 }

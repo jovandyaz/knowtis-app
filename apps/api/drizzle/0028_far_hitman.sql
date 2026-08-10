@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "ai_catalog_alerts_open_uniq" ON "ai_catalog_alerts" USING btree ("model_id","kind") WHERE resolved_at is null;

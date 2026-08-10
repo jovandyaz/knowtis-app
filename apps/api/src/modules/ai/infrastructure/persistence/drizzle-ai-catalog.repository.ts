@@ -57,8 +57,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
           outputCostPerToken: proposed(aiCatalogModels.outputCostPerToken),
           maxInputTokens: proposed(aiCatalogModels.maxInputTokens),
           maxOutputTokens: proposed(aiCatalogModels.maxOutputTokens),
-          elo: proposed(aiCatalogModels.elo),
-          popularityRank: proposed(aiCatalogModels.popularityRank),
+          intelligenceIndex: proposed(aiCatalogModels.intelligenceIndex),
           upstreamCreatedAt: proposed(aiCatalogModels.upstreamCreatedAt),
           upstreamExpirationDate: proposed(
             aiCatalogModels.upstreamExpirationDate

@@ -18,8 +18,7 @@ CREATE TABLE "ai_catalog_models" (
 	"output_cost_per_token" numeric(12, 10) NOT NULL,
 	"max_input_tokens" integer NOT NULL,
 	"max_output_tokens" integer,
-	"elo" integer,
-	"popularity_rank" integer,
+	"intelligence_index" numeric(4, 1),
 	"upstream_created_at" timestamp with time zone,
 	"upstream_expiration_date" timestamp with time zone,
 	"last_seen_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -34,4 +33,5 @@ CREATE TABLE "ai_catalog_models" (
 ALTER TABLE "ai_catalog_alerts" ADD CONSTRAINT "ai_catalog_alerts_model_id_ai_catalog_models_id_fk" FOREIGN KEY ("model_id") REFERENCES "public"."ai_catalog_models"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "ai_catalog_models" ADD CONSTRAINT "ai_catalog_models_promoted_by_users_id_fk" FOREIGN KEY ("promoted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ai_catalog_alerts_resolved_idx" ON "ai_catalog_alerts" USING btree ("resolved_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "ai_catalog_alerts_open_uniq" ON "ai_catalog_alerts" USING btree ("model_id","kind") WHERE resolved_at is null;--> statement-breakpoint
 CREATE INDEX "ai_catalog_models_status_idx" ON "ai_catalog_models" USING btree ("status");
