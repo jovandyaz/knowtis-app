@@ -94,16 +94,11 @@
     }
   },
   "aiAssistant": {
-    "copilotTitle": "Modelo del copilot",
-    "copilotDescription": "Elige el modelo que usa tu copilot por defecto. Cada conversación puede cambiarlo desde el chat.",
     "intentTitle": "Estilo del copilot",
     "intentDescription": "Elige cómo piensa tu copilot. Añade tu clave para elegir modelos exactos.",
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
-    "defaultHint": "Predeterminado de la cuenta",
-    "loadingModels": "Cargando modelos…",
     "loadError": "No se pudieron cargar los modelos",
-    "noModels": "No hay modelos disponibles",
     "retry": "Reintentar",
     "tier": {
       "fast": "Rápido",
@@ -134,8 +129,6 @@
       "invalid": "La clave fue rechazada. Verifica que sea válida y tenga cuota.",
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
-      "lockedBadge": "Requiere tu clave",
-      "unlockCta": "Guarda tu propia clave para desbloquear los modelos premium",
       "lastUsed": "Último uso {{when}}",
       "neverUsed": "Sin usar todavía"
     }

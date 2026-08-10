@@ -21,7 +21,6 @@ export interface ModelSelectOption {
   contextWindow?: number;
   costClass?: number;
   billedToUser?: boolean;
-  locked?: boolean;
 }
 
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
@@ -66,7 +65,6 @@ export interface ModelSelectProps {
   emptyLabel?: string;
   retryLabel?: string;
   billedBadgeLabel?: string;
-  lockedBadgeLabel?: string;
   footer?: ReactNode;
   triggerClassName?: string;
   triggerVariant?: 'ghost' | 'outline';
@@ -88,7 +86,6 @@ export function ModelSelect({
   emptyLabel,
   retryLabel,
   billedBadgeLabel,
-  lockedBadgeLabel,
   footer,
   triggerClassName,
   triggerVariant = 'ghost',
@@ -172,13 +169,7 @@ export function ModelSelect({
                   {g.items.map((m) => (
                     <DropdownMenuItem
                       key={m.id}
-                      disabled={m.locked ?? false}
-                      onSelect={() => {
-                        if (m.locked) {
-                          return;
-                        }
-                        onSelect(m.id);
-                      }}
+                      onSelect={() => onSelect(m.id)}
                       className="flex-col items-start gap-0.5"
                     >
                       <div className="flex w-full items-center justify-between gap-2">
@@ -188,12 +179,6 @@ export function ModelSelect({
                             <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
                               <KeyRound className="h-2.5 w-2.5" />
                               {billedBadgeLabel}
-                            </span>
-                          )}
-                          {m.locked && lockedBadgeLabel && (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
-                              <KeyRound className="h-2.5 w-2.5" />
-                              {lockedBadgeLabel}
                             </span>
                           )}
                         </span>

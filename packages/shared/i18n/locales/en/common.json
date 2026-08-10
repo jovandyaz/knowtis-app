@@ -94,16 +94,11 @@
     }
   },
   "aiAssistant": {
-    "copilotTitle": "Copilot model",
-    "copilotDescription": "Choose the model your copilot uses by default. Each conversation can change it from the chat.",
     "intentTitle": "Copilot style",
     "intentDescription": "Choose how your copilot thinks. Add your own key to pick exact models.",
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
-    "defaultHint": "Account default",
-    "loadingModels": "Loading models…",
     "loadError": "Couldn't load models",
-    "noModels": "No models available",
     "retry": "Retry",
     "tier": {
       "fast": "Fast",
@@ -134,8 +129,6 @@
       "invalid": "That key was rejected. Check it's valid and has quota.",
       "stored": "Key stored ({{prefix}}…)",
       "billedBadge": "Your key",
-      "lockedBadge": "Requires your key",
-      "unlockCta": "Store your own key to unlock premium models",
       "lastUsed": "Last used {{when}}",
       "neverUsed": "Not used yet"
     }

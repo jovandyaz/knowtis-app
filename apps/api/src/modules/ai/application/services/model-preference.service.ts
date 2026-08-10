@@ -46,16 +46,6 @@ export class ModelPreferenceService {
     }
   }
 
-  /** Fail-open to OFF: a flag-store outage must degrade to the pre-intent status quo. */
-  async intentUxOn(): Promise<boolean> {
-    try {
-      return await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_INTENT_UX);
-    } catch (error) {
-      this.logger.warn('ai_intent_ux lookup failed, treating as off', error);
-      return false;
-    }
-  }
-
   async listModels(userId: string): Promise<SelectableModel[]> {
     const [systemDefault, byokProviders, tierGatingOn] = await Promise.all([
       this.aiConfig.getDefaultModel(),
@@ -89,37 +79,33 @@ export class ModelPreferenceService {
   async getEffectiveDefault(
     userId: string,
     byokProviders?: ReadonlySet<string>,
-    tierGatingOn?: boolean,
-    intentUxOn?: boolean
+    tierGatingOn?: boolean
   ): Promise<string> {
     const providers =
       byokProviders ?? (await this.byok.enabledProviders(userId));
     const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
-    const intentUx = intentUxOn ?? (await this.intentUxOn());
     const { preferredModel, preferredIntent } =
       await this.settings.getSettings(userId);
-    // With intent UX on, only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
+    // Only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
     if (
       preferredModel &&
-      (!intentUx || providers.has(providerOf(preferredModel))) &&
+      providers.has(providerOf(preferredModel)) &&
       this.selectable.isSelectable(preferredModel, providers, gatingOn)
     ) {
       return preferredModel;
     }
-    if (intentUx) {
-      const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
-      const byokPick = this.selectable.firstOfTier(intent, providers);
-      // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
-      if (
-        byokPick &&
-        this.selectable.isSelectable(byokPick, providers, gatingOn)
-      ) {
-        return byokPick;
-      }
-      const configured = await this.aiConfig.getIntentModel(intent);
-      if (this.selectable.isSelectable(configured, providers, gatingOn)) {
-        return configured;
-      }
+    const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
+    const byokPick = this.selectable.firstOfTier(intent, providers);
+    // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
+    if (
+      byokPick &&
+      this.selectable.isSelectable(byokPick, providers, gatingOn)
+    ) {
+      return byokPick;
+    }
+    const configured = await this.aiConfig.getIntentModel(intent);
+    if (this.selectable.isSelectable(configured, providers, gatingOn)) {
+      return configured;
     }
     const systemDefault = await this.aiConfig.getDefaultModel();
     // Only under gating: dark behavior must stay byte-for-byte status quo.

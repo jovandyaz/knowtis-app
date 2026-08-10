@@ -1,70 +1,66 @@
 import { useTranslation } from 'react-i18next';
 
-import {
-  useAISettings,
-  useAvailableModels,
-  useUpdateAISettings,
-} from '@/hooks';
-import { useAgentStore } from '@/stores/agent.store';
-
 import { Button, ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
-  DEFAULT_MODEL_INTENT,
   MODEL_TIERS,
   type ModelIntent,
+  type SelectableModel,
 } from '@knowtis/shared-types';
 
 import {
   advancedModelOptions,
-  advancedOverride,
   intentChipOptions,
 } from './intent-picker-options';
 
-export function IntentModelPicker() {
+export interface IntentModelPickerProps {
+  models: readonly SelectableModel[] | undefined;
+  isError: boolean;
+  onRetry: () => void;
+  intent: ModelIntent;
+  overrideModel: string | null;
+  onSelectIntent: (value: ModelIntent) => void;
+  onSelectModel: (id: string) => void;
+  onClearOverride: () => void;
+  triggerClassName?: string;
+}
+
+/**
+ * Intent chips plus the Advanced override dropdown, driven entirely by props.
+ * An override deselects every chip, since the chosen model outranks the intent.
+ */
+export function IntentModelPicker({
+  models,
+  isError,
+  onRetry,
+  intent,
+  overrideModel,
+  onSelectIntent,
+  onSelectModel,
+  onClearOverride,
+  triggerClassName = '',
+}: IntentModelPickerProps) {
   const { t } = useTranslation('common');
-  const { data: models, isError, refetch } = useAvailableModels();
-  const { data: prefs } = useAISettings();
-  const { mutate: update } = useUpdateAISettings();
-  const sessionModel = useAgentStore((s) => s.selectedModel);
-  const setSessionModel = useAgentStore((s) => s.setSelectedModel);
-
   const advancedOptions = advancedModelOptions(models);
-  const overrideModel =
-    sessionModel ?? advancedOverride(prefs?.preferredModel, models);
-  const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
-
-  const intentOptions = intentChipOptions(t);
-
-  const selectIntent = (value: ModelIntent) => {
-    setSessionModel(null);
-    update({ preferredModel: null, preferredIntent: value });
-  };
-
-  const clearOverride = () => {
-    setSessionModel(null);
-    update({ preferredModel: null });
-  };
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <SegmentedControl
         aria-label={t('aiAssistant.intent.label')}
-        options={intentOptions}
+        options={intentChipOptions(t)}
         value={overrideModel ? null : intent}
-        onValueChange={selectIntent}
+        onValueChange={onSelectIntent}
       />
       {advancedOptions.length > 0 || isError ? (
         <ModelSelect
           models={advancedOptions}
           value={overrideModel}
-          onSelect={setSessionModel}
+          onSelect={onSelectModel}
           tierOrder={MODEL_TIERS}
           status={isError ? 'error' : 'ready'}
-          onRetry={() => void refetch()}
+          onRetry={onRetry}
           errorLabel={t('aiAssistant.loadError')}
           retryLabel={t('aiAssistant.retry')}
-          triggerClassName="h-8"
-          triggerVariant="ghost"
+          triggerClassName={triggerClassName}
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
           renderDescription={(m) => t((m.descriptionKey ?? '') as never)}
           triggerLabel={t('aiAssistant.advanced.trigger')}
@@ -76,7 +72,7 @@ export function IntentModelPicker() {
                 variant="link"
                 size="sm"
                 className="h-auto p-0 text-left text-xs font-normal"
-                onClick={clearOverride}
+                onClick={onClearOverride}
               >
                 {t('aiAssistant.advanced.clearOverride')}
               </Button>

@@ -8,10 +8,11 @@ export const aiModelsQueryKeys = {
   preferences: () => [...aiModelsQueryKeys.all, 'preferences'] as const,
 } as const;
 
-export function useAvailableModels() {
+export function useAvailableModels(enabled = true) {
   return useQuery({
     queryKey: aiModelsQueryKeys.list(),
     queryFn: () => aiModelsApi.getModels(),
     staleTime: 1000 * 60 * 10,
+    enabled,
   });
 }

@@ -438,9 +438,9 @@ Each returned model also carries `routableByServer`: `true` when the server's ow
 
 **Resolution cascade** (highest priority first), in `ModelPreferenceService`:
 
-1. `conversations.model` — the per-conversation override from the copilot picker. With `ai_intent_ux` on this layer is skipped for fresh turns (a cleared intent chip must not lose to a stale stored pick) but still honored on HITL resume, where it is the only carrier of the model that served the first half of the turn.
-2. `user_ai_settings.preferred_model` — the account default set in **Settings → Asistente IA**. With `ai_intent_ux` on it counts only when the caller's own BYOK key bills it (an Advanced-picker pick); legacy non-BYOK values are ignored, not deleted, so turning the flag off restores them.
-3. `user_ai_settings.preferred_intent` (`ai_intent_ux` on only; null = `balanced`) — a BYOK caller gets the first curated model of the tier their keys can run (catalog order is the rank); everyone else gets the intent's `ai_config` key: `fast` → `ai_fast_model`, `balanced` → `ai_default_model`, `powerful` → `ai_deep_model`.
+1. `conversations.model` — honored only on HITL resume, where it is the sole carrier of the model that served the first half of the turn; fresh turns resolve through the layers below.
+2. `user_ai_settings.preferred_model` — the account override set from the Advanced picker. Counts only when the caller's own BYOK key bills it; legacy non-BYOK values are ignored.
+3. `user_ai_settings.preferred_intent` (null = `balanced`) — a BYOK caller gets the first curated model of the tier their keys can run (catalog order is the rank); everyone else gets the intent's `ai_config` key: `fast` → `ai_fast_model`, `balanced` → `ai_default_model`, `powerful` → `ai_deep_model`.
 4. `ai_default_model` (DB `ai_config` row, else the code default) — the system default.
 
 The resolved model enters the [fallback chain](#cross-provider-fallback-chain) as the primary candidate; if its provider is down or out of credit the chain relays to another model, and the model reported back to the client is the one that actually served the turn.
@@ -459,7 +459,7 @@ The resolved model enters the [fallback chain](#cross-provider-fallback-chain) a
 
 A per-conversation choice rides on the agent WebSocket payload (`{ conversationId?, message, model? }`); `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation.
 
-**Frontend.** `CopilotModelPicker` dispatches on the `ai_intent_ux` flag: off renders `ModelListPicker` (the legacy full-list dropdown), on renders `IntentModelPicker` — three intent chips (Rápido / Equilibrado / Profundo, a `SegmentedControl`) plus an **Avanzado** dropdown filtered to BYOK-billed models, hidden when the caller has none. Anonymous users get no picker with the flag on. `ModelSelect` (`@knowtis/design-system`) is a tier-grouped dropdown; the cost band (`$` / `$$` / `$$$`) shows once per tier header. It renders explicit loading, error (with retry), and empty states. The `AIAssistantSection` settings tab mirrors the same flag split.
+**Frontend.** `CopilotModelPicker` renders three intent chips (Rápido / Equilibrado / Profundo, a `SegmentedControl`) plus an **Avanzado** dropdown filtered to BYOK-billed models, hidden when the caller has none. Anonymous users get no picker. `ModelSelect` (`@knowtis/design-system`) is a tier-grouped dropdown; the cost band (`$` / `$$` / `$$$`) shows once per tier header. It renders explicit loading, error (with retry), and empty states. The `AIAssistantSection` settings tab mirrors the same controls.
 
 ---
 
@@ -541,22 +541,21 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                     | Description                                                                                             |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `ai_enabled`                 | Global AI feature gate                                                                                  |
-| `voice_notes_enabled`        | Voice-to-note feature gate                                                                              |
-| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                 |
-| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                   |
-| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                   |
-| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                               |
-| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense))      |
-| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))             |
-| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching))      |
-| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                       |
-| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                    |
-| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))       |
-| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                               |
-| `ai_intent_ux`               | Intent-based model picker (chips + BYOK Advanced) ([Copilot Model Selection](#copilot-model-selection)) |
+| Flag Key                     | Description                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ai_enabled`                 | Global AI feature gate                                                                             |
+| `voice_notes_enabled`        | Voice-to-note feature gate                                                                         |
+| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                            |
+| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                              |
+| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                              |
+| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                          |
+| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)) |
+| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))        |
+| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)) |
+| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                  |
+| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))               |
+| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))  |
+| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                          |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 

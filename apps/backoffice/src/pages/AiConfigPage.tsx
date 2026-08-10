@@ -152,14 +152,16 @@ export function AiConfigPage() {
       );
     }
 
-    return sections.map((section) => (
-      <FlagGroupSection
-        key={section.group}
-        title={section.title}
-        description={section.description}
-        flags={section.flags}
-      />
-    ));
+    return sections
+      .filter((section) => section.flags.length > 0)
+      .map((section) => (
+        <FlagGroupSection
+          key={section.group}
+          title={section.title}
+          description={section.description}
+          flags={section.flags}
+        />
+      ));
   };
 
   return (

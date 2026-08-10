@@ -13,7 +13,10 @@ export function advancedModelOptions(
   return (models ?? []).filter((m) => m.access === 'granted' && m.billedToUser);
 }
 
-/** A stored preference counts as an override only while the Advanced picker actually offers it; a legacy pick the server ignores must not deselect the chips. Until the list resolves the pick stays an override, so the chips never claim an intent the server may not serve. */
+/**
+ * Returns the stored preference only while the Advanced picker offers it, else null.
+ * An unresolved list keeps it an override, so the chips never claim an intent the server may not serve.
+ */
 export function advancedOverride(
   preferredModel: string | null | undefined,
   models: readonly SelectableModel[] | undefined
