@@ -1,7 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -14,6 +13,7 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 
 const MINE = '00000000-0000-4000-8000-0000000000c1';
@@ -27,9 +27,6 @@ function vec(first: number): number[] {
   v[0] = first;
   return v;
 }
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 describe.runIf(DB_AVAILABLE)(
   'DrizzleNoteReadRepository.findAccessibleNotesByEmbedding',

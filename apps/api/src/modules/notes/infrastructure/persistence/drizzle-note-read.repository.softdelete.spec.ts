@@ -1,7 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -15,15 +14,13 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 
 const OWNER = '00000000-0000-4000-8000-0000000000a1';
 const NOTE = '00000000-0000-4000-8000-0000000000a2';
 const ACTIVE_NOTE = '00000000-0000-4000-8000-0000000000a4';
 const TOKEN = 'softdelete-tok-a2';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {
   let db: Database;

@@ -4,7 +4,6 @@ import type { AddressInfo } from 'node:net';
 
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { exportJWK, generateKeyPair } from 'jose';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -16,6 +15,7 @@ import {
   oauthPayloads,
   type Database,
 } from '../../../database';
+import { DB_AVAILABLE } from '../../../test-support/database';
 import {
   createOidcProvider,
   hasRejectedOfflineAccess,
@@ -23,9 +23,6 @@ import {
   shouldIssueRefreshToken,
   type OidcProviderHandle,
 } from '../oidc-provider.factory';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 const ISSUER = 'https://auth.knowtis.test';
 const RESOURCE_URL = 'https://mcp.knowtis.test/mcp';

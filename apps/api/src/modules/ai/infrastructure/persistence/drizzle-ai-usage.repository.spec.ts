@@ -1,6 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import {
   afterAll,
@@ -22,12 +21,10 @@ import {
   users,
   type Database,
 } from '../../../../database';
+import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleAIUsageRepository } from './drizzle-ai-usage.repository';
 
 const DB_USER_ID = '00000000-0000-4000-8000-0000000000c5';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 describe('DrizzleAIUsageRepository', () => {
   let repo: DrizzleAIUsageRepository;

@@ -1,6 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { inArray } from 'drizzle-orm';
 import {
   afterAll,
@@ -20,6 +19,7 @@ import {
   oauthPayloads,
   type Database,
 } from '../../../database';
+import { DB_AVAILABLE } from '../../../test-support/database';
 import {
   createAdapterFactory,
   DrizzleOidcAdapter,
@@ -27,9 +27,6 @@ import {
   grantBelongsToAccount,
   listGrantsByAccount,
 } from '../drizzle-oidc.adapter';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 const MODELS = [
   'AccessToken',
@@ -194,7 +191,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleOidcAdapter', () => {
       { accountId: 'acc-1', clientId: 'client-b' },
       3600
     );
-    await grants.upsert('g-other', { accountId: 'acc-2', clientId: 'client-a' }, 3600);
+    await grants.upsert(
+      'g-other',
+      { accountId: 'acc-2', clientId: 'client-a' },
+      3600
+    );
 
     const rows = await listGrantsByAccount(db, 'acc-1');
 
@@ -210,7 +211,11 @@ describe.runIf(DB_AVAILABLE)('DrizzleOidcAdapter', () => {
 
   it('should confirm grant ownership only for the owning account', async () => {
     const grants = factory('Grant');
-    await grants.upsert('g-own', { accountId: 'acc-1', clientId: 'client-a' }, 3600);
+    await grants.upsert(
+      'g-own',
+      { accountId: 'acc-1', clientId: 'client-a' },
+      3600
+    );
 
     expect(await grantBelongsToAccount(db, 'g-own', 'acc-1')).toBe(true);
     expect(await grantBelongsToAccount(db, 'g-own', 'acc-2')).toBe(false);

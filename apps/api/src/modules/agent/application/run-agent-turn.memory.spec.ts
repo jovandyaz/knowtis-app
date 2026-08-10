@@ -1,6 +1,5 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { config as loadEnv } from 'dotenv';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -12,6 +11,7 @@ import {
   users,
   type Database,
 } from '../../../database';
+import { DB_AVAILABLE } from '../../../test-support/database';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
@@ -31,9 +31,6 @@ import { RunAgentTurnHandler } from './run-agent-turn.handler';
 const USER = '00000000-0000-4000-8000-0000000000d1';
 const OTHER = '00000000-0000-4000-8000-0000000000d2';
 const MODEL = 'anthropic:claude-haiku-4-5-20251001';
-
-loadEnv({ path: ['.env.local', '.env'] });
-const DB_AVAILABLE = !!process.env['DATABASE_URL']?.trim();
 
 const memoryOff = {
   searchForUser: vi.fn().mockResolvedValue([]),
