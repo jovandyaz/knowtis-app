@@ -16,6 +16,7 @@ const PROMOTED_STATUS: CatalogModelStatus = 'promoted';
 export class PromotedModelsCache implements OnModuleInit {
   private readonly logger = new Logger(PromotedModelsCache.name);
   private promoted: readonly CatalogModel[] = [];
+  private latestGeneration = 0;
 
   constructor(
     @Inject(AI_CATALOG_REPOSITORY)
@@ -34,8 +35,14 @@ export class PromotedModelsCache implements OnModuleInit {
   /** Never rejects: an unreachable database keeps the previous snapshot rather than dropping promoted models out of the catalog. */
   @Interval(PROMOTED_CACHE_REFRESH_MS)
   async refresh(): Promise<void> {
+    const generation = ++this.latestGeneration;
     try {
-      this.promoted = await this.repository.listByStatus(PROMOTED_STATUS);
+      const rows = await this.repository.listByStatus(PROMOTED_STATUS);
+      // A slow read must not overwrite a newer one that already landed, or a
+      // just-promoted model would vanish again until the next interval.
+      if (generation === this.latestGeneration) {
+        this.promoted = rows;
+      }
     } catch (error) {
       this.logger.warn(
         `Failed to refresh promoted models, keeping ${this.promoted.length} cached`,

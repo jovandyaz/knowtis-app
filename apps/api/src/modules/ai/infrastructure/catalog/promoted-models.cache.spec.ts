@@ -63,6 +63,25 @@ describe('PromotedModelsCache', () => {
     expect(cache.snapshot()).toEqual([OTHER_PROMOTED_MODEL]);
   });
 
+  it('ignores a slow refresh that resolves after a newer one', async () => {
+    const gates: Array<(models: CatalogModel[]) => void> = [];
+    const repository = createCatalogRepositoryStub(
+      () =>
+        new Promise<CatalogModel[]>((resolve) => {
+          gates.push(resolve);
+        })
+    );
+    const cache = new PromotedModelsCache(repository);
+
+    const slow = cache.refresh();
+    const fresh = cache.refresh();
+    gates[1]([OTHER_PROMOTED_MODEL]);
+    gates[0]([PROMOTED_MODEL]);
+    await Promise.all([slow, fresh]);
+
+    expect(cache.snapshot()).toEqual([OTHER_PROMOTED_MODEL]);
+  });
+
   it('keeps the previous snapshot and warns when the repository fails', async () => {
     const warnSpy = vi
       .spyOn(Logger.prototype, 'warn')

@@ -460,7 +460,11 @@ describe('AIConfigService', () => {
           ACTOR
         )
       ).resolves.toBeUndefined();
-      expect(mockRepo.set).toHaveBeenCalled();
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_fallback_chain',
+        `${CUSTOM_FAST},${PROMOTED_ID}`,
+        undefined
+      );
     });
 
     it('rejects a chain naming a model that was never promoted', async () => {

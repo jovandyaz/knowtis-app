@@ -1,6 +1,7 @@
 import type { CatalogModel } from '../domain/model-catalog/catalog-model';
 
-const FIXED_TIMESTAMP = new Date('2026-08-10T00:00:00.000Z');
+const LAST_SEEN_AT = new Date('2026-08-10T00:00:00.000Z');
+const PROMOTED_AT = new Date('2026-08-09T00:00:00.000Z');
 
 export function createCatalogModel(
   overrides: Partial<CatalogModel> & { id: string }
@@ -17,9 +18,9 @@ export function createCatalogModel(
     intelligenceIndex: null,
     upstreamCreatedAt: null,
     upstreamExpirationDate: null,
-    lastSeenAt: FIXED_TIMESTAMP,
+    lastSeenAt: new Date(LAST_SEEN_AT),
     promotedBy: null,
-    promotedAt: FIXED_TIMESTAMP,
+    promotedAt: new Date(PROMOTED_AT),
     ...overrides,
   };
 }

@@ -2,19 +2,19 @@ import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 
 /** A model tracked in the AI catalog: discovered upstream as a candidate, then promoted or retired by an admin. */
 export interface CatalogModel {
-  id: string;
-  label: string;
-  description: string;
-  status: CatalogModelStatus;
-  tier: ModelTier;
-  inputCostPerToken: number;
-  outputCostPerToken: number;
-  maxInputTokens: number;
-  maxOutputTokens: number | null;
-  intelligenceIndex: number | null;
-  upstreamCreatedAt: Date | null;
-  upstreamExpirationDate: Date | null;
-  lastSeenAt: Date;
-  promotedBy: string | null;
-  promotedAt: Date | null;
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly status: CatalogModelStatus;
+  readonly tier: ModelTier;
+  readonly inputCostPerToken: number;
+  readonly outputCostPerToken: number;
+  readonly maxInputTokens: number;
+  readonly maxOutputTokens: number | null;
+  readonly intelligenceIndex: number | null;
+  readonly upstreamCreatedAt: Date | null;
+  readonly upstreamExpirationDate: Date | null;
+  readonly lastSeenAt: Date;
+  readonly promotedBy: string | null;
+  readonly promotedAt: Date | null;
 }
