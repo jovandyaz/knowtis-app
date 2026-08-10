@@ -10,9 +10,8 @@ import {
 } from '@knowtis/ai-gateway';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { LITELLM_PRICES_URL } from './litellm-prices.client';
 
-const PRICING_SOURCE_URL =
-  'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
 const REFRESH_TIMEOUT_MS = 10_000;
 
 @Injectable()
@@ -28,7 +27,7 @@ export class ModelCatalogAdapter implements ModelCatalog, OnModuleInit {
       return;
     }
     try {
-      const response = await fetch(PRICING_SOURCE_URL, {
+      const response = await fetch(LITELLM_PRICES_URL, {
         signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
       });
       if (!response.ok) {

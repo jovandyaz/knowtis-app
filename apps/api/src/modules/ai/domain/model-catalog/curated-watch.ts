@@ -1,6 +1,7 @@
 import { toLiteLLMKey } from '@knowtis/ai-gateway';
 import type { CatalogAlertKind, ModelTier } from '@knowtis/shared-types';
 
+import type { UpstreamModel } from '../ports/openrouter-models.port';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -12,15 +13,23 @@ export interface DriftFinding {
   detail: string;
 }
 
-interface LiteLlmEntry {
-  output_cost_per_token?: number;
-  deprecation_date?: string;
+/** The fields this watch reads out of a LiteLLM price entry; every other field upstream publishes is ignored. */
+export interface LiteLlmPriceEntry {
+  output_cost_per_token?: number | undefined;
+  deprecation_date?: string | undefined;
 }
 
 const OPEN_TIER: ModelTier = 'open';
 
-/** Relative gap above which two prices are a real change rather than floating-point noise. */
-const PRICE_DRIFT_TOLERANCE = 0.001;
+/** Relative gap above which the vendored snapshot and live LiteLLM differ for real rather than by floating-point noise. */
+const LITELLM_PRICE_DRIFT_RATIO = 0.001;
+
+/** OpenRouter routes across providers, so its price and the vendored list rate legitimately differ; only a wide gap means the vendored cost stopped covering what we pay. */
+const OPENROUTER_PRICE_DRIFT_RATIO = 0.2;
+
+const ISO_DATE_LENGTH = 10;
+const TOKENS_PER_MILLION = 1_000_000;
+const PRICE_DECIMALS = 2;
 
 const OPEN_TIER_SLUGS: ReadonlyMap<string, string> = new Map(
   CURATED_MODELS.filter(
@@ -34,11 +43,66 @@ export function openTierSlug(curatedId: string): string | null {
   return OPEN_TIER_SLUGS.get(curatedId) ?? null;
 }
 
-function hasPriceDrift(vendored: number, live: number): boolean {
+function hasPriceDrift(vendored: number, live: number, ratio: number): boolean {
   if (vendored === 0) {
     return live !== 0;
   }
-  return Math.abs(live - vendored) / vendored > PRICE_DRIFT_TOLERANCE;
+  return Math.abs(live - vendored) / vendored > ratio;
+}
+
+function perMillionTokens(costPerToken: number): string {
+  return (costPerToken * TOKENS_PER_MILLION).toFixed(PRICE_DECIMALS);
+}
+
+/**
+ * Upstream changes on the curated models OpenRouter bills, matched by slug.
+ *
+ * A curated model missing from `upstream` yields nothing: disappearing from
+ * OpenRouter is a serving outage, not a drift, and no alert kind expresses it.
+ */
+export function findOpenRouterDrift(
+  vendoredOutputCost: (id: string) => number | undefined,
+  upstream: readonly UpstreamModel[]
+): DriftFinding[] {
+  const bySlug = new Map(upstream.map((model) => [model.id, model]));
+  const findings: DriftFinding[] = [];
+
+  for (const model of CURATED_MODELS) {
+    const slug = openTierSlug(model.id);
+    if (slug === null) {
+      continue;
+    }
+    const live = bySlug.get(slug);
+    if (live === undefined) {
+      continue;
+    }
+
+    if (live.expirationDate !== null) {
+      findings.push({
+        modelId: model.id,
+        kind: 'deprecation',
+        detail: `OpenRouter lists expiration ${live.expirationDate.toISOString().slice(0, ISO_DATE_LENGTH)}`,
+      });
+    }
+
+    const vendored = vendoredOutputCost(model.id);
+    if (
+      vendored !== undefined &&
+      hasPriceDrift(
+        vendored,
+        live.completionCostPerToken,
+        OPENROUTER_PRICE_DRIFT_RATIO
+      )
+    ) {
+      findings.push({
+        modelId: model.id,
+        kind: 'price_drift',
+        detail: `OpenRouter output cost $${perMillionTokens(live.completionCostPerToken)}/M vs vendored $${perMillionTokens(vendored)}/M`,
+      });
+    }
+  }
+
+  return findings;
 }
 
 /**
@@ -49,7 +113,7 @@ function hasPriceDrift(vendored: number, live: number): boolean {
  */
 export function findLiteLlmDrift(
   vendoredOutputCost: (id: string) => number | undefined,
-  live: Record<string, LiteLlmEntry>
+  live: Record<string, LiteLlmPriceEntry>
 ): DriftFinding[] {
   const findings: DriftFinding[] = [];
 
@@ -79,7 +143,7 @@ export function findLiteLlmDrift(
     if (
       vendored !== undefined &&
       upstream !== undefined &&
-      hasPriceDrift(vendored, upstream)
+      hasPriceDrift(vendored, upstream, LITELLM_PRICE_DRIFT_RATIO)
     ) {
       findings.push({
         modelId: model.id,
