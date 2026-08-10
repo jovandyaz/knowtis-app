@@ -31,9 +31,21 @@ describe('estimateTokenCount', () => {
 
   it('should survive a chunk boundary that splits a surrogate pair', () => {
     const text = `${'a'.repeat(3_999)}\u{1F600}${'b'.repeat(100)}`;
+    const exact = encode(text).length;
 
     expect(text.charCodeAt(3_999)).toBeGreaterThanOrEqual(0xd800);
-    expect(estimateTokenCount(text)).toBeGreaterThan(0);
+
+    const drift = Math.abs(estimateTokenCount(text) - exact) / exact;
+
+    expect(drift).toBeLessThan(0.01);
+  });
+
+  it('should count a reserved special token as ordinary text wherever it falls', () => {
+    const inside = `${'a'.repeat(100)}<|endoftext|>${'b'.repeat(100)}`;
+    const straddling = `${'a'.repeat(3_994)}<|endoftext|>${'b'.repeat(100)}`;
+
+    expect(estimateTokenCount(inside)).toBeGreaterThan(0);
+    expect(estimateTokenCount(straddling)).toBeGreaterThan(0);
   });
 
   it('should stay within 1% of an exact encode for prose', () => {

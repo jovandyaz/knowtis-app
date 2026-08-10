@@ -7,12 +7,22 @@ import { encode } from 'gpt-tokenizer';
  */
 const ENCODE_CHUNK_CHARS = 4_000;
 
-/** Approximate token count. Chunk boundaries make it drift under 1% from an exact encode. */
+/**
+ * gpt-tokenizer throws on text holding `<|endoftext|>` and friends. Notes and
+ * model output are untrusted text, so specials count as ordinary tokens —
+ * otherwise a chunk boundary would decide whether estimating throws.
+ */
+const COUNT_SPECIALS_AS_TEXT = { disallowedSpecial: new Set<string>() };
+
+/** Approximate token count. Never throws. Chunk boundaries drift it under 1% from an exact encode. */
 export function estimateTokenCount(text: string): number {
   let total = 0;
 
   for (let offset = 0; offset < text.length; offset += ENCODE_CHUNK_CHARS) {
-    total += encode(text.slice(offset, offset + ENCODE_CHUNK_CHARS)).length;
+    total += encode(
+      text.slice(offset, offset + ENCODE_CHUNK_CHARS),
+      COUNT_SPECIALS_AS_TEXT
+    ).length;
   }
 
   return total;
