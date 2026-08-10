@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
+import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { createCatalogModel } from '../../testing/create-catalog-model';
+import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
@@ -11,6 +14,8 @@ const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
+const CURATED_OUTPUT_COST = 0.000015;
+const SHADOWING_OUTPUT_COST = 0.0000001;
 
 function promotedCache(models: readonly CatalogModel[]) {
   return { snapshot: () => models };
@@ -343,15 +348,32 @@ describe('SelectableModelsService', () => {
       expect(promoted?.description).toBeUndefined();
     });
 
-    it('keeps the curated entry when a promoted row repeats its id', () => {
-      const service = makeOpenService([
-        createCatalogModel({
-          id: SYSTEM_DEFAULT,
-          label: 'Shadowed',
-          description: PROMOTED_DESCRIPTION,
-          tier: 'open',
-        }),
-      ]);
+    it('keeps the curated entry when a promoted row repeats its id', async () => {
+      // Real composite catalog: pricing and context must resolve to the curated
+      // model even though a promoted row of the same id carries other numbers.
+      const curated = {
+        isSupported: () => true,
+        getPricing: () => ({ outputCostPerToken: CURATED_OUTPUT_COST }),
+        getContextWindow: () => ({ maxInputTokens: PORT_CONTEXT_WINDOW }),
+      };
+      const promoted = new PromotedModelsCache(
+        createCatalogRepositoryStub(async () => [
+          createCatalogModel({
+            id: SYSTEM_DEFAULT,
+            label: 'Shadowed',
+            description: PROMOTED_DESCRIPTION,
+            tier: 'open',
+            maxInputTokens: ROW_CONTEXT_WINDOW,
+            outputCostPerToken: SHADOWING_OUTPUT_COST,
+          }),
+        ])
+      );
+      await promoted.onModuleInit();
+      const service = new SelectableModelsService(
+        new CompositeModelCatalog(promoted, curated as never),
+        { isModelAvailable: () => true } as never,
+        promoted
+      );
 
       const matches = service
         .list(SYSTEM_DEFAULT)
@@ -362,6 +384,8 @@ describe('SelectableModelsService', () => {
         label: 'Sonnet 5',
         descriptionKey: 'aiModels.sonnet5',
         tier: 'balanced',
+        contextWindow: PORT_CONTEXT_WINDOW,
+        costClass: 2,
       });
       expect(matches[0]?.description).toBeUndefined();
     });
