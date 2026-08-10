@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
+import { useCopilotAutoOpen } from '@/hooks/useCopilotAutoOpen';
+
 import { LoadingState } from '@knowtis/design-system';
 
 const NoteEditorPage = lazy(() =>
@@ -15,6 +17,8 @@ export const Route = createFileRoute('/_app/notes/$noteId')({
 });
 
 function NoteEditorPageWrapper() {
+  useCopilotAutoOpen();
+
   return (
     <Suspense fallback={<LoadingState message="" />}>
       <NoteEditorPage />
