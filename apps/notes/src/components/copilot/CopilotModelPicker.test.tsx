@@ -284,4 +284,14 @@ describe('CopilotModelPicker', () => {
     expect(modelsEnabled).toHaveBeenCalledWith(true);
     expect(prefsEnabled).toHaveBeenCalledWith(true);
   });
+
+  it('waits for the session before querying anything', () => {
+    modelsData.mockReturnValue(withByokModel);
+    authUser.mockReturnValue(null);
+    const { container } = render(<CopilotModelPicker />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(modelsEnabled).toHaveBeenCalledWith(false);
+    expect(prefsEnabled).toHaveBeenCalledWith(false);
+  });
 });
