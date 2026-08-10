@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm';
 import {
   boolean,
   index,
@@ -36,6 +37,11 @@ export const users = pgTable(
   },
   (table) => [
     index('users_email_idx').on(table.email),
+    // Admin search matches with leading wildcards, which no btree index can serve.
+    index('users_email_trgm_idx').using(
+      'gin',
+      sql`${table.email} gin_trgm_ops`
+    ),
     uniqueIndex('users_provider_provider_id_idx').on(
       table.provider,
       table.providerId
