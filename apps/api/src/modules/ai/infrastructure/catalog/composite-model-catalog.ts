@@ -7,6 +7,7 @@ import type {
 } from '@knowtis/ai-gateway';
 
 import type { AiCatalogModelRow } from '../../../../database';
+import { CURATED_MODEL_IDS } from '../../domain/model-catalog/selectable-models.catalog';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
 import { PromotedModelsCache } from './promoted-models.cache';
 
@@ -47,7 +48,11 @@ export class CompositeModelCatalog implements ModelCatalog {
     return this.inner.getContextWindow(modelId);
   }
 
+  /** A curated id is never overridden by a promoted row — matches the exclusion in SelectableModelsService.catalogUnion(). */
   private find(modelId: string): AiCatalogModelRow | undefined {
+    if (CURATED_MODEL_IDS.has(modelId)) {
+      return undefined;
+    }
     return this.promoted.snapshot().find((row) => row.id === modelId);
   }
 }

@@ -1,3 +1,5 @@
+import type { ModelTier } from './ai.types';
+
 export const CATALOG_MODEL_STATUSES = [
   'candidate',
   'promoted',
@@ -13,6 +15,7 @@ export interface CatalogModelDto {
   label: string;
   description: string;
   status: CatalogModelStatus;
+  tier: ModelTier;
   inputCostPerToken: number;
   outputCostPerToken: number;
   maxInputTokens: number;

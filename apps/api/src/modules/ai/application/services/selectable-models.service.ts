@@ -9,6 +9,7 @@ import type { ModelIntent, SelectableModel } from '@knowtis/shared-types';
 
 import { accessFor } from '../../domain/model-catalog/model-access.policy';
 import {
+  CURATED_MODEL_IDS,
   CURATED_MODELS,
   type CuratedModel,
 } from '../../domain/model-catalog/selectable-models.catalog';
@@ -16,9 +17,6 @@ import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-model
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const NO_BYOK: ReadonlySet<string> = new Set();
-const CURATED_IDS: ReadonlySet<string> = new Set(
-  CURATED_MODELS.map((m) => m.id)
-);
 
 interface OfferedModel extends CuratedModel {
   description?: string;
@@ -35,12 +33,12 @@ export class SelectableModelsService {
   private catalogUnion(): readonly OfferedModel[] {
     return [
       ...CURATED_MODELS,
-      // Code wins the identity of a duplicate id: a DB row can never rename,
-      // re-tier or re-describe a curated model. Pricing and context window stay
-      // with the catalog port, where a promoted row overrides the snapshot.
+      // Code wins entirely for a duplicate id: a DB row can never rename,
+      // re-tier, re-describe, re-price or resize a curated model's context
+      // window — CompositeModelCatalog.find() applies the same exclusion.
       ...this.promotedModels
         .snapshot()
-        .filter((row) => !CURATED_IDS.has(row.id))
+        .filter((row) => !CURATED_MODEL_IDS.has(row.id))
         .map((row) => ({
           id: row.id,
           label: row.label,

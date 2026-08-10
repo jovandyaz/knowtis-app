@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import type { AiCatalogModelRow } from '../../../../database';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { AI_CATALOG_REPOSITORY } from '../../domain/ports/ai-catalog.repository';
 import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
@@ -16,6 +17,7 @@ import { PromotedModelsCache } from './promoted-models.cache';
 const SNAPSHOT_MODEL_ID = 'anthropic:claude-sonnet-4-20250514';
 const FAST_SNAPSHOT_MODEL_ID = 'anthropic:claude-haiku-4-5-20251001';
 const PROMOTED_ONLY_MODEL_ID = 'openrouter:vendor/promoted-only';
+const CURATED_DUPLICATE_MODEL_ID = CURATED_MODELS[0].id;
 const PROMOTED_INPUT_COST = 1.1e-7;
 const PROMOTED_OUTPUT_COST = 4.4e-7;
 const PROMOTED_MAX_INPUT_TOKENS = 262_144;
@@ -70,6 +72,25 @@ describe('CompositeModelCatalog', () => {
 
     expect(composite.getPricing(SNAPSHOT_MODEL_ID)?.inputCostPerToken).toBe(
       PROMOTED_INPUT_COST
+    );
+  });
+
+  it('never lets a promoted row override a curated model pricing or context window', async () => {
+    const { composite, inner } = await createComposite([
+      createCatalogModelRow({
+        id: CURATED_DUPLICATE_MODEL_ID,
+        inputCostPerToken: PROMOTED_INPUT_COST,
+        outputCostPerToken: PROMOTED_OUTPUT_COST,
+        maxInputTokens: PROMOTED_MAX_INPUT_TOKENS,
+        maxOutputTokens: null,
+      }),
+    ]);
+
+    expect(composite.getPricing(CURATED_DUPLICATE_MODEL_ID)).toEqual(
+      inner.getPricing(CURATED_DUPLICATE_MODEL_ID)
+    );
+    expect(composite.getContextWindow(CURATED_DUPLICATE_MODEL_ID)).toEqual(
+      inner.getContextWindow(CURATED_DUPLICATE_MODEL_ID)
     );
   });
 
