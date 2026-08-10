@@ -1,1 +1,0 @@
-ALTER TABLE "ai_usage" ALTER COLUMN "model" SET DATA TYPE varchar(120);

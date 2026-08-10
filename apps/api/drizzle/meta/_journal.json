@@ -194,15 +194,8 @@
     {
       "idx": 27,
       "version": "7",
-      "when": 1786384367052,
-      "tag": "0027_wandering_union_jack",
-      "breakpoints": true
-    },
-    {
-      "idx": 28,
-      "version": "7",
-      "when": 1786385436519,
-      "tag": "0028_low_electro",
+      "when": 1786396634278,
+      "tag": "0027_stale_gorgon",
       "breakpoints": true
     }
   ]

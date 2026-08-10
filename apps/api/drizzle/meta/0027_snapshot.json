@@ -1,5 +1,5 @@
 {
-  "id": "ac9108e9-cb17-47b9-b641-9460eb0aa642",
+  "id": "1b24003d-876f-47b2-9cff-d9c410e28577",
   "prevId": "d5521344-3cda-4a87-8827-aa532f527b84",
   "version": "7",
   "dialect": "postgresql",
@@ -900,7 +900,7 @@
         },
         "model": {
           "name": "model",
-          "type": "varchar(80)",
+          "type": "varchar(120)",
           "primaryKey": false,
           "notNull": true
         },
@@ -2609,21 +2609,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "ai_catalog_alerts_model_id_ai_catalog_models_id_fk": {
-          "name": "ai_catalog_alerts_model_id_ai_catalog_models_id_fk",
-          "tableFrom": "ai_catalog_alerts",
-          "tableTo": "ai_catalog_models",
-          "columnsFrom": [
-            "model_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},

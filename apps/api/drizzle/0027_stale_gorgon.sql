@@ -30,7 +30,7 @@ CREATE TABLE "ai_catalog_models" (
 	CONSTRAINT "ai_catalog_models_tier_check" CHECK ("ai_catalog_models"."tier" in ('fast', 'balanced', 'powerful', 'open'))
 );
 --> statement-breakpoint
-ALTER TABLE "ai_catalog_alerts" ADD CONSTRAINT "ai_catalog_alerts_model_id_ai_catalog_models_id_fk" FOREIGN KEY ("model_id") REFERENCES "public"."ai_catalog_models"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "ai_usage" ALTER COLUMN "model" SET DATA TYPE varchar(120);--> statement-breakpoint
 ALTER TABLE "ai_catalog_models" ADD CONSTRAINT "ai_catalog_models_promoted_by_users_id_fk" FOREIGN KEY ("promoted_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "ai_catalog_alerts_resolved_idx" ON "ai_catalog_alerts" USING btree ("resolved_at");--> statement-breakpoint
 CREATE UNIQUE INDEX "ai_catalog_alerts_open_uniq" ON "ai_catalog_alerts" USING btree ("model_id","kind") WHERE resolved_at is null;--> statement-breakpoint
