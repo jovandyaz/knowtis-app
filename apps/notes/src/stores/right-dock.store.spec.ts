@@ -4,7 +4,8 @@ import { useRightDockStore } from './right-dock.store';
 
 describe('useRightDockStore', () => {
   beforeEach(() => {
-    useRightDockStore.setState({ isOpen: false });
+    localStorage.clear();
+    useRightDockStore.setState({ isOpen: false, hasAutoOpened: false });
   });
 
   it('opens the dock', () => {
@@ -23,5 +24,27 @@ describe('useRightDockStore', () => {
     expect(useRightDockStore.getState().isOpen).toBe(true);
     useRightDockStore.getState().toggle();
     expect(useRightDockStore.getState().isOpen).toBe(false);
+  });
+
+  it('autoOpenOnce opens the dock and marks it as auto-opened on first call', () => {
+    useRightDockStore.getState().autoOpenOnce();
+    expect(useRightDockStore.getState().isOpen).toBe(true);
+    expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
+  });
+
+  it('autoOpenOnce does not reopen the dock after it already auto-opened', () => {
+    useRightDockStore.getState().autoOpenOnce();
+    useRightDockStore.getState().close();
+    useRightDockStore.getState().autoOpenOnce();
+    expect(useRightDockStore.getState().isOpen).toBe(false);
+    expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
+  });
+
+  it('persists only isOpen and hasAutoOpened to localStorage', () => {
+    useRightDockStore.getState().open();
+    const raw = localStorage.getItem('right-dock');
+    expect(raw).not.toBeNull();
+    const stored: { state: Record<string, unknown> } = JSON.parse(raw ?? '');
+    expect(stored.state).toEqual({ isOpen: true, hasAutoOpened: false });
   });
 });
