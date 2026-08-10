@@ -8,8 +8,10 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.{test,spec}.ts'],
-    // Each fork boots full Nest apps; concurrent forks OOM-kill CI runners
-    // (SIGKILL mid-run, no vitest summary), so run one fork at a time in CI.
+    // Not redundant: @nx/vitest:test forces `reporters: []` unless the config
+    // sets them, so failures reach CI with no name, file, or assertion.
+    reporters: ['default'],
+    // Each fork boots full Nest apps; concurrent forks exhaust CI runner memory.
     ...(process.env.CI ? { maxWorkers: 1 } : {}),
     coverage: {
       provider: 'v8',
