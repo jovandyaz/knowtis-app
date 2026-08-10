@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import type {
@@ -65,6 +65,11 @@ function keepCuratedCopy(column: PgColumn) {
   return sql`case when ${aiCatalogModels.status} = ${UPSTREAM_OWNED_COPY_STATUS} then ${proposed(column)} else ${column} end`;
 }
 
+/** SET expressions read the pre-update row, so re-promoting keeps the actor and timestamp of the promotion that actually happened. */
+function keepFirstPromotion(column: PgColumn, fresh: SQL) {
+  return sql`case when ${aiCatalogModels.status} = ${PROMOTED_STATUS} then ${column} else ${fresh} end`;
+}
+
 @Injectable()
 export class DrizzleAiCatalogRepository implements AiCatalogRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
@@ -109,7 +114,16 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
   ): Promise<CatalogModel | null> {
     const promotion =
       status === PROMOTED_STATUS
-        ? { promotedBy: actorId, promotedAt: sql`now()` }
+        ? {
+            promotedBy: keepFirstPromotion(
+              aiCatalogModels.promotedBy,
+              sql`${actorId}`
+            ),
+            promotedAt: keepFirstPromotion(
+              aiCatalogModels.promotedAt,
+              sql`now()`
+            ),
+          }
         : {};
     const [row] = await this.db
       .update(aiCatalogModels)

@@ -18,6 +18,7 @@ import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { DrizzleAiCatalogRepository } from './drizzle-ai-catalog.repository';
 
 const ACTOR_ID = '00000000-0000-4000-8000-0000000000ca';
+const SECOND_ACTOR_ID = '00000000-0000-4000-8000-0000000000cb';
 const PRIMARY_MODEL_ID = 'spec-catalog/primary';
 const SECONDARY_MODEL_ID = 'spec-catalog/secondary';
 const ABSENT_MODEL_ID = 'spec-catalog/absent';
@@ -109,12 +110,14 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
     await db
       .insert(users)
-      .values({
-        id: ACTOR_ID,
-        email: `e-${ACTOR_ID}@test.local`,
-        name: 'Catalog Admin',
-        isAnonymous: false,
-      })
+      .values(
+        [ACTOR_ID, SECOND_ACTOR_ID].map((id) => ({
+          id,
+          email: `e-${id}@test.local`,
+          name: 'Catalog Admin',
+          isAnonymous: false,
+        }))
+      )
       .onConflictDoNothing();
     await deleteTestRows();
   });
@@ -125,7 +128,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   afterAll(async () => {
     await deleteTestRows();
-    await db.delete(users).where(eq(users.id, ACTOR_ID));
+    await db.delete(users).where(inArray(users.id, [ACTOR_ID, SECOND_ACTOR_ID]));
     await moduleRef.close();
   });
 
@@ -262,6 +265,20 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       (m) => m.id
     );
     expect(candidateIds).not.toContain(PRIMARY_MODEL_ID);
+  });
+
+  it('should keep the first promotion actor and timestamp when promoted again', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    const first = await repo.setStatus(PRIMARY_MODEL_ID, 'promoted', ACTOR_ID);
+
+    const second = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      'promoted',
+      SECOND_ACTOR_ID
+    );
+
+    expect(second?.promotedBy).toBe(ACTOR_ID);
+    expect(second?.promotedAt?.getTime()).toBe(first?.promotedAt?.getTime());
   });
 
   it('should return null when the target model does not exist', async () => {
