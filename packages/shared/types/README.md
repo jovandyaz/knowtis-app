@@ -27,6 +27,7 @@ Each domain lives in its own `src/lib/*.types.ts`:
 | `artifact.types.ts`      | Flashcards, quizzes, summaries, mind maps, SM-2 study progress        |
 | `feature-flags.types.ts` | Feature flag keys and DTO                                             |
 | `anonymous.types.ts`     | Anonymous-user limits                                                 |
+| `catalog.types.ts`       | Open-tier catalog model/alert statuses and DTOs                       |
 
 ## Constants & enums
 
@@ -38,6 +39,7 @@ Key constants live here too (const-object enums, not TS `enum`). Don't hardcode 
 - **Collaboration:** `COLLABORATION_EVENTS`
 - **Feature flags:** `FEATURE_FLAG_KEYS`
 - **Anonymous:** `ANONYMOUS_LIMITS`
+- **Catalog:** `CATALOG_MODEL_STATUSES`, `CATALOG_ALERT_KINDS`
 
 See `src/index.ts` for the full export surface.
 

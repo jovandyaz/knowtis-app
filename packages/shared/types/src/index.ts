@@ -118,3 +118,12 @@ export {
   type CardResult,
   type StudySessionResult,
 } from './lib/artifact.types';
+
+export {
+  CATALOG_MODEL_STATUSES,
+  type CatalogModelStatus,
+  CATALOG_ALERT_KINDS,
+  type CatalogAlertKind,
+  type CatalogModelDto,
+  type CatalogAlertDto,
+} from './lib/catalog.types';
