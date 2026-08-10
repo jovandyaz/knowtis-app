@@ -43,8 +43,11 @@ describe('estimateTokenCount', () => {
   it('should count a reserved special token as ordinary text wherever it falls', () => {
     const inside = `${'a'.repeat(100)}<|endoftext|>${'b'.repeat(100)}`;
     const straddling = `${'a'.repeat(3_994)}<|endoftext|>${'b'.repeat(100)}`;
+    const asOrdinaryText = encode(inside, {
+      disallowedSpecial: new Set<string>(),
+    }).length;
 
-    expect(estimateTokenCount(inside)).toBeGreaterThan(0);
+    expect(estimateTokenCount(inside)).toBe(asOrdinaryText);
     expect(estimateTokenCount(straddling)).toBeGreaterThan(0);
   });
 
