@@ -33,18 +33,18 @@ export class SelectableModelsService {
   private catalogUnion(): readonly OfferedModel[] {
     return [
       ...CURATED_MODELS,
-      // Code wins entirely for a duplicate id: a DB row can never rename,
-      // re-tier, re-describe, re-price or resize a curated model's context
-      // window — CompositeModelCatalog.find() applies the same exclusion.
+      // Code wins entirely for a duplicate id: a promoted model can never
+      // rename, re-tier, re-describe, re-price or resize a curated one —
+      // CompositeModelCatalog.find() applies the same exclusion.
       ...this.promotedModels
         .snapshot()
-        .filter((row) => !CURATED_MODEL_IDS.has(row.id))
-        .map((row) => ({
-          id: row.id,
-          label: row.label,
+        .filter((promoted) => !CURATED_MODEL_IDS.has(promoted.id))
+        .map((promoted) => ({
+          id: promoted.id,
+          label: promoted.label,
           descriptionKey: '',
-          description: row.description,
-          tier: row.tier,
+          description: promoted.description,
+          tier: promoted.tier,
         })),
     ];
   }

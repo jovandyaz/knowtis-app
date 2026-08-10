@@ -3,7 +3,7 @@ import { Interval } from '@nestjs/schedule';
 
 import type { CatalogModelStatus } from '@knowtis/shared-types';
 
-import type { AiCatalogModelRow } from '../../../../database';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import {
   AI_CATALOG_REPOSITORY,
   type AiCatalogRepository,
@@ -15,7 +15,7 @@ const PROMOTED_STATUS: CatalogModelStatus = 'promoted';
 @Injectable()
 export class PromotedModelsCache implements OnModuleInit {
   private readonly logger = new Logger(PromotedModelsCache.name);
-  private promoted: readonly AiCatalogModelRow[] = [];
+  private promoted: readonly CatalogModel[] = [];
 
   constructor(
     @Inject(AI_CATALOG_REPOSITORY)
@@ -26,8 +26,8 @@ export class PromotedModelsCache implements OnModuleInit {
     await this.refresh();
   }
 
-  /** Last known promoted rows, empty until the first successful warm. Reads without awaiting because ModelCatalog is a synchronous port. */
-  snapshot(): readonly AiCatalogModelRow[] {
+  /** Last known promoted models, empty until the first successful warm. Reads without awaiting because ModelCatalog is a synchronous port. */
+  snapshot(): readonly CatalogModel[] {
     return this.promoted;
   }
 

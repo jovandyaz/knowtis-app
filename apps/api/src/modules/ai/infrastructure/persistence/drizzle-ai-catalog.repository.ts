@@ -15,6 +15,8 @@ import {
   type AiCatalogModelRow,
   type Database,
 } from '../../../../database';
+import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import type {
   AiCatalogRepository,
   CandidateUpsert,
@@ -22,6 +24,37 @@ import type {
 
 const PROMOTED_STATUS: CatalogModelStatus = 'promoted';
 const UPSTREAM_OWNED_COPY_STATUS: CatalogModelStatus = 'candidate';
+
+function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
+  return {
+    id: row.id,
+    label: row.label,
+    description: row.description,
+    status: row.status,
+    tier: row.tier,
+    inputCostPerToken: row.inputCostPerToken,
+    outputCostPerToken: row.outputCostPerToken,
+    maxInputTokens: row.maxInputTokens,
+    maxOutputTokens: row.maxOutputTokens,
+    intelligenceIndex: row.intelligenceIndex,
+    upstreamCreatedAt: row.upstreamCreatedAt,
+    upstreamExpirationDate: row.upstreamExpirationDate,
+    lastSeenAt: row.lastSeenAt,
+    promotedBy: row.promotedBy,
+    promotedAt: row.promotedAt,
+  };
+}
+
+function toCatalogAlert(row: AiCatalogAlertRow): CatalogAlert {
+  return {
+    id: row.id,
+    modelId: row.modelId,
+    kind: row.kind,
+    detail: row.detail,
+    createdAt: row.createdAt,
+    resolvedAt: row.resolvedAt,
+  };
+}
 
 /** Postgres exposes the row being inserted as `excluded` only inside ON CONFLICT DO UPDATE; this is invalid SQL anywhere else. */
 function proposed(column: PgColumn) {
@@ -36,12 +69,13 @@ function keepCuratedCopy(column: PgColumn) {
 export class DrizzleAiCatalogRepository implements AiCatalogRepository {
   constructor(@Inject(DATABASE_CONNECTION) private readonly db: Database) {}
 
-  async listByStatus(status: CatalogModelStatus): Promise<AiCatalogModelRow[]> {
-    return this.db
+  async listByStatus(status: CatalogModelStatus): Promise<CatalogModel[]> {
+    const rows = await this.db
       .select()
       .from(aiCatalogModels)
       .where(eq(aiCatalogModels.status, status))
       .orderBy(asc(aiCatalogModels.id));
+    return rows.map(toCatalogModel);
   }
 
   async upsertCandidate(model: CandidateUpsert): Promise<void> {
@@ -72,24 +106,24 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
     id: string,
     status: CatalogModelStatus,
     actorId: string
-  ): Promise<AiCatalogModelRow | null> {
+  ): Promise<CatalogModel | null> {
     const promotion =
       status === PROMOTED_STATUS
         ? { promotedBy: actorId, promotedAt: sql`now()` }
         : {};
-    const rows = await this.db
+    const [row] = await this.db
       .update(aiCatalogModels)
       .set({ status, updatedAt: sql`now()`, ...promotion })
       .where(eq(aiCatalogModels.id, id))
       .returning();
-    return rows[0] ?? null;
+    return row ? toCatalogModel(row) : null;
   }
 
   async updateCopy(
     id: string,
     patch: { label?: string; description?: string }
-  ): Promise<AiCatalogModelRow | null> {
-    const rows = await this.db
+  ): Promise<CatalogModel | null> {
+    const [row] = await this.db
       .update(aiCatalogModels)
       .set({
         ...(patch.label !== undefined && { label: patch.label }),
@@ -100,15 +134,16 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
       })
       .where(eq(aiCatalogModels.id, id))
       .returning();
-    return rows[0] ?? null;
+    return row ? toCatalogModel(row) : null;
   }
 
-  async listAlerts(unresolvedOnly: boolean): Promise<AiCatalogAlertRow[]> {
-    return this.db
+  async listAlerts(unresolvedOnly: boolean): Promise<CatalogAlert[]> {
+    const rows = await this.db
       .select()
       .from(aiCatalogAlerts)
       .where(unresolvedOnly ? isNull(aiCatalogAlerts.resolvedAt) : undefined)
       .orderBy(desc(aiCatalogAlerts.createdAt), desc(aiCatalogAlerts.id));
+    return rows.map(toCatalogAlert);
   }
 
   async createAlert(

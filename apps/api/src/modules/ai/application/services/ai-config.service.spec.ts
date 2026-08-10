@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { REASONING_EFFORTS } from '@knowtis/shared-types';
 
-import type { AiCatalogModelRow } from '../../../../database';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
-import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
+import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
@@ -47,10 +47,10 @@ describe('AIConfigService', () => {
   let mockCatalog: { isSupported: ReturnType<typeof vi.fn> };
   let mockPromoted: { snapshot: ReturnType<typeof vi.fn> };
 
-  /** Wires the real promoted cache and composite catalog so promoted rows reach validation exactly as they do at runtime. */
-  async function serviceWith(rows: readonly AiCatalogModelRow[]) {
+  /** Wires the real promoted cache and composite catalog so promoted models reach validation exactly as they do at runtime. */
+  async function serviceWith(models: readonly CatalogModel[]) {
     const promoted = new PromotedModelsCache(
-      createCatalogRepositoryStub(async () => [...rows])
+      createCatalogRepositoryStub(async () => [...models])
     );
     await promoted.onModuleInit();
     const catalog = new CompositeModelCatalog(
@@ -435,7 +435,7 @@ describe('AIConfigService', () => {
   describe('promoted catalog models', () => {
     it('accepts a promoted model as a global default', async () => {
       const withPromoted = await serviceWith([
-        createCatalogModelRow({ id: PROMOTED_ID }),
+        createCatalogModel({ id: PROMOTED_ID }),
       ]);
 
       await expect(
@@ -450,7 +450,7 @@ describe('AIConfigService', () => {
 
     it('accepts a fallback chain naming a promoted model', async () => {
       const withPromoted = await serviceWith([
-        createCatalogModelRow({ id: PROMOTED_ID }),
+        createCatalogModel({ id: PROMOTED_ID }),
       ]);
 
       await expect(
@@ -465,7 +465,7 @@ describe('AIConfigService', () => {
 
     it('rejects a chain naming a model that was never promoted', async () => {
       const withPromoted = await serviceWith([
-        createCatalogModelRow({ id: PROMOTED_ID }),
+        createCatalogModel({ id: PROMOTED_ID }),
       ]);
 
       await expect(
@@ -481,7 +481,7 @@ describe('AIConfigService', () => {
     it('rejects a promoted model the server cannot invoke as a global default', async () => {
       mockRegistry.isModelAvailable.mockReturnValue(false);
       const withPromoted = await serviceWith([
-        createCatalogModelRow({ id: PROMOTED_ID }),
+        createCatalogModel({ id: PROMOTED_ID }),
       ]);
 
       await expect(

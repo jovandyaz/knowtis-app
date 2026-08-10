@@ -6,7 +6,7 @@ import type {
   ModelPricing,
 } from '@knowtis/ai-gateway';
 
-import type { AiCatalogModelRow } from '../../../../database';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODEL_IDS } from '../../domain/model-catalog/selectable-models.catalog';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
 import { PromotedModelsCache } from './promoted-models.cache';
@@ -27,32 +27,32 @@ export class CompositeModelCatalog implements ModelCatalog {
   }
 
   getPricing(modelId: string): ModelPricing | undefined {
-    const row = this.find(modelId);
-    if (row) {
+    const model = this.find(modelId);
+    if (model) {
       return {
-        inputCostPerToken: row.inputCostPerToken,
-        outputCostPerToken: row.outputCostPerToken,
+        inputCostPerToken: model.inputCostPerToken,
+        outputCostPerToken: model.outputCostPerToken,
       };
     }
     return this.inner.getPricing(modelId);
   }
 
   getContextWindow(modelId: string): ModelContextWindow | undefined {
-    const row = this.find(modelId);
-    if (row) {
+    const model = this.find(modelId);
+    if (model) {
       return {
-        maxInputTokens: row.maxInputTokens,
-        maxOutputTokens: row.maxOutputTokens ?? undefined,
+        maxInputTokens: model.maxInputTokens,
+        maxOutputTokens: model.maxOutputTokens ?? undefined,
       };
     }
     return this.inner.getContextWindow(modelId);
   }
 
-  /** A curated id is never overridden by a promoted row — matches the exclusion in SelectableModelsService.catalogUnion(). */
-  private find(modelId: string): AiCatalogModelRow | undefined {
+  /** A curated id is never overridden by a promoted model — matches the exclusion in SelectableModelsService.catalogUnion(). */
+  private find(modelId: string): CatalogModel | undefined {
     if (CURATED_MODEL_IDS.has(modelId)) {
       return undefined;
     }
-    return this.promoted.snapshot().find((row) => row.id === modelId);
+    return this.promoted.snapshot().find((model) => model.id === modelId);
   }
 }

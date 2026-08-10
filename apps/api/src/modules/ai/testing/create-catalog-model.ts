@@ -1,10 +1,10 @@
-import type { AiCatalogModelRow } from '../../../database';
+import type { CatalogModel } from '../domain/model-catalog/catalog-model';
 
 const FIXED_TIMESTAMP = new Date('2026-08-10T00:00:00.000Z');
 
-export function createCatalogModelRow(
-  overrides: Partial<AiCatalogModelRow> & { id: string }
-): AiCatalogModelRow {
+export function createCatalogModel(
+  overrides: Partial<CatalogModel> & { id: string }
+): CatalogModel {
   return {
     label: overrides.id,
     description: '',
@@ -20,8 +20,6 @@ export function createCatalogModelRow(
     lastSeenAt: FIXED_TIMESTAMP,
     promotedBy: null,
     promotedAt: FIXED_TIMESTAMP,
-    createdAt: FIXED_TIMESTAMP,
-    updatedAt: FIXED_TIMESTAMP,
     ...overrides,
   };
 }

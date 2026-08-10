@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AiCatalogModelRow } from '../../../../database';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
-import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
+import { createCatalogModel } from '../../testing/create-catalog-model';
 import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
@@ -12,11 +12,11 @@ const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
 
-function promotedCache(rows: readonly AiCatalogModelRow[]) {
-  return { snapshot: () => rows };
+function promotedCache(models: readonly CatalogModel[]) {
+  return { snapshot: () => models };
 }
 
-function makeOpenService(promoted: readonly AiCatalogModelRow[] = []) {
+function makeOpenService(promoted: readonly CatalogModel[] = []) {
   const catalog = {
     isSupported: () => true,
     getPricing: () => ({ outputCostPerToken: 0.000005 }),
@@ -38,7 +38,7 @@ function makeService(opts: {
     string,
     { inputCostPerToken: number; outputCostPerToken: number }
   >;
-  promoted?: readonly AiCatalogModelRow[];
+  promoted?: readonly CatalogModel[];
 }) {
   const catalog = {
     isSupported: (id: string) => opts.supported.has(id),
@@ -264,7 +264,7 @@ describe('SelectableModelsService', () => {
 
     it('serves a promoted row as a free open-tier model with its description', () => {
       const service = makeOpenService([
-        createCatalogModelRow({
+        createCatalogModel({
           id: PROMOTED_ID,
           label: 'Promoted One',
           description: PROMOTED_DESCRIPTION,
@@ -303,7 +303,7 @@ describe('SelectableModelsService', () => {
           },
         },
         promoted: [
-          createCatalogModelRow({
+          createCatalogModel({
             id: PROMOTED_ID,
             maxInputTokens: ROW_CONTEXT_WINDOW,
             outputCostPerToken: 0.0000001,
@@ -321,7 +321,7 @@ describe('SelectableModelsService', () => {
 
     it('bills a promoted model to the user holding its provider key', () => {
       const service = makeOpenService([
-        createCatalogModelRow({ id: PROMOTED_ID, tier: 'open' }),
+        createCatalogModel({ id: PROMOTED_ID, tier: 'open' }),
       ]);
 
       const promoted = service
@@ -333,7 +333,7 @@ describe('SelectableModelsService', () => {
 
     it('omits the description of a promoted row that carries none', () => {
       const service = makeOpenService([
-        createCatalogModelRow({ id: PROMOTED_ID, description: '' }),
+        createCatalogModel({ id: PROMOTED_ID, description: '' }),
       ]);
 
       const promoted = service
@@ -345,7 +345,7 @@ describe('SelectableModelsService', () => {
 
     it('keeps the curated entry when a promoted row repeats its id', () => {
       const service = makeOpenService([
-        createCatalogModelRow({
+        createCatalogModel({
           id: SYSTEM_DEFAULT,
           label: 'Shadowed',
           description: PROMOTED_DESCRIPTION,
@@ -370,7 +370,7 @@ describe('SelectableModelsService', () => {
       const service = makeService({
         supported: new Set([PROMOTED_ID]),
         available: new Set([PROMOTED_ID]),
-        promoted: [createCatalogModelRow({ id: PROMOTED_ID })],
+        promoted: [createCatalogModel({ id: PROMOTED_ID })],
       });
 
       expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(true);
@@ -379,7 +379,7 @@ describe('SelectableModelsService', () => {
 
     it('offers a promoted model of a tier no curated key of the caller reaches', () => {
       const service = makeOpenService([
-        createCatalogModelRow({ id: PROMOTED_ID, tier: 'powerful' }),
+        createCatalogModel({ id: PROMOTED_ID, tier: 'powerful' }),
       ]);
 
       expect(service.firstOfTier('powerful', new Set(['openrouter']))).toBe(
@@ -389,7 +389,7 @@ describe('SelectableModelsService', () => {
 
     it('ranks curated models of a tier above promoted ones', () => {
       const service = makeOpenService([
-        createCatalogModelRow({ id: PROMOTED_ID, tier: 'powerful' }),
+        createCatalogModel({ id: PROMOTED_ID, tier: 'powerful' }),
       ]);
 
       expect(

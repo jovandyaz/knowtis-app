@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
-import type { AiCatalogModelRow } from '../../../../database';
+import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { AI_CATALOG_REPOSITORY } from '../../domain/ports/ai-catalog.repository';
-import { createCatalogModelRow } from '../../testing/create-catalog-model-row';
+import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { CompositeModelCatalog } from './composite-model-catalog';
@@ -22,9 +22,9 @@ const PROMOTED_INPUT_COST = 1.1e-7;
 const PROMOTED_OUTPUT_COST = 4.4e-7;
 const PROMOTED_MAX_INPUT_TOKENS = 262_144;
 
-async function createComposite(rows: AiCatalogModelRow[]) {
+async function createComposite(models: CatalogModel[]) {
   const promoted = new PromotedModelsCache(
-    createCatalogRepositoryStub(async () => rows)
+    createCatalogRepositoryStub(async () => models)
   );
   await promoted.onModuleInit();
   const inner = new ModelCatalogAdapter(
@@ -40,7 +40,7 @@ describe('CompositeModelCatalog', () => {
 
   it('serves promoted models that the inner catalog does not know', async () => {
     const { composite, inner } = await createComposite([
-      createCatalogModelRow({
+      createCatalogModel({
         id: PROMOTED_ONLY_MODEL_ID,
         inputCostPerToken: PROMOTED_INPUT_COST,
         outputCostPerToken: PROMOTED_OUTPUT_COST,
@@ -63,7 +63,7 @@ describe('CompositeModelCatalog', () => {
 
   it('prefers the promoted row over the inner catalog entry', async () => {
     const { composite } = await createComposite([
-      createCatalogModelRow({
+      createCatalogModel({
         id: SNAPSHOT_MODEL_ID,
         inputCostPerToken: PROMOTED_INPUT_COST,
         outputCostPerToken: PROMOTED_OUTPUT_COST,
@@ -77,7 +77,7 @@ describe('CompositeModelCatalog', () => {
 
   it('never lets a promoted row override a curated model pricing or context window', async () => {
     const { composite, inner } = await createComposite([
-      createCatalogModelRow({
+      createCatalogModel({
         id: CURATED_DUPLICATE_MODEL_ID,
         inputCostPerToken: PROMOTED_INPUT_COST,
         outputCostPerToken: PROMOTED_OUTPUT_COST,
@@ -96,7 +96,7 @@ describe('CompositeModelCatalog', () => {
 
   it('delegates models absent from the promoted snapshot to the inner catalog', async () => {
     const { composite, inner } = await createComposite([
-      createCatalogModelRow({ id: PROMOTED_ONLY_MODEL_ID }),
+      createCatalogModel({ id: PROMOTED_ONLY_MODEL_ID }),
     ]);
 
     expect(composite.isSupported(SNAPSHOT_MODEL_ID)).toBe(
@@ -112,8 +112,8 @@ describe('CompositeModelCatalog', () => {
 
   it('delegates isFast for promoted and non-promoted models alike', async () => {
     const { composite } = await createComposite([
-      createCatalogModelRow({ id: PROMOTED_ONLY_MODEL_ID }),
-      createCatalogModelRow({ id: FAST_SNAPSHOT_MODEL_ID }),
+      createCatalogModel({ id: PROMOTED_ONLY_MODEL_ID }),
+      createCatalogModel({ id: FAST_SNAPSHOT_MODEL_ID }),
     ]);
 
     expect(composite.isFast(FAST_SNAPSHOT_MODEL_ID)).toBe(true);
@@ -148,7 +148,7 @@ describe('CompositeModelCatalog', () => {
         {
           provide: AI_CATALOG_REPOSITORY,
           useValue: createCatalogRepositoryStub(async () => [
-            createCatalogModelRow({ id: PROMOTED_ONLY_MODEL_ID }),
+            createCatalogModel({ id: PROMOTED_ONLY_MODEL_ID }),
           ]),
         },
         {
