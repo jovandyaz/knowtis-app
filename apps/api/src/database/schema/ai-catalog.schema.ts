@@ -7,6 +7,7 @@ import {
   pgTable,
   serial,
   timestamp,
+  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -16,6 +17,7 @@ import {
   CATALOG_MODEL_STATUSES,
   MODEL_ID_MAX_LENGTH,
   MODEL_TIERS,
+  type CatalogAlertKind,
   type CatalogModelStatus,
   type ModelTier,
 } from '@knowtis/shared-types';
@@ -37,9 +39,11 @@ export const aiCatalogModels = pgTable(
     label: varchar('label', { length: 100 }).notNull(),
     description: varchar('description', { length: 500 }).notNull().default(''),
     tier: varchar('tier', { length: 16 })
+      .$type<ModelTier>()
       .notNull()
       .default(DEFAULT_CATALOG_MODEL_TIER),
     status: varchar('status', { length: 16 })
+      .$type<CatalogModelStatus>()
       .notNull()
       .default(DEFAULT_CATALOG_MODEL_STATUS),
     inputCostPerToken: numeric('input_cost_per_token', {
@@ -94,7 +98,7 @@ export const aiCatalogAlerts = pgTable(
     modelId: varchar('model_id', { length: MODEL_ID_MAX_LENGTH })
       .notNull()
       .references(() => aiCatalogModels.id, { onDelete: 'cascade' }),
-    kind: varchar('kind', { length: 24 }).notNull(),
+    kind: varchar('kind', { length: 24 }).$type<CatalogAlertKind>().notNull(),
     detail: varchar('detail', { length: 500 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
@@ -103,6 +107,9 @@ export const aiCatalogAlerts = pgTable(
   },
   (table) => [
     index('ai_catalog_alerts_resolved_idx').on(table.resolvedAt),
+    uniqueIndex('ai_catalog_alerts_open_uniq')
+      .on(table.modelId, table.kind)
+      .where(sql`resolved_at is null`),
     check(
       'ai_catalog_alerts_kind_check',
       sql`${table.kind} in (${sqlLiteralList(CATALOG_ALERT_KINDS)})`
