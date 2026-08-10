@@ -25,7 +25,6 @@ function make(
   byokProviders: string[] = [],
   tierGating = false,
   openFallback: string | null = OPEN_FALLBACK,
-  intentUx = false,
   preferredIntent: ModelIntent | null = null,
   intentModels: Record<ModelIntent, string> = INTENT_MODELS,
   firstOfTier: (tier: ModelIntent) => string | null = () => null
@@ -76,7 +75,7 @@ function make(
       .fn()
       .mockImplementation((key: string) =>
         Promise.resolve(
-          key === FEATURE_FLAG_KEYS.AI_TIER_GATING ? tierGating : intentUx
+          key === FEATURE_FLAG_KEYS.AI_TIER_GATING ? tierGating : false
         )
       ),
   };
@@ -91,14 +90,6 @@ function make(
 }
 
 describe('ModelPreferenceService', () => {
-  it('effective default = a valid user preference', async () => {
-    const { svc } = make('openai:gpt-4o-mini', [
-      SYSTEM_DEFAULT,
-      'openai:gpt-4o-mini',
-    ]);
-    expect(await svc.getEffectiveDefault('u1')).toBe('openai:gpt-4o-mini');
-  });
-
   it('effective default = system default when no preference', async () => {
     const { svc } = make(null, [SYSTEM_DEFAULT]);
     expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
@@ -178,7 +169,6 @@ describe('ModelPreferenceService', () => {
       [],
       false,
       OPEN_FALLBACK,
-      false,
       'powerful'
     );
     expect(await svc.getUserPreferences('u1')).toEqual({
@@ -247,20 +237,6 @@ describe('ModelPreferenceService', () => {
     ).toBe(true);
   });
 
-  it('effective default ignores the stored intent while ai_intent_ux is off', async () => {
-    const { svc, aiConfig } = make(
-      null,
-      [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
-      [],
-      false,
-      OPEN_FALLBACK,
-      false,
-      'powerful'
-    );
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
-    expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
-  });
-
   it('effective default resolves the intent through its ai_config key for a keyless caller', async () => {
     const { svc, aiConfig } = make(
       null,
@@ -268,7 +244,6 @@ describe('ModelPreferenceService', () => {
       [],
       false,
       OPEN_FALLBACK,
-      true,
       'powerful'
     );
     expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
@@ -282,7 +257,6 @@ describe('ModelPreferenceService', () => {
       [],
       false,
       OPEN_FALLBACK,
-      true,
       null
     );
     expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
@@ -296,7 +270,6 @@ describe('ModelPreferenceService', () => {
       ['anthropic'],
       false,
       OPEN_FALLBACK,
-      true,
       'powerful',
       INTENT_MODELS,
       () => 'anthropic:claude-opus-4-8'
@@ -313,48 +286,23 @@ describe('ModelPreferenceService', () => {
       ['openai'],
       false,
       OPEN_FALLBACK,
-      true,
       'fast'
     );
     expect(await svc.getEffectiveDefault('u1')).toBe('openai:gpt-5.6');
     expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
   });
 
-  it('effective default ignores a legacy non-BYOK stored model while intent UX is on', async () => {
+  it('effective default ignores a legacy non-BYOK stored model', async () => {
     const { svc, aiConfig } = make(
       OPEN_FALLBACK,
       [OPEN_FALLBACK, SYSTEM_DEFAULT],
       [],
       false,
       OPEN_FALLBACK,
-      true,
       null
     );
     expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
     expect(aiConfig.getIntentModel).toHaveBeenCalledWith('balanced');
-  });
-
-  it('effective default keeps a legacy stored model while intent UX is off', async () => {
-    const { svc } = make(OPEN_FALLBACK, [OPEN_FALLBACK, SYSTEM_DEFAULT]);
-    expect(await svc.getEffectiveDefault('u1')).toBe(OPEN_FALLBACK);
-  });
-
-  it('effective default trusts a supplied intent-ux result over the flag store', async () => {
-    const { svc, flags } = make(
-      null,
-      [SYSTEM_DEFAULT, INTENT_MODELS.fast],
-      [],
-      false,
-      OPEN_FALLBACK,
-      false,
-      'fast'
-    );
-    expect(
-      await svc.getEffectiveDefault('u1', undefined, undefined, true)
-    ).toBe(INTENT_MODELS.fast);
-    expect(flags.isEnabled).not.toHaveBeenCalledWith(
-      FEATURE_FLAG_KEYS.AI_INTENT_UX
-    );
   });
 
   it('effective default falls through to the legacy cascade when the intent target is unselectable', async () => {
@@ -364,7 +312,6 @@ describe('ModelPreferenceService', () => {
       [],
       false,
       OPEN_FALLBACK,
-      true,
       'powerful',
       {
         fast: 'openrouter:not-selectable',
@@ -382,7 +329,6 @@ describe('ModelPreferenceService', () => {
       [],
       true,
       OPEN_FALLBACK,
-      true,
       'powerful'
     );
     expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
@@ -396,7 +342,6 @@ describe('ModelPreferenceService', () => {
       ['anthropic'],
       true,
       OPEN_FALLBACK,
-      true,
       'powerful',
       INTENT_MODELS,
       () => 'anthropic:claude-opus-4-8'
@@ -407,17 +352,16 @@ describe('ModelPreferenceService', () => {
     expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
   });
 
-  it('effective default ignores the intent when the flag store errors', async () => {
+  it('effective default still resolves the intent when the flag store errors', async () => {
     const { svc, flags } = make(
       null,
       [SYSTEM_DEFAULT, 'openrouter:deep-mock'],
       [],
       false,
       OPEN_FALLBACK,
-      true,
       'powerful'
     );
     flags.isEnabled.mockRejectedValue(new Error('flag store down'));
-    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
+    expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
   });
 });
