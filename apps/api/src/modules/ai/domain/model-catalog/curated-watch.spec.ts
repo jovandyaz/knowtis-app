@@ -212,6 +212,16 @@ describe('findOpenRouterDrift', () => {
     expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
   });
 
+  it('should stay silent when the upstream price falls far below the vendored cost', () => {
+    const upstream = [
+      upstreamModel(GLM_SLUG, {
+        completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 0.36,
+      }),
+    ];
+
+    expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
+  });
+
   it('should report a wide price move as price_drift carrying both prices', () => {
     const upstream = [
       upstreamModel(GLM_SLUG, {

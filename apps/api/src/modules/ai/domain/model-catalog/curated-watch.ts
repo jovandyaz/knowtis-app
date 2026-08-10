@@ -24,7 +24,7 @@ const OPEN_TIER: ModelTier = 'open';
 /** Relative gap above which the vendored snapshot and live LiteLLM differ for real rather than by floating-point noise. */
 const LITELLM_PRICE_DRIFT_RATIO = 0.001;
 
-/** OpenRouter routes across providers, so its price and the vendored list rate legitimately differ; only a wide gap means the vendored cost stopped covering what we pay. */
+/** OpenRouter routes across providers, so its price and the vendored list rate legitimately differ; only a wide gap upward means the vendored cost stopped covering what we pay. */
 const OPENROUTER_PRICE_DRIFT_RATIO = 0.2;
 
 const ISO_DATE_LENGTH = 10;
@@ -48,6 +48,18 @@ function hasPriceDrift(vendored: number, live: number, ratio: number): boolean {
     return live !== 0;
   }
   return Math.abs(live - vendored) / vendored > ratio;
+}
+
+/**
+ * Whether the live price outgrew the vendored one. Only that direction is an
+ * incident: the open-tier vendored costs are deliberate upper bounds over
+ * OpenRouter's routed providers, so a cheaper upstream is the expected state.
+ */
+function exceedsVendored(vendored: number, live: number, ratio: number): boolean {
+  if (vendored === 0) {
+    return live > 0;
+  }
+  return (live - vendored) / vendored > ratio;
 }
 
 function perMillionTokens(costPerToken: number): string {
@@ -88,7 +100,7 @@ export function findOpenRouterDrift(
     const vendored = vendoredOutputCost(model.id);
     if (
       vendored !== undefined &&
-      hasPriceDrift(
+      exceedsVendored(
         vendored,
         live.completionCostPerToken,
         OPENROUTER_PRICE_DRIFT_RATIO
