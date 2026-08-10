@@ -44,7 +44,9 @@ import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.rep
 import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
+import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
@@ -113,7 +115,9 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       provide: SYSTEM_PROVIDER_KEYS_SOURCE,
       useExisting: SystemProviderKeysService,
     },
-    { provide: MODEL_CATALOG, useClass: ModelCatalogAdapter },
+    ModelCatalogAdapter,
+    PromotedModelsCache,
+    { provide: MODEL_CATALOG, useClass: CompositeModelCatalog },
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,
