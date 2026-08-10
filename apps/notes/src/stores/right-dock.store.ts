@@ -30,10 +30,16 @@ export const useRightDockStore = create<RightDockStore>()(
         isOpen: s.isOpen,
         hasAutoOpened: s.hasAutoOpened,
       }),
-      onRehydrateStorage: () => (state) => {
-        if (state?.isOpen && !window.matchMedia('(min-width: 768px)').matches) {
-          state.close();
+      merge: (persistedState, currentState) => {
+        const persisted =
+          typeof persistedState === 'object' && persistedState !== null
+            ? persistedState
+            : {};
+        const merged = { ...currentState, ...persisted };
+        if (merged.isOpen && !window.matchMedia('(min-width: 768px)').matches) {
+          return { ...merged, isOpen: false };
         }
+        return merged;
       },
     }
   )

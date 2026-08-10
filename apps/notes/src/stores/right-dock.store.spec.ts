@@ -79,6 +79,10 @@ describe('useRightDockStore', () => {
 
     expect(useRightDockStore.getState().isOpen).toBe(false);
     expect(useRightDockStore.getState().hasAutoOpened).toBe(true);
+
+    const raw = localStorage.getItem('right-dock');
+    const stored: { state: { isOpen: boolean } } = JSON.parse(raw ?? '');
+    expect(stored.state.isOpen).toBe(true);
   });
 
   it('keeps isOpen true on rehydrate when the persisted state is open and the viewport is desktop width', async () => {
