@@ -32,6 +32,7 @@ import { SelectableModelsService } from './application/services/selectable-model
 import { SystemProviderKeysService } from './application/services/system-provider-keys.service';
 import { VoiceTranscriptionService } from './application/services/voice-transcription.service';
 import { AI_CACHE } from './domain/ports/ai-cache.port';
+import { AI_CATALOG_REPOSITORY } from './domain/ports/ai-catalog.repository';
 import { AI_CONFIG_REPOSITORY } from './domain/ports/ai-config.repository';
 import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
@@ -45,6 +46,7 @@ import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
+import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
 import { DrizzleAIConfigRepository } from './infrastructure/persistence/drizzle-ai-config.repository';
 import { DrizzleAIUsageRepository } from './infrastructure/persistence/drizzle-ai-usage.repository';
 import { DrizzleSystemProviderKeysRepository } from './infrastructure/persistence/drizzle-system-provider-keys.repository';
@@ -117,6 +119,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,
       useClass: AIStructuredOutputSDKProvider,
     },
+    { provide: AI_CATALOG_REPOSITORY, useClass: DrizzleAiCatalogRepository },
     { provide: AI_CONFIG_REPOSITORY, useClass: DrizzleAIConfigRepository },
     { provide: AI_USAGE_REPOSITORY, useClass: DrizzleAIUsageRepository },
     { provide: EMBEDDING_PORT, useClass: VoyageEmbeddingAdapter },
