@@ -442,7 +442,7 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 `ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate`, `promoted` or `retired`. Promotion stamps `promoted_by` and `promoted_at`.
 
-`ai_catalog_alerts` records what needs a human: `deprecation` and `price_drift`, each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
+`ai_catalog_alerts` records what needs a human: `deprecation`, `price_drift` and `unavailable` (a curated model upstream stopped listing), each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
 > `model_id` deliberately carries **no foreign key**. Alerts also cover the curated models, which live in code and never get an `ai_catalog_models` row — a constraint here would reject exactly the alerts that matter most.
 

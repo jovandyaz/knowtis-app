@@ -52,7 +52,11 @@ function makeOpenService(promoted: readonly CatalogModel[] = []) {
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
   const registry: RegistryStub = { isModelAvailable: () => true };
-  return makeSelectableModelsService(catalog, registry, promotedCache(promoted));
+  return makeSelectableModelsService(
+    catalog,
+    registry,
+    promotedCache(promoted)
+  );
 }
 
 function makeService(opts: {
@@ -112,7 +116,11 @@ describe('SelectableModelsService', () => {
       getPricing: () => ({ outputCostPerToken: 0.000005 }),
       getContextWindow: () => ({ maxInputTokens: 1000 }),
     };
-    const svc = makeSelectableModelsService(catalog, registry, promotedCache([]));
+    const svc = makeSelectableModelsService(
+      catalog,
+      registry,
+      promotedCache([])
+    );
     const withByok = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
     expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
     const without = svc.list('anthropic:claude-sonnet-5');

@@ -4,7 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
-import type { UpstreamModel } from '../../domain/ports/openrouter-models.port';
+import { openTierSlug } from '../../domain/model-catalog/curated-watch';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
+import type {
+  UpstreamCatalog,
+  UpstreamModel,
+} from '../../domain/ports/openrouter-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
 
 const GLM_CURATED_ID = 'openrouter:z-ai/glm-5.2';
@@ -43,6 +48,32 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
+const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
+  openTierSlug(model.id)
+).filter((slug): slug is string => slug !== null);
+
+/** Curated open-tier models present and priced at the vendored cost, so they raise nothing: a fixture that omits one asserts it vanished upstream. */
+function withCuratedInSync(...models: UpstreamModel[]): UpstreamCatalog {
+  const provided = new Set(models.map((model) => model.id));
+  return {
+    models: [
+      ...CURATED_OPEN_SLUGS.filter((slug) => !provided.has(slug)).map(
+        (slug) => {
+          const vendored = VENDORED_PRICING[`openrouter:${slug}`];
+          return upstreamModel(slug, {
+            ...(vendored && {
+              completionCostPerToken: vendored.outputCostPerToken,
+            }),
+          });
+        }
+      ),
+      ...models,
+    ],
+    complete: true,
+    discarded: [],
+  };
+}
+
 function make(
   options: {
     upstream?: UpstreamModel[];
@@ -63,7 +94,9 @@ function make(
     createAlert: vi.fn().mockResolvedValue(undefined),
   };
   const openRouter = {
-    fetchModels: vi.fn().mockResolvedValue(options.upstream ?? []),
+    fetchModels: vi
+      .fn()
+      .mockResolvedValue(withCuratedInSync(...(options.upstream ?? []))),
   };
   const liteLlm = {
     fetchPrices: vi.fn().mockResolvedValue(options.liteLlmPrices ?? {}),
@@ -172,6 +205,37 @@ describe('CatalogSyncTask', () => {
       'deprecation',
       expect.stringContaining('2026-12-31')
     );
+  });
+
+  it('should raise an unavailable alert when a curated model leaves OpenRouter', async () => {
+    const { task, repo, openRouter } = make();
+    const inSync = withCuratedInSync();
+    openRouter.fetchModels.mockResolvedValue({
+      ...inSync,
+      models: inSync.models.filter((model) => model.id !== GLM_SLUG),
+    });
+
+    await task.sync();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      GLM_CURATED_ID,
+      'unavailable',
+      expect.stringContaining(GLM_SLUG)
+    );
+  });
+
+  it('should raise no unavailable alert when the fetch stopped paginating early', async () => {
+    const { task, repo, openRouter } = make();
+    const inSync = withCuratedInSync();
+    openRouter.fetchModels.mockResolvedValue({
+      ...inSync,
+      models: inSync.models.filter((model) => model.id !== GLM_SLUG),
+      complete: false,
+    });
+
+    await task.sync();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
   });
 
   it('should raise a price_drift alert when the vendored cost stops covering OpenRouter', async () => {
@@ -357,7 +421,7 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 3,
+      upstream: 3 + CURATED_OPEN_SLUGS.length,
       candidates: 2,
       alerts: 0,
       failures: 0,
@@ -373,7 +437,7 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 2,
+      upstream: 2 + CURATED_OPEN_SLUGS.length,
       candidates: 1,
       alerts: 0,
       failures: 1,

@@ -16,7 +16,16 @@ export interface UpstreamModel {
   outputModalities: readonly string[];
 }
 
+/** One upstream read. A model missing from `models` is only known to be gone when `complete` is true and its id is not in `discarded`. */
+export interface UpstreamCatalog {
+  models: readonly UpstreamModel[];
+  /** False when pagination stopped early, so models past the cut were never seen. */
+  complete: boolean;
+  /** Ids upstream published whose payload failed validation: absent from `models`, but not gone. */
+  discarded: readonly string[];
+}
+
 export interface OpenRouterModelsClient {
-  /** Every model upstream publishes, following pagination. Rejects on a non-2xx response; models whose payload cannot be parsed are dropped, not thrown on. */
-  fetchModels(): Promise<UpstreamModel[]>;
+  /** Every model upstream publishes, following pagination. Rejects on a non-2xx response; models whose payload cannot be parsed are collected into `discarded`, not thrown on. */
+  fetchModels(): Promise<UpstreamCatalog>;
 }

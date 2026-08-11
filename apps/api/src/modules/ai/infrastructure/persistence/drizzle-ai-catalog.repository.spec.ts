@@ -3,6 +3,8 @@ import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { CATALOG_ALERT_KINDS } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   aiCatalogAlerts,
@@ -390,6 +392,19 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     const openIds = (await ownAlerts(true)).map((alert) => alert.id);
     expect(openIds).toHaveLength(3);
     expect(openIds).toEqual([...openIds].sort((a, b) => b - a));
+  });
+
+  it('should accept every alert kind the domain can raise', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+
+    for (const kind of CATALOG_ALERT_KINDS) {
+      await repo.createAlert(PRIMARY_MODEL_ID, kind, FIRST_ALERT_DETAIL);
+    }
+
+    const open = await ownAlerts(true);
+    expect(open.map((alert) => alert.kind).sort()).toEqual(
+      [...CATALOG_ALERT_KINDS].sort()
+    );
   });
 
   it('should resolve an alert and allow a new one for the same kind', async () => {

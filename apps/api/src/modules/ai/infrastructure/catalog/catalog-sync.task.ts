@@ -122,16 +122,16 @@ export class CatalogSyncTask {
   }
 
   private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
-    const upstream = await this.openRouter.fetchModels();
+    const catalog = await this.openRouter.fetchModels();
     const findings = [
-      ...findOpenRouterDrift(this.vendoredOutputCost, upstream),
+      ...findOpenRouterDrift(this.vendoredOutputCost, catalog),
       ...(await this.liteLlmFindings()),
     ];
-    return this.persist(upstream, findings);
+    return this.persist(catalog.models, findings);
   }
 
   private async persist(
-    upstream: UpstreamModel[],
+    upstream: readonly UpstreamModel[],
     findings: DriftFinding[]
   ): Promise<CatalogSyncResultDto> {
     const failures: WriteFailure[] = [];

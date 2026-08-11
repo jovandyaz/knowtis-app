@@ -45,6 +45,7 @@ const PROMOTION_TIER = 'open' as const satisfies ModelTier;
 const ALERT_KIND_LABELS: Record<string, string> = {
   deprecation: 'Deprecation',
   price_drift: 'Price drift',
+  unavailable: 'Unavailable',
 } satisfies Record<CatalogAlertKind, string>;
 
 /** Unscored last: two thirds of the upstream list carry no index, and an unscored model is not a better bet than a scored one. */
