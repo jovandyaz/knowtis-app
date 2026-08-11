@@ -216,6 +216,7 @@ jobs:
       github.event_name == 'push' &&
       needs.ci.outputs.api_affected == 'true'
     container: ghcr.io/railwayapp/cli:latest
+    timeout-minutes: 20
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
@@ -224,7 +225,7 @@ jobs:
           persist-credentials: false
 
       - name: Deploy to Railway
-        run: railway up --service ${{ vars.RAILWAY_SERVICE_ID }}
+        run: sh .github/scripts/railway-deploy.sh "${{ vars.RAILWAY_SERVICE_ID }}"
 
   deploy-mcp:
     name: Deploy MCP to Railway
@@ -236,6 +237,7 @@ jobs:
       needs.ci.outputs.mcp_affected == 'true' &&
       vars.RAILWAY_MCP_SERVICE_ID != ''
     container: ghcr.io/railwayapp/cli:latest
+    timeout-minutes: 20
     env:
       RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       RAILWAY_MCP_SERVICE_ID: ${{ vars.RAILWAY_MCP_SERVICE_ID }}
@@ -314,4 +316,4 @@ jobs:
           echo "OAuth env parity OK: issuer='$api_issuer' resourceUrl='$api_resource'"
 
       - name: Deploy to Railway
-        run: railway up --service "$RAILWAY_MCP_SERVICE_ID"
+        run: sh .github/scripts/railway-deploy.sh "$RAILWAY_MCP_SERVICE_ID"
