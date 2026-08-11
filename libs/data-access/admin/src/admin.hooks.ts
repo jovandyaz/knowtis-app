@@ -293,13 +293,15 @@ function catalogModelPath(id: string): string {
   return `/ai/catalog/${encodeURIComponent(id)}`;
 }
 
-/** Promoting or retiring changes what the user picker offers, so the model list goes stale with the catalog. */
+/** Promoting or retiring changes what the user picker offers, so the model list goes stale with the catalog. Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
 function invalidateCatalogDependents(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiCatalog() });
-  queryClient.invalidateQueries({
-    queryKey: adminQueryKeys.selectableModels(),
-  });
-  queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiCatalog() }),
+    queryClient.invalidateQueries({
+      queryKey: adminQueryKeys.selectableModels(),
+    }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
+  ]);
 }
 
 function useCatalogModelMutation<TInput>(
@@ -309,9 +311,7 @@ function useCatalogModelMutation<TInput>(
   return useMutation({
     mutationFn: async (input: TInput) =>
       CatalogModelSchema.parse(await mutationFn(input)),
-    onSettled: () => {
-      invalidateCatalogDependents(queryClient);
-    },
+    onSettled: () => invalidateCatalogDependents(queryClient),
   });
 }
 
@@ -346,9 +346,7 @@ export function useResolveCatalogAlert() {
   return useMutation({
     mutationFn: (alertId: number) =>
       httpClient.post(`/ai/catalog/alerts/${alertId}/resolve`),
-    onSettled: () => {
-      invalidateCatalogDependents(queryClient);
-    },
+    onSettled: () => invalidateCatalogDependents(queryClient),
   });
 }
 

@@ -826,6 +826,29 @@ describe('usePromoteCatalogModel', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expectCatalogDependentsInvalidated(invalidateSpy);
   });
+
+  it('stays pending until the invalidated queries have refetched', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'promoted',
+    });
+    let refetched!: () => void;
+    const refetching = new Promise<void>((resolve) => {
+      refetched = resolve;
+    });
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      usePromoteCatalogModel()
+    );
+    invalidateSpy.mockReturnValue(refetching);
+    result.current.mutate({ id: CATALOG_MODEL.id, tier: 'open' });
+
+    await waitFor(() => expectCatalogDependentsInvalidated(invalidateSpy));
+    expect(result.current.isPending).toBe(true);
+
+    refetched();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
 });
 
 describe('useRetireCatalogModel', () => {
