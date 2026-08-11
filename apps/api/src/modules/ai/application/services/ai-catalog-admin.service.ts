@@ -148,8 +148,11 @@ export class AiCatalogAdminService {
     return toCatalogModelDto(model);
   }
 
+  /** Idempotent: re-resolving an alert changes nothing and is not audited a second time. */
   async resolveAlert(id: number, actorId: string): Promise<void> {
-    await this.repository.resolveAlert(id);
+    if (!(await this.repository.resolveAlert(id))) {
+      return;
+    }
     await this.audit.record({
       actorId,
       action: 'ai_catalog.alert_resolved',

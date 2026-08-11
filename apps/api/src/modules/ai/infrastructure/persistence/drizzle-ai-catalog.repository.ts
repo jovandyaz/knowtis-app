@@ -178,13 +178,14 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
       .returning({ id: aiCatalogAlerts.id });
   }
 
-  async resolveAlert(id: number): Promise<void> {
-    await this.db
+  async resolveAlert(id: number): Promise<boolean> {
+    const rows = await this.db
       .update(aiCatalogAlerts)
       .set({ resolvedAt: sql`now()` })
       .where(
         and(eq(aiCatalogAlerts.id, id), isNull(aiCatalogAlerts.resolvedAt))
       )
       .returning({ id: aiCatalogAlerts.id });
+    return rows.length > 0;
   }
 }

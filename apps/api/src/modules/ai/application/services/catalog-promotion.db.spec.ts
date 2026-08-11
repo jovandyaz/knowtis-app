@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import {
   afterAll,
   beforeAll,
@@ -95,6 +95,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     await db
       .delete(aiCatalogModels)
       .where(inArray(aiCatalogModels.id, TEST_MODEL_IDS));
+    await db.delete(users).where(eq(users.id, ACTOR_ID));
     await moduleRef.close();
   });
 

@@ -49,6 +49,6 @@ export interface AiCatalogRepository {
     kind: CatalogAlertKind,
     detail: string
   ): Promise<void>;
-  /** No-op when the alert is unknown or already resolved, so the original resolution time is preserved. */
-  resolveAlert(id: number): Promise<void>;
+  /** Resolves to whether this call closed the alert; false when it is unknown or already resolved, which preserves the original resolution time. */
+  resolveAlert(id: number): Promise<boolean>;
 }

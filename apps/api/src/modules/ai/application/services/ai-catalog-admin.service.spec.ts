@@ -43,7 +43,7 @@ describe('AiCatalogAdminService', () => {
         .mockResolvedValue(createCatalogModel({ id: MODEL_ID })),
       listAlerts: vi.fn().mockResolvedValue([]),
       createAlert: vi.fn(),
-      resolveAlert: vi.fn(),
+      resolveAlert: vi.fn().mockResolvedValue(true),
     };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     promotedCache = new PromotedModelsCache(repository as never);
@@ -230,6 +230,14 @@ describe('AiCatalogAdminService', () => {
       await service.resolveAlert(ALERT_ID, ACTOR_ID);
 
       expect(promotedCache.refresh).not.toHaveBeenCalled();
+    });
+
+    it('does not audit a second time when the alert was already resolved', async () => {
+      repository.resolveAlert.mockResolvedValue(false);
+
+      await service.resolveAlert(ALERT_ID, ACTOR_ID);
+
+      expect(audit.record).not.toHaveBeenCalled();
     });
   });
 });
