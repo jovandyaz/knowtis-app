@@ -19,7 +19,7 @@ import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 
 const OWNER = '00000000-0000-4000-8000-0000000000a1';
 const NOTE = '00000000-0000-4000-8000-0000000000a2';
-const ACTIVE_NOTE = '00000000-0000-4000-8000-0000000000a4';
+const ACTIVE_NOTE = '00000000-0000-4000-8000-0000000000a6';
 const TOKEN = 'softdelete-tok-a2';
 
 describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository soft-delete', () => {

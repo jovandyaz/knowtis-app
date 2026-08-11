@@ -15,8 +15,8 @@ import {
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzlePermissionRepository } from './drizzle-permission.repository';
 
-const OWNER = '00000000-0000-4000-8000-0000000000b1';
-const NOTE = '00000000-0000-4000-8000-0000000000b2';
+const OWNER = '00000000-0000-4000-8000-0000000000b5';
+const NOTE = '00000000-0000-4000-8000-0000000000b6';
 
 describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository soft-delete', () => {
   let db: Database;

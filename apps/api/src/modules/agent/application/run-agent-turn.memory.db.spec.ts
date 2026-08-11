@@ -28,8 +28,8 @@ import { DrizzleConversationRepository } from '../infrastructure/persistence/dri
 import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
-const USER = '00000000-0000-4000-8000-0000000000d1';
-const OTHER = '00000000-0000-4000-8000-0000000000d2';
+const USER = '00000000-0000-4000-8000-0000000000d4';
+const OTHER = '00000000-0000-4000-8000-0000000000d5';
 const MODEL = 'anthropic:claude-haiku-4-5-20251001';
 
 const memoryOff = {
