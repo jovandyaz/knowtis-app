@@ -17,11 +17,16 @@ describe('AgentCapabilityRows', () => {
   it('sends the understand demo prompt on click', async () => {
     const onSelect = vi.fn();
     render(<AgentCapabilityRows onSelect={onSelect} />);
-    await userEvent.click(
-      screen.getByRole('button', { name: /capability\.understand/ })
-    );
+    const button = screen.getByRole('button', {
+      name: /capability\.understand/,
+    });
+    await userEvent.click(button);
     expect(onSelect).toHaveBeenCalledWith(
       'ai.copilot.empty.capability.understand.prompt'
+    );
+    expect(button).toHaveAttribute(
+      'aria-label',
+      'ai.copilot.empty.capability.understand.label. ai.copilot.empty.capability.understand.hint'
     );
   });
 
