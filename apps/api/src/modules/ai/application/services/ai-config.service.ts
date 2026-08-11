@@ -122,15 +122,15 @@ export class AIConfigService {
   ) {}
 
   async getDefaultModel(): Promise<string> {
-    return this.getConfigValue('ai_default_model');
+    return this.getSupportedModel('ai_default_model');
   }
 
   async getFastModel(): Promise<string> {
-    return this.getConfigValue('ai_fast_model');
+    return this.getSupportedModel('ai_fast_model');
   }
 
   async getIntentModel(intent: ModelIntent): Promise<string> {
-    return this.getConfigValue(INTENT_CONFIG_KEYS[intent]);
+    return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
   }
 
   async getFallbackChain(): Promise<string[]> {
@@ -332,6 +332,18 @@ export class AIConfigService {
       );
       return [];
     }
+  }
+
+  /** Mirrors the catalog filter getFallbackChain applies: a model retired out of band must never be served as a single-value default either. */
+  private async getSupportedModel(dbKey: ConfigKey): Promise<string> {
+    const value = await this.getConfigValue(dbKey);
+    if (this.modelCatalog.isSupported(value)) {
+      return value;
+    }
+    this.logger.warn(
+      `Ignoring AI config '${dbKey}' model '${value}' missing from the catalog, using the code default`
+    );
+    return CONFIG_KEYS[dbKey].default;
   }
 
   private async getConfigValue(dbKey: ConfigKey): Promise<string> {
