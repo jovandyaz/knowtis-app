@@ -1052,7 +1052,9 @@ describe('admin mutations and their invalidations', () => {
       const client = new QueryClient({
         defaultOptions: { queries: { retry: false } },
       });
-      vi.spyOn(client, 'invalidateQueries').mockReturnValue(held);
+      const invalidateSpy = vi
+        .spyOn(client, 'invalidateQueries')
+        .mockReturnValue(held);
 
       const { result } = renderHook(hook, {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -1061,7 +1063,10 @@ describe('admin mutations and their invalidations', () => {
       });
       result.current.mutate(input as never);
 
-      await waitFor(() => expect(result.current.isPending).toBe(true));
+      // Anchor on the invalidation having started, not on `isPending` alone:
+      // straight after `mutate()` the mutation is pending because its own
+      // request is in flight, which a dropped promise would also satisfy.
+      await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
       await Promise.resolve();
       expect(result.current.isPending).toBe(true);
 
