@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { EnvConfig } from '../../../../config/env.config';
+import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import type { EmbeddingPort } from '../../../ai/domain/ports/embedding.port';
 import type {
   NoteEmbeddingRepository,
@@ -34,9 +35,7 @@ function makeTask(opts: {
       costUsd: 0.002,
     })),
   } as unknown as EmbeddingPort;
-  const db = {
-    execute: vi.fn(async () => [{ locked: opts.lock ?? true }]),
-  };
+  const client = createAdvisoryLockClient(opts.lock ?? true);
   const config = {
     get: (k: string) => {
       if (k === 'AI_EMBEDDING_MODEL') {
@@ -50,7 +49,7 @@ function makeTask(opts: {
   } as unknown as ConfigService<EnvConfig, true>;
   const rateLimit = { recordGlobalCost: vi.fn().mockResolvedValue(undefined) };
   const task = new EmbeddingReconcileTask(
-    db as never,
+    client,
     config,
     repo,
     embed,
