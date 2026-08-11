@@ -14,31 +14,43 @@ import { CatalogSection } from '../CatalogSection';
 
 const {
   useAiCatalogMock,
+  mutationStateMock,
   promoteMutate,
   retireMutate,
   updateCopyMutate,
   resolveAlertMutate,
 } = vi.hoisted(() => ({
   useAiCatalogMock: vi.fn(),
+  mutationStateMock: vi.fn(),
   promoteMutate: vi.fn(),
   retireMutate: vi.fn(),
   updateCopyMutate: vi.fn(),
   resolveAlertMutate: vi.fn(),
 }));
 
-const idleMutation = { isPending: false, isError: false, error: null };
+const IDLE_MUTATION = { isPending: false, isError: false, error: null };
+const PENDING_MUTATION = { ...IDLE_MUTATION, isPending: true };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
     useAiCatalog: () => useAiCatalogMock(),
-    usePromoteCatalogModel: () => ({ mutate: promoteMutate, ...idleMutation }),
-    useRetireCatalogModel: () => ({ mutate: retireMutate, ...idleMutation }),
-    useUpdateCatalogCopy: () => ({ mutate: updateCopyMutate, ...idleMutation }),
+    usePromoteCatalogModel: () => ({
+      mutate: promoteMutate,
+      ...mutationStateMock(),
+    }),
+    useRetireCatalogModel: () => ({
+      mutate: retireMutate,
+      ...mutationStateMock(),
+    }),
+    useUpdateCatalogCopy: () => ({
+      mutate: updateCopyMutate,
+      ...mutationStateMock(),
+    }),
     useResolveCatalogAlert: () => ({
       mutate: resolveAlertMutate,
-      ...idleMutation,
+      ...mutationStateMock(),
     }),
   };
 });
@@ -108,6 +120,8 @@ describe('CatalogSection', () => {
     updateCopyMutate.mockReset();
     resolveAlertMutate.mockReset();
     useAiCatalogMock.mockReset();
+    mutationStateMock.mockReset();
+    mutationStateMock.mockReturnValue(IDLE_MUTATION);
   });
 
   it('lists an open alert with its kind, model and detail', () => {
@@ -225,6 +239,36 @@ describe('CatalogSection', () => {
       id: 'openrouter:vendor/pick-me',
       tier: 'open',
     });
+  });
+
+  it('locks Promote and Retire while a mutation is in flight', () => {
+    mutationStateMock.mockReturnValue(PENDING_MUTATION);
+    renderSection({
+      candidates: [model({ label: 'Cheap One' })],
+      promoted: [
+        model({
+          id: 'openrouter:vendor/live-one',
+          label: 'Live One',
+          status: 'promoted',
+        }),
+      ],
+    });
+
+    expect(
+      screen.getByRole('button', { name: 'Promote Cheap One' })
+    ).toBeDisabled();
+    expect(
+      screen.getByRole('button', { name: 'Retire Live One' })
+    ).toBeDisabled();
+  });
+
+  it('ignores a second Promote while the first one is still in flight', async () => {
+    mutationStateMock.mockReturnValue(PENDING_MUTATION);
+    renderSection({ candidates: [model({ id: 'openrouter:vendor/pick-me' })] });
+
+    await userEvent.click(screen.getByRole('button', { name: /promote/i }));
+
+    expect(promoteMutate).not.toHaveBeenCalled();
   });
 
   it('retires a promoted model', async () => {
