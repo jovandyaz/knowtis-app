@@ -1,6 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
 
@@ -88,5 +90,22 @@ describe('ModelCatalogAdapter', () => {
       adapter.getPricing('anthropic:claude-sonnet-4-20250514')
         ?.inputCostPerToken
     ).toBe(0.000099);
+  });
+
+  // accessFor exempts curated ids from the ceiling only while tier gating is off.
+  // A snapshot refresh that pushes one of these over it would silently bill the
+  // platform for the whole free tier, so it has to fail here instead.
+  it('keeps every curated open-tier model within the free-tier ceiling', () => {
+    const adapter = makeAdapter();
+
+    for (const model of CURATED_MODELS.filter((m) => m.tier === 'open')) {
+      const outputCostPerToken = adapter.getPricing(
+        model.id
+      )?.outputCostPerToken;
+      expect(outputCostPerToken).toBeTypeOf('number');
+      expect(outputCostPerToken).toBeLessThanOrEqual(
+        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+      );
+    }
   });
 });

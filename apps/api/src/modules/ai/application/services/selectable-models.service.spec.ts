@@ -20,6 +20,9 @@ const PORT_CONTEXT_WINDOW = 262_144;
 const ROW_CONTEXT_WINDOW = 4_096;
 const CURATED_OUTPUT_COST = 0.000015;
 const SHADOWING_OUTPUT_COST = 0.0000001;
+/** Below FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, like every open-tier model the platform absorbs. */
+const FREE_TIER_OUTPUT_COST = 0.000001;
+const ABOVE_CEILING_OUTPUT_COST = 0.000015;
 
 type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;
 type PromotedCacheStub = Pick<PromotedModelsCache, 'snapshot'>;
@@ -45,7 +48,7 @@ function makeOpenService(promoted: readonly CatalogModel[] = []) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
     isFast: () => false,
-    getPricing: () => ({ outputCostPerToken: 0.000005 }),
+    getPricing: () => ({ outputCostPerToken: FREE_TIER_OUTPUT_COST }),
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
   const registry: RegistryStub = { isModelAvailable: () => true };
@@ -72,7 +75,10 @@ function makeService(opts: {
     getPricing: (id: string) =>
       opts.pricing?.[id] ||
       (opts.supported.has(id)
-        ? { inputCostPerToken: 0.000001, outputCostPerToken: 0.000005 }
+        ? {
+            inputCostPerToken: 0.000001,
+            outputCostPerToken: FREE_TIER_OUTPUT_COST,
+          }
         : undefined),
   };
   const registry: RegistryStub = {
@@ -405,6 +411,69 @@ describe('SelectableModelsService', () => {
         costClass: 2,
       });
       expect(matches[0]?.description).toBeUndefined();
+    });
+
+    /** The promote button is not a code review: the stored price, not the tier, decides who pays. */
+    describe('a model promoted above the free-tier ceiling', () => {
+      async function serviceWithPromotedPrice(outputCostPerToken: number) {
+        const promoted = new PromotedModelsCache(
+          createCatalogRepositoryStub(async () => [
+            createCatalogModel({
+              id: PROMOTED_ID,
+              tier: 'open',
+              outputCostPerToken,
+            }),
+          ])
+        );
+        await promoted.onModuleInit();
+        const curatedOnly = {
+          isSupported: () => false,
+          getPricing: () => undefined,
+          getContextWindow: () => undefined,
+        };
+        return new SelectableModelsService(
+          new CompositeModelCatalog(promoted, curatedOnly as never),
+          { isModelAvailable: () => true } as never,
+          promoted
+        );
+      }
+
+      it('is unreachable without a key even though its tier is open', async () => {
+        const service = await serviceWithPromotedPrice(
+          ABOVE_CEILING_OUTPUT_COST
+        );
+
+        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(false);
+        expect(
+          service
+            .list(SYSTEM_DEFAULT, NO_BYOK, true)
+            .find((m) => m.id === PROMOTED_ID)?.access
+        ).toBe('requires_byok');
+      });
+
+      it('stays unreachable without a key while tier gating is off', async () => {
+        const service = await serviceWithPromotedPrice(
+          ABOVE_CEILING_OUTPUT_COST
+        );
+
+        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, false)).toBe(false);
+      });
+
+      it('opens up to the caller who brings the provider key', async () => {
+        const service = await serviceWithPromotedPrice(
+          ABOVE_CEILING_OUTPUT_COST
+        );
+
+        expect(
+          service.isSelectable(PROMOTED_ID, new Set(['openrouter']), true)
+        ).toBe(true);
+      });
+
+      it('stays free when the stored price is under the ceiling', async () => {
+        const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
+
+        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(true);
+      });
     });
 
     it('selects a promoted model the curated catalog does not know', () => {

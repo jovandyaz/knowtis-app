@@ -5,9 +5,16 @@ import {
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type { ModelIntent, SelectableModel } from '@knowtis/shared-types';
+import type {
+  ModelAccess,
+  ModelIntent,
+  SelectableModel,
+} from '@knowtis/shared-types';
 
-import { accessFor } from '../../domain/model-catalog/model-access.policy';
+import {
+  accessFor,
+  type AccessCandidate,
+} from '../../domain/model-catalog/model-access.policy';
 import {
   CURATED_MODEL_IDS,
   CURATED_MODELS,
@@ -67,8 +74,23 @@ export class SelectableModelsService {
   ): boolean {
     return (
       this.invocable(model, byokProviders) &&
-      accessFor(model, byokProviders, tierGatingOn) === 'granted'
+      this.accessFor(model, byokProviders, tierGatingOn) === 'granted'
     );
+  }
+
+  /** Prices the model through the catalog port, which is what serves a promoted row's stored cost. */
+  private accessFor(
+    model: OfferedModel,
+    byokProviders: ReadonlySet<string>,
+    tierGatingOn: boolean
+  ): ModelAccess {
+    const candidate: AccessCandidate = {
+      id: model.id,
+      tier: model.tier,
+      outputCostPerToken:
+        this.catalog.getPricing(model.id)?.outputCostPerToken ?? null,
+    };
+    return accessFor(candidate, byokProviders, tierGatingOn);
   }
 
   private costClass(id: string): 1 | 2 | 3 {
@@ -103,7 +125,7 @@ export class SelectableModelsService {
         isDefault: m.id === systemDefault,
         billedToUser: byokProviders.has(providerOf(m.id)),
         routableByServer: this.registry.isModelAvailable(m.id),
-        access: accessFor(m, byokProviders, tierGatingOn),
+        access: this.accessFor(m, byokProviders, tierGatingOn),
       }));
   }
 
