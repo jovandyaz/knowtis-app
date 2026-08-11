@@ -110,10 +110,22 @@ export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
   async fetchModels(): Promise<UpstreamModel[]> {
     const models: UpstreamModel[] = [];
     const discarded: string[] = [];
+    const fetched = new Set<string>();
     let nextUrl: string | null = OPENROUTER_MODELS_URL;
     let pages = 0;
 
     while (nextUrl !== null && pages < MAX_MODEL_PAGES) {
+      if (fetched.has(nextUrl)) {
+        // Clearing it keeps the truncation warning below meaning "hit the page
+        // cap", which is a different upstream problem than a cycle.
+        nextUrl = null;
+        this.logger.warn({
+          event: 'ai.catalog.upstream_pagination_cycle',
+          pages,
+        });
+        break;
+      }
+      fetched.add(nextUrl);
       const page = await this.fetchPage(nextUrl);
       pages += 1;
       for (const raw of page.data) {

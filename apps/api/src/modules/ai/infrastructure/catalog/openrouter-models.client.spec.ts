@@ -314,10 +314,43 @@ describe('OpenRouterModelsHttpClient', () => {
     );
   });
 
+  it('should stop paginating on a next link that points back to a fetched page', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        okResponse(page([DEEPSEEK_V32], '/api/v1/models?offset=1&limit=1'))
+      )
+      .mockResolvedValueOnce(
+        okResponse(page([KIMI_K3], '/api/v1/models?offset=1&limit=1'))
+      );
+
+    const models = await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(models).toHaveLength(2);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.upstream_pagination_cycle',
+      })
+    );
+    expect(warn).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.upstream_pagination_truncated',
+      })
+    );
+  });
+
   it('should stop at the page cap when upstream never stops paginating', async () => {
-    fetchMock.mockResolvedValue(
-      okResponse(
-        page([DEEPSEEK_V32], 'https://openrouter.ai/api/v1/models?offset=1')
+    // Each page advances the offset: a repeated url would trip cycle detection
+    // instead, which is a different upstream fault.
+    let offset = 0;
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        okResponse(
+          page(
+            [DEEPSEEK_V32],
+            `https://openrouter.ai/api/v1/models?offset=${++offset}`
+          )
+        )
       )
     );
 
@@ -325,5 +358,10 @@ describe('OpenRouterModelsHttpClient', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(MAX_MODEL_PAGES);
     expect(models).toHaveLength(MAX_MODEL_PAGES);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.upstream_pagination_truncated',
+      })
+    );
   });
 });
