@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
+import { PROMOTED_STATUS } from '@knowtis/shared-types';
 import type {
   CatalogAlertKind,
   CatalogModelStatus,
@@ -23,7 +24,6 @@ import type {
   CatalogStatusChange,
 } from '../../domain/ports/ai-catalog.repository';
 
-const PROMOTED_STATUS = 'promoted' as const satisfies CatalogModelStatus;
 const UPSTREAM_OWNED_COPY_STATUS =
   'candidate' as const satisfies CatalogModelStatus;
 

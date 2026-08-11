@@ -448,11 +448,11 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 ### The sync job
 
-`CatalogSyncTask` runs daily at 03:00, gated by the `ai_catalog_sync` flag (default **off**, so the code deploys inert). It holds `pg_try_advisory_xact_lock(778493003)` — transaction-scoped, so a crashed run can never strand it the way a session lock taken through a pool can. Both HTTP fetches happen **before** the transaction opens, so no Postgres transaction stays open across a network call.
+`CatalogSyncTask` runs daily at 03:00, gated by the `ai_catalog_sync` flag (default **off**, so the code deploys inert). It runs under session advisory lock `778493003` pinned to a reserved connection (`runWithAdvisoryLock`) — unlocking through the pool can hit a session that never held the lock and strand it forever, which is what #206 fixed. The HTTP fetches run inside the lock, so two overlapping runs cannot double-fetch or double-write.
 
 A model becomes a candidate when it clears every bar: an author in `OPEN_WEIGHT_AUTHORS`, no variant suffix (`:free`, `:batch`, `:thinking`), not already curated, at least 128k of context, text output only, and an output price at or under `CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN`. Upsert is per-model, so one malformed entry cannot lose the rest of the run.
 
-The same run watches the **curated** models for upstream drift and files alerts: a model that vanished upstream, one flagged deprecated, or a price that moved. Price alerts on the open tier fire **only upward** — the vendored open-tier costs are deliberate upper bounds over OpenRouter's routed providers, so a cheaper upstream is the expected state, not an incident.
+The same run watches the **curated and promoted** models for upstream drift and files alerts: a model that vanished upstream, one flagged deprecated, or a price that moved. Absence is only ever concluded from a complete read that still recognizes a curated model and carries no anonymous discard; when it cannot conclude, the run warns `ai.catalog.absence_watch_blind` instead of silently reporting a clean sync. Price alerts on the open tier fire **only upward** — the vendored open-tier costs are deliberate upper bounds over OpenRouter's routed providers, so a cheaper upstream is the expected state, not an incident.
 
 ### Two ceilings, and why they differ
 
