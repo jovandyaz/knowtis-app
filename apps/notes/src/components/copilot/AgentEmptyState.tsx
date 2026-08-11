@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Sparkles } from 'lucide-react';
 
-import { AgentSuggestionChips } from './AgentSuggestionChips';
+import { AgentCapabilityRows } from './AgentCapabilityRows';
 
 export function AgentEmptyState({
   onSelectSuggestion,
@@ -23,7 +23,7 @@ export function AgentEmptyState({
           {t('ai.copilot.empty.greeting')}
         </p>
       </div>
-      <AgentSuggestionChips onSelect={onSelectSuggestion} />
+      <AgentCapabilityRows onSelect={onSelectSuggestion} />
     </div>
   );
 }

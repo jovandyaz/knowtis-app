@@ -206,13 +206,23 @@
       "stop": "Detener",
       "empty": {
         "title": "Pregúntale a tus notas",
-        "greeting": "Pregunta lo que quieras sobre esta nota: puedo resumir, mejorar, encontrar fuentes y más.",
-        "suggestions": "\"resume mis notas de bio\", \"¿qué dije sobre X?\"",
-        "suggestion": {
-          "summarize": "Resume esta nota",
-          "improve": "Mejora la redacción",
-          "sources": "Encuentra fuentes",
-          "translate": "Tradúcela"
+        "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",
+        "capability": {
+          "understand": {
+            "label": "Resume o traduce",
+            "hint": "esta nota",
+            "prompt": "Resume esta nota"
+          },
+          "write": {
+            "label": "Crea y edita notas",
+            "hint": "tú apruebas",
+            "prompt": "Crea una nota con los puntos clave de esta"
+          },
+          "research": {
+            "label": "Busca con fuentes",
+            "hint": "tus notas + la web",
+            "prompt": "Busca en la web contexto sobre esta nota y cita las fuentes"
+          }
         }
       },
       "estudio": {
