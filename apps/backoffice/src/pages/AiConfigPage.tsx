@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
+import { CatalogSection } from '@/components/ai-config/CatalogSection';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
 import { ReasoningSection } from '@/components/ai-config/ReasoningSection';
@@ -190,6 +191,7 @@ export function AiConfigPage() {
               {effort ? <ReasoningSection entry={effort} /> : null}
             </>
           )}
+          <CatalogSection />
         </TabsContent>
         <TabsContent value={TAB.guardrails} className="pt-4">
           {renderFlagPanel(GUARDRAIL_FLAG_GROUPS)}

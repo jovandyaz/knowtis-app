@@ -8,6 +8,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    // @nx/vitest swallows the default reporter, so a failure surfaces as a bare
+    // exit code with no test name or assertion.
+    reporters: ['default'],
   },
   resolve: {
     alias: {

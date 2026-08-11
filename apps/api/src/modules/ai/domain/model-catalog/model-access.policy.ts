@@ -1,7 +1,10 @@
 import { providerOf } from '@knowtis/ai-gateway';
-import type { ModelAccess, ModelTier } from '@knowtis/shared-types';
+import {
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+  type ModelAccess,
+  type ModelTier,
+} from '@knowtis/shared-types';
 
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from './candidate-filter';
 import { CURATED_MODEL_IDS } from './selectable-models.catalog';
 
 const GRANTED: ModelAccess = 'granted';

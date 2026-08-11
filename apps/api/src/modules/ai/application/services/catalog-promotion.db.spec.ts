@@ -11,6 +11,8 @@ import {
   vi,
 } from 'vitest';
 
+import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
+
 import { validateEnv } from '../../../../config/env.config';
 import {
   aiCatalogModels,
@@ -20,7 +22,6 @@ import {
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';

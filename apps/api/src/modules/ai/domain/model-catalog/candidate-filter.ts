@@ -17,10 +17,7 @@ export const OPEN_WEIGHT_AUTHORS = [
 
 export const MIN_CANDIDATE_CONTEXT_TOKENS = 128_000;
 
-/** Ceiling the platform absorbs on the free tier. */
-export const FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN = 0.0000044;
-
-/** Ceiling for admission into the catalog. Anything between the two ceilings is only reachable with BYOK or a paid plan. */
+/** Ceiling for admission into the catalog. Anything between this and the free-tier ceiling is only reachable with BYOK or a paid plan. */
 export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;
 
 const OPEN_WEIGHT_AUTHOR_SET: ReadonlySet<string> = new Set(

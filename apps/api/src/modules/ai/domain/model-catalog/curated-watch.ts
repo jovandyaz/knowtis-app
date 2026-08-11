@@ -55,7 +55,11 @@ function hasPriceDrift(vendored: number, live: number, ratio: number): boolean {
  * incident: the open-tier vendored costs are deliberate upper bounds over
  * OpenRouter's routed providers, so a cheaper upstream is the expected state.
  */
-function exceedsVendored(vendored: number, live: number, ratio: number): boolean {
+function exceedsVendored(
+  vendored: number,
+  live: number,
+  ratio: number
+): boolean {
   if (vendored === 0) {
     return live > 0;
   }

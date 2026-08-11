@@ -1,7 +1,8 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
+import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
+
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ModelCatalogAdapter } from './model-catalog.adapter';

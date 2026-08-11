@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from './candidate-filter';
+import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
+
 import { accessFor, type AccessCandidate } from './model-access.policy';
 import { CURATED_MODELS } from './selectable-models.catalog';
 
