@@ -116,6 +116,7 @@ describe('vendored snapshot', () => {
   const catalog = new LiteLLMCatalog(MODEL_PRICES_SNAPSHOT);
 
   it('resolves a real id through every provider key mapping', () => {
+    // One id per PROVIDER_TO_LITELLM branch; swap freely for any snapshot id.
     for (const model of [
       'anthropic:claude-sonnet-5',
       'google:gemini-3.5-flash',

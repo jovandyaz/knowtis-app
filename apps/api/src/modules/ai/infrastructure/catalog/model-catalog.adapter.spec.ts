@@ -99,10 +99,14 @@ describe('ModelCatalogAdapter', () => {
     const adapter = makeAdapter();
 
     for (const model of CURATED_MODELS) {
-      const pricing = adapter.getPricing(model.id);
       expect(adapter.isSupported(model.id), model.id).toBe(true);
+      const pricing = adapter.getPricing(model.id);
       expect(pricing?.inputCostPerToken, model.id).toBeGreaterThan(0);
       expect(pricing?.outputCostPerToken, model.id).toBeGreaterThan(0);
+      expect(
+        adapter.getContextWindow(model.id)?.maxInputTokens,
+        model.id
+      ).toBeGreaterThan(0);
     }
   });
 
