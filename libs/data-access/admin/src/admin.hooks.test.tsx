@@ -966,3 +966,112 @@ describe('useAiHealth', () => {
     expect(result.current.data?.providers['openrouter']?.cooling).toBe(true);
   });
 });
+
+describe('admin mutations and their invalidations', () => {
+  const PROVIDERS = [
+    {
+      provider: 'anthropic',
+      enabled: true,
+      keySource: 'database',
+      storedKeyUnreadable: false,
+      keyPrefix: 'sk-ant',
+      updatedAt: '2026-07-01T00:00:00.000Z',
+    },
+  ];
+  const FLAG = {
+    key: 'ai_enabled',
+    enabled: true,
+    description: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-07-01T00:00:00.000Z',
+  };
+
+  const CASES: {
+    name: string;
+    hook: () => { mutate: (input: never) => void; isPending: boolean };
+    input: unknown;
+    respond: () => void;
+  }[] = [
+    {
+      name: 'useUpdateUserRole',
+      hook: useUpdateUserRole,
+      input: { userId: PAGE.items[0].id, role: 'user' },
+      respond: () =>
+        vi.mocked(httpClient.patch).mockResolvedValue(PAGE.items[0]),
+    },
+    {
+      name: 'useUpsertFeatureFlag',
+      hook: useUpsertFeatureFlag,
+      input: { key: 'ai_enabled', enabled: true },
+      respond: () => vi.mocked(httpClient.put).mockResolvedValue(FLAG),
+    },
+    {
+      name: 'useDeleteFeatureFlag',
+      hook: useDeleteFeatureFlag,
+      input: 'ai_enabled',
+      respond: () => vi.mocked(httpClient.delete).mockResolvedValue({}),
+    },
+    {
+      name: 'useSetAiConfig',
+      hook: useSetAiConfig,
+      input: { key: 'ai_default_model', value: 'anthropic:claude-sonnet-5' },
+      respond: () => vi.mocked(httpClient.put).mockResolvedValue({}),
+    },
+    {
+      name: 'useResetAiConfig',
+      hook: useResetAiConfig,
+      input: { key: 'ai_default_model' },
+      respond: () => vi.mocked(httpClient.delete).mockResolvedValue({}),
+    },
+    {
+      name: 'useSetSystemProvider',
+      hook: useSetSystemProvider,
+      input: { provider: 'anthropic', enabled: true },
+      respond: () => vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS),
+    },
+    {
+      name: 'useClearSystemProviderKey',
+      hook: useClearSystemProviderKey,
+      input: 'anthropic',
+      respond: () => vi.mocked(httpClient.delete).mockResolvedValue(PROVIDERS),
+    },
+  ];
+
+  // A dropped invalidation promise is invisible to a "was it called" assertion:
+  // the call happens either way. Holding the refetch open is what separates the
+  // two — a caller disabling buttons on `isPending` re-enables them over stale
+  // rows exactly in this window.
+  it.each(CASES)(
+    '$name stays pending until its invalidations settle',
+    async ({ hook, input, respond }) => {
+      respond();
+      let releaseInvalidation: () => void = () => undefined;
+      const held = new Promise<void>((resolve) => {
+        releaseInvalidation = resolve;
+      });
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const invalidateSpy = vi
+        .spyOn(client, 'invalidateQueries')
+        .mockReturnValue(held);
+
+      const { result } = renderHook(hook, {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      });
+      result.current.mutate(input as never);
+
+      // Anchor on the invalidation having started, not on `isPending` alone:
+      // straight after `mutate()` the mutation is pending because its own
+      // request is in flight, which a dropped promise would also satisfy.
+      await waitFor(() => expect(invalidateSpy).toHaveBeenCalled());
+      await Promise.resolve();
+      expect(result.current.isPending).toBe(true);
+
+      releaseInvalidation();
+      await waitFor(() => expect(result.current.isPending).toBe(false));
+    }
+  );
+});

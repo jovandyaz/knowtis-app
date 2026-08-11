@@ -86,14 +86,13 @@ export function useUpdateUserRole() {
           role: input.role,
         })
       ),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.usersList(),
-      });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
-    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: adminQueryKeys.usersList() }),
+        queryClient.invalidateQueries({
+          queryKey: adminQueryKeys.auditLists(),
+        }),
+      ]),
   });
 }
 
@@ -129,10 +128,12 @@ export function useGlobalAiTimeseries(period: MetricsPeriod) {
 }
 
 function invalidateFlagDependents(queryClient: QueryClient) {
-  queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all });
-  queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
-  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
-  queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiHealth() });
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: featureFlagsQueryKeys.all }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiHealth() }),
+  ]);
 }
 
 export function useUpsertFeatureFlag() {
@@ -151,9 +152,7 @@ export function useUpsertFeatureFlag() {
           }),
         })
       ),
-    onSuccess: () => {
-      invalidateFlagDependents(queryClient);
-    },
+    onSettled: () => invalidateFlagDependents(queryClient),
   });
 }
 
@@ -162,10 +161,16 @@ export function useDeleteFeatureFlag() {
   return useMutation({
     mutationFn: (key: string) =>
       httpClient.delete(`/flags/${encodeURIComponent(key)}`),
-    onSuccess: () => {
-      invalidateFlagDependents(queryClient);
-    },
+    onSettled: () => invalidateFlagDependents(queryClient),
   });
+}
+
+/** Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
+function invalidateAiConfigDependents(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
+  ]);
 }
 
 export function useAiConfig() {
@@ -184,12 +189,7 @@ export function useSetAiConfig() {
       httpClient.put(`/ai/config/${encodeURIComponent(input.key)}`, {
         value: input.value,
       }),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
-    },
+    onSettled: () => invalidateAiConfigDependents(queryClient),
   });
 }
 
@@ -198,12 +198,7 @@ export function useResetAiConfig() {
   return useMutation({
     mutationFn: (input: { key: string }) =>
       httpClient.delete(`/ai/config/${encodeURIComponent(input.key)}`),
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiConfig() });
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.auditLists(),
-      });
-    },
+    onSettled: () => invalidateAiConfigDependents(queryClient),
   });
 }
 
@@ -235,12 +230,15 @@ function useSystemProviderMutation<TInput>(
       SystemProvidersSchema.parse(await mutationFn(input)),
     onSuccess: (providers) =>
       queryClient.setQueryData(adminQueryKeys.systemProviders(), providers),
-    onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: adminQueryKeys.systemProviders(),
-      });
-      queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() });
-    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: adminQueryKeys.systemProviders(),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: adminQueryKeys.auditLists(),
+        }),
+      ]),
   });
 }
 
