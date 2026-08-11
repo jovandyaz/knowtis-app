@@ -47,7 +47,6 @@ function promotedCache(models: readonly CatalogModel[]): PromotedCacheStub {
 function makeOpenService(promoted: readonly CatalogModel[] = []) {
   const catalog: ModelCatalog = {
     isSupported: () => true,
-    isFast: () => false,
     getPricing: () => ({ outputCostPerToken: FREE_TIER_OUTPUT_COST }),
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
@@ -71,7 +70,6 @@ function makeService(opts: {
 }) {
   const catalog: ModelCatalog = {
     isSupported: (id: string) => opts.supported.has(id),
-    isFast: () => false,
     getContextWindow: (id: string) =>
       opts.context?.[id]
         ? { maxInputTokens: opts.context[id], maxOutputTokens: 4096 }
@@ -112,7 +110,6 @@ describe('SelectableModelsService', () => {
     };
     const catalog: ModelCatalog = {
       isSupported: () => true,
-      isFast: () => false,
       getPricing: () => ({ outputCostPerToken: 0.000005 }),
       getContextWindow: () => ({ maxInputTokens: 1000 }),
     };
@@ -383,7 +380,6 @@ describe('SelectableModelsService', () => {
       // model even though a promoted row of the same id carries other numbers.
       const curated: ModelCatalog = {
         isSupported: () => true,
-        isFast: () => false,
         getPricing: () => ({ outputCostPerToken: CURATED_OUTPUT_COST }),
         getContextWindow: () => ({ maxInputTokens: PORT_CONTEXT_WINDOW }),
       };

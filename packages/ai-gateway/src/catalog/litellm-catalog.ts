@@ -4,12 +4,6 @@ import type {
   ModelPricing,
 } from './model-catalog';
 
-export const DEFAULT_FAST_MODELS: readonly string[] = [
-  'anthropic:claude-haiku-4-5-20251001',
-  'google:gemini-2.0-flash',
-  'openai:gpt-4o-mini',
-];
-
 interface CatalogEntry {
   readonly mode: string;
   readonly pricing: ModelPricing;
@@ -74,14 +68,9 @@ export function parseLiteLLMPricing(raw: unknown): Map<string, CatalogEntry> {
 
 export class LiteLLMCatalog implements ModelCatalog {
   private entries: Map<string, CatalogEntry>;
-  private readonly fastModels: Set<string>;
 
-  constructor(
-    raw: unknown,
-    fastModels: readonly string[] = DEFAULT_FAST_MODELS
-  ) {
+  constructor(raw: unknown) {
     this.entries = parseLiteLLMPricing(raw);
-    this.fastModels = new Set(fastModels);
   }
 
   /** Replaces the catalog contents; ignores data that parses to zero entries. */
@@ -100,10 +89,6 @@ export class LiteLLMCatalog implements ModelCatalog {
 
   isSupported(modelId: string): boolean {
     return this.lookup(modelId)?.mode === 'chat';
-  }
-
-  isFast(modelId: string): boolean {
-    return this.fastModels.has(modelId);
   }
 
   getPricing(modelId: string): ModelPricing | undefined {

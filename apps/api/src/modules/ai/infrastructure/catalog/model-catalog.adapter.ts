@@ -52,10 +52,6 @@ export class ModelCatalogAdapter implements ModelCatalog, OnModuleInit {
     return this.catalog.isSupported(modelId);
   }
 
-  isFast(modelId: string): boolean {
-    return this.catalog.isFast(modelId);
-  }
-
   getPricing(modelId: string): ModelPricing | undefined {
     const pricing = this.catalog.getPricing(modelId);
     if (pricing === undefined && !this.warnedModels.has(modelId)) {

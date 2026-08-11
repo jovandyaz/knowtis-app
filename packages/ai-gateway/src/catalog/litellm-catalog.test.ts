@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEFAULT_FAST_MODELS,
-  LiteLLMCatalog,
-  toLiteLLMKey,
-} from './litellm-catalog';
+import { LiteLLMCatalog, toLiteLLMKey } from './litellm-catalog';
 import { MODEL_PRICES_SNAPSHOT } from './model-prices.snapshot';
 
 const RAW = {
@@ -93,11 +89,6 @@ describe('LiteLLMCatalog', () => {
     ).toEqual({ maxInputTokens: 200000, maxOutputTokens: 64000 });
   });
 
-  it('flags fast models from the default list', () => {
-    expect(catalog.isFast('anthropic:claude-haiku-4-5-20251001')).toBe(true);
-    expect(catalog.isFast('anthropic:claude-sonnet-4-20250514')).toBe(false);
-  });
-
   it('drops negative pricing values from corrupted data', () => {
     const corrupted = new LiteLLMCatalog({
       'bad-model': {
@@ -124,17 +115,13 @@ describe('LiteLLMCatalog', () => {
 describe('vendored snapshot', () => {
   const catalog = new LiteLLMCatalog(MODEL_PRICES_SNAPSHOT);
 
-  it('contains the models Knowtis uses today', () => {
+  it('resolves a real id through every provider key mapping', () => {
+    // One id per PROVIDER_TO_LITELLM branch; swap freely for any snapshot id.
     for (const model of [
-      'anthropic:claude-sonnet-4-20250514',
-      'anthropic:claude-haiku-4-5-20251001',
-      'google:gemini-2.0-flash',
-      'google:gemini-2.5-pro',
-      'openai:gpt-4o-mini',
-      'openrouter:deepseek/deepseek-v3.2',
+      'anthropic:claude-sonnet-5',
+      'google:gemini-3.5-flash',
+      'openai:gpt-5.4',
       'openrouter:z-ai/glm-5.2',
-      'openrouter:moonshotai/kimi-k2.5',
-      'openrouter:minimax/minimax-m2.5',
     ]) {
       expect(catalog.isSupported(model), model).toBe(true);
       expect(
@@ -148,11 +135,5 @@ describe('vendored snapshot', () => {
     expect(
       catalog.getPricing('openai:whisper-1')?.inputCostPerSecond
     ).toBeGreaterThan(0);
-  });
-
-  it('keeps the default fast models resolvable', () => {
-    for (const model of DEFAULT_FAST_MODELS) {
-      expect(catalog.getPricing(model), model).toBeDefined();
-    }
   });
 });
