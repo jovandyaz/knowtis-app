@@ -1,10 +1,9 @@
 import { Logger } from '@nestjs/common';
-import type { SQL } from 'drizzle-orm';
-import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import type { UpstreamModel } from '../../domain/ports/openrouter-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
 
@@ -44,10 +43,6 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
-function renderSql(query: SQL): string {
-  return new PgDialect().sqlToQuery(query).sql;
-}
-
 function make(
   options: {
     upstream?: UpstreamModel[];
@@ -59,16 +54,7 @@ function make(
     flagEnabled?: boolean;
   } = {}
 ) {
-  const tx = {
-    execute: vi
-      .fn<(query: SQL) => Promise<{ locked: boolean }[]>>()
-      .mockResolvedValue([{ locked: options.locked ?? true }]),
-  };
-  const db = {
-    transaction: vi.fn(async (work: (tx: unknown) => Promise<void>) =>
-      work(tx)
-    ),
-  };
+  const lock = createAdvisoryLockClient(options.locked ?? true);
   const flags = {
     isEnabled: vi.fn().mockResolvedValue(options.flagEnabled ?? true),
   };
@@ -86,14 +72,14 @@ function make(
     getPricing: vi.fn((modelId: string) => VENDORED_PRICING[modelId]),
   };
   const task = new CatalogSyncTask(
-    db as never,
+    lock.client,
     flags as never,
     repo as never,
     openRouter as never,
     liteLlm as never,
     catalog as never
   );
-  return { task, db, tx, flags, repo, openRouter, liteLlm, catalog };
+  return { task, lock, flags, repo, openRouter, liteLlm, catalog };
 }
 
 describe('CatalogSyncTask', () => {
@@ -126,7 +112,7 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should touch nothing while the flag is off', async () => {
-    const { task, openRouter, liteLlm, db } = make({
+    const { task, openRouter, liteLlm, lock } = make({
       flagEnabled: false,
       upstream: [QWEN_CANDIDATE],
     });
@@ -135,7 +121,7 @@ describe('CatalogSyncTask', () => {
 
     expect(openRouter.fetchModels).not.toHaveBeenCalled();
     expect(liteLlm.fetchPrices).not.toHaveBeenCalled();
-    expect(db.transaction).not.toHaveBeenCalled();
+    expect(lock.reserve).not.toHaveBeenCalled();
   });
 
   it('should store every upstream model that passes the candidate filter', async () => {
@@ -268,36 +254,48 @@ describe('CatalogSyncTask', () => {
   });
 
   it('should write nothing while another run holds the lock', async () => {
-    const { task, repo, db } = make({
+    const { task, repo } = make({
       upstream: [QWEN_CANDIDATE],
       locked: false,
     });
 
     await task.sync();
 
-    expect(db.transaction).toHaveBeenCalledTimes(1);
     expect(repo.upsertCandidate).not.toHaveBeenCalled();
     expect(repo.createAlert).not.toHaveBeenCalled();
   });
 
-  it('should hold a transaction-scoped lock that needs no explicit unlock', async () => {
-    const { task, tx } = make({ upstream: [QWEN_CANDIDATE] });
+  // The lock has to bracket the fetches, not just the writes: two runs that
+  // both call OpenRouter and LiteLLM before either takes the lock waste four
+  // upstream calls and make the reported "skipped" outcome a lie.
+  it('should never call upstream when another run holds the lock', async () => {
+    const { task, openRouter, liteLlm } = make({
+      upstream: [QWEN_CANDIDATE],
+      locked: false,
+    });
 
     await task.sync();
 
-    expect(tx.execute).toHaveBeenCalledTimes(1);
-    const statements = tx.execute.mock.calls.map(([query]) => renderSql(query));
-    expect(statements[0]).toContain('pg_try_advisory_xact_lock');
-    expect(statements.join('\n')).not.toContain('pg_advisory_unlock');
+    expect(openRouter.fetchModels).not.toHaveBeenCalled();
+    expect(liteLlm.fetchPrices).not.toHaveBeenCalled();
+  });
+
+  it('should unlock and free the reserved connection after a pass', async () => {
+    const { task, lock } = make({ upstream: [QWEN_CANDIDATE] });
+
+    await task.sync();
+
+    expect(lock.queries[0]).toContain('pg_try_advisory_lock');
+    expect(lock.queries[1]).toContain('pg_advisory_unlock');
+    expect(lock.release).toHaveBeenCalledTimes(1);
   });
 
   it('should log and swallow a failing upstream fetch', async () => {
-    const { task, openRouter, db } = make();
+    const { task, openRouter } = make();
     openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
 
     await expect(task.sync()).resolves.toBeUndefined();
 
-    expect(db.transaction).not.toHaveBeenCalled();
     expect(errorLog).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.sync_failed',
@@ -372,9 +370,12 @@ describe('CatalogSyncTask', () => {
     });
     repo.upsertCandidate.mockRejectedValueOnce(new Error('value too long'));
 
-    await expect(task.run()).resolves.toMatchObject({
+    await expect(task.run()).resolves.toEqual({
       status: 'completed',
+      skippedReason: null,
+      upstream: 2,
       candidates: 1,
+      alerts: 0,
       failures: 1,
     });
   });
@@ -382,20 +383,26 @@ describe('CatalogSyncTask', () => {
   it('should tell an on-demand run the flag is what stopped it', async () => {
     const { task } = make({ flagEnabled: false, upstream: [QWEN_CANDIDATE] });
 
-    await expect(task.run()).resolves.toMatchObject({
+    await expect(task.run()).resolves.toEqual({
       status: 'skipped',
       skippedReason: 'flag_disabled',
+      upstream: 0,
       candidates: 0,
+      alerts: 0,
+      failures: 0,
     });
   });
 
   it('should tell an on-demand run another holder has the lock', async () => {
     const { task } = make({ upstream: [QWEN_CANDIDATE], locked: false });
 
-    await expect(task.run()).resolves.toMatchObject({
+    await expect(task.run()).resolves.toEqual({
       status: 'skipped',
       skippedReason: 'locked',
+      upstream: 0,
       candidates: 0,
+      alerts: 0,
+      failures: 0,
     });
   });
 
@@ -405,5 +412,15 @@ describe('CatalogSyncTask', () => {
 
     await expect(task.run()).rejects.toThrow('openrouter down');
     expect(errorLog).not.toHaveBeenCalled();
+  });
+
+  it('should release the lock when the upstream fetch fails inside it', async () => {
+    const { task, openRouter, lock } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+
+    await task.sync();
+
+    expect(lock.queries.at(-1)).toContain('pg_advisory_unlock');
+    expect(lock.release).toHaveBeenCalledTimes(1);
   });
 });

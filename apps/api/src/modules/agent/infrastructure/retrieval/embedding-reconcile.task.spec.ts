@@ -35,7 +35,7 @@ function makeTask(opts: {
       costUsd: 0.002,
     })),
   } as unknown as EmbeddingPort;
-  const client = createAdvisoryLockClient(opts.lock ?? true);
+  const { client } = createAdvisoryLockClient(opts.lock ?? true);
   const config = {
     get: (k: string) => {
       if (k === 'AI_EMBEDDING_MODEL') {

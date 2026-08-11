@@ -313,9 +313,13 @@ describe('AiCatalogAdminService', () => {
         failures: 0,
       });
 
-      await expect(service.sync(ACTOR_ID)).resolves.toMatchObject({
+      await expect(service.sync(ACTOR_ID)).resolves.toEqual({
         status: 'skipped',
         skippedReason: 'locked',
+        upstream: 0,
+        candidates: 0,
+        alerts: 0,
+        failures: 0,
       });
       expect(audit.record).not.toHaveBeenCalled();
       expect(promotedCache.refresh).not.toHaveBeenCalled();

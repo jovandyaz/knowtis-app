@@ -135,9 +135,13 @@ describe('AiCatalogController', () => {
     );
   });
   it('runs a sync on behalf of the admin who asked for it', async () => {
-    await expect(controller.sync(ACTOR)).resolves.toMatchObject({
+    await expect(controller.sync(ACTOR)).resolves.toEqual({
       status: 'completed',
+      skippedReason: null,
+      upstream: 120,
       candidates: 97,
+      alerts: 2,
+      failures: 0,
     });
     expect(catalog.sync).toHaveBeenCalledWith('admin-user-id');
   });
@@ -152,9 +156,13 @@ describe('AiCatalogController', () => {
       failures: 0,
     });
 
-    await expect(controller.sync(ACTOR)).resolves.toMatchObject({
+    await expect(controller.sync(ACTOR)).resolves.toEqual({
       status: 'skipped',
       skippedReason: 'flag_disabled',
+      upstream: 0,
+      candidates: 0,
+      alerts: 0,
+      failures: 0,
     });
   });
 });
