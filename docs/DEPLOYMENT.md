@@ -28,10 +28,12 @@ How Knowtis is deployed to production: Railway (API + MCP) and Vercel (notes fro
 Deployments are triggered by the **CI pipeline**, not by Railway's GitHub integration.
 
 ```
-Push to main → GitHub Actions CI → lint, typecheck, test, build → railway up
+Push to main → GitHub Actions CI → lint, typecheck, test, build → deploy → wait for SUCCESS
 ```
 
-The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job executes `railway up` using the Railway CLI container.
+The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job runs `.github/scripts/railway-deploy.sh` in the Railway CLI container.
+
+That script starts the deploy detached and then polls until the deployment reaches a terminal status: `SUCCESS` and `SKIPPED` (Railway found nothing to ship) pass; `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 15-minute timeout fail the job. Plain `railway up` returns when the **build** log stream closes — before `preDeployCommand` and the healthcheck — so it would report success on a deploy whose migration later failed. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
 
 **Config files:**
 
@@ -56,7 +58,7 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after e
 | `VOYAGE_API_KEY`               | Secret   | Optional — lights up the retrieval/memory eval suites         |
 | `TAVILY_API_KEY`               | Secret   | Optional — lights up the web-search eval suite                |
 
-> A third deploy job, `deploy-mcp`, ships the MCP server to Railway (`railway up`) on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
+> A third deploy job, `deploy-mcp`, ships the MCP server to Railway through the same gated script on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
 
 ### Frontend (Vercel) — CI-driven
 

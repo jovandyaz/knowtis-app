@@ -574,12 +574,12 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 **Deploy jobs** (main push only, each gated on its app being affected):
 
-| Job                 | Target                                                                                              |
-| ------------------- | --------------------------------------------------------------------------------------------------- |
-| `deploy-frontend`   | Vercel (notes) — `vercel pull/build/deploy --prebuilt --prod`                                       |
-| `deploy-backoffice` | Vercel (`knowtis-backoffice` project) — same flow with `--local-config apps/backoffice/vercel.json` |
-| `deploy`            | Railway (api) — `railway up`; migrations run via Railway's pre-deploy command                       |
-| `deploy-mcp`        | Railway (mcp) — pins service vars and asserts OAuth env parity before `railway up`                  |
+| Job                 | Target                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `deploy-frontend`   | Vercel (notes) — `vercel pull/build/deploy --prebuilt --prod`                                                                          |
+| `deploy-backoffice` | Vercel (`knowtis-backoffice` project) — same flow with `--local-config apps/backoffice/vercel.json`                                    |
+| `deploy`            | Railway (api) — `railway-deploy.sh`, which waits for the deployment's terminal status; migrations run via Railway's pre-deploy command |
+| `deploy-mcp`        | Railway (mcp) — pins service vars and asserts OAuth env parity, then the same gated deploy                                             |
 
 **Neither frontend auto-deploys from Vercel's Git integration** — `vercel.json` sets `git.deploymentEnabled: false`; every deploy is CI-driven and gated on the checks above. See [DEPLOYMENT.md](./DEPLOYMENT.md).
 

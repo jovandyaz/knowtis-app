@@ -131,7 +131,7 @@ CI-driven, not Vercel Git auto-deploy: `vercel.json` sets `"git": { "deploymentE
 
 ### Railway (Backend)
 
-Deploy via `railway up` in CI, conditional on `api` being affected. The `watchPatterns` in `railway.toml` do NOT apply because the deploy is CI-driven, not via Railway's GitHub integration.
+Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status), conditional on `api` being affected. The `watchPatterns` in `railway.toml` do NOT apply because the deploy is CI-driven, not via Railway's GitHub integration.
 
 ### Testing affected locally
 
