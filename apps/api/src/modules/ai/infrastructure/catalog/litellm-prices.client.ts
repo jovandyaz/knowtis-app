@@ -31,6 +31,7 @@ async function readBoundedBody(response: Response): Promise<string> {
     Number.isFinite(declaredBytes) &&
     declaredBytes > MAX_PRICE_PAYLOAD_BYTES
   ) {
+    await response.body?.cancel();
     throw payloadTooLarge();
   }
   const reader = response.body?.getReader();
