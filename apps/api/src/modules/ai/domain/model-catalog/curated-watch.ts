@@ -1,7 +1,10 @@
 import { toLiteLLMKey } from '@knowtis/ai-gateway';
 import type { CatalogAlertKind, ModelTier } from '@knowtis/shared-types';
 
-import type { UpstreamCatalog } from '../ports/openrouter-models.port';
+import {
+  UNPARSEABLE_MODEL_ID,
+  type UpstreamCatalog,
+} from '../ports/openrouter-models.port';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -73,24 +76,48 @@ function perMillionTokens(costPerToken: number): string {
   return (costPerToken * TOKENS_PER_MILLION).toFixed(PRICE_DECIMALS);
 }
 
+function unavailableDetail(slug: string): string {
+  return `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`;
+}
+
 /**
- * Upstream changes on the curated models OpenRouter bills, matched by slug.
- * Absence is only concluded from a catalog that reached the last page and still
- * lists a curated model, and never for an id upstream published unparseably.
+ * Slug lookup for one upstream read, plus the guard that decides whether it may
+ * retire anything: only a catalog that reached the last page, still lists a
+ * curated model, and carries no anonymous discard can prove absence — a
+ * discarded entry whose id failed to parse could be any model, including the
+ * one about to be declared gone.
  */
-export function findOpenRouterDrift(
-  vendoredOutputCost: (id: string) => number | undefined,
-  catalog: UpstreamCatalog
-): DriftFinding[] {
+function absenceCheck(catalog: UpstreamCatalog) {
   const bySlug = new Map(
     catalog.models.map((model) => [model.id.toLowerCase(), model])
   );
   const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
-  const curatedSlugs = CURATED_MODELS.map((model) => openTierSlug(model.id));
-  const recognizable = curatedSlugs.some(
-    (slug) => slug !== null && bySlug.has(slug)
-  );
-  const canConcludeAbsence = catalog.complete && recognizable;
+  const recognizable = CURATED_MODELS.some((model) => {
+    const slug = openTierSlug(model.id);
+    return slug !== null && bySlug.has(slug);
+  });
+  const conclusive =
+    catalog.complete && recognizable && !unparseable.has(UNPARSEABLE_MODEL_ID);
+
+  return {
+    bySlug,
+    conclusive,
+    isGone: (slug: string) =>
+      conclusive && !bySlug.has(slug) && !unparseable.has(slug),
+  };
+}
+
+/** False when this read cannot prove absence, so the vanish watch reports nothing that run — otherwise indistinguishable from a healthy sync. */
+export function canConcludeAbsence(catalog: UpstreamCatalog): boolean {
+  return absenceCheck(catalog).conclusive;
+}
+
+/** Upstream changes on the curated models OpenRouter bills, matched by slug. */
+export function findOpenRouterDrift(
+  vendoredOutputCost: (id: string) => number | undefined,
+  catalog: UpstreamCatalog
+): DriftFinding[] {
+  const { bySlug, isGone } = absenceCheck(catalog);
   const findings: DriftFinding[] = [];
 
   for (const model of CURATED_MODELS) {
@@ -100,11 +127,11 @@ export function findOpenRouterDrift(
     }
     const live = bySlug.get(slug);
     if (live === undefined) {
-      if (canConcludeAbsence && !unparseable.has(slug)) {
+      if (isGone(slug)) {
         findings.push({
           modelId: model.id,
           kind: 'unavailable',
-          detail: `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`,
+          detail: unavailableDetail(slug),
         });
       }
       continue;
@@ -136,6 +163,34 @@ export function findOpenRouterDrift(
   }
 
   return findings;
+}
+
+/**
+ * Promoted models OpenRouter stopped listing. Absence is read from the payload
+ * rather than from `lastSeenAt`, which only refreshes for rows still passing the
+ * candidate filter — a promoted model whose price outgrew that ceiling is still
+ * listed, and reporting it as vanished would be wrong.
+ */
+export function findPromotedDrift(
+  promotedIds: readonly string[],
+  catalog: UpstreamCatalog
+): DriftFinding[] {
+  const { isGone } = absenceCheck(catalog);
+
+  return promotedIds
+    .filter((id) => id.startsWith(OPENROUTER_ID_PREFIX))
+    .flatMap((id) => {
+      const slug = id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase();
+      return isGone(slug)
+        ? [
+            {
+              modelId: id,
+              kind: 'unavailable' as const,
+              detail: unavailableDetail(slug),
+            },
+          ]
+        : [];
+    });
 }
 
 /**

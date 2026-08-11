@@ -7,6 +7,9 @@ export const CATALOG_MODEL_STATUSES = [
 ] as const;
 export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
 
+/** The one status that serves a model to users, so several layers gate on it. */
+export const PROMOTED_STATUS = 'promoted' as const satisfies CatalogModelStatus;
+
 export const CATALOG_ALERT_KINDS = [
   'deprecation',
   'price_drift',

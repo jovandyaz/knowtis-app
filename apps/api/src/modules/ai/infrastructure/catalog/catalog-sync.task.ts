@@ -5,6 +5,7 @@ import type { Sql } from 'postgres';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   FEATURE_FLAG_KEYS,
+  PROMOTED_STATUS,
   type CatalogSyncResultDto,
   type CatalogSyncSkipReason,
 } from '@knowtis/shared-types';
@@ -16,8 +17,10 @@ import {
   toCandidateUpsert,
 } from '../../domain/model-catalog/candidate-filter';
 import {
+  canConcludeAbsence,
   findLiteLlmDrift,
   findOpenRouterDrift,
+  findPromotedDrift,
   type DriftFinding,
 } from '../../domain/model-catalog/curated-watch';
 import {
@@ -27,6 +30,7 @@ import {
 import {
   OPENROUTER_MODELS_CLIENT,
   type OpenRouterModelsClient,
+  type UpstreamCatalog,
   type UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 import { LiteLlmPricesHttpClient } from './litellm-prices.client';
@@ -121,10 +125,39 @@ export class CatalogSyncTask {
     }
   }
 
+  private async promotedFindings(
+    catalog: UpstreamCatalog
+  ): Promise<DriftFinding[]> {
+    try {
+      const promoted = await this.repo.listByStatus(PROMOTED_STATUS);
+      return findPromotedDrift(
+        promoted.map((model) => model.id),
+        catalog
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.catalog.promoted_read_failed',
+        reason: reasonOf(error),
+      });
+      return [];
+    }
+  }
+
   private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
     const catalog = await this.openRouter.fetchModels();
+    // A blind run logs the same `alerts: 0` as a healthy one, so the operator
+    // must be told the vanish watch concluded nothing this pass.
+    if (!canConcludeAbsence(catalog)) {
+      this.logger.warn({
+        event: 'ai.catalog.absence_watch_blind',
+        complete: catalog.complete,
+        models: catalog.models.length,
+        discarded: catalog.discarded.length,
+      });
+    }
     const findings = [
       ...findOpenRouterDrift(this.vendoredOutputCost, catalog),
+      ...(await this.promotedFindings(catalog)),
       ...(await this.liteLlmFindings()),
     ];
     return this.persist(catalog.models, findings);

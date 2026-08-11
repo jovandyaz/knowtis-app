@@ -1,10 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
-import type {
-  OpenRouterModelsClient,
-  UpstreamCatalog,
-  UpstreamModel,
+import {
+  UNPARSEABLE_MODEL_ID,
+  type OpenRouterModelsClient,
+  type UpstreamCatalog,
+  type UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 
 const OPENROUTER_MODELS_URL = 'https://openrouter.ai/api/v1/models';
@@ -18,7 +19,6 @@ const MS_PER_DAY = 86_400_000;
 const EXPIRATION_SENTINEL_HORIZON_MS = 10 * 365 * MS_PER_DAY;
 
 const DISCARD_LOG_SAMPLE_SIZE = 10;
-const UNKNOWN_MODEL_ID = '<unparseable>';
 
 const costPerTokenSchema = z
   .string()
@@ -93,7 +93,7 @@ function toUpstreamModel(raw: ParsedUpstreamModel): UpstreamModel {
 
 function idOf(raw: unknown): string {
   const parsed = modelIdSchema.safeParse(raw);
-  return parsed.success ? parsed.data.id : UNKNOWN_MODEL_ID;
+  return parsed.success ? parsed.data.id : UNPARSEABLE_MODEL_ID;
 }
 
 function resolveUrl(raw: string, base: string): URL | null {
@@ -139,7 +139,13 @@ export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
           discarded.push(idOf(raw));
         }
       }
-      nextUrl = this.nextPageUrl(page.links?.next);
+      const nextLink = page.links?.next;
+      nextUrl = this.nextPageUrl(nextLink);
+      // A published link that resolved to null was rejected, not the end of
+      // the list — pages past it were never seen.
+      if (nextLink && nextUrl === null) {
+        complete = false;
+      }
     }
 
     if (discarded.length > 0) {
