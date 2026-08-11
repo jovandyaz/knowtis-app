@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   LITELLM_PRICES_URL,
   LiteLlmPricesHttpClient,
+  MAX_PRICE_PAYLOAD_BYTES,
 } from './litellm-prices.client';
 
 const PAYLOAD = {
@@ -20,8 +21,18 @@ const PAYLOAD = {
   },
 };
 
-function okResponse(body: unknown): Response {
-  return { ok: true, status: 200, json: async () => body } as Response;
+function okResponse(body: unknown, headers: HeadersInit = {}): Response {
+  return new Response(JSON.stringify(body), { status: 200, headers });
+}
+
+function oversizedResponse(headers: HeadersInit = {}): Response {
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new Uint8Array(MAX_PRICE_PAYLOAD_BYTES + 1));
+      controller.close();
+    },
+  });
+  return new Response(body, { status: 200, headers });
 }
 
 describe('LiteLlmPricesHttpClient', () => {
@@ -88,14 +99,32 @@ describe('LiteLlmPricesHttpClient', () => {
   });
 
   it('should throw when upstream answers with a non-2xx status', async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 503,
-      json: async () => ({}),
-    } as Response);
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 503 }));
 
     await expect(new LiteLlmPricesHttpClient().fetchPrices()).rejects.toThrow(
       /503/
+    );
+  });
+
+  it('should reject a payload that declares a size over the cap', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(PAYLOAD, {
+        'content-length': String(MAX_PRICE_PAYLOAD_BYTES + 1),
+      })
+    );
+
+    await expect(new LiteLlmPricesHttpClient().fetchPrices()).rejects.toThrow(
+      /exceeds/
+    );
+  });
+
+  it('should reject a payload that outgrows the cap while it streams', async () => {
+    fetchMock.mockResolvedValueOnce(
+      oversizedResponse({ 'content-length': '2' })
+    );
+
+    await expect(new LiteLlmPricesHttpClient().fetchPrices()).rejects.toThrow(
+      /exceeds/
     );
   });
 
