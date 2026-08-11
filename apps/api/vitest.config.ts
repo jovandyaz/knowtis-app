@@ -35,6 +35,9 @@ export default defineConfig({
           environment: 'node',
           include: ['src/**/*.{test,spec}.ts'],
           exclude: [...configDefaults.exclude, DB_SPECS],
+          // Required: vitest refuses to group two projects together when their
+          // maxWorkers differ, and fileParallelism below pins the other to 1.
+          sequence: { groupOrder: 0 },
         },
       },
       {
@@ -45,6 +48,10 @@ export default defineConfig({
           environment: 'node',
           include: [DB_SPECS],
           fileParallelism: false,
+          // These already run one at a time, so sharing the worker's module
+          // registry costs no isolation and skips re-importing Nest per file.
+          isolate: false,
+          sequence: { groupOrder: 1 },
         },
       },
     ],
