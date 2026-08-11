@@ -18,6 +18,8 @@ const GLM_VENDORED_OUTPUT_COST = 0.0000044;
 const SONNET_CURATED_ID = 'anthropic:claude-sonnet-5';
 const SONNET_LITELLM_KEY = 'claude-sonnet-5';
 const SONNET_VENDORED_OUTPUT_COST = 0.00001;
+const PROMOTED_SLUG = 'qwen/qwen3-max';
+const PROMOTED_ID = `openrouter:${PROMOTED_SLUG}`;
 
 const VENDORED_PRICING: Record<string, { outputCostPerToken: number }> = {
   [GLM_CURATED_ID]: { outputCostPerToken: GLM_VENDORED_OUTPUT_COST },
@@ -83,6 +85,7 @@ function make(
     >;
     locked?: boolean;
     flagEnabled?: boolean;
+    promoted?: string[];
   } = {}
 ) {
   const lock = createAdvisoryLockClient(options.locked ?? true);
@@ -92,6 +95,9 @@ function make(
   const repo = {
     upsertCandidate: vi.fn().mockResolvedValue(undefined),
     createAlert: vi.fn().mockResolvedValue(undefined),
+    listByStatus: vi
+      .fn()
+      .mockResolvedValue((options.promoted ?? []).map((id) => ({ id }))),
   };
   const openRouter = {
     fetchModels: vi
@@ -468,6 +474,43 @@ describe('CatalogSyncTask', () => {
       alerts: 0,
       failures: 0,
     });
+  });
+
+  it('should alert when a promoted model is gone from a complete catalog', async () => {
+    const { task, repo } = make({ promoted: [PROMOTED_ID] });
+
+    await task.sync();
+
+    expect(repo.createAlert).toHaveBeenCalledWith(
+      PROMOTED_ID,
+      'unavailable',
+      expect.stringContaining(PROMOTED_SLUG)
+    );
+  });
+
+  it('should stay quiet on a promoted model upstream still lists', async () => {
+    const { task, repo } = make({
+      promoted: [PROMOTED_ID],
+      upstream: [upstreamModel(PROMOTED_SLUG)],
+    });
+
+    await task.sync();
+
+    expect(repo.createAlert).not.toHaveBeenCalled();
+  });
+
+  it('should keep syncing candidates when the promoted read fails', async () => {
+    const { task, repo } = make({
+      promoted: [PROMOTED_ID],
+      upstream: [QWEN_CANDIDATE],
+    });
+    repo.listByStatus.mockRejectedValue(new Error('catalog table locked'));
+
+    const result = await task.run();
+
+    expect(result.status).toBe('completed');
+    expect(repo.upsertCandidate).toHaveBeenCalled();
+    expect(repo.createAlert).not.toHaveBeenCalled();
   });
 
   it('should reject an on-demand run when the upstream fetch fails', async () => {

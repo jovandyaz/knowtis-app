@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
 
-import type { CatalogModelStatus } from '@knowtis/shared-types';
+import { PROMOTED_STATUS } from '@knowtis/shared-types';
 
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import {
@@ -10,7 +10,6 @@ import {
 } from '../../domain/ports/ai-catalog.repository';
 
 const PROMOTED_CACHE_REFRESH_MS = 60_000;
-const PROMOTED_STATUS: CatalogModelStatus = 'promoted';
 
 @Injectable()
 export class PromotedModelsCache implements OnModuleInit {

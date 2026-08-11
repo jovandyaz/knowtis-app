@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
+import { PROMOTED_STATUS } from '@knowtis/shared-types';
 import type {
   CatalogAlertDto,
   CatalogModelDto,
@@ -21,7 +22,6 @@ import { CatalogSyncTask } from '../../infrastructure/catalog/catalog-sync.task'
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 
 const CANDIDATE_STATUS = 'candidate' as const satisfies CatalogModelStatus;
-const PROMOTED_STATUS = 'promoted' as const satisfies CatalogModelStatus;
 const RETIRED_STATUS = 'retired' as const satisfies CatalogModelStatus;
 const OPEN_ALERTS_ONLY = true;
 

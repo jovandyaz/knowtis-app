@@ -73,24 +73,40 @@ function perMillionTokens(costPerToken: number): string {
   return (costPerToken * TOKENS_PER_MILLION).toFixed(PRICE_DECIMALS);
 }
 
+function unavailableDetail(slug: string): string {
+  return `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`;
+}
+
 /**
- * Upstream changes on the curated models OpenRouter bills, matched by slug.
- * Absence is only concluded from a catalog that reached the last page and still
- * lists a curated model, and never for an id upstream published unparseably.
+ * Slug lookup for one upstream read, plus the guard that decides whether it may
+ * retire anything: only a catalog that reached the last page and still lists a
+ * curated model can prove absence, and never for an id upstream published
+ * unparseably.
  */
-export function findOpenRouterDrift(
-  vendoredOutputCost: (id: string) => number | undefined,
-  catalog: UpstreamCatalog
-): DriftFinding[] {
+function absenceCheck(catalog: UpstreamCatalog) {
   const bySlug = new Map(
     catalog.models.map((model) => [model.id.toLowerCase(), model])
   );
   const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
-  const curatedSlugs = CURATED_MODELS.map((model) => openTierSlug(model.id));
-  const recognizable = curatedSlugs.some(
-    (slug) => slug !== null && bySlug.has(slug)
-  );
-  const canConcludeAbsence = catalog.complete && recognizable;
+  const recognizable = CURATED_MODELS.some((model) => {
+    const slug = openTierSlug(model.id);
+    return slug !== null && bySlug.has(slug);
+  });
+  const conclusive = catalog.complete && recognizable;
+
+  return {
+    bySlug,
+    isGone: (slug: string) =>
+      conclusive && !bySlug.has(slug) && !unparseable.has(slug),
+  };
+}
+
+/** Upstream changes on the curated models OpenRouter bills, matched by slug. */
+export function findOpenRouterDrift(
+  vendoredOutputCost: (id: string) => number | undefined,
+  catalog: UpstreamCatalog
+): DriftFinding[] {
+  const { bySlug, isGone } = absenceCheck(catalog);
   const findings: DriftFinding[] = [];
 
   for (const model of CURATED_MODELS) {
@@ -100,11 +116,11 @@ export function findOpenRouterDrift(
     }
     const live = bySlug.get(slug);
     if (live === undefined) {
-      if (canConcludeAbsence && !unparseable.has(slug)) {
+      if (isGone(slug)) {
         findings.push({
           modelId: model.id,
           kind: 'unavailable',
-          detail: `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`,
+          detail: unavailableDetail(slug),
         });
       }
       continue;
@@ -136,6 +152,34 @@ export function findOpenRouterDrift(
   }
 
   return findings;
+}
+
+/**
+ * Promoted models OpenRouter stopped listing. Absence is read from the payload
+ * rather than from `lastSeenAt`, which only refreshes for rows still passing the
+ * candidate filter — a promoted model whose price outgrew that ceiling is still
+ * listed, and reporting it as vanished would be wrong.
+ */
+export function findPromotedDrift(
+  promotedIds: readonly string[],
+  catalog: UpstreamCatalog
+): DriftFinding[] {
+  const { isGone } = absenceCheck(catalog);
+
+  return promotedIds
+    .filter((id) => id.startsWith(OPENROUTER_ID_PREFIX))
+    .flatMap((id) => {
+      const slug = id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase();
+      return isGone(slug)
+        ? [
+            {
+              modelId: id,
+              kind: 'unavailable' as const,
+              detail: unavailableDetail(slug),
+            },
+          ]
+        : [];
+    });
 }
 
 /**

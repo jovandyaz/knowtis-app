@@ -7,9 +7,13 @@ import type {
 import {
   findLiteLlmDrift,
   findOpenRouterDrift,
+  findPromotedDrift,
   openTierSlug,
 } from './curated-watch';
-import { CURATED_MODELS } from './selectable-models.catalog';
+import {
+  CURATED_MODELS,
+  OPENROUTER_ID_PREFIX,
+} from './selectable-models.catalog';
 
 const SONNET_ID = 'anthropic:claude-sonnet-5';
 const SONNET_VENDORED_OUTPUT_COST = 0.00001;
@@ -90,7 +94,7 @@ const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
 ).filter((slug): slug is string => slug !== null);
 
 function catalogOf(
-  models: UpstreamModel[],
+  models: readonly UpstreamModel[],
   overrides: Partial<UpstreamCatalog> = {}
 ): UpstreamCatalog {
   return { models, complete: true, discarded: [], ...overrides };
@@ -434,5 +438,61 @@ describe('findOpenRouterDrift', () => {
     const findings = findOpenRouterDrift(vendoredOutputCost, upstreamInSync());
 
     expect(findings).toEqual([]);
+  });
+});
+
+describe('findPromotedDrift', () => {
+  const PROMOTED_ID = 'openrouter:qwen/qwen3-max';
+  const PROMOTED_SLUG = 'qwen/qwen3-max';
+
+  it('should report a promoted model upstream stopped listing', () => {
+    const findings = findPromotedDrift([PROMOTED_ID], upstreamInSync());
+
+    expect(findings).toEqual([
+      {
+        modelId: PROMOTED_ID,
+        kind: 'unavailable',
+        detail: expect.stringContaining(PROMOTED_SLUG),
+      },
+    ]);
+  });
+
+  it('should not report a promoted model that is still listed', () => {
+    const listed = upstreamInSync([upstreamModel(PROMOTED_SLUG)]);
+
+    expect(findPromotedDrift([PROMOTED_ID], listed)).toEqual([]);
+  });
+
+  it('should not conclude absence from a truncated catalog', () => {
+    const truncated = catalogOf(upstreamInSync().models, { complete: false });
+
+    expect(findPromotedDrift([PROMOTED_ID], truncated)).toEqual([]);
+  });
+
+  it('should not conclude absence for an id upstream published unparseably', () => {
+    const discarded = catalogOf(upstreamInSync().models, {
+      discarded: [PROMOTED_SLUG],
+    });
+
+    expect(findPromotedDrift([PROMOTED_ID], discarded)).toEqual([]);
+  });
+
+  it('should not conclude absence when no curated slug is recognizable', () => {
+    const unrecognizable = catalogOf([upstreamModel('some-vendor/other')]);
+
+    expect(findPromotedDrift([PROMOTED_ID], unrecognizable)).toEqual([]);
+  });
+
+  it('should match an upstream slug whose casing differs from the stored id', () => {
+    const storedWithCasing = `${OPENROUTER_ID_PREFIX}Qwen/Qwen3-Max`;
+    const listed = upstreamInSync([upstreamModel(PROMOTED_SLUG)]);
+
+    expect(findPromotedDrift([storedWithCasing], listed)).toEqual([]);
+  });
+
+  it('should skip promoted ids that OpenRouter does not bill', () => {
+    expect(
+      findPromotedDrift(['anthropic:claude-sonnet-5'], upstreamInSync())
+    ).toEqual([]);
   });
 });
