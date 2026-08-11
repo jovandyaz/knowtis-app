@@ -15,7 +15,7 @@ const FREE_TIER: ModelTier = 'open';
 export interface AccessCandidate {
   readonly id: string;
   readonly tier: ModelTier;
-  /** `null` when the catalog cannot price the model, which is never free. */
+  /** `null` when the catalog cannot price the model. Neither `null` nor a negative price is ever free. */
   readonly outputCostPerToken: number | null;
 }
 
@@ -43,8 +43,10 @@ export function accessFor(
 }
 
 function isPlatformAbsorbable(model: AccessCandidate): boolean {
+  const cost = model.outputCostPerToken;
+  // A stored price below zero is not a discount, it is a broken row: no column
+  // constraint keeps it out, and reading it as free would waive the ceiling.
   return (
-    model.outputCostPerToken !== null &&
-    model.outputCostPerToken <= FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+    cost !== null && cost >= 0 && cost <= FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
   );
 }

@@ -91,6 +91,14 @@ describe('accessFor', () => {
     ).toBe('requires_byok');
   });
 
+  it('should gate a model stored with a negative price, which is not free either', () => {
+    const negative = candidate({ outputCostPerToken: -CHEAP_OUTPUT_COST });
+
+    expect(accessFor(negative, NONE, true)).toBe('requires_byok');
+    expect(accessFor(negative, NONE, false)).toBe('requires_byok');
+    expect(accessFor(negative, new Set(['openrouter']), true)).toBe('granted');
+  });
+
   it('should gate a promoted model of a paid tier regardless of how cheap it is', () => {
     expect(accessFor(candidate({ tier: 'fast' }), NONE, true)).toBe(
       'requires_byok'
