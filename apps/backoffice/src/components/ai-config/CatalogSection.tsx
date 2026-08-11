@@ -209,7 +209,7 @@ export function CatalogSection() {
                       variant="ghost"
                       size="sm"
                       disabled={mutating}
-                      aria-label={`Resolve alert for ${alert.modelId}`}
+                      aria-label={`Resolve ${alert.kind} alert for ${alert.modelId}`}
                       onClick={() => resolveAlert.mutate(alert.id)}
                     >
                       Resolve

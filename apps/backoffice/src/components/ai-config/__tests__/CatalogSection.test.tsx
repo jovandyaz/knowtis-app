@@ -146,6 +146,23 @@ describe('CatalogSection', () => {
     expect(resolveAlertMutate).toHaveBeenCalledWith(77);
   });
 
+  it('names each resolve button by kind so two alerts on one model differ', async () => {
+    renderSection({
+      alerts: [
+        alert({ id: 81, kind: 'price_drift' }),
+        alert({ id: 82, kind: 'deprecation' }),
+      ],
+    });
+
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Resolve deprecation alert for openrouter:z-ai/glm-5.2',
+      })
+    );
+
+    expect(resolveAlertMutate).toHaveBeenCalledWith(82);
+  });
+
   it('orders candidates by intelligence, unscored ones last', () => {
     renderSection({
       candidates: [
