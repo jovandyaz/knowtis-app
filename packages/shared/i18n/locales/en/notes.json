@@ -206,13 +206,30 @@
       "stop": "Stop",
       "empty": {
         "title": "Ask your notes",
-        "greeting": "Ask anything about this note — I can summarize, improve, find sources, and more.",
+        "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",
         "suggestions": "\"summarize my bio notes\", \"what did I say about X?\"",
         "suggestion": {
           "summarize": "Summarize this note",
           "improve": "Improve the writing",
           "sources": "Find sources",
           "translate": "Translate it"
+        },
+        "capability": {
+          "understand": {
+            "label": "Summarize or translate",
+            "hint": "this note",
+            "prompt": "Summarize this note"
+          },
+          "write": {
+            "label": "Create and edit notes",
+            "hint": "you approve changes",
+            "prompt": "Create a note with the key points of this one"
+          },
+          "research": {
+            "label": "Search with sources",
+            "hint": "your notes + the web",
+            "prompt": "Search the web for context on this note and cite the sources"
+          }
         }
       },
       "estudio": {
