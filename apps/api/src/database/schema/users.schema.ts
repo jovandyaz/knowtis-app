@@ -36,7 +36,6 @@ export const users = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('users_email_idx').on(table.email),
     // Admin search matches with leading wildcards, which no btree index can serve.
     index('users_email_trgm_idx').using(
       'gin',
