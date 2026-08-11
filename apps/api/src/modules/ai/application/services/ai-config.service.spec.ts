@@ -273,14 +273,16 @@ describe('AIConfigService', () => {
   });
 
   it('should mark a chain whose members the catalog dropped as stale', async () => {
-    mockRepo.getAllRows.mockResolvedValue([
-      {
-        key: 'ai_fallback_chain',
-        value: UNKNOWN_ID,
-        description: null,
-        updatedAt: new Date('2026-07-15T00:00:00Z'),
-      },
-    ]);
+    const row = {
+      key: 'ai_fallback_chain',
+      value: UNKNOWN_ID,
+      description: null,
+      updatedAt: new Date('2026-07-15T00:00:00Z'),
+    };
+    mockRepo.getAllRows.mockResolvedValue([row]);
+    mockRepo.get.mockImplementation(async (key: string) =>
+      key === 'ai_fallback_chain' ? row.value : null
+    );
     mockCatalog.isSupported.mockImplementation(
       (id: string) => id !== UNKNOWN_ID
     );
@@ -292,6 +294,7 @@ describe('AIConfigService', () => {
       value: AI_SETTING_DEFAULTS.ai_fallback_chain,
       storedValue: UNKNOWN_ID,
     });
+    expect(await service.getFallbackChain()).toEqual([]);
   });
 
   it('should report the members that still route when only some survived the catalog', async () => {

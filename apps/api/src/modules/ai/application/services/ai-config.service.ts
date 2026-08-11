@@ -4,6 +4,8 @@ import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
+  CHAIN_SEPARATOR,
+  parseChain,
   REASONING_EFFORTS,
   type AIConfigSource,
   type ModelIntent,
@@ -11,11 +13,7 @@ import {
 } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import {
-  AI_SETTING_DEFAULTS,
-  CHAIN_SEPARATOR,
-  parseChain,
-} from '../../domain/ai-settings';
+import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -357,6 +355,9 @@ export class AIConfigService {
         const supported = parseChain(row.value).filter((model) =>
           this.modelCatalog.isSupported(model)
         );
+        // All-dead diverges from getFallbackChain(), which returns [] here:
+        // FallbackChainService ignores empty refreshes, so the code default is
+        // what actually routes from the next boot on.
         return supported.length > 0
           ? supported.join(CHAIN_SEPARATOR)
           : def.default;
