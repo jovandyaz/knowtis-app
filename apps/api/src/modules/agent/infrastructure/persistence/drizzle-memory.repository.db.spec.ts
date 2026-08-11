@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -19,11 +19,12 @@ const vec = (seed: number) =>
   new Array(1024).fill(0).map((_, i) => (i === seed ? 1 : 0));
 
 describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleMemoryRepository;
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -33,7 +34,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
         DatabaseModule,
       ],
     }).compile();
-    db = mod.get<Database>(DATABASE_CONNECTION);
+    db = moduleRef.get<Database>(DATABASE_CONNECTION);
     repo = new DrizzleMemoryRepository(db);
     await db
       .insert(users)
@@ -47,6 +48,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleMemoryRepository', () => {
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, U1));
     await db.delete(users).where(eq(users.id, U2));
+    await moduleRef.close();
   });
 
   it('scopes search to the owner and never returns another user memory', async () => {

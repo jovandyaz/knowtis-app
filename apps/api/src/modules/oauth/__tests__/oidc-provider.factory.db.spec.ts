@@ -72,7 +72,13 @@ describe('createOidcProvider', () => {
   });
 
   afterAll(async () => {
-    server?.close();
+    await new Promise((resolve) => {
+      if (server) {
+        server.close(resolve);
+      } else {
+        resolve(undefined);
+      }
+    });
   });
 
   it('should configure PKCE S256, CIMD, resource indicators and none auth', () => {
@@ -291,7 +297,13 @@ describe.runIf(DB_AVAILABLE)('createOidcProvider dynamic registration', () => {
   });
 
   afterAll(async () => {
-    server?.close();
+    await new Promise((resolve) => {
+      if (server) {
+        server.close(resolve);
+      } else {
+        resolve(undefined);
+      }
+    });
     if (registeredClientIds.length > 0) {
       await db
         .delete(oauthPayloads)

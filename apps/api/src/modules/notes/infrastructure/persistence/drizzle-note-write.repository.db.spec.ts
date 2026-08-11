@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { and, eq, isNull } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
@@ -19,12 +19,13 @@ const OTHER = '00000000-0000-4000-8000-0000000000f2';
 const NOTE = '00000000-0000-4000-8000-0000000000f3';
 
 describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleNoteWriteRepository;
   let originalUpdatedAt: Date;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -63,6 +64,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteWriteRepository soft-delete', () => {
     await db.delete(notes).where(eq(notes.id, NOTE));
     await db.delete(users).where(eq(users.id, OWNER));
     await db.delete(users).where(eq(users.id, OTHER));
+    await moduleRef.close();
   });
 
   it('delete soft-deletes the row (keeps it, sets deleted_at)', async () => {

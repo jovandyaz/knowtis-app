@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,11 +18,12 @@ const USER = '00000000-0000-4000-8000-0000000000e1';
 const NOTE = '00000000-0000-4000-8000-0000000000e2';
 
 describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleNoteEmbeddingRepository;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -52,6 +53,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteEmbeddingRepository', () => {
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER));
+    await moduleRef.close();
   });
 
   it('reports a note with no embedding as stale (quietSeconds=0)', async () => {

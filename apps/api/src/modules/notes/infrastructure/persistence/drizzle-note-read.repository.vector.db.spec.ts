@@ -1,6 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -31,11 +31,12 @@ function vec(first: number): number[] {
 describe.runIf(DB_AVAILABLE)(
   'DrizzleNoteReadRepository.findAccessibleNotesByEmbedding',
   () => {
+    let moduleRef: TestingModule;
     let db: Database;
     let repo: DrizzleNoteReadRepository;
 
     beforeAll(async () => {
-      const moduleRef = await Test.createTestingModule({
+      moduleRef = await Test.createTestingModule({
         imports: [
           ConfigModule.forRoot({
             isGlobal: true,
@@ -101,6 +102,7 @@ describe.runIf(DB_AVAILABLE)(
     afterAll(async () => {
       await db.delete(users).where(eq(users.id, MINE));
       await db.delete(users).where(eq(users.id, OTHER));
+      await moduleRef.close();
     });
 
     it('returns only accessible notes, nearest first', async () => {

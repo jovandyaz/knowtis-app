@@ -1,5 +1,5 @@
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -28,8 +28,8 @@ import { DrizzleConversationRepository } from '../infrastructure/persistence/dri
 import type { InjectionGuardService } from './injection-guard.service';
 import { RunAgentTurnHandler } from './run-agent-turn.handler';
 
-const USER = '00000000-0000-4000-8000-0000000000d1';
-const OTHER = '00000000-0000-4000-8000-0000000000d2';
+const USER = '00000000-0000-4000-8000-0000000000d4';
+const OTHER = '00000000-0000-4000-8000-0000000000d5';
 const MODEL = 'anthropic:claude-haiku-4-5-20251001';
 
 const memoryOff = {
@@ -63,6 +63,7 @@ const aiConfigStub = {
 } as unknown as AIConfigService;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let config: ConfigService<EnvConfig, true>;
   const seenMessages: string[][] = [];
@@ -82,7 +83,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   };
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -116,6 +117,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER));
     await db.delete(users).where(eq(users.id, OTHER));
+    await moduleRef.close();
   });
 
   it('reconstructs turn 1 on turn 2 from only conversationId + message', async () => {

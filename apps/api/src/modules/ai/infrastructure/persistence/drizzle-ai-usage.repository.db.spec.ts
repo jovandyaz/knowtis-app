@@ -205,4 +205,28 @@ describe.runIf(DB_AVAILABLE)('DrizzleAIUsageRepository (database)', () => {
       expect(bucket.inputTokens).toBe(prior.inputTokens);
     }
   });
+
+  it('excludes byok usage from the daily budget total', async () => {
+    await repo.recordUsage({
+      userId: DB_USER_ID,
+      action: 'summarize',
+      model: 'anthropic:claude-sonnet-4-20250514',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 0.5,
+      byok: false,
+    });
+    await repo.recordUsage({
+      userId: DB_USER_ID,
+      action: 'summarize',
+      model: 'google:gemini-2.0-flash',
+      inputTokens: 100,
+      outputTokens: 50,
+      costUsd: 9.0,
+      byok: true,
+    });
+
+    const usage = await repo.getDailyUsage(DB_USER_ID);
+    expect(usage.totalCostUsd).toBe(0.5);
+  });
 });

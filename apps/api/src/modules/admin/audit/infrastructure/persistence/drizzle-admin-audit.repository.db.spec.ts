@@ -14,7 +14,7 @@ import {
 import { DB_AVAILABLE } from '../../../../../test-support/database';
 import { DrizzleAdminAuditRepository } from './drizzle-admin-audit.repository';
 
-const DB_USER_ID = '00000000-0000-4000-8000-0000000000a1';
+const DB_USER_ID = '00000000-0000-4000-8000-0000000000a5';
 
 describe.runIf(DB_AVAILABLE)('DrizzleAdminAuditRepository (database)', () => {
   let moduleRef: TestingModule;

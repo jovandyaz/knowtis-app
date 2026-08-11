@@ -9,6 +9,12 @@ paths:
 
 # Testing Rules
 
+## Database-backed specs (api)
+
+- A spec that reaches the real Postgres (imports `DB_AVAILABLE`, `DatabaseModule`, or `DATABASE_CONNECTION`) is named `*.db.spec.ts`. The api vitest config routes that suffix into a sequential project; a mis-named db spec runs in parallel forks and its `afterAll` fixture deletes race other files.
+- Fixture ids (`00000000-…` uuids) are owned by exactly one db spec. Both rules are enforced by `apps/api/src/test-support/fixture-ids.spec.ts`.
+- Close what you open: `moduleRef = await Test.createTestingModule(...)` is hoisted to describe scope and `afterAll` calls `await moduleRef.close()` — db specs share one worker, so an unclosed Nest container outlives its file.
+
 ## Framework
 
 - Test runner: **Vitest** (not Jest). Config per project: `vitest.config.ts`.

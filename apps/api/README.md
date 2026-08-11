@@ -566,7 +566,7 @@ nx test api --watch
 nx test api --coverage
 ```
 
-Tests are co-located inside each module's `application/` folder (`*.spec.ts`).
+Tests are co-located with the code they cover. Specs that hit the real Postgres are named `*.db.spec.ts` — the vitest config runs them sequentially in their own project so their fixture teardowns cannot race, and a guard in `src/test-support/fixture-ids.spec.ts` fails when a database-touching spec misses the suffix or two db specs share a fixture id.
 
 ---
 
