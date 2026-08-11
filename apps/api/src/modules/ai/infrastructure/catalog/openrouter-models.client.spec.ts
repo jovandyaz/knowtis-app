@@ -261,6 +261,20 @@ describe('OpenRouterModelsHttpClient', () => {
     );
   });
 
+  it('should stop paginating on a next link that is not a valid url', async () => {
+    fetchMock.mockResolvedValue(okResponse(page([DEEPSEEK_V32], 'http://')));
+
+    const models = await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(models).toHaveLength(1);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.upstream_pagination_rejected',
+      })
+    );
+  });
+
   it('should stop at the page cap when upstream never stops paginating', async () => {
     fetchMock.mockResolvedValue(
       okResponse(

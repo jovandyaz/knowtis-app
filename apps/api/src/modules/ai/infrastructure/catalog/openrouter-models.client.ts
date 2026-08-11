@@ -94,6 +94,14 @@ function idOf(raw: unknown): string {
   return parsed.success ? parsed.data.id : UNKNOWN_MODEL_ID;
 }
 
+function resolveUrl(raw: string, base: string): URL | null {
+  try {
+    return new URL(raw, base);
+  } catch {
+    return null;
+  }
+}
+
 @Injectable()
 export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
   private readonly logger = new Logger(OpenRouterModelsHttpClient.name);
@@ -139,7 +147,7 @@ export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
     if (!next) {
       return null;
     }
-    const url = URL.parse(next, OPENROUTER_MODELS_URL);
+    const url = resolveUrl(next, OPENROUTER_MODELS_URL);
     if (url === null || url.origin !== OPENROUTER_ORIGIN) {
       this.logger.warn({
         event: 'ai.catalog.upstream_pagination_rejected',
