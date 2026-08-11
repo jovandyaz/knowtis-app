@@ -21,6 +21,7 @@ const UNKNOWN_MODEL_ID = '<unparseable>';
 
 const costPerTokenSchema = z
   .string()
+  .refine((raw) => raw.trim().length > 0)
   .transform(Number)
   .refine((cost) => Number.isFinite(cost) && cost >= 0);
 

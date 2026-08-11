@@ -89,6 +89,22 @@ const OPENROUTER_AUTO_VARIABLE_PRICE = {
   expiration_date: null,
 };
 
+const BLANK_PRICED_MODEL = {
+  id: 'mystery/unpriced',
+  name: 'Mystery: Unpriced',
+  created: 1780000000,
+  description: 'A model upstream has not priced yet.',
+  context_length: 131072,
+  architecture: { output_modalities: ['text'] },
+  pricing: { prompt: '', completion: '' },
+};
+
+const WHITESPACE_PRICED_MODEL = {
+  ...BLANK_PRICED_MODEL,
+  id: 'mystery/blank-priced',
+  pricing: { prompt: '   ', completion: '   ' },
+};
+
 const MINIMAL_MODEL = {
   id: 'qwen/qwen3.8-max',
   name: 'Qwen: Qwen3.8 Max',
@@ -222,6 +238,29 @@ describe('OpenRouterModelsHttpClient', () => {
         models: ['openrouter/auto', 'broken/model'],
       })
     );
+  });
+
+  it('should discard a model whose price is blank instead of pricing it at zero', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(page([BLANK_PRICED_MODEL, DEEPSEEK_V32]))
+    );
+
+    const models = await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ models: ['mystery/unpriced'] })
+    );
+  });
+
+  it('should discard a model whose price is only whitespace', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(page([WHITESPACE_PRICED_MODEL, DEEPSEEK_V32]))
+    );
+
+    const models = await new OpenRouterModelsHttpClient().fetchModels();
+
+    expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
   });
 
   it('should follow links.next until it is null and concatenate the pages', async () => {
