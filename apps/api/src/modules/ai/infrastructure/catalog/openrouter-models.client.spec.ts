@@ -152,7 +152,8 @@ describe('OpenRouterModelsHttpClient', () => {
   it('should map the upstream payload onto domain models', async () => {
     fetchMock.mockResolvedValueOnce(okResponse(page([DEEPSEEK_V32])));
 
-    const [model] = await new OpenRouterModelsHttpClient().fetchModels();
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
 
     expect(model).toEqual({
       id: 'deepseek/deepseek-v3.2',
@@ -172,7 +173,8 @@ describe('OpenRouterModelsHttpClient', () => {
   it('should read pricing strings as numbers', async () => {
     fetchMock.mockResolvedValueOnce(okResponse(page([DEEPSEEK_V32])));
 
-    const [model] = await new OpenRouterModelsHttpClient().fetchModels();
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
 
     expect(model.promptCostPerToken).toBeTypeOf('number');
     expect(model.completionCostPerToken).toBeTypeOf('number');
@@ -183,7 +185,7 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([GLM_45_EXPIRING, KIMI_K3, MINIMAL_MODEL]))
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models.map((model) => model.maxCompletionTokens)).toEqual([
       98304,
@@ -202,7 +204,7 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([GLM_45_EXPIRING, GLM_5V_TURBO_SENTINEL]))
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models[0].expirationDate).toEqual(
       new Date('2026-12-31T00:00:00.000Z')
@@ -229,9 +231,11 @@ describe('OpenRouterModelsHttpClient', () => {
       )
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models, discarded } =
+      await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
+    expect(discarded).toEqual(['openrouter/auto', 'broken/model']);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         count: 2,
@@ -245,7 +249,7 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([BLANK_PRICED_MODEL, DEEPSEEK_V32]))
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
     expect(warn).toHaveBeenCalledWith(
@@ -258,7 +262,7 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([WHITESPACE_PRICED_MODEL, DEEPSEEK_V32]))
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models.map((model) => model.id)).toEqual(['deepseek/deepseek-v3.2']);
   });
@@ -270,7 +274,7 @@ describe('OpenRouterModelsHttpClient', () => {
       )
       .mockResolvedValueOnce(okResponse(page([KIMI_K3])));
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(models.map((model) => model.id)).toEqual([
       'deepseek/deepseek-v3.2',
@@ -289,7 +293,7 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([DEEPSEEK_V32], 'https://evil.example.com/api/v1/models'))
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(models).toHaveLength(1);
@@ -303,7 +307,7 @@ describe('OpenRouterModelsHttpClient', () => {
   it('should stop paginating on a next link that is not a valid url', async () => {
     fetchMock.mockResolvedValue(okResponse(page([DEEPSEEK_V32], 'http://')));
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(models).toHaveLength(1);
@@ -323,10 +327,12 @@ describe('OpenRouterModelsHttpClient', () => {
         okResponse(page([KIMI_K3], '/api/v1/models?offset=1&limit=1'))
       );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models, complete } =
+      await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(models).toHaveLength(2);
+    expect(complete).toBe(false);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.upstream_pagination_cycle',
@@ -354,10 +360,12 @@ describe('OpenRouterModelsHttpClient', () => {
       )
     );
 
-    const models = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models, complete } =
+      await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(MAX_MODEL_PAGES);
     expect(models).toHaveLength(MAX_MODEL_PAGES);
+    expect(complete).toBe(false);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.upstream_pagination_truncated',

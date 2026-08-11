@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { UpstreamModel } from '../ports/openrouter-models.port';
+import type {
+  UpstreamCatalog,
+  UpstreamModel,
+} from '../ports/openrouter-models.port';
 import {
   findLiteLlmDrift,
   findOpenRouterDrift,
@@ -86,15 +89,22 @@ const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
   openTierSlug(model.id)
 ).filter((slug): slug is string => slug !== null);
 
-/** Every curated open-tier slug present and unremarkable. Absence is itself a finding now, so a fixture that omits one is asserting that model vanished. */
-function upstreamInSync(overrides: UpstreamModel[] = []): UpstreamModel[] {
+function catalogOf(
+  models: UpstreamModel[],
+  overrides: Partial<UpstreamCatalog> = {}
+): UpstreamCatalog {
+  return { models, complete: true, discarded: [], ...overrides };
+}
+
+/** Every curated open-tier slug present and unremarkable: a fixture that omits one asserts that model vanished. */
+function upstreamInSync(overrides: UpstreamModel[] = []): UpstreamCatalog {
   const overridden = new Set(overrides.map((model) => model.id));
-  return [
+  return catalogOf([
     ...CURATED_OPEN_SLUGS.filter((slug) => !overridden.has(slug)).map((slug) =>
       upstreamModel(slug)
     ),
     ...overrides,
-  ];
+  ]);
 }
 
 describe('openTierSlug', () => {
@@ -307,10 +317,6 @@ describe('findOpenRouterDrift', () => {
     expect(findings.every((finding) => finding.modelId === GLM_ID)).toBe(true);
   });
 
-  it('should skip a curated model upstream no longer publishes', () => {
-    expect(findOpenRouterDrift(vendoredOutputCost, [])).toEqual([]);
-  });
-
   it('should never watch a model billed outside OpenRouter', () => {
     const upstream = upstreamInSync([
       upstreamModel('anthropic/claude-sonnet-5', {
@@ -355,7 +361,9 @@ describe('findOpenRouterDrift', () => {
     expect(findOpenRouterDrift(freeVendoredCost(GLM_ID), upstream)).toEqual([]);
   });
   it('should report a curated model that vanished from OpenRouter', () => {
-    const upstream = upstreamInSync().filter((model) => model.id !== GLM_SLUG);
+    const upstream = catalogOf(
+      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG)
+    );
 
     const findings = findOpenRouterDrift(vendoredOutputCost, upstream);
 
@@ -369,9 +377,10 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should report every curated model that vanished, not just the first', () => {
-    const findings = findOpenRouterDrift(vendoredOutputCost, [
-      upstreamModel(GLM_SLUG),
-    ]);
+    const findings = findOpenRouterDrift(
+      vendoredOutputCost,
+      catalogOf([upstreamModel(GLM_SLUG)])
+    );
 
     expect(findings).toHaveLength(CURATED_OPEN_SLUGS.length - 1);
     expect(findings.every((finding) => finding.kind === 'unavailable')).toBe(
@@ -379,10 +388,46 @@ describe('findOpenRouterDrift', () => {
     );
   });
 
-  // A truncated payload would otherwise raise an alert on every curated model
-  // at once, which reads as a catalog-wide outage rather than a bad fetch.
   it('should conclude nothing from an empty upstream payload', () => {
-    expect(findOpenRouterDrift(vendoredOutputCost, [])).toEqual([]);
+    expect(findOpenRouterDrift(vendoredOutputCost, catalogOf([]))).toEqual([]);
+  });
+
+  it('should conclude no absence from a catalog that stopped paginating early', () => {
+    const truncated = catalogOf(
+      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG),
+      { complete: false }
+    );
+
+    expect(findOpenRouterDrift(vendoredOutputCost, truncated)).toEqual([]);
+  });
+
+  it('should not call a model gone when upstream published it unparseably', () => {
+    const dropped = catalogOf(
+      upstreamInSync().models.filter((model) => model.id !== GLM_SLUG),
+      { discarded: [GLM_SLUG] }
+    );
+
+    expect(findOpenRouterDrift(vendoredOutputCost, dropped)).toEqual([]);
+  });
+
+  it('should conclude no absence when no curated slug is recognizable', () => {
+    const unrecognizable = catalogOf([
+      upstreamModel('some-vendor/other-model'),
+    ]);
+
+    expect(findOpenRouterDrift(vendoredOutputCost, unrecognizable)).toEqual([]);
+  });
+
+  it('should match an upstream slug whose casing differs from the curated id', () => {
+    const recased = catalogOf(
+      upstreamInSync().models.map((model) =>
+        model.id === GLM_SLUG
+          ? upstreamModel(GLM_SLUG.toUpperCase())
+          : upstreamModel(model.id)
+      )
+    );
+
+    expect(findOpenRouterDrift(vendoredOutputCost, recased)).toEqual([]);
   });
 
   it('should not report a vanished model that is still listed', () => {

@@ -1,7 +1,7 @@
 import { toLiteLLMKey } from '@knowtis/ai-gateway';
 import type { CatalogAlertKind, ModelTier } from '@knowtis/shared-types';
 
-import type { UpstreamModel } from '../ports/openrouter-models.port';
+import type { UpstreamCatalog } from '../ports/openrouter-models.port';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -35,7 +35,10 @@ const OPEN_TIER_SLUGS: ReadonlyMap<string, string> = new Map(
   CURATED_MODELS.filter(
     (model) =>
       model.tier === OPEN_TIER && model.id.startsWith(OPENROUTER_ID_PREFIX)
-  ).map((model) => [model.id, model.id.slice(OPENROUTER_ID_PREFIX.length)])
+  ).map((model) => [
+    model.id,
+    model.id.slice(OPENROUTER_ID_PREFIX.length).toLowerCase(),
+  ])
 );
 
 /** The OpenRouter slug behind a curated open-tier id, or null when that model is billed elsewhere or is not curated. */
@@ -72,17 +75,22 @@ function perMillionTokens(costPerToken: number): string {
 
 /**
  * Upstream changes on the curated models OpenRouter bills, matched by slug.
- * An empty `upstream` yields nothing: absence cannot be concluded from an empty
- * universe, and a truncated payload would otherwise alert on every model at once.
+ * Absence is only concluded from a catalog that reached the last page and still
+ * lists a curated model, and never for an id upstream published unparseably.
  */
 export function findOpenRouterDrift(
   vendoredOutputCost: (id: string) => number | undefined,
-  upstream: readonly UpstreamModel[]
+  catalog: UpstreamCatalog
 ): DriftFinding[] {
-  if (upstream.length === 0) {
-    return [];
-  }
-  const bySlug = new Map(upstream.map((model) => [model.id, model]));
+  const bySlug = new Map(
+    catalog.models.map((model) => [model.id.toLowerCase(), model])
+  );
+  const unparseable = new Set(catalog.discarded.map((id) => id.toLowerCase()));
+  const curatedSlugs = CURATED_MODELS.map((model) => openTierSlug(model.id));
+  const recognizable = curatedSlugs.some(
+    (slug) => slug !== null && bySlug.has(slug)
+  );
+  const canConcludeAbsence = catalog.complete && recognizable;
   const findings: DriftFinding[] = [];
 
   for (const model of CURATED_MODELS) {
@@ -92,11 +100,13 @@ export function findOpenRouterDrift(
     }
     const live = bySlug.get(slug);
     if (live === undefined) {
-      findings.push({
-        modelId: model.id,
-        kind: 'unavailable',
-        detail: `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`,
-      });
+      if (canConcludeAbsence && !unparseable.has(slug)) {
+        findings.push({
+          modelId: model.id,
+          kind: 'unavailable',
+          detail: `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`,
+        });
+      }
       continue;
     }
 

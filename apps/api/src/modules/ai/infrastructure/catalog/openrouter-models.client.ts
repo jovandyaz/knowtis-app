@@ -3,6 +3,7 @@ import { z } from 'zod';
 
 import type {
   OpenRouterModelsClient,
+  UpstreamCatalog,
   UpstreamModel,
 } from '../../domain/ports/openrouter-models.port';
 
@@ -107,18 +108,20 @@ function resolveUrl(raw: string, base: string): URL | null {
 export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
   private readonly logger = new Logger(OpenRouterModelsHttpClient.name);
 
-  async fetchModels(): Promise<UpstreamModel[]> {
+  async fetchModels(): Promise<UpstreamCatalog> {
     const models: UpstreamModel[] = [];
     const discarded: string[] = [];
     const fetched = new Set<string>();
     let nextUrl: string | null = OPENROUTER_MODELS_URL;
     let pages = 0;
+    let complete = true;
 
     while (nextUrl !== null && pages < MAX_MODEL_PAGES) {
       if (fetched.has(nextUrl)) {
         // Clearing it keeps the truncation warning below meaning "hit the page
         // cap", which is a different upstream problem than a cycle.
         nextUrl = null;
+        complete = false;
         this.logger.warn({
           event: 'ai.catalog.upstream_pagination_cycle',
           pages,
@@ -147,13 +150,14 @@ export class OpenRouterModelsHttpClient implements OpenRouterModelsClient {
       });
     }
     if (nextUrl !== null) {
+      complete = false;
       this.logger.warn({
         event: 'ai.catalog.upstream_pagination_truncated',
         pages,
         models: models.length,
       });
     }
-    return models;
+    return { models, complete, discarded };
   }
 
   private nextPageUrl(next: string | null | undefined): string | null {
