@@ -119,6 +119,7 @@ function PromotedModelRow({
             <Button
               size="sm"
               disabled={disabled}
+              aria-label={`Save ${model.label}`}
               onClick={() => onSave(label, description)}
             >
               Save

@@ -247,7 +247,9 @@ describe('CatalogSection', () => {
       screen.getByLabelText(/label for openrouter:vendor\/live-one/i),
       '!'
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Save Live One' })
+    );
 
     expect(updateCopyMutate).toHaveBeenCalledWith({
       id: 'openrouter:vendor/live-one',
@@ -261,8 +263,34 @@ describe('CatalogSection', () => {
     });
 
     expect(
-      screen.queryByRole('button', { name: 'Save' })
+      screen.queryByRole('button', { name: /^save/i })
     ).not.toBeInTheDocument();
+  });
+
+  it('names each Save after the model it saves', async () => {
+    renderSection({
+      promoted: [
+        model({
+          id: 'openrouter:vendor/one',
+          label: 'One',
+          status: 'promoted',
+        }),
+        model({
+          id: 'openrouter:vendor/two',
+          label: 'Two',
+          status: 'promoted',
+        }),
+      ],
+    });
+
+    await userEvent.type(
+      screen.getByLabelText(/label for openrouter:vendor\/two/i),
+      '!'
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Save Two' })
+    ).toBeInTheDocument();
   });
 
   it('tells the admin nothing is promoted yet', () => {
