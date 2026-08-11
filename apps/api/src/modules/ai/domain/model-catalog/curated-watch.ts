@@ -72,14 +72,16 @@ function perMillionTokens(costPerToken: number): string {
 
 /**
  * Upstream changes on the curated models OpenRouter bills, matched by slug.
- *
- * A curated model missing from `upstream` yields nothing: disappearing from
- * OpenRouter is a serving outage, not a drift, and no alert kind expresses it.
+ * An empty `upstream` yields nothing: absence cannot be concluded from an empty
+ * universe, and a truncated payload would otherwise alert on every model at once.
  */
 export function findOpenRouterDrift(
   vendoredOutputCost: (id: string) => number | undefined,
   upstream: readonly UpstreamModel[]
 ): DriftFinding[] {
+  if (upstream.length === 0) {
+    return [];
+  }
   const bySlug = new Map(upstream.map((model) => [model.id, model]));
   const findings: DriftFinding[] = [];
 
@@ -90,6 +92,11 @@ export function findOpenRouterDrift(
     }
     const live = bySlug.get(slug);
     if (live === undefined) {
+      findings.push({
+        modelId: model.id,
+        kind: 'unavailable',
+        detail: `OpenRouter no longer lists ${slug}; turns routed to this model fail at the provider`,
+      });
       continue;
     }
 

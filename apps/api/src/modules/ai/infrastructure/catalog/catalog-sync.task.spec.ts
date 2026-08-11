@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
+import { openTierSlug } from '../../domain/model-catalog/curated-watch';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { UpstreamModel } from '../../domain/ports/openrouter-models.port';
 import { CatalogSyncTask } from './catalog-sync.task';
 
@@ -43,6 +45,26 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
+const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
+  openTierSlug(model.id)
+).filter((slug): slug is string => slug !== null);
+
+/** Curated open-tier models present and priced at the vendored cost, so they raise nothing. A fixture that omits one now asserts it vanished upstream, which raises an `unavailable` alert. */
+function withCuratedInSync(...models: UpstreamModel[]): UpstreamModel[] {
+  const provided = new Set(models.map((model) => model.id));
+  return [
+    ...CURATED_OPEN_SLUGS.filter((slug) => !provided.has(slug)).map((slug) => {
+      const vendored = VENDORED_PRICING[`openrouter:${slug}`];
+      return upstreamModel(slug, {
+        ...(vendored && {
+          completionCostPerToken: vendored.outputCostPerToken,
+        }),
+      });
+    }),
+    ...models,
+  ];
+}
+
 function make(
   options: {
     upstream?: UpstreamModel[];
@@ -63,7 +85,9 @@ function make(
     createAlert: vi.fn().mockResolvedValue(undefined),
   };
   const openRouter = {
-    fetchModels: vi.fn().mockResolvedValue(options.upstream ?? []),
+    fetchModels: vi
+      .fn()
+      .mockResolvedValue(withCuratedInSync(...(options.upstream ?? []))),
   };
   const liteLlm = {
     fetchPrices: vi.fn().mockResolvedValue(options.liteLlmPrices ?? {}),
@@ -357,7 +381,7 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 3,
+      upstream: 3 + CURATED_OPEN_SLUGS.length,
       candidates: 2,
       alerts: 0,
       failures: 0,
@@ -373,7 +397,7 @@ describe('CatalogSyncTask', () => {
     await expect(task.run()).resolves.toEqual({
       status: 'completed',
       skippedReason: null,
-      upstream: 2,
+      upstream: 2 + CURATED_OPEN_SLUGS.length,
       candidates: 1,
       alerts: 0,
       failures: 1,

@@ -7,7 +7,11 @@ export const CATALOG_MODEL_STATUSES = [
 ] as const;
 export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
 
-export const CATALOG_ALERT_KINDS = ['deprecation', 'price_drift'] as const;
+export const CATALOG_ALERT_KINDS = [
+  'deprecation',
+  'price_drift',
+  'unavailable',
+] as const;
 export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
 
 export const CATALOG_LABEL_MAX_LENGTH = 100;

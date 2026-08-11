@@ -6,6 +6,7 @@ import {
   findOpenRouterDrift,
   openTierSlug,
 } from './curated-watch';
+import { CURATED_MODELS } from './selectable-models.catalog';
 
 const SONNET_ID = 'anthropic:claude-sonnet-5';
 const SONNET_VENDORED_OUTPUT_COST = 0.00001;
@@ -79,6 +80,21 @@ function upstreamModel(
     outputModalities: ['text'],
     ...overrides,
   };
+}
+
+const CURATED_OPEN_SLUGS = CURATED_MODELS.map((model) =>
+  openTierSlug(model.id)
+).filter((slug): slug is string => slug !== null);
+
+/** Every curated open-tier slug present and unremarkable. Absence is itself a finding now, so a fixture that omits one is asserting that model vanished. */
+function upstreamInSync(overrides: UpstreamModel[] = []): UpstreamModel[] {
+  const overridden = new Set(overrides.map((model) => model.id));
+  return [
+    ...CURATED_OPEN_SLUGS.filter((slug) => !overridden.has(slug)).map((slug) =>
+      upstreamModel(slug)
+    ),
+    ...overrides,
+  ];
 }
 
 describe('openTierSlug', () => {
@@ -217,37 +233,37 @@ describe('findLiteLlmDrift', () => {
 
 describe('findOpenRouterDrift', () => {
   it('should report nothing while the upstream price matches the vendored cost', () => {
-    const upstream = [upstreamModel(GLM_SLUG)];
+    const upstream = upstreamInSync();
 
     expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
   });
 
   it('should ignore a price move the vendored cost still covers', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 1.1,
       }),
-    ];
+    ]);
 
     expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
   });
 
   it('should stay silent when the upstream price falls far below the vendored cost', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 0.36,
       }),
-    ];
+    ]);
 
     expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
   });
 
   it('should report a wide price move as price_drift carrying both prices', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 2,
       }),
-    ];
+    ]);
 
     const findings = findOpenRouterDrift(vendoredOutputCost, upstream);
 
@@ -260,11 +276,11 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should report an upstream expiration date as a deprecation finding', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
-    ];
+    ]);
 
     const findings = findOpenRouterDrift(vendoredOutputCost, upstream);
 
@@ -275,12 +291,12 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should report both a deprecation and a price drift on the same model', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 3,
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
-    ];
+    ]);
 
     const findings = findOpenRouterDrift(vendoredOutputCost, upstream);
 
@@ -296,23 +312,23 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should never watch a model billed outside OpenRouter', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel('anthropic/claude-sonnet-5', {
         completionCostPerToken: SONNET_VENDORED_OUTPUT_COST * 10,
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
-    ];
+    ]);
 
     expect(findOpenRouterDrift(vendoredOutputCost, upstream)).toEqual([]);
   });
 
   it('should skip the price comparison when the vendored cost is unknown', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, {
         completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 10,
         expirationDate: new Date('2026-12-31T00:00:00.000Z'),
       }),
-    ];
+    ]);
 
     const findings = findOpenRouterDrift(() => undefined, upstream);
 
@@ -320,9 +336,9 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should report a free curated model that upstream started charging for', () => {
-    const upstream = [
+    const upstream = upstreamInSync([
       upstreamModel(GLM_SLUG, { completionCostPerToken: 0.000001 }),
-    ];
+    ]);
 
     const findings = findOpenRouterDrift(freeVendoredCost(GLM_ID), upstream);
 
@@ -332,8 +348,46 @@ describe('findOpenRouterDrift', () => {
   });
 
   it('should stay quiet while a free curated model is still free upstream', () => {
-    const upstream = [upstreamModel(GLM_SLUG, { completionCostPerToken: 0 })];
+    const upstream = upstreamInSync([
+      upstreamModel(GLM_SLUG, { completionCostPerToken: 0 }),
+    ]);
 
     expect(findOpenRouterDrift(freeVendoredCost(GLM_ID), upstream)).toEqual([]);
+  });
+  it('should report a curated model that vanished from OpenRouter', () => {
+    const upstream = upstreamInSync().filter((model) => model.id !== GLM_SLUG);
+
+    const findings = findOpenRouterDrift(vendoredOutputCost, upstream);
+
+    expect(findings).toEqual([
+      {
+        modelId: GLM_ID,
+        kind: 'unavailable',
+        detail: expect.stringContaining(GLM_SLUG),
+      },
+    ]);
+  });
+
+  it('should report every curated model that vanished, not just the first', () => {
+    const findings = findOpenRouterDrift(vendoredOutputCost, [
+      upstreamModel(GLM_SLUG),
+    ]);
+
+    expect(findings).toHaveLength(CURATED_OPEN_SLUGS.length - 1);
+    expect(findings.every((finding) => finding.kind === 'unavailable')).toBe(
+      true
+    );
+  });
+
+  // A truncated payload would otherwise raise an alert on every curated model
+  // at once, which reads as a catalog-wide outage rather than a bad fetch.
+  it('should conclude nothing from an empty upstream payload', () => {
+    expect(findOpenRouterDrift(vendoredOutputCost, [])).toEqual([]);
+  });
+
+  it('should not report a vanished model that is still listed', () => {
+    const findings = findOpenRouterDrift(vendoredOutputCost, upstreamInSync());
+
+    expect(findings).toEqual([]);
   });
 });

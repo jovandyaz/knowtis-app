@@ -1,0 +1,2 @@
+ALTER TABLE "ai_catalog_alerts" DROP CONSTRAINT "ai_catalog_alerts_kind_check";--> statement-breakpoint
+ALTER TABLE "ai_catalog_alerts" ADD CONSTRAINT "ai_catalog_alerts_kind_check" CHECK ("ai_catalog_alerts"."kind" in ('deprecation', 'price_drift', 'unavailable'));
