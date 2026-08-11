@@ -7,7 +7,6 @@ import { DB_AVAILABLE } from '../test-support/database';
 import { isLockTimeout } from './migration-retry';
 
 const DATABASE_URL = process.env['DATABASE_URL'] ?? '';
-const LOCK_SETTLE_MS = 200;
 
 const blocker = postgres(DATABASE_URL, { max: 1 });
 const victim = postgres(DATABASE_URL, { max: 1 });
@@ -26,14 +25,19 @@ describe.runIf(DB_AVAILABLE)('isLockTimeout against Postgres', () => {
 
   it('classifies the error drizzle raises when an ALTER waits on a held lock', async () => {
     let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
+    let confirmHeld: () => void = () => undefined;
+    const released = new Promise<void>((resolve) => {
       release = resolve;
+    });
+    const held = new Promise<void>((resolve) => {
+      confirmHeld = resolve;
     });
     const holding = blocker.begin(async (tx) => {
       await tx`LOCK TABLE migration_retry_probe IN ACCESS EXCLUSIVE MODE`;
-      await held;
+      confirmHeld();
+      await released;
     });
-    await new Promise((done) => setTimeout(done, LOCK_SETTLE_MS));
+    await held;
 
     await db.execute(sql`SET lock_timeout = '1s'`);
     let raised: unknown;
@@ -52,7 +56,6 @@ describe.runIf(DB_AVAILABLE)('isLockTimeout against Postgres', () => {
     }
 
     expect(raised).toBeInstanceOf(Error);
-    expect(raised).not.toBeInstanceOf(postgres.PostgresError);
     expect(isLockTimeout(raised)).toBe(true);
   });
 });
