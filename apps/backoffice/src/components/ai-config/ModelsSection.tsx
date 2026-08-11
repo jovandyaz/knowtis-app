@@ -5,8 +5,6 @@ import {
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
-  Badge,
-  Button,
   ModelSelect,
   MutationErrorAlert,
   Table,
@@ -19,6 +17,7 @@ import {
 import { MODEL_TIERS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 const KEY_LABELS: Record<string, string> = {
   ai_default_model: 'Default model',
@@ -98,23 +97,12 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant={entry.source === 'custom' ? 'default' : 'outline'}
-                  >
-                    {entry.source}
-                  </Badge>
-                  {entry.source === 'custom' ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={mutating}
-                      onClick={() => resetConfig.mutate({ key: entry.key })}
-                    >
-                      Reset to default
-                    </Button>
-                  ) : null}
-                </div>
+                <ConfigSourceCell
+                  entry={entry}
+                  label={KEY_LABELS[entry.key] ?? entry.key}
+                  disabled={mutating}
+                  onReset={() => resetConfig.mutate({ key: entry.key })}
+                />
               </TableCell>
               <TableCell>{entry.updatedAt?.toLocaleString() ?? '—'}</TableCell>
             </TableRow>

@@ -2,6 +2,7 @@ import { USER_ROLE } from '@jovandyaz/auth';
 import { z } from 'zod';
 
 import {
+  AI_CONFIG_SOURCES,
   AI_PROVIDERS,
   CATALOG_MODEL_STATUSES,
   CATALOG_SYNC_STATUSES,
@@ -121,7 +122,10 @@ export const AiConfigEntrySchema = z.object({
   // Backoffice and API deploy independently; a source added after this bundle
   // shipped must not fail the whole page. `default` is the fallback because it
   // renders no destructive action for a state this bundle does not understand.
-  source: z.enum(['custom', 'default']).catch('default'),
+  source: z.enum(AI_CONFIG_SOURCES).catch('default'),
+  // Backoffice and API deploy independently; an API that predates the stale
+  // state simply never sets it.
+  storedValue: z.string().nullable().default(null),
   description: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
 });

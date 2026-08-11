@@ -265,10 +265,135 @@ describe('AIConfigService', () => {
       key: 'ai_default_model',
       value: AI_SETTING_DEFAULTS.ai_default_model,
       kind: 'model',
-      source: 'default',
+      source: 'stale',
+      storedValue: UNKNOWN_ID,
+      description: 'promoted then retired',
+      updatedAt: new Date('2026-07-15T00:00:00Z'),
+    });
+  });
+
+  it('should mark a chain whose members the catalog dropped as stale', async () => {
+    const row = {
+      key: 'ai_fallback_chain',
+      value: UNKNOWN_ID,
+      description: null,
+      updatedAt: new Date('2026-07-15T00:00:00Z'),
+    };
+    mockRepo.getAllRows.mockResolvedValue([row]);
+    mockRepo.get.mockImplementation(async (key: string) =>
+      key === 'ai_fallback_chain' ? row.value : null
+    );
+    mockCatalog.isSupported.mockImplementation(
+      (id: string) => id !== UNKNOWN_ID
+    );
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+      source: 'stale',
+      value: AI_SETTING_DEFAULTS.ai_fallback_chain,
+      storedValue: UNKNOWN_ID,
+    });
+    expect(await service.getFallbackChain()).toEqual([]);
+  });
+
+  it('should report the members that still route when only some survived the catalog', async () => {
+    const survivor = 'anthropic:claude-sonnet-5';
+    const row = {
+      key: 'ai_fallback_chain',
+      value: `${survivor},${UNKNOWN_ID}`,
       description: null,
       updatedAt: null,
+    };
+    mockRepo.getAllRows.mockResolvedValue([row]);
+    mockRepo.get.mockImplementation(async (key: string) =>
+      key === 'ai_fallback_chain' ? row.value : null
+    );
+    mockCatalog.isSupported.mockImplementation(
+      (id: string) => id !== UNKNOWN_ID
+    );
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+      source: 'stale',
+      value: survivor,
+      storedValue: `${survivor},${UNKNOWN_ID}`,
     });
+    expect(await service.getFallbackChain()).toEqual([survivor]);
+  });
+
+  it('should not call a chain stale over whitespace the parser already ignores', async () => {
+    const chain =
+      'anthropic:claude-sonnet-5, anthropic:claude-haiku-4-5-20251001';
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_fallback_chain',
+        value: chain,
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+      source: 'custom',
+      storedValue: null,
+    });
+  });
+
+  it('should mark a reasoning effort the runtime rejects as stale', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_reasoning_effort',
+        value: 'ludicrous',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_reasoning_effort')).toMatchObject({
+      source: 'stale',
+      value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
+      storedValue: 'ludicrous',
+    });
+  });
+
+  it('should mark an unparseable provider allowlist as stale', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_openrouter_providers',
+        value: 'NOT A SLUG!!',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(
+      entries.find((e) => e.key === 'ai_openrouter_providers')
+    ).toMatchObject({ source: 'stale', storedValue: 'NOT A SLUG!!' });
+  });
+
+  it('should keep an empty provider allowlist custom, since it means no preference', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_openrouter_providers',
+        value: '',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(
+      entries.find((e) => e.key === 'ai_openrouter_providers')
+    ).toMatchObject({ source: 'custom', value: '', storedValue: null });
   });
 
   it('should resolve effective config from DB rows and code defaults', async () => {
@@ -288,6 +413,7 @@ describe('AIConfigService', () => {
         value: CUSTOM_MODEL,
         kind: 'model',
         source: 'custom',
+        storedValue: null,
         description: null,
         updatedAt,
       },
@@ -296,6 +422,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_fast_model,
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -304,6 +431,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_deep_model,
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -312,6 +440,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_fallback_chain,
         kind: 'chain',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -320,6 +449,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
         kind: 'choice',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -328,6 +458,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_openrouter_providers,
         kind: 'list',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -343,6 +474,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_default_model,
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -351,6 +483,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_fast_model,
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -359,6 +492,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_deep_model,
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -367,6 +501,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_fallback_chain,
         kind: 'chain',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -375,6 +510,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
         kind: 'choice',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },
@@ -383,6 +519,7 @@ describe('AIConfigService', () => {
         value: AI_SETTING_DEFAULTS.ai_openrouter_providers,
         kind: 'list',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },

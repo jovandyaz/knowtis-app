@@ -71,6 +71,7 @@ function entryWith(
     value,
     kind: 'chain',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };
@@ -368,7 +369,9 @@ describe('RoutingSection', () => {
     renderChain();
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: fallback chain$/i,
+      })
     ).toBeInTheDocument();
   });
 
@@ -376,7 +379,9 @@ describe('RoutingSection', () => {
     render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset to default: fallback chain$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -384,7 +389,9 @@ describe('RoutingSection', () => {
     renderChain();
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: fallback chain$/i,
+      })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({
@@ -398,7 +405,9 @@ describe('RoutingSection', () => {
     renderChain();
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: fallback chain$/i,
+      })
     ).toBeDisabled();
   });
 });

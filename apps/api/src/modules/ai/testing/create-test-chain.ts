@@ -1,7 +1,8 @@
 import { ConfigService } from '@nestjs/config';
 
+import { parseChain } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../../config/env.config';
-import { parseChain } from '../domain/ai-settings';
 import { WebhookAlertService } from '../infrastructure/alerting/webhook-alert.service';
 import {
   FallbackChainService,

@@ -4,13 +4,16 @@ import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
+  CHAIN_SEPARATOR,
+  parseChain,
   REASONING_EFFORTS,
+  type AIConfigSource,
   type ModelIntent,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
+import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -101,7 +104,9 @@ export interface AIConfigEntry {
   key: ConfigKey;
   value: string;
   kind: AIConfigKind;
-  source: 'custom' | 'default';
+  source: AIConfigSource;
+  /** The stored row's value when it is not the one being served — set only for `stale`, so the admin can see what the dead row points at. */
+  storedValue: string | null;
   description: string | null;
   updatedAt: Date | null;
 }
@@ -311,27 +316,63 @@ export class AIConfigService {
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
-      const row = this.servedRow(key, rows.get(key));
+      const stored = rows.get(key);
+      const value = this.servedValue(key, stored);
+      const diverged =
+        stored !== undefined && this.canonical(key, stored.value) !== value;
       return {
         key,
-        value: row?.value ?? CONFIG_KEYS[key].default,
+        value,
         kind: CONFIG_KEYS[key].kind,
-        source: row ? 'custom' : 'default',
-        description: row?.description ?? null,
-        updatedAt: row?.updatedAt ?? null,
+        source:
+          stored === undefined ? 'default' : diverged ? 'stale' : 'custom',
+        storedValue: diverged ? stored.value : null,
+        description: stored?.description ?? null,
+        updatedAt: stored?.updatedAt ?? null,
       };
     });
   }
 
-  /** Drops a model row naming something the catalog no longer supports: getSupportedModel ignores it at runtime, so reporting it would show the admin a value the server never serves. */
-  private servedRow(
-    key: ConfigKey,
-    row: AIConfigRow | undefined
-  ): AIConfigRow | undefined {
-    if (!row || CONFIG_KEYS[key].kind !== 'model') {
-      return row;
+  /** The stored string in the form the runtime parses it, so whitespace alone never reads as a divergence. */
+  private canonical(key: ConfigKey, value: string): string {
+    return CONFIG_KEYS[key].kind === 'chain'
+      ? parseChain(value).join(CHAIN_SEPARATOR)
+      : value;
+  }
+
+  /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
+  private servedValue(key: ConfigKey, row: AIConfigRow | undefined): string {
+    const def = CONFIG_KEYS[key];
+    if (!row) {
+      return def.default;
     }
-    return this.modelCatalog.isSupported(row.value) ? row : undefined;
+    switch (def.kind) {
+      case 'model':
+        return this.modelCatalog.isSupported(row.value)
+          ? row.value
+          : def.default;
+      case 'chain': {
+        const supported = parseChain(row.value).filter((model) =>
+          this.modelCatalog.isSupported(model)
+        );
+        // All-dead diverges from getFallbackChain(), which returns [] here:
+        // FallbackChainService ignores empty refreshes, so the code default is
+        // what actually routes from the next boot on.
+        return supported.length > 0
+          ? supported.join(CHAIN_SEPARATOR)
+          : def.default;
+      }
+      case 'choice':
+        return def.allowed.some((allowed) => allowed === row.value)
+          ? row.value
+          : def.default;
+      case 'list':
+        return parseProviderOrder(row.value) !== null ? row.value : def.default;
+      default: {
+        const exhaustive: never = def;
+        throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);
+      }
+    }
   }
 
   private async getAllRowsSafe() {

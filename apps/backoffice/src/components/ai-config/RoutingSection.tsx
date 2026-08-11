@@ -12,16 +12,14 @@ import {
   ModelSelect,
   MutationErrorAlert,
 } from '@knowtis/design-system';
-import { MODEL_TIERS } from '@knowtis/shared-types';
+import {
+  CHAIN_SEPARATOR,
+  MODEL_TIERS,
+  parseChain,
+} from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((model) => model.trim())
-    .filter(Boolean);
-}
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 function move(chain: string[], from: number, to: number): string[] {
   const next = [...chain];
@@ -46,11 +44,14 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
     null
   );
 
-  const saved = parseChain(entry.value);
-  const isForked = draft?.base === entry.value;
+  // Edit what is stored, not what routes: on a stale row `value` is the filtered
+  // chain, and saving from it would silently drop the member the admin wrote.
+  const stored = entry.storedValue ?? entry.value;
+  const saved = parseChain(stored);
+  const isForked = draft?.base === stored;
   const chain = isForked ? draft.chain : saved;
-  const isDirty = isForked && draft.chain.join(',') !== entry.value;
-  const edit = (next: string[]) => setDraft({ base: entry.value, chain: next });
+  const isDirty = isForked && draft.chain.join(CHAIN_SEPARATOR) !== stored;
+  const edit = (next: string[]) => setDraft({ base: stored, chain: next });
   const available = (models.data ?? []).filter(
     (model) => !chain.includes(model.id)
   );
@@ -76,26 +77,19 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         isError={setConfig.isError}
         fallbackMessage="Could not update the chain."
       />
-      <div className="flex items-center gap-2">
-        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
-          {entry.source}
-        </Badge>
-        <span className="text-xs text-(--muted-foreground)">
-          {entry.updatedAt
-            ? `Updated ${entry.updatedAt.toLocaleString()}`
-            : 'Never changed'}
-        </span>
-        {entry.source === 'custom' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={mutating}
-            onClick={() => resetConfig.mutate({ key: entry.key })}
-          >
-            Reset to default
-          </Button>
-        ) : null}
-      </div>
+      <ConfigSourceCell
+        entry={entry}
+        label="fallback chain"
+        disabled={mutating}
+        onReset={() => resetConfig.mutate({ key: entry.key })}
+        meta={
+          <span className="text-xs text-(--muted-foreground)">
+            {entry.updatedAt
+              ? `Updated ${entry.updatedAt.toLocaleString()}`
+              : 'Never changed'}
+          </span>
+        }
+      />
       {chain.length === 0 ? (
         <p className="text-sm text-(--muted-foreground)">
           The chain is empty. Add at least one model before saving.
@@ -159,9 +153,9 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         </p>
       ) : hasInertMembers ? (
         <p role="status" className="text-xs text-(--muted-foreground)">
-          Models marked “won’t route” are skipped: their provider has no server
-          key or is disabled, or the model left the catalog. They stay in the
-          chain and resume if that changes.
+          Models marked “won’t route” are skipped. A member whose provider has
+          no server key or is disabled stays in the chain and resumes if that
+          changes; one the catalog dropped blocks saving until it is removed.
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -183,7 +177,10 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             <Button
               disabled={mutating || chain.length === 0 || isInert}
               onClick={() =>
-                setConfig.mutate({ key: entry.key, value: chain.join(',') })
+                setConfig.mutate({
+                  key: entry.key,
+                  value: chain.join(CHAIN_SEPARATOR),
+                })
               }
             >
               Save chain

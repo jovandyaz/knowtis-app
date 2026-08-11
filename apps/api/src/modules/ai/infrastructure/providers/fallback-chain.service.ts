@@ -6,9 +6,10 @@ import {
   providerOf,
   resolveChainCandidates,
 } from '@knowtis/ai-gateway';
+import { parseChain } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
+import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { WebhookAlertService } from '../alerting/webhook-alert.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 

@@ -43,6 +43,7 @@ function entryWith(
     value,
     kind: 'choice',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };
@@ -112,7 +113,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: reasoning effort$/i,
+      })
     ).toBeInTheDocument();
   });
 
@@ -120,7 +123,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'default');
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset to default: reasoning effort$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -128,7 +133,9 @@ describe('ReasoningSection', () => {
     renderSection('high', 'custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: reasoning effort$/i,
+      })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({
@@ -150,7 +157,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: reasoning effort$/i,
+      })
     ).toBeDisabled();
   });
 });

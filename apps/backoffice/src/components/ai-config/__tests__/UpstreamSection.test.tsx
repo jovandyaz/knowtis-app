@@ -42,6 +42,7 @@ function entryWith(
     value,
     kind: 'list',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };
@@ -118,7 +119,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: provider allowlist$/i,
+      })
     ).toBeInTheDocument();
   });
 
@@ -126,7 +129,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks,baseten', 'default');
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset to default: provider allowlist$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -134,7 +139,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks', 'custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset to default: provider allowlist$/i,
+      })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({

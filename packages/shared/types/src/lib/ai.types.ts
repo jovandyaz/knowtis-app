@@ -81,6 +81,20 @@ export type ModelAccess = (typeof MODEL_ACCESS)[number];
 export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
+/** Where an AI config key's served value comes from; `stale` means a row is stored but the runtime ignores it and serves the code default. */
+export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
+export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];
+
+export const CHAIN_SEPARATOR = ',';
+
+/** Splits a separator-delimited model chain into trimmed, non-empty ids — the wire format shared by the API and the backoffice editor. */
+export function parseChain(value: string): string[] {
+  return value
+    .split(CHAIN_SEPARATOR)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
 export interface SelectableModel {
   id: string;
   label: string;
