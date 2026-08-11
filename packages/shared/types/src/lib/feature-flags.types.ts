@@ -13,6 +13,7 @@ export const FEATURE_FLAG_KEYS = {
   AI_GLOBAL_SPEND_BREAKER: 'ai_global_spend_breaker',
   AI_ANON_IP_BUDGET: 'ai_anon_ip_budget',
   AI_TIER_GATING: 'ai_tier_gating',
+  AI_CATALOG_SYNC: 'ai_catalog_sync',
 } as const;
 
 export type FeatureFlagKey =
@@ -132,6 +133,11 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.AI,
     group: FLAG_GROUP.ACCESS,
     label: 'Tier gating',
+  },
+  ai_catalog_sync: {
+    domain: FLAG_DOMAIN.AI,
+    group: FLAG_GROUP.CAPABILITY,
+    label: 'Catalog sync',
   },
 } as const satisfies Record<FeatureFlagKey, FlagMeta>;
 

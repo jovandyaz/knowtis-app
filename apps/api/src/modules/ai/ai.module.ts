@@ -38,14 +38,18 @@ import { AI_COMPLETION_PROVIDER } from './domain/ports/ai-provider.port';
 import { AI_STRUCTURED_OUTPUT_PROVIDER } from './domain/ports/ai-structured-output.port';
 import { AI_USAGE_REPOSITORY } from './domain/ports/ai-usage.repository';
 import { EMBEDDING_PORT } from './domain/ports/embedding.port';
+import { OPENROUTER_MODELS_CLIENT } from './domain/ports/openrouter-models.port';
 import { RATE_LIMIT_PROVIDER } from './domain/ports/rate-limit.port';
 import { SYSTEM_PROVIDER_KEYS_REPOSITORY } from './domain/ports/system-provider-keys.repository';
 import { USER_AI_SETTINGS_REPOSITORY } from './domain/ports/user-ai-settings.repository';
 import { USER_PROVIDER_KEYS_REPOSITORY } from './domain/ports/user-provider-keys.repository';
 import { WEB_SEARCH_PORT } from './domain/ports/web-search.port';
 import { WebhookAlertService } from './infrastructure/alerting/webhook-alert.service';
+import { CatalogSyncTask } from './infrastructure/catalog/catalog-sync.task';
 import { CompositeModelCatalog } from './infrastructure/catalog/composite-model-catalog';
+import { LiteLlmPricesHttpClient } from './infrastructure/catalog/litellm-prices.client';
 import { ModelCatalogAdapter } from './infrastructure/catalog/model-catalog.adapter';
+import { OpenRouterModelsHttpClient } from './infrastructure/catalog/openrouter-models.client';
 import { PromotedModelsCache } from './infrastructure/catalog/promoted-models.cache';
 import { VoyageEmbeddingAdapter } from './infrastructure/embedding/voyage-embedding.adapter';
 import { DrizzleAiCatalogRepository } from './infrastructure/persistence/drizzle-ai-catalog.repository';
@@ -118,6 +122,12 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     ModelCatalogAdapter,
     PromotedModelsCache,
     { provide: MODEL_CATALOG, useClass: CompositeModelCatalog },
+    {
+      provide: OPENROUTER_MODELS_CLIENT,
+      useClass: OpenRouterModelsHttpClient,
+    },
+    LiteLlmPricesHttpClient,
+    CatalogSyncTask,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,

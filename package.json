@@ -18,6 +18,7 @@
     "dev:mcp": "nx serve mcp",
     "build:mcp": "nx build mcp",
     "setup": "node tools/setup.mjs",
+    "catalog:refresh-snapshot": "node tools/refresh-model-catalog.mjs",
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint -- --fix",
     "format": "prettier --write .",
