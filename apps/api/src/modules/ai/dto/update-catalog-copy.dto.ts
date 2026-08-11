@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsString, MaxLength, ValidateIf } from 'class-validator';
 
 import {
   CATALOG_DESCRIPTION_MAX_LENGTH,
@@ -7,13 +7,16 @@ import {
   type UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
 
+const isProvided = (_: unknown, value: unknown) => value !== undefined;
+
 export class UpdateCatalogCopyDto implements UpdateCatalogCopyInput {
   @ApiPropertyOptional({
     description: 'Name shown in the model picker',
     maxLength: CATALOG_LABEL_MAX_LENGTH,
     example: 'Kimi K3',
   })
-  @IsOptional()
+  // @IsOptional() would also skip null, letting `{ label: null }` reach the non-null column.
+  @ValidateIf(isProvided)
   @IsString()
   @MaxLength(CATALOG_LABEL_MAX_LENGTH)
   label?: string;
@@ -23,7 +26,7 @@ export class UpdateCatalogCopyDto implements UpdateCatalogCopyInput {
     maxLength: CATALOG_DESCRIPTION_MAX_LENGTH,
     example: 'Long-context open-weight model',
   })
-  @IsOptional()
+  @ValidateIf(isProvided)
   @IsString()
   @MaxLength(CATALOG_DESCRIPTION_MAX_LENGTH)
   description?: string;
