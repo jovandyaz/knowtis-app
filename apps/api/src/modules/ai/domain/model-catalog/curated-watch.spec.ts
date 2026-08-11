@@ -33,6 +33,10 @@ function vendoredOutputCost(id: string): number | undefined {
   return VENDORED_OUTPUT_COSTS.get(id);
 }
 
+function freeVendoredCost(freeId: string) {
+  return (id: string): number | undefined => (id === freeId ? 0 : undefined);
+}
+
 const LIVE_IN_SYNC: Record<
   string,
   { output_cost_per_token?: number; deprecation_date?: string }
@@ -193,6 +197,22 @@ describe('findLiteLlmDrift', () => {
 
     expect(findings.map((finding) => finding.kind)).toEqual(['deprecation']);
   });
+
+  it('should report a free curated model that upstream started charging for', () => {
+    const live = { 'claude-sonnet-5': { output_cost_per_token: 0.000001 } };
+
+    const findings = findLiteLlmDrift(freeVendoredCost(SONNET_ID), live);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].modelId).toBe(SONNET_ID);
+    expect(findings[0].kind).toBe('price_drift');
+  });
+
+  it('should stay quiet while a free curated model is still free upstream', () => {
+    const live = { 'claude-sonnet-5': { output_cost_per_token: 0 } };
+
+    expect(findLiteLlmDrift(freeVendoredCost(SONNET_ID), live)).toEqual([]);
+  });
 });
 
 describe('findOpenRouterDrift', () => {
@@ -297,5 +317,23 @@ describe('findOpenRouterDrift', () => {
     const findings = findOpenRouterDrift(() => undefined, upstream);
 
     expect(findings.map((finding) => finding.kind)).toEqual(['deprecation']);
+  });
+
+  it('should report a free curated model that upstream started charging for', () => {
+    const upstream = [
+      upstreamModel(GLM_SLUG, { completionCostPerToken: 0.000001 }),
+    ];
+
+    const findings = findOpenRouterDrift(freeVendoredCost(GLM_ID), upstream);
+
+    expect(findings).toHaveLength(1);
+    expect(findings[0].modelId).toBe(GLM_ID);
+    expect(findings[0].kind).toBe('price_drift');
+  });
+
+  it('should stay quiet while a free curated model is still free upstream', () => {
+    const upstream = [upstreamModel(GLM_SLUG, { completionCostPerToken: 0 })];
+
+    expect(findOpenRouterDrift(freeVendoredCost(GLM_ID), upstream)).toEqual([]);
   });
 });

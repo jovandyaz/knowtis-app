@@ -1,4 +1,6 @@
 import { Logger } from '@nestjs/common';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
@@ -42,6 +44,10 @@ const QWEN_CANDIDATE = upstreamModel('qwen/qwen3.8-max');
 const DEEPSEEK_CANDIDATE = upstreamModel('deepseek/deepseek-v4-flash');
 const CLOSED_WEIGHT_MODEL = upstreamModel('openai/gpt-5.4');
 
+function renderSql(query: SQL): string {
+  return new PgDialect().sqlToQuery(query).sql;
+}
+
 function make(
   options: {
     upstream?: UpstreamModel[];
@@ -54,7 +60,9 @@ function make(
   } = {}
 ) {
   const tx = {
-    execute: vi.fn().mockResolvedValue([{ locked: options.locked ?? true }]),
+    execute: vi
+      .fn<(query: SQL) => Promise<{ locked: boolean }[]>>()
+      .mockResolvedValue([{ locked: options.locked ?? true }]),
   };
   const db = {
     transaction: vi.fn(async (work: (tx: unknown) => Promise<void>) =>
@@ -278,9 +286,9 @@ describe('CatalogSyncTask', () => {
     await task.sync();
 
     expect(tx.execute).toHaveBeenCalledTimes(1);
-    expect(JSON.stringify(tx.execute.mock.calls[0][0])).toContain(
-      'pg_try_advisory_xact_lock'
-    );
+    const statements = tx.execute.mock.calls.map(([query]) => renderSql(query));
+    expect(statements[0]).toContain('pg_try_advisory_xact_lock');
+    expect(statements.join('\n')).not.toContain('pg_advisory_unlock');
   });
 
   it('should log and swallow a failing upstream fetch', async () => {
@@ -312,6 +320,34 @@ describe('CatalogSyncTask', () => {
       expect.objectContaining({
         event: 'ai.catalog.sync_write_failed',
         count: 1,
+      })
+    );
+  });
+
+  it('should keep raising the other alerts when one alert write fails', async () => {
+    const { task, repo } = make({
+      upstream: [
+        upstreamModel(GLM_SLUG, {
+          completionCostPerToken: GLM_VENDORED_OUTPUT_COST * 2,
+          expirationDate: new Date('2026-12-31T00:00:00.000Z'),
+        }),
+      ],
+    });
+    repo.createAlert.mockRejectedValueOnce(new Error('alerts table locked'));
+
+    await task.sync();
+
+    expect(repo.createAlert).toHaveBeenCalledTimes(2);
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.sync_write_failed',
+        count: 1,
+        failures: [
+          {
+            target: `${GLM_CURATED_ID} deprecation`,
+            reason: 'alerts table locked',
+          },
+        ],
       })
     );
   });
