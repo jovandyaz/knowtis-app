@@ -1,0 +1,26 @@
+# The gate decides whether a prod deploy is trusted, so its changes cannot rely
+# on a run-it-by-hand convention: this runs the harness in the same image the
+# real deploy uses.
+name: Deploy Gate Tests
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/scripts/**']
+  pull_request:
+    paths: ['.github/scripts/**']
+
+jobs:
+  gate-harness:
+    name: Railway deploy gate harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run harness in the Railway CLI image
+        run: |
+          docker run --rm -v "$PWD/.github/scripts:/s" --entrypoint sh \
+            ghcr.io/railwayapp/cli:latest /s/railway-deploy.test.sh
