@@ -11,6 +11,39 @@ import postgres from 'postgres';
 // lock instead of racing the drizzle journal.
 const MIGRATION_LOCK_KEY = 4011989;
 
+const LOCK_TIMEOUT = '5s';
+const LOCK_NOT_AVAILABLE = '55P03';
+const MAX_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 3000;
+
+type Db = ReturnType<typeof drizzle>;
+
+const delay = (ms: number) => new Promise((done) => setTimeout(done, ms));
+
+function isLockTimeout(error: unknown): boolean {
+  return (
+    error instanceof postgres.PostgresError && error.code === LOCK_NOT_AVAILABLE
+  );
+}
+
+/** Applies pending migrations, retrying a lock timeout and nothing else. Rejects once attempts run out — a failed migration must block the deploy. */
+async function applyPending(db: Db, migrationsFolder: string): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      await migrate(db, { migrationsFolder });
+      return;
+    } catch (error) {
+      if (!isLockTimeout(error) || attempt === MAX_ATTEMPTS) {
+        throw error;
+      }
+      console.warn(
+        `[migrate] lock timeout after ${LOCK_TIMEOUT}; another transaction holds a lock on a table being altered. Retrying (${attempt}/${MAX_ATTEMPTS - 1})…`
+      );
+      await delay(RETRY_DELAY_MS);
+    }
+  }
+}
+
 async function main(): Promise<void> {
   loadEnv({ path: ['.env.local', '.env'] });
 
@@ -26,8 +59,12 @@ async function main(): Promise<void> {
   try {
     await db.execute(sql`SELECT pg_advisory_lock(${MIGRATION_LOCK_KEY})`);
     try {
+      // Set after the advisory lock, never before: `lock_timeout` bounds
+      // advisory waits too, so a deploy queued behind another would fail
+      // instead of waiting its turn.
+      await db.execute(sql`SET lock_timeout = ${sql.raw(`'${LOCK_TIMEOUT}'`)}`);
       console.log('[migrate] applying pending migrations…');
-      await migrate(db, { migrationsFolder });
+      await applyPending(db, migrationsFolder);
       console.log('[migrate] schema up to date.');
     } finally {
       await db.execute(sql`SELECT pg_advisory_unlock(${MIGRATION_LOCK_KEY})`);
