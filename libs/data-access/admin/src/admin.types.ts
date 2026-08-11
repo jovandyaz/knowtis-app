@@ -3,6 +3,8 @@ import { z } from 'zod';
 
 import {
   AI_PROVIDERS,
+  CATALOG_ALERT_KINDS,
+  CATALOG_MODEL_STATUSES,
   MODEL_ACCESS,
   MODEL_TIERS,
   PROVIDER_KEY_SOURCES,
@@ -182,3 +184,41 @@ export const AiHealthSchema = z.object({
   providers: z.record(z.string(), ProviderHealthSchema),
 });
 export type AiHealth = z.infer<typeof AiHealthSchema>;
+
+// Backoffice and API deploy independently; fields the screen already renders as
+// "unknown" tolerate absence so an older API costs a blank cell, not the page.
+// Identity and pricing stay strict — a silently zeroed price misinforms promotion.
+export const CatalogModelSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  description: z.string().default(''),
+  status: z.enum(CATALOG_MODEL_STATUSES),
+  tier: z.enum(MODEL_TIERS),
+  inputCostPerToken: z.number(),
+  outputCostPerToken: z.number(),
+  maxInputTokens: z.number(),
+  maxOutputTokens: z.number().nullable().default(null),
+  intelligenceIndex: z.number().nullable().default(null),
+  upstreamCreatedAt: z.coerce.date().nullable().default(null),
+  upstreamExpirationDate: z.coerce.date().nullable().default(null),
+  lastSeenAt: z.coerce.date(),
+  promotedAt: z.coerce.date().nullable().default(null),
+});
+export type CatalogModel = z.infer<typeof CatalogModelSchema>;
+
+export const CatalogAlertSchema = z.object({
+  id: z.number().int(),
+  modelId: z.string(),
+  kind: z.enum(CATALOG_ALERT_KINDS),
+  detail: z.string(),
+  createdAt: z.coerce.date(),
+  resolvedAt: z.coerce.date().nullable().default(null),
+});
+export type CatalogAlert = z.infer<typeof CatalogAlertSchema>;
+
+export const CatalogOverviewSchema = z.object({
+  candidates: z.array(CatalogModelSchema),
+  promoted: z.array(CatalogModelSchema),
+  alerts: z.array(CatalogAlertSchema),
+});
+export type CatalogOverview = z.infer<typeof CatalogOverviewSchema>;
