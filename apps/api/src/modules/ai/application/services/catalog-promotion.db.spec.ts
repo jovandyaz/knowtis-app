@@ -116,7 +116,8 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     admin = new AiCatalogAdminService(
       repo,
       { record: vi.fn().mockResolvedValue(undefined) } as never,
-      promotedCache
+      promotedCache,
+      { run: vi.fn() } as never
     );
     selectable = new SelectableModelsService(
       new CompositeModelCatalog(

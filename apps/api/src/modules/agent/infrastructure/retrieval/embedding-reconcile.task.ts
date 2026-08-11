@@ -51,10 +51,12 @@ export class EmbeddingReconcileTask {
     if (!this.config.get('VOYAGE_API_KEY')) {
       return;
     }
-    const ran = await runWithAdvisoryLock(this.client, ADVISORY_LOCK_KEY, () =>
-      this.reconcileLocked()
+    const { acquired } = await runWithAdvisoryLock(
+      this.client,
+      ADVISORY_LOCK_KEY,
+      () => this.reconcileLocked()
     );
-    if (!ran) {
+    if (!acquired) {
       this.logger.debug(
         'Embedding reconcile skipped: another run holds the lock'
       );

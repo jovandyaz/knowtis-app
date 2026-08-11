@@ -67,6 +67,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useRetireCatalogModel: () => idleMutation,
     useUpdateCatalogCopy: () => idleMutation,
     useResolveCatalogAlert: () => idleMutation,
+    useSyncCatalog: () => idleMutation,
   };
 });
 

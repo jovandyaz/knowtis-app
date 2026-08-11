@@ -27,9 +27,10 @@ describe('runWithAdvisoryLock', () => {
     const { client, queries, release } = makeClient(true);
     const work = vi.fn().mockResolvedValue(undefined);
 
-    await expect(runWithAdvisoryLock(client, LOCK_KEY, work)).resolves.toBe(
-      true
-    );
+    await expect(runWithAdvisoryLock(client, LOCK_KEY, work)).resolves.toEqual({
+      acquired: true,
+      result: undefined,
+    });
 
     expect(work).toHaveBeenCalledTimes(1);
     expect(queries[0]).toContain('pg_try_advisory_lock');
@@ -41,9 +42,10 @@ describe('runWithAdvisoryLock', () => {
     const { client, queries, release } = makeClient(false);
     const work = vi.fn();
 
-    await expect(runWithAdvisoryLock(client, LOCK_KEY, work)).resolves.toBe(
-      false
-    );
+    await expect(runWithAdvisoryLock(client, LOCK_KEY, work)).resolves.toEqual({
+      acquired: false,
+      result: null,
+    });
 
     expect(work).not.toHaveBeenCalled();
     expect(queries.some((q) => q.includes('pg_advisory_unlock'))).toBe(false);

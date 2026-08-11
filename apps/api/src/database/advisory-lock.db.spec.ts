@@ -25,15 +25,16 @@ describe.runIf(DB_AVAILABLE)('runWithAdvisoryLock against Postgres', () => {
     await expect(
       runWithAdvisoryLock(client, KEY, async () => {
         during = await heldCount();
+        return 'work ran';
       })
-    ).resolves.toBe(true);
+    ).resolves.toEqual({ acquired: true, result: 'work ran' });
 
     expect(during).toBe(1);
     expect(await heldCount()).toBe(0);
   });
 
   it('refuses a second holder while the first still runs', async () => {
-    let second: boolean | null = null;
+    let second: { acquired: boolean } | null = null;
 
     await runWithAdvisoryLock(client, KEY, async () => {
       second = await runWithAdvisoryLock(client, KEY, () =>
@@ -41,7 +42,7 @@ describe.runIf(DB_AVAILABLE)('runWithAdvisoryLock against Postgres', () => {
       );
     });
 
-    expect(second).toBe(false);
+    expect(second).toEqual({ acquired: false, result: null });
   });
 
   it('releases the lock when the work throws', async () => {

@@ -25,6 +25,7 @@ import { Throttle } from '@nestjs/throttler';
 import type {
   CatalogModelDto,
   CatalogOverviewDto,
+  CatalogSyncResultDto,
 } from '@knowtis/shared-types';
 
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
@@ -41,6 +42,8 @@ const UNKNOWN_MODEL = 'Unknown model id';
 
 const READ_THROTTLE = { default: { limit: 30, ttl: 60000 } };
 const MUTATION_THROTTLE = { default: { limit: 10, ttl: 60000 } };
+/** Tighter than the other mutations: each pass calls two upstream APIs and rewrites the whole candidate table. */
+const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 
 @ApiTags('AI')
 @ApiBearerAuth()
@@ -62,6 +65,20 @@ export class AiCatalogController {
   @Get()
   list(): Promise<CatalogOverviewDto> {
     return this.catalog.overview();
+  }
+
+  @ApiOperation({
+    summary: 'Sync the catalog from upstream now',
+    description:
+      'Runs the pass the daily cron would run. Reports what it wrote, or why it skipped: the feature flag is off, or another run holds the lock.',
+  })
+  @ApiResponse({ status: 200, description: 'What the sync pass did' })
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(SYNC_THROTTLE)
+  @HttpCode(HttpStatus.OK)
+  @Post('sync')
+  sync(@CurrentUser() user: RequestUser): Promise<CatalogSyncResultDto> {
+    return this.catalog.sync(user.id);
   }
 
   @ApiOperation({

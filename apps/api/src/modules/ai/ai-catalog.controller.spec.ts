@@ -42,6 +42,14 @@ describe('AiCatalogController', () => {
       retire: vi.fn().mockResolvedValue(model),
       updateCopy: vi.fn().mockResolvedValue(model),
       resolveAlert: vi.fn().mockResolvedValue(undefined),
+      sync: vi.fn().mockResolvedValue({
+        status: 'completed',
+        skippedReason: null,
+        upstream: 120,
+        candidates: 97,
+        alerts: 2,
+        failures: 0,
+      }),
     };
     controller = new AiCatalogController(catalog as never);
   });
@@ -125,5 +133,36 @@ describe('AiCatalogController', () => {
       ALERT_ID,
       'admin-user-id'
     );
+  });
+  it('runs a sync on behalf of the admin who asked for it', async () => {
+    await expect(controller.sync(ACTOR)).resolves.toEqual({
+      status: 'completed',
+      skippedReason: null,
+      upstream: 120,
+      candidates: 97,
+      alerts: 2,
+      failures: 0,
+    });
+    expect(catalog.sync).toHaveBeenCalledWith('admin-user-id');
+  });
+
+  it('passes a skipped sync through instead of dressing it as a success', async () => {
+    catalog.sync.mockResolvedValue({
+      status: 'skipped',
+      skippedReason: 'flag_disabled',
+      upstream: 0,
+      candidates: 0,
+      alerts: 0,
+      failures: 0,
+    });
+
+    await expect(controller.sync(ACTOR)).resolves.toEqual({
+      status: 'skipped',
+      skippedReason: 'flag_disabled',
+      upstream: 0,
+      candidates: 0,
+      alerts: 0,
+      failures: 0,
+    });
   });
 });

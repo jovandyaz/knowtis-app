@@ -8,7 +8,7 @@ import { MemoryExtractionTask } from './memory-extraction.task';
 function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'vk';
   const lock = opts.lock ?? true;
-  const client = createAdvisoryLockClient(lock);
+  const { client } = createAdvisoryLockClient(lock);
   const config = {
     get: (k: string) =>
       (

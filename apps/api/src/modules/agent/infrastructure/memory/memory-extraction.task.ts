@@ -67,10 +67,12 @@ export class MemoryExtractionTask {
     ) {
       return;
     }
-    const ran = await runWithAdvisoryLock(this.client, ADVISORY_LOCK_KEY, () =>
-      this.reconcileLocked()
+    const { acquired } = await runWithAdvisoryLock(
+      this.client,
+      ADVISORY_LOCK_KEY,
+      () => this.reconcileLocked()
     );
-    if (!ran) {
+    if (!acquired) {
       this.logger.debug(
         'Memory extraction skipped: another run holds the lock'
       );

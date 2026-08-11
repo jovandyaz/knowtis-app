@@ -7,8 +7,10 @@ import {
   usePromoteCatalogModel,
   useResolveCatalogAlert,
   useRetireCatalogModel,
+  useSyncCatalog,
   useUpdateCatalogCopy,
   type CatalogModel,
+  type CatalogSyncResult,
 } from '@knowtis/data-access-admin';
 import {
   Badge,
@@ -31,6 +33,7 @@ import {
   CATALOG_LABEL_MAX_LENGTH,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   type CatalogAlertKind,
+  type CatalogSyncSkipReason,
   type ModelTier,
 } from '@knowtis/shared-types';
 
@@ -61,6 +64,23 @@ function isByokOnly(model: CatalogModel): boolean {
     model.outputCostPerToken < 0 ||
     model.outputCostPerToken > FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
   );
+}
+
+const SYNC_SKIP_MESSAGES: Record<string, string> = {
+  flag_disabled: 'Skipped: the ai_catalog_sync flag is off.',
+  locked: 'Skipped: another sync is already running.',
+} satisfies Record<CatalogSyncSkipReason, string>;
+
+function syncSummary(result: CatalogSyncResult): string {
+  if (result.status === 'skipped') {
+    return (
+      SYNC_SKIP_MESSAGES[result.skippedReason ?? ''] ??
+      'Skipped: nothing to do right now.'
+    );
+  }
+  const failed =
+    result.failures > 0 ? `, ${result.failures} write(s) failed` : '';
+  return `Synced ${result.upstream} upstream models: ${result.candidates} candidate(s), ${result.alerts} alert(s)${failed}.`;
 }
 
 interface PromotedModelRowProps {
@@ -150,8 +170,9 @@ export function CatalogSection() {
   const retire = useRetireCatalogModel();
   const updateCopy = useUpdateCatalogCopy();
   const resolveAlert = useResolveCatalogAlert();
+  const sync = useSyncCatalog();
 
-  const mutations = [promote, retire, updateCopy, resolveAlert];
+  const mutations = [promote, retire, updateCopy, resolveAlert, sync];
   const mutating = mutations.some((mutation) => mutation.isPending);
   const failed = mutations.find((mutation) => mutation.isError);
 
@@ -165,6 +186,16 @@ export function CatalogSection() {
     <ConfigSection
       title="Model catalog"
       description="Open-weight models the sync found upstream. Promoting one publishes it to the model list; its stored price still decides who may run it."
+      action={
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => sync.mutate()}
+          disabled={mutating}
+        >
+          {sync.isPending ? 'Syncing…' : 'Sync now'}
+        </Button>
+      }
     >
       {catalog.isError ? (
         <ErrorState
@@ -181,6 +212,12 @@ export function CatalogSection() {
             isError={!!failed}
             fallbackMessage="Could not apply the catalog change."
           />
+
+          {sync.isSuccess && !sync.isPending ? (
+            <p role="status" className="text-sm text-(--muted-foreground)">
+              {syncSummary(sync.data)}
+            </p>
+          ) : null}
 
           {alerts.length > 0 ? (
             <Card className="flex min-w-0 flex-col gap-2 p-4">

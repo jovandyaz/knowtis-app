@@ -130,6 +130,11 @@ export {
   type CatalogModelDto,
   type CatalogAlertDto,
   type CatalogOverviewDto,
+  CATALOG_SYNC_STATUSES,
+  type CatalogSyncStatus,
+  CATALOG_SYNC_SKIP_REASONS,
+  type CatalogSyncSkipReason,
+  type CatalogSyncResultDto,
   type PromoteCatalogModelInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';

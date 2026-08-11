@@ -1,11 +1,15 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { sql } from 'drizzle-orm';
+import type { Sql } from 'postgres';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_KEYS,
+  type CatalogSyncResultDto,
+  type CatalogSyncSkipReason,
+} from '@knowtis/shared-types';
 
-import { DATABASE_CONNECTION, type Database } from '../../../../database';
+import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import {
   isCatalogCandidate,
@@ -39,12 +43,23 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
+  return {
+    status: 'skipped',
+    skippedReason: reason,
+    upstream: 0,
+    candidates: 0,
+    alerts: 0,
+    failures: 0,
+  };
+}
+
 @Injectable()
 export class CatalogSyncTask {
   private readonly logger = new Logger(CatalogSyncTask.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: Database,
+    @Inject(DATABASE_CLIENT) private readonly client: Sql,
     private readonly flags: FeatureFlagsService,
     @Inject(AI_CATALOG_REPOSITORY) private readonly repo: AiCatalogRepository,
     @Inject(OPENROUTER_MODELS_CLIENT)
@@ -55,16 +70,8 @@ export class CatalogSyncTask {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async sync(): Promise<void> {
-    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC))) {
-      return;
-    }
     try {
-      const upstream = await this.openRouter.fetchModels();
-      const findings = [
-        ...findOpenRouterDrift(this.vendoredOutputCost, upstream),
-        ...(await this.liteLlmFindings()),
-      ];
-      await this.persist(upstream, findings);
+      await this.run();
     } catch (error) {
       this.logger.error({
         event: 'ai.catalog.sync_failed',
@@ -72,6 +79,28 @@ export class CatalogSyncTask {
         stack: error instanceof Error ? error.stack : undefined,
       });
     }
+  }
+
+  /**
+   * Runs one pass and resolves what it did. Rejects when the upstream fetch fails — the cron swallows that, an on-demand caller surfaces it.
+   */
+  async run(): Promise<CatalogSyncResultDto> {
+    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC))) {
+      return skipped('flag_disabled');
+    }
+    const outcome = await runWithAdvisoryLock(
+      this.client,
+      ADVISORY_LOCK_KEY,
+      () => this.fetchAndPersist()
+    );
+    if (!outcome.acquired) {
+      this.logger.log({
+        event: 'ai.catalog.sync_skipped',
+        reason: 'another run holds the lock',
+      });
+      return skipped('locked');
+    }
+    return outcome.result;
   }
 
   private readonly vendoredOutputCost = (modelId: string): number | undefined =>
@@ -92,78 +121,72 @@ export class CatalogSyncTask {
     }
   }
 
+  private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
+    const upstream = await this.openRouter.fetchModels();
+    const findings = [
+      ...findOpenRouterDrift(this.vendoredOutputCost, upstream),
+      ...(await this.liteLlmFindings()),
+    ];
+    return this.persist(upstream, findings);
+  }
+
   private async persist(
     upstream: UpstreamModel[],
     findings: DriftFinding[]
-  ): Promise<void> {
-    await this.runLocked(async () => {
-      const failures: WriteFailure[] = [];
-      let candidates = 0;
-      let alerts = 0;
+  ): Promise<CatalogSyncResultDto> {
+    const failures: WriteFailure[] = [];
+    let candidates = 0;
+    let alerts = 0;
 
-      for (const model of upstream) {
-        if (!isCatalogCandidate(model)) {
-          continue;
-        }
-        try {
-          await this.repo.upsertCandidate(toCandidateUpsert(model));
-          candidates += 1;
-        } catch (error) {
-          failures.push({ target: model.id, reason: reasonOf(error) });
-        }
+    for (const model of upstream) {
+      if (!isCatalogCandidate(model)) {
+        continue;
       }
-
-      for (const finding of findings) {
-        try {
-          await this.repo.createAlert(
-            finding.modelId,
-            finding.kind,
-            finding.detail
-          );
-          alerts += 1;
-        } catch (error) {
-          failures.push({
-            target: `${finding.modelId} ${finding.kind}`,
-            reason: reasonOf(error),
-          });
-        }
+      try {
+        await this.repo.upsertCandidate(toCandidateUpsert(model));
+        candidates += 1;
+      } catch (error) {
+        failures.push({ target: model.id, reason: reasonOf(error) });
       }
+    }
 
-      this.logger.log({
-        event: 'ai.catalog.sync',
-        upstream: upstream.length,
-        candidates,
-        alerts,
+    for (const finding of findings) {
+      try {
+        await this.repo.createAlert(
+          finding.modelId,
+          finding.kind,
+          finding.detail
+        );
+        alerts += 1;
+      } catch (error) {
+        failures.push({
+          target: `${finding.modelId} ${finding.kind}`,
+          reason: reasonOf(error),
+        });
+      }
+    }
+
+    this.logger.log({
+      event: 'ai.catalog.sync',
+      upstream: upstream.length,
+      candidates,
+      alerts,
+    });
+    if (failures.length > 0) {
+      this.logger.warn({
+        event: 'ai.catalog.sync_write_failed',
+        count: failures.length,
+        failures: failures.slice(0, FAILURE_LOG_SAMPLE_SIZE),
       });
-      if (failures.length > 0) {
-        this.logger.warn({
-          event: 'ai.catalog.sync_write_failed',
-          count: failures.length,
-          failures: failures.slice(0, FAILURE_LOG_SAMPLE_SIZE),
-        });
-      }
-    });
-  }
+    }
 
-  /**
-   * Runs `work` under a transaction-scoped advisory lock, which Postgres drops
-   * on commit — a crashed run can never strand it the way a session lock taken
-   * through a pool can. The writes inside `work` go through the pooled
-   * repository, so the transaction bounds the lock, not their atomicity.
-   */
-  private async runLocked(work: () => Promise<void>): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      const rows = await tx.execute<{ locked: boolean }>(
-        sql`SELECT pg_try_advisory_xact_lock(${ADVISORY_LOCK_KEY}) AS locked`
-      );
-      if (rows[0]?.locked !== true) {
-        this.logger.log({
-          event: 'ai.catalog.sync_skipped',
-          reason: 'another run holds the lock',
-        });
-        return;
-      }
-      await work();
-    });
+    return {
+      status: 'completed',
+      skippedReason: null,
+      upstream: upstream.length,
+      candidates,
+      alerts,
+      failures: failures.length,
+    };
   }
 }

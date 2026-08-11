@@ -20,6 +20,7 @@ import {
   AiHealthSchema,
   CatalogModelSchema,
   CatalogOverviewSchema,
+  CatalogSyncResultSchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
@@ -346,6 +347,15 @@ export function useResolveCatalogAlert() {
   return useMutation({
     mutationFn: (alertId: number) =>
       httpClient.post(`/ai/catalog/alerts/${alertId}/resolve`),
+    onSettled: () => invalidateCatalogDependents(queryClient),
+  });
+}
+
+export function useSyncCatalog() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () =>
+      CatalogSyncResultSchema.parse(await httpClient.post('/ai/catalog/sync')),
     onSettled: () => invalidateCatalogDependents(queryClient),
   });
 }
