@@ -294,16 +294,18 @@ describe('AIConfigService', () => {
     });
   });
 
-  it('should mark a chain stale when only some members survived the catalog', async () => {
+  it('should report the members that still route when only some survived the catalog', async () => {
     const survivor = 'anthropic:claude-sonnet-5';
-    mockRepo.getAllRows.mockResolvedValue([
-      {
-        key: 'ai_fallback_chain',
-        value: `${survivor},${UNKNOWN_ID}`,
-        description: null,
-        updatedAt: null,
-      },
-    ]);
+    const row = {
+      key: 'ai_fallback_chain',
+      value: `${survivor},${UNKNOWN_ID}`,
+      description: null,
+      updatedAt: null,
+    };
+    mockRepo.getAllRows.mockResolvedValue([row]);
+    mockRepo.get.mockImplementation(async (key: string) =>
+      key === 'ai_fallback_chain' ? row.value : null
+    );
     mockCatalog.isSupported.mockImplementation(
       (id: string) => id !== UNKNOWN_ID
     );
@@ -312,7 +314,29 @@ describe('AIConfigService', () => {
 
     expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
       source: 'stale',
+      value: survivor,
       storedValue: `${survivor},${UNKNOWN_ID}`,
+    });
+    expect(await service.getFallbackChain()).toEqual([survivor]);
+  });
+
+  it('should not call a chain stale over whitespace the parser already ignores', async () => {
+    const chain =
+      'anthropic:claude-sonnet-5, anthropic:claude-haiku-4-5-20251001';
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_fallback_chain',
+        value: chain,
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+      source: 'custom',
+      storedValue: null,
     });
   });
 

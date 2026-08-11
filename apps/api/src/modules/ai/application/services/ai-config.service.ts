@@ -11,7 +11,11 @@ import {
 } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
-import { AI_SETTING_DEFAULTS, parseChain } from '../../domain/ai-settings';
+import {
+  AI_SETTING_DEFAULTS,
+  CHAIN_SEPARATOR,
+  parseChain,
+} from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -315,40 +319,54 @@ export class AIConfigService {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
       const stored = rows.get(key);
-      const served = this.isServed(key, stored) ? stored : undefined;
-      const isStale = stored !== undefined && served === undefined;
+      const value = this.servedValue(key, stored);
+      const diverged =
+        stored !== undefined && this.canonical(key, stored.value) !== value;
       return {
         key,
-        value: served?.value ?? CONFIG_KEYS[key].default,
+        value,
         kind: CONFIG_KEYS[key].kind,
-        source: isStale ? 'stale' : served ? 'custom' : 'default',
-        storedValue: isStale ? stored.value : null,
+        source:
+          stored === undefined ? 'default' : diverged ? 'stale' : 'custom',
+        storedValue: diverged ? stored.value : null,
         description: stored?.description ?? null,
         updatedAt: stored?.updatedAt ?? null,
       };
     });
   }
 
-  /** Whether the runtime would serve this row verbatim: every getter above falls back to the code default for a value it cannot use, so reporting such a row as effective would show a value the server never serves. */
-  private isServed(key: ConfigKey, row: AIConfigRow | undefined): boolean {
-    if (!row) {
-      return false;
-    }
+  /** The stored string in the form the runtime parses it, so whitespace alone never reads as a divergence. */
+  private canonical(key: ConfigKey, value: string): string {
+    return CONFIG_KEYS[key].kind === 'chain'
+      ? parseChain(value).join(CHAIN_SEPARATOR)
+      : value;
+  }
+
+  /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
+  private servedValue(key: ConfigKey, row: AIConfigRow | undefined): string {
     const def = CONFIG_KEYS[key];
+    if (!row) {
+      return def.default;
+    }
     switch (def.kind) {
       case 'model':
-        return this.modelCatalog.isSupported(row.value);
+        return this.modelCatalog.isSupported(row.value)
+          ? row.value
+          : def.default;
       case 'chain': {
-        const entries = parseChain(row.value);
-        return (
-          entries.length > 0 &&
-          entries.every((model) => this.modelCatalog.isSupported(model))
+        const supported = parseChain(row.value).filter((model) =>
+          this.modelCatalog.isSupported(model)
         );
+        return supported.length > 0
+          ? supported.join(CHAIN_SEPARATOR)
+          : def.default;
       }
       case 'choice':
-        return def.allowed.some((allowed) => allowed === row.value);
+        return def.allowed.some((allowed) => allowed === row.value)
+          ? row.value
+          : def.default;
       case 'list':
-        return parseProviderOrder(row.value) !== null;
+        return parseProviderOrder(row.value) !== null ? row.value : def.default;
       default: {
         const exhaustive: never = def;
         throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);

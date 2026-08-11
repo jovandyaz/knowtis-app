@@ -47,11 +47,14 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
     null
   );
 
-  const saved = parseChain(entry.value);
-  const isForked = draft?.base === entry.value;
+  // Edit what is stored, not what routes: on a stale row `value` is the filtered
+  // chain, and saving from it would silently drop the member the admin wrote.
+  const stored = entry.storedValue ?? entry.value;
+  const saved = parseChain(stored);
+  const isForked = draft?.base === stored;
   const chain = isForked ? draft.chain : saved;
-  const isDirty = isForked && draft.chain.join(',') !== entry.value;
-  const edit = (next: string[]) => setDraft({ base: entry.value, chain: next });
+  const isDirty = isForked && draft.chain.join(',') !== stored;
+  const edit = (next: string[]) => setDraft({ base: stored, chain: next });
   const available = (models.data ?? []).filter(
     (model) => !chain.includes(model.id)
   );
