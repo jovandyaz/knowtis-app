@@ -14,8 +14,10 @@ import {
 import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
 
-const USER = '00000000-0000-4000-8000-0000000000f1';
-const OTHER = '00000000-0000-4000-8000-0000000000f2';
+// Own ids: specs sharing fixture users delete each other's rows in afterAll when
+// the suite runs in parallel against one database.
+const USER = '00000000-0000-4000-8000-000000000091';
+const OTHER = '00000000-0000-4000-8000-000000000092';
 
 describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   let db: Database;
