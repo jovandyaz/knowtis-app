@@ -2,12 +2,13 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
+import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
 import { MemoryExtractionTask } from './memory-extraction.task';
 
 function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'vk';
   const lock = opts.lock ?? true;
-  const db = { execute: vi.fn().mockResolvedValue([{ locked: lock }]) };
+  const client = createAdvisoryLockClient(lock);
   const config = {
     get: (k: string) =>
       (
@@ -50,7 +51,7 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   };
   const rateLimit = { recordGlobalCost: vi.fn().mockResolvedValue(undefined) };
   const task = new MemoryExtractionTask(
-    db as never,
+    client,
     config as never,
     aiConfig as never,
     flags as never,

@@ -6,7 +6,8 @@ import postgres, { type Sql } from 'postgres';
 import * as schema from './schema';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
-const DATABASE_CLIENT = 'DATABASE_CLIENT';
+/** Raw postgres-js client. Inject only to pin work to one connection; everything else uses `DATABASE_CONNECTION`. */
+export const DATABASE_CLIENT = 'DATABASE_CLIENT';
 
 export type Database = PostgresJsDatabase<typeof schema>;
 
@@ -32,7 +33,7 @@ export type Database = PostgresJsDatabase<typeof schema>;
       inject: [DATABASE_CLIENT],
     },
   ],
-  exports: [DATABASE_CONNECTION],
+  exports: [DATABASE_CONNECTION, DATABASE_CLIENT],
 })
 export class DatabaseModule implements OnModuleDestroy {
   constructor(@Inject(DATABASE_CLIENT) private readonly client: Sql) {}

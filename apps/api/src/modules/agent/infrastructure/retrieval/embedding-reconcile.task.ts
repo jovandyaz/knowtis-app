@@ -1,10 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Interval } from '@nestjs/schedule';
-import { sql } from 'drizzle-orm';
+import type { Sql } from 'postgres';
 
 import type { EnvConfig } from '../../../../config/env.config';
-import { DATABASE_CONNECTION, type Database } from '../../../../database';
+import { DATABASE_CLIENT, runWithAdvisoryLock } from '../../../../database';
 import { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import {
   EMBEDDING_PORT,
@@ -36,8 +36,8 @@ export class EmbeddingReconcileTask {
   private readonly logger = new Logger(EmbeddingReconcileTask.name);
 
   constructor(
-    @Inject(DATABASE_CONNECTION)
-    private readonly db: Database,
+    @Inject(DATABASE_CLIENT)
+    private readonly client: Sql,
     private readonly config: ConfigService<EnvConfig, true>,
     @Inject(NOTE_EMBEDDING_REPOSITORY)
     private readonly repo: NoteEmbeddingRepository,
@@ -51,10 +51,17 @@ export class EmbeddingReconcileTask {
     if (!this.config.get('VOYAGE_API_KEY')) {
       return;
     }
-    const locked = await this.acquireLock();
-    if (!locked) {
-      return;
+    const ran = await runWithAdvisoryLock(this.client, ADVISORY_LOCK_KEY, () =>
+      this.reconcileLocked()
+    );
+    if (!ran) {
+      this.logger.debug(
+        'Embedding reconcile skipped: another run holds the lock'
+      );
     }
+  }
+
+  private async reconcileLocked(): Promise<void> {
     try {
       const model = this.config.get('AI_EMBEDDING_MODEL');
       const stale = await this.repo.findStaleNotes(
@@ -76,8 +83,6 @@ export class EmbeddingReconcileTask {
         'Embedding reconcile failed',
         error instanceof Error ? error.stack : String(error)
       );
-    } finally {
-      await this.releaseLock();
     }
   }
 
@@ -151,16 +156,5 @@ export class EmbeddingReconcileTask {
       }
     }
     return count;
-  }
-
-  private async acquireLock(): Promise<boolean> {
-    const rows = (await this.db.execute(
-      sql`SELECT pg_try_advisory_lock(${ADVISORY_LOCK_KEY}) AS locked`
-    )) as unknown as { locked: boolean }[];
-    return rows[0]?.locked === true;
-  }
-
-  private async releaseLock(): Promise<void> {
-    await this.db.execute(sql`SELECT pg_advisory_unlock(${ADVISORY_LOCK_KEY})`);
   }
 }
