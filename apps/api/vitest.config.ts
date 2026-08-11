@@ -15,10 +15,9 @@ const plugins = () => [
 
 export default defineConfig({
   root: __dirname,
+  // With inline projects, file selection lives entirely in the projects below —
+  // a root-level `include` would select nothing.
   test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.{test,spec}.ts'],
     // Not redundant: @nx/vitest:test forces `reporters: []` unless the config
     // sets them, so failures reach CI with no name, file, or assertion.
     reporters: ['default'],

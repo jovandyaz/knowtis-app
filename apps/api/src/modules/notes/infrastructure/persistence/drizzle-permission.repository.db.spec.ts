@@ -1,6 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -19,12 +19,13 @@ const OWNER = '00000000-0000-4000-8000-0000000000b5';
 const NOTE = '00000000-0000-4000-8000-0000000000b6';
 
 describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository soft-delete', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzlePermissionRepository;
   const ownerId = UserId.create(OWNER)._unsafeUnwrap();
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -59,6 +60,7 @@ describe.runIf(DB_AVAILABLE)('DrizzlePermissionRepository soft-delete', () => {
   afterAll(async () => {
     await db.delete(notes).where(eq(notes.id, NOTE));
     await db.delete(users).where(eq(users.id, OWNER));
+    await moduleRef.close();
   });
 
   it('hasAccess is false for the owner of a soft-deleted note', async () => {

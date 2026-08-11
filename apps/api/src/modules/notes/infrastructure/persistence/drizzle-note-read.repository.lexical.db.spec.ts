@@ -1,6 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -22,11 +22,12 @@ const OTHER_NOTE = '00000000-0000-4000-8000-0000000000b3';
 describe.runIf(DB_AVAILABLE)(
   'DrizzleNoteReadRepository.findAccessibleNotesByLexicalRank',
   () => {
+    let moduleRef: TestingModule;
     let db: Database;
     let repo: DrizzleNoteReadRepository;
 
     beforeAll(async () => {
-      const moduleRef = await Test.createTestingModule({
+      moduleRef = await Test.createTestingModule({
         imports: [
           ConfigModule.forRoot({
             isGlobal: true,
@@ -90,6 +91,7 @@ describe.runIf(DB_AVAILABLE)(
     afterAll(async () => {
       await db.delete(users).where(eq(users.id, USER_ID));
       await db.delete(users).where(eq(users.id, OTHER_ID));
+      await moduleRef.close();
     });
 
     it('ranks the lexically-relevant note first', async () => {

@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -20,11 +20,12 @@ const USER = '00000000-0000-4000-8000-000000000091';
 const OTHER = '00000000-0000-4000-8000-000000000092';
 
 describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleConversationRepository;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -53,6 +54,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER));
     await db.delete(users).where(eq(users.id, OTHER));
+    await moduleRef.close();
   });
 
   it('creates a conversation and loads its turns oldest→newest', async () => {

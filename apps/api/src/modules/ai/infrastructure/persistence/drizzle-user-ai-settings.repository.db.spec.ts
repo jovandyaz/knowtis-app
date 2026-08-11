@@ -1,5 +1,5 @@
 import { ConfigModule } from '@nestjs/config';
-import { Test } from '@nestjs/testing';
+import { Test, type TestingModule } from '@nestjs/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
@@ -18,11 +18,12 @@ import { DrizzleUserAiSettingsRepository } from './drizzle-user-ai-settings.repo
 const USER_ID = '00000000-0000-4000-8000-0000000000c3';
 
 describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
+  let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleUserAiSettingsRepository;
 
   beforeAll(async () => {
-    const moduleRef = await Test.createTestingModule({
+    moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -49,6 +50,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleUserAiSettingsRepository', () => {
 
   afterAll(async () => {
     await db.delete(users).where(eq(users.id, USER_ID));
+    await moduleRef.close();
   });
 
   it('returns null settings when no row is stored', async () => {
