@@ -43,7 +43,7 @@ export function ConfigSourceCell({
           variant="ghost"
           size="sm"
           disabled={disabled}
-          aria-label={`Reset ${label} to default`}
+          aria-label={`Reset to default: ${label}`}
           onClick={onReset}
         >
           Reset to default

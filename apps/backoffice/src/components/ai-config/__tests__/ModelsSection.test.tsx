@@ -115,7 +115,7 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /^reset .+ to default$/i })
+      screen.getByRole('button', { name: /^reset to default: .+$/i })
     ).toBeInTheDocument();
   });
 
@@ -123,7 +123,7 @@ describe('ModelsSection', () => {
     renderSection('default');
 
     expect(
-      screen.queryByRole('button', { name: /^reset .+ to default$/i })
+      screen.queryByRole('button', { name: /^reset to default: .+$/i })
     ).not.toBeInTheDocument();
   });
 
@@ -131,7 +131,7 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /^reset .+ to default$/i })
+      screen.getByRole('button', { name: /^reset to default: .+$/i })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({ key: 'ai_default_model' });
@@ -143,7 +143,7 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /^reset .+ to default$/i })
+      screen.getByRole('button', { name: /^reset to default: .+$/i })
     ).toBeDisabled();
   });
   it('marks a stored value the runtime no longer serves as stale', () => {
@@ -163,7 +163,7 @@ describe('ModelsSection', () => {
     renderSection('stale');
 
     expect(
-      screen.getByRole('button', { name: /^reset .+ to default$/i })
+      screen.getByRole('button', { name: /^reset to default: .+$/i })
     ).toBeInTheDocument();
   });
 
@@ -179,13 +179,13 @@ describe('ModelsSection', () => {
     );
 
     const names = screen
-      .getAllByRole('button', { name: /^reset .+ to default$/i })
+      .getAllByRole('button', { name: /^reset to default: .+$/i })
       .map((button) => button.getAttribute('aria-label'));
 
     expect(names).toEqual([
-      'Reset Default model to default',
-      'Reset Fast model to default',
-      'Reset Deep model to default',
+      'Reset to default: Default model',
+      'Reset to default: Fast model',
+      'Reset to default: Deep model',
     ]);
   });
 });

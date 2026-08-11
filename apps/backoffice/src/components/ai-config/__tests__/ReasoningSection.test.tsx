@@ -114,7 +114,7 @@ describe('ReasoningSection', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /^reset reasoning effort to default$/i,
+        name: /^reset to default: reasoning effort$/i,
       })
     ).toBeInTheDocument();
   });
@@ -124,7 +124,7 @@ describe('ReasoningSection', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: /^reset reasoning effort to default$/i,
+        name: /^reset to default: reasoning effort$/i,
       })
     ).not.toBeInTheDocument();
   });
@@ -134,7 +134,7 @@ describe('ReasoningSection', () => {
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: /^reset reasoning effort to default$/i,
+        name: /^reset to default: reasoning effort$/i,
       })
     );
 
@@ -158,7 +158,7 @@ describe('ReasoningSection', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /^reset reasoning effort to default$/i,
+        name: /^reset to default: reasoning effort$/i,
       })
     ).toBeDisabled();
   });

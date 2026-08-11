@@ -120,7 +120,7 @@ describe('UpstreamSection', () => {
 
     expect(
       screen.getByRole('button', {
-        name: /^reset provider allowlist to default$/i,
+        name: /^reset to default: provider allowlist$/i,
       })
     ).toBeInTheDocument();
   });
@@ -130,7 +130,7 @@ describe('UpstreamSection', () => {
 
     expect(
       screen.queryByRole('button', {
-        name: /^reset provider allowlist to default$/i,
+        name: /^reset to default: provider allowlist$/i,
       })
     ).not.toBeInTheDocument();
   });
@@ -140,7 +140,7 @@ describe('UpstreamSection', () => {
 
     await userEvent.click(
       screen.getByRole('button', {
-        name: /^reset provider allowlist to default$/i,
+        name: /^reset to default: provider allowlist$/i,
       })
     );
 
