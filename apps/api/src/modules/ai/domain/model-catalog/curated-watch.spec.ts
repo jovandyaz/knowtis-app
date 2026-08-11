@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  UpstreamCatalog,
-  UpstreamModel,
+import {
+  UNPARSEABLE_MODEL_ID,
+  type UpstreamCatalog,
+  type UpstreamModel,
 } from '../ports/openrouter-models.port';
 import {
+  canConcludeAbsence,
   findLiteLlmDrift,
   findOpenRouterDrift,
   findPromotedDrift,
@@ -494,5 +496,44 @@ describe('findPromotedDrift', () => {
     expect(
       findPromotedDrift(['anthropic:claude-sonnet-5'], upstreamInSync())
     ).toEqual([]);
+  });
+
+  it('should not conclude absence while an anonymous discard is present', () => {
+    const anonymous = catalogOf(upstreamInSync().models, {
+      discarded: [UNPARSEABLE_MODEL_ID],
+    });
+
+    expect(findPromotedDrift([PROMOTED_ID], anonymous)).toEqual([]);
+    expect(findOpenRouterDrift(vendoredOutputCost, anonymous)).toEqual([]);
+  });
+});
+
+describe('canConcludeAbsence', () => {
+  it('should be true for a complete, recognizable, fully attributed read', () => {
+    expect(canConcludeAbsence(upstreamInSync())).toBe(true);
+  });
+
+  it('should be false for a truncated read', () => {
+    expect(
+      canConcludeAbsence(
+        catalogOf(upstreamInSync().models, { complete: false })
+      )
+    ).toBe(false);
+  });
+
+  it('should be false when no curated slug is recognizable', () => {
+    expect(
+      canConcludeAbsence(catalogOf([upstreamModel('some-vendor/other')]))
+    ).toBe(false);
+  });
+
+  it('should be false while an anonymous discard is present', () => {
+    expect(
+      canConcludeAbsence(
+        catalogOf(upstreamInSync().models, {
+          discarded: [UNPARSEABLE_MODEL_ID],
+        })
+      )
+    ).toBe(false);
   });
 });

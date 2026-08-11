@@ -1,7 +1,10 @@
 import { toLiteLLMKey } from '@knowtis/ai-gateway';
 import type { CatalogAlertKind, ModelTier } from '@knowtis/shared-types';
 
-import type { UpstreamCatalog } from '../ports/openrouter-models.port';
+import {
+  UNPARSEABLE_MODEL_ID,
+  type UpstreamCatalog,
+} from '../ports/openrouter-models.port';
 import {
   CURATED_MODELS,
   OPENROUTER_ID_PREFIX,
@@ -79,9 +82,10 @@ function unavailableDetail(slug: string): string {
 
 /**
  * Slug lookup for one upstream read, plus the guard that decides whether it may
- * retire anything: only a catalog that reached the last page and still lists a
- * curated model can prove absence, and never for an id upstream published
- * unparseably.
+ * retire anything: only a catalog that reached the last page, still lists a
+ * curated model, and carries no anonymous discard can prove absence — a
+ * discarded entry whose id failed to parse could be any model, including the
+ * one about to be declared gone.
  */
 function absenceCheck(catalog: UpstreamCatalog) {
   const bySlug = new Map(
@@ -92,13 +96,20 @@ function absenceCheck(catalog: UpstreamCatalog) {
     const slug = openTierSlug(model.id);
     return slug !== null && bySlug.has(slug);
   });
-  const conclusive = catalog.complete && recognizable;
+  const conclusive =
+    catalog.complete && recognizable && !unparseable.has(UNPARSEABLE_MODEL_ID);
 
   return {
     bySlug,
+    conclusive,
     isGone: (slug: string) =>
       conclusive && !bySlug.has(slug) && !unparseable.has(slug),
   };
+}
+
+/** False when this read cannot prove absence, so the vanish watch reports nothing that run — otherwise indistinguishable from a healthy sync. */
+export function canConcludeAbsence(catalog: UpstreamCatalog): boolean {
+  return absenceCheck(catalog).conclusive;
 }
 
 /** Upstream changes on the curated models OpenRouter bills, matched by slug. */

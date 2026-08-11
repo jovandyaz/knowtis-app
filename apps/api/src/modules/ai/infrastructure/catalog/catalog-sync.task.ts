@@ -17,6 +17,7 @@ import {
   toCandidateUpsert,
 } from '../../domain/model-catalog/candidate-filter';
 import {
+  canConcludeAbsence,
   findLiteLlmDrift,
   findOpenRouterDrift,
   findPromotedDrift,
@@ -144,6 +145,16 @@ export class CatalogSyncTask {
 
   private async fetchAndPersist(): Promise<CatalogSyncResultDto> {
     const catalog = await this.openRouter.fetchModels();
+    // A blind run logs the same `alerts: 0` as a healthy one, so the operator
+    // must be told the vanish watch concluded nothing this pass.
+    if (!canConcludeAbsence(catalog)) {
+      this.logger.warn({
+        event: 'ai.catalog.absence_watch_blind',
+        complete: catalog.complete,
+        models: catalog.models.length,
+        discarded: catalog.discarded.length,
+      });
+    }
     const findings = [
       ...findOpenRouterDrift(this.vendoredOutputCost, catalog),
       ...(await this.promotedFindings(catalog)),

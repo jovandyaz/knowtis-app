@@ -511,6 +511,34 @@ describe('CatalogSyncTask', () => {
     expect(result.status).toBe('completed');
     expect(repo.upsertCandidate).toHaveBeenCalled();
     expect(repo.createAlert).not.toHaveBeenCalled();
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'ai.catalog.promoted_read_failed' })
+    );
+  });
+
+  it('should warn that the vanish watch is blind on an inconclusive read', async () => {
+    const { task, openRouter } = make();
+    const inSync = withCuratedInSync();
+    openRouter.fetchModels.mockResolvedValue({ ...inSync, complete: false });
+
+    await task.sync();
+
+    expect(warnLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'ai.catalog.absence_watch_blind',
+        complete: false,
+      })
+    );
+  });
+
+  it('should not warn about the vanish watch on a conclusive read', async () => {
+    const { task } = make();
+
+    await task.sync();
+
+    expect(warnLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'ai.catalog.absence_watch_blind' })
+    );
   });
 
   it('should reject an on-demand run when the upstream fetch fails', async () => {

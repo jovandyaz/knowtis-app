@@ -293,10 +293,12 @@ describe('OpenRouterModelsHttpClient', () => {
       okResponse(page([DEEPSEEK_V32], 'https://evil.example.com/api/v1/models'))
     );
 
-    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models, complete } =
+      await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(models).toHaveLength(1);
+    expect(complete).toBe(false);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.upstream_pagination_rejected',
@@ -307,10 +309,12 @@ describe('OpenRouterModelsHttpClient', () => {
   it('should stop paginating on a next link that is not a valid url', async () => {
     fetchMock.mockResolvedValue(okResponse(page([DEEPSEEK_V32], 'http://')));
 
-    const { models } = await new OpenRouterModelsHttpClient().fetchModels();
+    const { models, complete } =
+      await new OpenRouterModelsHttpClient().fetchModels();
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(models).toHaveLength(1);
+    expect(complete).toBe(false);
     expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'ai.catalog.upstream_pagination_rejected',

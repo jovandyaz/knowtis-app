@@ -16,12 +16,15 @@ export interface UpstreamModel {
   outputModalities: readonly string[];
 }
 
+/** Discard entry for a payload whose `id` itself failed to parse: the model's identity is unknown, so no absence may be concluded while one is present. */
+export const UNPARSEABLE_MODEL_ID = '<unparseable>';
+
 /** One upstream read. A model missing from `models` is only known to be gone when `complete` is true and its id is not in `discarded`. */
 export interface UpstreamCatalog {
   models: readonly UpstreamModel[];
   /** False when pagination stopped early, so models past the cut were never seen. */
   complete: boolean;
-  /** Ids upstream published whose payload failed validation: absent from `models`, but not gone. */
+  /** Ids upstream published whose payload failed validation: absent from `models`, but not gone. An id may be `UNPARSEABLE_MODEL_ID`. */
   discarded: readonly string[];
 }
 
