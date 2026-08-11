@@ -15,7 +15,6 @@ import { ModelCatalogAdapter } from './model-catalog.adapter';
 import { PromotedModelsCache } from './promoted-models.cache';
 
 const SNAPSHOT_MODEL_ID = 'anthropic:claude-sonnet-4-20250514';
-const FAST_SNAPSHOT_MODEL_ID = 'anthropic:claude-haiku-4-5-20251001';
 const PROMOTED_ONLY_MODEL_ID = 'openrouter:vendor/promoted-only';
 const CURATED_DUPLICATE_MODEL_ID = CURATED_MODELS[0].id;
 const PROMOTED_INPUT_COST = 1.1e-7;
@@ -110,27 +109,11 @@ describe('CompositeModelCatalog', () => {
     );
   });
 
-  it('delegates isFast for promoted and non-promoted models alike', async () => {
-    const { composite } = await createComposite([
-      createCatalogModel({ id: PROMOTED_ONLY_MODEL_ID }),
-      createCatalogModel({ id: FAST_SNAPSHOT_MODEL_ID }),
-    ]);
-
-    expect(composite.isFast(FAST_SNAPSHOT_MODEL_ID)).toBe(true);
-    expect(composite.isFast(PROMOTED_ONLY_MODEL_ID)).toBe(false);
-    expect(composite.isFast(SNAPSHOT_MODEL_ID)).toBe(false);
-  });
-
   it('behaves like the inner catalog when nothing is promoted', async () => {
     const { composite, inner } = await createComposite([]);
 
-    for (const modelId of [
-      SNAPSHOT_MODEL_ID,
-      FAST_SNAPSHOT_MODEL_ID,
-      PROMOTED_ONLY_MODEL_ID,
-    ]) {
+    for (const modelId of [SNAPSHOT_MODEL_ID, PROMOTED_ONLY_MODEL_ID]) {
       expect(composite.isSupported(modelId)).toBe(inner.isSupported(modelId));
-      expect(composite.isFast(modelId)).toBe(inner.isFast(modelId));
       expect(composite.getPricing(modelId)).toEqual(inner.getPricing(modelId));
       expect(composite.getContextWindow(modelId)).toEqual(
         inner.getContextWindow(modelId)

@@ -15,7 +15,6 @@ export interface ModelContextWindow {
 
 export interface ModelCatalog {
   isSupported(modelId: string): boolean;
-  isFast(modelId: string): boolean;
   getPricing(modelId: string): ModelPricing | undefined;
   getContextWindow(modelId: string): ModelContextWindow | undefined;
 }

@@ -8,11 +8,7 @@ export {
   type ModelContextWindow,
   type ModelPricing,
 } from './catalog/model-catalog';
-export {
-  DEFAULT_FAST_MODELS,
-  LiteLLMCatalog,
-  toLiteLLMKey,
-} from './catalog/litellm-catalog';
+export { LiteLLMCatalog, toLiteLLMKey } from './catalog/litellm-catalog';
 export {
   computeTokenCostUsd,
   type TokenCostInput,

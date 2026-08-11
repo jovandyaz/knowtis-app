@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEFAULT_FAST_MODELS,
-  LiteLLMCatalog,
-  toLiteLLMKey,
-} from './litellm-catalog';
+import { LiteLLMCatalog, toLiteLLMKey } from './litellm-catalog';
 import { MODEL_PRICES_SNAPSHOT } from './model-prices.snapshot';
 
 const RAW = {
@@ -93,11 +89,6 @@ describe('LiteLLMCatalog', () => {
     ).toEqual({ maxInputTokens: 200000, maxOutputTokens: 64000 });
   });
 
-  it('flags fast models from the default list', () => {
-    expect(catalog.isFast('anthropic:claude-haiku-4-5-20251001')).toBe(true);
-    expect(catalog.isFast('anthropic:claude-sonnet-4-20250514')).toBe(false);
-  });
-
   it('drops negative pricing values from corrupted data', () => {
     const corrupted = new LiteLLMCatalog({
       'bad-model': {
@@ -148,11 +139,5 @@ describe('vendored snapshot', () => {
     expect(
       catalog.getPricing('openai:whisper-1')?.inputCostPerSecond
     ).toBeGreaterThan(0);
-  });
-
-  it('keeps the default fast models resolvable', () => {
-    for (const model of DEFAULT_FAST_MODELS) {
-      expect(catalog.getPricing(model), model).toBeDefined();
-    }
   });
 });

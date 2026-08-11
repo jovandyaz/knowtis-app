@@ -5,10 +5,7 @@ import type { ModelCatalog } from '@knowtis/ai-gateway';
 import { AIErrors, type AIDomainError } from '../errors/ai.errors';
 
 export class AIModel {
-  private constructor(
-    public readonly value: string,
-    public readonly isFast: boolean
-  ) {}
+  private constructor(public readonly value: string) {}
 
   static create(
     model: string,
@@ -17,7 +14,7 @@ export class AIModel {
     if (!model || !catalog.isSupported(model)) {
       return err(AIErrors.invalidModel(model));
     }
-    return ok(new AIModel(model, catalog.isFast(model)));
+    return ok(new AIModel(model));
   }
 
   get provider(): string {

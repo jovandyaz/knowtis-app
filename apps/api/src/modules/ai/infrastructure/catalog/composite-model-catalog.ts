@@ -22,10 +22,6 @@ export class CompositeModelCatalog implements ModelCatalog {
     return this.find(modelId) !== undefined || this.inner.isSupported(modelId);
   }
 
-  isFast(modelId: string): boolean {
-    return this.inner.isFast(modelId);
-  }
-
   getPricing(modelId: string): ModelPricing | undefined {
     const model = this.find(modelId);
     if (model) {

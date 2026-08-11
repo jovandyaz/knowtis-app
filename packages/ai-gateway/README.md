@@ -28,7 +28,7 @@ This package imports **no other `@knowtis/*` package** and **no framework** (no 
 
 Everything is exported from [`src/index.ts`](src/index.ts):
 
-- **Catalog:** `MODEL_CATALOG`, `LiteLLMCatalog`, `DEFAULT_FAST_MODELS`, `toLiteLLMKey`, `computeTokenCostUsd`, `MODEL_PRICES_SNAPSHOT` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `TokenCostInput` types).
+- **Catalog:** `MODEL_CATALOG`, `LiteLLMCatalog`, `toLiteLLMKey`, `computeTokenCostUsd`, `MODEL_PRICES_SNAPSHOT` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `TokenCostInput` types).
 - **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ chain/cooldown types).
 - **Guard:** `detectPromptInjection`, `sanitizeContent`.
 - **Tokens:** `estimateTokenCount`.
