@@ -207,13 +207,6 @@
       "empty": {
         "title": "Pregúntale a tus notas",
         "greeting": "Entiendo todas tus notas y la web, y puedo crear o editar notas con tu aprobación.",
-        "suggestions": "\"resume mis notas de bio\", \"¿qué dije sobre X?\"",
-        "suggestion": {
-          "summarize": "Resume esta nota",
-          "improve": "Mejora la redacción",
-          "sources": "Encuentra fuentes",
-          "translate": "Tradúcela"
-        },
         "capability": {
           "understand": {
             "label": "Resume o traduce",

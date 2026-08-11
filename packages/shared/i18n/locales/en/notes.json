@@ -207,13 +207,6 @@
       "empty": {
         "title": "Ask your notes",
         "greeting": "I understand all your notes and the web — and I can create or edit notes with your approval.",
-        "suggestions": "\"summarize my bio notes\", \"what did I say about X?\"",
-        "suggestion": {
-          "summarize": "Summarize this note",
-          "improve": "Improve the writing",
-          "sources": "Find sources",
-          "translate": "Translate it"
-        },
         "capability": {
           "understand": {
             "label": "Summarize or translate",
