@@ -71,6 +71,7 @@ function entryWith(
     value,
     kind: 'chain',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };

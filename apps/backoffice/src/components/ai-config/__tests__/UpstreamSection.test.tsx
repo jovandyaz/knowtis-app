@@ -42,6 +42,7 @@ function entryWith(
     value,
     kind: 'list',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };

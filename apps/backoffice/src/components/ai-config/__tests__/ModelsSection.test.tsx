@@ -62,6 +62,7 @@ function entryWith(source: AiConfigEntry['source']): AiConfigEntry {
     value: 'anthropic:sonnet',
     kind: 'model',
     source,
+    storedValue: source === 'stale' ? 'openrouter:vendor/retired-one' : null,
     description: null,
     updatedAt: null,
   };
@@ -109,7 +110,7 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset .+ to default$/i })
     ).toBeInTheDocument();
   });
 
@@ -117,7 +118,7 @@ describe('ModelsSection', () => {
     renderSection('default');
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', { name: /^reset .+ to default$/i })
     ).not.toBeInTheDocument();
   });
 
@@ -125,7 +126,7 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset .+ to default$/i })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({ key: 'ai_default_model' });
@@ -137,7 +138,21 @@ describe('ModelsSection', () => {
     renderSection('custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset .+ to default$/i })
     ).toBeDisabled();
+  });
+  it('marks a stored value the runtime no longer serves as stale', () => {
+    renderSection('stale');
+
+    expect(screen.getByText('stale')).toBeInTheDocument();
+    expect(screen.getByText(/no longer served/i)).toBeInTheDocument();
+  });
+
+  it('offers Reset on a stale row, which is the only way to clear the dead row', () => {
+    renderSection('stale');
+
+    expect(
+      screen.getByRole('button', { name: /^reset .+ to default$/i })
+    ).toBeInTheDocument();
   });
 });

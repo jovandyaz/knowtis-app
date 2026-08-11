@@ -29,6 +29,10 @@ const MAX_OPENROUTER_PROVIDERS = 8;
 
 export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list';
 
+export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
+/** `stale`: a row is stored but the runtime ignores it, so the served value is the code default. */
+export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];
+
 type ConfigKeyDef =
   | { default: string; kind: 'model' | 'chain' | 'list' }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
@@ -101,7 +105,9 @@ export interface AIConfigEntry {
   key: ConfigKey;
   value: string;
   kind: AIConfigKind;
-  source: 'custom' | 'default';
+  source: AIConfigSource;
+  /** The stored row's value when it is not the one being served — set only for `stale`, so the admin can see what the dead row points at. */
+  storedValue: string | null;
   description: string | null;
   updatedAt: Date | null;
 }
@@ -311,27 +317,30 @@ export class AIConfigService {
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
-      const row = this.servedRow(key, rows.get(key));
+      const stored = rows.get(key);
+      const served = this.isServed(key, stored) ? stored : undefined;
+      const isStale = stored !== undefined && served === undefined;
       return {
         key,
-        value: row?.value ?? CONFIG_KEYS[key].default,
+        value: served?.value ?? CONFIG_KEYS[key].default,
         kind: CONFIG_KEYS[key].kind,
-        source: row ? 'custom' : 'default',
-        description: row?.description ?? null,
-        updatedAt: row?.updatedAt ?? null,
+        source: isStale ? 'stale' : served ? 'custom' : 'default',
+        storedValue: isStale ? stored.value : null,
+        description: stored?.description ?? null,
+        updatedAt: stored?.updatedAt ?? null,
       };
     });
   }
 
-  /** Drops a model row naming something the catalog no longer supports: getSupportedModel ignores it at runtime, so reporting it would show the admin a value the server never serves. */
-  private servedRow(
-    key: ConfigKey,
-    row: AIConfigRow | undefined
-  ): AIConfigRow | undefined {
-    if (!row || CONFIG_KEYS[key].kind !== 'model') {
-      return row;
+  /** Whether the runtime would serve this row: `getSupportedModel` ignores a model the catalog dropped, so reporting it as effective would show a value the server never serves. */
+  private isServed(key: ConfigKey, row: AIConfigRow | undefined): boolean {
+    if (!row) {
+      return false;
     }
-    return this.modelCatalog.isSupported(row.value) ? row : undefined;
+    if (CONFIG_KEYS[key].kind !== 'model') {
+      return true;
+    }
+    return this.modelCatalog.isSupported(row.value);
   }
 
   private async getAllRowsSafe() {

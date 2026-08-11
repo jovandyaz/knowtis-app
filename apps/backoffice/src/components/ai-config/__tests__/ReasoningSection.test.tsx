@@ -43,6 +43,7 @@ function entryWith(
     value,
     kind: 'choice',
     source,
+    storedValue: null,
     description: null,
     updatedAt: null,
   };
