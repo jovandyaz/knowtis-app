@@ -3,10 +3,11 @@ import {
   useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
-import { Badge, Button, MutationErrorAlert } from '@knowtis/design-system';
+import { Button, MutationErrorAlert } from '@knowtis/design-system';
 import { REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 interface ReasoningSectionProps {
   entry: AiConfigEntry;
@@ -41,19 +42,12 @@ export function ReasoningSection({ entry }: ReasoningSectionProps) {
             {effort}
           </Button>
         ))}
-        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
-          {entry.source}
-        </Badge>
-        {entry.source === 'custom' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={mutating}
-            onClick={() => resetConfig.mutate({ key: entry.key })}
-          >
-            Reset to default
-          </Button>
-        ) : null}
+        <ConfigSourceCell
+          entry={entry}
+          label="reasoning effort"
+          disabled={mutating}
+          onReset={() => resetConfig.mutate({ key: entry.key })}
+        />
       </div>
     </ConfigSection>
   );

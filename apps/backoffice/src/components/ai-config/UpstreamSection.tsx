@@ -6,7 +6,6 @@ import {
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
-  Badge,
   Button,
   FormField,
   Input,
@@ -14,6 +13,7 @@ import {
 } from '@knowtis/design-system';
 
 import { ConfigSection } from './ConfigSection';
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
@@ -78,21 +78,12 @@ export function UpstreamSection({ entry }: UpstreamSectionProps) {
         isError={setConfig.isError}
         fallbackMessage="Could not update the upstream allowlist."
       />
-      <div className="flex items-center gap-2">
-        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
-          {entry.source}
-        </Badge>
-        {entry.source === 'custom' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={mutating}
-            onClick={() => resetConfig.mutate({ key: entry.key })}
-          >
-            Reset to default
-          </Button>
-        ) : null}
-      </div>
+      <ConfigSourceCell
+        entry={entry}
+        label="provider allowlist"
+        disabled={mutating}
+        onReset={() => resetConfig.mutate({ key: entry.key })}
+      />
       <FormField
         id={UPSTREAMS_INPUT_ID}
         label="Provider allowlist"

@@ -65,6 +65,8 @@ export {
   DEFAULT_MODEL_INTENT,
   isModelIntent,
   REASONING_EFFORTS,
+  AI_CONFIG_SOURCES,
+  type AIConfigSource,
   type AIAction,
   type AILanguage,
   type AITone,

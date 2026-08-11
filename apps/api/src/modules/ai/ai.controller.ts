@@ -33,6 +33,8 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
+import { AI_CONFIG_SOURCES } from '@knowtis/shared-types';
+
 import { unwrapOrThrow } from '../../core/http';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
@@ -111,8 +113,13 @@ const effectiveConfigSchema = {
       },
       source: {
         type: 'string',
-        enum: ['custom', 'default'],
+        enum: [...AI_CONFIG_SOURCES],
         example: 'custom',
+      },
+      storedValue: {
+        type: 'string',
+        nullable: true,
+        example: 'openrouter:vendor/retired-one',
       },
       description: { type: 'string', nullable: true },
       updatedAt: {

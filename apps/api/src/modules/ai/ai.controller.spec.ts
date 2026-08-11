@@ -76,6 +76,7 @@ describe('AIController resetConfig', () => {
         value: 'openrouter:minimax/minimax-m2.5',
         kind: 'model',
         source: 'default',
+        storedValue: null,
         description: null,
         updatedAt: null,
       },

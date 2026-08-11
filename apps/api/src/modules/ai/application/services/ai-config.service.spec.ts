@@ -272,7 +272,7 @@ describe('AIConfigService', () => {
     });
   });
 
-  it('should keep a stale chain row reportable, since only model keys are catalog-filtered', async () => {
+  it('should mark a chain whose members the catalog dropped as stale', async () => {
     mockRepo.getAllRows.mockResolvedValue([
       {
         key: 'ai_fallback_chain',
@@ -288,9 +288,85 @@ describe('AIConfigService', () => {
     const entries = await service.getEffectiveConfig();
 
     expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
-      source: 'custom',
-      storedValue: null,
+      source: 'stale',
+      value: AI_SETTING_DEFAULTS.ai_fallback_chain,
+      storedValue: UNKNOWN_ID,
     });
+  });
+
+  it('should mark a chain stale when only some members survived the catalog', async () => {
+    const survivor = 'anthropic:claude-sonnet-5';
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_fallback_chain',
+        value: `${survivor},${UNKNOWN_ID}`,
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+    mockCatalog.isSupported.mockImplementation(
+      (id: string) => id !== UNKNOWN_ID
+    );
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_fallback_chain')).toMatchObject({
+      source: 'stale',
+      storedValue: `${survivor},${UNKNOWN_ID}`,
+    });
+  });
+
+  it('should mark a reasoning effort the runtime rejects as stale', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_reasoning_effort',
+        value: 'ludicrous',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_reasoning_effort')).toMatchObject({
+      source: 'stale',
+      value: AI_SETTING_DEFAULTS.ai_reasoning_effort,
+      storedValue: 'ludicrous',
+    });
+  });
+
+  it('should mark an unparseable provider allowlist as stale', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_openrouter_providers',
+        value: 'NOT A SLUG!!',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(
+      entries.find((e) => e.key === 'ai_openrouter_providers')
+    ).toMatchObject({ source: 'stale', storedValue: 'NOT A SLUG!!' });
+  });
+
+  it('should keep an empty provider allowlist custom, since it means no preference', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_openrouter_providers',
+        value: '',
+        description: null,
+        updatedAt: null,
+      },
+    ]);
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(
+      entries.find((e) => e.key === 'ai_openrouter_providers')
+    ).toMatchObject({ source: 'custom', value: '', storedValue: null });
   });
 
   it('should resolve effective config from DB rows and code defaults', async () => {

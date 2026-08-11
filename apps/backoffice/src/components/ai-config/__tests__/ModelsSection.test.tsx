@@ -56,13 +56,18 @@ const MODELS = [
   },
 ];
 
-function entryWith(source: AiConfigEntry['source']): AiConfigEntry {
+const RETIRED_MODEL_ID = 'openrouter:vendor/retired-one';
+
+function entryWith(
+  source: AiConfigEntry['source'],
+  key = 'ai_default_model'
+): AiConfigEntry {
   return {
-    key: 'ai_default_model',
+    key,
     value: 'anthropic:sonnet',
     kind: 'model',
     source,
-    storedValue: source === 'stale' ? 'openrouter:vendor/retired-one' : null,
+    storedValue: source === 'stale' ? RETIRED_MODEL_ID : null,
     description: null,
     updatedAt: null,
   };
@@ -144,8 +149,14 @@ describe('ModelsSection', () => {
   it('marks a stored value the runtime no longer serves as stale', () => {
     renderSection('stale');
 
-    expect(screen.getByText('stale')).toBeInTheDocument();
+    expect(screen.getByText('stale')).toHaveClass('bg-(--destructive)');
     expect(screen.getByText(/no longer served/i)).toBeInTheDocument();
+  });
+
+  it('names the dead stored model, not the one actually being served', () => {
+    renderSection('stale');
+
+    expect(screen.getByText(RETIRED_MODEL_ID)).toBeInTheDocument();
   });
 
   it('offers Reset on a stale row, which is the only way to clear the dead row', () => {
@@ -154,5 +165,27 @@ describe('ModelsSection', () => {
     expect(
       screen.getByRole('button', { name: /^reset .+ to default$/i })
     ).toBeInTheDocument();
+  });
+
+  it('gives every row its own Reset name so they are distinguishable', () => {
+    render(
+      <ModelsSection
+        entries={[
+          entryWith('custom', 'ai_default_model'),
+          entryWith('custom', 'ai_fast_model'),
+          entryWith('custom', 'ai_deep_model'),
+        ]}
+      />
+    );
+
+    const names = screen
+      .getAllByRole('button', { name: /^reset .+ to default$/i })
+      .map((button) => button.getAttribute('aria-label'));
+
+    expect(names).toEqual([
+      'Reset Default model to default',
+      'Reset Fast model to default',
+      'Reset Deep model to default',
+    ]);
   });
 });

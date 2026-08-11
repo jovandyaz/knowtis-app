@@ -5,8 +5,6 @@ import {
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
-  Badge,
-  Button,
   ModelSelect,
   MutationErrorAlert,
   Table,
@@ -19,18 +17,13 @@ import {
 import { MODEL_TIERS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 const KEY_LABELS: Record<string, string> = {
   ai_default_model: 'Default model',
   ai_fast_model: 'Fast model',
   ai_deep_model: 'Deep model',
 };
-
-const SOURCE_BADGE_VARIANTS = {
-  custom: 'default',
-  default: 'outline',
-  stale: 'destructive',
-} as const satisfies Record<AiConfigEntry['source'], string>;
 
 interface ModelsSectionProps {
   entries: AiConfigEntry[];
@@ -104,29 +97,12 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2">
-                  <Badge variant={SOURCE_BADGE_VARIANTS[entry.source]}>
-                    {entry.source}
-                  </Badge>
-                  {entry.source === 'stale' ? (
-                    <span className="text-xs text-(--muted-foreground)">
-                      stored{' '}
-                      <span className="font-mono">{entry.storedValue}</span> is
-                      no longer served
-                    </span>
-                  ) : null}
-                  {entry.source === 'default' ? null : (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={mutating}
-                      aria-label={`Reset ${entry.key} to default`}
-                      onClick={() => resetConfig.mutate({ key: entry.key })}
-                    >
-                      Reset to default
-                    </Button>
-                  )}
-                </div>
+                <ConfigSourceCell
+                  entry={entry}
+                  label={KEY_LABELS[entry.key] ?? entry.key}
+                  disabled={mutating}
+                  onReset={() => resetConfig.mutate({ key: entry.key })}
+                />
               </TableCell>
               <TableCell>{entry.updatedAt?.toLocaleString() ?? '—'}</TableCell>
             </TableRow>

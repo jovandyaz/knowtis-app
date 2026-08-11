@@ -5,6 +5,7 @@ import type { Cache } from 'cache-manager';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   REASONING_EFFORTS,
+  type AIConfigSource,
   type ModelIntent,
   type ReasoningEffort,
 } from '@knowtis/shared-types';
@@ -28,10 +29,6 @@ const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
 
 export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list';
-
-export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
-/** `stale`: a row is stored but the runtime ignores it, so the served value is the code default. */
-export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];
 
 type ConfigKeyDef =
   | { default: string; kind: 'model' | 'chain' | 'list' }
@@ -332,15 +329,31 @@ export class AIConfigService {
     });
   }
 
-  /** Whether the runtime would serve this row: `getSupportedModel` ignores a model the catalog dropped, so reporting it as effective would show a value the server never serves. */
+  /** Whether the runtime would serve this row verbatim: every getter above falls back to the code default for a value it cannot use, so reporting such a row as effective would show a value the server never serves. */
   private isServed(key: ConfigKey, row: AIConfigRow | undefined): boolean {
     if (!row) {
       return false;
     }
-    if (CONFIG_KEYS[key].kind !== 'model') {
-      return true;
+    const def = CONFIG_KEYS[key];
+    switch (def.kind) {
+      case 'model':
+        return this.modelCatalog.isSupported(row.value);
+      case 'chain': {
+        const entries = parseChain(row.value);
+        return (
+          entries.length > 0 &&
+          entries.every((model) => this.modelCatalog.isSupported(model))
+        );
+      }
+      case 'choice':
+        return def.allowed.some((allowed) => allowed === row.value);
+      case 'list':
+        return parseProviderOrder(row.value) !== null;
+      default: {
+        const exhaustive: never = def;
+        throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);
+      }
     }
-    return this.modelCatalog.isSupported(row.value);
   }
 
   private async getAllRowsSafe() {

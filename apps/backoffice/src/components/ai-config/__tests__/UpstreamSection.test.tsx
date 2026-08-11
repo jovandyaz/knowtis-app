@@ -119,7 +119,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset provider allowlist to default$/i,
+      })
     ).toBeInTheDocument();
   });
 
@@ -127,7 +129,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks,baseten', 'default');
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset provider allowlist to default$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -135,7 +139,9 @@ describe('UpstreamSection', () => {
     renderSection('fireworks', 'custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset provider allowlist to default$/i,
+      })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({

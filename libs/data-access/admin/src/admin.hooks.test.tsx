@@ -382,9 +382,9 @@ describe('AiConfigEntrySchema source skew mapping', () => {
   };
 
   it('falls back to default for a source this bundle does not know', () => {
-    expect(AiConfigEntrySchema.parse({ ...base, source: 'stale' }).source).toBe(
-      'default'
-    );
+    expect(
+      AiConfigEntrySchema.parse({ ...base, source: 'locked' }).source
+    ).toBe('default');
   });
 
   it('passes the new custom value through unchanged', () => {

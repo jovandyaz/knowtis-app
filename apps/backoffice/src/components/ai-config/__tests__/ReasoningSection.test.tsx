@@ -113,7 +113,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset reasoning effort to default$/i,
+      })
     ).toBeInTheDocument();
   });
 
@@ -121,7 +123,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'default');
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset reasoning effort to default$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -129,7 +133,9 @@ describe('ReasoningSection', () => {
     renderSection('high', 'custom');
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset reasoning effort to default$/i,
+      })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({
@@ -151,7 +157,9 @@ describe('ReasoningSection', () => {
     renderSection('medium', 'custom');
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', {
+        name: /^reset reasoning effort to default$/i,
+      })
     ).toBeDisabled();
   });
 });

@@ -15,6 +15,7 @@ import {
 import { MODEL_TIERS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
+import { ConfigSourceCell } from './ConfigSourceCell';
 
 function parseChain(value: string): string[] {
   return value
@@ -76,26 +77,19 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         isError={setConfig.isError}
         fallbackMessage="Could not update the chain."
       />
-      <div className="flex items-center gap-2">
-        <Badge variant={entry.source === 'custom' ? 'default' : 'outline'}>
-          {entry.source}
-        </Badge>
-        <span className="text-xs text-(--muted-foreground)">
-          {entry.updatedAt
-            ? `Updated ${entry.updatedAt.toLocaleString()}`
-            : 'Never changed'}
-        </span>
-        {entry.source === 'custom' ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={mutating}
-            onClick={() => resetConfig.mutate({ key: entry.key })}
-          >
-            Reset to default
-          </Button>
-        ) : null}
-      </div>
+      <ConfigSourceCell
+        entry={entry}
+        label="fallback chain"
+        disabled={mutating}
+        onReset={() => resetConfig.mutate({ key: entry.key })}
+        meta={
+          <span className="text-xs text-(--muted-foreground)">
+            {entry.updatedAt
+              ? `Updated ${entry.updatedAt.toLocaleString()}`
+              : 'Never changed'}
+          </span>
+        }
+      />
       {chain.length === 0 ? (
         <p className="text-sm text-(--muted-foreground)">
           The chain is empty. Add at least one model before saving.

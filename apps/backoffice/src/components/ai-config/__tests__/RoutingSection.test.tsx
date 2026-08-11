@@ -369,7 +369,7 @@ describe('RoutingSection', () => {
     renderChain();
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset fallback chain to default$/i })
     ).toBeInTheDocument();
   });
 
@@ -377,7 +377,9 @@ describe('RoutingSection', () => {
     render(<RoutingSection entry={entryWith(CHAIN, 'default')} />);
 
     expect(
-      screen.queryByRole('button', { name: /reset to default/i })
+      screen.queryByRole('button', {
+        name: /^reset fallback chain to default$/i,
+      })
     ).not.toBeInTheDocument();
   });
 
@@ -385,7 +387,7 @@ describe('RoutingSection', () => {
     renderChain();
 
     await userEvent.click(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset fallback chain to default$/i })
     );
 
     expect(resetConfigMutate).toHaveBeenCalledWith({
@@ -399,7 +401,7 @@ describe('RoutingSection', () => {
     renderChain();
 
     expect(
-      screen.getByRole('button', { name: /reset to default/i })
+      screen.getByRole('button', { name: /^reset fallback chain to default$/i })
     ).toBeDisabled();
   });
 });
