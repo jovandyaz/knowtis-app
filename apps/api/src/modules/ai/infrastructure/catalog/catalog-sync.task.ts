@@ -66,10 +66,11 @@ export class CatalogSyncTask {
       ];
       await this.persist(upstream, findings);
     } catch (error) {
-      this.logger.error(
-        'Catalog sync failed',
-        error instanceof Error ? error.stack : String(error)
-      );
+      this.logger.error({
+        event: 'ai.catalog.sync_failed',
+        reason: reasonOf(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
     }
   }
 

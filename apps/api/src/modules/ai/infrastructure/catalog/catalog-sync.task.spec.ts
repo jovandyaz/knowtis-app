@@ -291,8 +291,11 @@ describe('CatalogSyncTask', () => {
 
     expect(db.transaction).not.toHaveBeenCalled();
     expect(errorLog).toHaveBeenCalledWith(
-      'Catalog sync failed',
-      expect.stringContaining('openrouter down')
+      expect.objectContaining({
+        event: 'ai.catalog.sync_failed',
+        reason: 'openrouter down',
+        stack: expect.stringContaining('openrouter down'),
+      })
     );
   });
 
