@@ -12,17 +12,14 @@ import {
   ModelSelect,
   MutationErrorAlert,
 } from '@knowtis/design-system';
-import { MODEL_TIERS } from '@knowtis/shared-types';
+import {
+  CHAIN_SEPARATOR,
+  MODEL_TIERS,
+  parseChain,
+} from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
-
-function parseChain(value: string): string[] {
-  return value
-    .split(',')
-    .map((model) => model.trim())
-    .filter(Boolean);
-}
 
 function move(chain: string[], from: number, to: number): string[] {
   const next = [...chain];
@@ -53,7 +50,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
   const saved = parseChain(stored);
   const isForked = draft?.base === stored;
   const chain = isForked ? draft.chain : saved;
-  const isDirty = isForked && draft.chain.join(',') !== stored;
+  const isDirty = isForked && draft.chain.join(CHAIN_SEPARATOR) !== stored;
   const edit = (next: string[]) => setDraft({ base: stored, chain: next });
   const available = (models.data ?? []).filter(
     (model) => !chain.includes(model.id)
@@ -156,9 +153,9 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         </p>
       ) : hasInertMembers ? (
         <p role="status" className="text-xs text-(--muted-foreground)">
-          Models marked “won’t route” are skipped: their provider has no server
-          key or is disabled, or the model left the catalog. They stay in the
-          chain and resume if that changes.
+          Models marked “won’t route” are skipped. A member whose provider has
+          no server key or is disabled stays in the chain and resumes if that
+          changes; one the catalog dropped blocks saving until it is removed.
         </p>
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
@@ -180,7 +177,10 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             <Button
               disabled={mutating || chain.length === 0 || isInert}
               onClick={() =>
-                setConfig.mutate({ key: entry.key, value: chain.join(',') })
+                setConfig.mutate({
+                  key: entry.key,
+                  value: chain.join(CHAIN_SEPARATOR),
+                })
               }
             >
               Save chain

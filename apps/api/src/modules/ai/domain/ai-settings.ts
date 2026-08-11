@@ -8,13 +8,3 @@ export const AI_SETTING_DEFAULTS = {
   ai_reasoning_effort: 'medium',
   ai_openrouter_providers: 'fireworks,baseten',
 } as const;
-
-export const CHAIN_SEPARATOR = ',';
-
-/** Splits a comma-separated model chain into trimmed, non-empty ids. */
-export function parseChain(value: string): string[] {
-  return value
-    .split(CHAIN_SEPARATOR)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}

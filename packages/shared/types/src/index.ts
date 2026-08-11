@@ -66,6 +66,8 @@ export {
   isModelIntent,
   REASONING_EFFORTS,
   AI_CONFIG_SOURCES,
+  CHAIN_SEPARATOR,
+  parseChain,
   type AIConfigSource,
   type AIAction,
   type AILanguage,
