@@ -15,6 +15,7 @@ import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.cat
 import {
   AI_CONFIG_REPOSITORY,
   type AIConfigRepository,
+  type AIConfigRow,
 } from '../../domain/ports/ai-config.repository';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
@@ -122,15 +123,15 @@ export class AIConfigService {
   ) {}
 
   async getDefaultModel(): Promise<string> {
-    return this.getConfigValue('ai_default_model');
+    return this.getSupportedModel('ai_default_model');
   }
 
   async getFastModel(): Promise<string> {
-    return this.getConfigValue('ai_fast_model');
+    return this.getSupportedModel('ai_fast_model');
   }
 
   async getIntentModel(intent: ModelIntent): Promise<string> {
-    return this.getConfigValue(INTENT_CONFIG_KEYS[intent]);
+    return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
   }
 
   async getFallbackChain(): Promise<string[]> {
@@ -306,11 +307,11 @@ export class AIConfigService {
     }
   }
 
-  /** Resolves every config key to its effective value: the DB row when present, the code default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from the code defaults, mirroring the runtime fallback in getConfigValue. */
+  /** Resolves every config key to the value the runtime actually serves: the DB row when present and still servable, the code default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from the code defaults, mirroring the runtime fallback in getConfigValue. */
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
     return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
-      const row = rows.get(key);
+      const row = this.servedRow(key, rows.get(key));
       return {
         key,
         value: row?.value ?? CONFIG_KEYS[key].default,
@@ -320,6 +321,17 @@ export class AIConfigService {
         updatedAt: row?.updatedAt ?? null,
       };
     });
+  }
+
+  /** Drops a model row naming something the catalog no longer supports: getSupportedModel ignores it at runtime, so reporting it would show the admin a value the server never serves. */
+  private servedRow(
+    key: ConfigKey,
+    row: AIConfigRow | undefined
+  ): AIConfigRow | undefined {
+    if (!row || CONFIG_KEYS[key].kind !== 'model') {
+      return row;
+    }
+    return this.modelCatalog.isSupported(row.value) ? row : undefined;
   }
 
   private async getAllRowsSafe() {
@@ -332,6 +344,18 @@ export class AIConfigService {
       );
       return [];
     }
+  }
+
+  /** Mirrors the catalog filter getFallbackChain applies: a model retired out of band must never be served as a single-value default either. */
+  private async getSupportedModel(dbKey: ConfigKey): Promise<string> {
+    const value = await this.getConfigValue(dbKey);
+    if (this.modelCatalog.isSupported(value)) {
+      return value;
+    }
+    this.logger.warn(
+      `Ignoring AI config '${dbKey}' model '${value}' missing from the catalog, using the code default`
+    );
+    return CONFIG_KEYS[dbKey].default;
   }
 
   private async getConfigValue(dbKey: ConfigKey): Promise<string> {

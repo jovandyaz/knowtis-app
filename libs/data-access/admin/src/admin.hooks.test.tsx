@@ -4,25 +4,30 @@ import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, type MockInstance } from 'vitest';
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
 
 import {
   adminQueryKeys,
   useAdminUsers,
+  useAiCatalog,
   useAiConfig,
   useAiHealth,
   useAuditLog,
   useClearSystemProviderKey,
   useDeleteFeatureFlag,
   useGlobalAiTimeseries,
+  usePromoteCatalogModel,
   useResetAiConfig,
+  useResolveCatalogAlert,
+  useRetireCatalogModel,
   useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,
   useSystemProviders,
   useTestSystemProvider,
+  useUpdateCatalogCopy,
   useUpdateUserRole,
   useUpsertFeatureFlag,
 } from './admin.hooks';
@@ -649,6 +654,293 @@ describe('useTestSystemProvider', () => {
     result.current.mutate('anthropic');
 
     await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
+const CATALOG_MODEL = {
+  id: 'openrouter:z-ai/glm-5.2',
+  label: 'GLM 5.2',
+  description: 'Open-weight generalist',
+  status: 'candidate',
+  tier: 'open',
+  inputCostPerToken: 0.0000004,
+  outputCostPerToken: 0.0000016,
+  maxInputTokens: 200000,
+  maxOutputTokens: 8192,
+  intelligenceIndex: 42,
+  upstreamCreatedAt: '2026-06-01T00:00:00.000Z',
+  upstreamExpirationDate: null,
+  lastSeenAt: '2026-08-10T00:00:00.000Z',
+  promotedAt: null,
+};
+
+const CATALOG_ALERT = {
+  id: 7,
+  modelId: 'openrouter:z-ai/glm-5.2',
+  kind: 'deprecation',
+  detail: 'Upstream flagged the model as deprecated',
+  createdAt: '2026-08-09T00:00:00.000Z',
+  resolvedAt: null,
+};
+
+const CATALOG_OVERVIEW = {
+  candidates: [CATALOG_MODEL],
+  promoted: [],
+  alerts: [CATALOG_ALERT],
+};
+
+const ENCODED_MODEL_PATH = '/ai/catalog/openrouter%3Az-ai%2Fglm-5.2';
+
+function renderWithInvalidateSpy<THook>(hook: () => THook) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+  const { result } = renderHook(hook, {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    ),
+  });
+  return { result, invalidateSpy };
+}
+
+function expectCatalogDependentsInvalidated(
+  invalidateSpy: MockInstance<QueryClient['invalidateQueries']>
+) {
+  expect(invalidateSpy).toHaveBeenCalledWith({
+    queryKey: adminQueryKeys.aiCatalog(),
+  });
+  expect(invalidateSpy).toHaveBeenCalledWith({
+    queryKey: adminQueryKeys.selectableModels(),
+  });
+  expect(invalidateSpy).toHaveBeenCalledWith({
+    queryKey: adminQueryKeys.auditLists(),
+  });
+}
+
+describe('useAiCatalog', () => {
+  it('fetches the overview and coerces the wire timestamps', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(CATALOG_OVERVIEW);
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/catalog');
+    expect(result.current.data?.candidates[0].id).toBe(
+      'openrouter:z-ai/glm-5.2'
+    );
+    expect(result.current.data?.candidates[0].lastSeenAt).toBeInstanceOf(Date);
+    expect(result.current.data?.candidates[0].upstreamCreatedAt).toBeInstanceOf(
+      Date
+    );
+    expect(result.current.data?.candidates[0].promotedAt).toBeNull();
+    expect(result.current.data?.alerts[0].createdAt).toBeInstanceOf(Date);
+    expect(result.current.data?.alerts[0].id).toBe(7);
+  });
+
+  it('renders a model from an API that omits the optional fields', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      candidates: [
+        {
+          id: CATALOG_MODEL.id,
+          label: CATALOG_MODEL.label,
+          status: 'candidate',
+          tier: 'open',
+          inputCostPerToken: 0,
+          outputCostPerToken: 0,
+          maxInputTokens: 200000,
+          lastSeenAt: CATALOG_MODEL.lastSeenAt,
+        },
+      ],
+      promoted: [],
+      alerts: [{ ...CATALOG_ALERT, resolvedAt: undefined }],
+    });
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.candidates[0].description).toBe('');
+    expect(result.current.data?.candidates[0].maxOutputTokens).toBeNull();
+    expect(result.current.data?.candidates[0].intelligenceIndex).toBeNull();
+    expect(result.current.data?.candidates[0].upstreamCreatedAt).toBeNull();
+    expect(result.current.data?.candidates[0].promotedAt).toBeNull();
+    expect(result.current.data?.alerts[0].resolvedAt).toBeNull();
+  });
+
+  it('rejects a model whose status this bundle does not know', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG_OVERVIEW,
+      candidates: [{ ...CATALOG_MODEL, status: 'shadow-banned' }],
+    });
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it('surfaces an alert kind this bundle does not know instead of failing', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG_OVERVIEW,
+      alerts: [{ ...CATALOG_ALERT, kind: 'upstream_vanished' }],
+    });
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.alerts[0].kind).toBe('upstream_vanished');
+  });
+});
+
+describe('usePromoteCatalogModel', () => {
+  it('encodes the slash in the model id instead of splitting the path', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'promoted',
+      promotedAt: '2026-08-10T12:00:00.000Z',
+    });
+
+    const { result } = renderHook(() => usePromoteCatalogModel(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({ id: CATALOG_MODEL.id, tier: 'open' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith(
+      `${ENCODED_MODEL_PATH}/promote`,
+      { tier: 'open' }
+    );
+    expect(result.current.data?.promotedAt).toBeInstanceOf(Date);
+  });
+
+  it('invalidates the catalog, the selectable models and the audit log', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'promoted',
+    });
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      usePromoteCatalogModel()
+    );
+    result.current.mutate({ id: CATALOG_MODEL.id, tier: 'open' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expectCatalogDependentsInvalidated(invalidateSpy);
+  });
+
+  it('stays pending until the invalidated queries have refetched', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'promoted',
+    });
+    let refetched!: () => void;
+    const refetching = new Promise<void>((resolve) => {
+      refetched = resolve;
+    });
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      usePromoteCatalogModel()
+    );
+    invalidateSpy.mockReturnValue(refetching);
+    result.current.mutate({ id: CATALOG_MODEL.id, tier: 'open' });
+
+    await waitFor(() => expectCatalogDependentsInvalidated(invalidateSpy));
+    expect(result.current.isPending).toBe(true);
+
+    refetched();
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+});
+
+describe('useRetireCatalogModel', () => {
+  it('encodes the slash in the model id instead of splitting the path', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'retired',
+    });
+
+    const { result } = renderHook(() => useRetireCatalogModel(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate(CATALOG_MODEL.id);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith(
+      `${ENCODED_MODEL_PATH}/retire`
+    );
+    expect(result.current.data?.status).toBe('retired');
+  });
+
+  it('invalidates the catalog, the selectable models and the audit log', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({
+      ...CATALOG_MODEL,
+      status: 'retired',
+    });
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      useRetireCatalogModel()
+    );
+    result.current.mutate(CATALOG_MODEL.id);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expectCatalogDependentsInvalidated(invalidateSpy);
+  });
+});
+
+describe('useUpdateCatalogCopy', () => {
+  it('encodes the slash in the model id and sends only the fields the caller set', async () => {
+    vi.mocked(httpClient.patch).mockResolvedValue({
+      ...CATALOG_MODEL,
+      label: 'GLM 5.2 Turbo',
+    });
+
+    const { result } = renderHook(() => useUpdateCatalogCopy(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({
+      id: CATALOG_MODEL.id,
+      patch: { label: 'GLM 5.2 Turbo' },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.patch).toHaveBeenCalledWith(ENCODED_MODEL_PATH, {
+      label: 'GLM 5.2 Turbo',
+    });
+    expect(result.current.data?.label).toBe('GLM 5.2 Turbo');
+  });
+
+  it('invalidates the catalog, the selectable models and the audit log', async () => {
+    vi.mocked(httpClient.patch).mockResolvedValue(CATALOG_MODEL);
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      useUpdateCatalogCopy()
+    );
+    result.current.mutate({
+      id: CATALOG_MODEL.id,
+      patch: { description: 'Cheap and fast' },
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.patch).toHaveBeenCalledWith(ENCODED_MODEL_PATH, {
+      description: 'Cheap and fast',
+    });
+    expectCatalogDependentsInvalidated(invalidateSpy);
+  });
+});
+
+describe('useResolveCatalogAlert', () => {
+  it('posts the numeric alert id and invalidates the catalog dependents', async () => {
+    vi.mocked(httpClient.post).mockResolvedValue({});
+
+    const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
+      useResolveCatalogAlert()
+    );
+    result.current.mutate(CATALOG_ALERT.id);
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.post).toHaveBeenCalledWith(
+      '/ai/catalog/alerts/7/resolve'
+    );
+    expectCatalogDependentsInvalidated(invalidateSpy);
   });
 });
 

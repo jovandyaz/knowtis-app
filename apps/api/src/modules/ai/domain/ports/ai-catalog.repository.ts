@@ -1,6 +1,7 @@
 import type {
   CatalogAlertKind,
   CatalogModelStatus,
+  ModelTier,
 } from '@knowtis/shared-types';
 
 import type { CatalogAlert } from '../model-catalog/catalog-alert';
@@ -21,6 +22,11 @@ export interface CandidateUpsert {
   upstreamExpirationDate: Date | null;
 }
 
+/** An admin decision on a tracked model. Promotion carries the tier because that is what decides who can reach the model. */
+export type CatalogStatusChange =
+  | { status: 'promoted'; tier: ModelTier }
+  | { status: 'retired' };
+
 export interface AiCatalogRepository {
   listByStatus(status: CatalogModelStatus): Promise<CatalogModel[]>;
   /** Records an upstream sighting: inserts as `candidate`, or refreshes metadata and `lastSeenAt` on an existing model without touching its status. Upstream `label`/`description` only land while the model is still a candidate. */
@@ -28,7 +34,7 @@ export interface AiCatalogRepository {
   /** Resolves the updated model, or null when `id` is unknown. Stamps `promotedBy`/`promotedAt` when moving to `promoted`. */
   setStatus(
     id: string,
-    status: CatalogModelStatus,
+    change: CatalogStatusChange,
     actorId: string
   ): Promise<CatalogModel | null>;
   /** Resolves the updated model, or null when `id` is unknown. Omitted fields keep their stored value. */
@@ -43,6 +49,6 @@ export interface AiCatalogRepository {
     kind: CatalogAlertKind,
     detail: string
   ): Promise<void>;
-  /** No-op when the alert is unknown or already resolved, so the original resolution time is preserved. */
-  resolveAlert(id: number): Promise<void>;
+  /** Resolves to whether this call closed the alert; false when it is unknown or already resolved, which preserves the original resolution time. */
+  resolveAlert(id: number): Promise<boolean>;
 }

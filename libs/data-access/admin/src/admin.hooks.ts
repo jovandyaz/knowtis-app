@@ -8,12 +8,18 @@ import {
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
 import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
-import type { AIProvider } from '@knowtis/shared-types';
+import type {
+  AIProvider,
+  ModelTier,
+  UpdateCatalogCopyInput,
+} from '@knowtis/shared-types';
 
 import {
   AdminUserSchema,
   AiConfigSchema,
   AiHealthSchema,
+  CatalogModelSchema,
+  CatalogOverviewSchema,
   DailyUsageSchema,
   FeatureFlagSchema,
   MetricsSummarySchema,
@@ -46,6 +52,7 @@ export const adminQueryKeys = {
   selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
   aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
+  aiCatalog: () => [...adminQueryKeys.all, 'ai-catalog'] as const,
 } as const;
 
 function usersPath({ page, limit, search, role }: AdminUsersParams): string {
@@ -270,6 +277,76 @@ export function useAiHealth() {
       AiHealthSchema.parse(await httpClient.get('/ai/health')),
     staleTime: 1000 * 30,
     refetchInterval: AI_HEALTH_REFETCH_MS,
+  });
+}
+
+export function useAiCatalog() {
+  return useQuery({
+    queryKey: adminQueryKeys.aiCatalog(),
+    queryFn: async () =>
+      CatalogOverviewSchema.parse(await httpClient.get('/ai/catalog')),
+    staleTime: 1000 * 60,
+  });
+}
+
+function catalogModelPath(id: string): string {
+  return `/ai/catalog/${encodeURIComponent(id)}`;
+}
+
+/** Promoting or retiring changes what the user picker offers, so the model list goes stale with the catalog. Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
+function invalidateCatalogDependents(queryClient: QueryClient) {
+  return Promise.all([
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiCatalog() }),
+    queryClient.invalidateQueries({
+      queryKey: adminQueryKeys.selectableModels(),
+    }),
+    queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
+  ]);
+}
+
+function useCatalogModelMutation<TInput>(
+  mutationFn: (input: TInput) => Promise<unknown>
+) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: TInput) =>
+      CatalogModelSchema.parse(await mutationFn(input)),
+    onSettled: () => invalidateCatalogDependents(queryClient),
+  });
+}
+
+export function usePromoteCatalogModel() {
+  return useCatalogModelMutation((input: { id: string; tier: ModelTier }) =>
+    httpClient.post(`${catalogModelPath(input.id)}/promote`, {
+      tier: input.tier,
+    })
+  );
+}
+
+export function useRetireCatalogModel() {
+  return useCatalogModelMutation((id: string) =>
+    httpClient.post(`${catalogModelPath(id)}/retire`)
+  );
+}
+
+export function useUpdateCatalogCopy() {
+  return useCatalogModelMutation(
+    (input: { id: string; patch: UpdateCatalogCopyInput }) =>
+      httpClient.patch(catalogModelPath(input.id), {
+        ...(input.patch.label !== undefined && { label: input.patch.label }),
+        ...(input.patch.description !== undefined && {
+          description: input.patch.description,
+        }),
+      })
+  );
+}
+
+export function useResolveCatalogAlert() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (alertId: number) =>
+      httpClient.post(`/ai/catalog/alerts/${alertId}/resolve`),
+    onSettled: () => invalidateCatalogDependents(queryClient),
   });
 }
 

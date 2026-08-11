@@ -17,12 +17,14 @@ const {
   useSelectableModelsMock,
   useSystemProvidersMock,
   useFeatureFlagsMock,
+  useAiCatalogMock,
   setConfigMutate,
 } = vi.hoisted(() => ({
   useAiConfigMock: vi.fn(),
   useSelectableModelsMock: vi.fn(),
   useSystemProvidersMock: vi.fn(),
   useFeatureFlagsMock: vi.fn(),
+  useAiCatalogMock: vi.fn(),
   setConfigMutate: vi.fn(),
 }));
 
@@ -60,6 +62,11 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useAiHealth: () => idleQuery,
     useGlobalAiUsage: () => idleQuery,
     useUpsertFeatureFlag: () => ({ mutate: vi.fn(), isPending: false }),
+    useAiCatalog: () => useAiCatalogMock(),
+    usePromoteCatalogModel: () => idleMutation,
+    useRetireCatalogModel: () => idleMutation,
+    useUpdateCatalogCopy: () => idleMutation,
+    useResolveCatalogAlert: () => idleMutation,
   };
 });
 
@@ -94,6 +101,7 @@ describe('AiConfigPage', () => {
     useAiConfigMock.mockReset();
     useSelectableModelsMock.mockReset();
     useFeatureFlagsMock.mockReset();
+    useAiCatalogMock.mockReset();
     setConfigMutate.mockReset();
     useAiConfigMock.mockReturnValue({
       data: [],
@@ -109,6 +117,12 @@ describe('AiConfigPage', () => {
     });
     useSystemProvidersMock.mockReturnValue({
       data: [],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useAiCatalogMock.mockReturnValue({
+      data: { candidates: [], promoted: [], alerts: [] },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -318,6 +332,16 @@ describe('AiConfigPage', () => {
   it('renders the status header with the master toggle', () => {
     renderPage();
     expect(screen.getByRole('switch', { name: 'AI enabled' })).toBeChecked();
+  });
+
+  it('offers the model catalog alongside the models', () => {
+    renderPage();
+
+    expect(
+      within(screen.getByRole('tabpanel')).getByRole('heading', {
+        name: /model catalog/i,
+      })
+    ).toBeInTheDocument();
   });
 
   it('shows guardrail flags under the Guardrails & Limits tab', async () => {

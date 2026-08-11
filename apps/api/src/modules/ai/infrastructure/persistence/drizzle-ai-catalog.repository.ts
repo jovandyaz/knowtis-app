@@ -20,10 +20,12 @@ import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import type {
   AiCatalogRepository,
   CandidateUpsert,
+  CatalogStatusChange,
 } from '../../domain/ports/ai-catalog.repository';
 
-const PROMOTED_STATUS: CatalogModelStatus = 'promoted';
-const UPSTREAM_OWNED_COPY_STATUS: CatalogModelStatus = 'candidate';
+const PROMOTED_STATUS = 'promoted' as const satisfies CatalogModelStatus;
+const UPSTREAM_OWNED_COPY_STATUS =
+  'candidate' as const satisfies CatalogModelStatus;
 
 function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
   return {
@@ -109,12 +111,13 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
 
   async setStatus(
     id: string,
-    status: CatalogModelStatus,
+    change: CatalogStatusChange,
     actorId: string
   ): Promise<CatalogModel | null> {
     const promotion =
-      status === PROMOTED_STATUS
+      change.status === PROMOTED_STATUS
         ? {
+            tier: change.tier,
             promotedBy: keepFirstPromotion(
               aiCatalogModels.promotedBy,
               sql`${actorId}`
@@ -127,7 +130,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
         : {};
     const [row] = await this.db
       .update(aiCatalogModels)
-      .set({ status, updatedAt: sql`now()`, ...promotion })
+      .set({ status: change.status, updatedAt: sql`now()`, ...promotion })
       .where(eq(aiCatalogModels.id, id))
       .returning();
     return row ? toCatalogModel(row) : null;
@@ -175,13 +178,14 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
       .returning({ id: aiCatalogAlerts.id });
   }
 
-  async resolveAlert(id: number): Promise<void> {
-    await this.db
+  async resolveAlert(id: number): Promise<boolean> {
+    const rows = await this.db
       .update(aiCatalogAlerts)
       .set({ resolvedAt: sql`now()` })
       .where(
         and(eq(aiCatalogAlerts.id, id), isNull(aiCatalogAlerts.resolvedAt))
       )
       .returning({ id: aiCatalogAlerts.id });
+    return rows.length > 0;
   }
 }

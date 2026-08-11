@@ -246,6 +246,31 @@ describe('AIConfigService', () => {
     );
   });
 
+  it('should report a stored model the catalog dropped as the code default the runtime serves', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_default_model',
+        value: UNKNOWN_ID,
+        description: 'promoted then retired',
+        updatedAt: new Date('2026-07-15T00:00:00Z'),
+      },
+    ]);
+    mockCatalog.isSupported.mockImplementation(
+      (id: string) => id !== UNKNOWN_ID
+    );
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_default_model')).toEqual({
+      key: 'ai_default_model',
+      value: AI_SETTING_DEFAULTS.ai_default_model,
+      kind: 'model',
+      source: 'default',
+      description: null,
+      updatedAt: null,
+    });
+  });
+
   it('should resolve effective config from DB rows and code defaults', async () => {
     const updatedAt = new Date('2026-07-15T00:00:00Z');
     mockRepo.getAllRows.mockResolvedValue([
@@ -633,6 +658,58 @@ describe('AIConfigService', () => {
       expect(await service.getIntentModel('powerful')).toBe(
         'openrouter:moonshotai/kimi-k2.5'
       );
+    });
+  });
+
+  describe('models that left the catalog', () => {
+    it('should fall back to the code default when the stored default model is gone', async () => {
+      mockRepo.get.mockResolvedValue(PROMOTED_ID);
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== PROMOTED_ID
+      );
+
+      expect(await service.getDefaultModel()).toBe(
+        AI_SETTING_DEFAULTS.ai_default_model
+      );
+    });
+
+    it('should fall back to the code default when a stored intent model is gone', async () => {
+      mockRepo.get.mockResolvedValue(PROMOTED_ID);
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== PROMOTED_ID
+      );
+
+      expect(await service.getIntentModel('powerful')).toBe(
+        AI_SETTING_DEFAULTS.ai_deep_model
+      );
+      expect(await service.getFastModel()).toBe(
+        AI_SETTING_DEFAULTS.ai_fast_model
+      );
+    });
+
+    it('should serve a stored model the catalog still supports', async () => {
+      mockRepo.get.mockResolvedValue(PROMOTED_ID);
+
+      expect(await service.getDefaultModel()).toBe(PROMOTED_ID);
+      expect(await service.getIntentModel('fast')).toBe(PROMOTED_ID);
+    });
+
+    it('should serve a retired promoted default from the code default through the real catalog', async () => {
+      const retired = await serviceWith([]);
+      mockRepo.get.mockResolvedValue(PROMOTED_ID);
+
+      expect(await retired.getDefaultModel()).toBe(
+        AI_SETTING_DEFAULTS.ai_default_model
+      );
+    });
+
+    it('should serve a promoted default while the model is still promoted', async () => {
+      const promoted = await serviceWith([
+        createCatalogModel({ id: PROMOTED_ID }),
+      ]);
+      mockRepo.get.mockResolvedValue(PROMOTED_ID);
+
+      expect(await promoted.getDefaultModel()).toBe(PROMOTED_ID);
     });
   });
 });

@@ -10,6 +10,12 @@ export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
 export const CATALOG_ALERT_KINDS = ['deprecation', 'price_drift'] as const;
 export type CatalogAlertKind = (typeof CATALOG_ALERT_KINDS)[number];
 
+export const CATALOG_LABEL_MAX_LENGTH = 100;
+export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
+
+/** Ceiling the platform absorbs on the free tier. Above it a model is reachable only with BYOK. */
+export const FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN = 0.0000044;
+
 export interface CatalogModelDto {
   id: string;
   label: string;
@@ -34,4 +40,21 @@ export interface CatalogAlertDto {
   detail: string;
   createdAt: string;
   resolvedAt: string | null;
+}
+
+/** Everything the catalog admin screen renders: the promotion queue, what is live, and the alerts still open. */
+export interface CatalogOverviewDto {
+  candidates: CatalogModelDto[];
+  promoted: CatalogModelDto[];
+  alerts: CatalogAlertDto[];
+}
+
+/** Promotion is never implicit about reach: the tier decides which pool the model joins. */
+export interface PromoteCatalogModelInput {
+  tier: ModelTier;
+}
+
+export interface UpdateCatalogCopyInput {
+  label?: string;
+  description?: string;
 }

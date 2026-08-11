@@ -14,6 +14,8 @@ import {
 
 import {
   CATALOG_ALERT_KINDS,
+  CATALOG_DESCRIPTION_MAX_LENGTH,
+  CATALOG_LABEL_MAX_LENGTH,
   CATALOG_MODEL_STATUSES,
   MODEL_ID_MAX_LENGTH,
   MODEL_TIERS,
@@ -36,8 +38,12 @@ export const aiCatalogModels = pgTable(
   'ai_catalog_models',
   {
     id: varchar('id', { length: MODEL_ID_MAX_LENGTH }).primaryKey(),
-    label: varchar('label', { length: 100 }).notNull(),
-    description: varchar('description', { length: 500 }).notNull().default(''),
+    label: varchar('label', { length: CATALOG_LABEL_MAX_LENGTH }).notNull(),
+    description: varchar('description', {
+      length: CATALOG_DESCRIPTION_MAX_LENGTH,
+    })
+      .notNull()
+      .default(''),
     tier: varchar('tier', { length: 16 })
       .$type<ModelTier>()
       .notNull()
