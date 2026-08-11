@@ -9,6 +9,8 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+
 import { users } from './users.schema';
 
 export const aiUsage = pgTable(
@@ -19,7 +21,7 @@ export const aiUsage = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     action: varchar('action', { length: 50 }).notNull(),
-    model: varchar('model', { length: 80 }).notNull(),
+    model: varchar('model', { length: MODEL_ID_MAX_LENGTH }).notNull(),
     inputTokens: integer('input_tokens').notNull().default(0),
     outputTokens: integer('output_tokens').notNull().default(0),
     costUsd: numeric('cost_usd', { precision: 10, scale: 6 })

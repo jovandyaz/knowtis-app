@@ -7,7 +7,7 @@ export interface CuratedModel {
   tier: ModelTier;
 }
 
-export const CURATED_MODELS: CuratedModel[] = [
+export const CURATED_MODELS: readonly CuratedModel[] = [
   {
     id: 'anthropic:claude-haiku-4-5-20251001',
     label: 'Haiku 4.5',
@@ -87,3 +87,8 @@ export const CURATED_MODELS: CuratedModel[] = [
     tier: 'open',
   },
 ];
+
+/** Ids code already owns; a promoted DB row sharing one must never override it. */
+export const CURATED_MODEL_IDS: ReadonlySet<string> = new Set(
+  CURATED_MODELS.map((m) => m.id)
+);

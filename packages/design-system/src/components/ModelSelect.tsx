@@ -18,6 +18,7 @@ export interface ModelSelectOption {
   label: string;
   tier: string;
   descriptionKey?: string;
+  description?: string;
   contextWindow?: number;
   costClass?: number;
   billedToUser?: boolean;
@@ -166,33 +167,36 @@ export function ModelSelect({
                       </span>
                     )}
                   </DropdownMenuLabel>
-                  {g.items.map((m) => (
-                    <DropdownMenuItem
-                      key={m.id}
-                      onSelect={() => onSelect(m.id)}
-                      className="flex-col items-start gap-0.5"
-                    >
-                      <div className="flex w-full items-center justify-between gap-2">
-                        <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                          <span className="truncate">{m.label}</span>
-                          {m.billedToUser && billedBadgeLabel && (
-                            <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
-                              <KeyRound className="h-2.5 w-2.5" />
-                              {billedBadgeLabel}
-                            </span>
+                  {g.items.map((m) => {
+                    const description = renderDescription?.(m);
+                    return (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onSelect={() => onSelect(m.id)}
+                        className="flex-col items-start gap-0.5"
+                      >
+                        <div className="flex w-full items-center justify-between gap-2">
+                          <span className="flex min-w-0 items-center gap-1.5 font-medium">
+                            <span className="truncate">{m.label}</span>
+                            {m.billedToUser && billedBadgeLabel && (
+                              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
+                                <KeyRound className="h-2.5 w-2.5" />
+                                {billedBadgeLabel}
+                              </span>
+                            )}
+                          </span>
+                          {m.id === value && (
+                            <Check className="h-3.5 w-3.5 shrink-0" />
                           )}
-                        </span>
-                        {m.id === value && (
-                          <Check className="h-3.5 w-3.5 shrink-0" />
+                        </div>
+                        {description && (
+                          <span className="text-xs text-(--muted-foreground)">
+                            {description}
+                          </span>
                         )}
-                      </div>
-                      {renderDescription && (
-                        <span className="text-xs text-(--muted-foreground)">
-                          {renderDescription(m)}
-                        </span>
-                      )}
-                    </DropdownMenuItem>
-                  ))}
+                      </DropdownMenuItem>
+                    );
+                  })}
                 </div>
               );
             })}
