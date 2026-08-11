@@ -301,7 +301,7 @@ describe('useAiConfig', () => {
         key: 'ai_default_model',
         value: 'anthropic:claude-sonnet-5',
         kind: 'model',
-        source: 'database',
+        source: 'custom',
         description: null,
         updatedAt: '2026-07-15T00:00:00.000Z',
       },
@@ -309,7 +309,7 @@ describe('useAiConfig', () => {
         key: 'ai_fast_model',
         value: 'anthropic:claude-haiku-4-5-20251001',
         kind: 'model',
-        source: 'environment',
+        source: 'default',
         description: null,
         updatedAt: null,
       },
@@ -317,7 +317,7 @@ describe('useAiConfig', () => {
         key: 'ai_reasoning_effort',
         value: 'medium',
         kind: 'choice',
-        source: 'database',
+        source: 'custom',
         description: null,
         updatedAt: null,
       },
@@ -332,7 +332,7 @@ describe('useAiConfig', () => {
     expect(result.current.data?.[2].kind).toBe('choice');
   });
 
-  it('rejects a payload with an unknown source', async () => {
+  it('keeps the page usable when the API emits a source this bundle predates', async () => {
     vi.mocked(httpClient.get).mockResolvedValue([
       {
         key: 'ai_default_model',
@@ -346,7 +346,8 @@ describe('useAiConfig', () => {
 
     const { result } = renderHook(() => useAiConfig(), { wrapper: Wrapper });
 
-    await waitFor(() => expect(result.current.isError).toBe(true));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.[0].source).toBe('default');
   });
 });
 
@@ -380,16 +381,10 @@ describe('AiConfigEntrySchema source skew mapping', () => {
     updatedAt: null,
   };
 
-  it('maps the pre-deploy database wire value to custom', () => {
-    expect(
-      AiConfigEntrySchema.parse({ ...base, source: 'database' }).source
-    ).toBe('custom');
-  });
-
-  it('maps the pre-deploy environment wire value to default', () => {
-    expect(
-      AiConfigEntrySchema.parse({ ...base, source: 'environment' }).source
-    ).toBe('default');
+  it('falls back to default for a source this bundle does not know', () => {
+    expect(AiConfigEntrySchema.parse({ ...base, source: 'stale' }).source).toBe(
+      'default'
+    );
   });
 
   it('passes the new custom value through unchanged', () => {

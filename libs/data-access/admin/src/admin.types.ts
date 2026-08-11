@@ -118,12 +118,10 @@ export const AiConfigEntrySchema = z.object({
   // `kind` or emits one this bundle does not know yet renders nothing for that
   // entry rather than failing the whole page.
   kind: z.string().default('model'),
-  // Backoffice and API deploy independently; an API still emitting the old
-  // database/environment wire values must keep parsing through the window.
-  source: z.preprocess(
-    (v) => (v === 'database' ? 'custom' : v === 'environment' ? 'default' : v),
-    z.enum(['custom', 'default'])
-  ),
+  // Backoffice and API deploy independently; a source added after this bundle
+  // shipped must not fail the whole page. `default` is the fallback because it
+  // renders no destructive action for a state this bundle does not understand.
+  source: z.enum(['custom', 'default']).catch('default'),
   description: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
 });
