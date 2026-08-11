@@ -777,6 +777,18 @@ describe('useAiCatalog', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
+
+  it('surfaces an alert kind this bundle does not know instead of failing', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      ...CATALOG_OVERVIEW,
+      alerts: [{ ...CATALOG_ALERT, kind: 'upstream_vanished' }],
+    });
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.alerts[0].kind).toBe('upstream_vanished');
+  });
 });
 
 describe('usePromoteCatalogModel', () => {

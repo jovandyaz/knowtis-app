@@ -3,7 +3,6 @@ import { z } from 'zod';
 
 import {
   AI_PROVIDERS,
-  CATALOG_ALERT_KINDS,
   CATALOG_MODEL_STATUSES,
   MODEL_ACCESS,
   MODEL_TIERS,
@@ -209,7 +208,9 @@ export type CatalogModel = z.infer<typeof CatalogModelSchema>;
 export const CatalogAlertSchema = z.object({
   id: z.number().int(),
   modelId: z.string(),
-  kind: z.enum(CATALOG_ALERT_KINDS),
+  // Backoffice and API deploy independently; an alert kind this bundle predates
+  // must reach the admin as an unknown badge, never take the whole page down.
+  kind: z.string(),
   detail: z.string(),
   createdAt: z.coerce.date(),
   resolvedAt: z.coerce.date().nullable().default(null),
