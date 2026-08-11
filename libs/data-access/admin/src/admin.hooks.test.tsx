@@ -387,6 +387,25 @@ describe('AiConfigEntrySchema source skew mapping', () => {
     ).toBe('default');
   });
 
+  it('parses a stale row together with its stored value', () => {
+    expect(
+      AiConfigEntrySchema.parse({
+        ...base,
+        source: 'stale',
+        storedValue: 'openrouter:vendor/dead-model',
+      })
+    ).toMatchObject({
+      source: 'stale',
+      storedValue: 'openrouter:vendor/dead-model',
+    });
+  });
+
+  it('defaults storedValue to null for an API that predates it', () => {
+    expect(
+      AiConfigEntrySchema.parse({ ...base, source: 'custom' }).storedValue
+    ).toBeNull();
+  });
+
   it('passes the new custom value through unchanged', () => {
     expect(
       AiConfigEntrySchema.parse({ ...base, source: 'custom' }).source
