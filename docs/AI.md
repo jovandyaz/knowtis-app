@@ -343,11 +343,11 @@ A `model` key takes a single server-invocable model id — curated, or promoted 
 
 **REST API** (admin only):
 
-| Method | Path              | Description                                                                                                    |
-| ------ | ----------------- | -------------------------------------------------------------------------------------------------------------- |
-| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `custom` or `default`)   |
-| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; value must be a server-invocable curated or promoted model id)        |
-| DELETE | `/ai/config/:key` | Reset a key to its code default — deletes the DB row, audits `ai_config.reset`, returns the effective entries. |
+| Method | Path              | Description                                                                                                                                                                |
+| ------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `custom` or `default`)                                                               |
+| PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; a `model` key takes one server-invocable id, `ai_fallback_chain` a comma-separated list with at least one server-routable member) |
+| DELETE | `/ai/config/:key` | Reset a key to its code default — deletes the DB row, audits `ai_config.reset`, returns the effective entries.                                                             |
 
 After updating or resetting a config value, the in-memory cache is invalidated and the change takes effect within 30 seconds across all instances.
 
@@ -401,6 +401,8 @@ Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWith
 - Usage, cost, and the `model` reported to clients always reflect the model that **actually served** the request.
 - The copilot agent receives `isLast` per attempt so it can degrade gracefully only on the final candidate.
 
+> **BYOK turns skip this chain entirely.** When the turn carries a `byokApiKey`, `AiSdkAgentOrchestrator` bypasses `FallbackChainService` and retries only the same model on the same key — relaying to another model would bill a provider the caller never opted into, and provider errors are redacted for the same reason. OpenRouter's own upstream failover still applies inside a single `openrouter:` call, since that happens below this layer.
+
 **Circuit breaker:** `ProviderCooldownTracker` opens a cooldown after `AI_COOLDOWN_ALLOWED_FAILS` failures inside a 60s window (cooldown lasts `AI_COOLDOWN_SECONDS`). Cooling entries are skipped by the chain resolver; a success or expiry ends the cooldown. Events: `ai.provider.cooldown_start` / `ai.provider.cooldown_end`.
 
 The cooldown **bucket** (`cooldownKeyOf`) is the provider for direct providers — their models share one key and quota, so they fail together — but the **full model id** for aggregators (`openrouter:*`): OpenRouter multiplexes each model to an independent upstream pool, so one model's outage says nothing about its siblings. Without per-model buckets, one failing OpenRouter model would cool the whole provider and disable failover inside an all-OpenRouter chain — the default chain's exact shape.
@@ -434,13 +436,15 @@ Pricing and context-window data come from [LiteLLM's public pricing JSON](https:
 
 The curated list is hand-maintained, so it goes stale silently: open-weight models ship and change price weekly. This catalog watches OpenRouter for us and turns the interesting ones into **candidates** an admin can promote — the machine finds them, a human decides.
 
+> Two different things get called "the catalog" below. The **selectable-model catalog** is the union users pick from, behind `ModelCatalog.isSupported` — curated entries plus promoted rows. **`ai_catalog_models`** is the table this section describes, and it holds only what the sync discovered. A curated model lives in the first and never appears in the second, so "absent from the catalog" means different things depending on which one is meant.
+
 ### The tables
 
 `ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate`, `promoted` or `retired`. Promotion stamps `promoted_by` and `promoted_at`.
 
 `ai_catalog_alerts` records what needs a human: `deprecation` and `price_drift`, each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
-> `model_id` deliberately carries **no foreign key**. Alerts also cover the curated models, which live in code and never get a catalog row — a constraint here would reject exactly the alerts that matter most.
+> `model_id` deliberately carries **no foreign key**. Alerts also cover the curated models, which live in code and never get an `ai_catalog_models` row — a constraint here would reject exactly the alerts that matter most.
 
 ### The sync job
 
@@ -485,7 +489,7 @@ Users pick which model the copilot uses, per conversation and as an account defa
 
 Where the two sources disagree, **code wins**: a curated entry keeps its hand-written label, tier and pricing even if a promoted row carries the same id. Curated ids are the stable contract the rest of the system is guard-tested against; promoted rows are data.
 
-Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the catalog covers a retired model, `routableByServer` covers a keyless/disabled/BYOK-only one.
+Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the **selectable-model** catalog covers a model that is gone (a dropped curated id, or a promoted row since retired), `routableByServer` covers a keyless/disabled/BYOK-only one.
 
 **Resolution cascade** (highest priority first), in `ModelPreferenceService`:
 
@@ -810,29 +814,29 @@ Voice-to-Note is documented separately in [docs/VOICE-NOTE.md](VOICE-NOTE.md). I
 
 All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enabled`.
 
-| Method | Path                           | Description                                                                                                               |
-| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
-| POST   | `/ai/complete`                 | Non-streaming completion. Body: `AICompleteDto`.                                                                          |
-| GET    | `/ai/usage`                    | Daily token + cost usage for authenticated user.                                                                          |
-| GET    | `/ai/metrics`                  | Usage summary. Query: `?period=day\|week\|month`.                                                                         |
-| GET    | `/ai/health`                   | Per-provider cooldown snapshot (admin only).                                                                              |
-| GET    | `/ai/config`                   | Effective config entries with `source: custom\|default` (admin only).                                                     |
-| PUT    | `/ai/config/:key`              | Update a config value — curated or promoted model id, or a routable chain for `ai_fallback_chain` (admin only).           |
-| DELETE | `/ai/config/:key`              | Reset a config key to its code default; audits `ai_config.reset` (admin only).                                            |
-| GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env). |
-| PUT    | `/ai/providers/:provider`      | Store a key (probed first) and/or set `enabled` (admin only).                                                             |
-| DELETE | `/ai/providers/:provider/key`  | Clear the stored key (admin only).                                                                                        |
-| POST   | `/ai/providers/:provider/test` | Probe the routing key; resolves 200 with a pass/fail verdict (admin only).                                                |
-| GET    | `/ai/models`                   | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection).                               |
-| GET    | `/ai/preferences`              | The caller's account-default copilot model and intent.                                                                    |
-| PUT    | `/ai/preferences`              | Patch the caller's model/intent preferences (partial).                                                                    |
-| GET    | `/ai/keys`                     | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                     |
-| PUT    | `/ai/keys/:provider`           | Validate + store a provider key.                                                                                          |
-| DELETE | `/ai/keys/:provider`           | Remove a stored provider key.                                                                                             |
-| POST   | `/ai/voice-note`               | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                                                     |
-| GET    | `/agent/memories`              | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).                                   |
-| DELETE | `/agent/memories/:id`          | Forget one memory.                                                                                                        |
-| DELETE | `/agent/memories`              | Forget all memories.                                                                                                      |
+| Method | Path                           | Description                                                                                                                                                                       |
+| ------ | ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| POST   | `/ai/complete`                 | Non-streaming completion. Body: `AICompleteDto`.                                                                                                                                  |
+| GET    | `/ai/usage`                    | Daily token + cost usage for authenticated user.                                                                                                                                  |
+| GET    | `/ai/metrics`                  | Usage summary. Query: `?period=day\|week\|month`.                                                                                                                                 |
+| GET    | `/ai/health`                   | Per-provider cooldown snapshot (admin only).                                                                                                                                      |
+| GET    | `/ai/config`                   | Effective config entries with `source: custom\|default` (admin only).                                                                                                             |
+| PUT    | `/ai/config/:key`              | Update a config value — a server-invocable curated or promoted model id, or for `ai_fallback_chain` a comma-separated list with at least one server-routable member (admin only). |
+| DELETE | `/ai/config/:key`              | Reset a config key to its code default; audits `ai_config.reset` (admin only).                                                                                                    |
+| GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env).                                                         |
+| PUT    | `/ai/providers/:provider`      | Store a key (probed first) and/or set `enabled` (admin only).                                                                                                                     |
+| DELETE | `/ai/providers/:provider/key`  | Clear the stored key (admin only).                                                                                                                                                |
+| POST   | `/ai/providers/:provider/test` | Probe the routing key; resolves 200 with a pass/fail verdict (admin only).                                                                                                        |
+| GET    | `/ai/models`                   | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection).                                                                                       |
+| GET    | `/ai/preferences`              | The caller's account-default copilot model and intent.                                                                                                                            |
+| PUT    | `/ai/preferences`              | Patch the caller's model/intent preferences (partial).                                                                                                                            |
+| GET    | `/ai/keys`                     | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                                                                             |
+| PUT    | `/ai/keys/:provider`           | Validate + store a provider key.                                                                                                                                                  |
+| DELETE | `/ai/keys/:provider`           | Remove a stored provider key.                                                                                                                                                     |
+| POST   | `/ai/voice-note`               | Transcribe + structure a voice note. See [Voice Notes](#voice-notes).                                                                                                             |
+| GET    | `/agent/memories`              | List long-term memories. See [Long-term user memory (A6b)](#long-term-user-memory-a6b).                                                                                           |
+| DELETE | `/agent/memories/:id`          | Forget one memory.                                                                                                                                                                |
+| DELETE | `/agent/memories`              | Forget all memories.                                                                                                                                                              |
 
 > Swagger UI available at `/api/docs` in development.
 
