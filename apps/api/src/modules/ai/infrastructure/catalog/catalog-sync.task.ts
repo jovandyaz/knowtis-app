@@ -153,9 +153,9 @@ export class CatalogSyncTask {
    */
   private async runLocked(work: () => Promise<void>): Promise<void> {
     await this.db.transaction(async (tx) => {
-      const rows = (await tx.execute(
+      const rows = await tx.execute<{ locked: boolean }>(
         sql`SELECT pg_try_advisory_xact_lock(${ADVISORY_LOCK_KEY}) AS locked`
-      )) as unknown as { locked: boolean }[];
+      );
       if (rows[0]?.locked !== true) {
         this.logger.log({
           event: 'ai.catalog.sync_skipped',
