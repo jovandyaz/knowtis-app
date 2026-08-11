@@ -93,6 +93,19 @@ describe('ModelCatalogAdapter', () => {
     ).toBe(0.000099);
   });
 
+  // An unpriced model still routes — the adapter only logs and records
+  // costUsd=0, so the budget breaker never sees that spend.
+  it('prices every curated model from the vendored snapshot', () => {
+    const adapter = makeAdapter();
+
+    for (const model of CURATED_MODELS) {
+      const pricing = adapter.getPricing(model.id);
+      expect(adapter.isSupported(model.id), model.id).toBe(true);
+      expect(pricing?.inputCostPerToken, model.id).toBeGreaterThan(0);
+      expect(pricing?.outputCostPerToken, model.id).toBeGreaterThan(0);
+    }
+  });
+
   // accessFor exempts curated ids from the ceiling only while tier gating is off.
   // A snapshot refresh that pushes one of these over it would silently bill the
   // platform for the whole free tier, so it has to fail here instead.

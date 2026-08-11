@@ -115,17 +115,12 @@ describe('LiteLLMCatalog', () => {
 describe('vendored snapshot', () => {
   const catalog = new LiteLLMCatalog(MODEL_PRICES_SNAPSHOT);
 
-  it('contains the models Knowtis uses today', () => {
+  it('resolves a real id through every provider key mapping', () => {
     for (const model of [
-      'anthropic:claude-sonnet-4-20250514',
-      'anthropic:claude-haiku-4-5-20251001',
-      'google:gemini-2.0-flash',
-      'google:gemini-2.5-pro',
-      'openai:gpt-4o-mini',
-      'openrouter:deepseek/deepseek-v3.2',
+      'anthropic:claude-sonnet-5',
+      'google:gemini-3.5-flash',
+      'openai:gpt-5.4',
       'openrouter:z-ai/glm-5.2',
-      'openrouter:moonshotai/kimi-k2.5',
-      'openrouter:minimax/minimax-m2.5',
     ]) {
       expect(catalog.isSupported(model), model).toBe(true);
       expect(
