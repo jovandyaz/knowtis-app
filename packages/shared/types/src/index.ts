@@ -124,6 +124,11 @@ export {
   type CatalogModelStatus,
   CATALOG_ALERT_KINDS,
   type CatalogAlertKind,
+  CATALOG_LABEL_MAX_LENGTH,
+  CATALOG_DESCRIPTION_MAX_LENGTH,
   type CatalogModelDto,
   type CatalogAlertDto,
+  type CatalogOverviewDto,
+  type PromoteCatalogModelInput,
+  type UpdateCatalogCopyInput,
 } from './lib/catalog.types';

@@ -14,7 +14,10 @@ import {
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
-import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
+import type {
+  CandidateUpsert,
+  CatalogStatusChange,
+} from '../../domain/ports/ai-catalog.repository';
 import { DrizzleAiCatalogRepository } from './drizzle-ai-catalog.repository';
 
 const ACTOR_ID = '00000000-0000-4000-8000-0000000000ca';
@@ -46,6 +49,10 @@ const CLOCK_SKEW_TOLERANCE_MS = 5_000;
 const FIRST_ALERT_DETAIL = 'upstream marked the model deprecated';
 const SECOND_ALERT_DETAIL = 'upstream still reports the model deprecated';
 const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
+
+const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
+const PROMOTE_FAST: CatalogStatusChange = { status: 'promoted', tier: 'fast' };
+const RETIRE: CatalogStatusChange = { status: 'retired' };
 
 function candidate(
   id: string,
@@ -128,7 +135,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   afterAll(async () => {
     await deleteTestRows();
-    await db.delete(users).where(inArray(users.id, [ACTOR_ID, SECOND_ACTOR_ID]));
+    await db
+      .delete(users)
+      .where(inArray(users.id, [ACTOR_ID, SECOND_ACTOR_ID]));
     await moduleRef.close();
   });
 
@@ -185,7 +194,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should refresh metadata and lastSeenAt on re-upsert without touching status, curated copy or updatedAt', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await repo.setStatus(PRIMARY_MODEL_ID, 'retired', ACTOR_ID);
+    await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
     await db
       .update(aiCatalogModels)
       .set({
@@ -225,7 +234,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should keep admin-edited copy when re-upserting a promoted model', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await repo.setStatus(PRIMARY_MODEL_ID, 'promoted', ACTOR_ID);
+    await repo.setStatus(PRIMARY_MODEL_ID, PROMOTE_OPEN, ACTOR_ID);
     await repo.updateCopy(PRIMARY_MODEL_ID, {
       label: ADMIN_LABEL,
       description: ADMIN_DESCRIPTION,
@@ -251,7 +260,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
     const promoted = await repo.setStatus(
       PRIMARY_MODEL_ID,
-      'promoted',
+      PROMOTE_OPEN,
       ACTOR_ID
     );
 
@@ -269,11 +278,15 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should keep the first promotion actor and timestamp when promoted again', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    const first = await repo.setStatus(PRIMARY_MODEL_ID, 'promoted', ACTOR_ID);
+    const first = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      PROMOTE_OPEN,
+      ACTOR_ID
+    );
 
     const second = await repo.setStatus(
       PRIMARY_MODEL_ID,
-      'promoted',
+      PROMOTE_OPEN,
       SECOND_ACTOR_ID
     );
 
@@ -283,12 +296,16 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should stamp a new actor and time when a retired model is promoted again', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    const first = await repo.setStatus(PRIMARY_MODEL_ID, 'promoted', ACTOR_ID);
-    await repo.setStatus(PRIMARY_MODEL_ID, 'retired', ACTOR_ID);
+    const first = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      PROMOTE_OPEN,
+      ACTOR_ID
+    );
+    await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
 
     const revived = await repo.setStatus(
       PRIMARY_MODEL_ID,
-      'promoted',
+      PROMOTE_OPEN,
       SECOND_ACTOR_ID
     );
 
@@ -300,9 +317,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     );
   });
 
+  it('should store the tier the promotion chose and let a later one re-tier', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+
+    const promoted = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      PROMOTE_FAST,
+      ACTOR_ID
+    );
+
+    expect(promoted?.tier).toBe('fast');
+    const reTiered = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      PROMOTE_OPEN,
+      ACTOR_ID
+    );
+    expect(reTiered?.tier).toBe('open');
+  });
+
+  it('should leave the tier untouched when retiring', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    await repo.setStatus(PRIMARY_MODEL_ID, PROMOTE_FAST, ACTOR_ID);
+
+    const retired = await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
+
+    expect(retired?.status).toBe('retired');
+    expect(retired?.tier).toBe('fast');
+  });
+
   it('should return null when the target model does not exist', async () => {
     await expect(
-      repo.setStatus(ABSENT_MODEL_ID, 'promoted', ACTOR_ID)
+      repo.setStatus(ABSENT_MODEL_ID, PROMOTE_OPEN, ACTOR_ID)
     ).resolves.toBeNull();
     await expect(
       repo.updateCopy(ABSENT_MODEL_ID, { label: ADMIN_LABEL })

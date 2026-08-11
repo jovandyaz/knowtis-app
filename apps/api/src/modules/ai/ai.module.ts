@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import { AdminAuditModule } from '../admin/audit/admin-audit.module';
+import { AiCatalogController } from './ai-catalog.controller';
 import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
 import { AiProvidersController } from './ai-providers.controller';
@@ -16,6 +17,7 @@ import { AIGateway } from './ai.gateway';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
+import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
@@ -93,6 +95,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     AiModelsController,
     AiKeysController,
     AiProvidersController,
+    AiCatalogController,
   ],
   providers: [
     SelectableModelsService,
@@ -128,6 +131,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     },
     LiteLlmPricesHttpClient,
     CatalogSyncTask,
+    AiCatalogAdminService,
     { provide: AI_COMPLETION_PROVIDER, useClass: AISDKProvider },
     {
       provide: AI_STRUCTURED_OUTPUT_PROVIDER,
