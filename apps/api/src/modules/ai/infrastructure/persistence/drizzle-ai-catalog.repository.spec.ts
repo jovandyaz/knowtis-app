@@ -281,6 +281,25 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(second?.promotedAt?.getTime()).toBe(first?.promotedAt?.getTime());
   });
 
+  it('should stamp a new actor and time when a retired model is promoted again', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    const first = await repo.setStatus(PRIMARY_MODEL_ID, 'promoted', ACTOR_ID);
+    await repo.setStatus(PRIMARY_MODEL_ID, 'retired', ACTOR_ID);
+
+    const revived = await repo.setStatus(
+      PRIMARY_MODEL_ID,
+      'promoted',
+      SECOND_ACTOR_ID
+    );
+
+    // Retiring ends a promotion, so reviving one is a new decision by a new
+    // admin: the audit fields describe the promotion currently in effect.
+    expect(revived?.promotedBy).toBe(SECOND_ACTOR_ID);
+    expect(revived?.promotedAt?.getTime()).toBeGreaterThanOrEqual(
+      first?.promotedAt?.getTime() ?? 0
+    );
+  });
+
   it('should return null when the target model does not exist', async () => {
     await expect(
       repo.setStatus(ABSENT_MODEL_ID, 'promoted', ACTOR_ID)

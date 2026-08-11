@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ModelCatalog } from '@knowtis/ai-gateway';
+
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
+import type { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
+import type { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { createCatalogModel } from '../../testing/create-catalog-model';
 import { createCatalogRepositoryStub } from '../../testing/create-catalog-repository-stub';
 import { SelectableModelsService } from './selectable-models.service';
@@ -17,22 +21,35 @@ const ROW_CONTEXT_WINDOW = 4_096;
 const CURATED_OUTPUT_COST = 0.000015;
 const SHADOWING_OUTPUT_COST = 0.0000001;
 
-function promotedCache(models: readonly CatalogModel[]) {
+type RegistryStub = Pick<ProviderRegistryFactory, 'isModelAvailable'>;
+type PromotedCacheStub = Pick<PromotedModelsCache, 'snapshot'>;
+
+/** Typed against the real ports so a shape change breaks compilation here instead of at runtime. */
+function makeSelectableModelsService(
+  catalog: ModelCatalog,
+  registry: RegistryStub,
+  promoted: PromotedCacheStub
+) {
+  return new SelectableModelsService(
+    catalog,
+    registry as ProviderRegistryFactory,
+    promoted as PromotedModelsCache
+  );
+}
+
+function promotedCache(models: readonly CatalogModel[]): PromotedCacheStub {
   return { snapshot: () => models };
 }
 
 function makeOpenService(promoted: readonly CatalogModel[] = []) {
-  const catalog = {
+  const catalog: ModelCatalog = {
     isSupported: () => true,
+    isFast: () => false,
     getPricing: () => ({ outputCostPerToken: 0.000005 }),
     getContextWindow: () => ({ maxInputTokens: 1000 }),
   };
-  const registry = { isModelAvailable: () => true };
-  return new SelectableModelsService(
-    catalog as never,
-    registry as never,
-    promotedCache(promoted) as never
-  );
+  const registry: RegistryStub = { isModelAvailable: () => true };
+  return makeSelectableModelsService(catalog, registry, promotedCache(promoted));
 }
 
 function makeService(opts: {
@@ -45,7 +62,7 @@ function makeService(opts: {
   >;
   promoted?: readonly CatalogModel[];
 }) {
-  const catalog = {
+  const catalog: ModelCatalog = {
     isSupported: (id: string) => opts.supported.has(id),
     isFast: () => false,
     getContextWindow: (id: string) =>
@@ -58,11 +75,13 @@ function makeService(opts: {
         ? { inputCostPerToken: 0.000001, outputCostPerToken: 0.000005 }
         : undefined),
   };
-  const registry = { isModelAvailable: (id: string) => opts.available.has(id) };
-  return new SelectableModelsService(
-    catalog as never,
-    registry as never,
-    promotedCache(opts.promoted ?? []) as never
+  const registry: RegistryStub = {
+    isModelAvailable: (id: string) => opts.available.has(id),
+  };
+  return makeSelectableModelsService(
+    catalog,
+    registry,
+    promotedCache(opts.promoted ?? [])
   );
 }
 
@@ -78,19 +97,16 @@ describe('SelectableModelsService', () => {
   });
 
   it('unlocks a model when the user has a BYOK key for its provider', () => {
-    const registry = {
+    const registry: RegistryStub = {
       isModelAvailable: (id: string) => id.startsWith('anthropic:'),
     };
-    const catalog = {
+    const catalog: ModelCatalog = {
       isSupported: () => true,
+      isFast: () => false,
       getPricing: () => ({ outputCostPerToken: 0.000005 }),
       getContextWindow: () => ({ maxInputTokens: 1000 }),
     };
-    const svc = new SelectableModelsService(
-      catalog as never,
-      registry as never,
-      promotedCache([]) as never
-    );
+    const svc = makeSelectableModelsService(catalog, registry, promotedCache([]));
     const withByok = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
     expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
     const without = svc.list('anthropic:claude-sonnet-5');
@@ -351,8 +367,9 @@ describe('SelectableModelsService', () => {
     it('keeps the curated entry when a promoted row repeats its id', async () => {
       // Real composite catalog: pricing and context must resolve to the curated
       // model even though a promoted row of the same id carries other numbers.
-      const curated = {
+      const curated: ModelCatalog = {
         isSupported: () => true,
+        isFast: () => false,
         getPricing: () => ({ outputCostPerToken: CURATED_OUTPUT_COST }),
         getContextWindow: () => ({ maxInputTokens: PORT_CONTEXT_WINDOW }),
       };
@@ -369,9 +386,9 @@ describe('SelectableModelsService', () => {
         ])
       );
       await promoted.onModuleInit();
-      const service = new SelectableModelsService(
-        new CompositeModelCatalog(promoted, curated as never),
-        { isModelAvailable: () => true } as never,
+      const service = makeSelectableModelsService(
+        new CompositeModelCatalog(promoted, curated as ModelCatalogAdapter),
+        { isModelAvailable: () => true },
         promoted
       );
 
