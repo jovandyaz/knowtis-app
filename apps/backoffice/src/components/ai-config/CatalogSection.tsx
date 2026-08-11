@@ -55,8 +55,12 @@ function byIntelligenceDesc(a: CatalogModel, b: CatalogModel): number {
   return b.intelligenceIndex - a.intelligenceIndex;
 }
 
+/** Mirrors the server's access policy, where a negative stored price is a broken row rather than a discount. */
 function isByokOnly(model: CatalogModel): boolean {
-  return model.outputCostPerToken > FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
+  return (
+    model.outputCostPerToken < 0 ||
+    model.outputCostPerToken > FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+  );
 }
 
 interface PromotedModelRowProps {

@@ -173,6 +173,18 @@ describe('CatalogSection', () => {
     ).toBeInTheDocument();
   });
 
+  it('marks a candidate stored with a negative price as BYOK only, as the server reads it', () => {
+    renderSection({
+      candidates: [
+        model({ label: 'Broken row', outputCostPerToken: -CHEAP_OUTPUT_COST }),
+      ],
+    });
+
+    expect(
+      within(rowFor('Broken row')).getByText(BYOK_ONLY_BADGE)
+    ).toBeInTheDocument();
+  });
+
   it('leaves a candidate under the free ceiling unmarked', () => {
     renderSection({
       candidates: [
