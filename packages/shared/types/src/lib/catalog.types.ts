@@ -49,6 +49,22 @@ export interface CatalogOverviewDto {
   alerts: CatalogAlertDto[];
 }
 
+export const CATALOG_SYNC_STATUSES = ['completed', 'skipped'] as const;
+export type CatalogSyncStatus = (typeof CATALOG_SYNC_STATUSES)[number];
+
+export const CATALOG_SYNC_SKIP_REASONS = ['flag_disabled', 'locked'] as const;
+export type CatalogSyncSkipReason = (typeof CATALOG_SYNC_SKIP_REASONS)[number];
+
+/** What one sync pass did. Counts are zero when `status` is `skipped`, and `skippedReason` is set only then. */
+export interface CatalogSyncResultDto {
+  status: CatalogSyncStatus;
+  skippedReason: CatalogSyncSkipReason | null;
+  upstream: number;
+  candidates: number;
+  alerts: number;
+  failures: number;
+}
+
 /** Promotion is never implicit about reach: the tier decides which pool the model joins. */
 export interface PromoteCatalogModelInput {
   tier: ModelTier;

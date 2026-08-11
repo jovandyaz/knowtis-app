@@ -351,4 +351,59 @@ describe('CatalogSyncTask', () => {
       })
     );
   });
+  it('should report what an on-demand run wrote', async () => {
+    const { task } = make({
+      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE, CLOSED_WEIGHT_MODEL],
+    });
+
+    await expect(task.run()).resolves.toEqual({
+      status: 'completed',
+      skippedReason: null,
+      upstream: 3,
+      candidates: 2,
+      alerts: 0,
+      failures: 0,
+    });
+  });
+
+  it('should count the writes that failed rather than hide them behind a success', async () => {
+    const { task, repo } = make({
+      upstream: [QWEN_CANDIDATE, DEEPSEEK_CANDIDATE],
+    });
+    repo.upsertCandidate.mockRejectedValueOnce(new Error('value too long'));
+
+    await expect(task.run()).resolves.toMatchObject({
+      status: 'completed',
+      candidates: 1,
+      failures: 1,
+    });
+  });
+
+  it('should tell an on-demand run the flag is what stopped it', async () => {
+    const { task } = make({ flagEnabled: false, upstream: [QWEN_CANDIDATE] });
+
+    await expect(task.run()).resolves.toMatchObject({
+      status: 'skipped',
+      skippedReason: 'flag_disabled',
+      candidates: 0,
+    });
+  });
+
+  it('should tell an on-demand run another holder has the lock', async () => {
+    const { task } = make({ upstream: [QWEN_CANDIDATE], locked: false });
+
+    await expect(task.run()).resolves.toMatchObject({
+      status: 'skipped',
+      skippedReason: 'locked',
+      candidates: 0,
+    });
+  });
+
+  it('should reject an on-demand run when the upstream fetch fails', async () => {
+    const { task, openRouter } = make();
+    openRouter.fetchModels.mockRejectedValue(new Error('openrouter down'));
+
+    await expect(task.run()).rejects.toThrow('openrouter down');
+    expect(errorLog).not.toHaveBeenCalled();
+  });
 });

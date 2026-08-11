@@ -19,6 +19,8 @@ const {
   retireMutate,
   updateCopyMutate,
   resolveAlertMutate,
+  syncMutate,
+  syncStateMock,
 } = vi.hoisted(() => ({
   useAiCatalogMock: vi.fn(),
   mutationStateMock: vi.fn(),
@@ -26,9 +28,12 @@ const {
   retireMutate: vi.fn(),
   updateCopyMutate: vi.fn(),
   resolveAlertMutate: vi.fn(),
+  syncMutate: vi.fn(),
+  syncStateMock: vi.fn(),
 }));
 
 const IDLE_MUTATION = { isPending: false, isError: false, error: null };
+const IDLE_SYNC = { ...IDLE_MUTATION, isSuccess: false, data: undefined };
 const PENDING_MUTATION = { ...IDLE_MUTATION, isPending: true };
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
@@ -52,6 +57,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
       mutate: resolveAlertMutate,
       ...mutationStateMock(),
     }),
+    useSyncCatalog: () => ({ mutate: syncMutate, ...syncStateMock() }),
   };
 });
 
@@ -122,6 +128,8 @@ describe('CatalogSection', () => {
     useAiCatalogMock.mockReset();
     mutationStateMock.mockReset();
     mutationStateMock.mockReturnValue(IDLE_MUTATION);
+    syncMutate.mockReset();
+    syncStateMock.mockReturnValue(IDLE_SYNC);
   });
 
   it('lists an open alert with its kind, model and detail', () => {
@@ -385,5 +393,75 @@ describe('CatalogSection', () => {
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
     expect(refetch).toHaveBeenCalled();
+  });
+  it('runs a sync on demand', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sync now/i }));
+
+    expect(syncMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports what the sync wrote', () => {
+    syncStateMock.mockReturnValue({
+      ...IDLE_SYNC,
+      isSuccess: true,
+      data: {
+        status: 'completed',
+        skippedReason: null,
+        upstream: 120,
+        candidates: 97,
+        alerts: 2,
+        failures: 0,
+      },
+    });
+    renderSection();
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      '120 upstream models: 97 candidate(s), 2 alert(s)'
+    );
+  });
+
+  it('names the flag when that is what stopped the sync', () => {
+    syncStateMock.mockReturnValue({
+      ...IDLE_SYNC,
+      isSuccess: true,
+      data: {
+        status: 'skipped',
+        skippedReason: 'flag_disabled',
+        upstream: 0,
+        candidates: 0,
+        alerts: 0,
+        failures: 0,
+      },
+    });
+    renderSection();
+
+    expect(screen.getByRole('status')).toHaveTextContent(/ai_catalog_sync/);
+  });
+
+  it('still reports a sync whose skip reason this bundle predates', () => {
+    syncStateMock.mockReturnValue({
+      ...IDLE_SYNC,
+      isSuccess: true,
+      data: {
+        status: 'skipped',
+        skippedReason: 'some_future_reason',
+        upstream: 0,
+        candidates: 0,
+        alerts: 0,
+        failures: 0,
+      },
+    });
+    renderSection();
+
+    expect(screen.getByRole('status')).toHaveTextContent(/skipped/i);
+  });
+
+  it('disables the sync button while another catalog mutation is in flight', () => {
+    mutationStateMock.mockReturnValue(PENDING_MUTATION);
+    renderSection();
+
+    expect(screen.getByRole('button', { name: /sync now/i })).toBeDisabled();
   });
 });

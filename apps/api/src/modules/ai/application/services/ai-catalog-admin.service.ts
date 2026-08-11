@@ -5,6 +5,7 @@ import type {
   CatalogModelDto,
   CatalogModelStatus,
   CatalogOverviewDto,
+  CatalogSyncResultDto,
   ModelTier,
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
@@ -16,6 +17,7 @@ import {
   AI_CATALOG_REPOSITORY,
   type AiCatalogRepository,
 } from '../../domain/ports/ai-catalog.repository';
+import { CatalogSyncTask } from '../../infrastructure/catalog/catalog-sync.task';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 
 const CANDIDATE_STATUS = 'candidate' as const satisfies CatalogModelStatus;
@@ -25,6 +27,7 @@ const OPEN_ALERTS_ONLY = true;
 
 const CATALOG_MODEL_TARGET = 'ai_catalog_model';
 const CATALOG_ALERT_TARGET = 'ai_catalog_alert';
+const CATALOG_SYNC_TARGET = 'ai_catalog_sync';
 
 function toCatalogModelDto(model: CatalogModel): CatalogModelDto {
   return {
@@ -65,8 +68,32 @@ export class AiCatalogAdminService {
     @Inject(AI_CATALOG_REPOSITORY)
     private readonly repository: AiCatalogRepository,
     private readonly audit: AdminAuditService,
-    private readonly promotedModels: PromotedModelsCache
+    private readonly promotedModels: PromotedModelsCache,
+    private readonly syncTask: CatalogSyncTask
   ) {}
+
+  /** Runs the sync the cron would run at 03:00 UTC, and resolves what it did. Rejects when the upstream fetch fails. */
+  async sync(actorId: string): Promise<CatalogSyncResultDto> {
+    const result = await this.syncTask.run();
+    if (result.status !== 'completed') {
+      return result;
+    }
+    try {
+      await this.audit.record({
+        actorId,
+        action: 'ai_catalog.synced',
+        targetType: CATALOG_SYNC_TARGET,
+        after: {
+          candidates: result.candidates,
+          alerts: result.alerts,
+          failures: result.failures,
+        },
+      });
+    } finally {
+      await this.refreshPromoted();
+    }
+    return result;
+  }
 
   async overview(): Promise<CatalogOverviewDto> {
     const [candidates, promoted, alerts] = await Promise.all([

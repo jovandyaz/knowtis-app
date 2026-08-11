@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   AI_PROVIDERS,
   CATALOG_MODEL_STATUSES,
+  CATALOG_SYNC_STATUSES,
   MODEL_ACCESS,
   MODEL_TIERS,
   PROVIDER_KEY_SOURCES,
@@ -223,3 +224,15 @@ export const CatalogOverviewSchema = z.object({
   alerts: z.array(CatalogAlertSchema),
 });
 export type CatalogOverview = z.infer<typeof CatalogOverviewSchema>;
+
+export const CatalogSyncResultSchema = z.object({
+  status: z.enum(CATALOG_SYNC_STATUSES),
+  // Same deploy-skew tolerance as the alert kind: a reason this bundle predates
+  // must still render, and the counts already tell the admin what happened.
+  skippedReason: z.string().nullable().default(null),
+  upstream: z.number().int(),
+  candidates: z.number().int(),
+  alerts: z.number().int(),
+  failures: z.number().int(),
+});
+export type CatalogSyncResult = z.infer<typeof CatalogSyncResultSchema>;

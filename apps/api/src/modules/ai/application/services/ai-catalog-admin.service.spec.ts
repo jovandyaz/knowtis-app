@@ -14,6 +14,15 @@ const MODEL_ID = 'openrouter:vendor/promoted-one';
 const CANDIDATE_ID = 'openrouter:vendor/candidate-one';
 const ALERT_ID = 7;
 
+const COMPLETED_SYNC = {
+  status: 'completed',
+  skippedReason: null,
+  upstream: 120,
+  candidates: 97,
+  alerts: 2,
+  failures: 0,
+} as const;
+
 const alert: CatalogAlert = {
   id: ALERT_ID,
   modelId: MODEL_ID,
@@ -29,6 +38,7 @@ describe('AiCatalogAdminService', () => {
   };
   let audit: { record: ReturnType<typeof vi.fn> };
   let promotedCache: PromotedModelsCache;
+  let syncTask: { run: ReturnType<typeof vi.fn> };
   let service: AiCatalogAdminService;
 
   beforeEach(() => {
@@ -48,10 +58,12 @@ describe('AiCatalogAdminService', () => {
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     promotedCache = new PromotedModelsCache(repository as never);
     vi.spyOn(promotedCache, 'refresh');
+    syncTask = { run: vi.fn().mockResolvedValue({ ...COMPLETED_SYNC }) };
     service = new AiCatalogAdminService(
       repository as never,
       audit as never,
-      promotedCache
+      promotedCache,
+      syncTask as never
     );
   });
 
@@ -264,6 +276,55 @@ describe('AiCatalogAdminService', () => {
 
       await service.resolveAlert(ALERT_ID, ACTOR_ID);
 
+      expect(audit.record).not.toHaveBeenCalled();
+    });
+  });
+  describe('sync', () => {
+    it('reports what the pass wrote', async () => {
+      await expect(service.sync(ACTOR_ID)).resolves.toEqual(COMPLETED_SYNC);
+      expect(syncTask.run).toHaveBeenCalledTimes(1);
+    });
+
+    it('audits a completed pass with its counts', async () => {
+      await service.sync(ACTOR_ID);
+
+      expect(audit.record).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actorId: ACTOR_ID,
+          action: 'ai_catalog.synced',
+          after: { candidates: 97, alerts: 2, failures: 0 },
+        })
+      );
+    });
+
+    it('refreshes the promoted cache, since a pass reprices promoted rows too', async () => {
+      await service.sync(ACTOR_ID);
+
+      expect(promotedCache.refresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('neither audits nor refreshes a pass that never ran', async () => {
+      syncTask.run.mockResolvedValue({
+        status: 'skipped',
+        skippedReason: 'locked',
+        upstream: 0,
+        candidates: 0,
+        alerts: 0,
+        failures: 0,
+      });
+
+      await expect(service.sync(ACTOR_ID)).resolves.toMatchObject({
+        status: 'skipped',
+        skippedReason: 'locked',
+      });
+      expect(audit.record).not.toHaveBeenCalled();
+      expect(promotedCache.refresh).not.toHaveBeenCalled();
+    });
+
+    it('propagates an upstream failure instead of reporting an empty success', async () => {
+      syncTask.run.mockRejectedValue(new Error('openrouter down'));
+
+      await expect(service.sync(ACTOR_ID)).rejects.toThrow('openrouter down');
       expect(audit.record).not.toHaveBeenCalled();
     });
   });

@@ -3,7 +3,11 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { sql } from 'drizzle-orm';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_KEYS,
+  type CatalogSyncResultDto,
+  type CatalogSyncSkipReason,
+} from '@knowtis/shared-types';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
@@ -39,6 +43,17 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+function skipped(reason: CatalogSyncSkipReason): CatalogSyncResultDto {
+  return {
+    status: 'skipped',
+    skippedReason: reason,
+    upstream: 0,
+    candidates: 0,
+    alerts: 0,
+    failures: 0,
+  };
+}
+
 @Injectable()
 export class CatalogSyncTask {
   private readonly logger = new Logger(CatalogSyncTask.name);
@@ -55,16 +70,8 @@ export class CatalogSyncTask {
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async sync(): Promise<void> {
-    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC))) {
-      return;
-    }
     try {
-      const upstream = await this.openRouter.fetchModels();
-      const findings = [
-        ...findOpenRouterDrift(this.vendoredOutputCost, upstream),
-        ...(await this.liteLlmFindings()),
-      ];
-      await this.persist(upstream, findings);
+      await this.run();
     } catch (error) {
       this.logger.error({
         event: 'ai.catalog.sync_failed',
@@ -72,6 +79,21 @@ export class CatalogSyncTask {
         stack: error instanceof Error ? error.stack : undefined,
       });
     }
+  }
+
+  /**
+   * Runs one pass and resolves what it did. Rejects when the upstream fetch fails — the cron swallows that, an on-demand caller surfaces it.
+   */
+  async run(): Promise<CatalogSyncResultDto> {
+    if (!(await this.flags.isEnabled(FEATURE_FLAG_KEYS.AI_CATALOG_SYNC))) {
+      return skipped('flag_disabled');
+    }
+    const upstream = await this.openRouter.fetchModels();
+    const findings = [
+      ...findOpenRouterDrift(this.vendoredOutputCost, upstream),
+      ...(await this.liteLlmFindings()),
+    ];
+    return this.persist(upstream, findings);
   }
 
   private readonly vendoredOutputCost = (modelId: string): number | undefined =>
@@ -95,8 +117,8 @@ export class CatalogSyncTask {
   private async persist(
     upstream: UpstreamModel[],
     findings: DriftFinding[]
-  ): Promise<void> {
-    await this.runLocked(async () => {
+  ): Promise<CatalogSyncResultDto> {
+    const written = await this.runLocked(async () => {
       const failures: WriteFailure[] = [];
       let candidates = 0;
       let alerts = 0;
@@ -142,17 +164,29 @@ export class CatalogSyncTask {
           failures: failures.slice(0, FAILURE_LOG_SAMPLE_SIZE),
         });
       }
+      return { candidates, alerts, failures: failures.length };
     });
+
+    if (!written) {
+      return skipped('locked');
+    }
+    return {
+      status: 'completed',
+      skippedReason: null,
+      upstream: upstream.length,
+      ...written,
+    };
   }
 
   /**
-   * Runs `work` under a transaction-scoped advisory lock, which Postgres drops
-   * on commit — a crashed run can never strand it the way a session lock taken
-   * through a pool can. The writes inside `work` go through the pooled
-   * repository, so the transaction bounds the lock, not their atomicity.
+   * Resolves what `work` returned, or `null` when another run holds the lock.
+   * The lock is transaction-scoped, which Postgres drops on commit — a crashed
+   * run can never strand it the way a session lock taken through a pool can.
+   * The writes inside `work` go through the pooled repository, so the
+   * transaction bounds the lock, not their atomicity.
    */
-  private async runLocked(work: () => Promise<void>): Promise<void> {
-    await this.db.transaction(async (tx) => {
+  private async runLocked<T>(work: () => Promise<T>): Promise<T | null> {
+    return this.db.transaction(async (tx) => {
       const rows = await tx.execute<{ locked: boolean }>(
         sql`SELECT pg_try_advisory_xact_lock(${ADVISORY_LOCK_KEY}) AS locked`
       );
@@ -161,9 +195,9 @@ export class CatalogSyncTask {
           event: 'ai.catalog.sync_skipped',
           reason: 'another run holds the lock',
         });
-        return;
+        return null;
       }
-      await work();
+      return work();
     });
   }
 }
