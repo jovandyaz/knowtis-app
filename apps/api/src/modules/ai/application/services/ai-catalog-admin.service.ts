@@ -95,14 +95,17 @@ export class AiCatalogAdminService {
     if (!model) {
       return null;
     }
-    await this.audit.record({
-      actorId,
-      action: 'ai_catalog.promoted',
-      targetType: CATALOG_MODEL_TARGET,
-      targetId: id,
-      after: { status: model.status, tier: model.tier },
-    });
-    await this.refreshPromoted();
+    try {
+      await this.audit.record({
+        actorId,
+        action: 'ai_catalog.promoted',
+        targetType: CATALOG_MODEL_TARGET,
+        targetId: id,
+        after: { status: model.status, tier: model.tier },
+      });
+    } finally {
+      await this.refreshPromoted();
+    }
     return toCatalogModelDto(model);
   }
 
@@ -116,14 +119,17 @@ export class AiCatalogAdminService {
     if (!model) {
       return null;
     }
-    await this.audit.record({
-      actorId,
-      action: 'ai_catalog.retired',
-      targetType: CATALOG_MODEL_TARGET,
-      targetId: id,
-      after: { status: model.status },
-    });
-    await this.refreshPromoted();
+    try {
+      await this.audit.record({
+        actorId,
+        action: 'ai_catalog.retired',
+        targetType: CATALOG_MODEL_TARGET,
+        targetId: id,
+        after: { status: model.status },
+      });
+    } finally {
+      await this.refreshPromoted();
+    }
     return toCatalogModelDto(model);
   }
 
@@ -137,14 +143,17 @@ export class AiCatalogAdminService {
     if (!model) {
       return null;
     }
-    await this.audit.record({
-      actorId,
-      action: 'ai_catalog.copy_updated',
-      targetType: CATALOG_MODEL_TARGET,
-      targetId: id,
-      after: { label: model.label, description: model.description },
-    });
-    await this.refreshPromoted();
+    try {
+      await this.audit.record({
+        actorId,
+        action: 'ai_catalog.copy_updated',
+        targetType: CATALOG_MODEL_TARGET,
+        targetId: id,
+        after: { label: model.label, description: model.description },
+      });
+    } finally {
+      await this.refreshPromoted();
+    }
     return toCatalogModelDto(model);
   }
 
@@ -161,7 +170,7 @@ export class AiCatalogAdminService {
     });
   }
 
-  /** The cache also refreshes on an interval, so a failure here only costs freshness. */
+  /** Runs even when the audit write rejected: the status change is already persisted, so a stale picker would outlive the error. The cache also refreshes on an interval, so a failure here only costs freshness. */
   private async refreshPromoted(): Promise<void> {
     try {
       await this.promotedModels.refresh();

@@ -152,6 +152,15 @@ describe('AiCatalogAdminService', () => {
       expect(promotedCache.refresh).not.toHaveBeenCalled();
       expect(audit.record).not.toHaveBeenCalled();
     });
+
+    it('refreshes the picker and surfaces the failure when the audit write fails', async () => {
+      audit.record.mockRejectedValue(new Error('audit down'));
+
+      await expect(service.promote(MODEL_ID, 'fast', ACTOR_ID)).rejects.toThrow(
+        'audit down'
+      );
+      expect(promotedCache.refresh).toHaveBeenCalled();
+    });
   });
 
   describe('retire', () => {
@@ -180,6 +189,15 @@ describe('AiCatalogAdminService', () => {
 
       expect(await service.retire(MODEL_ID, ACTOR_ID)).toBeNull();
       expect(promotedCache.refresh).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the picker and surfaces the failure when the audit write fails', async () => {
+      audit.record.mockRejectedValue(new Error('audit down'));
+
+      await expect(service.retire(MODEL_ID, ACTOR_ID)).rejects.toThrow(
+        'audit down'
+      );
+      expect(promotedCache.refresh).toHaveBeenCalled();
     });
   });
 
@@ -210,6 +228,15 @@ describe('AiCatalogAdminService', () => {
 
       expect(await service.updateCopy(MODEL_ID, {}, ACTOR_ID)).toBeNull();
       expect(audit.record).not.toHaveBeenCalled();
+    });
+
+    it('refreshes the picker and surfaces the failure when the audit write fails', async () => {
+      audit.record.mockRejectedValue(new Error('audit down'));
+
+      await expect(
+        service.updateCopy(MODEL_ID, { label: 'Edited' }, ACTOR_ID)
+      ).rejects.toThrow('audit down');
+      expect(promotedCache.refresh).toHaveBeenCalled();
     });
   });
 

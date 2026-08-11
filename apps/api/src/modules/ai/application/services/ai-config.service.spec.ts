@@ -246,6 +246,31 @@ describe('AIConfigService', () => {
     );
   });
 
+  it('should report a stored model the catalog dropped as the code default the runtime serves', async () => {
+    mockRepo.getAllRows.mockResolvedValue([
+      {
+        key: 'ai_default_model',
+        value: UNKNOWN_ID,
+        description: 'promoted then retired',
+        updatedAt: new Date('2026-07-15T00:00:00Z'),
+      },
+    ]);
+    mockCatalog.isSupported.mockImplementation(
+      (id: string) => id !== UNKNOWN_ID
+    );
+
+    const entries = await service.getEffectiveConfig();
+
+    expect(entries.find((e) => e.key === 'ai_default_model')).toEqual({
+      key: 'ai_default_model',
+      value: AI_SETTING_DEFAULTS.ai_default_model,
+      kind: 'model',
+      source: 'default',
+      description: null,
+      updatedAt: null,
+    });
+  });
+
   it('should resolve effective config from DB rows and code defaults', async () => {
     const updatedAt = new Date('2026-07-15T00:00:00Z');
     mockRepo.getAllRows.mockResolvedValue([
