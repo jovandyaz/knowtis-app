@@ -49,11 +49,18 @@ export interface CatalogAlertDto {
   resolvedAt: string | null;
 }
 
-/** Everything the catalog admin screen renders: the promotion queue, what is live, and the alerts still open. */
+/** What the catalog admin screen renders outside the candidate table: what is live, and the alerts still open. */
 export interface CatalogOverviewDto {
-  candidates: CatalogModelDto[];
   promoted: CatalogModelDto[];
   alerts: CatalogAlertDto[];
+}
+
+/** One ranked page of the promotion queue. `total` counts every row matching the search, not just this page. */
+export interface PaginatedCandidatesDto {
+  items: CatalogModelDto[];
+  total: number;
+  page: number;
+  limit: number;
 }
 
 export const CATALOG_SYNC_STATUSES = ['completed', 'skipped'] as const;

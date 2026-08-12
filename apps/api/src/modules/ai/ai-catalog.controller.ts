@@ -12,6 +12,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,7 @@ import type {
   CatalogModelDto,
   CatalogOverviewDto,
   CatalogSyncResultDto,
+  PaginatedCandidatesDto,
 } from '@knowtis/shared-types';
 
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
@@ -33,12 +35,16 @@ import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
+import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
 import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
 import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 const AI_DISABLED = 'AI feature is disabled';
 const UNKNOWN_MODEL = 'Unknown model id';
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 25;
 
 const READ_THROTTLE = { default: { limit: 30, ttl: 60000 } };
 const MUTATION_THROTTLE = { default: { limit: 10, ttl: 60000 } };
@@ -55,9 +61,9 @@ export class AiCatalogController {
   constructor(private readonly catalog: AiCatalogAdminService) {}
 
   @ApiOperation({
-    summary: 'List the model catalog',
+    summary: 'List live promoted models and open alerts',
     description:
-      'Promotion queue, live promoted models and the alerts still open.',
+      'Live promoted models and the alerts still open. The promotion queue is served by GET /ai/catalog/candidates.',
   })
   @ApiResponse({ status: 200, description: 'Catalog overview' })
   @ApiAuthErrors(AI_DISABLED)
@@ -65,6 +71,25 @@ export class AiCatalogController {
   @Get()
   list(): Promise<CatalogOverviewDto> {
     return this.catalog.overview();
+  }
+
+  @ApiOperation({
+    summary: 'List the promotion queue',
+    description:
+      'One ranked page of candidates: scored models first, unscored last. `search` matches label or model id.',
+  })
+  @ApiResponse({ status: 200, description: 'A page of candidates' })
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(READ_THROTTLE)
+  @Get('candidates')
+  listCandidates(
+    @Query() query: PaginatedCandidatesQueryDto
+  ): Promise<PaginatedCandidatesDto> {
+    return this.catalog.listCandidates({
+      page: query.page ?? DEFAULT_PAGE,
+      limit: query.limit ?? DEFAULT_LIMIT,
+      search: query.search,
+    });
   }
 
   @ApiOperation({

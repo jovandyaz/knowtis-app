@@ -101,7 +101,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
   async listCandidates(params: {
     page: number;
     limit: number;
-    search?: string;
+    search?: string | undefined;
   }): Promise<{ items: CatalogModel[]; total: number }> {
     const term = params.search?.trim();
     const predicate = term

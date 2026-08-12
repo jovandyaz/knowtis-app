@@ -8,6 +8,7 @@ import type {
   CatalogOverviewDto,
   CatalogSyncResultDto,
   ModelTier,
+  PaginatedCandidatesDto,
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
 
@@ -21,7 +22,6 @@ import {
 import { CatalogSyncTask } from '../../infrastructure/catalog/catalog-sync.task';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 
-const CANDIDATE_STATUS = 'candidate' as const satisfies CatalogModelStatus;
 const RETIRED_STATUS = 'retired' as const satisfies CatalogModelStatus;
 const OPEN_ALERTS_ONLY = true;
 
@@ -96,15 +96,27 @@ export class AiCatalogAdminService {
   }
 
   async overview(): Promise<CatalogOverviewDto> {
-    const [candidates, promoted, alerts] = await Promise.all([
-      this.repository.listByStatus(CANDIDATE_STATUS),
+    const [promoted, alerts] = await Promise.all([
       this.repository.listByStatus(PROMOTED_STATUS),
       this.repository.listAlerts(OPEN_ALERTS_ONLY),
     ]);
     return {
-      candidates: candidates.map(toCatalogModelDto),
       promoted: promoted.map(toCatalogModelDto),
       alerts: alerts.map(toCatalogAlertDto),
+    };
+  }
+
+  async listCandidates(params: {
+    page: number;
+    limit: number;
+    search?: string | undefined;
+  }): Promise<PaginatedCandidatesDto> {
+    const { items, total } = await this.repository.listCandidates(params);
+    return {
+      items: items.map(toCatalogModelDto),
+      total,
+      page: params.page,
+      limit: params.limit,
     };
   }
 

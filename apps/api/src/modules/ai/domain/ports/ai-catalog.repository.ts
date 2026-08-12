@@ -55,6 +55,6 @@ export interface AiCatalogRepository {
   listCandidates(params: {
     page: number;
     limit: number;
-    search?: string;
+    search?: string | undefined;
   }): Promise<{ items: CatalogModel[]; total: number }>;
 }
