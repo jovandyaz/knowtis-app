@@ -128,6 +128,8 @@ describe('AiCatalogAdminService', () => {
   });
 
   describe('listCandidates', () => {
+    const SEARCH_TERM = 'kimi';
+
     it('pages candidates through the repository and echoes the page back', async () => {
       repository.listCandidates.mockResolvedValue({
         items: [createCatalogModel({ id: 'openrouter:vendor/one' })],
@@ -143,6 +145,16 @@ describe('AiCatalogAdminService', () => {
       });
       expect(result).toMatchObject({ total: 97, page: 3, limit: 25 });
       expect(result.items).toHaveLength(1);
+    });
+
+    it('hands the search term to the repository instead of dropping it', async () => {
+      await service.listCandidates({ page: 1, limit: 25, search: SEARCH_TERM });
+
+      expect(repository.listCandidates).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: SEARCH_TERM,
+      });
     });
   });
 
