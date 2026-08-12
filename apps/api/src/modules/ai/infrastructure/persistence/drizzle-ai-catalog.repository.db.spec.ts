@@ -457,6 +457,10 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       WILDCARD,
       WILDCARD_DECOY,
     ];
+    /** Scopes every assertion to this block's fixtures: the table is shared, so an unscoped read can only assert lower bounds. */
+    const PAGING_SEARCH = 'paging';
+    const PAGE_SIZE = 2;
+    const PAGE_COUNT = Math.ceil(PAGING_MODEL_IDS.length / PAGE_SIZE);
 
     beforeAll(async () => {
       await repo.upsertCandidate(
@@ -492,7 +496,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       const { items } = await repo.listCandidates({
         page: 1,
         limit: 100,
-        search: 'paging',
+        search: PAGING_SEARCH,
       });
       const ours = items.map((m) => m.id);
 
@@ -502,28 +506,41 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     });
 
     it('reports the full total alongside one page of items', async () => {
-      const page = await repo.listCandidates({ page: 1, limit: 2 });
+      const page = await repo.listCandidates({
+        page: 1,
+        limit: PAGE_SIZE,
+        search: PAGING_SEARCH,
+      });
 
-      expect(page.items).toHaveLength(2);
-      expect(page.total).toBeGreaterThanOrEqual(4);
+      expect(page.items.map((m) => m.id)).toEqual([SCORED_HIGH, WILDCARD]);
+      expect(page.total).toBe(PAGING_MODEL_IDS.length);
     });
 
     it('never repeats or skips a row across pages', async () => {
-      const first = await repo.listCandidates({ page: 1, limit: 2 });
-      const second = await repo.listCandidates({ page: 2, limit: 2 });
-      const ids = [...first.items, ...second.items].map((m) => m.id);
+      const pages = await Promise.all(
+        Array.from({ length: PAGE_COUNT }, (_, index) =>
+          repo.listCandidates({
+            page: index + 1,
+            limit: PAGE_SIZE,
+            search: PAGING_SEARCH,
+          })
+        )
+      );
+      const ids = pages.flatMap((page) => page.items.map((m) => m.id));
 
-      expect(new Set(ids).size).toBe(ids.length);
+      expect(ids).toHaveLength(PAGING_MODEL_IDS.length);
+      expect([...ids].sort()).toEqual([...PAGING_MODEL_IDS].sort());
     });
 
     it('returns an empty page past the end without lying about the total', async () => {
       const { items, total } = await repo.listCandidates({
         page: 10_000,
         limit: 25,
+        search: PAGING_SEARCH,
       });
 
       expect(items).toEqual([]);
-      expect(total).toBeGreaterThanOrEqual(4);
+      expect(total).toBe(PAGING_MODEL_IDS.length);
     });
 
     it('matches a search term against label and id', async () => {
