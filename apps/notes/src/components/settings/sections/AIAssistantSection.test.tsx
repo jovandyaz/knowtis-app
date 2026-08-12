@@ -12,8 +12,17 @@ const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 const featureFlag = vi.fn<(key: string) => boolean>();
+const sessionModel = vi.fn<() => string | null>();
+const setSessionModel = vi.fn();
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
+}));
+vi.mock('@/stores/agent.store', () => ({
+  useAgentStore: (select: (s: unknown) => unknown) =>
+    select({
+      selectedModel: sessionModel(),
+      setSelectedModel: setSessionModel,
+    }),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: (key: string) => featureFlag(key),
@@ -98,6 +107,7 @@ describe('AIAssistantSection', () => {
       preferredModel: null,
       preferredIntent: null,
     });
+    sessionModel.mockReturnValue(null);
   });
 
   it('offers only the three intent chips to a user without BYOK models', () => {
@@ -156,6 +166,26 @@ describe('AIAssistantSection', () => {
     }
   });
 
+  it('deactivates every chip while the composer runs a session override', () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    for (const chip of screen.getAllByRole('radio')) {
+      expect(chip).toHaveAttribute('data-state', 'off');
+    }
+  });
+
+  it('names the composer session override on the advanced trigger', () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('button', { name: /Byok One/ })
+    ).toBeInTheDocument();
+  });
+
   it('keeps the intent chips active over a legacy non-advanced preferredModel', () => {
     modelsData.mockReturnValue(withByokModel);
     prefsData.mockReturnValue({
@@ -167,11 +197,6 @@ describe('AIAssistantSection', () => {
     expect(
       screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
     ).toHaveAttribute('data-state', 'on');
-    expect(
-      screen.queryByRole('button', {
-        name: 'aiAssistant.advanced.clearOverride',
-      })
-    ).not.toBeInTheDocument();
   });
 
   it('keeps the chips deselected for a stored preference while the list is unresolved', () => {
@@ -229,7 +254,7 @@ describe('AIAssistantSection', () => {
     );
 
     expect(
-      screen.getByRole('menuitem', { name: /Byok One/ })
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
     ).toBeInTheDocument();
     expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
@@ -247,7 +272,43 @@ describe('AIAssistantSection', () => {
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
   });
 
-  it('clears the override from the advanced footer without touching the intent', async () => {
+  it('clears the composer session override when an intent chip is picked', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    prefsData.mockReturnValue({
+      preferredModel: null,
+      preferredIntent: 'powerful',
+    });
+    render(<AIAssistantSection />);
+
+    const chip = screen.getByRole('radio', {
+      name: 'aiAssistant.intent.powerful',
+    });
+    expect(chip).toHaveAttribute('data-state', 'off');
+    await userEvent.click(chip);
+
+    expect(setSessionModel).toHaveBeenCalledWith(null);
+    expect(update).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'powerful',
+    });
+  });
+
+  it('clears the composer session override when an advanced model is stored', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
+    );
+
+    expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
+    expect(setSessionModel).toHaveBeenCalledWith(null);
+  });
+
+  it('clears a stored model override when an intent chip is picked', async () => {
     modelsData.mockReturnValue(withByokModel);
     prefsData.mockReturnValue({
       preferredModel: 'o:byok',
@@ -255,13 +316,13 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
-    await userEvent.click(
-      screen.getByRole('button', {
-        name: 'aiAssistant.advanced.clearOverride',
-      })
-    );
+    const chip = screen.getByRole('radio', { name: 'aiAssistant.intent.fast' });
+    expect(chip).toBeEnabled();
+    await userEvent.click(chip);
 
-    expect(update).toHaveBeenCalledWith({ preferredModel: null });
+    expect(update).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'fast',
+    });
   });
 });

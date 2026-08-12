@@ -32,22 +32,37 @@ const DropdownMenuContent = forwardRef<
 ));
 DropdownMenuContent.displayName = 'DropdownMenuContent';
 
+const MENU_ITEM_CLASSES = [
+  'text-sm text-(--foreground) rounded-sm px-2 py-1.5 cursor-pointer outline-none',
+  'data-[highlighted]:bg-(--muted) focus:bg-(--muted)',
+  'flex items-center gap-2',
+];
+
 const DropdownMenuItem = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.Item>,
   ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
-    className={cn(
-      'text-sm text-(--foreground) rounded-sm px-2 py-1.5 cursor-pointer outline-none',
-      'data-[highlighted]:bg-(--muted) focus:bg-(--muted)',
-      'flex items-center gap-2',
-      className
-    )}
+    className={cn(MENU_ITEM_CLASSES, className)}
     {...props}
   />
 ));
 DropdownMenuItem.displayName = 'DropdownMenuItem';
+
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
+
+const DropdownMenuRadioItem = forwardRef<
+  ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(MENU_ITEM_CLASSES, className)}
+    {...props}
+  />
+));
+DropdownMenuRadioItem.displayName = 'DropdownMenuRadioItem';
 
 const DropdownMenuSeparator = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.Separator>,
@@ -127,6 +142,8 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuLabel,
   DropdownMenuSwitchItem,

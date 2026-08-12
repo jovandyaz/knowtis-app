@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Button, ModelSelect, SegmentedControl } from '@knowtis/design-system';
+import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
   MODEL_TIERS,
   type ModelIntent,
@@ -20,14 +20,12 @@ export interface IntentModelPickerProps {
   overrideModel: string | null;
   onSelectIntent: (value: ModelIntent) => void;
   onSelectModel: (id: string) => void;
-  onClearOverride: () => void;
-  triggerClassName?: string;
 }
 
 /**
- * Intent chips plus the Advanced override dropdown, driven entirely by props.
- * An override deselects and disables every chip, since the chosen model
- * outranks the intent — clearing the override is the way back.
+ * Settings' full picker: the intent chips next to the model dropdown, both
+ * always usable. A stored model deselects every chip because it outranks the
+ * intent; picking a chip is what clears it.
  */
 export function IntentModelPicker({
   models,
@@ -37,12 +35,9 @@ export function IntentModelPicker({
   overrideModel,
   onSelectIntent,
   onSelectModel,
-  onClearOverride,
-  triggerClassName = '',
 }: IntentModelPickerProps) {
   const { t } = useTranslation('common');
   const advancedOptions = advancedModelOptions(models);
-  const showAdvanced = advancedOptions.length > 0 || isError;
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -51,11 +46,8 @@ export function IntentModelPicker({
         options={intentChipOptions(t)}
         value={overrideModel ? null : intent}
         onValueChange={onSelectIntent}
-        // Only inert while the dropdown is there to carry "clear override";
-        // with no dropdown a chip is the caller's one way out of the override.
-        disabled={!!overrideModel && showAdvanced}
       />
-      {showAdvanced ? (
+      {advancedOptions.length > 0 || isError ? (
         <ModelSelect
           models={advancedOptions}
           value={overrideModel}
@@ -65,7 +57,6 @@ export function IntentModelPicker({
           onRetry={onRetry}
           errorLabel={t('aiAssistant.loadError')}
           retryLabel={t('aiAssistant.retry')}
-          triggerClassName={triggerClassName}
           tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
           renderDescription={(m) =>
             m.descriptionKey
@@ -74,19 +65,6 @@ export function IntentModelPicker({
           }
           triggerLabel={t('aiAssistant.advanced.trigger')}
           billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
-          footer={
-            overrideModel ? (
-              <Button
-                type="button"
-                variant="link"
-                size="sm"
-                className="h-auto p-0 text-left text-xs font-normal"
-                onClick={onClearOverride}
-              >
-                {t('aiAssistant.advanced.clearOverride')}
-              </Button>
-            ) : undefined
-          }
         />
       ) : null}
     </div>

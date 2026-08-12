@@ -9,6 +9,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './DropdownMenu';
@@ -24,6 +26,17 @@ export interface ModelSelectOption {
   billedToUser?: boolean;
 }
 
+export interface ModelSelectSectionOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface ModelSelectSection {
+  label: string;
+  options: ReadonlyArray<ModelSelectSectionOption>;
+}
+
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
 
 const COST_GLYPH = '$';
@@ -31,6 +44,7 @@ const MIN_COST_LEVEL = 1;
 const MAX_COST_LEVEL = 3;
 const NO_COST_LEVEL = 0;
 const FALLBACK_LABEL = '—';
+const OPTION_ROW_CLASSES = 'flex-col items-start gap-0.5';
 
 function costGlyphs(level: number): string {
   const clamped = Math.min(
@@ -59,6 +73,16 @@ export interface ModelSelectProps {
   status?: ModelSelectStatus;
   onRetry?: () => void;
   renderDescription?: (m: ModelSelectOption) => string;
+  /**
+   * Options listed above the tier groups. Rendered whatever `status` is — they are constants, not loaded data.
+   * Option ids must be unique across the section and `models`; a collision renders two checked rows.
+   */
+  leadingSection?: ModelSelectSection;
+  /**
+   * Renders the rows as one-shot actions instead of a selection set: plain menu
+   * items, no checked state. Pass `value` as null — an action list selects nothing.
+   */
+  rowsAreActions?: boolean;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
   loadingLabel?: string;
@@ -66,10 +90,94 @@ export interface ModelSelectProps {
   emptyLabel?: string;
   retryLabel?: string;
   billedBadgeLabel?: string;
-  footer?: ReactNode;
   triggerClassName?: string;
   triggerVariant?: 'ghost' | 'outline';
   disabled?: boolean;
+  'aria-label'?: string;
+}
+
+function OptionRow({
+  label,
+  description,
+  selected,
+  badge,
+}: {
+  label: string;
+  description?: string | undefined;
+  selected: boolean;
+  badge?: ReactNode | undefined;
+}) {
+  return (
+    <>
+      <div className="flex w-full items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 font-medium">
+          <span className="truncate">{label}</span>
+          {badge}
+        </span>
+        {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+      </div>
+      {description && (
+        <span
+          className="w-full min-w-0 line-clamp-1 text-xs text-(--muted-foreground)"
+          title={description}
+        >
+          {description}
+        </span>
+      )}
+    </>
+  );
+}
+
+function OptionGroup({
+  asActions,
+  value,
+  onSelect,
+  children,
+}: {
+  asActions: boolean;
+  value: string | null;
+  onSelect: (id: string) => void;
+  children: ReactNode;
+}) {
+  if (asActions) {
+    return <div>{children}</div>;
+  }
+  return (
+    <DropdownMenuRadioGroup
+      {...(value !== null && { value })}
+      onValueChange={onSelect}
+    >
+      {children}
+    </DropdownMenuRadioGroup>
+  );
+}
+
+function OptionItem({
+  id,
+  asAction,
+  onSelect,
+  children,
+}: {
+  id: string;
+  asAction: boolean;
+  onSelect: (id: string) => void;
+  children: ReactNode;
+}) {
+  if (asAction) {
+    return (
+      <DropdownMenuItem
+        onSelect={() => onSelect(id)}
+        className={OPTION_ROW_CLASSES}
+      >
+        {children}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <DropdownMenuRadioItem value={id} className={OPTION_ROW_CLASSES}>
+      {children}
+    </DropdownMenuRadioItem>
+  );
 }
 
 export function ModelSelect({
@@ -80,6 +188,8 @@ export function ModelSelect({
   status = 'ready',
   onRetry,
   renderDescription,
+  leadingSection,
+  rowsAreActions = false,
   tierLabel,
   triggerLabel,
   loadingLabel,
@@ -87,17 +197,26 @@ export function ModelSelect({
   emptyLabel,
   retryLabel,
   billedBadgeLabel,
-  footer,
   triggerClassName,
   triggerVariant = 'ghost',
   disabled = false,
+  'aria-label': ariaLabel,
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const isEmpty = status === 'ready' && models.length === 0;
-  const triggerDisabled = disabled || isLoading || isEmpty;
+  const visibleLeadingSection =
+    leadingSection && leadingSection.options.length > 0
+      ? leadingSection
+      : undefined;
+  const hasLeadingSection = !!visibleLeadingSection;
+  const isEmpty =
+    status === 'ready' && models.length === 0 && !hasLeadingSection;
+  const triggerDisabled =
+    disabled || isEmpty || (isLoading && !hasLeadingSection);
 
-  const active = models.find((m) => m.id === value);
+  const active =
+    models.find((m) => m.id === value) ??
+    visibleLeadingSection?.options.find((o) => o.id === value);
   const ordered = tierOrder ?? [];
   const known = new Set<string>(ordered);
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
@@ -110,7 +229,12 @@ export function ModelSelect({
     }))
     .filter((g) => g.items.length > 0);
 
+  const selectedId = rowsAreActions ? null : value;
+
   const triggerText = ((): string => {
+    if (active) {
+      return active.label;
+    }
     if (isLoading) {
       return loadingLabel ?? FALLBACK_LABEL;
     }
@@ -120,7 +244,7 @@ export function ModelSelect({
     if (isEmpty) {
       return emptyLabel ?? FALLBACK_LABEL;
     }
-    return active?.label ?? triggerLabel ?? FALLBACK_LABEL;
+    return triggerLabel ?? FALLBACK_LABEL;
   })();
 
   return (
@@ -132,6 +256,7 @@ export function ModelSelect({
           size="sm"
           className={cn('gap-1.5', triggerClassName)}
           disabled={triggerDisabled}
+          aria-label={ariaLabel ? `${ariaLabel}: ${triggerText}` : undefined}
         >
           {isLoading && (
             <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
@@ -141,8 +266,34 @@ export function ModelSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
+        {visibleLeadingSection && (
+          <OptionGroup
+            asActions={rowsAreActions}
+            value={value}
+            onSelect={onSelect}
+          >
+            <DropdownMenuLabel className="text-xs uppercase tracking-wide">
+              {visibleLeadingSection.label}
+            </DropdownMenuLabel>
+            {visibleLeadingSection.options.map((option) => (
+              <OptionItem
+                key={option.id}
+                id={option.id}
+                asAction={rowsAreActions}
+                onSelect={onSelect}
+              >
+                <OptionRow
+                  label={option.label}
+                  description={option.description}
+                  selected={option.id === selectedId}
+                />
+              </OptionItem>
+            ))}
+          </OptionGroup>
+        )}
         {isError ? (
           <>
+            {hasLeadingSection && <DropdownMenuSeparator />}
             <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
               {errorLabel ?? FALLBACK_LABEL}
             </div>
@@ -157,8 +308,13 @@ export function ModelSelect({
             {groups.map((g, i) => {
               const level = tierCostLevel(g.items);
               return (
-                <div key={g.tier}>
-                  {i > 0 && <DropdownMenuSeparator />}
+                <OptionGroup
+                  key={g.tier}
+                  asActions={rowsAreActions}
+                  value={value}
+                  onSelect={onSelect}
+                >
+                  {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
                     <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
                     {level > NO_COST_LEVEL && (
@@ -170,47 +326,31 @@ export function ModelSelect({
                   {g.items.map((m) => {
                     const description = renderDescription?.(m);
                     return (
-                      <DropdownMenuItem
+                      <OptionItem
                         key={m.id}
-                        onSelect={() => onSelect(m.id)}
-                        className="flex-col items-start gap-0.5"
+                        id={m.id}
+                        asAction={rowsAreActions}
+                        onSelect={onSelect}
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                            <span className="truncate">{m.label}</span>
-                            {m.billedToUser && billedBadgeLabel && (
+                        <OptionRow
+                          label={m.label}
+                          description={description}
+                          selected={m.id === selectedId}
+                          badge={
+                            m.billedToUser && billedBadgeLabel ? (
                               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
                                 <KeyRound className="h-2.5 w-2.5" />
                                 {billedBadgeLabel}
                               </span>
-                            )}
-                          </span>
-                          {m.id === value && (
-                            <Check className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                        </div>
-                        {description && (
-                          <span
-                            className="w-full min-w-0 line-clamp-1 text-xs text-(--muted-foreground)"
-                            title={description}
-                          >
-                            {description}
-                          </span>
-                        )}
-                      </DropdownMenuItem>
+                            ) : undefined
+                          }
+                        />
+                      </OptionItem>
                     );
                   })}
-                </div>
+                </OptionGroup>
               );
             })}
-          </>
-        )}
-        {footer && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
-              {footer}
-            </div>
           </>
         )}
       </DropdownMenuContent>

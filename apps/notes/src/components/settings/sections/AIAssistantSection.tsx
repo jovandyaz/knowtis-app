@@ -5,6 +5,7 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
+import { useAgentStore } from '@/stores/agent.store';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { DEFAULT_MODEL_INTENT, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
@@ -19,6 +20,8 @@ export function AIAssistantSection() {
   const { data: models, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
+  const sessionModel = useAgentStore((s) => s.selectedModel);
+  const setSessionModel = useAgentStore((s) => s.setSelectedModel);
   const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
 
   return (
@@ -33,12 +36,19 @@ export function AIAssistantSection() {
           isError={isError}
           onRetry={() => void refetch()}
           intent={prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT}
-          overrideModel={advancedOverride(prefs?.preferredModel, models)}
-          onSelectIntent={(value) =>
-            update({ preferredModel: null, preferredIntent: value })
+          // The composer's session model outranks account preferences, so it
+          // has to be both named here and dropped by any choice made here.
+          overrideModel={
+            sessionModel ?? advancedOverride(prefs?.preferredModel, models)
           }
-          onSelectModel={(id) => update({ preferredModel: id })}
-          onClearOverride={() => update({ preferredModel: null })}
+          onSelectIntent={(value) => {
+            setSessionModel(null);
+            update({ preferredModel: null, preferredIntent: value });
+          }}
+          onSelectModel={(id) => {
+            setSessionModel(null);
+            update({ preferredModel: id });
+          }}
         />
       </section>
 

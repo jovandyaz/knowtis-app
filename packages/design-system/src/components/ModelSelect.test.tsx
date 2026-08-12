@@ -55,10 +55,10 @@ describe('ModelSelect', () => {
     // An empty description span is invisible to textContent but still consumes
     // the item's row gap, so the assertion has to be structural.
     expect(
-      screen.getByRole('menuitem', { name: /Fast One/ }).children
+      screen.getByRole('menuitemradio', { name: /Fast One/ }).children
     ).toHaveLength(2);
     expect(
-      screen.getByRole('menuitem', { name: /Balanced One/ }).children
+      screen.getByRole('menuitemradio', { name: /Balanced One/ }).children
     ).toHaveLength(1);
   });
 
@@ -153,34 +153,6 @@ describe('ModelSelect', () => {
     expect(screen.queryByText('Your key')).toBeNull();
   });
 
-  it('renders the footer inside the popover when provided', async () => {
-    render(
-      <ModelSelect
-        models={[...models]}
-        value="a:fast"
-        onSelect={vi.fn()}
-        footer="Account default: Balanced One"
-      />
-    );
-    await userEvent.click(screen.getByRole('button'));
-    expect(screen.getByText('Account default: Balanced One')).toBeTruthy();
-  });
-
-  it('keeps the footer reachable in the error state', async () => {
-    render(
-      <ModelSelect
-        models={[]}
-        value={null}
-        onSelect={vi.fn()}
-        status="error"
-        errorLabel="Could not load"
-        footer="Clear override"
-      />
-    );
-    await userEvent.click(screen.getByRole('button'));
-    expect(screen.getByText('Clear override')).toBeTruthy();
-  });
-
   it('disables the trigger and shows the loading label while models load', () => {
     render(
       <ModelSelect
@@ -243,5 +215,276 @@ describe('ModelSelect', () => {
     expect(screen.getByRole('button', { name: /Model One/ })).toHaveClass(
       'composer-trigger'
     );
+  });
+
+  const styleSection = {
+    label: 'STYLE',
+    options: [
+      { id: 'fast', label: 'Quick', description: 'Instant answers' },
+      { id: 'balanced', label: 'Even', description: 'The sweet spot' },
+    ],
+  };
+
+  it('lists the leading section above the tier groups', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        tierLabel={(tier) => tier.toUpperCase()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const headings = screen
+      .getAllByText(/^(STYLE|FAST|BALANCED)$/)
+      .map((el) => el.textContent);
+    expect(headings).toEqual(['STYLE', 'FAST', 'BALANCED']);
+  });
+
+  it('emits the leading option id and labels the trigger with it', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={onSelect}
+        leadingSection={styleSection}
+      />
+    );
+    expect(screen.getByRole('button')).toHaveTextContent('Even');
+
+    await userEvent.click(screen.getByRole('button'));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /Quick/ }));
+    expect(onSelect).toHaveBeenCalledWith('fast');
+  });
+
+  it('keeps the leading options listed when the model list is in error', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(
+      screen.getByRole('menuitemradio', { name: /Quick/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Could not load')).toBeTruthy();
+  });
+
+  it('keeps the trigger usable while models load behind a leading section', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="loading"
+        loadingLabel="Loading models…"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveTextContent('Even');
+  });
+
+  it('keeps the trigger usable when only the leading section has options', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    expect(screen.getByRole('button')).toBeEnabled();
+  });
+
+  it('keeps the trigger on the resolved model when a refetch fails without a leading section', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button')).toHaveTextContent('Fast One');
+
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Could not load')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('disables the trigger when the leading section has no options and models are empty', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        leadingSection={{ label: 'STYLE', options: [] }}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveTextContent('No models available');
+  });
+
+  it('composes the trigger accessible name from the purpose and the current value', () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        aria-label="Assistant style"
+      />
+    );
+    expect(
+      screen.getByRole('button', { name: 'Assistant style: Fast One' })
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the trigger unlabelled when no aria-label purpose is supplied', () => {
+    render(
+      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
+    );
+    expect(
+      screen.getByRole('button', { name: 'Fast One' })
+    ).toBeInTheDocument();
+  });
+
+  it('exposes the active model row as the checked one and marks it with a glyph', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const active = screen.getByRole('menuitemradio', { name: /Fast One/ });
+    const inactive = screen.getByRole('menuitemradio', {
+      name: /Balanced One/,
+    });
+    expect(active).toHaveAttribute('aria-checked', 'true');
+    expect(inactive).toHaveAttribute('aria-checked', 'false');
+    // The check glyph carries no accessible text, so it can only be asserted structurally.
+    expect(active.querySelector('svg')).toBeInTheDocument();
+    expect(inactive.querySelector('svg')).toBeNull();
+  });
+
+  it('exposes the active leading option as the checked one and marks it with a glyph', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const active = screen.getByRole('menuitemradio', { name: /Even/ });
+    const inactive = screen.getByRole('menuitemradio', { name: /Quick/ });
+    expect(active).toHaveAttribute('aria-checked', 'true');
+    expect(inactive).toHaveAttribute('aria-checked', 'false');
+    expect(active.querySelector('svg')).toBeInTheDocument();
+    expect(inactive.querySelector('svg')).toBeNull();
+  });
+
+  it('keeps the rows a radio set when nothing is selected yet', async () => {
+    render(
+      <ModelSelect models={[...models]} value={null} onSelect={vi.fn()} />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const rows = screen.getAllByRole('menuitemradio');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toHaveAttribute('aria-checked', 'false');
+    }
+  });
+
+  it('renders the rows as plain actions when the caller opts out of selection', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[...models]}
+        value={null}
+        onSelect={onSelect}
+        rowsAreActions
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    expect(screen.queryAllByRole('group')).toHaveLength(0);
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: /Balanced One/ })
+    );
+    expect(onSelect).toHaveBeenCalledWith('a:bal');
+  });
+
+  it('leaves an action row unmarked even when it matches the value', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        rowsAreActions
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const row = screen.getByRole('menuitem', { name: /Fast One/ });
+    expect(row).not.toHaveAttribute('aria-checked');
+    expect(row.querySelector('svg')).toBeNull();
+  });
+
+  it('renders zero separators when a leading section meets an empty model list', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
+  });
+
+  it('renders exactly one separator when a leading section meets non-empty model groups', async () => {
+    render(
+      <ModelSelect
+        models={[models[0]]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
   });
 });

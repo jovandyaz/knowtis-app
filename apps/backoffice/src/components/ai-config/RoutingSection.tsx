@@ -162,6 +162,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         <ModelSelect
           models={available}
           value={null}
+          rowsAreActions
           tierOrder={MODEL_TIERS}
           status={
             models.isLoading ? 'loading' : models.isError ? 'error' : 'ready'

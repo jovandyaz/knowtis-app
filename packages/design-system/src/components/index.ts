@@ -74,6 +74,8 @@ export {
   ModelSelect,
   type ModelSelectProps,
   type ModelSelectOption,
+  type ModelSelectSection,
+  type ModelSelectSectionOption,
 } from './ModelSelect';
 export {
   SegmentedControl,

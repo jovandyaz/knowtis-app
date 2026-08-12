@@ -1,5 +1,6 @@
 import type { TFunction } from 'i18next';
 
+import type { ModelSelectSection } from '@knowtis/design-system';
 import {
   MODEL_INTENTS,
   type ModelIntent,
@@ -42,4 +43,15 @@ export function intentChipOptions(t: TFunction<'common'>): Array<{
     label: t(`aiAssistant.intent.${value}` as never),
     title: t(`aiAssistant.intent.${value}Hint` as never),
   }));
+}
+
+export function intentSection(t: TFunction<'common'>): ModelSelectSection {
+  return {
+    label: t('aiAssistant.intent.group'),
+    options: MODEL_INTENTS.map((value) => ({
+      id: value,
+      label: t(`aiAssistant.intent.${value}` as never),
+      description: t(`aiAssistant.intent.${value}Hint` as never),
+    })),
+  };
 }
