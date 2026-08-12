@@ -221,7 +221,8 @@ export const CatalogAlertSchema = z.object({
 export type CatalogAlert = z.infer<typeof CatalogAlertSchema>;
 
 export const CatalogOverviewSchema = z.object({
-  candidates: z.array(CatalogModelSchema),
+  // The API deploys independently of this bundle and may stop sending it.
+  candidates: z.array(CatalogModelSchema).default([]),
   promoted: z.array(CatalogModelSchema),
   alerts: z.array(CatalogAlertSchema),
 });
