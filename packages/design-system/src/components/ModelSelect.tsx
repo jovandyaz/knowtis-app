@@ -191,7 +191,7 @@ export function ModelSelect({
                         </div>
                         {description && (
                           <span
-                            className="line-clamp-1 text-xs text-(--muted-foreground)"
+                            className="w-full min-w-0 line-clamp-1 text-xs text-(--muted-foreground)"
                             title={description}
                           >
                             {description}
