@@ -137,7 +137,7 @@ function makeModelPreference(
     getEffectiveDefault: vi.fn().mockResolvedValue(effectiveDefault),
     assertSelectable: vi.fn(),
     isSelectable: vi.fn().mockReturnValue(true),
-    isSelectableWith: vi.fn().mockReturnValue(true),
+    isSelectableWith: vi.fn().mockResolvedValue(true),
     byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
     tierGatingOn: vi.fn().mockResolvedValue(false),
   } as unknown as ModelPreferenceService;
@@ -2776,7 +2776,7 @@ describe('RunAgentTurnHandler', () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const conversations = makeConversations();
     const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(false);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -2831,7 +2831,7 @@ describe('RunAgentTurnHandler', () => {
     vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
       new Set(['google'])
     );
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
     const handler = new RunAgentTurnHandler(
@@ -2880,7 +2880,7 @@ describe('RunAgentTurnHandler', () => {
     vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
       new Set(['google'])
     );
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue(null);
     const handler = new RunAgentTurnHandler(
@@ -2924,7 +2924,7 @@ describe('RunAgentTurnHandler', () => {
     const conversations = makeConversations();
     const modelPreference = makeModelPreference();
     vi.mocked(modelPreference.tierGatingOn).mockResolvedValue(true);
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(false);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -2974,7 +2974,7 @@ describe('RunAgentTurnHandler', () => {
       'anthropic:claude-sonnet-4-20250514'
     );
     vi.mocked(modelPreference.tierGatingOn).mockResolvedValue(true);
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(false);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(false);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3197,7 +3197,7 @@ describe('RunAgentTurnHandler', () => {
     vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
       new Set(['google'])
     );
-    vi.mocked(modelPreference.isSelectableWith).mockReturnValue(true);
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
     const byok = makeByok();
     vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
     const handler = new RunAgentTurnHandler(
