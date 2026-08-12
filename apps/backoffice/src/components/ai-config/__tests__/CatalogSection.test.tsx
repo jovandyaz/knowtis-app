@@ -132,10 +132,29 @@ describe('CatalogSection', () => {
     expect(screen.getByText(/vs vendored/)).toBeInTheDocument();
   });
 
-  it('gives the alert detail a basis so it wraps to its own line instead of widening the page', () => {
+  it('wraps a long alert detail instead of letting it widen the page', () => {
     renderSection({ alerts: [alert()] });
 
-    expect(screen.getByText(/vs vendored/)).toHaveClass('basis-48');
+    expect(screen.getByText(/vs vendored/)).toHaveClass(
+      'basis-48',
+      'wrap-break-word'
+    );
+  });
+
+  it('keeps the alerts card inside the layout instead of widening the page', () => {
+    renderSection({ alerts: [alert()] });
+
+    expect(
+      screen.getByRole('heading', { name: 'Open alerts' }).parentElement
+    ).toHaveClass('min-w-0');
+  });
+
+  it('keeps the promoted card inside the layout instead of widening the page', () => {
+    renderSection();
+
+    expect(
+      screen.getByRole('heading', { name: /^promoted/i }).parentElement
+    ).toHaveClass('min-w-0');
   });
 
   it('renders an alert kind this bundle does not know as its raw value', () => {
