@@ -125,6 +125,91 @@ describe('ModelSelect', () => {
     expect(screen.queryAllByText('$$$')).toHaveLength(0);
   });
 
+  it('lists every model under one heading when modelsLabel is given', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        tierOrder={['balanced', 'fast']}
+        tierLabel={(tier) => tier.toUpperCase()}
+        modelsLabel="MODELS"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByText('MODELS')).toBeInTheDocument();
+    expect(screen.queryByText('FAST')).not.toBeInTheDocument();
+    expect(screen.queryByText('BALANCED')).not.toBeInTheDocument();
+
+    // tierOrder still sorts the flattened list.
+    const rows = screen.getAllByRole('menuitemradio').map((r) => r.textContent);
+    expect(rows[0]).toContain('Balanced One');
+    expect(rows[1]).toContain('Fast One');
+  });
+
+  it('moves the cost indicator onto each row when the groups are flattened', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        modelsLabel="MODELS"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    // One heading cannot speak for tiers that differ in cost, so each row carries its own.
+    expect(
+      screen.getByRole('menuitemradio', { name: /Fast One/ })
+    ).toHaveTextContent('$');
+    expect(
+      screen.getByRole('menuitemradio', { name: /Balanced One/ })
+    ).toHaveTextContent('$$');
+  });
+
+  it('shows no cost glyph on a row whose cost class is below the first level', async () => {
+    render(
+      <ModelSelect
+        models={[{ ...models[0], costClass: 0 }]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        modelsLabel="MODELS"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.queryByText('$')).not.toBeInTheDocument();
+  });
+
+  it('keeps the cost band off the heading that speaks for every tier', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        modelsLabel="MODELS"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByText('MODELS').parentElement).toHaveTextContent(
+      /^MODELS$/
+    );
+  });
+
+  it('leaves an unselected row without a trailing slot', async () => {
+    render(
+      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    // An empty slot is invisible to textContent but still consumes the row's
+    // gap, so the assertion has to be structural.
+    const row = screen.getByRole('menuitemradio', { name: /Balanced One/ });
+    expect(row.firstElementChild?.children).toHaveLength(1);
+  });
+
   it('shows the billed badge only on models billed to the user', async () => {
     render(
       <ModelSelect
@@ -472,6 +557,24 @@ describe('ModelSelect', () => {
       />
     );
     await userEvent.click(screen.getByRole('button'));
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
+  });
+
+  it('renders no flattened heading over an empty model list', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        modelsLabel="MODELS"
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.queryByText('MODELS')).not.toBeInTheDocument();
     expect(screen.queryAllByRole('separator')).toHaveLength(0);
   });
 
