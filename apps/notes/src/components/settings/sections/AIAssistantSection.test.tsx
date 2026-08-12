@@ -234,7 +234,7 @@ describe('AIAssistantSection', () => {
     );
 
     expect(
-      screen.getByRole('menuitem', { name: /Byok One/ })
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
     ).toBeInTheDocument();
     expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();

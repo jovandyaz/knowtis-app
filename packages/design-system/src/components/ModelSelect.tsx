@@ -9,6 +9,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './DropdownMenu';
@@ -168,6 +170,11 @@ export function ModelSelect({
     }))
     .filter((g) => g.items.length > 0);
 
+  const selectionProps = {
+    ...(value !== null && { value }),
+    onValueChange: onSelect,
+  };
+
   const triggerText = ((): string => {
     if (active) {
       return active.label;
@@ -204,14 +211,14 @@ export function ModelSelect({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
         {visibleLeadingSection && (
-          <>
+          <DropdownMenuRadioGroup {...selectionProps}>
             <DropdownMenuLabel className="text-xs uppercase tracking-wide">
               {visibleLeadingSection.label}
             </DropdownMenuLabel>
             {visibleLeadingSection.options.map((option) => (
-              <DropdownMenuItem
+              <DropdownMenuRadioItem
                 key={option.id}
-                onSelect={() => onSelect(option.id)}
+                value={option.id}
                 className="flex-col items-start gap-0.5"
               >
                 <OptionRow
@@ -219,9 +226,9 @@ export function ModelSelect({
                   description={option.description}
                   selected={option.id === value}
                 />
-              </DropdownMenuItem>
+              </DropdownMenuRadioItem>
             ))}
-          </>
+          </DropdownMenuRadioGroup>
         )}
         {isError ? (
           <>
@@ -240,7 +247,7 @@ export function ModelSelect({
             {groups.map((g, i) => {
               const level = tierCostLevel(g.items);
               return (
-                <div key={g.tier}>
+                <DropdownMenuRadioGroup key={g.tier} {...selectionProps}>
                   {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
                     <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
@@ -253,9 +260,9 @@ export function ModelSelect({
                   {g.items.map((m) => {
                     const description = renderDescription?.(m);
                     return (
-                      <DropdownMenuItem
+                      <DropdownMenuRadioItem
                         key={m.id}
-                        onSelect={() => onSelect(m.id)}
+                        value={m.id}
                         className="flex-col items-start gap-0.5"
                       >
                         <OptionRow
@@ -271,10 +278,10 @@ export function ModelSelect({
                             ) : undefined
                           }
                         />
-                      </DropdownMenuItem>
+                      </DropdownMenuRadioItem>
                     );
                   })}
-                </div>
+                </DropdownMenuRadioGroup>
               );
             })}
           </>

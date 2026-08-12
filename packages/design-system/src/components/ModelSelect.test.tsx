@@ -55,10 +55,10 @@ describe('ModelSelect', () => {
     // An empty description span is invisible to textContent but still consumes
     // the item's row gap, so the assertion has to be structural.
     expect(
-      screen.getByRole('menuitem', { name: /Fast One/ }).children
+      screen.getByRole('menuitemradio', { name: /Fast One/ }).children
     ).toHaveLength(2);
     expect(
-      screen.getByRole('menuitem', { name: /Balanced One/ }).children
+      screen.getByRole('menuitemradio', { name: /Balanced One/ }).children
     ).toHaveLength(1);
   });
 
@@ -256,7 +256,7 @@ describe('ModelSelect', () => {
     expect(screen.getByRole('button')).toHaveTextContent('Even');
 
     await userEvent.click(screen.getByRole('button'));
-    await userEvent.click(screen.getByRole('menuitem', { name: /Quick/ }));
+    await userEvent.click(screen.getByRole('menuitemradio', { name: /Quick/ }));
     expect(onSelect).toHaveBeenCalledWith('fast');
   });
 
@@ -275,7 +275,9 @@ describe('ModelSelect', () => {
     );
     await userEvent.click(screen.getByRole('button'));
 
-    expect(screen.getByRole('menuitem', { name: /Quick/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('menuitemradio', { name: /Quick/ })
+    ).toBeInTheDocument();
     expect(screen.getByText('Could not load')).toBeTruthy();
   });
 
@@ -365,6 +367,47 @@ describe('ModelSelect', () => {
     expect(
       screen.getByRole('button', { name: 'Fast One' })
     ).toBeInTheDocument();
+  });
+
+  it('exposes the active model row as the checked one and marks it with a glyph', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const active = screen.getByRole('menuitemradio', { name: /Fast One/ });
+    const inactive = screen.getByRole('menuitemradio', {
+      name: /Balanced One/,
+    });
+    expect(active).toHaveAttribute('aria-checked', 'true');
+    expect(inactive).toHaveAttribute('aria-checked', 'false');
+    // The check glyph carries no accessible text, so it can only be asserted structurally.
+    expect(active.querySelector('svg')).toBeInTheDocument();
+    expect(inactive.querySelector('svg')).toBeNull();
+  });
+
+  it('exposes the active leading option as the checked one and marks it with a glyph', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const active = screen.getByRole('menuitemradio', { name: /Even/ });
+    const inactive = screen.getByRole('menuitemradio', { name: /Quick/ });
+    expect(active).toHaveAttribute('aria-checked', 'true');
+    expect(inactive).toHaveAttribute('aria-checked', 'false');
+    expect(active.querySelector('svg')).toBeInTheDocument();
+    expect(inactive.querySelector('svg')).toBeNull();
   });
 
   it('renders zero separators when a leading section meets an empty model list', async () => {

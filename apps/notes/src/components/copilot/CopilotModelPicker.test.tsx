@@ -192,10 +192,10 @@ describe('CopilotModelPicker', () => {
     await userEvent.click(trigger);
 
     expect(
-      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
     ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitem', { name: /Byok One/ })
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
     ).toBeInTheDocument();
     expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
@@ -210,7 +210,7 @@ describe('CopilotModelPicker', () => {
     expect(trigger).toHaveTextContent('Byok One');
     await userEvent.click(trigger);
     await userEvent.click(
-      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
     );
 
     expect(setSelected).toHaveBeenCalledWith(null);
@@ -242,10 +242,10 @@ describe('CopilotModelPicker', () => {
     await userEvent.click(trigger);
 
     expect(
-      screen.getByRole('menuitem', { name: /Promoted One/ })
+      screen.getByRole('menuitemradio', { name: /Promoted One/ })
     ).toHaveTextContent('Promoted from the open catalog');
     expect(
-      screen.getByRole('menuitem', { name: /Byok One/ })
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
     ).toHaveTextContent('aiModels.gpt56');
   });
 
@@ -260,7 +260,7 @@ describe('CopilotModelPicker', () => {
 
     await userEvent.click(trigger);
     await userEvent.click(
-      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
     );
 
     expect(setSelected).toHaveBeenCalledWith(null);
@@ -313,7 +313,7 @@ describe('CopilotModelPicker', () => {
     expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
     await userEvent.click(trigger);
     expect(
-      screen.getByRole('menuitem', { name: /aiAssistant.intent.powerful/ })
+      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.powerful/ })
     ).toBeInTheDocument();
 
     await userEvent.click(

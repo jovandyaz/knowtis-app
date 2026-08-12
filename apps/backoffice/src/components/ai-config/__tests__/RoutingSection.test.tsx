@@ -240,7 +240,7 @@ describe('RoutingSection', () => {
 
     await userEvent.click(screen.getByRole('button', { name: /add model/i }));
     await userEvent.click(
-      await screen.findByRole('menuitem', { name: /gemini/i })
+      await screen.findByRole('menuitemradio', { name: /gemini/i })
     );
     await userEvent.click(screen.getByRole('button', { name: /save chain/i }));
 
@@ -253,10 +253,10 @@ describe('RoutingSection', () => {
     await userEvent.click(screen.getByRole('button', { name: /add model/i }));
 
     expect(
-      await screen.findByRole('menuitem', { name: /gemini/i })
+      await screen.findByRole('menuitemradio', { name: /gemini/i })
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole('menuitem', { name: /sonnet/i })
+      screen.queryByRole('menuitemradio', { name: /sonnet/i })
     ).not.toBeInTheDocument();
   });
 
