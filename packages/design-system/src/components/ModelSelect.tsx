@@ -190,7 +190,10 @@ export function ModelSelect({
                           )}
                         </div>
                         {description && (
-                          <span className="text-xs text-(--muted-foreground)">
+                          <span
+                            className="line-clamp-1 text-xs text-(--muted-foreground)"
+                            title={description}
+                          >
                             {description}
                           </span>
                         )}
