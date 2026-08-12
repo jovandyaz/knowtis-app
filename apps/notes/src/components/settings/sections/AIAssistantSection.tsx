@@ -38,7 +38,6 @@ export function AIAssistantSection() {
             update({ preferredModel: null, preferredIntent: value })
           }
           onSelectModel={(id) => update({ preferredModel: id })}
-          onClearOverride={() => update({ preferredModel: null })}
         />
       </section>
 

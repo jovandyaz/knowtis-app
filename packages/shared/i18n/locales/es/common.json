@@ -117,8 +117,7 @@
       "powerfulHint": "Razonamiento a fondo"
     },
     "advanced": {
-      "trigger": "Avanzado: elegir modelo",
-      "clearOverride": "Volver al estilo"
+      "trigger": "Avanzado: elegir modelo"
     },
     "byok": {
       "title": "Tus claves de API",

@@ -117,8 +117,7 @@
       "powerfulHint": "Deep reasoning"
     },
     "advanced": {
-      "trigger": "Advanced: choose model",
-      "clearOverride": "Back to style"
+      "trigger": "Advanced: choose model"
     },
     "byok": {
       "title": "Your API keys",
