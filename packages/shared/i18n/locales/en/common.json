@@ -101,12 +101,6 @@
     "loadError": "Couldn't load models",
     "retry": "Retry",
     "modelsGroup": "Models",
-    "tier": {
-      "fast": "Fast",
-      "balanced": "Balanced",
-      "powerful": "Powerful",
-      "open": "Open"
-    },
     "intent": {
       "label": "Assistant style",
       "group": "Style",

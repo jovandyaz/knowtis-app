@@ -57,7 +57,7 @@ export function IntentModelPicker({
           onRetry={onRetry}
           errorLabel={t('aiAssistant.loadError')}
           retryLabel={t('aiAssistant.retry')}
-          tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
+          modelsLabel={t('aiAssistant.modelsGroup')}
           renderDescription={(m) =>
             m.descriptionKey
               ? t(m.descriptionKey as never)

@@ -91,7 +91,6 @@ export interface ModelSelectProps {
    * heading cannot speak for tiers that differ in cost.
    */
   modelsLabel?: string;
-  tierLabel?: (tier: string) => string;
   triggerLabel?: string;
   loadingLabel?: string;
   errorLabel?: string;
@@ -211,7 +210,6 @@ export function ModelSelect({
   leadingSection,
   rowsAreActions = false,
   modelsLabel,
-  tierLabel,
   triggerLabel,
   loadingLabel,
   errorLabel,
@@ -246,7 +244,7 @@ export function ModelSelect({
   const tierGroups = [...ordered, ...extraTiers]
     .map((tier) => ({
       key: tier,
-      label: tierLabel ? tierLabel(tier) : tier,
+      label: tier,
       items: models.filter((m) => m.tier === tier),
     }))
     .filter((g) => g.items.length > 0);

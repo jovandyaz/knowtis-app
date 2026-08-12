@@ -101,12 +101,6 @@
     "loadError": "No se pudieron cargar los modelos",
     "retry": "Reintentar",
     "modelsGroup": "Modelos",
-    "tier": {
-      "fast": "Rápido",
-      "balanced": "Equilibrado",
-      "powerful": "Potente",
-      "open": "Abierto"
-    },
     "intent": {
       "label": "Estilo del asistente",
       "group": "Estilo",

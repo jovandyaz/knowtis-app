@@ -88,14 +88,13 @@ describe('ModelSelect', () => {
         value="a:fast"
         onSelect={vi.fn()}
         tierOrder={['balanced', 'fast']}
-        tierLabel={(tier) => tier.toUpperCase()}
       />
     );
     await userEvent.click(screen.getByRole('button'));
     const labels = screen
-      .getAllByText(/^(BALANCED|FAST)$/)
+      .getAllByText(/^(balanced|fast)$/)
       .map((el) => el.textContent);
-    expect(labels).toEqual(['BALANCED', 'FAST']);
+    expect(labels).toEqual(['balanced', 'fast']);
   });
 
   it('disables the trigger when disabled is set', () => {
@@ -112,12 +111,7 @@ describe('ModelSelect', () => {
 
   it('shows one cost indicator per tier header derived from its costliest model', async () => {
     render(
-      <ModelSelect
-        models={[...models]}
-        value="a:fast"
-        onSelect={vi.fn()}
-        tierLabel={(tier) => tier.toUpperCase()}
-      />
+      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
     );
     await userEvent.click(screen.getByRole('button'));
     expect(screen.getByText('$')).toBeTruthy();
@@ -132,15 +126,14 @@ describe('ModelSelect', () => {
         value="a:fast"
         onSelect={vi.fn()}
         tierOrder={['balanced', 'fast']}
-        tierLabel={(tier) => tier.toUpperCase()}
         modelsLabel="MODELS"
       />
     );
     await userEvent.click(screen.getByRole('button'));
 
     expect(screen.getByText('MODELS')).toBeInTheDocument();
-    expect(screen.queryByText('FAST')).not.toBeInTheDocument();
-    expect(screen.queryByText('BALANCED')).not.toBeInTheDocument();
+    expect(screen.queryByText('fast')).not.toBeInTheDocument();
+    expect(screen.queryByText('balanced')).not.toBeInTheDocument();
 
     // tierOrder still sorts the flattened list.
     const rows = screen.getAllByRole('menuitemradio').map((r) => r.textContent);
@@ -317,15 +310,14 @@ describe('ModelSelect', () => {
         value="balanced"
         onSelect={vi.fn()}
         leadingSection={styleSection}
-        tierLabel={(tier) => tier.toUpperCase()}
       />
     );
     await userEvent.click(screen.getByRole('button'));
 
     const headings = screen
-      .getAllByText(/^(STYLE|FAST|BALANCED)$/)
+      .getAllByText(/^(STYLE|fast|balanced)$/)
       .map((el) => el.textContent);
-    expect(headings).toEqual(['STYLE', 'FAST', 'BALANCED']);
+    expect(headings).toEqual(['STYLE', 'fast', 'balanced']);
   });
 
   it('emits the leading option id and labels the trigger with it', async () => {
