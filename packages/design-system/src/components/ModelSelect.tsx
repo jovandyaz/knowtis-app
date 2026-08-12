@@ -195,7 +195,7 @@ export function ModelSelect({
           size="sm"
           className={cn('gap-1.5', triggerClassName)}
           disabled={triggerDisabled}
-          aria-label={ariaLabel}
+          aria-label={ariaLabel ? `${ariaLabel}: ${triggerText}` : undefined}
         >
           {isLoading && (
             <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />

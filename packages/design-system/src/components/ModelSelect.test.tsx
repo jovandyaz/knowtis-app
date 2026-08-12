@@ -372,7 +372,7 @@ describe('ModelSelect', () => {
     expect(trigger).toHaveTextContent('No models available');
   });
 
-  it('names the trigger with the supplied aria-label', () => {
+  it('composes the trigger accessible name from the purpose and the current value', () => {
     render(
       <ModelSelect
         models={[...models]}
@@ -382,7 +382,16 @@ describe('ModelSelect', () => {
       />
     );
     expect(
-      screen.getByRole('button', { name: 'Assistant style' })
+      screen.getByRole('button', { name: 'Assistant style: Fast One' })
+    ).toBeInTheDocument();
+  });
+
+  it('leaves the trigger unlabelled when no aria-label purpose is supplied', () => {
+    render(
+      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
+    );
+    expect(
+      screen.getByRole('button', { name: 'Fast One' })
     ).toBeInTheDocument();
   });
 

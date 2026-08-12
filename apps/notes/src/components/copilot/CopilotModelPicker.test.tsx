@@ -187,9 +187,7 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    const trigger = screen.getByRole('button', {
-      name: 'aiAssistant.intent.label',
-    });
+    const trigger = screen.getByRole('button');
     expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
     await userEvent.click(trigger);
 
@@ -208,9 +206,7 @@ describe('CopilotModelPicker', () => {
     sessionModel.mockReturnValue('o:byok');
     render(<CopilotModelPicker />);
 
-    const trigger = screen.getByRole('button', {
-      name: 'aiAssistant.intent.label',
-    });
+    const trigger = screen.getByRole('button');
     expect(trigger).toHaveTextContent('Byok One');
     await userEvent.click(trigger);
     await userEvent.click(
@@ -228,9 +224,9 @@ describe('CopilotModelPicker', () => {
     modelsData.mockReturnValue(withByokModel);
     render(<CopilotModelPicker />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
-    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
+    await userEvent.click(trigger);
     await userEvent.click(screen.getByText('Byok One'));
 
     expect(setSelected).toHaveBeenCalledWith('o:byok');
@@ -241,9 +237,9 @@ describe('CopilotModelPicker', () => {
     modelsData.mockReturnValue(withPromotedModel);
     render(<CopilotModelPicker />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
-    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
+    await userEvent.click(trigger);
 
     expect(
       screen.getByRole('menuitem', { name: /Promoted One/ })
@@ -258,9 +254,7 @@ describe('CopilotModelPicker', () => {
     sessionModel.mockReturnValue('google:gemini-3.5-flash');
     render(<CopilotModelPicker />);
 
-    const trigger = screen.getByRole('button', {
-      name: 'aiAssistant.intent.label',
-    });
+    const trigger = screen.getByRole('button');
     expect(trigger).not.toHaveTextContent('—');
     expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
 
@@ -293,9 +287,7 @@ describe('CopilotModelPicker', () => {
     });
     render(<CopilotModelPicker />);
 
-    expect(
-      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
-    ).toHaveTextContent('Byok One');
+    expect(screen.getByRole('button')).toHaveTextContent('Byok One');
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 
@@ -307,9 +299,9 @@ describe('CopilotModelPicker', () => {
     });
     render(<CopilotModelPicker />);
 
-    expect(
-      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
-    ).toHaveTextContent('aiAssistant.intent.powerful');
+    expect(screen.getByRole('button')).toHaveTextContent(
+      'aiAssistant.intent.powerful'
+    );
   });
 
   it('keeps the styles choosable when the model list fails to load', async () => {
@@ -317,9 +309,9 @@ describe('CopilotModelPicker', () => {
     modelsError.mockReturnValue(true);
     render(<CopilotModelPicker />);
 
-    await userEvent.click(
-      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
-    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
+    await userEvent.click(trigger);
     expect(
       screen.getByRole('menuitem', { name: /aiAssistant.intent.powerful/ })
     ).toBeInTheDocument();
