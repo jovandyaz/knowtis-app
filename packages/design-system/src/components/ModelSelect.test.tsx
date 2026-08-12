@@ -410,6 +410,56 @@ describe('ModelSelect', () => {
     expect(inactive.querySelector('svg')).toBeNull();
   });
 
+  it('keeps the rows a radio set when nothing is selected yet', async () => {
+    render(
+      <ModelSelect models={[...models]} value={null} onSelect={vi.fn()} />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const rows = screen.getAllByRole('menuitemradio');
+    expect(rows).toHaveLength(2);
+    for (const row of rows) {
+      expect(row).toHaveAttribute('aria-checked', 'false');
+    }
+  });
+
+  it('renders the rows as plain actions when the caller opts out of selection', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[...models]}
+        value={null}
+        onSelect={onSelect}
+        rowsAreActions
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    expect(screen.queryAllByRole('group')).toHaveLength(0);
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: /Balanced One/ })
+    );
+    expect(onSelect).toHaveBeenCalledWith('a:bal');
+  });
+
+  it('leaves an action row unmarked even when it matches the value', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        rowsAreActions
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const row = screen.getByRole('menuitem', { name: /Fast One/ });
+    expect(row).not.toHaveAttribute('aria-checked');
+    expect(row.querySelector('svg')).toBeNull();
+  });
+
   it('renders zero separators when a leading section meets an empty model list', async () => {
     render(
       <ModelSelect

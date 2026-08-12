@@ -44,6 +44,7 @@ const MIN_COST_LEVEL = 1;
 const MAX_COST_LEVEL = 3;
 const NO_COST_LEVEL = 0;
 const FALLBACK_LABEL = '—';
+const OPTION_ROW_CLASSES = 'flex-col items-start gap-0.5';
 
 function costGlyphs(level: number): string {
   const clamped = Math.min(
@@ -77,6 +78,11 @@ export interface ModelSelectProps {
    * Option ids must be unique across the section and `models`; a collision renders two checked rows.
    */
   leadingSection?: ModelSelectSection;
+  /**
+   * Renders the rows as one-shot actions instead of a selection set: plain menu
+   * items, no checked state. Pass `value` as null — an action list selects nothing.
+   */
+  rowsAreActions?: boolean;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
   loadingLabel?: string;
@@ -122,6 +128,58 @@ function OptionRow({
   );
 }
 
+function OptionGroup({
+  asActions,
+  value,
+  onSelect,
+  children,
+}: {
+  asActions: boolean;
+  value: string | null;
+  onSelect: (id: string) => void;
+  children: ReactNode;
+}) {
+  if (asActions) {
+    return <div>{children}</div>;
+  }
+  return (
+    <DropdownMenuRadioGroup
+      {...(value !== null && { value })}
+      onValueChange={onSelect}
+    >
+      {children}
+    </DropdownMenuRadioGroup>
+  );
+}
+
+function OptionItem({
+  id,
+  asAction,
+  onSelect,
+  children,
+}: {
+  id: string;
+  asAction: boolean;
+  onSelect: (id: string) => void;
+  children: ReactNode;
+}) {
+  if (asAction) {
+    return (
+      <DropdownMenuItem
+        onSelect={() => onSelect(id)}
+        className={OPTION_ROW_CLASSES}
+      >
+        {children}
+      </DropdownMenuItem>
+    );
+  }
+  return (
+    <DropdownMenuRadioItem value={id} className={OPTION_ROW_CLASSES}>
+      {children}
+    </DropdownMenuRadioItem>
+  );
+}
+
 export function ModelSelect({
   models,
   value,
@@ -131,6 +189,7 @@ export function ModelSelect({
   onRetry,
   renderDescription,
   leadingSection,
+  rowsAreActions = false,
   tierLabel,
   triggerLabel,
   loadingLabel,
@@ -170,10 +229,7 @@ export function ModelSelect({
     }))
     .filter((g) => g.items.length > 0);
 
-  const selectionProps = {
-    ...(value !== null && { value }),
-    onValueChange: onSelect,
-  };
+  const selectedId = rowsAreActions ? null : value;
 
   const triggerText = ((): string => {
     if (active) {
@@ -211,24 +267,29 @@ export function ModelSelect({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
         {visibleLeadingSection && (
-          <DropdownMenuRadioGroup {...selectionProps}>
+          <OptionGroup
+            asActions={rowsAreActions}
+            value={value}
+            onSelect={onSelect}
+          >
             <DropdownMenuLabel className="text-xs uppercase tracking-wide">
               {visibleLeadingSection.label}
             </DropdownMenuLabel>
             {visibleLeadingSection.options.map((option) => (
-              <DropdownMenuRadioItem
+              <OptionItem
                 key={option.id}
-                value={option.id}
-                className="flex-col items-start gap-0.5"
+                id={option.id}
+                asAction={rowsAreActions}
+                onSelect={onSelect}
               >
                 <OptionRow
                   label={option.label}
                   description={option.description}
-                  selected={option.id === value}
+                  selected={option.id === selectedId}
                 />
-              </DropdownMenuRadioItem>
+              </OptionItem>
             ))}
-          </DropdownMenuRadioGroup>
+          </OptionGroup>
         )}
         {isError ? (
           <>
@@ -247,7 +308,12 @@ export function ModelSelect({
             {groups.map((g, i) => {
               const level = tierCostLevel(g.items);
               return (
-                <DropdownMenuRadioGroup key={g.tier} {...selectionProps}>
+                <OptionGroup
+                  key={g.tier}
+                  asActions={rowsAreActions}
+                  value={value}
+                  onSelect={onSelect}
+                >
                   {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
                     <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
@@ -260,15 +326,16 @@ export function ModelSelect({
                   {g.items.map((m) => {
                     const description = renderDescription?.(m);
                     return (
-                      <DropdownMenuRadioItem
+                      <OptionItem
                         key={m.id}
-                        value={m.id}
-                        className="flex-col items-start gap-0.5"
+                        id={m.id}
+                        asAction={rowsAreActions}
+                        onSelect={onSelect}
                       >
                         <OptionRow
                           label={m.label}
                           description={description}
-                          selected={m.id === value}
+                          selected={m.id === selectedId}
                           badge={
                             m.billedToUser && billedBadgeLabel ? (
                               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
@@ -278,10 +345,10 @@ export function ModelSelect({
                             ) : undefined
                           }
                         />
-                      </DropdownMenuRadioItem>
+                      </OptionItem>
                     );
                   })}
-                </DropdownMenuRadioGroup>
+                </OptionGroup>
               );
             })}
           </>
