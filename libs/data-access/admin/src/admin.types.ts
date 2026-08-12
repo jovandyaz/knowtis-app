@@ -221,7 +221,9 @@ export const CatalogAlertSchema = z.object({
 export type CatalogAlert = z.infer<typeof CatalogAlertSchema>;
 
 export const CatalogOverviewSchema = z.object({
-  candidates: z.array(CatalogModelSchema),
+  // Backoffice and API deploy independently; an API that has moved the
+  // promotion queue to its own paginated route must not take the whole catalog section down.
+  candidates: z.array(CatalogModelSchema).default([]),
   promoted: z.array(CatalogModelSchema),
   alerts: z.array(CatalogAlertSchema),
 });
