@@ -1,3 +1,5 @@
+import { useEffect } from 'react';
+
 import {
   flexRender,
   getCoreRowModel,
@@ -26,6 +28,7 @@ import {
 interface DataTableBaseProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  'aria-label'?: string;
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -57,6 +60,7 @@ export function DataTable<TData, TValue = unknown>({
   rowCount,
   pagination,
   onPaginationChange,
+  'aria-label': ariaLabel,
   isLoading = false,
   emptyTitle = 'No results',
   emptyDescription,
@@ -86,9 +90,30 @@ export function DataTable<TData, TValue = unknown>({
         }),
   });
 
+  // TanStack clamps setPageIndex against `options.pageCount`, which server
+  // pagination replaces with `rowCount`, so a shrinking total strands the page.
+  useEffect(() => {
+    if (
+      isLoading ||
+      rowCount === undefined ||
+      pagination === undefined ||
+      onPaginationChange === undefined
+    ) {
+      return;
+    }
+    const lastPageIndex = Math.max(
+      Math.ceil(rowCount / pagination.pageSize) - 1,
+      0
+    );
+    if (pagination.pageIndex <= lastPageIndex) {
+      return;
+    }
+    onPaginationChange({ ...pagination, pageIndex: lastPageIndex });
+  }, [isLoading, rowCount, pagination, onPaginationChange]);
+
   if (isLoading) {
     return (
-      <Table>
+      <Table aria-label={ariaLabel}>
         <TableHeader>
           <TableRow>
             {columns.map((_, index) => (
@@ -113,93 +138,104 @@ export function DataTable<TData, TValue = unknown>({
     );
   }
 
-  if (data.length === 0) {
-    return (
-      <EmptyState
-        title={emptyTitle}
-        {...(emptyDescription === undefined
-          ? {}
-          : { description: emptyDescription })}
-      />
-    );
+  const emptyState = (
+    <EmptyState
+      title={emptyTitle}
+      {...(emptyDescription === undefined
+        ? {}
+        : { description: emptyDescription })}
+    />
+  );
+
+  const isEmpty = data.length === 0;
+  const isPastFirstPage = (pagination?.pageIndex ?? 0) > 0;
+
+  if (isEmpty && !isPastFirstPage) {
+    return emptyState;
   }
 
   const showPagination = isServerPaginated || table.getPageCount() > 1;
 
   return (
     <div className="flex flex-col gap-3">
-      <Table>
-        <TableHeader>
-          {table.getHeaderGroups().map((headerGroup) => (
-            <TableRow key={headerGroup.id}>
-              {headerGroup.headers.map((header) => {
-                const headerContent = header.isPlaceholder
-                  ? null
-                  : flexRender(
-                      header.column.columnDef.header,
-                      header.getContext()
-                    );
+      {isEmpty ? (
+        emptyState
+      ) : (
+        <Table aria-label={ariaLabel}>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  const headerContent = header.isPlaceholder
+                    ? null
+                    : flexRender(
+                        header.column.columnDef.header,
+                        header.getContext()
+                      );
 
-                return (
-                  <TableHead
-                    key={header.id}
-                    aria-sort={
-                      header.column.getIsSorted() === 'asc'
-                        ? 'ascending'
-                        : header.column.getIsSorted() === 'desc'
-                          ? 'descending'
-                          : undefined
-                    }
-                  >
-                    {header.column.getCanSort() ? (
-                      <button
-                        type="button"
-                        className="flex items-center gap-1 hover:text-(--foreground)"
-                        onClick={header.column.getToggleSortingHandler()}
-                      >
-                        {headerContent}
-                        <span aria-hidden="true">
-                          {{ asc: '↑', desc: '↓' }[
-                            header.column.getIsSorted() as string
-                          ] ?? null}
-                        </span>
-                      </button>
-                    ) : (
-                      headerContent
-                    )}
-                  </TableHead>
-                );
-              })}
-            </TableRow>
-          ))}
-        </TableHeader>
-        <TableBody>
-          {table.getRowModel().rows.map((row) => (
-            <TableRow
-              key={row.id}
-              tabIndex={onRowClick ? 0 : undefined}
-              className={onRowClick ? 'cursor-pointer' : undefined}
-              onClick={onRowClick ? () => onRowClick(row.original) : undefined}
-              onKeyDown={
-                onRowClick
-                  ? (event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        onRowClick(row.original);
+                  return (
+                    <TableHead
+                      key={header.id}
+                      aria-sort={
+                        header.column.getIsSorted() === 'asc'
+                          ? 'ascending'
+                          : header.column.getIsSorted() === 'desc'
+                            ? 'descending'
+                            : undefined
                       }
-                    }
-                  : undefined
-              }
-            >
-              {row.getVisibleCells().map((cell) => (
-                <TableCell key={cell.id}>
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </TableCell>
-              ))}
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+                    >
+                      {header.column.getCanSort() ? (
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 hover:text-(--foreground)"
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
+                          {headerContent}
+                          <span aria-hidden="true">
+                            {{ asc: '↑', desc: '↓' }[
+                              header.column.getIsSorted() as string
+                            ] ?? null}
+                          </span>
+                        </button>
+                      ) : (
+                        headerContent
+                      )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.map((row) => (
+              <TableRow
+                key={row.id}
+                tabIndex={onRowClick ? 0 : undefined}
+                className={onRowClick ? 'cursor-pointer' : undefined}
+                onClick={
+                  onRowClick ? () => onRowClick(row.original) : undefined
+                }
+                onKeyDown={
+                  onRowClick
+                    ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          onRowClick(row.original);
+                        }
+                      }
+                    : undefined
+                }
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
       {showPagination ? (
         <div className="flex items-center justify-between">
           <span className="text-xs text-(--muted-foreground)">

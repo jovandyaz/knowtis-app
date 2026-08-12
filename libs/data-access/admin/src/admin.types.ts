@@ -208,6 +208,15 @@ export const CatalogModelSchema = z.object({
 });
 export type CatalogModel = z.infer<typeof CatalogModelSchema>;
 
+export const PaginatedCandidatesSchema = paginatedSchema(CatalogModelSchema);
+export type PaginatedCandidates = z.infer<typeof PaginatedCandidatesSchema>;
+
+export interface AiCatalogCandidatesParams {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
 export const CatalogAlertSchema = z.object({
   id: z.number().int(),
   modelId: z.string(),
@@ -221,8 +230,6 @@ export const CatalogAlertSchema = z.object({
 export type CatalogAlert = z.infer<typeof CatalogAlertSchema>;
 
 export const CatalogOverviewSchema = z.object({
-  // The API deploys independently of this bundle and may stop sending it.
-  candidates: z.array(CatalogModelSchema).default([]),
   promoted: z.array(CatalogModelSchema),
   alerts: z.array(CatalogAlertSchema),
 });
