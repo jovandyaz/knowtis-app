@@ -85,7 +85,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
         meta={
           <span className="text-xs text-(--muted-foreground)">
             {entry.updatedAt
-              ? `Updated ${entry.updatedAt.toLocaleString()}`
+              ? `Updated ${entry.updatedAt.toLocaleDateString()}`
               : 'Never changed'}
           </span>
         }

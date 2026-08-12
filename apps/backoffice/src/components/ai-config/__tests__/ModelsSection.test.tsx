@@ -188,4 +188,42 @@ describe('ModelsSection', () => {
       'Reset to default: Deep model',
     ]);
   });
+
+  it('keeps the config key reachable without spending a line on it', () => {
+    render(
+      <ModelsSection entries={[entryWith('custom', 'ai_default_model')]} />
+    );
+
+    expect(screen.getByText('Default model')).toHaveAttribute(
+      'title',
+      'ai_default_model'
+    );
+    expect(screen.queryByText('ai_default_model')).not.toBeInTheDocument();
+  });
+
+  it('shows the model id beside the select, with the full value on hover', () => {
+    render(
+      <ModelsSection entries={[entryWith('custom', 'ai_default_model')]} />
+    );
+
+    const id = screen.getByTitle('anthropic:sonnet');
+    expect(id).toHaveTextContent('anthropic:sonnet');
+    expect(id).toHaveClass('truncate');
+  });
+
+  it('shows the update date without the time of day', () => {
+    const updatedAt = new Date('2026-08-11T11:44:20Z');
+    render(
+      <ModelsSection
+        entries={[{ ...entryWith('custom', 'ai_default_model'), updatedAt }]}
+      />
+    );
+
+    expect(
+      screen.getByText(updatedAt.toLocaleDateString())
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(updatedAt.toLocaleString())
+    ).not.toBeInTheDocument();
+  });
 });

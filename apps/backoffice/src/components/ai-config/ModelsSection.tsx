@@ -65,10 +65,9 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
           {entries.map((entry) => (
             <TableRow key={entry.key}>
               <TableCell>
-                <div className="flex flex-col">
-                  <span>{KEY_LABELS[entry.key] ?? entry.key}</span>
-                  <span className="font-mono text-xs text-(--muted-foreground)">
-                    {entry.key}
+                <div className="flex min-w-0 flex-col">
+                  <span title={entry.key}>
+                    {KEY_LABELS[entry.key] ?? entry.key}
                   </span>
                   {entry.description && (
                     <span className="text-xs text-(--muted-foreground)">
@@ -78,7 +77,7 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                 </div>
               </TableCell>
               <TableCell>
-                <div className="flex flex-col gap-1">
+                <div className="flex min-w-0 items-center gap-2">
                   <ModelSelect
                     models={models.data ?? []}
                     value={entry.value}
@@ -91,7 +90,10 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                       setConfig.mutate({ key: entry.key, value: id })
                     }
                   />
-                  <span className="font-mono text-xs text-(--muted-foreground)">
+                  <span
+                    title={entry.value}
+                    className="truncate font-mono text-xs text-(--muted-foreground)"
+                  >
                     {entry.value}
                   </span>
                 </div>
@@ -104,7 +106,9 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
                   onReset={() => resetConfig.mutate({ key: entry.key })}
                 />
               </TableCell>
-              <TableCell>{entry.updatedAt?.toLocaleString() ?? '—'}</TableCell>
+              <TableCell>
+                {entry.updatedAt?.toLocaleDateString() ?? '—'}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
