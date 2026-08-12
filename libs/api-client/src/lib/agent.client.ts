@@ -107,6 +107,7 @@ export class AgentClient {
   };
   private authRefreshHandler: AuthRefreshHandler | null = null;
   private onSessionExpired: (() => void) | null = null;
+  private recoveringAuth = false;
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
@@ -155,7 +156,7 @@ export class AgentClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(content, callbacks);
     } else if (this.authRefreshHandler) {
-      void this.authPolicy.recover(this.authHandlers(content, callbacks));
+      this.beginAuthRecovery(content, callbacks);
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -171,6 +172,14 @@ export class AgentClient {
     };
   }
 
+  private beginAuthRecovery(
+    content: string,
+    callbacks: AgentStreamCallbacks
+  ): void {
+    this.recoveringAuth = true;
+    void this.authPolicy.recover(this.authHandlers(content, callbacks));
+  }
+
   private authHandlers(
     content: string,
     callbacks: AgentStreamCallbacks
@@ -178,6 +187,7 @@ export class AgentClient {
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
+        this.recoveringAuth = false;
         if (this.activeCallbacks !== callbacks) {
           return;
         }
@@ -185,6 +195,7 @@ export class AgentClient {
         this.openAndEmit(content, callbacks);
       },
       onExhausted: () => {
+        this.recoveringAuth = false;
         if (this.activeCallbacks !== callbacks) {
           return;
         }
@@ -239,10 +250,11 @@ export class AgentClient {
   }
 
   private ensureSocket(): void {
-    if (this.socket) {
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 
+    this.teardownSocket();
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],
       autoConnect: true,
@@ -272,6 +284,16 @@ export class AgentClient {
       logger.info(`Agent WebSocket disconnected: ${reason}`, {
         context: 'AgentClient',
       });
+      if (this.socket?.active) {
+        return;
+      }
+      // A server-forced close never reconnects on its own, so anything emitted
+      // afterwards would sit in the send buffer until the client watchdog.
+      const callbacks = this.activeCallbacks;
+      this.teardownSocket();
+      if (callbacks && !this.recoveringAuth) {
+        this.failRequest(callbacks, CONNECTION_ERROR);
+      }
     });
 
     this.socket.on('connect_error', (error) => {
@@ -312,10 +334,13 @@ export class AgentClient {
     });
 
     this.socket.on('agent:error', (payload: AgentErrorPayload) => {
-      if (this.canRecoverFromAuthError(payload)) {
-        void this.authPolicy.recover(
-          this.authHandlers(this.pendingContent!, this.activeCallbacks!)
-        );
+      const { pendingContent, activeCallbacks } = this;
+      if (
+        pendingContent &&
+        activeCallbacks &&
+        this.canRecoverFromAuthError(payload)
+      ) {
+        this.beginAuthRecovery(pendingContent, activeCallbacks);
         return;
       }
 
@@ -356,12 +381,7 @@ export class AgentClient {
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {
-    return (
-      payload.code === AUTH_REQUIRED_CODE &&
-      !!this.authRefreshHandler &&
-      !!this.activeCallbacks &&
-      !!this.pendingContent
-    );
+    return payload.code === AUTH_REQUIRED_CODE && !!this.authRefreshHandler;
   }
 }
 

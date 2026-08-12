@@ -76,6 +76,7 @@ export class AIClient {
   };
   private authRefreshHandler: AuthRefreshHandler | null = null;
   private onSessionExpired: (() => void) | null = null;
+  private recoveringAuth = false;
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
@@ -119,7 +120,7 @@ export class AIClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(payload, callbacks);
     } else if (this.authRefreshHandler) {
-      void this.authPolicy.recover(this.authHandlers(payload, callbacks));
+      this.beginAuthRecovery(payload, callbacks);
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -135,6 +136,14 @@ export class AIClient {
     };
   }
 
+  private beginAuthRecovery(
+    payload: AICompletePayload,
+    callbacks: AIStreamCallbacks
+  ): void {
+    this.recoveringAuth = true;
+    void this.authPolicy.recover(this.authHandlers(payload, callbacks));
+  }
+
   private authHandlers(
     payload: AICompletePayload,
     callbacks: AIStreamCallbacks
@@ -142,6 +151,7 @@ export class AIClient {
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
+        this.recoveringAuth = false;
         if (this.activeCallbacks !== callbacks) {
           return;
         }
@@ -149,6 +159,7 @@ export class AIClient {
         this.openAndEmit(payload, callbacks);
       },
       onExhausted: () => {
+        this.recoveringAuth = false;
         if (this.activeCallbacks !== callbacks) {
           return;
         }
@@ -199,10 +210,11 @@ export class AIClient {
 
   /** Reads the latest token via the auth function so reconnects pick up fresh credentials. */
   private ensureSocket(): void {
-    if (this.socket) {
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 
+    this.teardownSocket();
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],
       autoConnect: true,
@@ -232,6 +244,16 @@ export class AIClient {
       logger.info(`AI WebSocket disconnected: ${reason}`, {
         context: 'AIClient',
       });
+      if (this.socket?.active) {
+        return;
+      }
+      // A server-forced close never reconnects on its own, so anything emitted
+      // afterwards would sit in the send buffer with nothing to flush it.
+      const callbacks = this.activeCallbacks;
+      this.teardownSocket();
+      if (callbacks && !this.recoveringAuth) {
+        this.failRequest(callbacks, CONNECTION_ERROR);
+      }
     });
 
     this.socket.on('connect_error', (error) => {
@@ -257,10 +279,13 @@ export class AIClient {
     });
 
     this.socket.on('ai:error', (payload: AIErrorPayload) => {
-      if (this.canRecoverFromAuthError(payload)) {
-        void this.authPolicy.recover(
-          this.authHandlers(this.pendingPayload!, this.activeCallbacks!)
-        );
+      const { pendingPayload, activeCallbacks } = this;
+      if (
+        pendingPayload &&
+        activeCallbacks &&
+        this.canRecoverFromAuthError(payload)
+      ) {
+        this.beginAuthRecovery(pendingPayload, activeCallbacks);
         return;
       }
 
@@ -271,12 +296,7 @@ export class AIClient {
   }
 
   private canRecoverFromAuthError(payload: AIErrorPayload): boolean {
-    return (
-      payload.code === AUTH_REQUIRED_CODE &&
-      !!this.authRefreshHandler &&
-      !!this.activeCallbacks &&
-      !!this.pendingPayload
-    );
+    return payload.code === AUTH_REQUIRED_CODE && !!this.authRefreshHandler;
   }
 }
 
