@@ -153,34 +153,6 @@ describe('ModelSelect', () => {
     expect(screen.queryByText('Your key')).toBeNull();
   });
 
-  it('renders the footer inside the popover when provided', async () => {
-    render(
-      <ModelSelect
-        models={[...models]}
-        value="a:fast"
-        onSelect={vi.fn()}
-        footer="Account default: Balanced One"
-      />
-    );
-    await userEvent.click(screen.getByRole('button'));
-    expect(screen.getByText('Account default: Balanced One')).toBeTruthy();
-  });
-
-  it('keeps the footer reachable in the error state', async () => {
-    render(
-      <ModelSelect
-        models={[]}
-        value={null}
-        onSelect={vi.fn()}
-        status="error"
-        errorLabel="Could not load"
-        footer="Clear override"
-      />
-    );
-    await userEvent.click(screen.getByRole('button'));
-    expect(screen.getByText('Clear override')).toBeTruthy();
-  });
-
   it('disables the trigger and shows the loading label while models load', () => {
     render(
       <ModelSelect
@@ -395,7 +367,7 @@ describe('ModelSelect', () => {
     ).toBeInTheDocument();
   });
 
-  it('renders exactly one separator when a leading section meets a footer with no model groups', async () => {
+  it('renders zero separators when a leading section meets an empty model list', async () => {
     render(
       <ModelSelect
         models={[]}
@@ -404,7 +376,19 @@ describe('ModelSelect', () => {
         leadingSection={styleSection}
         status="ready"
         emptyLabel="No models available"
-        footer="Account default"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
+  });
+
+  it('renders exactly one separator when a leading section meets non-empty model groups', async () => {
+    render(
+      <ModelSelect
+        models={[models[0]]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
       />
     );
     await userEvent.click(screen.getByRole('button'));

@@ -82,7 +82,6 @@ export interface ModelSelectProps {
   emptyLabel?: string;
   retryLabel?: string;
   billedBadgeLabel?: string;
-  footer?: ReactNode;
   triggerClassName?: string;
   triggerVariant?: 'ghost' | 'outline';
   disabled?: boolean;
@@ -137,7 +136,6 @@ export function ModelSelect({
   emptyLabel,
   retryLabel,
   billedBadgeLabel,
-  footer,
   triggerClassName,
   triggerVariant = 'ghost',
   disabled = false,
@@ -279,14 +277,6 @@ export function ModelSelect({
                 </div>
               );
             })}
-          </>
-        )}
-        {footer && (
-          <>
-            <DropdownMenuSeparator />
-            <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
-              {footer}
-            </div>
           </>
         )}
       </DropdownMenuContent>
