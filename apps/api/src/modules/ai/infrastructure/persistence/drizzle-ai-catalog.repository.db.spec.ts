@@ -443,4 +443,113 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     const [reResolved] = await ownAlerts(false);
     expect(reResolved.resolvedAt?.getTime()).toBe(firstResolvedAt?.getTime());
   });
+
+  describe('listCandidates', () => {
+    const SCORED_HIGH = 'openrouter:vendor/paging-high';
+    const SCORED_LOW = 'openrouter:vendor/paging-low';
+    const UNSCORED = 'openrouter:vendor/paging-unscored';
+    const WILDCARD = 'openrouter:vendor/paging-100%-off';
+    const WILDCARD_DECOY = 'openrouter:vendor/paging-100-off';
+    const PAGING_MODEL_IDS = [
+      SCORED_HIGH,
+      SCORED_LOW,
+      UNSCORED,
+      WILDCARD,
+      WILDCARD_DECOY,
+    ];
+
+    beforeAll(async () => {
+      await repo.upsertCandidate(
+        candidate(SCORED_HIGH, { label: 'Paging High', intelligenceIndex: 90 })
+      );
+      await repo.upsertCandidate(
+        candidate(SCORED_LOW, { label: 'Paging Low', intelligenceIndex: 10 })
+      );
+      await repo.upsertCandidate(
+        candidate(UNSCORED, {
+          label: 'Paging Unscored',
+          intelligenceIndex: null,
+        })
+      );
+      await repo.upsertCandidate(
+        candidate(WILDCARD, { label: 'Paging Wildcard', intelligenceIndex: 50 })
+      );
+      await repo.upsertCandidate(
+        candidate(WILDCARD_DECOY, {
+          label: 'Paging Decoy',
+          intelligenceIndex: 30,
+        })
+      );
+    });
+
+    afterAll(async () => {
+      await db
+        .delete(aiCatalogModels)
+        .where(inArray(aiCatalogModels.id, PAGING_MODEL_IDS));
+    });
+
+    it('ranks scored models first, unscored last', async () => {
+      const { items } = await repo.listCandidates({
+        page: 1,
+        limit: 100,
+        search: 'paging',
+      });
+      const ours = items.map((m) => m.id);
+
+      expect(ours.indexOf(SCORED_HIGH)).toBeLessThan(ours.indexOf(WILDCARD));
+      expect(ours.indexOf(WILDCARD)).toBeLessThan(ours.indexOf(SCORED_LOW));
+      expect(ours.at(-1)).toBe(UNSCORED);
+    });
+
+    it('reports the full total alongside one page of items', async () => {
+      const page = await repo.listCandidates({ page: 1, limit: 2 });
+
+      expect(page.items).toHaveLength(2);
+      expect(page.total).toBeGreaterThanOrEqual(4);
+    });
+
+    it('never repeats or skips a row across pages', async () => {
+      const first = await repo.listCandidates({ page: 1, limit: 2 });
+      const second = await repo.listCandidates({ page: 2, limit: 2 });
+      const ids = [...first.items, ...second.items].map((m) => m.id);
+
+      expect(new Set(ids).size).toBe(ids.length);
+    });
+
+    it('returns an empty page past the end without lying about the total', async () => {
+      const { items, total } = await repo.listCandidates({
+        page: 10_000,
+        limit: 25,
+      });
+
+      expect(items).toEqual([]);
+      expect(total).toBeGreaterThanOrEqual(4);
+    });
+
+    it('matches a search term against label and id', async () => {
+      const byLabel = await repo.listCandidates({
+        page: 1,
+        limit: 25,
+        search: 'Paging Unscored',
+      });
+      const byId = await repo.listCandidates({
+        page: 1,
+        limit: 25,
+        search: 'paging-low',
+      });
+
+      expect(byLabel.items.map((m) => m.id)).toContain(UNSCORED);
+      expect(byId.items.map((m) => m.id)).toContain(SCORED_LOW);
+    });
+
+    it('treats a wildcard in the search term as a literal', async () => {
+      const { items } = await repo.listCandidates({
+        page: 1,
+        limit: 25,
+        search: '100%-off',
+      });
+
+      expect(items.map((m) => m.id)).toEqual([WILDCARD]);
+    });
+  });
 });

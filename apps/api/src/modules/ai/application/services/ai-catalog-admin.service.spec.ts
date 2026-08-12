@@ -54,6 +54,7 @@ describe('AiCatalogAdminService', () => {
       listAlerts: vi.fn().mockResolvedValue([]),
       createAlert: vi.fn(),
       resolveAlert: vi.fn().mockResolvedValue(true),
+      listCandidates: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     promotedCache = new PromotedModelsCache(repository as never);

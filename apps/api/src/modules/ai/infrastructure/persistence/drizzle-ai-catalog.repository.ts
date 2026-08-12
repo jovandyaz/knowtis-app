@@ -1,5 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  ilike,
+  isNull,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
 import { PROMOTED_STATUS } from '@knowtis/shared-types';
@@ -16,6 +27,7 @@ import {
   type AiCatalogModelRow,
   type Database,
 } from '../../../../database';
+import { escapeLike } from '../../../../database/escape-like';
 import type { CatalogAlert } from '../../domain/model-catalog/catalog-alert';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
 import type {
@@ -26,6 +38,7 @@ import type {
 
 const UPSTREAM_OWNED_COPY_STATUS =
   'candidate' as const satisfies CatalogModelStatus;
+const CANDIDATE_STATUS = 'candidate' as const satisfies CatalogModelStatus;
 
 function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
   return {
@@ -83,6 +96,41 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
       .where(eq(aiCatalogModels.status, status))
       .orderBy(asc(aiCatalogModels.id));
     return rows.map(toCatalogModel);
+  }
+
+  async listCandidates(params: {
+    page: number;
+    limit: number;
+    search?: string;
+  }): Promise<{ items: CatalogModel[]; total: number }> {
+    const term = params.search?.trim();
+    const predicate = term
+      ? and(
+          eq(aiCatalogModels.status, CANDIDATE_STATUS),
+          or(
+            ilike(aiCatalogModels.label, `%${escapeLike(term)}%`),
+            ilike(aiCatalogModels.id, `%${escapeLike(term)}%`)
+          )
+        )
+      : eq(aiCatalogModels.status, CANDIDATE_STATUS);
+
+    const [rows, totals] = await Promise.all([
+      this.db
+        .select()
+        .from(aiCatalogModels)
+        .where(predicate)
+        // `desc()` cannot express NULLS LAST, and intelligenceIndex is nullable
+        // and non-unique — `id` keeps a row from drifting between pages.
+        .orderBy(
+          sql`${aiCatalogModels.intelligenceIndex} desc nulls last`,
+          asc(aiCatalogModels.id)
+        )
+        .limit(params.limit)
+        .offset((params.page - 1) * params.limit),
+      this.db.select({ value: count() }).from(aiCatalogModels).where(predicate),
+    ]);
+
+    return { items: rows.map(toCatalogModel), total: totals[0]?.value ?? 0 };
   }
 
   async upsertCandidate(model: CandidateUpsert): Promise<void> {

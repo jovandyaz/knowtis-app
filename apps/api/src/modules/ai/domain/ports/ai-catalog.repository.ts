@@ -51,4 +51,10 @@ export interface AiCatalogRepository {
   ): Promise<void>;
   /** Resolves to whether this call closed the alert; false when it is unknown or already resolved, which preserves the original resolution time. */
   resolveAlert(id: number): Promise<boolean>;
+  /** One ranked page of candidates: scored models first, unscored last, `id` breaking ties. `search` matches label or id, case-insensitively. */
+  listCandidates(params: {
+    page: number;
+    limit: number;
+    search?: string;
+  }): Promise<{ items: CatalogModel[]; total: number }>;
 }
