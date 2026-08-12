@@ -22,6 +22,7 @@ import {
   type Database,
 } from '../../../../database';
 import { DB_AVAILABLE } from '../../../../test-support/database';
+import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import type { CandidateUpsert } from '../../domain/ports/ai-catalog.repository';
 import { CompositeModelCatalog } from '../../infrastructure/catalog/composite-model-catalog';
 import { ModelCatalogAdapter } from '../../infrastructure/catalog/model-catalog.adapter';
@@ -59,6 +60,11 @@ function candidate(id: string, outputCostPerToken: number): CandidateUpsert {
     upstreamExpirationDate: null,
   };
 }
+
+/** Stands for a config that still points at every curated model, so these cases isolate promotion. */
+const ALL_CURATED: ReadonlySet<string> = new Set(
+  CURATED_MODELS.map((model) => model.id)
+);
 
 describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
   let moduleRef: TestingModule;
@@ -133,7 +139,12 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
   it('leaves a candidate out of the offered catalog until it is promoted', () => {
     expect(
-      selectable.isSelectable(CHEAP_MODEL_ID, NO_BYOK, TIER_GATING_ON)
+      selectable.isSelectable(
+        CHEAP_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_ON
+      )
     ).toBe(false);
   });
 
@@ -141,7 +152,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
 
     const offered = selectable
-      .list(SYSTEM_DEFAULT, NO_BYOK, TIER_GATING_ON)
+      .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, TIER_GATING_ON)
       .find((m) => m.id === CHEAP_MODEL_ID);
 
     expect(offered).toMatchObject({
@@ -152,7 +163,12 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       contextWindow: 262_144,
     });
     expect(
-      selectable.isSelectable(CHEAP_MODEL_ID, NO_BYOK, TIER_GATING_ON)
+      selectable.isSelectable(
+        CHEAP_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_ON
+      )
     ).toBe(true);
   });
 
@@ -169,25 +185,41 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
 
     expect(
-      selectable.isSelectable(CHEAP_MODEL_ID, NO_BYOK, TIER_GATING_ON)
+      selectable.isSelectable(
+        CHEAP_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_ON
+      )
     ).toBe(false);
-    expect(selectable.firstOfTier('powerful', OPENROUTER_BYOK)).toBe(
-      CHEAP_MODEL_ID
-    );
+    expect(
+      selectable.firstOfTier('powerful', ALL_CURATED, OPENROUTER_BYOK)
+    ).toBe(CHEAP_MODEL_ID);
   });
 
   it('never gives away a promoted model priced above the free ceiling', async () => {
     await admin.promote(EXPENSIVE_MODEL_ID, 'open', ACTOR_ID);
 
     expect(
-      selectable.isSelectable(EXPENSIVE_MODEL_ID, NO_BYOK, TIER_GATING_ON)
-    ).toBe(false);
-    expect(
-      selectable.isSelectable(EXPENSIVE_MODEL_ID, NO_BYOK, TIER_GATING_OFF)
+      selectable.isSelectable(
+        EXPENSIVE_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_ON
+      )
     ).toBe(false);
     expect(
       selectable.isSelectable(
         EXPENSIVE_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_OFF
+      )
+    ).toBe(false);
+    expect(
+      selectable.isSelectable(
+        EXPENSIVE_MODEL_ID,
+        ALL_CURATED,
         OPENROUTER_BYOK,
         TIER_GATING_ON
       )
@@ -200,7 +232,12 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
 
     expect(
-      selectable.isSelectable(CHEAP_MODEL_ID, NO_BYOK, TIER_GATING_ON)
+      selectable.isSelectable(
+        CHEAP_MODEL_ID,
+        ALL_CURATED,
+        NO_BYOK,
+        TIER_GATING_ON
+      )
     ).toBe(false);
     expect(promotedCache.snapshot().map((m) => m.id)).not.toContain(
       CHEAP_MODEL_ID
@@ -218,7 +255,7 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
 
     expect(
       selectable
-        .list(SYSTEM_DEFAULT, NO_BYOK, TIER_GATING_ON)
+        .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, TIER_GATING_ON)
         .find((m) => m.id === CHEAP_MODEL_ID)?.label
     ).toBe('Renamed by admin');
   });

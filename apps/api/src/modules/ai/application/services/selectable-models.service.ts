@@ -37,9 +37,16 @@ export class SelectableModelsService {
     private readonly promotedModels: PromotedModelsCache
   ) {}
 
-  private catalogUnion(): readonly OfferedModel[] {
+  /**
+   * What the product offers: every promoted model, plus the curated ones the
+   * running config still points at. A curated model nobody configured is a
+   * seed for defaults and validation, not something to put in front of users.
+   */
+  private catalogUnion(
+    configured: ReadonlySet<string>
+  ): readonly OfferedModel[] {
     return [
-      ...CURATED_MODELS,
+      ...CURATED_MODELS.filter((model) => configured.has(model.id)),
       // Code wins entirely for a duplicate id: a promoted model can never
       // rename, re-tier, re-describe, re-price or resize a curated one —
       // CompositeModelCatalog.find() applies the same exclusion.
@@ -109,10 +116,11 @@ export class SelectableModelsService {
 
   list(
     systemDefault: string,
+    configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
     tierGatingOn = false
   ): SelectableModel[] {
-    return this.catalogUnion()
+    return this.catalogUnion(configured)
       .filter((m) => this.invocable(m, byokProviders))
       .map((m) => ({
         id: m.id,
@@ -131,20 +139,22 @@ export class SelectableModelsService {
 
   isSelectable(
     modelId: string,
+    configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
     tierGatingOn = false
   ): boolean {
-    const offered = this.catalogUnion().find((m) => m.id === modelId);
+    const offered = this.catalogUnion(configured).find((m) => m.id === modelId);
     return !!offered && this.selectable(offered, byokProviders, tierGatingOn);
   }
 
   /** First offered model this caller may actually run, or null when none — the landing spot when a configured default is gated. */
   firstSelectable(
+    configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
     tierGatingOn = false
   ): string | null {
     return (
-      this.catalogUnion().find((m) =>
+      this.catalogUnion(configured).find((m) =>
         this.selectable(m, byokProviders, tierGatingOn)
       )?.id ?? null
     );
@@ -153,9 +163,10 @@ export class SelectableModelsService {
   /** First offered model of the tier the caller's own keys can run, or null — catalog order is the rank, curated ahead of promoted. */
   firstOfTier(
     tier: ModelIntent,
+    configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string>
   ): string | null {
-    const match = this.catalogUnion().find(
+    const match = this.catalogUnion(configured).find(
       (m) =>
         m.tier === tier &&
         byokProviders.has(providerOf(m.id)) &&

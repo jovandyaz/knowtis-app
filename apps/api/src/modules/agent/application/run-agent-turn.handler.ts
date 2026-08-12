@@ -754,11 +754,11 @@ export class RunAgentTurnHandler {
   ): Promise<string | null> {
     if (input.model) {
       if (
-        !this.modelPreference.isSelectableWith(
+        !(await this.modelPreference.isSelectableWith(
           input.model,
           byokProviders,
           tierGatingOn
-        )
+        ))
       ) {
         this.logger.warn({
           event: 'ai.model.access_denied',
@@ -782,7 +782,11 @@ export class RunAgentTurnHandler {
     if (
       stored &&
       resuming &&
-      this.modelPreference.isSelectableWith(stored, byokProviders, tierGatingOn)
+      (await this.modelPreference.isSelectableWith(
+        stored,
+        byokProviders,
+        tierGatingOn
+      ))
     ) {
       return stored;
     }

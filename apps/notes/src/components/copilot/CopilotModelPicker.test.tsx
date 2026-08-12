@@ -147,6 +147,29 @@ describe('CopilotModelPicker', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('makes the intent chips inert while an override owns the turn', () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('google:gemini-3.5-flash');
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toBeDisabled();
+  });
+
+  it('keeps the intent chips usable when an override has no picker to clear it', () => {
+    modelsData.mockReturnValue(withLockedModel);
+    sessionModel.mockReturnValue('google:gemini-3.5-flash');
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
+    ).toBeEnabled();
+  });
+
   it('activates the default intent when the account has none stored', () => {
     render(<CopilotModelPicker />);
 

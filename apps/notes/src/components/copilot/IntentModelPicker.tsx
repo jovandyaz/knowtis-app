@@ -26,7 +26,8 @@ export interface IntentModelPickerProps {
 
 /**
  * Intent chips plus the Advanced override dropdown, driven entirely by props.
- * An override deselects every chip, since the chosen model outranks the intent.
+ * An override deselects and disables every chip, since the chosen model
+ * outranks the intent — clearing the override is the way back.
  */
 export function IntentModelPicker({
   models,
@@ -41,6 +42,7 @@ export function IntentModelPicker({
 }: IntentModelPickerProps) {
   const { t } = useTranslation('common');
   const advancedOptions = advancedModelOptions(models);
+  const showAdvanced = advancedOptions.length > 0 || isError;
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -49,8 +51,11 @@ export function IntentModelPicker({
         options={intentChipOptions(t)}
         value={overrideModel ? null : intent}
         onValueChange={onSelectIntent}
+        // Only inert while the dropdown is there to carry "clear override";
+        // with no dropdown a chip is the caller's one way out of the override.
+        disabled={!!overrideModel && showAdvanced}
       />
-      {advancedOptions.length > 0 || isError ? (
+      {showAdvanced ? (
         <ModelSelect
           models={advancedOptions}
           value={overrideModel}

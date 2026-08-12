@@ -39,6 +39,7 @@ function make(
   const selectableSvc = {
     isSelectable: (
       id: string,
+      _configured: ReadonlySet<string>,
       providers?: ReadonlySet<string>,
       tierGatingOn?: boolean
     ) => {
@@ -49,8 +50,12 @@ function make(
       return selectable.includes(id) || hasKey;
     },
     firstSelectable: () => openFallback,
-    firstOfTier,
-    list: (_systemDefault: string, providers?: ReadonlySet<string>) => {
+    firstOfTier: (tier: ModelIntent) => firstOfTier(tier),
+    list: (
+      _systemDefault: string,
+      _configured: ReadonlySet<string>,
+      providers?: ReadonlySet<string>
+    ) => {
       const unlocked = providers
         ? byokProviders
             .filter((p) => providers.has(p))
@@ -65,6 +70,13 @@ function make(
       .fn()
       .mockImplementation((intent: ModelIntent) =>
         Promise.resolve(intentModels[intent])
+      ),
+    getConfiguredModelIds: vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          new Set([SYSTEM_DEFAULT, ...Object.values(intentModels)])
+        )
       ),
   };
   const byok = {
@@ -220,21 +232,21 @@ describe('ModelPreferenceService', () => {
     );
   });
 
-  it('isSelectableWith threads tier gating into the selectability check', () => {
+  it('isSelectableWith threads tier gating into the selectability check', async () => {
     const { svc } = make(null, ['anthropic:claude-opus-4-8']);
-    expect(
+    await expect(
       svc.isSelectableWith('anthropic:claude-opus-4-8', new Set(), false)
-    ).toBe(true);
-    expect(
+    ).resolves.toBe(true);
+    await expect(
       svc.isSelectableWith('anthropic:claude-opus-4-8', new Set(), true)
-    ).toBe(false);
-    expect(
+    ).resolves.toBe(false);
+    await expect(
       svc.isSelectableWith(
         'anthropic:claude-opus-4-8',
         new Set(['anthropic']),
         true
       )
-    ).toBe(true);
+    ).resolves.toBe(true);
   });
 
   it('effective default resolves the intent through its ai_config key for a keyless caller', async () => {

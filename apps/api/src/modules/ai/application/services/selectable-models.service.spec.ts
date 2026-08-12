@@ -14,6 +14,10 @@ import { SelectableModelsService } from './selectable-models.service';
 
 const SYSTEM_DEFAULT = 'anthropic:claude-sonnet-5';
 const NO_BYOK: ReadonlySet<string> = new Set();
+/** Stands for a config that still points at every curated model, which is what these cases assume. */
+const ALL_CURATED: ReadonlySet<string> = new Set(
+  CURATED_MODELS.map((model) => model.id)
+);
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const PROMOTED_DESCRIPTION = 'Promoted from the open catalog';
 const PORT_CONTEXT_WINDOW = 262_144;
@@ -99,7 +103,7 @@ describe('SelectableModelsService', () => {
       supported: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6']),
       available: new Set(['anthropic:claude-sonnet-5']),
     });
-    const ids = svc.list(SYSTEM_DEFAULT).map((m) => m.id);
+    const ids = svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => m.id);
     expect(ids).toContain('anthropic:claude-sonnet-5');
     expect(ids).not.toContain('openai:gpt-5.6');
   });
@@ -118,15 +122,23 @@ describe('SelectableModelsService', () => {
       registry,
       promotedCache([])
     );
-    const withByok = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
+    const withByok = svc.list(
+      'anthropic:claude-sonnet-5',
+      ALL_CURATED,
+      new Set(['google'])
+    );
     expect(withByok.some((m) => m.id.startsWith('google:'))).toBe(true);
-    const without = svc.list('anthropic:claude-sonnet-5');
+    const without = svc.list('anthropic:claude-sonnet-5', ALL_CURATED);
     expect(without.some((m) => m.id.startsWith('google:'))).toBe(false);
   });
 
   it('flags billedToUser only for models whose provider has a BYOK key', () => {
     const svc = makeOpenService();
-    const models = svc.list('anthropic:claude-sonnet-5', new Set(['google']));
+    const models = svc.list(
+      'anthropic:claude-sonnet-5',
+      ALL_CURATED,
+      new Set(['google'])
+    );
     expect(models.find((m) => m.id.startsWith('google:'))?.billedToUser).toBe(
       true
     );
@@ -140,10 +152,44 @@ describe('SelectableModelsService', () => {
       supported: new Set(['google:gemini-3.5-flash']),
       available: new Set(),
     });
-    expect(svc.isSelectable('google:gemini-3.5-flash')).toBe(false);
+    expect(svc.isSelectable('google:gemini-3.5-flash', ALL_CURATED)).toBe(
+      false
+    );
     expect(
-      svc.isSelectable('google:gemini-3.5-flash', new Set(['google']))
+      svc.isSelectable(
+        'google:gemini-3.5-flash',
+        ALL_CURATED,
+        new Set(['google'])
+      )
     ).toBe(true);
+  });
+
+  it('drops a curated model the running config no longer points at', () => {
+    const svc = makeService({
+      supported: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6']),
+      available: new Set(['anthropic:claude-sonnet-5', 'openai:gpt-5.6']),
+    });
+    const configured: ReadonlySet<string> = new Set([
+      'anthropic:claude-sonnet-5',
+    ]);
+
+    const ids = svc.list(SYSTEM_DEFAULT, configured).map((m) => m.id);
+
+    expect(ids).toEqual(['anthropic:claude-sonnet-5']);
+    expect(svc.isSelectable('openai:gpt-5.6', configured)).toBe(false);
+  });
+
+  it('offers a promoted model without any config pointing at it', () => {
+    const promoted = createCatalogModel({
+      id: PROMOTED_ID,
+      tier: 'open',
+      outputCostPerToken: FREE_TIER_OUTPUT_COST,
+    });
+    const svc = makeOpenService([promoted]);
+
+    const ids = svc.list(SYSTEM_DEFAULT, new Set()).map((m) => m.id);
+
+    expect(ids).toEqual([PROMOTED_ID]);
   });
 
   it('marks the system default with isDefault', () => {
@@ -151,7 +197,9 @@ describe('SelectableModelsService', () => {
       supported: new Set([SYSTEM_DEFAULT]),
       available: new Set([SYSTEM_DEFAULT]),
     });
-    const def = svc.list(SYSTEM_DEFAULT).find((m) => m.id === SYSTEM_DEFAULT);
+    const def = svc
+      .list(SYSTEM_DEFAULT, ALL_CURATED)
+      .find((m) => m.id === SYSTEM_DEFAULT);
     expect(def?.isDefault).toBe(true);
   });
 
@@ -160,9 +208,9 @@ describe('SelectableModelsService', () => {
       supported: new Set([SYSTEM_DEFAULT]),
       available: new Set([SYSTEM_DEFAULT]),
     });
-    expect(svc.isSelectable(SYSTEM_DEFAULT)).toBe(true);
-    expect(svc.isSelectable('anthropic:not-curated')).toBe(false);
-    expect(svc.isSelectable('openai:gpt-5.6')).toBe(false); // curated but unavailable
+    expect(svc.isSelectable(SYSTEM_DEFAULT, ALL_CURATED)).toBe(true);
+    expect(svc.isSelectable('anthropic:not-curated', ALL_CURATED)).toBe(false);
+    expect(svc.isSelectable('openai:gpt-5.6', ALL_CURATED)).toBe(false); // curated but unavailable
   });
 
   it('derives costClass from outputCostPerToken across tiers', () => {
@@ -190,7 +238,7 @@ describe('SelectableModelsService', () => {
       },
     });
     const byId = Object.fromEntries(
-      svc.list(SYSTEM_DEFAULT).map((m) => [m.id, m.costClass])
+      svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => [m.id, m.costClass])
     );
     expect(byId['anthropic:claude-haiku-4-5-20251001']).toBe(1);
     expect(byId['anthropic:claude-sonnet-5']).toBe(2);
@@ -227,7 +275,7 @@ describe('SelectableModelsService', () => {
       },
     });
     const byId = Object.fromEntries(
-      svc.list(SYSTEM_DEFAULT).map((m) => [m.id, m.costClass])
+      svc.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => [m.id, m.costClass])
     );
     expect(byId['openai:gpt-5.4-mini']).toBe(1);
     expect(byId['anthropic:claude-sonnet-5']).toBe(2);
@@ -239,6 +287,7 @@ describe('SelectableModelsService', () => {
     const service = makeOpenService();
     const models = service.list(
       'openrouter:deepseek/deepseek-v3.2',
+      ALL_CURATED,
       NO_BYOK,
       true
     );
@@ -249,31 +298,33 @@ describe('SelectableModelsService', () => {
   it('should refuse to select a gated model and accept it with the key', () => {
     const service = makeOpenService();
     const premiumId = 'anthropic:claude-haiku-4-5-20251001';
-    expect(service.isSelectable(premiumId, NO_BYOK, true)).toBe(false);
-    expect(service.isSelectable(premiumId, new Set(['anthropic']), true)).toBe(
-      true
+    expect(service.isSelectable(premiumId, ALL_CURATED, NO_BYOK, true)).toBe(
+      false
     );
+    expect(
+      service.isSelectable(premiumId, ALL_CURATED, new Set(['anthropic']), true)
+    ).toBe(true);
   });
 
   it('should change nothing while the flag is off', () => {
     const service = makeOpenService();
     expect(
       service
-        .list('openrouter:deepseek/deepseek-v3.2', NO_BYOK, false)
+        .list('openrouter:deepseek/deepseek-v3.2', ALL_CURATED, NO_BYOK, false)
         .every((m) => m.access === 'granted')
     ).toBe(true);
   });
 
   it('offers the first open model as fallback for a gated keyless caller', () => {
     const service = makeOpenService();
-    expect(service.firstSelectable(NO_BYOK, true)).toBe(
+    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBe(
       'openrouter:deepseek/deepseek-v3.2'
     );
   });
 
   it('offers the first curated model as fallback while the flag is off', () => {
     const service = makeOpenService();
-    expect(service.firstSelectable(NO_BYOK, false)).toBe(
+    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, false)).toBe(
       'anthropic:claude-haiku-4-5-20251001'
     );
   });
@@ -283,15 +334,15 @@ describe('SelectableModelsService', () => {
       supported: new Set(),
       available: new Set(),
     });
-    expect(service.firstSelectable(NO_BYOK, true)).toBeNull();
+    expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBeNull();
   });
 
   describe('promoted catalog models', () => {
     it('lists exactly the curated set while nothing is promoted', () => {
       const service = makeOpenService();
-      expect(service.list(SYSTEM_DEFAULT).map((m) => m.id)).toEqual(
-        CURATED_MODELS.map((m) => m.id)
-      );
+      expect(
+        service.list(SYSTEM_DEFAULT, ALL_CURATED).map((m) => m.id)
+      ).toEqual(CURATED_MODELS.map((m) => m.id));
     });
 
     it('serves a promoted row as a free open-tier model with its description', () => {
@@ -304,7 +355,7 @@ describe('SelectableModelsService', () => {
         }),
       ]);
 
-      const listed = service.list(SYSTEM_DEFAULT, NO_BYOK, true);
+      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true);
       const promoted = listed.find((m) => m.id === PROMOTED_ID);
 
       // List order is display order: ModelSelect keeps item order within a tier group.
@@ -344,7 +395,7 @@ describe('SelectableModelsService', () => {
       });
 
       const promoted = service
-        .list(SYSTEM_DEFAULT)
+        .list(SYSTEM_DEFAULT, ALL_CURATED)
         .find((m) => m.id === PROMOTED_ID);
 
       expect(promoted?.contextWindow).toBe(PORT_CONTEXT_WINDOW);
@@ -357,7 +408,7 @@ describe('SelectableModelsService', () => {
       ]);
 
       const promoted = service
-        .list(SYSTEM_DEFAULT, new Set(['openrouter']))
+        .list(SYSTEM_DEFAULT, ALL_CURATED, new Set(['openrouter']))
         .find((m) => m.id === PROMOTED_ID);
 
       expect(promoted?.billedToUser).toBe(true);
@@ -369,7 +420,7 @@ describe('SelectableModelsService', () => {
       ]);
 
       const promoted = service
-        .list(SYSTEM_DEFAULT)
+        .list(SYSTEM_DEFAULT, ALL_CURATED)
         .find((m) => m.id === PROMOTED_ID);
 
       expect(promoted?.description).toBeUndefined();
@@ -403,7 +454,7 @@ describe('SelectableModelsService', () => {
       );
 
       const matches = service
-        .list(SYSTEM_DEFAULT)
+        .list(SYSTEM_DEFAULT, ALL_CURATED)
         .filter((m) => m.id === SYSTEM_DEFAULT);
 
       expect(matches).toHaveLength(1);
@@ -447,10 +498,12 @@ describe('SelectableModelsService', () => {
           ABOVE_CEILING_OUTPUT_COST
         );
 
-        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(false);
+        expect(
+          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
+        ).toBe(false);
         expect(
           service
-            .list(SYSTEM_DEFAULT, NO_BYOK, true)
+            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true)
             .find((m) => m.id === PROMOTED_ID)?.access
         ).toBe('requires_byok');
       });
@@ -460,7 +513,9 @@ describe('SelectableModelsService', () => {
           ABOVE_CEILING_OUTPUT_COST
         );
 
-        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, false)).toBe(false);
+        expect(
+          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, false)
+        ).toBe(false);
       });
 
       it('opens up to the caller who brings the provider key', async () => {
@@ -469,14 +524,21 @@ describe('SelectableModelsService', () => {
         );
 
         expect(
-          service.isSelectable(PROMOTED_ID, new Set(['openrouter']), true)
+          service.isSelectable(
+            PROMOTED_ID,
+            ALL_CURATED,
+            new Set(['openrouter']),
+            true
+          )
         ).toBe(true);
       });
 
       it('stays free when the stored price is under the ceiling', async () => {
         const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
 
-        expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(true);
+        expect(
+          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
+        ).toBe(true);
       });
     });
 
@@ -487,8 +549,12 @@ describe('SelectableModelsService', () => {
         promoted: [createCatalogModel({ id: PROMOTED_ID })],
       });
 
-      expect(service.isSelectable(PROMOTED_ID, NO_BYOK, true)).toBe(true);
-      expect(service.firstSelectable(NO_BYOK, true)).toBe(PROMOTED_ID);
+      expect(
+        service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
+      ).toBe(true);
+      expect(service.firstSelectable(ALL_CURATED, NO_BYOK, true)).toBe(
+        PROMOTED_ID
+      );
     });
 
     it('offers a promoted model of a tier no curated key of the caller reaches', () => {
@@ -496,9 +562,9 @@ describe('SelectableModelsService', () => {
         createCatalogModel({ id: PROMOTED_ID, tier: 'powerful' }),
       ]);
 
-      expect(service.firstOfTier('powerful', new Set(['openrouter']))).toBe(
-        PROMOTED_ID
-      );
+      expect(
+        service.firstOfTier('powerful', ALL_CURATED, new Set(['openrouter']))
+      ).toBe(PROMOTED_ID);
     });
 
     it('ranks curated models of a tier above promoted ones', () => {
@@ -507,7 +573,11 @@ describe('SelectableModelsService', () => {
       ]);
 
       expect(
-        service.firstOfTier('powerful', new Set(['anthropic', 'openrouter']))
+        service.firstOfTier(
+          'powerful',
+          ALL_CURATED,
+          new Set(['anthropic', 'openrouter'])
+        )
       ).toBe('anthropic:claude-opus-4-8');
     });
   });
@@ -515,29 +585,33 @@ describe('SelectableModelsService', () => {
   describe('firstOfTier', () => {
     it('returns the first curated model of the tier the caller has a key for', () => {
       const service = makeOpenService();
-      expect(service.firstOfTier('powerful', new Set(['anthropic']))).toBe(
-        'anthropic:claude-opus-4-8'
-      );
-      expect(service.firstOfTier('powerful', new Set(['openai']))).toBe(
-        'openai:gpt-5.6'
-      );
+      expect(
+        service.firstOfTier('powerful', ALL_CURATED, new Set(['anthropic']))
+      ).toBe('anthropic:claude-opus-4-8');
+      expect(
+        service.firstOfTier('powerful', ALL_CURATED, new Set(['openai']))
+      ).toBe('openai:gpt-5.6');
     });
 
     it('ranks by catalog order when the caller holds keys for several providers of the tier', () => {
       const service = makeOpenService();
       expect(
-        service.firstOfTier('powerful', new Set(['openai', 'anthropic']))
+        service.firstOfTier(
+          'powerful',
+          ALL_CURATED,
+          new Set(['openai', 'anthropic'])
+        )
       ).toBe('anthropic:claude-opus-4-8');
-      expect(service.firstOfTier('fast', new Set(['google', 'openai']))).toBe(
-        'openai:gpt-5.4-mini'
-      );
+      expect(
+        service.firstOfTier('fast', ALL_CURATED, new Set(['google', 'openai']))
+      ).toBe('openai:gpt-5.4-mini');
     });
 
     it('returns null when no curated model of the tier matches the BYOK set', () => {
       const service = makeOpenService();
-      expect(service.firstOfTier('powerful', NO_BYOK)).toBeNull();
+      expect(service.firstOfTier('powerful', ALL_CURATED, NO_BYOK)).toBeNull();
       expect(
-        service.firstOfTier('powerful', new Set(['openrouter']))
+        service.firstOfTier('powerful', ALL_CURATED, new Set(['openrouter']))
       ).toBeNull();
     });
 
@@ -546,7 +620,9 @@ describe('SelectableModelsService', () => {
         supported: new Set(),
         available: new Set(),
       });
-      expect(service.firstOfTier('fast', new Set(['anthropic']))).toBeNull();
+      expect(
+        service.firstOfTier('fast', ALL_CURATED, new Set(['anthropic']))
+      ).toBeNull();
     });
   });
 });

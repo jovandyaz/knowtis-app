@@ -47,12 +47,19 @@ export class ModelPreferenceService {
   }
 
   async listModels(userId: string): Promise<SelectableModel[]> {
-    const [systemDefault, byokProviders, tierGatingOn] = await Promise.all([
-      this.aiConfig.getDefaultModel(),
-      this.byok.enabledProviders(userId),
-      this.tierGatingOn(),
-    ]);
-    return this.selectable.list(systemDefault, byokProviders, tierGatingOn);
+    const [systemDefault, configured, byokProviders, tierGatingOn] =
+      await Promise.all([
+        this.aiConfig.getDefaultModel(),
+        this.aiConfig.getConfiguredModelIds(),
+        this.byok.enabledProviders(userId),
+        this.tierGatingOn(),
+      ]);
+    return this.selectable.list(
+      systemDefault,
+      configured,
+      byokProviders,
+      tierGatingOn
+    );
   }
 
   byokProvidersFor(
@@ -62,12 +69,17 @@ export class ModelPreferenceService {
     return this.byok.enabledProviders(userId, isAnonymous);
   }
 
-  isSelectableWith(
+  async isSelectableWith(
     modelId: string,
     byokProviders: ReadonlySet<string>,
     tierGatingOn: boolean
-  ): boolean {
-    return this.selectable.isSelectable(modelId, byokProviders, tierGatingOn);
+  ): Promise<boolean> {
+    return this.selectable.isSelectable(
+      modelId,
+      await this.aiConfig.getConfiguredModelIds(),
+      byokProviders,
+      tierGatingOn
+    );
   }
 
   async getUserPreferences(userId: string): Promise<AIPreferences> {
@@ -84,38 +96,45 @@ export class ModelPreferenceService {
     const providers =
       byokProviders ?? (await this.byok.enabledProviders(userId));
     const gatingOn = tierGatingOn ?? (await this.tierGatingOn());
+    const offered = await this.aiConfig.getConfiguredModelIds();
     const { preferredModel, preferredIntent } =
       await this.settings.getSettings(userId);
     // Only Advanced (BYOK-billed) picks are overrides — anything else the UI cannot show.
     if (
       preferredModel &&
       providers.has(providerOf(preferredModel)) &&
-      this.selectable.isSelectable(preferredModel, providers, gatingOn)
+      this.selectable.isSelectable(preferredModel, offered, providers, gatingOn)
     ) {
       return preferredModel;
     }
     const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
-    const byokPick = this.selectable.firstOfTier(intent, providers);
+    const byokPick = this.selectable.firstOfTier(intent, offered, providers);
     // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
     if (
       byokPick &&
-      this.selectable.isSelectable(byokPick, providers, gatingOn)
+      this.selectable.isSelectable(byokPick, offered, providers, gatingOn)
     ) {
       return byokPick;
     }
     const configured = await this.aiConfig.getIntentModel(intent);
-    if (this.selectable.isSelectable(configured, providers, gatingOn)) {
+    if (
+      this.selectable.isSelectable(configured, offered, providers, gatingOn)
+    ) {
       return configured;
     }
     const systemDefault = await this.aiConfig.getDefaultModel();
     // Only under gating: dark behavior must stay byte-for-byte status quo.
     if (
       !gatingOn ||
-      this.selectable.isSelectable(systemDefault, providers, gatingOn)
+      this.selectable.isSelectable(systemDefault, offered, providers, gatingOn)
     ) {
       return systemDefault;
     }
-    const fallback = this.selectable.firstSelectable(providers, gatingOn);
+    const fallback = this.selectable.firstSelectable(
+      offered,
+      providers,
+      gatingOn
+    );
     if (!fallback) {
       return systemDefault;
     }
@@ -127,8 +146,11 @@ export class ModelPreferenceService {
     return fallback;
   }
 
-  isSelectable(modelId: string): boolean {
-    return this.selectable.isSelectable(modelId);
+  async isSelectable(modelId: string): Promise<boolean> {
+    return this.selectable.isSelectable(
+      modelId,
+      await this.aiConfig.getConfiguredModelIds()
+    );
   }
 
   async setUserPreferences(
@@ -139,13 +161,15 @@ export class ModelPreferenceService {
       return;
     }
     if (typeof patch.preferredModel === 'string') {
-      const [byokProviders, tierGatingOn] = await Promise.all([
+      const [byokProviders, tierGatingOn, offered] = await Promise.all([
         this.byok.enabledProviders(userId),
         this.tierGatingOn(),
+        this.aiConfig.getConfiguredModelIds(),
       ]);
       if (
         !this.selectable.isSelectable(
           patch.preferredModel,
+          offered,
           byokProviders,
           tierGatingOn
         )

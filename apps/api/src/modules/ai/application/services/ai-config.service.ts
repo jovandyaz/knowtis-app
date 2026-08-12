@@ -154,6 +154,21 @@ export class AIConfigService {
     return supported;
   }
 
+  /**
+   * Every model the running configuration points at: the three intent models
+   * plus the fallback chain. These stay offerable even when they are not
+   * promoted, so an operator can never configure a model the picker hides.
+   */
+  async getConfiguredModelIds(): Promise<ReadonlySet<string>> {
+    const [fast, balanced, deep, chain] = await Promise.all([
+      this.getIntentModel('fast'),
+      this.getIntentModel('balanced'),
+      this.getIntentModel('powerful'),
+      this.getFallbackChain(),
+    ]);
+    return new Set([fast, balanced, deep, ...chain]);
+  }
+
   async getReasoningEffort(): Promise<ReasoningEffort> {
     const value = await this.getConfigValue('ai_reasoning_effort');
     if (isReasoningEffort(value)) {
