@@ -140,6 +140,12 @@ describe('CatalogSection', () => {
     expect(screen.getByText(/vs vendored/)).toBeInTheDocument();
   });
 
+  it('gives the alert detail a basis so it wraps to its own line instead of widening the page', () => {
+    renderSection({ alerts: [alert()] });
+
+    expect(screen.getByText(/vs vendored/)).toHaveClass('basis-48');
+  });
+
   it('renders an alert kind this bundle does not know as its raw value', () => {
     renderSection({ alerts: [alert({ kind: 'context_shrink' })] });
 

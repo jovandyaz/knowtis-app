@@ -237,7 +237,7 @@ export function CatalogSection() {
                     <span className="font-mono text-xs text-(--muted-foreground)">
                       {alert.modelId}
                     </span>
-                    <span className="min-w-0 flex-1 text-sm">
+                    <span className="min-w-0 flex-1 basis-48 wrap-break-word text-sm">
                       {alert.detail}
                     </span>
                     <span className="text-xs text-(--muted-foreground)">
