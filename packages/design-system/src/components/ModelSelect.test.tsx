@@ -62,6 +62,25 @@ describe('ModelSelect', () => {
     ).toHaveLength(1);
   });
 
+  it('keeps a long description reachable in full while clamping it to one line', async () => {
+    const longDescription =
+      'A promoted model arrives with the raw upstream blurb, which runs for several sentences and would otherwise take over the whole dropdown.';
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        renderDescription={() => longDescription}
+      />
+    );
+    await userEvent.click(screen.getByRole('button', { name: /Fast One/ }));
+
+    const description = screen.getAllByTitle(longDescription)[0];
+    expect(description).toHaveTextContent(longDescription);
+    // jsdom does no layout, so the clamp can only be guarded as a markup contract.
+    expect(description).toHaveClass('line-clamp-1', 'w-full', 'min-w-0');
+  });
+
   it('orders tier groups by the tierOrder prop', async () => {
     render(
       <ModelSelect
