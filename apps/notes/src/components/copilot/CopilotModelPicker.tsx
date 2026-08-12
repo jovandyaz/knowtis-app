@@ -39,7 +39,8 @@ export function CopilotModelPicker() {
   const advancedOptions = advancedModelOptions(models);
 
   const select = (id: string) => {
-    if (!isModelIntent(id)) {
+    const isOfferedModel = advancedOptions.some((m) => m.id === id);
+    if (isOfferedModel || !isModelIntent(id)) {
       setSessionModel(id);
       return;
     }

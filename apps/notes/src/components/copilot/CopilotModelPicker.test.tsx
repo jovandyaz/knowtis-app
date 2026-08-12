@@ -111,9 +111,24 @@ const promotedModel = {
   access: 'granted',
 } satisfies SelectableModel;
 
+const intentNamedModel = {
+  id: 'fast',
+  label: 'Intent Named One',
+  descriptionKey: '',
+  description: 'Promoted with an id that reads like a style',
+  tier: 'fast',
+  contextWindow: 200000,
+  costClass: 1,
+  isDefault: false,
+  billedToUser: true,
+  routableByServer: true,
+  access: 'granted',
+} satisfies SelectableModel;
+
 const withLockedModel = [...grantedModels, lockedModel];
 const withByokModel = [...grantedModels, lockedModel, byokModel];
 const withPromotedModel = [...withByokModel, promotedModel];
+const withIntentNamedModel = [...withByokModel, intentNamedModel];
 
 describe('CopilotModelPicker', () => {
   beforeEach(() => {
@@ -230,6 +245,17 @@ describe('CopilotModelPicker', () => {
     await userEvent.click(screen.getByText('Byok One'));
 
     expect(setSelected).toHaveBeenCalledWith('o:byok');
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
+  it('picks a model whose id reads like a style instead of storing a preference', async () => {
+    modelsData.mockReturnValue(withIntentNamedModel);
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(screen.getByRole('button'));
+    await userEvent.click(screen.getByText('Intent Named One'));
+
+    expect(setSelected).toHaveBeenCalledWith('fast');
     expect(updatePreferences).not.toHaveBeenCalled();
   });
 
