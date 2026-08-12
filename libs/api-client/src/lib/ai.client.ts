@@ -76,6 +76,7 @@ export class AIClient {
   };
   private authRefreshHandler: AuthRefreshHandler | null = null;
   private onSessionExpired: (() => void) | null = null;
+  private recoveringAuth = false;
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
@@ -119,7 +120,7 @@ export class AIClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(payload, callbacks);
     } else if (this.authRefreshHandler) {
-      void this.authPolicy.recover(this.authHandlers(payload, callbacks));
+      this.beginAuthRecovery();
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -135,24 +136,40 @@ export class AIClient {
     };
   }
 
-  private authHandlers(
-    payload: AICompletePayload,
-    callbacks: AIStreamCallbacks
-  ): Parameters<TokenRefreshPolicy['recover']>[0] {
+  private beginAuthRecovery(): void {
+    this.recoveringAuth = true;
+    void this.authPolicy.recover(this.authHandlers());
+  }
+
+  /**
+   * Resolves the request to resume from the live pending state rather than a
+   * captured one: a request issued while the refresh is in flight is suppressed
+   * by the policy's in-flight guard, so it is this recovery that must carry it.
+   */
+  private authHandlers(): Parameters<TokenRefreshPolicy['recover']>[0] {
+    const pending = () => {
+      const callbacks = this.activeCallbacks;
+      const payload = this.pendingPayload;
+      return callbacks && payload ? { callbacks, payload } : null;
+    };
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
-        if (this.activeCallbacks !== callbacks) {
+        this.recoveringAuth = false;
+        const request = pending();
+        if (!request) {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(payload, callbacks);
+        this.openAndEmit(request.payload, request.callbacks);
       },
       onExhausted: () => {
-        if (this.activeCallbacks !== callbacks) {
+        this.recoveringAuth = false;
+        const request = pending();
+        if (!request) {
           return;
         }
-        this.failRequest(callbacks, AUTH_ERROR);
+        this.failRequest(request.callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -199,10 +216,11 @@ export class AIClient {
 
   /** Reads the latest token via the auth function so reconnects pick up fresh credentials. */
   private ensureSocket(): void {
-    if (this.socket) {
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 
+    this.teardownSocket();
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],
       autoConnect: true,
@@ -213,28 +231,42 @@ export class AIClient {
     this.setupEventListeners();
   }
 
+  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
   private teardownSocket(): void {
-    this.socket?.disconnect();
+    const socket = this.socket;
     this.socket = null;
+    socket?.disconnect();
   }
 
   private setupEventListeners(): void {
-    if (!this.socket) {
+    const socket = this.socket;
+    if (!socket) {
       return;
     }
 
-    this.socket.on('connect', () => {
+    socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('AI WebSocket connected', { context: 'AIClient' });
     });
 
-    this.socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason) => {
       logger.info(`AI WebSocket disconnected: ${reason}`, {
         context: 'AIClient',
       });
+      // Our own teardown already decided what happens to the request.
+      if (this.socket !== socket || socket.active) {
+        return;
+      }
+      // A server-forced close never reconnects on its own, so anything emitted
+      // afterwards would sit in the send buffer with nothing to flush it.
+      const callbacks = this.activeCallbacks;
+      this.teardownSocket();
+      if (callbacks && !this.recoveringAuth) {
+        this.failRequest(callbacks, CONNECTION_ERROR);
+      }
     });
 
-    this.socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error) => {
       logger.error('AI connection error', { error, context: 'AIClient' });
       this.reconnectAttempts++;
 
@@ -246,21 +278,23 @@ export class AIClient {
       }
     });
 
-    this.socket.on('ai:chunk', (payload: AIChunkPayload) => {
+    socket.on('ai:chunk', (payload: AIChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
     });
 
-    this.socket.on('ai:done', (payload: AIDonePayload) => {
+    socket.on('ai:done', (payload: AIDonePayload) => {
       this.activeCallbacks?.onDone(payload);
       this.activeCallbacks = null;
       this.pendingPayload = null;
     });
 
-    this.socket.on('ai:error', (payload: AIErrorPayload) => {
-      if (this.canRecoverFromAuthError(payload)) {
-        void this.authPolicy.recover(
-          this.authHandlers(this.pendingPayload!, this.activeCallbacks!)
-        );
+    socket.on('ai:error', (payload: AIErrorPayload) => {
+      if (
+        this.pendingPayload &&
+        this.activeCallbacks &&
+        this.canRecoverFromAuthError(payload)
+      ) {
+        this.beginAuthRecovery();
         return;
       }
 
@@ -271,12 +305,7 @@ export class AIClient {
   }
 
   private canRecoverFromAuthError(payload: AIErrorPayload): boolean {
-    return (
-      payload.code === AUTH_REQUIRED_CODE &&
-      !!this.authRefreshHandler &&
-      !!this.activeCallbacks &&
-      !!this.pendingPayload
-    );
+    return payload.code === AUTH_REQUIRED_CODE && !!this.authRefreshHandler;
   }
 }
 

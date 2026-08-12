@@ -14,13 +14,17 @@ function createFakeSocket() {
   const handlers = new Map<string, (arg?: unknown) => void>();
   const socket = {
     connected: false,
+    active: true,
     on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
       handlers.set(event, cb);
       return socket;
     }),
     emit: vi.fn(() => socket),
+    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
     disconnect: vi.fn(() => {
       socket.connected = false;
+      socket.active = false;
+      handlers.get('disconnect')?.('io client disconnect');
       return socket;
     }),
   };
@@ -239,5 +243,65 @@ describe('AIClient', () => {
 
     expect(callbacks.onError).toHaveBeenCalled();
     expect(fake.socket.disconnect).toHaveBeenCalled();
+  });
+
+  it('opens a fresh socket for a request sent after the server closed the previous one', async () => {
+    const callbacks = createCallbacks();
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+    expect(io).toHaveBeenCalledTimes(1);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    client.stream(PAYLOAD, createCallbacks());
+    await flush();
+
+    expect(io).toHaveBeenCalledTimes(2);
+    expect(fake.socket.emit).toHaveBeenLastCalledWith('ai:complete', PAYLOAD);
+  });
+
+  it('fails the in-flight request when the server closes the connection', async () => {
+    const callbacks = createCallbacks();
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      code: 'CONNECTION_FAILED',
+      message: 'Failed to connect to AI server',
+    });
+  });
+
+  it('keeps the in-flight request alive while socket.io is reconnecting', async () => {
+    const callbacks = createCallbacks();
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+
+    fake.socket.connected = false;
+    fake.socket.active = true;
+    fake.trigger('disconnect', 'transport close');
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(io).toHaveBeenCalledTimes(1);
   });
 });

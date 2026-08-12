@@ -25,13 +25,17 @@ function createFakeSocket() {
   const fakeHandlers = new Map<string, (arg?: unknown) => void>();
   const fakeSocket = {
     connected: false,
+    active: true,
     on: vi.fn((event: string, cb: (arg?: unknown) => void) => {
       fakeHandlers.set(event, cb);
       return fakeSocket;
     }),
     emit: vi.fn(() => fakeSocket),
+    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
     disconnect: vi.fn(() => {
       fakeSocket.connected = false;
+      fakeSocket.active = false;
+      fakeHandlers.get('disconnect')?.('io client disconnect');
       return fakeSocket;
     }),
   };
@@ -375,5 +379,148 @@ describe('AgentClient – auth/transport failure paths', () => {
     }
 
     expect(fake.socket.disconnect).toHaveBeenCalled();
+  });
+
+  it('opens a fresh socket for a turn sent after the server closed the previous one', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    expect(io).toHaveBeenCalledTimes(1);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    client.sendMessage('second', callbacks);
+    await flush();
+
+    expect(io).toHaveBeenCalledTimes(2);
+    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
+      message: { content: 'second' },
+    });
+  });
+
+  it('fails the in-flight turn when the server closes the connection', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('hi', callbacks);
+    await flush();
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      code: 'CONNECTION_FAILED',
+      message: 'Failed to connect to agent server',
+    });
+  });
+
+  it('keeps the in-flight turn alive while socket.io is reconnecting', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('hi', callbacks);
+    await flush();
+
+    fake.socket.connected = false;
+    fake.socket.active = true;
+    fake.trigger('disconnect', 'transport close');
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(io).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries the turn sent while the token refresh was still in flight', async () => {
+    let token: string | null = null;
+    let releaseRefresh = () => {};
+    const refresh = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseRefresh = () => {
+            token = 'fresh-token';
+            resolve(true);
+          };
+        })
+    );
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    client.sendMessage('second', callbacks);
+    await flush();
+
+    releaseRefresh();
+    await flush();
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
+      message: { content: 'second' },
+    });
+  });
+
+  it('lets auth recovery resume the turn the expiry disconnect interrupted', async () => {
+    let token = 'stale-token';
+    const refresh = vi.fn(async () => {
+      token = 'fresh-token';
+      return true;
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('hi', callbacks);
+    await flush();
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    await flush();
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
+      message: { content: 'hi' },
+    });
   });
 });

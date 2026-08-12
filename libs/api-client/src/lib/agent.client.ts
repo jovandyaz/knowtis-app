@@ -107,6 +107,7 @@ export class AgentClient {
   };
   private authRefreshHandler: AuthRefreshHandler | null = null;
   private onSessionExpired: (() => void) | null = null;
+  private recoveringAuth = false;
 
   constructor(wsUrl?: string) {
     this.wsUrl = wsUrl;
@@ -155,7 +156,7 @@ export class AgentClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(content, callbacks);
     } else if (this.authRefreshHandler) {
-      void this.authPolicy.recover(this.authHandlers(content, callbacks));
+      this.beginAuthRecovery();
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -171,24 +172,40 @@ export class AgentClient {
     };
   }
 
-  private authHandlers(
-    content: string,
-    callbacks: AgentStreamCallbacks
-  ): Parameters<TokenRefreshPolicy['recover']>[0] {
+  private beginAuthRecovery(): void {
+    this.recoveringAuth = true;
+    void this.authPolicy.recover(this.authHandlers());
+  }
+
+  /**
+   * Resolves the request to resume from the live pending state rather than a
+   * captured one: a send issued while the refresh is in flight is suppressed by
+   * the policy's in-flight guard, so it is this recovery that must carry it.
+   */
+  private authHandlers(): Parameters<TokenRefreshPolicy['recover']>[0] {
+    const pending = () => {
+      const callbacks = this.activeCallbacks;
+      const content = this.pendingContent;
+      return callbacks && content ? { callbacks, content } : null;
+    };
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
-        if (this.activeCallbacks !== callbacks) {
+        this.recoveringAuth = false;
+        const request = pending();
+        if (!request) {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(content, callbacks);
+        this.openAndEmit(request.content, request.callbacks);
       },
       onExhausted: () => {
-        if (this.activeCallbacks !== callbacks) {
+        this.recoveringAuth = false;
+        const request = pending();
+        if (!request) {
           return;
         }
-        this.failRequest(callbacks, AUTH_ERROR);
+        this.failRequest(request.callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -239,10 +256,11 @@ export class AgentClient {
   }
 
   private ensureSocket(): void {
-    if (this.socket) {
+    if (this.socket?.connected || this.socket?.active) {
       return;
     }
 
+    this.teardownSocket();
     this.socket = io(this.getWsUrl(), {
       transports: ['polling', 'websocket'],
       autoConnect: true,
@@ -253,28 +271,42 @@ export class AgentClient {
     this.setupEventListeners();
   }
 
+  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
   private teardownSocket(): void {
-    this.socket?.disconnect();
+    const socket = this.socket;
     this.socket = null;
+    socket?.disconnect();
   }
 
   private setupEventListeners(): void {
-    if (!this.socket) {
+    const socket = this.socket;
+    if (!socket) {
       return;
     }
 
-    this.socket.on('connect', () => {
+    socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('Agent WebSocket connected', { context: 'AgentClient' });
     });
 
-    this.socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason) => {
       logger.info(`Agent WebSocket disconnected: ${reason}`, {
         context: 'AgentClient',
       });
+      // Our own teardown already decided what happens to the request.
+      if (this.socket !== socket || socket.active) {
+        return;
+      }
+      // A server-forced close never reconnects on its own, so anything emitted
+      // afterwards would sit in the send buffer until the client watchdog.
+      const callbacks = this.activeCallbacks;
+      this.teardownSocket();
+      if (callbacks && !this.recoveringAuth) {
+        this.failRequest(callbacks, CONNECTION_ERROR);
+      }
     });
 
-    this.socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error) => {
       logger.error('Agent connection error', { error, context: 'AgentClient' });
       this.reconnectAttempts++;
 
@@ -286,15 +318,15 @@ export class AgentClient {
       }
     });
 
-    this.socket.on('agent:chunk', (payload: AgentChunkPayload) => {
+    socket.on('agent:chunk', (payload: AgentChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
     });
 
-    this.socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
+    socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
       this.activeCallbacks?.onThinking?.(payload);
     });
 
-    this.socket.on('agent:done', (payload: AgentDonePayload) => {
+    socket.on('agent:done', (payload: AgentDonePayload) => {
       if (payload.conversationId) {
         this.conversationId = payload.conversationId;
       }
@@ -303,19 +335,21 @@ export class AgentClient {
       this.pendingContent = null;
     });
 
-    this.socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+    socket.on('agent:proposal', (payload: AgentProposalPayload) => {
       this.activeCallbacks?.onProposal?.(payload);
     });
 
-    this.socket.on('agent:committed', (payload: AgentCommittedPayload) => {
+    socket.on('agent:committed', (payload: AgentCommittedPayload) => {
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
-    this.socket.on('agent:error', (payload: AgentErrorPayload) => {
-      if (this.canRecoverFromAuthError(payload)) {
-        void this.authPolicy.recover(
-          this.authHandlers(this.pendingContent!, this.activeCallbacks!)
-        );
+    socket.on('agent:error', (payload: AgentErrorPayload) => {
+      if (
+        this.pendingContent &&
+        this.activeCallbacks &&
+        this.canRecoverFromAuthError(payload)
+      ) {
+        this.beginAuthRecovery();
         return;
       }
 
@@ -356,12 +390,7 @@ export class AgentClient {
   }
 
   private canRecoverFromAuthError(payload: AgentErrorPayload): boolean {
-    return (
-      payload.code === AUTH_REQUIRED_CODE &&
-      !!this.authRefreshHandler &&
-      !!this.activeCallbacks &&
-      !!this.pendingContent
-    );
+    return payload.code === AUTH_REQUIRED_CODE && !!this.authRefreshHandler;
   }
 }
 
