@@ -187,8 +187,13 @@ export function AiConfigPage() {
           {renderConfigPanel(
             <>
               <ModelsSection entries={modelEntries} />
-              {chain ? <RoutingSection entry={chain} /> : null}
-              {effort ? <ReasoningSection entry={effort} /> : null}
+              <div
+                data-testid="ai-config-settings-grid"
+                className="grid grid-cols-1 gap-8 xl:grid-cols-2"
+              >
+                {chain ? <RoutingSection entry={chain} /> : null}
+                {effort ? <ReasoningSection entry={effort} /> : null}
+              </div>
             </>
           )}
           <CatalogSection />

@@ -14,7 +14,7 @@ export function ConfigSection({
   children,
 }: ConfigSectionProps) {
   return (
-    <section className="flex flex-col gap-3">
+    <section className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <h2 className="text-lg font-semibold">{title}</h2>

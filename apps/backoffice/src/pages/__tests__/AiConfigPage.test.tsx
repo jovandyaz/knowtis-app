@@ -595,4 +595,64 @@ describe('AiConfigPage', () => {
 
     expect([...unreached]).toEqual([]);
   });
+
+  it('pairs routing and reasoning in a two-column grid at xl', async () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_fallback_chain',
+          value: 'anthropic:claude-haiku-4-5-20251001',
+          kind: 'chain',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+        {
+          key: 'ai_reasoning_effort',
+          value: 'medium',
+          kind: 'choice',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    const routing = await screen.findByRole('heading', { name: 'Routing' });
+    const grid = routing.closest('[data-testid="ai-config-settings-grid"]');
+
+    expect(grid).not.toBeNull();
+    expect(grid).toHaveClass('grid', 'grid-cols-1', 'xl:grid-cols-2');
+    expect(
+      within(grid as HTMLElement).getByRole('heading', { name: 'Reasoning' })
+    ).toBeInTheDocument();
+  });
+
+  it('lets a grid cell shrink below its content so long ids truncate', async () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_fallback_chain',
+          value: 'anthropic:claude-haiku-4-5-20251001',
+          kind: 'chain',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    const routing = await screen.findByRole('heading', { name: 'Routing' });
+    expect(routing.closest('section')).toHaveClass('min-w-0');
+  });
 });
