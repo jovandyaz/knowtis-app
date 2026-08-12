@@ -11,7 +11,6 @@ import { AiCatalogAdminService } from './ai-catalog-admin.service';
 
 const ACTOR_ID = 'admin-user-id';
 const MODEL_ID = 'openrouter:vendor/promoted-one';
-const CANDIDATE_ID = 'openrouter:vendor/candidate-one';
 const ALERT_ID = 7;
 
 const COMPLETED_SYNC = {
@@ -54,6 +53,7 @@ describe('AiCatalogAdminService', () => {
       listAlerts: vi.fn().mockResolvedValue([]),
       createAlert: vi.fn(),
       resolveAlert: vi.fn().mockResolvedValue(true),
+      listCandidates: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     };
     audit = { record: vi.fn().mockResolvedValue(undefined) };
     promotedCache = new PromotedModelsCache(repository as never);
@@ -68,25 +68,17 @@ describe('AiCatalogAdminService', () => {
   });
 
   describe('overview', () => {
-    it('serves candidates, promoted models and open alerts as DTOs', async () => {
+    it('serves promoted models and open alerts as DTOs', async () => {
       const promoted = createCatalogModel({
         id: MODEL_ID,
         label: 'Promoted One',
         tier: 'open',
       });
-      const candidate = createCatalogModel({
-        id: CANDIDATE_ID,
-        status: 'candidate',
-        promotedAt: null,
-      });
-      repository.listByStatus.mockImplementation(async (status: string) =>
-        status === 'promoted' ? [promoted] : [candidate]
-      );
+      repository.listByStatus.mockResolvedValue([promoted]);
       repository.listAlerts.mockResolvedValue([alert]);
 
       const overview = await service.overview();
 
-      expect(overview.candidates.map((m) => m.id)).toEqual([CANDIDATE_ID]);
       expect(overview.promoted[0]).toMatchObject({
         id: MODEL_ID,
         label: 'Promoted One',
@@ -98,6 +90,14 @@ describe('AiCatalogAdminService', () => {
         kind: 'price_drift',
         resolvedAt: null,
       });
+    });
+
+    it('no longer carries candidates in the overview', async () => {
+      const overview = await service.overview();
+
+      expect(overview).not.toHaveProperty('candidates');
+      expect(overview).toHaveProperty('promoted');
+      expect(overview).toHaveProperty('alerts');
     });
 
     it('serializes timestamps as ISO strings and keeps nullable ones null', async () => {
@@ -124,6 +124,37 @@ describe('AiCatalogAdminService', () => {
       await service.overview();
 
       expect(repository.listAlerts).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe('listCandidates', () => {
+    const SEARCH_TERM = 'kimi';
+
+    it('pages candidates through the repository and echoes the page back', async () => {
+      repository.listCandidates.mockResolvedValue({
+        items: [createCatalogModel({ id: 'openrouter:vendor/one' })],
+        total: 97,
+      });
+
+      const result = await service.listCandidates({ page: 3, limit: 25 });
+
+      expect(repository.listCandidates).toHaveBeenCalledWith({
+        page: 3,
+        limit: 25,
+        search: undefined,
+      });
+      expect(result).toMatchObject({ total: 97, page: 3, limit: 25 });
+      expect(result.items).toHaveLength(1);
+    });
+
+    it('hands the search term to the repository instead of dropping it', async () => {
+      await service.listCandidates({ page: 1, limit: 25, search: SEARCH_TERM });
+
+      expect(repository.listCandidates).toHaveBeenCalledWith({
+        page: 1,
+        limit: 25,
+        search: SEARCH_TERM,
+      });
     });
   });
 

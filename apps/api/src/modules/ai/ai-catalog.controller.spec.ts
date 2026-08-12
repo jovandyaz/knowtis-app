@@ -35,9 +35,10 @@ describe('AiCatalogController', () => {
 
   beforeEach(() => {
     catalog = {
-      overview: vi
+      overview: vi.fn().mockResolvedValue({ promoted: [], alerts: [] }),
+      listCandidates: vi
         .fn()
-        .mockResolvedValue({ candidates: [], promoted: [], alerts: [] }),
+        .mockResolvedValue({ items: [], total: 0, page: 1, limit: 25 }),
       promote: vi.fn().mockResolvedValue(model),
       retire: vi.fn().mockResolvedValue(model),
       updateCopy: vi.fn().mockResolvedValue(model),
@@ -56,9 +57,25 @@ describe('AiCatalogController', () => {
 
   it('serves the catalog overview', async () => {
     expect(await controller.list()).toEqual({
-      candidates: [],
       promoted: [],
       alerts: [],
+    });
+  });
+
+  it('applies the house defaults when the query omits them', async () => {
+    catalog.listCandidates.mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+    });
+
+    await controller.listCandidates({});
+
+    expect(catalog.listCandidates).toHaveBeenCalledWith({
+      page: 1,
+      limit: 25,
+      search: undefined,
     });
   });
 

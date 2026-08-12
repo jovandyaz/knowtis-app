@@ -135,6 +135,7 @@ export {
   type CatalogModelDto,
   type CatalogAlertDto,
   type CatalogOverviewDto,
+  type PaginatedCandidatesDto,
   CATALOG_SYNC_STATUSES,
   type CatalogSyncStatus,
   CATALOG_SYNC_SKIP_REASONS,
