@@ -20,6 +20,7 @@ export function AIAssistantSection() {
   const { data: models, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
+  const sessionModel = useAgentStore((s) => s.selectedModel);
   const setSessionModel = useAgentStore((s) => s.setSelectedModel);
   const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
 
@@ -35,10 +36,12 @@ export function AIAssistantSection() {
           isError={isError}
           onRetry={() => void refetch()}
           intent={prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT}
-          overrideModel={advancedOverride(prefs?.preferredModel, models)}
+          // The composer's session model outranks account preferences, so it
+          // has to be both named here and dropped by any choice made here.
+          overrideModel={
+            sessionModel ?? advancedOverride(prefs?.preferredModel, models)
+          }
           onSelectIntent={(value) => {
-            // The composer's session model outranks account preferences, so a
-            // choice made here is inert until that override is dropped.
             setSessionModel(null);
             update({ preferredModel: null, preferredIntent: value });
           }}

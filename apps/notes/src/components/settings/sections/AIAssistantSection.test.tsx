@@ -166,6 +166,26 @@ describe('AIAssistantSection', () => {
     }
   });
 
+  it('deactivates every chip while the composer runs a session override', () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    for (const chip of screen.getAllByRole('radio')) {
+      expect(chip).toHaveAttribute('data-state', 'off');
+    }
+  });
+
+  it('names the composer session override on the advanced trigger', () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    expect(
+      screen.getByRole('button', { name: /Byok One/ })
+    ).toBeInTheDocument();
+  });
+
   it('keeps the intent chips active over a legacy non-advanced preferredModel', () => {
     modelsData.mockReturnValue(withByokModel);
     prefsData.mockReturnValue({
@@ -255,24 +275,34 @@ describe('AIAssistantSection', () => {
   it('clears the composer session override when an intent chip is picked', async () => {
     modelsData.mockReturnValue(withByokModel);
     sessionModel.mockReturnValue('o:byok');
+    prefsData.mockReturnValue({
+      preferredModel: null,
+      preferredIntent: 'powerful',
+    });
     render(<AIAssistantSection />);
 
-    await userEvent.click(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
-    );
+    const chip = screen.getByRole('radio', {
+      name: 'aiAssistant.intent.powerful',
+    });
+    expect(chip).toHaveAttribute('data-state', 'off');
+    await userEvent.click(chip);
 
     expect(setSessionModel).toHaveBeenCalledWith(null);
+    expect(update).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'powerful',
+    });
   });
 
   it('clears the composer session override when an advanced model is stored', async () => {
     modelsData.mockReturnValue(withByokModel);
-    sessionModel.mockReturnValue('a:fast');
+    sessionModel.mockReturnValue('o:byok');
     render(<AIAssistantSection />);
 
+    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+      screen.getByRole('menuitemradio', { name: /Byok One/ })
     );
-    await userEvent.click(screen.getByText('Byok One'));
 
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
     expect(setSessionModel).toHaveBeenCalledWith(null);
