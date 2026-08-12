@@ -336,4 +336,55 @@ describe('ModelSelect', () => {
     );
     expect(screen.getByRole('button')).toBeEnabled();
   });
+
+  it('keeps the trigger on the resolved model when a refetch fails without a leading section', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={vi.fn()}
+      />
+    );
+    expect(screen.getByRole('button')).toHaveTextContent('Fast One');
+
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getByText('Could not load')).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('disables the trigger when the leading section has no options and models are empty', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        leadingSection={{ label: 'STYLE', options: [] }}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveTextContent('No models available');
+  });
+
+  it('renders exactly one separator when a leading section meets a footer with no model groups', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="ready"
+        emptyLabel="No models available"
+        footer="Account default"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+    expect(screen.getAllByRole('separator')).toHaveLength(1);
+  });
 });

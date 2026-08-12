@@ -70,7 +70,10 @@ export interface ModelSelectProps {
   status?: ModelSelectStatus;
   onRetry?: () => void;
   renderDescription?: (m: ModelSelectOption) => string;
-  /** Options listed above the tier groups. Rendered whatever `status` is — they are constants, not loaded data. */
+  /**
+   * Options listed above the tier groups. Rendered whatever `status` is — they are constants, not loaded data.
+   * Option ids must be unique across the section and `models`; a collision renders two checked rows.
+   */
   leadingSection?: ModelSelectSection;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
@@ -140,7 +143,11 @@ export function ModelSelect({
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const hasLeadingSection = !!leadingSection;
+  const visibleLeadingSection =
+    leadingSection && leadingSection.options.length > 0
+      ? leadingSection
+      : undefined;
+  const hasLeadingSection = !!visibleLeadingSection;
   const isEmpty =
     status === 'ready' && models.length === 0 && !hasLeadingSection;
   const triggerDisabled =
@@ -148,7 +155,7 @@ export function ModelSelect({
 
   const active =
     models.find((m) => m.id === value) ??
-    leadingSection?.options.find((o) => o.id === value);
+    visibleLeadingSection?.options.find((o) => o.id === value);
   const ordered = tierOrder ?? [];
   const known = new Set<string>(ordered);
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
@@ -195,12 +202,12 @@ export function ModelSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
-        {leadingSection && (
+        {visibleLeadingSection && (
           <>
             <DropdownMenuLabel className="text-xs uppercase tracking-wide">
-              {leadingSection.label}
+              {visibleLeadingSection.label}
             </DropdownMenuLabel>
-            {leadingSection.options.map((option) => (
+            {visibleLeadingSection.options.map((option) => (
               <DropdownMenuItem
                 key={option.id}
                 onSelect={() => onSelect(option.id)}
@@ -213,11 +220,11 @@ export function ModelSelect({
                 />
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
           </>
         )}
         {isError ? (
           <>
+            {hasLeadingSection && <DropdownMenuSeparator />}
             <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
               {errorLabel ?? FALLBACK_LABEL}
             </div>
@@ -233,7 +240,7 @@ export function ModelSelect({
               const level = tierCostLevel(g.items);
               return (
                 <div key={g.tier}>
-                  {i > 0 && <DropdownMenuSeparator />}
+                  {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
                     <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
                     {level > NO_COST_LEVEL && (
