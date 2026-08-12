@@ -43,6 +43,16 @@ describe('DataTable', () => {
     expect(screen.getByText('No users')).toBeInTheDocument();
   });
 
+  it('should name the table for assistive tech, loading or loaded', () => {
+    const { rerender } = render(
+      <DataTable columns={columns} data={[]} isLoading aria-label="People" />
+    );
+    expect(screen.getByRole('table', { name: 'People' })).toBeInTheDocument();
+
+    rerender(<DataTable columns={columns} data={data} aria-label="People" />);
+    expect(screen.getByRole('table', { name: 'People' })).toBeInTheDocument();
+  });
+
   it('shows skeleton rows while loading', () => {
     render(<DataTable columns={columns} data={[]} isLoading />);
     expect(screen.getAllByRole('row')).toHaveLength(6);

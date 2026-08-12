@@ -26,6 +26,7 @@ import {
 interface DataTableBaseProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  'aria-label'?: string;
   isLoading?: boolean;
   emptyTitle?: string;
   emptyDescription?: string;
@@ -57,6 +58,7 @@ export function DataTable<TData, TValue = unknown>({
   rowCount,
   pagination,
   onPaginationChange,
+  'aria-label': ariaLabel,
   isLoading = false,
   emptyTitle = 'No results',
   emptyDescription,
@@ -88,7 +90,7 @@ export function DataTable<TData, TValue = unknown>({
 
   if (isLoading) {
     return (
-      <Table>
+      <Table aria-label={ariaLabel}>
         <TableHeader>
           <TableRow>
             {columns.map((_, index) => (
@@ -128,7 +130,7 @@ export function DataTable<TData, TValue = unknown>({
 
   return (
     <div className="flex flex-col gap-3">
-      <Table>
+      <Table aria-label={ariaLabel}>
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
