@@ -77,7 +77,7 @@ export function CopilotModelPicker() {
       retryLabel={t('aiAssistant.retry')}
       triggerClassName="h-8"
       triggerLabel={t(`aiAssistant.intent.${intent}` as never)}
-      tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
+      modelsLabel={t('aiAssistant.modelsGroup')}
       renderDescription={(m) =>
         m.descriptionKey ? t(m.descriptionKey as never) : (m.description ?? '')
       }

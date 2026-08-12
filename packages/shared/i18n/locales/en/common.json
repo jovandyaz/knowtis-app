@@ -100,6 +100,7 @@
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",
     "retry": "Retry",
+    "modelsGroup": "Models",
     "tier": {
       "fast": "Fast",
       "balanced": "Balanced",
