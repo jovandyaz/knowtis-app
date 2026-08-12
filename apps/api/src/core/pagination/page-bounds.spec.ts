@@ -13,7 +13,6 @@ const PAGINATED_QUERY_DTOS = [
   { route: 'GET /ai/catalog/candidates', dto: PaginatedCandidatesQueryDto },
 ];
 
-/** `Number.isInteger(1e21)` is true, so `@IsInt` and `@Min` both wave this through. */
 const EXPONENT_FORM_PAGE = '1e21';
 
 async function pageConstraints(

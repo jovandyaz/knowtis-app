@@ -457,7 +457,6 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
       WILDCARD,
       WILDCARD_DECOY,
     ];
-    /** Scopes every assertion to this block's fixtures: the table is shared, so an unscoped read can only assert lower bounds. */
     const PAGING_SEARCH = 'paging';
     const PAGE_SIZE = 2;
     const PAGE_COUNT = Math.ceil(PAGING_MODEL_IDS.length / PAGE_SIZE);

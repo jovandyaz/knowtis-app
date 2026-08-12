@@ -49,13 +49,11 @@ export interface CatalogAlertDto {
   resolvedAt: string | null;
 }
 
-/** What the catalog admin screen renders outside the candidate table: what is live, and the alerts still open. */
 export interface CatalogOverviewDto {
   promoted: CatalogModelDto[];
   alerts: CatalogAlertDto[];
 }
 
-/** One ranked page of the promotion queue. `total` counts every row matching the search, not just this page. */
 export interface PaginatedCandidatesDto {
   items: CatalogModelDto[];
   total: number;
