@@ -26,7 +26,8 @@ export interface IntentModelPickerProps {
 
 /**
  * Intent chips plus the Advanced override dropdown, driven entirely by props.
- * An override deselects every chip, since the chosen model outranks the intent.
+ * An override deselects and disables every chip, since the chosen model
+ * outranks the intent — clearing the override is the way back.
  */
 export function IntentModelPicker({
   models,
@@ -49,6 +50,7 @@ export function IntentModelPicker({
         options={intentChipOptions(t)}
         value={overrideModel ? null : intent}
         onValueChange={onSelectIntent}
+        disabled={!!overrideModel}
       />
       {advancedOptions.length > 0 || isError ? (
         <ModelSelect
