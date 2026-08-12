@@ -108,6 +108,7 @@
     },
     "intent": {
       "label": "Assistant style",
+      "group": "Style",
       "fast": "Fast",
       "balanced": "Balanced",
       "powerful": "Deep",

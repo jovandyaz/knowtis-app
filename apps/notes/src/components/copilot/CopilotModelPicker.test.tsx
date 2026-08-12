@@ -147,17 +147,7 @@ describe('CopilotModelPicker', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('makes the intent chips inert while an override owns the turn', () => {
-    modelsData.mockReturnValue(withByokModel);
-    sessionModel.mockReturnValue('google:gemini-3.5-flash');
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    ).toBeDisabled();
-  });
-
-  it('keeps the intent chips usable when an override has no picker to clear it', () => {
+  it('keeps the chips as the way out of an override with no BYOK models', () => {
     modelsData.mockReturnValue(withLockedModel);
     sessionModel.mockReturnValue('google:gemini-3.5-flash');
     render(<CopilotModelPicker />);
@@ -192,14 +182,18 @@ describe('CopilotModelPicker', () => {
     expect(setSelected).toHaveBeenCalledWith(null);
   });
 
-  it('offers the advanced picker with only BYOK-billed models', async () => {
+  it('offers one control listing styles above the BYOK models', async () => {
     modelsData.mockReturnValue(withByokModel);
     render(<CopilotModelPicker />);
 
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
     );
 
+    expect(
+      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole('menuitem', { name: /Byok One/ })
     ).toBeInTheDocument();
@@ -207,12 +201,42 @@ describe('CopilotModelPicker', () => {
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
   });
 
+  it('returns to the account style when a style row is picked', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+    );
+
+    expect(setSelected).toHaveBeenCalledWith(null);
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'fast',
+    });
+  });
+
+  it('picks a model into the session only', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
+    );
+    await userEvent.click(screen.getByText('Byok One'));
+
+    expect(setSelected).toHaveBeenCalledWith('o:byok');
+    expect(updatePreferences).not.toHaveBeenCalled();
+  });
+
   it('describes a keyless catalog model with its own text instead of a key echo', async () => {
     modelsData.mockReturnValue(withPromotedModel);
     render(<CopilotModelPicker />);
 
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
     );
 
     expect(
@@ -221,19 +245,6 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.getByRole('menuitem', { name: /Byok One/ })
     ).toHaveTextContent('aiModels.gpt56');
-  });
-
-  it('picks an advanced model into the session only', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    render(<CopilotModelPicker />);
-
-    await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
-    );
-    await userEvent.click(screen.getByText('Byok One'));
-
-    expect(setSelected).toHaveBeenCalledWith('o:byok');
-    expect(updatePreferences).not.toHaveBeenCalled();
   });
 
   it('deactivates every chip while a model override is in effect', () => {
@@ -245,7 +256,21 @@ describe('CopilotModelPicker', () => {
     }
   });
 
-  it('keeps the intent chips active over a legacy non-advanced preferredModel', () => {
+  it('names the stored advanced preference on the trigger', () => {
+    modelsData.mockReturnValue(withByokModel);
+    prefsData.mockReturnValue({
+      preferredModel: 'o:byok',
+      preferredIntent: 'powerful',
+    });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('button', { name: /Byok One/ })
+    ).toBeInTheDocument();
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+  });
+
+  it('names the stored intent on the trigger when no model outranks it', () => {
     modelsData.mockReturnValue(withByokModel);
     prefsData.mockReturnValue({
       preferredModel: 'a:bal',
@@ -254,72 +279,26 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
-    ).toHaveAttribute('data-state', 'on');
-    expect(
-      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+      screen.getByRole('button', { name: /aiAssistant.intent.powerful/ })
     ).toBeInTheDocument();
   });
 
-  it('deactivates the chips for a stored advanced preference', () => {
-    modelsData.mockReturnValue(withByokModel);
-    prefsData.mockReturnValue({
-      preferredModel: 'o:byok',
-      preferredIntent: 'powerful',
-    });
-    render(<CopilotModelPicker />);
-
-    for (const chip of screen.getAllByRole('radio')) {
-      expect(chip).toHaveAttribute('data-state', 'off');
-    }
-    expect(
-      screen.getByRole('button', { name: /Byok One/ })
-    ).toBeInTheDocument();
-  });
-
-  it('surfaces a model-list load error behind the advanced trigger', async () => {
+  it('keeps the styles choosable when the model list fails to load', async () => {
     modelsData.mockReturnValue(undefined);
     modelsError.mockReturnValue(true);
     render(<CopilotModelPicker />);
 
     await userEvent.click(
-      screen.getByRole('button', { name: 'aiAssistant.loadError' })
+      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
     );
+    expect(
+      screen.getByRole('menuitem', { name: /aiAssistant.intent.powerful/ })
+    ).toBeInTheDocument();
+
     await userEvent.click(
       screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
     );
-
     expect(modelsRefetch).toHaveBeenCalled();
-  });
-
-  it('keeps the chips deselected for a stored preference while the list is unresolved', () => {
-    modelsData.mockReturnValue(undefined);
-    modelsError.mockReturnValue(true);
-    prefsData.mockReturnValue({
-      preferredModel: 'o:byok',
-      preferredIntent: 'fast',
-    });
-    render(<CopilotModelPicker />);
-
-    for (const chip of screen.getAllByRole('radio')) {
-      expect(chip).toHaveAttribute('data-state', 'off');
-    }
-  });
-
-  it('clears the override from the advanced footer without touching the intent', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    sessionModel.mockReturnValue('o:byok');
-    render(<CopilotModelPicker />);
-
-    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
-    await userEvent.click(
-      screen.getByRole('button', {
-        name: 'aiAssistant.advanced.clearOverride',
-      })
-    );
-
-    expect(setSelected).toHaveBeenCalledWith(null);
-    expect(updatePreferences).toHaveBeenCalledWith({ preferredModel: null });
   });
 
   it('renders no picker at all for an anonymous user', () => {

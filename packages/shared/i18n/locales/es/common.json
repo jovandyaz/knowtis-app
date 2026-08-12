@@ -108,6 +108,7 @@
     },
     "intent": {
       "label": "Estilo del asistente",
+      "group": "Estilo",
       "fast": "Rápido",
       "balanced": "Equilibrado",
       "powerful": "Profundo",
