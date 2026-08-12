@@ -20,8 +20,11 @@ function createFakeSocket() {
       return socket;
     }),
     emit: vi.fn(() => socket),
+    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
     disconnect: vi.fn(() => {
       socket.connected = false;
+      socket.active = false;
+      handlers.get('disconnect')?.('io client disconnect');
       return socket;
     }),
   };

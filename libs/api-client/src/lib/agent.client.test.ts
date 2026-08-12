@@ -31,8 +31,11 @@ function createFakeSocket() {
       return fakeSocket;
     }),
     emit: vi.fn(() => fakeSocket),
+    // Mirrors socket.io: a manual disconnect emits the event with the socket inactive.
     disconnect: vi.fn(() => {
       fakeSocket.connected = false;
+      fakeSocket.active = false;
+      fakeHandlers.get('disconnect')?.('io client disconnect');
       return fakeSocket;
     }),
   };
@@ -450,6 +453,43 @@ describe('AgentClient – auth/transport failure paths', () => {
 
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(io).toHaveBeenCalledTimes(1);
+  });
+
+  it('carries the turn sent while the token refresh was still in flight', async () => {
+    let token: string | null = null;
+    let releaseRefresh = () => {};
+    const refresh = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          releaseRefresh = () => {
+            token = 'fresh-token';
+            resolve(true);
+          };
+        })
+    );
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('first', callbacks);
+    await flush();
+    client.sendMessage('second', callbacks);
+    await flush();
+
+    releaseRefresh();
+    await flush();
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
+      message: { content: 'second' },
+    });
   });
 
   it('lets auth recovery resume the turn the expiry disconnect interrupted', async () => {

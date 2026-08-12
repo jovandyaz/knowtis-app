@@ -120,7 +120,7 @@ export class AIClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(payload, callbacks);
     } else if (this.authRefreshHandler) {
-      this.beginAuthRecovery(payload, callbacks);
+      this.beginAuthRecovery();
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -136,34 +136,40 @@ export class AIClient {
     };
   }
 
-  private beginAuthRecovery(
-    payload: AICompletePayload,
-    callbacks: AIStreamCallbacks
-  ): void {
+  private beginAuthRecovery(): void {
     this.recoveringAuth = true;
-    void this.authPolicy.recover(this.authHandlers(payload, callbacks));
+    void this.authPolicy.recover(this.authHandlers());
   }
 
-  private authHandlers(
-    payload: AICompletePayload,
-    callbacks: AIStreamCallbacks
-  ): Parameters<TokenRefreshPolicy['recover']>[0] {
+  /**
+   * Resolves the request to resume from the live pending state rather than a
+   * captured one: a request issued while the refresh is in flight is suppressed
+   * by the policy's in-flight guard, so it is this recovery that must carry it.
+   */
+  private authHandlers(): Parameters<TokenRefreshPolicy['recover']>[0] {
+    const pending = () => {
+      const callbacks = this.activeCallbacks;
+      const payload = this.pendingPayload;
+      return callbacks && payload ? { callbacks, payload } : null;
+    };
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
         this.recoveringAuth = false;
-        if (this.activeCallbacks !== callbacks) {
+        const request = pending();
+        if (!request) {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(payload, callbacks);
+        this.openAndEmit(request.payload, request.callbacks);
       },
       onExhausted: () => {
         this.recoveringAuth = false;
-        if (this.activeCallbacks !== callbacks) {
+        const request = pending();
+        if (!request) {
           return;
         }
-        this.failRequest(callbacks, AUTH_ERROR);
+        this.failRequest(request.callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -225,26 +231,30 @@ export class AIClient {
     this.setupEventListeners();
   }
 
+  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
   private teardownSocket(): void {
-    this.socket?.disconnect();
+    const socket = this.socket;
     this.socket = null;
+    socket?.disconnect();
   }
 
   private setupEventListeners(): void {
-    if (!this.socket) {
+    const socket = this.socket;
+    if (!socket) {
       return;
     }
 
-    this.socket.on('connect', () => {
+    socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('AI WebSocket connected', { context: 'AIClient' });
     });
 
-    this.socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason) => {
       logger.info(`AI WebSocket disconnected: ${reason}`, {
         context: 'AIClient',
       });
-      if (this.socket?.active) {
+      // Our own teardown already decided what happens to the request.
+      if (this.socket !== socket || socket.active) {
         return;
       }
       // A server-forced close never reconnects on its own, so anything emitted
@@ -256,7 +266,7 @@ export class AIClient {
       }
     });
 
-    this.socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error) => {
       logger.error('AI connection error', { error, context: 'AIClient' });
       this.reconnectAttempts++;
 
@@ -268,24 +278,23 @@ export class AIClient {
       }
     });
 
-    this.socket.on('ai:chunk', (payload: AIChunkPayload) => {
+    socket.on('ai:chunk', (payload: AIChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
     });
 
-    this.socket.on('ai:done', (payload: AIDonePayload) => {
+    socket.on('ai:done', (payload: AIDonePayload) => {
       this.activeCallbacks?.onDone(payload);
       this.activeCallbacks = null;
       this.pendingPayload = null;
     });
 
-    this.socket.on('ai:error', (payload: AIErrorPayload) => {
-      const { pendingPayload, activeCallbacks } = this;
+    socket.on('ai:error', (payload: AIErrorPayload) => {
       if (
-        pendingPayload &&
-        activeCallbacks &&
+        this.pendingPayload &&
+        this.activeCallbacks &&
         this.canRecoverFromAuthError(payload)
       ) {
-        this.beginAuthRecovery(pendingPayload, activeCallbacks);
+        this.beginAuthRecovery();
         return;
       }
 

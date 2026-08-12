@@ -156,7 +156,7 @@ export class AgentClient {
     if (this.tokenProvider.getAccessToken()) {
       this.openAndEmit(content, callbacks);
     } else if (this.authRefreshHandler) {
-      this.beginAuthRecovery(content, callbacks);
+      this.beginAuthRecovery();
     } else {
       this.failRequest(callbacks, AUTH_ERROR);
     }
@@ -172,34 +172,40 @@ export class AgentClient {
     };
   }
 
-  private beginAuthRecovery(
-    content: string,
-    callbacks: AgentStreamCallbacks
-  ): void {
+  private beginAuthRecovery(): void {
     this.recoveringAuth = true;
-    void this.authPolicy.recover(this.authHandlers(content, callbacks));
+    void this.authPolicy.recover(this.authHandlers());
   }
 
-  private authHandlers(
-    content: string,
-    callbacks: AgentStreamCallbacks
-  ): Parameters<TokenRefreshPolicy['recover']>[0] {
+  /**
+   * Resolves the request to resume from the live pending state rather than a
+   * captured one: a send issued while the refresh is in flight is suppressed by
+   * the policy's in-flight guard, so it is this recovery that must carry it.
+   */
+  private authHandlers(): Parameters<TokenRefreshPolicy['recover']>[0] {
+    const pending = () => {
+      const callbacks = this.activeCallbacks;
+      const content = this.pendingContent;
+      return callbacks && content ? { callbacks, content } : null;
+    };
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
         this.recoveringAuth = false;
-        if (this.activeCallbacks !== callbacks) {
+        const request = pending();
+        if (!request) {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(content, callbacks);
+        this.openAndEmit(request.content, request.callbacks);
       },
       onExhausted: () => {
         this.recoveringAuth = false;
-        if (this.activeCallbacks !== callbacks) {
+        const request = pending();
+        if (!request) {
           return;
         }
-        this.failRequest(callbacks, AUTH_ERROR);
+        this.failRequest(request.callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -265,26 +271,30 @@ export class AgentClient {
     this.setupEventListeners();
   }
 
+  /** Detaches the socket before closing it, so its `disconnect` event is recognisable as ours. */
   private teardownSocket(): void {
-    this.socket?.disconnect();
+    const socket = this.socket;
     this.socket = null;
+    socket?.disconnect();
   }
 
   private setupEventListeners(): void {
-    if (!this.socket) {
+    const socket = this.socket;
+    if (!socket) {
       return;
     }
 
-    this.socket.on('connect', () => {
+    socket.on('connect', () => {
       this.reconnectAttempts = 0;
       logger.info('Agent WebSocket connected', { context: 'AgentClient' });
     });
 
-    this.socket.on('disconnect', (reason) => {
+    socket.on('disconnect', (reason) => {
       logger.info(`Agent WebSocket disconnected: ${reason}`, {
         context: 'AgentClient',
       });
-      if (this.socket?.active) {
+      // Our own teardown already decided what happens to the request.
+      if (this.socket !== socket || socket.active) {
         return;
       }
       // A server-forced close never reconnects on its own, so anything emitted
@@ -296,7 +306,7 @@ export class AgentClient {
       }
     });
 
-    this.socket.on('connect_error', (error) => {
+    socket.on('connect_error', (error) => {
       logger.error('Agent connection error', { error, context: 'AgentClient' });
       this.reconnectAttempts++;
 
@@ -308,15 +318,15 @@ export class AgentClient {
       }
     });
 
-    this.socket.on('agent:chunk', (payload: AgentChunkPayload) => {
+    socket.on('agent:chunk', (payload: AgentChunkPayload) => {
       this.activeCallbacks?.onChunk(payload);
     });
 
-    this.socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
+    socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
       this.activeCallbacks?.onThinking?.(payload);
     });
 
-    this.socket.on('agent:done', (payload: AgentDonePayload) => {
+    socket.on('agent:done', (payload: AgentDonePayload) => {
       if (payload.conversationId) {
         this.conversationId = payload.conversationId;
       }
@@ -325,22 +335,21 @@ export class AgentClient {
       this.pendingContent = null;
     });
 
-    this.socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+    socket.on('agent:proposal', (payload: AgentProposalPayload) => {
       this.activeCallbacks?.onProposal?.(payload);
     });
 
-    this.socket.on('agent:committed', (payload: AgentCommittedPayload) => {
+    socket.on('agent:committed', (payload: AgentCommittedPayload) => {
       this.activeCallbacks?.onCommitted?.(payload);
     });
 
-    this.socket.on('agent:error', (payload: AgentErrorPayload) => {
-      const { pendingContent, activeCallbacks } = this;
+    socket.on('agent:error', (payload: AgentErrorPayload) => {
       if (
-        pendingContent &&
-        activeCallbacks &&
+        this.pendingContent &&
+        this.activeCallbacks &&
         this.canRecoverFromAuthError(payload)
       ) {
-        this.beginAuthRecovery(pendingContent, activeCallbacks);
+        this.beginAuthRecovery();
         return;
       }
 
