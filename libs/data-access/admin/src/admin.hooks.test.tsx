@@ -781,6 +781,20 @@ describe('useAiCatalog', () => {
     expect(result.current.data?.alerts[0].resolvedAt).toBeNull();
   });
 
+  it('keeps the catalog usable when the API omits the candidate queue', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      promoted: [CATALOG_MODEL],
+      alerts: [CATALOG_ALERT],
+    });
+
+    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.candidates).toEqual([]);
+    expect(result.current.data?.promoted[0].id).toBe(CATALOG_MODEL.id);
+    expect(result.current.data?.alerts[0].id).toBe(CATALOG_ALERT.id);
+  });
+
   it('rejects a model whose status this bundle does not know', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       ...CATALOG_OVERVIEW,
