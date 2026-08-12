@@ -26,12 +26,14 @@ import {
   MetricsSummarySchema,
   MetricsTimeseriesSchema,
   PaginatedAuditSchema,
+  PaginatedCandidatesSchema,
   PaginatedUsersSchema,
   ProviderTestResultSchema,
   SelectableModelsSchema,
   SystemProvidersSchema,
   type AdminUser,
   type AdminUsersParams,
+  type AiCatalogCandidatesParams,
   type AuditParams,
   type MetricsPeriod,
 } from './admin.types';
@@ -54,6 +56,8 @@ export const adminQueryKeys = {
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
   aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
   aiCatalog: () => [...adminQueryKeys.all, 'ai-catalog'] as const,
+  aiCatalogCandidates: (params: AiCatalogCandidatesParams) =>
+    [...adminQueryKeys.aiCatalog(), 'candidates', params] as const,
 } as const;
 
 function usersPath({ page, limit, search, role }: AdminUsersParams): string {
@@ -288,11 +292,35 @@ export function useAiCatalog() {
   });
 }
 
+function candidatesPath({
+  page,
+  limit,
+  search,
+}: AiCatalogCandidatesParams): string {
+  const params = [`page=${page}`, `limit=${limit}`];
+  if (search) {
+    params.push(`search=${encodeURIComponent(search)}`);
+  }
+  return `/ai/catalog/candidates?${params.join('&')}`;
+}
+
+export function useAiCatalogCandidates(params: AiCatalogCandidatesParams) {
+  return useQuery({
+    queryKey: adminQueryKeys.aiCatalogCandidates(params),
+    queryFn: async () =>
+      PaginatedCandidatesSchema.parse(
+        await httpClient.get(candidatesPath(params))
+      ),
+    staleTime: 1000 * 60,
+    placeholderData: keepPreviousData,
+  });
+}
+
 function catalogModelPath(id: string): string {
   return `/ai/catalog/${encodeURIComponent(id)}`;
 }
 
-/** Promoting or retiring changes what the user picker offers, so the model list goes stale with the catalog. Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
+/** Promoting or retiring changes what the user picker offers, so the model list goes stale with the catalog. The catalog key is a prefix of every candidates page key, so those pages go stale here too. Returned so the mutation stays pending until the refetches land — a caller disabling buttons on `isPending` would otherwise re-enable them over stale rows. */
 function invalidateCatalogDependents(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiCatalog() }),

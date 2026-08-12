@@ -4,7 +4,14 @@ import { useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { renderHook, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, type MockInstance } from 'vitest';
+import {
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+  type MockInstance,
+} from 'vitest';
 
 import { aiModelsApi, httpClient } from '@knowtis/api-client';
 
@@ -12,6 +19,7 @@ import {
   adminQueryKeys,
   useAdminUsers,
   useAiCatalog,
+  useAiCatalogCandidates,
   useAiConfig,
   useAiHealth,
   useAuditLog,
@@ -25,6 +33,7 @@ import {
   useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,
+  useSyncCatalog,
   useSystemProviders,
   useTestSystemProvider,
   useUpdateCatalogCopy,
@@ -819,6 +828,116 @@ describe('useAiCatalog', () => {
   });
 });
 
+describe('useAiCatalogCandidates', () => {
+  const CANDIDATE = {
+    id: 'openrouter:vendor/one',
+    label: 'One',
+    description: '',
+    status: 'candidate',
+    tier: 'open',
+    inputCostPerToken: 0.000001,
+    outputCostPerToken: 0.000002,
+    maxInputTokens: 128000,
+    maxOutputTokens: null,
+    intelligenceIndex: 42,
+    upstreamCreatedAt: null,
+    upstreamExpirationDate: null,
+    lastSeenAt: '2026-08-11T00:00:00.000Z',
+    promotedAt: null,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('requests the page and encodes the search term', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      items: [CANDIDATE],
+      total: 97,
+      page: 2,
+      limit: 25,
+    });
+
+    const { result } = renderHook(
+      () => useAiCatalogCandidates({ page: 2, limit: 25, search: 'a b' }),
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(httpClient.get).toHaveBeenCalledWith(
+      '/ai/catalog/candidates?page=2&limit=25&search=a%20b'
+    );
+    expect(result.current.data?.total).toBe(97);
+    expect(result.current.data?.items[0].lastSeenAt).toBeInstanceOf(Date);
+  });
+
+  it('omits the search param when there is no term', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      items: [],
+      total: 0,
+      page: 1,
+      limit: 25,
+    });
+
+    renderHook(() => useAiCatalogCandidates({ page: 1, limit: 25 }), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() =>
+      expect(httpClient.get).toHaveBeenCalledWith(
+        '/ai/catalog/candidates?page=1&limit=25'
+      )
+    );
+  });
+
+  it('keeps the previous page on screen while the next one loads', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      items: [CANDIDATE],
+      total: 97,
+      page: 1,
+      limit: 25,
+    });
+
+    const { result, rerender } = renderHook(
+      ({ page }: { page: number }) =>
+        useAiCatalogCandidates({ page, limit: 25 }),
+      { wrapper: Wrapper, initialProps: { page: 1 } }
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    let releaseSecondPage: (page: unknown) => void = () => undefined;
+    vi.mocked(httpClient.get).mockReturnValueOnce(
+      new Promise((resolve) => {
+        releaseSecondPage = resolve;
+      })
+    );
+    rerender({ page: 2 });
+
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(true));
+    expect(result.current.data?.items[0].id).toBe(CANDIDATE.id);
+
+    releaseSecondPage({ items: [], total: 97, page: 2, limit: 25 });
+    await waitFor(() => expect(result.current.isPlaceholderData).toBe(false));
+    expect(result.current.data?.items).toEqual([]);
+  });
+
+  it('rejects a page whose total contradicts the paginated envelope', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue({
+      items: [CANDIDATE],
+      total: -1,
+      page: 1,
+      limit: 25,
+    });
+
+    const { result } = renderHook(
+      () => useAiCatalogCandidates({ page: 1, limit: 25 }),
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+});
+
 describe('usePromoteCatalogModel', () => {
   it('encodes the slash in the model id instead of splitting the path', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
@@ -970,6 +1089,91 @@ describe('useResolveCatalogAlert', () => {
     );
     expectCatalogDependentsInvalidated(invalidateSpy);
   });
+});
+
+describe('catalog mutations and the cached candidates page', () => {
+  const CANDIDATES_PARAMS = { page: 1, limit: 25 };
+
+  const CASES: {
+    name: string;
+    hook: () => { mutate: (input: never) => void; isSuccess: boolean };
+    input: unknown;
+    respond: () => void;
+  }[] = [
+    {
+      name: 'usePromoteCatalogModel',
+      hook: usePromoteCatalogModel,
+      input: { id: CATALOG_MODEL.id, tier: 'open' },
+      respond: () =>
+        vi
+          .mocked(httpClient.post)
+          .mockResolvedValue({ ...CATALOG_MODEL, status: 'promoted' }),
+    },
+    {
+      name: 'useRetireCatalogModel',
+      hook: useRetireCatalogModel,
+      input: CATALOG_MODEL.id,
+      respond: () =>
+        vi
+          .mocked(httpClient.post)
+          .mockResolvedValue({ ...CATALOG_MODEL, status: 'retired' }),
+    },
+    {
+      name: 'useUpdateCatalogCopy',
+      hook: useUpdateCatalogCopy,
+      input: { id: CATALOG_MODEL.id, patch: { label: 'GLM 5.2 Turbo' } },
+      respond: () =>
+        vi.mocked(httpClient.patch).mockResolvedValue(CATALOG_MODEL),
+    },
+    {
+      name: 'useResolveCatalogAlert',
+      hook: useResolveCatalogAlert,
+      input: CATALOG_ALERT.id,
+      respond: () => vi.mocked(httpClient.post).mockResolvedValue({}),
+    },
+    {
+      name: 'useSyncCatalog',
+      hook: useSyncCatalog,
+      input: undefined,
+      respond: () =>
+        vi.mocked(httpClient.post).mockResolvedValue({
+          status: 'completed',
+          skippedReason: null,
+          upstream: 12,
+          candidates: 3,
+          alerts: 0,
+          failures: 0,
+        }),
+    },
+  ];
+
+  it.each(CASES)(
+    '$name marks the cached candidates page stale',
+    async ({ hook, input, respond }) => {
+      respond();
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      });
+      const candidatesKey =
+        adminQueryKeys.aiCatalogCandidates(CANDIDATES_PARAMS);
+      client.setQueryData(candidatesKey, {
+        items: [],
+        total: 0,
+        page: 1,
+        limit: 25,
+      });
+
+      const { result } = renderHook(hook, {
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        ),
+      });
+      result.current.mutate(input as never);
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(client.getQueryState(candidatesKey)?.isInvalidated).toBe(true);
+    }
+  );
 });
 
 describe('useAiHealth', () => {

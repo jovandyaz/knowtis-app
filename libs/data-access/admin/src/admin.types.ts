@@ -208,6 +208,15 @@ export const CatalogModelSchema = z.object({
 });
 export type CatalogModel = z.infer<typeof CatalogModelSchema>;
 
+export const PaginatedCandidatesSchema = paginatedSchema(CatalogModelSchema);
+export type PaginatedCandidates = z.infer<typeof PaginatedCandidatesSchema>;
+
+export interface AiCatalogCandidatesParams {
+  page: number;
+  limit: number;
+  search?: string;
+}
+
 export const CatalogAlertSchema = z.object({
   id: z.number().int(),
   modelId: z.string(),
