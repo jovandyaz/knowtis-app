@@ -47,8 +47,7 @@ export function CatalogSection() {
   const mutating = mutations.some((mutation) => mutation.isPending);
   const failed = mutations.find((mutation) => mutation.isError);
 
-  const promoted = catalog.data?.promoted ?? [];
-  const alerts = catalog.data?.alerts ?? [];
+  const overview = catalog.isError ? null : (catalog.data ?? null);
 
   return (
     <ConfigSection
@@ -71,9 +70,7 @@ export function CatalogSection() {
           onRetry={() => void catalog.refetch()}
           fullHeight={false}
         />
-      ) : catalog.isLoading || !catalog.data ? (
-        <LoadingState />
-      ) : (
+      ) : overview ? (
         <>
           <MutationErrorAlert
             error={failed?.error ?? null}
@@ -88,23 +85,27 @@ export function CatalogSection() {
           ) : null}
 
           <CatalogAlerts
-            alerts={alerts}
+            alerts={overview.alerts}
             disabled={mutating}
             onResolve={(alertId) => resolveAlert.mutate(alertId)}
           />
-
-          <CandidatesTable disabled={mutating} />
-
-          <PromotedTable
-            models={promoted}
-            disabled={mutating}
-            onSave={({ id, label, description }) =>
-              updateCopy.mutate({ id, patch: { label, description } })
-            }
-            onRetire={(id) => retire.mutate(id)}
-          />
         </>
+      ) : (
+        <LoadingState />
       )}
+
+      <CandidatesTable disabled={mutating} />
+
+      {overview ? (
+        <PromotedTable
+          models={overview.promoted}
+          disabled={mutating}
+          onSave={({ id, label, description }) =>
+            updateCopy.mutate({ id, patch: { label, description } })
+          }
+          onRetire={(id) => retire.mutate(id)}
+        />
+      ) : null}
     </ConfigSection>
   );
 }

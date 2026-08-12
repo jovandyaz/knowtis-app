@@ -302,6 +302,22 @@ describe('CatalogSection', () => {
 
     expect(refetch).toHaveBeenCalled();
   });
+
+  it('keeps a typed candidate search when the overview fails to load', async () => {
+    const { rerender } = renderSection();
+    await userEvent.type(screen.getByRole('searchbox'), 'kimi');
+
+    useAiCatalogMock.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: true,
+      refetch: vi.fn(),
+    });
+    rerender(<CatalogSection />);
+
+    expect(screen.getByRole('searchbox')).toHaveValue('kimi');
+  });
+
   it('runs a sync on demand', async () => {
     renderSection();
 
