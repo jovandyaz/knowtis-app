@@ -63,6 +63,11 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
     useGlobalAiUsage: () => idleQuery,
     useUpsertFeatureFlag: () => ({ mutate: vi.fn(), isPending: false }),
     useAiCatalog: () => useAiCatalogMock(),
+    useAiCatalogCandidates: () => ({
+      ...idleQuery,
+      data: { items: [], total: 0, page: 1, limit: 25 },
+      refetch: vi.fn(),
+    }),
     usePromoteCatalogModel: () => idleMutation,
     useRetireCatalogModel: () => idleMutation,
     useUpdateCatalogCopy: () => idleMutation,
@@ -123,7 +128,7 @@ describe('AiConfigPage', () => {
       refetch: vi.fn(),
     });
     useAiCatalogMock.mockReturnValue({
-      data: { candidates: [], promoted: [], alerts: [] },
+      data: { promoted: [], alerts: [] },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),

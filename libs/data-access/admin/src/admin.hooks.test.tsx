@@ -707,8 +707,7 @@ const CATALOG_ALERT = {
 };
 
 const CATALOG_OVERVIEW = {
-  candidates: [CATALOG_MODEL],
-  promoted: [],
+  promoted: [CATALOG_MODEL],
   alerts: [CATALOG_ALERT],
 };
 
@@ -749,25 +748,23 @@ describe('useAiCatalog', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(httpClient.get).toHaveBeenCalledWith('/ai/catalog');
-    expect(result.current.data?.candidates[0].id).toBe(
-      'openrouter:z-ai/glm-5.2'
-    );
-    expect(result.current.data?.candidates[0].lastSeenAt).toBeInstanceOf(Date);
-    expect(result.current.data?.candidates[0].upstreamCreatedAt).toBeInstanceOf(
+    expect(result.current.data?.promoted[0].id).toBe('openrouter:z-ai/glm-5.2');
+    expect(result.current.data?.promoted[0].lastSeenAt).toBeInstanceOf(Date);
+    expect(result.current.data?.promoted[0].upstreamCreatedAt).toBeInstanceOf(
       Date
     );
-    expect(result.current.data?.candidates[0].promotedAt).toBeNull();
+    expect(result.current.data?.promoted[0].promotedAt).toBeNull();
     expect(result.current.data?.alerts[0].createdAt).toBeInstanceOf(Date);
     expect(result.current.data?.alerts[0].id).toBe(7);
   });
 
   it('renders a model from an API that omits the optional fields', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({
-      candidates: [
+      promoted: [
         {
           id: CATALOG_MODEL.id,
           label: CATALOG_MODEL.label,
-          status: 'candidate',
+          status: 'promoted',
           tier: 'open',
           inputCostPerToken: 0,
           outputCostPerToken: 0,
@@ -775,39 +772,24 @@ describe('useAiCatalog', () => {
           lastSeenAt: CATALOG_MODEL.lastSeenAt,
         },
       ],
-      promoted: [],
       alerts: [{ ...CATALOG_ALERT, resolvedAt: undefined }],
     });
 
     const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.candidates[0].description).toBe('');
-    expect(result.current.data?.candidates[0].maxOutputTokens).toBeNull();
-    expect(result.current.data?.candidates[0].intelligenceIndex).toBeNull();
-    expect(result.current.data?.candidates[0].upstreamCreatedAt).toBeNull();
-    expect(result.current.data?.candidates[0].promotedAt).toBeNull();
+    expect(result.current.data?.promoted[0].description).toBe('');
+    expect(result.current.data?.promoted[0].maxOutputTokens).toBeNull();
+    expect(result.current.data?.promoted[0].intelligenceIndex).toBeNull();
+    expect(result.current.data?.promoted[0].upstreamCreatedAt).toBeNull();
+    expect(result.current.data?.promoted[0].promotedAt).toBeNull();
     expect(result.current.data?.alerts[0].resolvedAt).toBeNull();
-  });
-
-  it('keeps the catalog usable when the API omits the candidate queue', async () => {
-    vi.mocked(httpClient.get).mockResolvedValue({
-      promoted: [CATALOG_MODEL],
-      alerts: [CATALOG_ALERT],
-    });
-
-    const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });
-
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(result.current.data?.candidates).toEqual([]);
-    expect(result.current.data?.promoted[0].id).toBe(CATALOG_MODEL.id);
-    expect(result.current.data?.alerts[0].id).toBe(CATALOG_ALERT.id);
   });
 
   it('rejects a model whose status this bundle does not know', async () => {
     vi.mocked(httpClient.get).mockResolvedValue({
       ...CATALOG_OVERVIEW,
-      candidates: [{ ...CATALOG_MODEL, status: 'shadow-banned' }],
+      promoted: [{ ...CATALOG_MODEL, status: 'shadow-banned' }],
     });
 
     const { result } = renderHook(() => useAiCatalog(), { wrapper: Wrapper });

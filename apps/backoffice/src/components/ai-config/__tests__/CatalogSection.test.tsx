@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,14 +8,13 @@ import type {
   CatalogModel,
   CatalogOverview,
 } from '@knowtis/data-access-admin';
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
 import { CatalogSection } from '../CatalogSection';
 
 const {
   useAiCatalogMock,
+  useAiCatalogCandidatesMock,
   mutationStateMock,
-  promoteMutate,
   retireMutate,
   updateCopyMutate,
   resolveAlertMutate,
@@ -23,8 +22,8 @@ const {
   syncStateMock,
 } = vi.hoisted(() => ({
   useAiCatalogMock: vi.fn(),
+  useAiCatalogCandidatesMock: vi.fn(),
   mutationStateMock: vi.fn(),
-  promoteMutate: vi.fn(),
   retireMutate: vi.fn(),
   updateCopyMutate: vi.fn(),
   resolveAlertMutate: vi.fn(),
@@ -41,8 +40,9 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   return {
     ...actual,
     useAiCatalog: () => useAiCatalogMock(),
+    useAiCatalogCandidates: () => useAiCatalogCandidatesMock(),
     usePromoteCatalogModel: () => ({
-      mutate: promoteMutate,
+      mutate: vi.fn(),
       ...mutationStateMock(),
     }),
     useRetireCatalogModel: () => ({
@@ -61,9 +61,12 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   };
 });
 
-const CHEAP_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN / 2;
-const EXPENSIVE_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4;
-const BYOK_ONLY_BADGE = /byok only/i;
+const EMPTY_CANDIDATE_PAGE = {
+  data: { items: [], total: 0, page: 1, limit: 25 },
+  isLoading: false,
+  isError: false,
+  refetch: vi.fn(),
+};
 
 function model(overrides: Partial<CatalogModel> = {}): CatalogModel {
   return {
@@ -73,7 +76,7 @@ function model(overrides: Partial<CatalogModel> = {}): CatalogModel {
     status: 'candidate',
     tier: 'open',
     inputCostPerToken: 0.0000002,
-    outputCostPerToken: CHEAP_OUTPUT_COST,
+    outputCostPerToken: 0.0000004,
     maxInputTokens: 131_072,
     maxOutputTokens: null,
     intelligenceIndex: 40,
@@ -99,7 +102,7 @@ function alert(overrides: Partial<CatalogAlert> = {}): CatalogAlert {
 
 function renderSection(overview: Partial<CatalogOverview> = {}) {
   useAiCatalogMock.mockReturnValue({
-    data: { candidates: [], promoted: [], alerts: [], ...overview },
+    data: { promoted: [], alerts: [], ...overview },
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -107,25 +110,14 @@ function renderSection(overview: Partial<CatalogOverview> = {}) {
   return render(<CatalogSection />);
 }
 
-function candidatesTable() {
-  return within(screen.getByRole('table', { name: /candidates/i }));
-}
-
-function rowFor(label: string): HTMLElement {
-  const row = screen.getByText(label).closest('tr');
-  if (!row) {
-    throw new Error(`No candidate row for ${label}`);
-  }
-  return row;
-}
-
 describe('CatalogSection', () => {
   beforeEach(() => {
-    promoteMutate.mockReset();
     retireMutate.mockReset();
     updateCopyMutate.mockReset();
     resolveAlertMutate.mockReset();
     useAiCatalogMock.mockReset();
+    useAiCatalogCandidatesMock.mockReset();
+    useAiCatalogCandidatesMock.mockReturnValue(EMPTY_CANDIDATE_PAGE);
     mutationStateMock.mockReset();
     mutationStateMock.mockReturnValue(IDLE_MUTATION);
     syncMutate.mockReset();
@@ -177,105 +169,9 @@ describe('CatalogSection', () => {
     expect(resolveAlertMutate).toHaveBeenCalledWith(82);
   });
 
-  it('orders candidates by intelligence, unscored ones last', () => {
-    renderSection({
-      candidates: [
-        model({
-          id: 'openrouter:vendor/unscored',
-          label: 'Unscored',
-          intelligenceIndex: null,
-        }),
-        model({
-          id: 'openrouter:vendor/mid',
-          label: 'Mid',
-          intelligenceIndex: 30,
-        }),
-        model({
-          id: 'openrouter:vendor/top',
-          label: 'Top',
-          intelligenceIndex: 55,
-        }),
-      ],
-    });
-
-    const labels = candidatesTable()
-      .getAllByRole('row')
-      .slice(1)
-      .map((row) => within(row).getByRole('button').getAttribute('aria-label'));
-
-    expect(labels).toEqual(['Promote Top', 'Promote Mid', 'Promote Unscored']);
-  });
-
-  it('marks a candidate the free tier cannot absorb as BYOK only', () => {
-    renderSection({
-      candidates: [
-        model({ label: 'Pricey', outputCostPerToken: EXPENSIVE_OUTPUT_COST }),
-      ],
-    });
-
-    expect(
-      within(rowFor('Pricey')).getByText(BYOK_ONLY_BADGE)
-    ).toBeInTheDocument();
-  });
-
-  it('marks a candidate stored with a negative price as BYOK only, as the server reads it', () => {
-    renderSection({
-      candidates: [
-        model({ label: 'Broken row', outputCostPerToken: -CHEAP_OUTPUT_COST }),
-      ],
-    });
-
-    expect(
-      within(rowFor('Broken row')).getByText(BYOK_ONLY_BADGE)
-    ).toBeInTheDocument();
-  });
-
-  it('leaves a candidate under the free ceiling unmarked', () => {
-    renderSection({
-      candidates: [
-        model({
-          label: 'At the ceiling',
-          outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-        }),
-      ],
-    });
-
-    expect(
-      within(rowFor('At the ceiling')).queryByText(BYOK_ONLY_BADGE)
-    ).not.toBeInTheDocument();
-  });
-
-  it('shows what a candidate costs per million tokens', () => {
-    renderSection({
-      candidates: [
-        model({
-          label: 'Priced',
-          inputCostPerToken: 0.0000002,
-          outputCostPerToken: 0.0000008,
-        }),
-      ],
-    });
-
-    const row = within(rowFor('Priced'));
-    expect(row.getByText('$0.20')).toBeInTheDocument();
-    expect(row.getByText('$0.80')).toBeInTheDocument();
-  });
-
-  it('promotes a candidate into the open tier', async () => {
-    renderSection({ candidates: [model({ id: 'openrouter:vendor/pick-me' })] });
-
-    await userEvent.click(screen.getByRole('button', { name: /promote/i }));
-
-    expect(promoteMutate).toHaveBeenCalledWith({
-      id: 'openrouter:vendor/pick-me',
-      tier: 'open',
-    });
-  });
-
-  it('locks Promote and Retire while a mutation is in flight', () => {
+  it('locks Retire while a mutation is in flight', () => {
     mutationStateMock.mockReturnValue(PENDING_MUTATION);
     renderSection({
-      candidates: [model({ label: 'Cheap One' })],
       promoted: [
         model({
           id: 'openrouter:vendor/live-one',
@@ -286,20 +182,26 @@ describe('CatalogSection', () => {
     });
 
     expect(
-      screen.getByRole('button', { name: 'Promote Cheap One' })
-    ).toBeDisabled();
-    expect(
       screen.getByRole('button', { name: 'Retire Live One' })
     ).toBeDisabled();
   });
 
-  it('ignores a second Promote while the first one is still in flight', async () => {
+  it('locks Promote from the section, not only from its own mutation', () => {
     mutationStateMock.mockReturnValue(PENDING_MUTATION);
-    renderSection({ candidates: [model({ id: 'openrouter:vendor/pick-me' })] });
+    useAiCatalogCandidatesMock.mockReturnValue({
+      ...EMPTY_CANDIDATE_PAGE,
+      data: {
+        items: [model({ label: 'Cheap One' })],
+        total: 1,
+        page: 1,
+        limit: 25,
+      },
+    });
+    renderSection();
 
-    await userEvent.click(screen.getByRole('button', { name: /promote/i }));
-
-    expect(promoteMutate).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('button', { name: 'Promote Cheap One' })
+    ).toBeDisabled();
   });
 
   it('retires a promoted model', async () => {
@@ -381,7 +283,7 @@ describe('CatalogSection', () => {
   });
 
   it('tells the admin nothing is promoted yet', () => {
-    renderSection({ candidates: [model()] });
+    renderSection();
 
     expect(screen.getByText(/no promoted model/i)).toBeInTheDocument();
   });

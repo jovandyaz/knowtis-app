@@ -18,7 +18,7 @@ import {
   CATALOG_LABEL_MAX_LENGTH,
 } from '@knowtis/shared-types';
 
-export interface PromotedCopyEdit {
+interface PromotedCopyEdit {
   id: string;
   label: string;
   description: string;
