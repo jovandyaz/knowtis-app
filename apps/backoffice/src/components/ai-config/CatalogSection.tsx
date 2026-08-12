@@ -1,5 +1,3 @@
-import { useState } from 'react';
-
 import { formatUsdPerMillionTokens } from '@/lib/format';
 
 import {
@@ -18,7 +16,6 @@ import {
   Card,
   EmptyState,
   ErrorState,
-  Input,
   LoadingState,
   MutationErrorAlert,
   Table,
@@ -29,24 +26,17 @@ import {
   TableRow,
 } from '@knowtis/design-system';
 import {
-  CATALOG_DESCRIPTION_MAX_LENGTH,
-  CATALOG_LABEL_MAX_LENGTH,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  type CatalogAlertKind,
   type CatalogSyncSkipReason,
   type ModelTier,
 } from '@knowtis/shared-types';
 
+import { CatalogAlerts } from './CatalogAlerts';
 import { ConfigSection } from './ConfigSection';
+import { PromotedTable } from './PromotedTable';
 
 /** Only open-weight models reach the candidate list, so promotion always joins the open pool. */
 const PROMOTION_TIER = 'open' as const satisfies ModelTier;
-
-const ALERT_KIND_LABELS: Record<string, string> = {
-  deprecation: 'Deprecation',
-  price_drift: 'Price drift',
-  unavailable: 'Unavailable',
-} satisfies Record<CatalogAlertKind, string>;
 
 /** Unscored last: two thirds of the upstream list carry no index, and an unscored model is not a better bet than a scored one. */
 function byIntelligenceDesc(a: CatalogModel, b: CatalogModel): number {
@@ -82,87 +72,6 @@ function syncSummary(result: CatalogSyncResult): string {
   const failed =
     result.failures > 0 ? `, ${result.failures} write(s) failed` : '';
   return `Synced ${result.upstream} upstream models: ${result.candidates} candidate(s), ${result.alerts} alert(s)${failed}.`;
-}
-
-interface PromotedModelRowProps {
-  model: CatalogModel;
-  disabled: boolean;
-  onSave: (label: string, description: string) => void;
-  onRetire: () => void;
-}
-
-function PromotedModelRow({
-  model,
-  disabled,
-  onSave,
-  onRetire,
-}: PromotedModelRowProps) {
-  // A draft holds the edit and `base` drops it if another admin writes
-  // meanwhile — saving over their change would silently revert it.
-  const [draft, setDraft] = useState<{
-    base: string;
-    label: string;
-    description: string;
-  } | null>(null);
-
-  const saved = `${model.label}\n${model.description}`;
-  const isForked = draft?.base === saved;
-  const label = isForked ? draft.label : model.label;
-  const description = isForked ? draft.description : model.description;
-  const isDirty = isForked && `${label}\n${description}` !== saved;
-  const edit = (next: { label?: string; description?: string }) =>
-    setDraft({ base: saved, label, description, ...next });
-
-  return (
-    <TableRow>
-      <TableCell>
-        <span className="font-mono text-xs text-(--muted-foreground)">
-          {model.id}
-        </span>
-      </TableCell>
-      <TableCell>
-        <Input
-          aria-label={`Label for ${model.id}`}
-          value={label}
-          maxLength={CATALOG_LABEL_MAX_LENGTH}
-          disabled={disabled}
-          onChange={(event) => edit({ label: event.target.value })}
-        />
-      </TableCell>
-      <TableCell>
-        <Input
-          aria-label={`Description for ${model.id}`}
-          value={description}
-          maxLength={CATALOG_DESCRIPTION_MAX_LENGTH}
-          disabled={disabled}
-          onChange={(event) => edit({ description: event.target.value })}
-        />
-      </TableCell>
-      <TableCell>
-        <div className="flex items-center gap-2">
-          {isDirty ? (
-            <Button
-              size="sm"
-              disabled={disabled}
-              aria-label={`Save ${model.label}`}
-              onClick={() => onSave(label, description)}
-            >
-              Save
-            </Button>
-          ) : null}
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={disabled}
-            aria-label={`Retire ${model.label}`}
-            onClick={onRetire}
-          >
-            Retire
-          </Button>
-        </div>
-      </TableCell>
-    </TableRow>
-  );
 }
 
 export function CatalogSection() {
@@ -220,43 +129,11 @@ export function CatalogSection() {
             </p>
           ) : null}
 
-          {alerts.length > 0 ? (
-            <Card className="flex min-w-0 flex-col gap-2 p-4">
-              <h3 className="text-sm font-medium text-(--muted-foreground)">
-                Open alerts
-              </h3>
-              <ul className="flex flex-col gap-2">
-                {alerts.map((alert) => (
-                  <li
-                    key={alert.id}
-                    className="flex flex-wrap items-center gap-2"
-                  >
-                    <Badge variant="outline">
-                      {ALERT_KIND_LABELS[alert.kind] ?? alert.kind}
-                    </Badge>
-                    <span className="font-mono text-xs text-(--muted-foreground)">
-                      {alert.modelId}
-                    </span>
-                    <span className="min-w-0 flex-1 basis-48 wrap-break-word text-sm">
-                      {alert.detail}
-                    </span>
-                    <span className="text-xs text-(--muted-foreground)">
-                      {alert.createdAt.toLocaleDateString()}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={mutating}
-                      aria-label={`Resolve ${alert.kind} alert for ${alert.modelId}`}
-                      onClick={() => resolveAlert.mutate(alert.id)}
-                    >
-                      Resolve
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          ) : null}
+          <CatalogAlerts
+            alerts={alerts}
+            disabled={mutating}
+            onResolve={(alertId) => resolveAlert.mutate(alertId)}
+          />
 
           {/* min-w-0 on the card: grid and flex items default to min-width:auto,
               so a wide table widens the page instead of scrolling inside it. */}
@@ -346,47 +223,14 @@ export function CatalogSection() {
             )}
           </Card>
 
-          <Card className="flex min-w-0 flex-col gap-3 p-4">
-            <h3 className="text-sm font-medium text-(--muted-foreground)">
-              Promoted ({promoted.length})
-            </h3>
-            {promoted.length === 0 ? (
-              <EmptyState
-                title="No promoted model"
-                description="Promote a candidate to offer it in the model list."
-                fullHeight={false}
-              />
-            ) : (
-              <Table aria-label="Promoted models">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="whitespace-nowrap">Model</TableHead>
-                    <TableHead className="whitespace-nowrap">Label</TableHead>
-                    <TableHead className="whitespace-nowrap">
-                      Description
-                    </TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {promoted.map((model) => (
-                    <PromotedModelRow
-                      key={model.id}
-                      model={model}
-                      disabled={mutating}
-                      onSave={(label, description) =>
-                        updateCopy.mutate({
-                          id: model.id,
-                          patch: { label, description },
-                        })
-                      }
-                      onRetire={() => retire.mutate(model.id)}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </Card>
+          <PromotedTable
+            models={promoted}
+            disabled={mutating}
+            onSave={({ id, label, description }) =>
+              updateCopy.mutate({ id, patch: { label, description } })
+            }
+            onRetire={(id) => retire.mutate(id)}
+          />
         </>
       )}
     </ConfigSection>
