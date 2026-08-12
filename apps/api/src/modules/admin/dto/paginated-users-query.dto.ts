@@ -11,7 +11,7 @@ import {
   Min,
 } from 'class-validator';
 
-import { MAX_PAGE } from '../../../core/pagination';
+import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
 
 export class PaginatedUsersQueryDto {
   @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE, default: 1 })
@@ -22,11 +22,11 @@ export class PaginatedUsersQueryDto {
   @IsOptional()
   page?: number;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 25 })
+  @ApiPropertyOptional({ minimum: 1, maximum: MAX_LIMIT, default: 25 })
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(100)
+  @Max(MAX_LIMIT)
   @IsOptional()
   limit?: number;
 

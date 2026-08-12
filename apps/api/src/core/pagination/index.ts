@@ -1,1 +1,1 @@
-export { MAX_PAGE } from './pagination.constants';
+export { MAX_LIMIT, MAX_PAGE } from './pagination.constants';
