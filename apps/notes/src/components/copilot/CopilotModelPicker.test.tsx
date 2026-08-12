@@ -187,9 +187,11 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
-    );
+    const trigger = screen.getByRole('button', {
+      name: 'aiAssistant.intent.label',
+    });
+    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
+    await userEvent.click(trigger);
 
     expect(
       screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
@@ -206,7 +208,11 @@ describe('CopilotModelPicker', () => {
     sessionModel.mockReturnValue('o:byok');
     render(<CopilotModelPicker />);
 
-    await userEvent.click(screen.getByRole('button', { name: /Byok One/ }));
+    const trigger = screen.getByRole('button', {
+      name: 'aiAssistant.intent.label',
+    });
+    expect(trigger).toHaveTextContent('Byok One');
+    await userEvent.click(trigger);
     await userEvent.click(
       screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
     );
@@ -223,7 +229,7 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
+      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
     );
     await userEvent.click(screen.getByText('Byok One'));
 
@@ -236,7 +242,7 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
+      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
     );
 
     expect(
@@ -245,6 +251,29 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.getByRole('menuitem', { name: /Byok One/ })
     ).toHaveTextContent('aiModels.gpt56');
+  });
+
+  it('names the account style when the session override has left the model list', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('google:gemini-3.5-flash');
+    render(<CopilotModelPicker />);
+
+    const trigger = screen.getByRole('button', {
+      name: 'aiAssistant.intent.label',
+    });
+    expect(trigger).not.toHaveTextContent('—');
+    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
+
+    await userEvent.click(trigger);
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: /aiAssistant.intent.fast/ })
+    );
+
+    expect(setSelected).toHaveBeenCalledWith(null);
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'fast',
+    });
   });
 
   it('deactivates every chip while a model override is in effect', () => {
@@ -265,8 +294,8 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     expect(
-      screen.getByRole('button', { name: /Byok One/ })
-    ).toBeInTheDocument();
+      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
+    ).toHaveTextContent('Byok One');
     expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 
@@ -279,8 +308,8 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     expect(
-      screen.getByRole('button', { name: /aiAssistant.intent.powerful/ })
-    ).toBeInTheDocument();
+      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
+    ).toHaveTextContent('aiAssistant.intent.powerful');
   });
 
   it('keeps the styles choosable when the model list fails to load', async () => {
@@ -289,7 +318,7 @@ describe('CopilotModelPicker', () => {
     render(<CopilotModelPicker />);
 
     await userEvent.click(
-      screen.getByRole('button', { name: /aiAssistant.intent.balanced/ })
+      screen.getByRole('button', { name: 'aiAssistant.intent.label' })
     );
     expect(
       screen.getByRole('menuitem', { name: /aiAssistant.intent.powerful/ })
@@ -299,6 +328,22 @@ describe('CopilotModelPicker', () => {
       screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
     );
     expect(modelsRefetch).toHaveBeenCalled();
+  });
+
+  it('keeps the chips deselected while the model list is still loading', () => {
+    modelsData.mockReturnValue(undefined);
+    modelsError.mockReturnValue(false);
+    prefsData.mockReturnValue({
+      preferredModel: 'o:byok',
+      preferredIntent: 'fast',
+    });
+    render(<CopilotModelPicker />);
+
+    const chips = screen.getAllByRole('radio');
+    expect(chips).toHaveLength(3);
+    for (const chip of chips) {
+      expect(chip).toHaveAttribute('data-state', 'off');
+    }
   });
 
   it('renders no picker at all for an anonymous user', () => {

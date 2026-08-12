@@ -64,6 +64,7 @@ export function CopilotModelPicker() {
 
   return (
     <ModelSelect
+      aria-label={t('aiAssistant.intent.label')}
       models={advancedOptions}
       value={override ?? intent}
       onSelect={select}
@@ -74,6 +75,7 @@ export function CopilotModelPicker() {
       errorLabel={t('aiAssistant.loadError')}
       retryLabel={t('aiAssistant.retry')}
       triggerClassName="h-8"
+      triggerLabel={t(`aiAssistant.intent.${intent}` as never)}
       tierLabel={(tier) => t(`aiAssistant.tier.${tier}` as never)}
       renderDescription={(m) =>
         m.descriptionKey ? t(m.descriptionKey as never) : (m.description ?? '')

@@ -372,6 +372,20 @@ describe('ModelSelect', () => {
     expect(trigger).toHaveTextContent('No models available');
   });
 
+  it('names the trigger with the supplied aria-label', () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={vi.fn()}
+        aria-label="Assistant style"
+      />
+    );
+    expect(
+      screen.getByRole('button', { name: 'Assistant style' })
+    ).toBeInTheDocument();
+  });
+
   it('renders exactly one separator when a leading section meets a footer with no model groups', async () => {
     render(
       <ModelSelect

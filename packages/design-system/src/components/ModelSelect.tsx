@@ -86,6 +86,7 @@ export interface ModelSelectProps {
   triggerClassName?: string;
   triggerVariant?: 'ghost' | 'outline';
   disabled?: boolean;
+  'aria-label'?: string;
 }
 
 function OptionRow({
@@ -140,6 +141,7 @@ export function ModelSelect({
   triggerClassName,
   triggerVariant = 'ghost',
   disabled = false,
+  'aria-label': ariaLabel,
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
@@ -193,6 +195,7 @@ export function ModelSelect({
           size="sm"
           className={cn('gap-1.5', triggerClassName)}
           disabled={triggerDisabled}
+          aria-label={ariaLabel}
         >
           {isLoading && (
             <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
