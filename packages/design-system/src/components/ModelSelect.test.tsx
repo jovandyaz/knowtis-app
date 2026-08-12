@@ -244,4 +244,96 @@ describe('ModelSelect', () => {
       'composer-trigger'
     );
   });
+
+  const styleSection = {
+    label: 'STYLE',
+    options: [
+      { id: 'fast', label: 'Quick', description: 'Instant answers' },
+      { id: 'balanced', label: 'Even', description: 'The sweet spot' },
+    ],
+  };
+
+  it('lists the leading section above the tier groups', async () => {
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        tierLabel={(tier) => tier.toUpperCase()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const headings = screen
+      .getAllByText(/^(STYLE|FAST|BALANCED)$/)
+      .map((el) => el.textContent);
+    expect(headings).toEqual(['STYLE', 'FAST', 'BALANCED']);
+  });
+
+  it('emits the leading option id and labels the trigger with it', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="balanced"
+        onSelect={onSelect}
+        leadingSection={styleSection}
+      />
+    );
+    expect(screen.getByRole('button')).toHaveTextContent('Even');
+
+    await userEvent.click(screen.getByRole('button'));
+    await userEvent.click(screen.getByRole('menuitem', { name: /Quick/ }));
+    expect(onSelect).toHaveBeenCalledWith('fast');
+  });
+
+  it('keeps the leading options listed when the model list is in error', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByRole('menuitem', { name: /Quick/ })).toBeInTheDocument();
+    expect(screen.getByText('Could not load')).toBeTruthy();
+  });
+
+  it('keeps the trigger usable while models load behind a leading section', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="balanced"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="loading"
+        loadingLabel="Loading models…"
+      />
+    );
+    const trigger = screen.getByRole('button');
+    expect(trigger).toBeEnabled();
+    expect(trigger).toHaveTextContent('Even');
+  });
+
+  it('keeps the trigger usable when only the leading section has options', () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value="fast"
+        onSelect={vi.fn()}
+        leadingSection={styleSection}
+        status="ready"
+        emptyLabel="No models available"
+      />
+    );
+    expect(screen.getByRole('button')).toBeEnabled();
+  });
 });

@@ -79,6 +79,8 @@ export {
   ModelSelect,
   type ModelSelectProps,
   type ModelSelectOption,
+  type ModelSelectSection,
+  type ModelSelectSectionOption,
   SegmentedControl,
   type SegmentedControlOption,
   type SegmentedControlProps,

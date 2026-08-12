@@ -24,6 +24,17 @@ export interface ModelSelectOption {
   billedToUser?: boolean;
 }
 
+export interface ModelSelectSectionOption {
+  id: string;
+  label: string;
+  description?: string;
+}
+
+export interface ModelSelectSection {
+  label: string;
+  options: ReadonlyArray<ModelSelectSectionOption>;
+}
+
 export type ModelSelectStatus = 'loading' | 'error' | 'ready';
 
 const COST_GLYPH = '$';
@@ -59,6 +70,8 @@ export interface ModelSelectProps {
   status?: ModelSelectStatus;
   onRetry?: () => void;
   renderDescription?: (m: ModelSelectOption) => string;
+  /** Options listed above the tier groups. Rendered whatever `status` is — they are constants, not loaded data. */
+  leadingSection?: ModelSelectSection;
   tierLabel?: (tier: string) => string;
   triggerLabel?: string;
   loadingLabel?: string;
@@ -72,6 +85,38 @@ export interface ModelSelectProps {
   disabled?: boolean;
 }
 
+function OptionRow({
+  label,
+  description,
+  selected,
+  badge,
+}: {
+  label: string;
+  description?: string | undefined;
+  selected: boolean;
+  badge?: ReactNode | undefined;
+}) {
+  return (
+    <>
+      <div className="flex w-full items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-1.5 font-medium">
+          <span className="truncate">{label}</span>
+          {badge}
+        </span>
+        {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+      </div>
+      {description && (
+        <span
+          className="w-full min-w-0 line-clamp-1 text-xs text-(--muted-foreground)"
+          title={description}
+        >
+          {description}
+        </span>
+      )}
+    </>
+  );
+}
+
 export function ModelSelect({
   models,
   value,
@@ -80,6 +125,7 @@ export function ModelSelect({
   status = 'ready',
   onRetry,
   renderDescription,
+  leadingSection,
   tierLabel,
   triggerLabel,
   loadingLabel,
@@ -94,10 +140,15 @@ export function ModelSelect({
 }: ModelSelectProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
-  const isEmpty = status === 'ready' && models.length === 0;
-  const triggerDisabled = disabled || isLoading || isEmpty;
+  const hasLeadingSection = !!leadingSection;
+  const isEmpty =
+    status === 'ready' && models.length === 0 && !hasLeadingSection;
+  const triggerDisabled =
+    disabled || isEmpty || (isLoading && !hasLeadingSection);
 
-  const active = models.find((m) => m.id === value);
+  const active =
+    models.find((m) => m.id === value) ??
+    leadingSection?.options.find((o) => o.id === value);
   const ordered = tierOrder ?? [];
   const known = new Set<string>(ordered);
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
@@ -111,6 +162,9 @@ export function ModelSelect({
     .filter((g) => g.items.length > 0);
 
   const triggerText = ((): string => {
+    if (active) {
+      return active.label;
+    }
     if (isLoading) {
       return loadingLabel ?? FALLBACK_LABEL;
     }
@@ -120,7 +174,7 @@ export function ModelSelect({
     if (isEmpty) {
       return emptyLabel ?? FALLBACK_LABEL;
     }
-    return active?.label ?? triggerLabel ?? FALLBACK_LABEL;
+    return triggerLabel ?? FALLBACK_LABEL;
   })();
 
   return (
@@ -141,6 +195,27 @@ export function ModelSelect({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
+        {leadingSection && (
+          <>
+            <DropdownMenuLabel className="text-xs uppercase tracking-wide">
+              {leadingSection.label}
+            </DropdownMenuLabel>
+            {leadingSection.options.map((option) => (
+              <DropdownMenuItem
+                key={option.id}
+                onSelect={() => onSelect(option.id)}
+                className="flex-col items-start gap-0.5"
+              >
+                <OptionRow
+                  label={option.label}
+                  description={option.description}
+                  selected={option.id === value}
+                />
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator />
+          </>
+        )}
         {isError ? (
           <>
             <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
@@ -175,28 +250,19 @@ export function ModelSelect({
                         onSelect={() => onSelect(m.id)}
                         className="flex-col items-start gap-0.5"
                       >
-                        <div className="flex w-full items-center justify-between gap-2">
-                          <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                            <span className="truncate">{m.label}</span>
-                            {m.billedToUser && billedBadgeLabel && (
+                        <OptionRow
+                          label={m.label}
+                          description={description}
+                          selected={m.id === value}
+                          badge={
+                            m.billedToUser && billedBadgeLabel ? (
                               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
                                 <KeyRound className="h-2.5 w-2.5" />
                                 {billedBadgeLabel}
                               </span>
-                            )}
-                          </span>
-                          {m.id === value && (
-                            <Check className="h-3.5 w-3.5 shrink-0" />
-                          )}
-                        </div>
-                        {description && (
-                          <span
-                            className="w-full min-w-0 line-clamp-1 text-xs text-(--muted-foreground)"
-                            title={description}
-                          >
-                            {description}
-                          </span>
-                        )}
+                            ) : undefined
+                          }
+                        />
                       </DropdownMenuItem>
                     );
                   })}
