@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { createColumnHelper } from '@tanstack/react-table';
 import type { ColumnDef, PaginationState } from '@tanstack/react-table';
@@ -140,8 +140,13 @@ export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
   });
 
   const locked = disabled || promote.isPending;
-  const columns = candidateColumns(locked, (model) =>
-    promote.mutate({ id: model.id, tier: PROMOTION_TIER })
+  const promoteModel = promote.mutate;
+  const columns = useMemo(
+    () =>
+      candidateColumns(locked, (model) =>
+        promoteModel({ id: model.id, tier: PROMOTION_TIER })
+      ),
+    [locked, promoteModel]
   );
 
   return (
