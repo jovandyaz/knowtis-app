@@ -12,8 +12,17 @@ const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const prefsData = vi.fn();
 const featureFlag = vi.fn<(key: string) => boolean>();
+const sessionModel = vi.fn<() => string | null>();
+const setSessionModel = vi.fn();
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
+}));
+vi.mock('@/stores/agent.store', () => ({
+  useAgentStore: (select: (s: unknown) => unknown) =>
+    select({
+      selectedModel: sessionModel(),
+      setSelectedModel: setSessionModel,
+    }),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: (key: string) => featureFlag(key),
@@ -98,6 +107,7 @@ describe('AIAssistantSection', () => {
       preferredModel: null,
       preferredIntent: null,
     });
+    sessionModel.mockReturnValue(null);
   });
 
   it('offers only the three intent chips to a user without BYOK models', () => {
@@ -240,6 +250,32 @@ describe('AIAssistantSection', () => {
     await userEvent.click(screen.getByText('Byok One'));
 
     expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
+  });
+
+  it('clears the composer session override when an intent chip is picked', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('o:byok');
+    render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
+    );
+
+    expect(setSessionModel).toHaveBeenCalledWith(null);
+  });
+
+  it('clears the composer session override when an advanced model is stored', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    sessionModel.mockReturnValue('a:fast');
+    render(<AIAssistantSection />);
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /aiAssistant.advanced.trigger/ })
+    );
+    await userEvent.click(screen.getByText('Byok One'));
+
+    expect(update).toHaveBeenCalledWith({ preferredModel: 'o:byok' });
+    expect(setSessionModel).toHaveBeenCalledWith(null);
   });
 
   it('clears a stored model override when an intent chip is picked', async () => {

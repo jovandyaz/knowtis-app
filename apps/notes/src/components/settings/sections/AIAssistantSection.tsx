@@ -5,6 +5,7 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
+import { useAgentStore } from '@/stores/agent.store';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { DEFAULT_MODEL_INTENT, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
@@ -19,6 +20,7 @@ export function AIAssistantSection() {
   const { data: models, isError, refetch } = useAvailableModels();
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
+  const setSessionModel = useAgentStore((s) => s.setSelectedModel);
   const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
 
   return (
@@ -34,10 +36,16 @@ export function AIAssistantSection() {
           onRetry={() => void refetch()}
           intent={prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT}
           overrideModel={advancedOverride(prefs?.preferredModel, models)}
-          onSelectIntent={(value) =>
-            update({ preferredModel: null, preferredIntent: value })
-          }
-          onSelectModel={(id) => update({ preferredModel: id })}
+          onSelectIntent={(value) => {
+            // The composer's session model outranks account preferences, so a
+            // choice made here is inert until that override is dropped.
+            setSessionModel(null);
+            update({ preferredModel: null, preferredIntent: value });
+          }}
+          onSelectModel={(id) => {
+            setSessionModel(null);
+            update({ preferredModel: id });
+          }}
         />
       </section>
 
