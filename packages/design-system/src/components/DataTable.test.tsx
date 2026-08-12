@@ -43,7 +43,7 @@ describe('DataTable', () => {
     expect(screen.getByText('No users')).toBeInTheDocument();
   });
 
-  it('should name the table for assistive tech, loading or loaded', () => {
+  it('names the table for assistive tech, loading or loaded', () => {
     const { rerender } = render(
       <DataTable columns={columns} data={[]} isLoading aria-label="People" />
     );
@@ -131,6 +131,76 @@ describe('DataTable', () => {
     );
     const nameHeader = screen.getByRole('columnheader', { name: 'Name' });
     expect(within(nameHeader).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  describe('server mode empty pages', () => {
+    it('keeps the bare empty state on the first page', () => {
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          rowCount={0}
+          pagination={{ pageIndex: 0, pageSize: 25 }}
+          onPaginationChange={vi.fn()}
+          emptyTitle="No users"
+        />
+      );
+      expect(screen.getByText('No users')).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /previous page/i })
+      ).not.toBeInTheDocument();
+    });
+
+    it('still offers Previous when a page the row count covers comes back empty', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          rowCount={50}
+          pagination={{ pageIndex: 1, pageSize: 25 }}
+          onPaginationChange={onPaginationChange}
+          emptyTitle="No users"
+        />
+      );
+      expect(screen.getByText('No users')).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /previous page/i })
+      ).toBeEnabled();
+      expect(onPaginationChange).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the last page with rows when the row count shrinks', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          rowCount={30}
+          pagination={{ pageIndex: 3, pageSize: 25 }}
+          onPaginationChange={onPaginationChange}
+        />
+      );
+      expect(onPaginationChange).toHaveBeenCalledWith({
+        pageIndex: 1,
+        pageSize: 25,
+      });
+    });
+
+    it('leaves the page index alone while the first page is still loading', () => {
+      const onPaginationChange = vi.fn();
+      render(
+        <DataTable
+          columns={columns}
+          data={[]}
+          rowCount={0}
+          pagination={{ pageIndex: 2, pageSize: 25 }}
+          onPaginationChange={onPaginationChange}
+          isLoading
+        />
+      );
+      expect(onPaginationChange).not.toHaveBeenCalled();
+    });
   });
 
   describe('client mode pagination', () => {
