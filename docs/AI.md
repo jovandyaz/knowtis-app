@@ -514,7 +514,7 @@ The resolved model enters the [fallback chain](#cross-provider-fallback-chain) a
 
 A per-conversation choice rides on the agent WebSocket payload (`{ conversationId?, message, model? }`); `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation.
 
-**Frontend.** `CopilotModelPicker` renders three intent chips (Rápido / Equilibrado / Profundo, a `SegmentedControl`) plus an **Avanzado** dropdown filtered to BYOK-billed models, hidden when the caller has none. Anonymous users get no picker. `ModelSelect` (`@knowtis/design-system`) is a tier-grouped dropdown; the cost band (`$` / `$$` / `$$$`) shows once per tier header. It renders explicit loading, error (with retry), and empty states. The `AIAssistantSection` settings tab mirrors the same controls.
+**Frontend.** Both product surfaces render one `ModelSelect` (`@knowtis/design-system`): its leading section lists the three styles (Rápido / Equilibrado / Profundo), and the BYOK-billed models follow flattened under a single **Modelos** heading, each row carrying its own cost band (`$` / `$$` / `$$$`). In the composer `CopilotModelPicker` is that control alone, falling back to the style chips (`SegmentedControl`) when the caller has no such model; the `AIAssistantSection` settings tab keeps the chips beside the same dropdown. Anonymous users get no picker. The dropdown renders explicit loading, error (with retry), and empty states. The backoffice pickers pass no styles and stay grouped per tier, with the cost band on the tier header.
 
 ---
 
