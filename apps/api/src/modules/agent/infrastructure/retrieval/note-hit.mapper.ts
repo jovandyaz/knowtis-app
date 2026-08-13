@@ -1,3 +1,5 @@
+import { GENERAL_ACCESS } from '@knowtis/shared-types';
+
 import type { NoteHit } from '../../domain/retrieval';
 
 export interface NoteSummaryRow {
@@ -5,7 +7,6 @@ export interface NoteSummaryRow {
   readonly title: string;
   readonly ownerId: string;
   readonly generalAccess: string;
-  readonly shareToken: string | null;
   readonly updatedAt: Date;
 }
 
@@ -16,7 +17,6 @@ export function toNoteHit(note: NoteSummaryRow, userId: string): NoteHit {
     updatedAt: note.updatedAt.toISOString(),
     isOwner: note.ownerId === userId,
     isSharedWithMe: note.ownerId !== userId,
-    isPubliclyShared:
-      note.generalAccess !== 'restricted' || note.shareToken !== null,
+    isPubliclyShared: note.generalAccess !== GENERAL_ACCESS.RESTRICTED,
   };
 }

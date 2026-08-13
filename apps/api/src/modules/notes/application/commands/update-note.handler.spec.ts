@@ -121,7 +121,7 @@ describe('UpdateNoteHandler', () => {
     );
   });
 
-  it('should clear share token when changing to restricted', async () => {
+  it('should preserve the share token when changing to restricted', async () => {
     const noteWithToken: NoteEntity = {
       ...mockNote,
       generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
@@ -129,24 +129,46 @@ describe('UpdateNoteHandler', () => {
     };
 
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(noteWithToken);
-    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(noteWithToken));
+    const updateSpy = vi
+      .spyOn(mockRepository, 'update')
+      .mockResolvedValue(ok(noteWithToken));
 
-    const input = {
+    const result = await handler.execute({
       noteId: 'note-1',
       userId: 'owner-1',
       generalAccess: GENERAL_ACCESS.RESTRICTED,
-    };
-
-    const result = await handler.execute(input);
+    });
 
     expect(result.isOk()).toBe(true);
-    expect(mockRepository.update).toHaveBeenCalledWith(
+    expect(updateSpy).toHaveBeenCalledWith(
       'note-1',
-      expect.objectContaining({
-        generalAccess: GENERAL_ACCESS.RESTRICTED,
-        shareToken: null,
-      })
+      expect.objectContaining({ generalAccess: GENERAL_ACCESS.RESTRICTED })
     );
+    expect(updateSpy.mock.calls[0]?.[1]).not.toHaveProperty('shareToken');
+  });
+
+  it('should reuse the existing token when sharing is re-enabled', async () => {
+    const restrictedNoteWithToken: NoteEntity = {
+      ...mockNote,
+      generalAccess: GENERAL_ACCESS.RESTRICTED,
+      shareToken: 'existing-token-abc123',
+    };
+
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(
+      restrictedNoteWithToken
+    );
+    const updateSpy = vi
+      .spyOn(mockRepository, 'update')
+      .mockResolvedValue(ok(restrictedNoteWithToken));
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(updateSpy.mock.calls[0]?.[1]).not.toHaveProperty('shareToken');
   });
 
   it('should allow editor to update content atomically with yjsState', async () => {

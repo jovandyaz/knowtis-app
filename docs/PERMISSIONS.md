@@ -73,7 +73,7 @@ Similar to Google Docs, each note has a **General Access** setting:
 
 When "Anyone with the link" is enabled:
 
-- A unique `shareToken` (128-bit, 32-char hex via `crypto.randomBytes(16)`) is automatically generated
+- A unique `shareToken` (128-bit, 32-char hex via `crypto.randomBytes(16)`) is generated the first time the note is shared, and reused from then on
 - The `generalAccessPermission` determines what people with the link can do:
   - **Viewer**: Read-only access
   - **Editor**: Can read and edit
@@ -202,7 +202,9 @@ The `PATCH /notes/:id` endpoint accepts:
 - `generalAccessPermission` (owner, or editor if `editorsCanShare=true`)
 - `editorsCanShare` (owner only)
 
-When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is automatically generated. When changed to `'restricted'`, the `shareToken` is cleared.
+When `generalAccess` is changed to `'anyone_with_link'` and no `shareToken` exists, one is generated. The token is then **permanent**: changing back to `'restricted'` leaves it in place, so re-enabling sharing resumes the same link instead of minting a different one.
+
+A retained token grants nothing on its own. Every reader gates on `generalAccess` as well — `findByShareToken` (REST), the Hocuspocus handshake, and the shared-artifacts query all require `'anyone_with_link'` — so a restricted note's token resolves to a 404 until sharing is re-enabled. The consequence to be aware of: there is no way to invalidate a leaked link, because re-sharing revives every link previously handed out.
 
 ### Direct Permissions
 
@@ -270,8 +272,9 @@ The ShareDialog component provides:
    - Viewer
    - Editor
 
-3. **Copy Link Button** (visible when `shareToken` exists):
+3. **Copy Link Button** (visible when "Anyone with the link" is selected):
    - Copies `${origin}/s/${shareToken}` to clipboard
+   - A restricted note may still hold a token; the link stays hidden until sharing is on
 
 4. **Editors Can Share Toggle** (owner only):
    - Allows editors to manage sharing
