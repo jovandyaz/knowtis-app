@@ -49,9 +49,10 @@ export const AGENT_STREAM_INACTIVITY_MS = 310_000;
 export const THINKING_TAIL_CHARS = 400;
 const CHUNK_FLUSH_MS = 50;
 
-const PROPOSAL_EXPIRED_ERROR: AgentErrorPayload = {
-  code: 'AGENT_PROPOSAL_EXPIRED',
-  message: 'The proposal can no longer be resumed',
+/** Local failure only: whether the proposal itself expired is the server's to say. */
+const RESUME_UNAVAILABLE_ERROR: AgentErrorPayload = {
+  code: 'AGENT_RESUME_UNAVAILABLE',
+  message: 'The turn is no longer open to resume',
 };
 
 interface AgentState {
@@ -109,6 +110,27 @@ export const useAgentStore = create<AgentState>((set, get) => {
         thinkingText: (s.thinkingText + text).slice(-THINKING_TAIL_CHARS),
       })),
   });
+
+  const beginResumedTurn = (): AgentChatMessage => {
+    const assistant: AgentChatMessage = {
+      id: nextId(),
+      role: 'assistant',
+      content: '',
+    };
+    activeAssistantId = assistant.id;
+    thinkingBuffer.discard();
+    return assistant;
+  };
+
+  const failResume = () => {
+    thinkingBuffer.discard();
+    set({
+      status: 'error',
+      error: RESUME_UNAVAILABLE_ERROR,
+      pendingProposal: null,
+      thinkingText: '',
+    });
+  };
 
   const run = (
     text: string,
@@ -340,29 +362,21 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (!p) {
         return;
       }
-      if (!agentClient.approve(p.id)) {
-        thinkingBuffer.discard();
-        set({
-          status: 'error',
-          error: PROPOSAL_EXPIRED_ERROR,
-          pendingProposal: null,
-          thinkingText: '',
-        });
+      if (!agentClient.canResume()) {
+        failResume();
         return;
       }
-      const assistant: AgentChatMessage = {
-        id: nextId(),
-        role: 'assistant',
-        content: '',
-      };
-      activeAssistantId = assistant.id;
-      thinkingBuffer.discard();
+      const assistant = beginResumedTurn();
       set((s) => ({
         status: 'streaming',
         pendingProposal: null,
         thinkingText: '',
         messages: [...s.messages, assistant],
       }));
+      agentClient.approve(p.id);
+      if (get().status !== 'streaming') {
+        return;
+      }
       buffer.armInactivityTimer();
     },
 
@@ -371,23 +385,11 @@ export const useAgentStore = create<AgentState>((set, get) => {
       if (!p) {
         return;
       }
-      if (!agentClient.reject(p.id, reason)) {
-        thinkingBuffer.discard();
-        set({
-          status: 'error',
-          error: PROPOSAL_EXPIRED_ERROR,
-          pendingProposal: null,
-          thinkingText: '',
-        });
+      if (!agentClient.canResume()) {
+        failResume();
         return;
       }
-      const assistant: AgentChatMessage = {
-        id: nextId(),
-        role: 'assistant',
-        content: '',
-      };
-      activeAssistantId = assistant.id;
-      thinkingBuffer.discard();
+      const assistant = beginResumedTurn();
       set((s) => {
         let marked = false;
         const messages = [...s.messages];
@@ -408,6 +410,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
             : [...s.messages, assistant],
         };
       });
+      agentClient.reject(p.id, reason);
+      if (get().status !== 'streaming') {
+        return;
+      }
       buffer.armInactivityTimer();
     },
   };

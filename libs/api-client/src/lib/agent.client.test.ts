@@ -51,6 +51,15 @@ const AUTH_ERROR = {
   message: 'Authentication required',
 };
 
+const PROPOSAL = {
+  id: 'p1',
+  kind: 'create' as const,
+  targetNoteId: null,
+  summary: 'Create "My Note"',
+  previewHtml: null,
+  payload: {},
+};
+
 function makeClient(): AgentClient {
   const client = new AgentClient('http://localhost:3333/agent');
   client.setTokenProvider({
@@ -203,20 +212,21 @@ describe('AgentClient', () => {
     expect(payload).not.toHaveProperty('model');
   });
 
-  it('approve returns true and emits while a request is pending', () => {
+  it('approve emits while the turn is still open', () => {
     const client = makeClient();
     client.sendMessage('hi', {
       onChunk: vi.fn(),
       onDone: vi.fn(),
       onError: vi.fn(),
     });
-    expect(client.approve('p1')).toBe(true);
+    expect(client.canResume()).toBe(true);
+    client.approve('p1');
     expect(emit).toHaveBeenCalledWith('agent:approve', {
       proposalId: 'p1',
     });
   });
 
-  it('approve returns false without emitting once the request completed', () => {
+  it('approve does not emit once the request completed', () => {
     const client = makeClient();
     client.sendMessage('hi', {
       onChunk: vi.fn(),
@@ -228,11 +238,12 @@ describe('AgentClient', () => {
       sources: [],
     });
     emit.mockClear();
-    expect(client.approve('p1')).toBe(false);
+    expect(client.canResume()).toBe(false);
+    client.approve('p1');
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('reject returns false without emitting after cancel cleared the pending request', () => {
+  it('reject does not emit after cancel cleared the pending request', () => {
     const client = makeClient();
     const handle = client.sendMessage('hi', {
       onChunk: vi.fn(),
@@ -241,7 +252,8 @@ describe('AgentClient', () => {
     });
     handle.cancel();
     emit.mockClear();
-    expect(client.reject('p1', 'no')).toBe(false);
+    expect(client.canResume()).toBe(false);
+    client.reject('p1', 'no');
     expect(emit).not.toHaveBeenCalled();
   });
 });
@@ -489,6 +501,184 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(callbacks.onError).not.toHaveBeenCalled();
     expect(fake.socket.emit).toHaveBeenLastCalledWith('agent:message', {
       message: { content: 'second' },
+    });
+  });
+
+  it('keeps a turn suspended on a proposal alive when the server closes the connection', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(client.canResume()).toBe(true);
+  });
+
+  it('approves over a fresh socket after the server closed the previous one', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    fake.socket.emit.mockClear();
+
+    client.approve('p1');
+    await flush();
+
+    expect(io).toHaveBeenCalledTimes(2);
+    expect(fake.socket.emit).toHaveBeenCalledWith('agent:approve', {
+      proposalId: 'p1',
+    });
+  });
+
+  it('rejects over a fresh socket after the server closed the previous one', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks, 'note-9');
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    fake.socket.emit.mockClear();
+
+    client.reject('p1', 'too long');
+    await flush();
+
+    expect(fake.socket.emit).toHaveBeenCalledWith('agent:reject', {
+      proposalId: 'p1',
+      noteId: 'note-9',
+      reason: 'too long',
+    });
+  });
+
+  it('replays the decision, not the original message, after auth recovery', async () => {
+    let token: string | null = 'stale-token';
+    const refresh = vi.fn(async () => {
+      token = 'fresh-token';
+      return true;
+    });
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => token,
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+    token = null;
+    fake.socket.emit.mockClear();
+
+    client.approve('p1');
+    await flush();
+
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).not.toHaveBeenCalled();
+    expect(fake.socket.emit).toHaveBeenCalledTimes(1);
+    expect(fake.socket.emit).toHaveBeenCalledWith('agent:approve', {
+      proposalId: 'p1',
+    });
+  });
+
+  it('reports the turn as unresumable once it completed', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+    fake.trigger('agent:done', {
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+    });
+    fake.socket.emit.mockClear();
+
+    expect(client.canResume()).toBe(false);
+    client.approve('p1');
+    expect(fake.socket.emit).not.toHaveBeenCalled();
+  });
+
+  it('still fails a streaming turn when the server closes the connection', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+    client.approve('p1');
+    await flush();
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).toHaveBeenCalledWith({
+      code: 'CONNECTION_FAILED',
+      message: 'Failed to connect to agent server',
     });
   });
 

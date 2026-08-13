@@ -187,6 +187,7 @@
       "emptyCompletion": "The model ran out of room while thinking and didn't answer. Please retry.",
       "staleNote": "The note changed — ask me again.",
       "proposalExpired": "That request expired — ask again.",
+      "resumeUnavailable": "I couldn't resume that request — ask again.",
       "permissionDenied": "You don't have permission to do that.",
       "sanitizeRejected": "The content was rejected for safety reasons.",
       "targetUserNotFound": "That user wasn't found.",

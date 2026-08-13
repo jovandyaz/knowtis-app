@@ -21,8 +21,9 @@ import {
 vi.mock('@knowtis/api-client', () => ({
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
-    approve: vi.fn(() => true),
-    reject: vi.fn(() => true),
+    canResume: vi.fn(() => true),
+    approve: vi.fn(),
+    reject: vi.fn(),
     resetConversation: vi.fn(),
   },
 }));
@@ -193,8 +194,7 @@ describe('agent.store server-authoritative wire', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    vi.mocked(agentClient.approve).mockReturnValue(true);
-    vi.mocked(agentClient.reject).mockReturnValue(true);
+    vi.mocked(agentClient.canResume).mockReturnValue(true);
     useAgentStore.getState().newConversation();
   });
 
@@ -357,8 +357,7 @@ describe('agent.store proposals', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    vi.mocked(agentClient.approve).mockReturnValue(true);
-    vi.mocked(agentClient.reject).mockReturnValue(true);
+    vi.mocked(agentClient.canResume).mockReturnValue(true);
     useAgentStore.getState().newConversation();
   });
 
@@ -405,8 +404,8 @@ describe('agent.store proposals', () => {
     );
   });
 
-  it('approveProposal fails fast when the client has no pending request', () => {
-    vi.mocked(agentClient.approve).mockReturnValue(false);
+  it('approveProposal fails fast once the turn is closed', () => {
+    vi.mocked(agentClient.canResume).mockReturnValue(false);
     useAgentStore.setState({
       pendingProposal: {
         id: 'p1',
@@ -421,12 +420,12 @@ describe('agent.store proposals', () => {
     useAgentStore.getState().approveProposal();
     const { status, error, pendingProposal } = useAgentStore.getState();
     expect(status).toBe('error');
-    expect(error?.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    expect(error?.code).toBe('AGENT_RESUME_UNAVAILABLE');
     expect(pendingProposal).toBeNull();
   });
 
-  it('rejectProposal fails fast when the client has no pending request', () => {
-    vi.mocked(agentClient.reject).mockReturnValue(false);
+  it('rejectProposal fails fast once the turn is closed', () => {
+    vi.mocked(agentClient.canResume).mockReturnValue(false);
     useAgentStore.setState({
       pendingProposal: {
         id: 'p1',
@@ -441,8 +440,30 @@ describe('agent.store proposals', () => {
     useAgentStore.getState().rejectProposal('reason');
     const { status, error, pendingProposal } = useAgentStore.getState();
     expect(status).toBe('error');
-    expect(error?.code).toBe('AGENT_PROPOSAL_EXPIRED');
+    expect(error?.code).toBe('AGENT_RESUME_UNAVAILABLE');
     expect(pendingProposal).toBeNull();
+  });
+
+  it('does not arm the watchdog when the approve fails before streaming resumes', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('create a note');
+    get().onProposal?.({
+      id: 'p1',
+      kind: 'create',
+      targetNoteId: null,
+      summary: 's',
+      previewHtml: null,
+      payload: {},
+    });
+    vi.mocked(agentClient.approve).mockImplementation(() => {
+      get().onError({ code: 'CONNECTION_FAILED', message: 'down' });
+    });
+
+    useAgentStore.getState().approveProposal();
+    expect(useAgentStore.getState().status).toBe('error');
+
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+    expect(useAgentStore.getState().status).toBe('error');
   });
 
   it('approveProposal is a no-op without a pending proposal', () => {
@@ -480,8 +501,7 @@ describe('agent.store thinking tail', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.clearAllMocks();
-    vi.mocked(agentClient.approve).mockReturnValue(true);
-    vi.mocked(agentClient.reject).mockReturnValue(true);
+    vi.mocked(agentClient.canResume).mockReturnValue(true);
     useAgentStore.getState().newConversation();
   });
 
@@ -626,9 +646,9 @@ describe('agent.store thinking tail', () => {
     expect(useAgentStore.getState().thinkingText).toBe('');
   });
 
-  it('clears the thinking tail when the proposal has expired', () => {
+  it('clears the thinking tail when the turn can no longer be resumed', () => {
     const { get } = capture();
-    vi.mocked(agentClient.approve).mockReturnValue(false);
+    vi.mocked(agentClient.canResume).mockReturnValue(false);
     useAgentStore.getState().sendMessage('create a note');
     get().onProposal?.(PROPOSAL);
     get().onThinking?.({ text: 'reasoning after the proposal' });
