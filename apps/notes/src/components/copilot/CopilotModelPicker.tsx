@@ -5,7 +5,6 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
-import { useAgentStore } from '@/stores/agent.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
@@ -30,21 +29,17 @@ export function CopilotModelPicker() {
   const { data: models, isError, refetch } = useAvailableModels(showPicker);
   const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
-  const sessionModel = useAgentStore((s) => s.selectedModel);
-  const setSessionModel = useAgentStore((s) => s.setSelectedModel);
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
-  const override =
-    sessionModel ?? advancedOverride(prefs?.preferredModel, models);
+  const override = advancedOverride(prefs?.preferredModel, models);
   const advancedOptions = advancedModelOptions(models);
 
   const select = (id: string) => {
     const isOfferedModel = advancedOptions.some((m) => m.id === id);
     if (isOfferedModel || !isModelIntent(id)) {
-      setSessionModel(id);
+      update({ preferredModel: id });
       return;
     }
-    setSessionModel(null);
     update({ preferredModel: null, preferredIntent: id });
   };
 

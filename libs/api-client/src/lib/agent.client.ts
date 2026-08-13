@@ -106,7 +106,6 @@ export class AgentClient {
   private pending: PendingRequest | null = null;
   private awaitingDecision = false;
   private pendingNoteId: string | undefined;
-  private pendingModel: string | undefined;
   private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
@@ -148,8 +147,7 @@ export class AgentClient {
   sendMessage(
     content: string,
     callbacks: AgentStreamCallbacks,
-    noteId?: string,
-    model?: string
+    noteId?: string
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -158,7 +156,6 @@ export class AgentClient {
 
     this.activeCallbacks = callbacks;
     this.pendingNoteId = noteId;
-    this.pendingModel = model;
 
     this.dispatch({ kind: 'message', content }, callbacks);
 
@@ -252,7 +249,6 @@ export class AgentClient {
             : {}),
           message: { content: request.content },
           ...noteId,
-          ...(this.pendingModel ? { model: this.pendingModel } : {}),
         });
         return;
       case 'approve':

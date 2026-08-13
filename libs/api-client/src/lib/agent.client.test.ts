@@ -185,33 +185,6 @@ describe('AgentClient', () => {
     });
   });
 
-  it('includes model in the agent:message payload when provided', () => {
-    const client = makeClient();
-    client.sendMessage(
-      'hi',
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
-      undefined,
-      'openai:gpt-4o-mini'
-    );
-    expect(emit).toHaveBeenCalledWith(
-      'agent:message',
-      expect.objectContaining({ model: 'openai:gpt-4o-mini' })
-    );
-  });
-
-  it('omits model from agent:message payload when not provided', () => {
-    const client = makeClient();
-    client.sendMessage('hi', {
-      onChunk: vi.fn(),
-      onDone: vi.fn(),
-      onError: vi.fn(),
-    });
-    const payload = emit.mock.calls.find(
-      ([event]) => event === 'agent:message'
-    )?.[1] as Record<string, unknown>;
-    expect(payload).not.toHaveProperty('model');
-  });
-
   it('approve emits while the turn is still open', () => {
     const client = makeClient();
     client.sendMessage('hi', {

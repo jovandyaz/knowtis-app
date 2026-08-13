@@ -6,7 +6,6 @@ import type { SelectableModel } from '@knowtis/shared-types';
 
 import { CopilotModelPicker } from './CopilotModelPicker';
 
-const setSelected = vi.fn();
 const updatePreferences = vi.fn();
 const modelsData = vi.fn();
 const modelsError = vi.fn<() => boolean>();
@@ -14,7 +13,6 @@ const modelsRefetch = vi.fn();
 const modelsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsData = vi.fn();
-const sessionModel = vi.fn<() => string | null>();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
 
 vi.mock('react-i18next', () => ({
@@ -38,10 +36,6 @@ vi.mock('@/hooks', () => ({
     return { data: prefsData() };
   },
   useUpdateAISettings: () => ({ mutate: updatePreferences }),
-}));
-vi.mock('@/stores/agent.store', () => ({
-  useAgentStore: (select: (s: unknown) => unknown) =>
-    select({ selectedModel: sessionModel(), setSelectedModel: setSelected }),
 }));
 
 const grantedModels = [
@@ -139,7 +133,6 @@ describe('CopilotModelPicker', () => {
       preferredModel: null,
       preferredIntent: null,
     });
-    sessionModel.mockReturnValue(null);
     authUser.mockReturnValue({ isAnonymous: false });
   });
 
@@ -162,19 +155,6 @@ describe('CopilotModelPicker', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('keeps the chips as the way out of an override with no BYOK models', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    sessionModel.mockReturnValue('google:gemini-3.5-flash');
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    ).toBeEnabled();
-  });
-
   it('activates the default intent when the account has none stored', () => {
     render(<CopilotModelPicker />);
 
@@ -194,7 +174,6 @@ describe('CopilotModelPicker', () => {
       preferredModel: null,
       preferredIntent: 'fast',
     });
-    expect(setSelected).toHaveBeenCalledWith(null);
   });
 
   it('offers one control listing styles above the BYOK models', async () => {
@@ -230,7 +209,10 @@ describe('CopilotModelPicker', () => {
 
   it('returns to the account style when a style row is picked', async () => {
     modelsData.mockReturnValue(withByokModel);
-    sessionModel.mockReturnValue('o:byok');
+    prefsData.mockReturnValue({
+      preferredModel: 'o:byok',
+      preferredIntent: null,
+    });
     render(<CopilotModelPicker />);
 
     const trigger = screen.getByRole('button');
@@ -240,14 +222,13 @@ describe('CopilotModelPicker', () => {
       screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
     );
 
-    expect(setSelected).toHaveBeenCalledWith(null);
     expect(updatePreferences).toHaveBeenCalledWith({
       preferredModel: null,
       preferredIntent: 'fast',
     });
   });
 
-  it('picks a model into the session only', async () => {
+  it('persists a picked model as the account preference', async () => {
     modelsData.mockReturnValue(withByokModel);
     render(<CopilotModelPicker />);
 
@@ -256,19 +237,21 @@ describe('CopilotModelPicker', () => {
     await userEvent.click(trigger);
     await userEvent.click(screen.getByText('Byok One'));
 
-    expect(setSelected).toHaveBeenCalledWith('o:byok');
-    expect(updatePreferences).not.toHaveBeenCalled();
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: 'o:byok',
+    });
   });
 
-  it('picks a model whose id reads like a style instead of storing a preference', async () => {
+  it('stores a model whose id reads like a style as a model, not an intent', async () => {
     modelsData.mockReturnValue(withIntentNamedModel);
     render(<CopilotModelPicker />);
 
     await userEvent.click(screen.getByRole('button'));
     await userEvent.click(screen.getByText('Intent Named One'));
 
-    expect(setSelected).toHaveBeenCalledWith('fast');
-    expect(updatePreferences).not.toHaveBeenCalled();
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: 'fast',
+    });
   });
 
   it('describes a keyless catalog model with its own text instead of a key echo', async () => {
@@ -287,9 +270,12 @@ describe('CopilotModelPicker', () => {
     ).toHaveTextContent('aiModels.gpt56');
   });
 
-  it('names the account style when the session override has left the model list', async () => {
+  it('names the account style when the stored model has left the model list', async () => {
     modelsData.mockReturnValue(withByokModel);
-    sessionModel.mockReturnValue('google:gemini-3.5-flash');
+    prefsData.mockReturnValue({
+      preferredModel: 'google:gemini-3.5-flash',
+      preferredIntent: null,
+    });
     render(<CopilotModelPicker />);
 
     const trigger = screen.getByRole('button');
@@ -301,20 +287,10 @@ describe('CopilotModelPicker', () => {
       screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
     );
 
-    expect(setSelected).toHaveBeenCalledWith(null);
     expect(updatePreferences).toHaveBeenCalledWith({
       preferredModel: null,
       preferredIntent: 'fast',
     });
-  });
-
-  it('deactivates every chip while a model override is in effect', () => {
-    sessionModel.mockReturnValue('a:fast');
-    render(<CopilotModelPicker />);
-
-    for (const chip of screen.getAllByRole('radio')) {
-      expect(chip).toHaveAttribute('data-state', 'off');
-    }
   });
 
   it('names the stored advanced preference on the trigger', () => {
