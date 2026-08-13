@@ -187,6 +187,7 @@
       "emptyCompletion": "El modelo se quedó sin espacio mientras pensaba y no respondió. Reinténtalo.",
       "staleNote": "La nota cambió — pídemelo de nuevo.",
       "proposalExpired": "La propuesta expiró — pídemelo otra vez.",
+      "resumeUnavailable": "No pude retomar esa propuesta — pídemelo otra vez.",
       "permissionDenied": "No tienes permiso para hacer eso.",
       "sanitizeRejected": "El contenido fue rechazado por razones de seguridad.",
       "targetUserNotFound": "Ese usuario no fue encontrado.",

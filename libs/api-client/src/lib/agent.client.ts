@@ -80,6 +80,16 @@ export interface AgentStreamHandle {
 
 export type AuthRefreshHandler = () => Promise<boolean>;
 
+/**
+ * The turn leg the client replays when it has to open a fresh socket — the
+ * opening message, or the decision that resumes a turn suspended on a proposal.
+ */
+type DecisionRequest =
+  | { kind: 'approve'; proposalId: string }
+  | { kind: 'reject'; proposalId: string; reason?: string };
+
+type PendingRequest = { kind: 'message'; content: string } | DecisionRequest;
+
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
 const AUTH_ERROR: AgentErrorPayload = {
   code: AUTH_REQUIRED_CODE,
@@ -93,7 +103,8 @@ const CONNECTION_ERROR: AgentErrorPayload = {
 export class AgentClient {
   private socket: Socket | null = null;
   private activeCallbacks: AgentStreamCallbacks | null = null;
-  private pendingContent: string | null = null;
+  private pending: PendingRequest | null = null;
+  private awaitingDecision = false;
   private pendingNoteId: string | undefined;
   private pendingModel: string | undefined;
   private conversationId: string | undefined;
@@ -130,8 +141,7 @@ export class AgentClient {
   }
 
   disconnect(): void {
-    this.activeCallbacks = null;
-    this.pendingContent = null;
+    this.clearPending();
     this.teardownSocket();
   }
 
@@ -143,30 +153,20 @@ export class AgentClient {
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
-      this.activeCallbacks = null;
+      this.clearPending();
     }
 
     this.activeCallbacks = callbacks;
-    this.pendingContent = content;
     this.pendingNoteId = noteId;
     this.pendingModel = model;
-    this.reconnectAttempts = 0;
-    this.authPolicy.reset();
 
-    if (this.tokenProvider.getAccessToken()) {
-      this.openAndEmit(content, callbacks);
-    } else if (this.authRefreshHandler) {
-      this.beginAuthRecovery();
-    } else {
-      this.failRequest(callbacks, AUTH_ERROR);
-    }
+    this.dispatch({ kind: 'message', content }, callbacks);
 
     return {
       cancel: () => {
         if (this.activeCallbacks === callbacks) {
           this.socket?.emit('agent:cancel');
-          this.activeCallbacks = null;
-          this.pendingContent = null;
+          this.clearPending();
         }
       },
     };
@@ -185,27 +185,27 @@ export class AgentClient {
   private authHandlers(): Parameters<TokenRefreshPolicy['recover']>[0] {
     const pending = () => {
       const callbacks = this.activeCallbacks;
-      const content = this.pendingContent;
-      return callbacks && content ? { callbacks, content } : null;
+      const request = this.pending;
+      return callbacks && request ? { callbacks, request } : null;
     };
     return {
       refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
       onRefreshed: () => {
         this.recoveringAuth = false;
-        const request = pending();
-        if (!request) {
+        const pendingRequest = pending();
+        if (!pendingRequest) {
           return;
         }
         this.teardownSocket();
-        this.openAndEmit(request.content, request.callbacks);
+        this.emitPending(pendingRequest.request, pendingRequest.callbacks);
       },
       onExhausted: () => {
         this.recoveringAuth = false;
-        const request = pending();
-        if (!request) {
+        const pendingRequest = pending();
+        if (!pendingRequest) {
           return;
         }
-        this.failRequest(request.callbacks, AUTH_ERROR);
+        this.failRequest(pendingRequest.callbacks, AUTH_ERROR);
         this.onSessionExpired?.();
       },
       onError: (error) =>
@@ -216,18 +216,69 @@ export class AgentClient {
     };
   }
 
-  private openAndEmit(content: string, callbacks: AgentStreamCallbacks): void {
+  private dispatch(
+    request: PendingRequest,
+    callbacks: AgentStreamCallbacks
+  ): void {
+    this.pending = request;
+    this.awaitingDecision = false;
+    this.reconnectAttempts = 0;
+    this.authPolicy.reset();
+
+    if (this.tokenProvider.getAccessToken()) {
+      this.emitPending(request, callbacks);
+    } else if (this.authRefreshHandler) {
+      this.beginAuthRecovery();
+    } else {
+      this.failRequest(callbacks, AUTH_ERROR);
+    }
+  }
+
+  private emitPending(
+    request: PendingRequest,
+    callbacks: AgentStreamCallbacks
+  ): void {
     this.ensureSocket();
     if (!this.socket) {
       this.failRequest(callbacks, CONNECTION_ERROR);
       return;
     }
-    this.socket.emit('agent:message', {
-      ...(this.conversationId ? { conversationId: this.conversationId } : {}),
-      message: { content },
-      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
-      ...(this.pendingModel ? { model: this.pendingModel } : {}),
-    });
+    const noteId = this.pendingNoteId ? { noteId: this.pendingNoteId } : {};
+    switch (request.kind) {
+      case 'message':
+        this.socket.emit('agent:message', {
+          ...(this.conversationId
+            ? { conversationId: this.conversationId }
+            : {}),
+          message: { content: request.content },
+          ...noteId,
+          ...(this.pendingModel ? { model: this.pendingModel } : {}),
+        });
+        return;
+      case 'approve':
+        this.socket.emit('agent:approve', {
+          proposalId: request.proposalId,
+          ...noteId,
+        });
+        return;
+      case 'reject':
+        this.socket.emit('agent:reject', {
+          proposalId: request.proposalId,
+          ...noteId,
+          ...(request.reason ? { reason: request.reason } : {}),
+        });
+        return;
+      default: {
+        const exhaustive: never = request;
+        throw new Error(`Unhandled pending request: ${String(exhaustive)}`);
+      }
+    }
+  }
+
+  private clearPending(): void {
+    this.activeCallbacks = null;
+    this.pending = null;
+    this.awaitingDecision = false;
   }
 
   private failRequest(
@@ -236,8 +287,7 @@ export class AgentClient {
   ): void {
     callbacks.onError(error);
     if (this.activeCallbacks === callbacks) {
-      this.activeCallbacks = null;
-      this.pendingContent = null;
+      this.clearPending();
     }
   }
 
@@ -297,11 +347,12 @@ export class AgentClient {
       if (this.socket !== socket || socket.active) {
         return;
       }
-      // A server-forced close never reconnects on its own, so anything emitted
-      // afterwards would sit in the send buffer until the client watchdog.
+      // A server-forced close never reconnects, so a later emit would sit in
+      // the send buffer. A turn suspended on a proposal has nothing in flight
+      // to fail — its decision opens a fresh socket instead.
       const callbacks = this.activeCallbacks;
       this.teardownSocket();
-      if (callbacks && !this.recoveringAuth) {
+      if (callbacks && !this.recoveringAuth && !this.awaitingDecision) {
         this.failRequest(callbacks, CONNECTION_ERROR);
       }
     });
@@ -331,11 +382,11 @@ export class AgentClient {
         this.conversationId = payload.conversationId;
       }
       this.activeCallbacks?.onDone(payload);
-      this.activeCallbacks = null;
-      this.pendingContent = null;
+      this.clearPending();
     });
 
     socket.on('agent:proposal', (payload: AgentProposalPayload) => {
+      this.awaitingDecision = true;
       this.activeCallbacks?.onProposal?.(payload);
     });
 
@@ -345,7 +396,7 @@ export class AgentClient {
 
     socket.on('agent:error', (payload: AgentErrorPayload) => {
       if (
-        this.pendingContent &&
+        this.pending &&
         this.activeCallbacks &&
         this.canRecoverFromAuthError(payload)
       ) {
@@ -359,29 +410,35 @@ export class AgentClient {
     });
   }
 
-  /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
-  approve(proposalId: string): boolean {
-    if (!this.pendingContent || !this.socket) {
-      return false;
-    }
-    this.socket.emit('agent:approve', {
-      proposalId,
-      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
-    });
-    return true;
+  /**
+   * True while a turn is still open on this client, so a proposal decision has
+   * somewhere to stream back to. False means the turn ended (done, cancelled or
+   * superseded) — only the server can say whether the proposal itself expired.
+   */
+  canResume(): boolean {
+    return this.activeCallbacks !== null;
   }
 
-  /** Returns false when there is no pending request to resume (race with done/cancel/reconnect). */
-  reject(proposalId: string, reason?: string): boolean {
-    if (!this.pendingContent || !this.socket) {
-      return false;
-    }
-    this.socket.emit('agent:reject', {
+  /** No-op when the turn already ended; reopens the socket when the server closed it. */
+  approve(proposalId: string): void {
+    this.resume({ kind: 'approve', proposalId });
+  }
+
+  /** No-op when the turn already ended; reopens the socket when the server closed it. */
+  reject(proposalId: string, reason?: string): void {
+    this.resume({
+      kind: 'reject',
       proposalId,
-      ...(this.pendingNoteId ? { noteId: this.pendingNoteId } : {}),
       ...(reason ? { reason } : {}),
     });
-    return true;
+  }
+
+  private resume(request: DecisionRequest): void {
+    const callbacks = this.activeCallbacks;
+    if (!callbacks) {
+      return;
+    }
+    this.dispatch(request, callbacks);
   }
 
   /** Starts a fresh server conversation on the next send. */

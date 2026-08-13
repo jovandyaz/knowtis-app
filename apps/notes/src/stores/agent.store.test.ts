@@ -6,8 +6,9 @@ vi.mock('@knowtis/api-client', () => ({
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
     resetConversation: vi.fn(),
-    approve: vi.fn(() => true),
-    reject: vi.fn(() => true),
+    canResume: vi.fn(() => true),
+    approve: vi.fn(),
+    reject: vi.fn(),
   },
 }));
 vi.mock('@/lib/query-client', () => ({

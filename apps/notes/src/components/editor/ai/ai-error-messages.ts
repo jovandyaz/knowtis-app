@@ -12,6 +12,7 @@ type AIErrorMessageKey =
   | 'ai.errors.injection'
   | 'ai.errors.staleNote'
   | 'ai.errors.proposalExpired'
+  | 'ai.errors.resumeUnavailable'
   | 'ai.errors.permissionDenied'
   | 'ai.errors.sanitizeRejected'
   | 'ai.errors.targetUserNotFound'
@@ -36,6 +37,7 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   PROMPT_INJECTION_DETECTED: 'ai.errors.injection',
   AGENT_STALE_NOTE: 'ai.errors.staleNote',
   AGENT_PROPOSAL_EXPIRED: 'ai.errors.proposalExpired',
+  AGENT_RESUME_UNAVAILABLE: 'ai.errors.resumeUnavailable',
   AGENT_PERMISSION_DENIED: 'ai.errors.permissionDenied',
   AGENT_SANITIZE_REJECTED: 'ai.errors.sanitizeRejected',
   AGENT_TARGET_USER_NOT_FOUND: 'ai.errors.targetUserNotFound',
