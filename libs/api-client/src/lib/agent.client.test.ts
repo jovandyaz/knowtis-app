@@ -589,6 +589,31 @@ describe('AgentClient – auth/transport failure paths', () => {
     });
   });
 
+  it('omits reason from agent:reject when the caller gives none', async () => {
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'valid-token',
+      clearTokens: vi.fn(),
+    });
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+    fake.socket.emit.mockClear();
+
+    client.reject('p1');
+    await flush();
+
+    expect(fake.socket.emit).toHaveBeenCalledWith('agent:reject', {
+      proposalId: 'p1',
+    });
+  });
+
   it('replays the decision, not the original message, after auth recovery', async () => {
     let token: string | null = 'stale-token';
     const refresh = vi.fn(async () => {

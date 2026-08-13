@@ -84,10 +84,11 @@ export type AuthRefreshHandler = () => Promise<boolean>;
  * The turn leg the client replays when it has to open a fresh socket — the
  * opening message, or the decision that resumes a turn suspended on a proposal.
  */
-type PendingRequest =
-  | { kind: 'message'; content: string }
+type DecisionRequest =
   | { kind: 'approve'; proposalId: string }
   | { kind: 'reject'; proposalId: string; reason?: string };
+
+type PendingRequest = { kind: 'message'; content: string } | DecisionRequest;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
 const AUTH_ERROR: AgentErrorPayload = {
@@ -432,7 +433,7 @@ export class AgentClient {
     });
   }
 
-  private resume(request: PendingRequest): void {
+  private resume(request: DecisionRequest): void {
     const callbacks = this.activeCallbacks;
     if (!callbacks) {
       return;

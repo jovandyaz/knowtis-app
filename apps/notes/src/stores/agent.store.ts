@@ -129,6 +129,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       error: RESUME_UNAVAILABLE_ERROR,
       pendingProposal: null,
       thinkingText: '',
+      _streamHandle: null,
     });
   };
 
