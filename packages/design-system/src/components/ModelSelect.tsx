@@ -45,6 +45,7 @@ const MAX_COST_LEVEL = 3;
 const NO_COST_LEVEL = 0;
 const FALLBACK_LABEL = '—';
 const OPTION_ROW_CLASSES = 'flex-col items-start gap-0.5';
+const FLAT_GROUP_KEY = 'models';
 
 function costGlyphs(level: number): string {
   const clamped = Math.min(
@@ -54,14 +55,15 @@ function costGlyphs(level: number): string {
   return COST_GLYPH.repeat(clamped);
 }
 
+function costLevel(m: ModelSelectOption): number {
+  const level = m.costClass;
+  return level === undefined || !Number.isFinite(level)
+    ? NO_COST_LEVEL
+    : Math.max(NO_COST_LEVEL, Math.trunc(level));
+}
+
 function tierCostLevel(items: readonly ModelSelectOption[]): number {
-  return items.reduce((max, m) => {
-    const level = m.costClass;
-    if (level === undefined || !Number.isFinite(level)) {
-      return max;
-    }
-    return Math.max(max, Math.trunc(level));
-  }, NO_COST_LEVEL);
+  return items.reduce((max, m) => Math.max(max, costLevel(m)), NO_COST_LEVEL);
 }
 
 export interface ModelSelectProps {
@@ -83,7 +85,12 @@ export interface ModelSelectProps {
    * items, no checked state. Pass `value` as null — an action list selects nothing.
    */
   rowsAreActions?: boolean;
-  tierLabel?: (tier: string) => string;
+  /**
+   * Lists every model under this single heading instead of one heading per tier,
+   * keeping `tierOrder` as the sort. The cost glyph moves onto each row, since one
+   * heading cannot speak for tiers that differ in cost.
+   */
+  modelsLabel?: string;
   triggerLabel?: string;
   loadingLabel?: string;
   errorLabel?: string;
@@ -101,12 +108,15 @@ function OptionRow({
   description,
   selected,
   badge,
+  cost,
 }: {
   label: string;
   description?: string | undefined;
   selected: boolean;
   badge?: ReactNode | undefined;
+  cost?: string | undefined;
 }) {
+  const check = selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null;
   return (
     <>
       <div className="flex w-full items-center justify-between gap-2">
@@ -114,7 +124,16 @@ function OptionRow({
           <span className="truncate">{label}</span>
           {badge}
         </span>
-        {selected && <Check className="h-3.5 w-3.5 shrink-0" />}
+        {cost ? (
+          <span className="flex shrink-0 items-center gap-1.5">
+            <span className="font-normal text-(--muted-foreground)">
+              {cost}
+            </span>
+            {check}
+          </span>
+        ) : (
+          check
+        )}
       </div>
       {description && (
         <span
@@ -190,7 +209,7 @@ export function ModelSelect({
   renderDescription,
   leadingSection,
   rowsAreActions = false,
-  tierLabel,
+  modelsLabel,
   triggerLabel,
   loadingLabel,
   errorLabel,
@@ -222,12 +241,22 @@ export function ModelSelect({
   const extraTiers = [...new Set(models.map((m) => m.tier))].filter(
     (tier) => !known.has(tier)
   );
-  const groups = [...ordered, ...extraTiers]
+  const tierGroups = [...ordered, ...extraTiers]
     .map((tier) => ({
-      tier,
+      key: tier,
+      label: tier,
       items: models.filter((m) => m.tier === tier),
     }))
     .filter((g) => g.items.length > 0);
+  const flatGroup =
+    modelsLabel && tierGroups.length > 0
+      ? {
+          key: FLAT_GROUP_KEY,
+          label: modelsLabel,
+          items: tierGroups.flatMap((g) => g.items),
+        }
+      : undefined;
+  const groups = flatGroup ? [flatGroup] : tierGroups;
 
   const selectedId = rowsAreActions ? null : value;
 
@@ -309,15 +338,15 @@ export function ModelSelect({
               const level = tierCostLevel(g.items);
               return (
                 <OptionGroup
-                  key={g.tier}
+                  key={g.key}
                   asActions={rowsAreActions}
                   value={value}
                   onSelect={onSelect}
                 >
                   {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
                   <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
-                    <span>{tierLabel ? tierLabel(g.tier) : g.tier}</span>
-                    {level > NO_COST_LEVEL && (
+                    <span>{g.label}</span>
+                    {!flatGroup && level > NO_COST_LEVEL && (
                       <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
                         {costGlyphs(level)}
                       </span>
@@ -325,6 +354,7 @@ export function ModelSelect({
                   </DropdownMenuLabel>
                   {g.items.map((m) => {
                     const description = renderDescription?.(m);
+                    const rowLevel = costLevel(m);
                     return (
                       <OptionItem
                         key={m.id}
@@ -336,6 +366,11 @@ export function ModelSelect({
                           label={m.label}
                           description={description}
                           selected={m.id === selectedId}
+                          cost={
+                            flatGroup && rowLevel > NO_COST_LEVEL
+                              ? costGlyphs(rowLevel)
+                              : undefined
+                          }
                           badge={
                             m.billedToUser && billedBadgeLabel ? (
                               <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">

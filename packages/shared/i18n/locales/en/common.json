@@ -100,12 +100,7 @@
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",
     "retry": "Retry",
-    "tier": {
-      "fast": "Fast",
-      "balanced": "Balanced",
-      "powerful": "Powerful",
-      "open": "Open"
-    },
+    "modelsGroup": "Models",
     "intent": {
       "label": "Assistant style",
       "group": "Style",

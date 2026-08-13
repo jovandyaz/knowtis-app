@@ -216,6 +216,18 @@ describe('CopilotModelPicker', () => {
     expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
   });
 
+  it('groups the models under one heading so no tier repeats a style name', async () => {
+    modelsData.mockReturnValue(withByokModel);
+    render(<CopilotModelPicker />);
+
+    await userEvent.click(screen.getByRole('button'));
+
+    expect(screen.getByText('aiAssistant.modelsGroup')).toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/^(fast|balanced|powerful|open)$/i)
+    ).toHaveLength(0);
+  });
+
   it('returns to the account style when a style row is picked', async () => {
     modelsData.mockReturnValue(withByokModel);
     sessionModel.mockReturnValue('o:byok');
