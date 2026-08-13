@@ -60,12 +60,10 @@ interface AgentState {
   status: AgentStatus;
   error: AgentErrorPayload | null;
   pendingProposal: PendingProposal | null;
-  selectedModel: string | null;
   /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
   thinkingText: string;
   _streamHandle: AgentStreamHandle | null;
-  sendMessage: (text: string, noteId?: string, model?: string) => void;
-  setSelectedModel: (id: string | null) => void;
+  sendMessage: (text: string, noteId?: string) => void;
   newConversation: () => void;
   cancel: () => void;
   retryLast: () => void;
@@ -133,12 +131,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     });
   };
 
-  const run = (
-    text: string,
-    assistantId: string,
-    noteId?: string,
-    model?: string
-  ) => {
+  const run = (text: string, assistantId: string, noteId?: string) => {
     activeAssistantId = assistantId;
     const version = streamVersion;
     const handle = agentClient.sendMessage(
@@ -244,8 +237,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
       },
-      noteId,
-      model
+      noteId
     );
     if (get().status !== 'streaming') {
       return;
@@ -259,11 +251,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
     status: 'idle',
     error: null,
     pendingProposal: null,
-    selectedModel: null,
     thinkingText: '',
     _streamHandle: null,
 
-    sendMessage: (text, noteId, model) => {
+    sendMessage: (text, noteId) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
@@ -297,15 +288,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
         _streamHandle: null,
       });
 
-      run(
-        trimmed,
-        assistantMessage.id,
-        noteId,
-        model ?? current.selectedModel ?? undefined
-      );
+      run(trimmed, assistantMessage.id, noteId);
     },
-
-    setSelectedModel: (id) => set({ selectedModel: id }),
 
     newConversation: () => {
       get()._streamHandle?.cancel();
@@ -320,7 +304,6 @@ export const useAgentStore = create<AgentState>((set, get) => {
         status: 'idle',
         error: null,
         pendingProposal: null,
-        selectedModel: null,
         thinkingText: '',
         _streamHandle: null,
       });

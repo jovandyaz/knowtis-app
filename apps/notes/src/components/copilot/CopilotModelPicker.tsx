@@ -5,7 +5,6 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
-import { useAgentStore } from '@/stores/agent.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
@@ -27,24 +26,28 @@ export function CopilotModelPicker() {
   const user = useAuthUser();
   // Anonymous users cannot persist preferences, so they run on the server default intent and get no picker.
   const showPicker = user != null && !user.isAnonymous;
-  const { data: models, isError, refetch } = useAvailableModels(showPicker);
+  const {
+    data: models,
+    isPending,
+    isError,
+    refetch,
+  } = useAvailableModels(showPicker);
   const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
-  const sessionModel = useAgentStore((s) => s.selectedModel);
-  const setSessionModel = useAgentStore((s) => s.setSelectedModel);
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
-  const override =
-    sessionModel ?? advancedOverride(prefs?.preferredModel, models);
+  const override = advancedOverride(prefs?.preferredModel, models);
   const advancedOptions = advancedModelOptions(models);
+  // An unresolved list keeps a stored model an override, so the chips would render with
+  // nothing active. That caller's control is the dropdown — show it loading instead.
+  const resolvingOverride = isPending && override !== null;
 
   const select = (id: string) => {
     const isOfferedModel = advancedOptions.some((m) => m.id === id);
     if (isOfferedModel || !isModelIntent(id)) {
-      setSessionModel(id);
+      update({ preferredModel: id });
       return;
     }
-    setSessionModel(null);
     update({ preferredModel: null, preferredIntent: id });
   };
 
@@ -52,7 +55,7 @@ export function CopilotModelPicker() {
     return null;
   }
 
-  if (advancedOptions.length === 0 && !isError) {
+  if (advancedOptions.length === 0 && !isError && !resolvingOverride) {
     return (
       <SegmentedControl
         aria-label={t('aiAssistant.intent.label')}
@@ -71,8 +74,9 @@ export function CopilotModelPicker() {
       onSelect={select}
       leadingSection={intentSection(t)}
       tierOrder={MODEL_TIERS}
-      status={isError ? 'error' : 'ready'}
+      status={isError ? 'error' : isPending ? 'loading' : 'ready'}
       onRetry={() => void refetch()}
+      loadingLabel={t('aiAssistant.loading')}
       errorLabel={t('aiAssistant.loadError')}
       retryLabel={t('aiAssistant.retry')}
       triggerClassName="h-8"

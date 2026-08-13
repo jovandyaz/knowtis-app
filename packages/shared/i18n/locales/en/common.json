@@ -99,6 +99,7 @@
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",
+    "loading": "Loading models…",
     "retry": "Retry",
     "modelsGroup": "Models",
     "intent": {
