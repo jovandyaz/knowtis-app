@@ -8,6 +8,7 @@ import { CopilotModelPicker } from './CopilotModelPicker';
 
 const updatePreferences = vi.fn();
 const modelsData = vi.fn();
+const modelsPending = vi.fn<() => boolean>();
 const modelsError = vi.fn<() => boolean>();
 const modelsRefetch = vi.fn();
 const modelsEnabled = vi.fn<(enabled?: boolean) => void>();
@@ -26,7 +27,7 @@ vi.mock('@/hooks', () => ({
     modelsEnabled(enabled);
     return {
       data: modelsData(),
-      isPending: false,
+      isPending: modelsPending(),
       isError: modelsError(),
       refetch: modelsRefetch,
     };
@@ -128,6 +129,7 @@ describe('CopilotModelPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     modelsData.mockReturnValue(grantedModels);
+    modelsPending.mockReturnValue(false);
     modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
       preferredModel: null,
@@ -336,20 +338,41 @@ describe('CopilotModelPicker', () => {
     expect(modelsRefetch).toHaveBeenCalled();
   });
 
-  it('keeps the chips deselected while the model list is still loading', () => {
+  it('announces the load instead of chips while a stored model is unresolved', async () => {
     modelsData.mockReturnValue(undefined);
-    modelsError.mockReturnValue(false);
+    modelsPending.mockReturnValue(true);
     prefsData.mockReturnValue({
       preferredModel: 'o:byok',
       preferredIntent: 'fast',
     });
     render(<CopilotModelPicker />);
 
-    const chips = screen.getAllByRole('radio');
-    expect(chips).toHaveLength(3);
-    for (const chip of chips) {
-      expect(chip).toHaveAttribute('data-state', 'off');
-    }
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
+    const trigger = screen.getByRole('button');
+    expect(trigger).toHaveTextContent('aiAssistant.loading');
+    expect(trigger).toBeEnabled();
+
+    await userEvent.click(trigger);
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.powerful/ })
+    );
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'powerful',
+    });
+  });
+
+  it('keeps the chips while the list loads for a caller with no stored model', () => {
+    modelsData.mockReturnValue(undefined);
+    modelsPending.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute('data-state', 'on');
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('renders no picker at all for an anonymous user', () => {

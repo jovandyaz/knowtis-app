@@ -99,6 +99,7 @@
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "loadError": "No se pudieron cargar los modelos",
+    "loading": "Cargando modelos…",
     "retry": "Reintentar",
     "modelsGroup": "Modelos",
     "intent": {

@@ -514,7 +514,7 @@ The resolved model enters the [fallback chain](#cross-provider-fallback-chain) a
 
 The agent WebSocket payload still accepts a per-turn override (`{ conversationId?, message, model? }`) — `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation — but no shipped surface sends it: both pickers write the account preference instead, so the cascade serves every turn.
 
-**Frontend.** Both product surfaces render one `ModelSelect` (`@knowtis/design-system`): its leading section lists the three styles (Rápido / Equilibrado / Profundo), and the BYOK-billed models follow flattened under a single **Modelos** heading, each row carrying its own cost band (`$` / `$$` / `$$$`). Picking a style writes `{ preferredModel: null, preferredIntent }`; picking a model writes `{ preferredModel }` — the same account preference from either surface, with no session-scoped override in between. In the composer `CopilotModelPicker` is that control alone, falling back to the style chips (`SegmentedControl`) when the caller has no such model; the `AIAssistantSection` settings tab keeps the chips beside the same dropdown. Anonymous users get no picker. The dropdown renders explicit loading, error (with retry), and empty states. The backoffice pickers pass no styles and stay grouped per tier, with the cost band on the tier header.
+**Frontend.** Both product surfaces render one `ModelSelect` (`@knowtis/design-system`): its leading section lists the three styles (Rápido / Equilibrado / Profundo), and the BYOK-billed models follow flattened under a single **Modelos** heading, each row carrying its own cost band (`$` / `$$` / `$$$`). Picking a style writes `{ preferredModel: null, preferredIntent }`; picking a model writes `{ preferredModel }` — the same account preference from either surface, with no session-scoped override in between. In the composer `CopilotModelPicker` is that control alone, falling back to the style chips (`SegmentedControl`) when the caller has no such model; the `AIAssistantSection` settings tab keeps the chips beside the same dropdown. Anonymous users get no picker. The dropdown renders explicit loading, error (with retry), and empty states; while the list is in flight the composer keeps the chips, except for a caller whose stored model is still unresolved — chips would show no active choice there, so it renders the dropdown loading instead. The backoffice pickers pass no styles and stay grouped per tier, with the cost band on the tier header.
 
 ---
 
@@ -1000,6 +1000,7 @@ The copilot is **server-authoritative**: the client never sends its own message 
   "conversationId": "uuid", // optional — omit to start a new conversation
   "message": { "content": "..." }, // the new user message (1–20 000 chars)
   "noteId": "uuid", // optional — note the user is currently editing
+  "model": "provider:id", // optional per-turn override — no shipped surface sends it
 }
 ```
 
