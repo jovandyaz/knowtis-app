@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { Globe, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -20,6 +21,16 @@ import {
 } from '@knowtis/shared-types';
 
 import { AccessInfoBanner, AccessOptionCard, LinkAccessSection } from './share';
+
+/** A retained token means the note was shared before, so resuming returns the same link. */
+function accessToastKey(next: GeneralAccessLevel, shareToken: string | null) {
+  if (next === GENERAL_ACCESS.RESTRICTED) {
+    return 'share.linkPausedToast' as const;
+  }
+  return shareToken
+    ? ('share.linkResumedToast' as const)
+    : ('share.linkCreatedToast' as const);
+}
 
 interface ShareDialogProps {
   open: boolean;
@@ -59,6 +70,18 @@ export function ShareDialog({
     updateNote.mutate({ id: noteId, input });
   };
 
+  const handleGeneralAccessChange = (next: GeneralAccessLevel) => {
+    if (next === generalAccess) {
+      return;
+    }
+    updateNote.mutate(
+      { id: noteId, input: { generalAccess: next } },
+      {
+        onSuccess: () => toast.success(t(accessToastKey(next, shareToken))),
+      }
+    );
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[520px] p-0 gap-0 overflow-hidden">
@@ -87,7 +110,7 @@ export function ShareDialog({
                 selected={!isPublicAccess}
                 disabled={!canShare || updateNote.isPending}
                 onClick={() =>
-                  handleUpdate({ generalAccess: GENERAL_ACCESS.RESTRICTED })
+                  handleGeneralAccessChange(GENERAL_ACCESS.RESTRICTED)
                 }
                 icon={Lock}
                 title={t('share.restricted')}
@@ -97,9 +120,7 @@ export function ShareDialog({
                 selected={isPublicAccess}
                 disabled={!canShare || updateNote.isPending}
                 onClick={() =>
-                  handleUpdate({
-                    generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-                  })
+                  handleGeneralAccessChange(GENERAL_ACCESS.ANYONE_WITH_LINK)
                 }
                 icon={Globe}
                 title={t('share.anyoneWithLink')}
