@@ -26,10 +26,12 @@ import {
 import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION } from '@knowtis/shared-types';
 
+const HTTP_NOT_FOUND = 404;
+
 export function SharedNotePage() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
-  const { token } = useParams({ from: '/s/$token' });
+  const { token } = useParams({ from: ROUTES.SHARED_NOTE });
   const { data, isLoading, isError, error } = useNoteByToken(token);
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
@@ -37,6 +39,7 @@ export function SharedNotePage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { copied, copy: copyLink } = useCopyLink();
   const hasArtifacts = !!artifacts && artifacts.length > 0;
+  const sharedPath = ROUTES.SHARED_NOTE.replace('$token', token);
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);
@@ -60,10 +63,10 @@ export function SharedNotePage() {
 
   if (isError) {
     const isNotFound =
-      ApiClientError.isApiClientError(error) && error.status === 404;
+      ApiClientError.isApiClientError(error) && error.status === HTTP_NOT_FOUND;
 
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6">
         <ErrorState
           fullHeight={false}
           title={
@@ -77,6 +80,16 @@ export function SharedNotePage() {
               : t('shared.failedToLoadShared')
           }
         />
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
+            <Button size="sm">{t('shared.signIn')}</Button>
+          </Link>
+          <Link to={ROUTES.ROOT}>
+            <Button variant="outline" size="sm">
+              {t('shared.goToKnowtis')}
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -139,7 +152,7 @@ export function SharedNotePage() {
                 <Eye className="h-4 w-4" />
               </button>
             )}
-            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+            <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
               <Button variant="outline" size="sm">
                 {t('shared.signIn')}
               </Button>
@@ -212,7 +225,7 @@ export function SharedNotePage() {
                   </TooltipContent>
                 </Tooltip>
               )}
-              <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+              <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
                 <Button variant="outline" size="sm">
                   {t('shared.signIn')}
                 </Button>
