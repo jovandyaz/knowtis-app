@@ -73,7 +73,7 @@ describe('ShareDialog — confirmation outlives the dialog', () => {
     );
 
     await userEvent.click(
-      screen.getByRole('button', { name: /share.anyoneWithLink/ })
+      screen.getByRole('radio', { name: /share.anyoneWithLink/ })
     );
     await waitFor(() => expect(notesApi.update).toHaveBeenCalled());
 

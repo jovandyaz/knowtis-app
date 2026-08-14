@@ -5,7 +5,7 @@ import { Check, Copy, Users } from 'lucide-react';
 
 import {
   Button,
-  cn,
+  SegmentedControl,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
@@ -32,7 +32,7 @@ export function LinkAccessSection({
   const permissionOptions = [
     { value: PERMISSION.VIEWER, label: t('share.viewer') },
     { value: PERMISSION.EDITOR, label: t('share.editor') },
-  ] as const;
+  ];
 
   const handleCopyLink = async () => {
     try {
@@ -52,24 +52,13 @@ export function LinkAccessSection({
           <h3 className="text-sm font-medium">{t('share.linkAccess')}</h3>
         </div>
 
-        <div className="flex items-center gap-1 p-0.5 bg-muted rounded-md">
-          {permissionOptions.map((option) => (
-            <button
-              key={option.value}
-              onClick={() => onPermissionChange(option.value)}
-              disabled={disabled}
-              className={cn(
-                'px-3 py-1.5 text-xs font-medium rounded transition-all',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-                permission === option.value
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl
+          aria-label={t('share.linkAccess')}
+          options={permissionOptions}
+          value={permission}
+          onValueChange={onPermissionChange}
+          disabled={disabled}
+        />
       </div>
 
       <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg border border-border">
