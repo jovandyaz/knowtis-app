@@ -94,13 +94,12 @@ export function ShareDialog({
     : null;
 
   const applyAccessChange = (input: UpdateNoteInput, successKey: ToastKey) => {
-    updateNote.mutate(
-      { id: noteId, input },
-      {
-        onSuccess: () => toast.success(t(successKey)),
-        onError: () => toast.error(t('share.accessChangeError')),
-      }
-    );
+    // Per-call mutate callbacks are skipped once the observer loses its
+    // listeners, so navigating away would silently drop the confirmation.
+    void updateNote
+      .mutateAsync({ id: noteId, input })
+      .then(() => toast.success(t(successKey)))
+      .catch(() => toast.error(t('share.accessChangeError')));
   };
 
   const handleGeneralAccessChange = (next: GeneralAccessLevel) => {
