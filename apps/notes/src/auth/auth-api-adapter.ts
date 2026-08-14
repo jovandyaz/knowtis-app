@@ -11,7 +11,11 @@ import type {
   TokenStorage,
 } from '@jovandyaz/auth-react';
 
-import { refreshSessionTokens, type IHttpClient } from '@knowtis/api-client';
+import {
+  classifyRefreshFailure,
+  refreshSessionTokens,
+  type IHttpClient,
+} from '@knowtis/api-client';
 
 import {
   clearAnonymousSession,
@@ -153,23 +157,15 @@ export function createAuthApiAdapter(
         const tokens = await adapter.refreshToken();
         return tokens.accessToken;
       } catch (refreshError) {
+        if (classifyRefreshFailure(refreshError) === 'unavailable') {
+          throw refreshError;
+        }
         console.warn(
-          '[AuthApiAdapter] Anonymous session refresh failed, creating a new one:',
+          '[AuthApiAdapter] Anonymous session rejected, creating a new one:',
           refreshError
         );
-        try {
-          const response = await createAnonymousSession(
-            tokenStorage,
-            authStore
-          );
-          return response.accessToken;
-        } catch (error) {
-          console.warn(
-            '[AuthApiAdapter] Anonymous session creation failed:',
-            error
-          );
-          return null;
-        }
+        const response = await createAnonymousSession(tokenStorage, authStore);
+        return response.accessToken;
       }
     }
 
@@ -177,8 +173,11 @@ export function createAuthApiAdapter(
       const tokens = await adapter.refreshToken();
       return tokens.accessToken;
     } catch (error) {
+      if (classifyRefreshFailure(error) === 'unavailable') {
+        throw error;
+      }
       console.warn(
-        '[AuthApiAdapter] Token refresh failed, logging out:',
+        '[AuthApiAdapter] Refresh credential rejected, logging out:',
         error
       );
       void adapter.logout();

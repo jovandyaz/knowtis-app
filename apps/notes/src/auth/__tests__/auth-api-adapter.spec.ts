@@ -2,7 +2,7 @@ import type { AuthResponse, AuthTokens } from '@jovandyaz/auth';
 import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { IHttpClient } from '@knowtis/api-client';
+import { ApiClientError, type IHttpClient } from '@knowtis/api-client';
 
 import { createAnonymousSession } from '../anonymous-session';
 import { createAuthApiAdapter } from '../auth-api-adapter';
@@ -496,9 +496,11 @@ describe('createAuthApiAdapter', () => {
       );
     });
 
-    it('creates a new anonymous session when the anonymous refresh fails', async () => {
+    it('creates a new anonymous session when the anonymous refresh is rejected', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      httpClient.post.mockRejectedValue(new Error('401'));
+      httpClient.post.mockRejectedValue(
+        new ApiClientError('Unauthorized', 401)
+      );
       vi.mocked(createAnonymousSession).mockResolvedValue({
         user: { id: 'anon-2', name: 'Anonymous', isAnonymous: true },
         accessToken: 'replacement-at',
@@ -519,10 +521,12 @@ describe('createAuthApiAdapter', () => {
       expect(authStore.getState().logout).not.toHaveBeenCalled();
     });
 
-    it('clears store, redirects to login and returns null on refresh failure for non-anonymous user', async () => {
+    it('clears store, redirects to login and returns null when the credential is rejected for a non-anonymous user', async () => {
       const onSessionLost = vi.fn();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      httpClient.post.mockRejectedValue(new Error('expired'));
+      httpClient.post.mockRejectedValue(
+        new ApiClientError('Invalid refresh token', 401)
+      );
       authStore.getState().user = { isAnonymous: false } as ReturnType<
         AuthStoreInstance['getState']
       >['user'];
@@ -542,6 +546,50 @@ describe('createAuthApiAdapter', () => {
       });
       expect(authStore.getState().logout).toHaveBeenCalledTimes(1);
       expect(onSessionLost).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['a server error', new ApiClientError('Boom', 503)],
+      ['a network failure', new ApiClientError('Network error', 0)],
+    ])(
+      'propagates %s for a non-anonymous user without touching the session',
+      async (_label, failure) => {
+        vi.mocked(createAnonymousSession).mockClear();
+        const onSessionLost = vi.fn();
+        httpClient.post.mockRejectedValue(failure);
+        authStore.getState().user = { isAnonymous: false } as ReturnType<
+          AuthStoreInstance['getState']
+        >['user'];
+        createAuthApiAdapter({
+          httpClient,
+          tokenStorage,
+          authStore,
+          onSessionLost,
+        });
+
+        const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
+
+        await expect(callback()).rejects.toBe(failure);
+        expect(authStore.getState().logout).not.toHaveBeenCalled();
+        expect(onSessionLost).not.toHaveBeenCalled();
+        expect(createAnonymousSession).not.toHaveBeenCalled();
+      }
+    );
+
+    it('propagates a transient failure for an anonymous user instead of minting a new identity', async () => {
+      vi.mocked(createAnonymousSession).mockClear();
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const failure = new ApiClientError('Service Unavailable', 503);
+      httpClient.post.mockRejectedValue(failure);
+      authStore.getState().user = { isAnonymous: true } as ReturnType<
+        AuthStoreInstance['getState']
+      >['user'];
+      createAuthApiAdapter({ httpClient, tokenStorage, authStore });
+
+      const callback = httpClient.setRefreshTokenCallback.mock.calls[0][0];
+
+      await expect(callback()).rejects.toBe(failure);
+      expect(createAnonymousSession).not.toHaveBeenCalled();
     });
   });
 

@@ -6,7 +6,7 @@ import {
 } from '@jovandyaz/auth-react';
 import type { AuthUserProfile } from '@jovandyaz/auth-react';
 
-import { httpClient } from '@knowtis/api-client';
+import { classifyRefreshFailure, httpClient } from '@knowtis/api-client';
 
 import { createBackofficeAuthApi } from './auth-api-adapter';
 import { AUTH_STORAGE_KEY } from './constants';
@@ -42,7 +42,13 @@ httpClient.setRefreshTokenCallback(async () => {
     const tokens = await authApi.refreshToken();
     return tokens.accessToken;
   } catch (error) {
-    console.warn('[backoffice-auth] token refresh failed, logging out', error);
+    if (classifyRefreshFailure(error) === 'unavailable') {
+      throw error;
+    }
+    console.warn(
+      '[backoffice-auth] refresh credential rejected, logging out',
+      error
+    );
     authStore.getState().logout();
     return null;
   }
