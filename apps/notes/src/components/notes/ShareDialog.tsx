@@ -72,8 +72,7 @@ export function ShareDialog({
   const updateNote = useUpdateNote();
   const queryClient = useQueryClient();
 
-  // Nothing invalidates the note detail when sharing changes elsewhere, so an
-  // owner opening the dialog could otherwise read minutes-old sharing state.
+  // Nothing else invalidates this key, so the dialog can open onto stale state.
   useEffect(() => {
     if (open) {
       void queryClient.invalidateQueries({
