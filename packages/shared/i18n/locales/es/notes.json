@@ -126,7 +126,7 @@
     "editButton": "Editar",
     "viewButton": "Ver",
     "editUnavailable": "No se pudo empezar a editar. Inicia sesión para editar esta nota.",
-    "editDenied": "Este enlace ya no permite editar. Puedes seguir leyendo la nota.",
+    "editDenied": "No se pudo seguir editando. Inténtalo de nuevo — puedes seguir leyendo la nota.",
     "signIn": "Iniciar sesión",
     "goToKnowtis": "Ir a Knowtis",
     "byAuthor": "Por {{name}}"

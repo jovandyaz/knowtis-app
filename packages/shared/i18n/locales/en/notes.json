@@ -126,7 +126,7 @@
     "editButton": "Edit",
     "viewButton": "View",
     "editUnavailable": "Couldn't start editing. Sign in to edit this note.",
-    "editDenied": "This link no longer allows editing. You can still read the note.",
+    "editDenied": "Couldn't keep editing. Try again — you can still read the note.",
     "signIn": "Sign in",
     "goToKnowtis": "Go to Knowtis",
     "byAuthor": "By {{name}}"

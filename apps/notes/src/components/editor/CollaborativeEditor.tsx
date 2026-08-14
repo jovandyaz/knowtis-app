@@ -276,22 +276,25 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
-    // A share link is reachable without an account, so logging out and
-    // redirecting would strand a visitor who never had a session to lose.
-    if (shareToken) {
-      onEditDenied?.();
-      return;
-    }
+    // Clearing is what lets the next attempt mint a fresh guest session, but a
+    // share link is reachable without an account, so it must never redirect.
     performSessionLogout({
       authStore,
       tokenStorage,
-      redirect: () => {
-        navigate({
-          to: ROUTES.LOGIN,
-          search: { redirect: window.location.pathname },
-        });
-      },
+      ...(shareToken
+        ? {}
+        : {
+            redirect: () => {
+              navigate({
+                to: ROUTES.LOGIN,
+                search: { redirect: window.location.pathname },
+              });
+            },
+          }),
     });
+    if (shareToken) {
+      onEditDenied?.();
+    }
   }, [navigate, shareToken, onEditDenied]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
