@@ -16,19 +16,13 @@ import { TooltipProvider } from '@knowtis/design-system';
 
 import { ShareDialog } from './ShareDialog';
 
-const updateMutate =
-  vi.fn<
-    (
-      vars: unknown,
-      handlers?: { onSuccess?: () => void; onError?: () => void }
-    ) => void
-  >();
+const updateMutateAsync = vi.fn<(vars: unknown) => Promise<unknown>>();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', async (importOriginal) => ({
   ...(await importOriginal<typeof DataAccessNotes>()),
-  useUpdateNote: () => ({ mutate: updateMutate, isPending: false }),
+  useUpdateNote: () => ({ mutateAsync: updateMutateAsync, isPending: false }),
 }));
 vi.mock('sonner', () => ({
   toast: {
@@ -77,12 +71,10 @@ function renderDialog(overrides: Partial<Parameters<typeof ShareDialog>[0]>) {
 const clickOption = (name: string) =>
   userEvent.click(screen.getByRole('button', { name: new RegExp(name) }));
 
-const settle = (result: 'onSuccess' | 'onError' = 'onSuccess') =>
-  updateMutate.mock.calls.at(-1)?.[1]?.[result]?.();
-
 describe('ShareDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    updateMutateAsync.mockResolvedValue({});
     queryClient = new QueryClient();
   });
 
@@ -90,36 +82,41 @@ describe('ShareDialog', () => {
     renderDialog({ shareToken: null });
 
     await clickOption('share.anyoneWithLink');
-    settle();
 
-    expect(toastSuccess).toHaveBeenCalledWith('share.linkCreatedToast');
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith('share.linkCreatedToast')
+    );
   });
 
   it('announces a share as resumed when the note already holds a token', async () => {
     renderDialog({ shareToken: 'tok', generalAccess: 'restricted' });
 
     await clickOption('share.anyoneWithLink');
-    settle();
 
-    expect(toastSuccess).toHaveBeenCalledWith('share.linkResumedToast');
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith('share.linkResumedToast')
+    );
   });
 
   it('announces going private as a paused link', async () => {
     renderDialog({ shareToken: 'tok', generalAccess: 'anyone_with_link' });
 
     await clickOption('share.restricted');
-    settle();
 
-    expect(toastSuccess).toHaveBeenCalledWith('share.linkPausedToast');
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith('share.linkPausedToast')
+    );
   });
 
   it('reports a failed access change instead of staying silent', async () => {
+    updateMutateAsync.mockRejectedValue(new Error('nope'));
     renderDialog({ shareToken: 'tok', generalAccess: 'anyone_with_link' });
 
     await clickOption('share.restricted');
-    settle('onError');
 
-    expect(toastError).toHaveBeenCalledWith('share.accessChangeError');
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('share.accessChangeError')
+    );
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
@@ -128,7 +125,7 @@ describe('ShareDialog', () => {
 
     await clickOption('share.restricted');
 
-    expect(updateMutate).not.toHaveBeenCalled();
+    expect(updateMutateAsync).not.toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
@@ -151,9 +148,10 @@ describe('ShareDialog', () => {
     renderDialog({ shareToken: 'tok', generalAccess: 'anyone_with_link' });
 
     await userEvent.click(screen.getByRole('button', { name: 'share.editor' }));
-    settle();
 
-    expect(toastSuccess).toHaveBeenCalledWith('share.permissionEditorToast');
+    await waitFor(() =>
+      expect(toastSuccess).toHaveBeenCalledWith('share.permissionEditorToast')
+    );
   });
 
   it('refreshes the note detail when the dialog opens', async () => {
@@ -200,6 +198,6 @@ describe('ShareDialog', () => {
     );
 
     await clickOption('share.restricted');
-    expect(updateMutate).not.toHaveBeenCalled();
+    expect(updateMutateAsync).not.toHaveBeenCalled();
   });
 });
