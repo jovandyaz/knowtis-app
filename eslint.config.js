@@ -7,6 +7,8 @@ import { defineConfig, globalIgnores } from 'eslint/config';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+import minimalComments from './tools/lint-rules/minimal-comments.js';
+
 export default defineConfig([
   globalIgnores([
     'dist',
@@ -108,6 +110,15 @@ export default defineConfig([
       'no-var': 'error',
       eqeqeq: ['error', 'always', { null: 'ignore' }],
       curly: ['error', 'all'],
+    },
+  },
+  {
+    files: ['**/*.{ts,tsx}'],
+    plugins: {
+      knowtis: { rules: { 'minimal-comments': minimalComments } },
+    },
+    rules: {
+      'knowtis/minimal-comments': 'warn',
     },
   },
   // React-specific config
