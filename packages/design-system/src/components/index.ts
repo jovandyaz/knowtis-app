@@ -83,6 +83,11 @@ export {
   type SegmentedControlProps,
 } from './SegmentedControl';
 export {
+  RadioCardGroup,
+  type RadioCardOption,
+  type RadioCardGroupProps,
+} from './RadioCardGroup';
+export {
   Table,
   TableBody,
   TableCaption,
