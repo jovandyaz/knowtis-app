@@ -253,4 +253,62 @@ describe('defineAbilityFor', () => {
       expect(ability.can('update', publicNote)).toBe(false);
     });
   });
+
+  describe('guest session following a share link', () => {
+    const guest: AuthUser = { id: 'guest-1', isAnonymous: true };
+    const linkedNote: NoteSubject = {
+      __typename: 'Note',
+      id: 'note-guest-1',
+      ownerId: 'other-user',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    };
+
+    it('can edit the note the link granted editor on', () => {
+      const ability = defineAbilityFor(guest, {
+        sharedNotes: [
+          { noteId: 'note-guest-1', permission: PERMISSION.EDITOR },
+        ],
+      });
+      expect(ability.can('update', linkedNote)).toBe(true);
+    });
+
+    it('can only read when the link grants viewer', () => {
+      const ability = defineAbilityFor(guest, {
+        sharedNotes: [
+          { noteId: 'note-guest-1', permission: PERMISSION.VIEWER },
+        ],
+      });
+      expect(ability.can('read', linkedNote)).toBe(true);
+      expect(ability.can('update', linkedNote)).toBe(false);
+    });
+
+    it('cannot edit a public note it holds no share grant for', () => {
+      const ability = defineAbilityFor(guest, { sharedNotes: [] });
+      expect(ability.can('read', linkedNote)).toBe(true);
+      expect(ability.can('update', linkedNote)).toBe(false);
+    });
+
+    it('never inherits the right to re-share or delete', () => {
+      const ability = defineAbilityFor(guest, {
+        sharedNotes: [
+          { noteId: 'note-guest-1', permission: PERMISSION.EDITOR },
+        ],
+      });
+      expect(ability.can('share', linkedNote)).toBe(false);
+      expect(ability.can('delete', linkedNote)).toBe(false);
+    });
+
+    it('still owns the notes it created itself', () => {
+      const ability = defineAbilityFor(guest);
+      const ownNote: NoteSubject = {
+        __typename: 'Note',
+        id: 'note-guest-own',
+        ownerId: 'guest-1',
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+      };
+      expect(ability.can('update', ownNote)).toBe(true);
+      expect(ability.can('delete', ownNote)).toBe(true);
+      expect(ability.can('share', ownNote)).toBe(false);
+    });
+  });
 });

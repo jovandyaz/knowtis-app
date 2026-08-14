@@ -10,6 +10,7 @@ import { setTokenStorage as setCollaborationTokenStorage } from '../collaboratio
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
 import { AUTH_STORAGE_KEY } from './constants';
+import { runEnsureGuestSession } from './guest-session';
 import { runInitAuth } from './init-auth';
 import { performSessionLogout } from './perform-session-logout';
 import { redirectToLoginWithReload } from './redirect-to-login';
@@ -54,6 +55,15 @@ export async function initAuth(): Promise<void> {
   await runInitAuth({
     authStore,
     authApi,
+    tokenStorage,
+    initAnonymousSession,
+  });
+}
+
+/** Resolves false when the visitor must stay read-only. */
+export async function ensureGuestSession(): Promise<boolean> {
+  return runEnsureGuestSession({
+    authStore,
     tokenStorage,
     initAnonymousSession,
   });
