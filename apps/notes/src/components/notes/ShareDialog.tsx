@@ -72,7 +72,8 @@ export function ShareDialog({
   const updateNote = useUpdateNote();
   const queryClient = useQueryClient();
 
-  // Nothing else invalidates this key, so the dialog can open onto stale state.
+  // The detail query only refetches on its own staleness, so sharing state
+  // changed from another tab or device can be minutes old when this opens.
   useEffect(() => {
     if (open) {
       void queryClient.invalidateQueries({
