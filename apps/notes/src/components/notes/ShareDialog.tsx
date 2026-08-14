@@ -34,7 +34,7 @@ type ToastKey =
   | 'share.permissionEditorToast'
   | 'share.permissionViewerToast';
 
-/** A retained token means the note was shared before, so resuming returns the same link. */
+// A retained token means the note was shared before, so resuming returns the same link.
 function accessToastKey(
   next: GeneralAccessLevel,
   shareToken: string | null
