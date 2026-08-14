@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,6 +22,9 @@ const toastError = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useUpdateNote: () => ({ mutate: updateMutate, isPending: false }),
+  notesQueryKeys: {
+    detail: (id: string) => ['notes', 'detail', id] as const,
+  },
 }));
 vi.mock('sonner', () => ({
   toast: {
@@ -33,8 +36,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
+let queryClient: QueryClient;
+
 const wrapper = ({ children }: { children: ReactNode }) => (
-  <QueryClientProvider client={new QueryClient()}>
+  <QueryClientProvider client={queryClient}>
     <TooltipProvider>{children}</TooltipProvider>
   </QueryClientProvider>
 );
@@ -66,6 +71,7 @@ const settle = (result: 'onSuccess' | 'onError' = 'onSuccess') =>
 describe('ShareDialog', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    queryClient = new QueryClient();
   });
 
   it('announces a first share as a created link', async () => {
@@ -134,5 +140,33 @@ describe('ShareDialog', () => {
     settle();
 
     expect(toastSuccess).toHaveBeenCalledWith('share.permissionEditorToast');
+  });
+
+  it('refreshes the note detail when the dialog opens', async () => {
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    renderDialog({ shareToken: 'tok' });
+
+    await waitFor(() =>
+      expect(invalidate).toHaveBeenCalledWith({
+        queryKey: ['notes', 'detail', 'n1'],
+      })
+    );
+  });
+
+  it('refuses to act on sharing state that is still being refreshed', async () => {
+    void queryClient.fetchQuery({
+      queryKey: ['notes', 'detail', 'n1'],
+      queryFn: () => new Promise(() => undefined),
+    });
+    renderDialog({ shareToken: 'tok', generalAccess: 'anyone_with_link' });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: /share.restricted/ })
+      ).toBeDisabled()
+    );
+
+    await clickOption('share.restricted');
+    expect(updateMutate).not.toHaveBeenCalled();
   });
 });
