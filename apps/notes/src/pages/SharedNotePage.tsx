@@ -6,7 +6,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
-import { ROUTES } from '@/config';
+import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { format } from 'date-fns';
 import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
@@ -31,15 +31,15 @@ const HTTP_NOT_FOUND = 404;
 export function SharedNotePage() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
-  const { token } = useParams({ from: ROUTES.SHARED_NOTE });
-  const { data, isLoading, isError, error } = useNoteByToken(token);
+  const { token } = useParams({ from: '/s/$token' });
+  const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
   const [latestContent, setLatestContent] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { copied, copy: copyLink } = useCopyLink();
   const hasArtifacts = !!artifacts && artifacts.length > 0;
-  const sharedPath = ROUTES.SHARED_NOTE.replace('$token', token);
+  const sharedPath = sharedNotePath(token);
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);
@@ -79,12 +79,18 @@ export function SharedNotePage() {
               ? t('shared.linkNotFoundDesc')
               : t('shared.failedToLoadShared')
           }
+          {...(isNotFound
+            ? {}
+            : {
+                onRetry: () => refetch(),
+                retryLabel: tCommon('buttons.tryAgain'),
+              })}
         />
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
+          <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
             <Button size="sm">{t('shared.signIn')}</Button>
           </Link>
-          <Link to={ROUTES.ROOT}>
+          <Link to={ROUTES.DASHBOARD}>
             <Button variant="outline" size="sm">
               {t('shared.goToKnowtis')}
             </Button>
