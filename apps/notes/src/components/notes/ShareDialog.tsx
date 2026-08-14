@@ -15,6 +15,7 @@ import {
 import {
   ACCESS,
   GENERAL_ACCESS,
+  PERMISSION,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type PermissionLevel,
@@ -23,14 +24,22 @@ import {
 
 import { AccessInfoBanner, AccessOptionCard, LinkAccessSection } from './share';
 
+type ToastKey =
+  | 'share.linkCreatedToast'
+  | 'share.linkPausedToast'
+  | 'share.linkResumedToast'
+  | 'share.permissionEditorToast'
+  | 'share.permissionViewerToast';
+
 /** A retained token means the note was shared before, so resuming returns the same link. */
-function accessToastKey(next: GeneralAccessLevel, shareToken: string | null) {
+function accessToastKey(
+  next: GeneralAccessLevel,
+  shareToken: string | null
+): ToastKey {
   if (next === GENERAL_ACCESS.RESTRICTED) {
-    return 'share.linkPausedToast' as const;
+    return 'share.linkPausedToast';
   }
-  return shareToken
-    ? ('share.linkResumedToast' as const)
-    : ('share.linkCreatedToast' as const);
+  return shareToken ? 'share.linkResumedToast' : 'share.linkCreatedToast';
 }
 
 interface ShareDialogProps {
@@ -67,20 +76,34 @@ export function ShareDialog({
     ? `${window.location.origin}${sharedNotePath(shareToken)}`
     : null;
 
-  const handleUpdate = (input: UpdateNoteInput) => {
-    updateNote.mutate({ id: noteId, input });
+  const applyAccessChange = (input: UpdateNoteInput, successKey: ToastKey) => {
+    updateNote.mutate(
+      { id: noteId, input },
+      {
+        onSuccess: () => toast.success(t(successKey)),
+        onError: () => toast.error(t('share.accessChangeError')),
+      }
+    );
   };
 
   const handleGeneralAccessChange = (next: GeneralAccessLevel) => {
-    if (next === generalAccess) {
-      return;
+    if (next !== generalAccess) {
+      applyAccessChange(
+        { generalAccess: next },
+        accessToastKey(next, shareToken)
+      );
     }
-    updateNote.mutate(
-      { id: noteId, input: { generalAccess: next } },
-      {
-        onSuccess: () => toast.success(t(accessToastKey(next, shareToken))),
-      }
-    );
+  };
+
+  const handlePermissionChange = (next: PermissionLevel) => {
+    if (next !== generalAccessPermission) {
+      applyAccessChange(
+        { generalAccessPermission: next },
+        next === PERMISSION.EDITOR
+          ? 'share.permissionEditorToast'
+          : 'share.permissionViewerToast'
+      );
+    }
   };
 
   return (
@@ -115,7 +138,11 @@ export function ShareDialog({
                 }
                 icon={Lock}
                 title={t('share.restricted')}
-                description={t('share.restrictedDesc')}
+                description={
+                  shareToken
+                    ? t('share.restrictedDescPaused')
+                    : t('share.restrictedDesc')
+                }
               />
               <AccessOptionCard
                 selected={isPublicAccess}
@@ -135,9 +162,7 @@ export function ShareDialog({
               shareUrl={shareUrl}
               permission={generalAccessPermission}
               disabled={!canShare || updateNote.isPending}
-              onPermissionChange={(permission: PermissionLevel) =>
-                handleUpdate({ generalAccessPermission: permission })
-              }
+              onPermissionChange={handlePermissionChange}
             />
           )}
 

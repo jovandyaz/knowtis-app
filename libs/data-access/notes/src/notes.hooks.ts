@@ -4,8 +4,12 @@ import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
 import type {
   CreateNoteInput,
   Note,
+  NoteAccessLevel,
+  NoteWithOwner,
   UpdateNoteInput,
 } from '@knowtis/shared-types';
+
+type NoteDetail = NoteWithOwner & { accessLevel: NoteAccessLevel };
 
 export const notesQueryKeys = {
   all: ['notes'] as const,
@@ -91,6 +95,14 @@ export function useUpdateNote() {
       );
 
       return { previousNote, previousLists };
+    },
+    // The refetch queued in onSettled is not awaited, so without this the
+    // server's own fields (a freshly minted shareToken) stay missing from the
+    // cache for a full round trip after the mutation resolves.
+    onSuccess: (updated, { id }) => {
+      queryClient.setQueryData<NoteDetail>(notesQueryKeys.detail(id), (prev) =>
+        prev ? { ...prev, ...updated } : prev
+      );
     },
     onError: (_err, { id }, context) => {
       if (context?.previousNote) {

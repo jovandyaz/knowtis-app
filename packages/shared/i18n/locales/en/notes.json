@@ -91,7 +91,7 @@
     "description": "Manage who can access this note",
     "generalAccess": "General access",
     "restricted": "Private",
-    "restrictedDesc": "Only you can see it. The link is paused, not deleted",
+    "restrictedDesc": "Only you can see this note",
     "linkCreatedToast": "Link created. It's ready to share",
     "linkPausedToast": "Link paused. It stops working until you share again",
     "linkResumedToast": "Link active again. It's the same one as before",
@@ -110,7 +110,11 @@
     "editorsCanShare": "Editors can share",
     "editorsCanShareToggleDesc": "Allow editors to invite others and manage access",
     "editorsCanShareTitle": "Editors can share this note",
-    "onlyYouCanShare": "Only you can share this note"
+    "onlyYouCanShare": "Only you can share this note",
+    "restrictedDescPaused": "Only you can see it. The link is paused, not deleted",
+    "permissionViewerToast": "The link is now read-only",
+    "permissionEditorToast": "People with the link can now edit",
+    "accessChangeError": "Couldn't change access. Try again"
   },
   "shared": {
     "loadingSharedNote": "Loading shared note...",
@@ -489,7 +493,10 @@
     "failedToast": "Failed to update profile"
   },
   "workspace": {
-    "tabs": { "note": "Note", "study": "Study" },
+    "tabs": {
+      "note": "Note",
+      "study": "Study"
+    },
     "tabsLabel": "Note workspace"
   }
 }
