@@ -222,26 +222,19 @@ export class UpdateNoteHandler {
     return null;
   }
 
+  /**
+   * A note's share token is minted once and never rotated: going restricted
+   * only flips `generalAccess`, which every share-token reader gates on, so the
+   * link resumes working — same URL — when sharing is re-enabled.
+   */
   private resolveShareToken(
     input: UpdateNoteInput,
     note: NoteEntity
-  ): { shareToken?: string | null } {
-    if (input.generalAccess === undefined) {
-      return {};
-    }
-
-    if (
-      input.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
+  ): { shareToken?: string } {
+    return input.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
       !note.shareToken
-    ) {
-      return { shareToken: randomBytes(16).toString('hex') };
-    }
-
-    if (input.generalAccess === GENERAL_ACCESS.RESTRICTED) {
-      return { shareToken: null };
-    }
-
-    return {};
+      ? { shareToken: randomBytes(16).toString('hex') }
+      : {};
   }
 
   private emitUpdateEvent(

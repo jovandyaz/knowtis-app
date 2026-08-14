@@ -7,7 +7,6 @@ const base = {
   title: 'N1',
   ownerId: 'u1',
   generalAccess: 'restricted',
-  shareToken: null,
   createdAt: new Date('2026-06-01T00:00:00Z'),
   updatedAt: new Date('2026-06-02T00:00:00Z'),
 };
@@ -32,8 +31,11 @@ describe('toNoteHit', () => {
     expect(hit.isPubliclyShared).toBe(true);
   });
 
-  it('treats a restricted note with a share token as publicly shared', () => {
-    const hit = toNoteHit({ ...base, shareToken: 'tok' }, 'u1');
-    expect(hit.isPubliclyShared).toBe(true);
+  it('derives isPubliclyShared from generalAccess alone', () => {
+    expect(toNoteHit(base, 'u1').isPubliclyShared).toBe(false);
+    expect(
+      toNoteHit({ ...base, generalAccess: 'anyone_with_link' }, 'u1')
+        .isPubliclyShared
+    ).toBe(true);
   });
 });

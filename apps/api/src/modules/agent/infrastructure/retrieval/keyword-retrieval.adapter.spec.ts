@@ -171,7 +171,7 @@ describe('KeywordRetrievalAdapter', () => {
       });
     });
 
-    it('marks a note isPubliclyShared when shareToken is set (even if owner and restricted)', async () => {
+    it('keeps a restricted note out of isPubliclyShared even when it retains a token', async () => {
       const repo = makeRepo({
         summaries: [summary('a', 'Token Note', { shareToken: 'abc-token' })],
       });
@@ -179,7 +179,7 @@ describe('KeywordRetrievalAdapter', () => {
 
       const hits = await adapter.search(USER, 'token');
 
-      expect(hits[0]).toMatchObject({ isOwner: true, isPubliclyShared: true });
+      expect(hits[0]).toMatchObject({ isOwner: true, isPubliclyShared: false });
     });
 
     it('caps results to MAX_SEARCH_HITS (20)', async () => {
