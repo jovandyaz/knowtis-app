@@ -278,6 +278,80 @@ describe('initAnonymousSession — demotion guard', () => {
     );
   });
 
+  it('creates a new anonymous session when the server reports no refresh credential at all', async () => {
+    localStorage.setItem(
+      ANON_STORAGE_KEY,
+      JSON.stringify({
+        userId: 'existing-anon',
+        expiresAt: Date.now() + 60_000,
+      })
+    );
+    vi.mocked(httpClient.post).mockImplementation(async (url: string) => {
+      if (url === '/auth/refresh') {
+        throw new ApiClientError('Refresh token is required', 400);
+      }
+      return {
+        user: { id: 'replacement-anon', name: 'Anonymous', isAnonymous: true },
+        accessToken: 'new-at',
+      };
+    });
+
+    const { store, state } = createMockAuthStore({
+      isAuthenticated: false,
+      user: null,
+    });
+    const tokenStorage = createMockTokenStorage();
+
+    await initAnonymousSession(tokenStorage, store);
+
+    expect(vi.mocked(httpClient.post)).toHaveBeenCalledWith(
+      '/auth/anonymous',
+      {},
+      { skipAuth: true }
+    );
+    expect(state.setUser).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'replacement-anon', isAnonymous: true })
+    );
+    expect(localStorage.getItem(ANON_STORAGE_KEY)).toContain(
+      'replacement-anon'
+    );
+  });
+
+  it.each([
+    ['throttled', 429],
+    ['unavailable', 503],
+  ])('keeps the marker when the refresh is %s', async (_label, status) => {
+    localStorage.setItem(
+      ANON_STORAGE_KEY,
+      JSON.stringify({
+        userId: 'existing-anon',
+        expiresAt: Date.now() + 60_000,
+      })
+    );
+    vi.mocked(httpClient.post).mockImplementation(async (url: string) => {
+      if (url === '/auth/refresh') {
+        throw new ApiClientError('Boom', status);
+      }
+      return { user: null, accessToken: 'unexpected' };
+    });
+
+    const { store, state } = createMockAuthStore({
+      isAuthenticated: false,
+      user: null,
+    });
+
+    await initAnonymousSession(createMockTokenStorage(), store);
+
+    expect(vi.mocked(httpClient.post)).not.toHaveBeenCalledWith(
+      '/auth/anonymous',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(localStorage.getItem(ANON_STORAGE_KEY)).toContain('existing-anon');
+    expect(state.setUser).not.toHaveBeenCalled();
+    expect(state.setLoading).toHaveBeenCalledWith(false);
+  });
+
   it('coalesces two concurrent restores into a single refresh request', async () => {
     localStorage.setItem(
       ANON_STORAGE_KEY,

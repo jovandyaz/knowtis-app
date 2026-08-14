@@ -29,11 +29,17 @@ type RestoreOutcome = 'restored' | 'rejected' | 'unavailable';
 
 const ANON_MARKER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-function isAuthRejection(error: unknown): boolean {
-  return (
-    ApiClientError.isApiClientError(error) &&
-    (error.status === 401 || error.status === 403)
-  );
+const UNRESTORABLE_STATUSES: ReadonlySet<number> = new Set([400, 401, 403]);
+
+// /auth/refresh answers 400, not 401, when the cookie is simply absent, and this
+// marker outlives the 7-day cookie — so 400 here is routine and terminal.
+function classifyRestoreFailure(
+  error: unknown
+): Exclude<RestoreOutcome, 'restored'> {
+  if (!ApiClientError.isApiClientError(error)) {
+    return 'unavailable';
+  }
+  return UNRESTORABLE_STATUSES.has(error.status) ? 'rejected' : 'unavailable';
 }
 
 function wasPreviouslyRegistered(): boolean {
@@ -131,7 +137,7 @@ async function migrateLegacySession(
     return 'restored';
   } catch (error) {
     console.warn('[AnonymousSession] Legacy session migration failed:', error);
-    return isAuthRejection(error) ? 'rejected' : 'unavailable';
+    return classifyRestoreFailure(error);
   }
 }
 
@@ -149,7 +155,7 @@ async function restoreSessionViaRefresh(
     return 'restored';
   } catch (error) {
     console.warn('[AnonymousSession] Session refresh failed:', error);
-    return isAuthRejection(error) ? 'rejected' : 'unavailable';
+    return classifyRestoreFailure(error);
   }
 }
 
