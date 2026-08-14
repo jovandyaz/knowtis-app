@@ -276,7 +276,8 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
-    // A share link is reachable without an account: clear, never redirect.
+    // Logging out an account-less visitor looks wrong, but the dead token is
+    // reused until cleared, and a share link has no login to fall back to.
     performSessionLogout({
       authStore,
       tokenStorage,

@@ -29,18 +29,10 @@ type RestoreOutcome = 'restored' | 'rejected' | 'unavailable';
 
 const ANON_MARKER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-const HTTP_BAD_REQUEST = 400;
-const HTTP_UNAUTHORIZED = 401;
-const HTTP_FORBIDDEN = 403;
+const UNRESTORABLE_STATUSES: ReadonlySet<number> = new Set([400, 401, 403]);
 
-const UNRESTORABLE_STATUSES: ReadonlySet<number> = new Set([
-  HTTP_BAD_REQUEST,
-  HTTP_UNAUTHORIZED,
-  HTTP_FORBIDDEN,
-]);
-
-// A credential failure can never succeed on retry, so the stored identity must
-// be discarded; a transport failure may, so it must be left alone.
+// /auth/refresh answers 400, not 401, when the cookie is simply absent, and this
+// marker outlives the 7-day cookie — so 400 here is routine and terminal.
 function classifyRestoreFailure(
   error: unknown
 ): Exclude<RestoreOutcome, 'restored'> {

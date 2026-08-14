@@ -288,11 +288,7 @@ describe('initAnonymousSession — demotion guard', () => {
     );
     vi.mocked(httpClient.post).mockImplementation(async (url: string) => {
       if (url === '/auth/refresh') {
-        throw new ApiClientError(
-          'Refresh token is required',
-          400,
-          'BAD_REQUEST'
-        );
+        throw new ApiClientError('Refresh token is required', 400);
       }
       return {
         user: { id: 'replacement-anon', name: 'Anonymous', isAnonymous: true },
@@ -321,7 +317,10 @@ describe('initAnonymousSession — demotion guard', () => {
     );
   });
 
-  it('keeps the marker when the refresh fails with a server error', async () => {
+  it.each([
+    ['throttled', 429],
+    ['unavailable', 503],
+  ])('keeps the marker when the refresh is %s', async (_label, status) => {
     localStorage.setItem(
       ANON_STORAGE_KEY,
       JSON.stringify({
@@ -331,9 +330,9 @@ describe('initAnonymousSession — demotion guard', () => {
     );
     vi.mocked(httpClient.post).mockImplementation(async (url: string) => {
       if (url === '/auth/refresh') {
-        throw new ApiClientError('Boom', 503, 'SERVICE_UNAVAILABLE');
+        throw new ApiClientError('Boom', status);
       }
-      throw new Error('should not create a session on a transient failure');
+      return { user: null, accessToken: 'unexpected' };
     });
 
     const { store, state } = createMockAuthStore({
@@ -343,6 +342,11 @@ describe('initAnonymousSession — demotion guard', () => {
 
     await initAnonymousSession(createMockTokenStorage(), store);
 
+    expect(vi.mocked(httpClient.post)).not.toHaveBeenCalledWith(
+      '/auth/anonymous',
+      expect.anything(),
+      expect.anything()
+    );
     expect(localStorage.getItem(ANON_STORAGE_KEY)).toContain('existing-anon');
     expect(state.setUser).not.toHaveBeenCalled();
     expect(state.setLoading).toHaveBeenCalledWith(false);
