@@ -276,8 +276,7 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
-    // Clearing is what lets the next attempt mint a fresh guest session, but a
-    // share link is reachable without an account, so it must never redirect.
+    // A share link is reachable without an account: clear, never redirect.
     performSessionLogout({
       authStore,
       tokenStorage,

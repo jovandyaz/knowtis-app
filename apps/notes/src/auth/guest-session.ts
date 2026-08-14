@@ -11,8 +11,7 @@ export interface GuestSessionDeps {
 
 /**
  * Gives an account-less visitor an identity so a share link can grant them
- * write access. Resolves false when no session could be established, which
- * callers must treat as "stay read-only".
+ * write access. Resolves false when the visitor must stay read-only.
  */
 export async function runEnsureGuestSession(
   deps: GuestSessionDeps

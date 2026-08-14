@@ -33,18 +33,14 @@ const HTTP_BAD_REQUEST = 400;
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 
-/** The refresh credential is absent (400) or refused (401/403). */
 const UNRESTORABLE_STATUSES: ReadonlySet<number> = new Set([
   HTTP_BAD_REQUEST,
   HTTP_UNAUTHORIZED,
   HTTP_FORBIDDEN,
 ]);
 
-/**
- * A restore that failed for a credential reason can never succeed on retry, so
- * the caller must discard the stored identity and mint a new one. Transport
- * failures may succeed later and must leave the stored identity untouched.
- */
+// A credential failure can never succeed on retry, so the stored identity must
+// be discarded; a transport failure may, so it must be left alone.
 function classifyRestoreFailure(
   error: unknown
 ): Exclude<RestoreOutcome, 'restored'> {
