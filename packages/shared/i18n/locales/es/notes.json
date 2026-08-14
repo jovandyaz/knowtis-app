@@ -125,6 +125,8 @@
     "viewOnlyBadge": "Solo lectura",
     "editButton": "Editar",
     "viewButton": "Ver",
+    "editUnavailable": "No se pudo empezar a editar. Inicia sesión para editar esta nota.",
+    "editDenied": "No se pudo seguir editando. Inténtalo de nuevo — puedes seguir leyendo la nota.",
     "signIn": "Iniciar sesión",
     "goToKnowtis": "Ir a Knowtis",
     "byAuthor": "Por {{name}}"

@@ -276,17 +276,26 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
+    // Clearing is what lets the next attempt mint a fresh guest session, but a
+    // share link is reachable without an account, so it must never redirect.
     performSessionLogout({
       authStore,
       tokenStorage,
-      redirect: () => {
-        navigate({
-          to: ROUTES.LOGIN,
-          search: { redirect: window.location.pathname },
-        });
-      },
+      ...(shareToken
+        ? {}
+        : {
+            redirect: () => {
+              navigate({
+                to: ROUTES.LOGIN,
+                search: { redirect: window.location.pathname },
+              });
+            },
+          }),
     });
-  }, [navigate]);
+    if (shareToken) {
+      onEditDenied?.();
+    }
+  }, [navigate, shareToken, onEditDenied]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
   const { isConnected, isSynced } = useHocuspocusCollaboration({

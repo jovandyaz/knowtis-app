@@ -248,6 +248,68 @@ describe('HocuspocusAuthExtension', () => {
     expect(payload.connectionConfig.readOnly).toBe(false);
   });
 
+  it('should grant a guest editor access via a valid share token', async () => {
+    const note = {
+      id: 'note-1',
+      ownerId: 'other-user',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.EDITOR,
+      shareToken: 'share-secret',
+    };
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'guest-1', email: '', isAnonymous: true }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'guest-1', isAnonymous: true }),
+      } as never,
+      {
+        findById: vi.fn().mockResolvedValue(note),
+        findPermissionsByNote: vi.fn().mockResolvedValue([]),
+      } as unknown as NoteRepository
+    );
+
+    const payload = buildPayload('guest-token', { shareToken: 'share-secret' });
+    await ext.toExtension().onAuthenticate?.(payload as never);
+
+    expect(payload.connectionConfig.readOnly).toBe(false);
+  });
+
+  it('should keep a guest read-only when the share token is stale', async () => {
+    const note = {
+      id: 'note-1',
+      ownerId: 'other-user',
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.EDITOR,
+      shareToken: 'share-secret',
+    };
+    const ext = new HocuspocusAuthExtension(
+      {
+        verify: vi
+          .fn()
+          .mockReturnValue({ sub: 'guest-1', email: '', isAnonymous: true }),
+      } as never,
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ id: 'guest-1', isAnonymous: true }),
+      } as never,
+      {
+        findById: vi.fn().mockResolvedValue(note),
+        findPermissionsByNote: vi.fn().mockResolvedValue([]),
+      } as unknown as NoteRepository
+    );
+
+    const payload = buildPayload('guest-token', { shareToken: 'wrong-secret' });
+    await ext.toExtension().onAuthenticate?.(payload as never);
+
+    expect(payload.connectionConfig.readOnly).toBe(true);
+  });
+
   it('should verify tokens pinned to the HS256 algorithm', async () => {
     const verify = vi
       .fn()

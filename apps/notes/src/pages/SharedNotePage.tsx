@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Link, useParams } from '@tanstack/react-router';
 
+import { ensureGuestSession } from '@/auth/setup';
 import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
@@ -10,6 +11,7 @@ import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { format } from 'date-fns';
 import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import { useSharedNoteArtifacts } from '@knowtis/data-access-artifacts';
@@ -35,6 +37,7 @@ export function SharedNotePage() {
   const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
+  const [isPreparingEdit, setIsPreparingEdit] = useState(false);
   const [latestContent, setLatestContent] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { copied, copy: copyLink } = useCopyLink();
@@ -43,7 +46,21 @@ export function SharedNotePage() {
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);
-  }, []);
+    toast.error(t('shared.editDenied'));
+  }, [t]);
+
+  const handleStartEditing = useCallback(() => {
+    setIsPreparingEdit(true);
+    void ensureGuestSession()
+      .then((ready) => {
+        if (ready) {
+          setIsEditing(true);
+          return;
+        }
+        toast.error(t('shared.editUnavailable'));
+      })
+      .finally(() => setIsPreparingEdit(false));
+  }, [t]);
 
   const handleUpdate = useCallback((content: string) => {
     setLatestContent(content);
@@ -141,8 +158,9 @@ export function SharedNotePage() {
             {canEdit && !isEditing && (
               <button
                 type="button"
-                onClick={() => setIsEditing(true)}
-                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer"
+                onClick={handleStartEditing}
+                disabled={isPreparingEdit}
+                className="p-1.5 rounded-md text-(--muted-foreground) hover:text-(--foreground) transition-colors cursor-pointer disabled:opacity-50"
                 aria-label={t('shared.editButton')}
               >
                 <Pencil className="h-4 w-4" />
@@ -213,8 +231,14 @@ export function SharedNotePage() {
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
+                      disabled={isPreparingEdit}
+                      aria-label={
+                        isEditing
+                          ? t('shared.viewButton')
+                          : t('shared.editButton')
+                      }
                       onClick={
-                        isEditing ? handleStopEditing : () => setIsEditing(true)
+                        isEditing ? handleStopEditing : handleStartEditing
                       }
                     >
                       {isEditing ? (

@@ -30,17 +30,13 @@ export function defineAbilityFor(
       }
 
       if (user.isAnonymous) {
-        // Anonymous authenticated users: CRUD own notes, no sharing
         allow('create', Note);
         allow('read', Note, { ownerId: user.id });
         allow('update', Note, { ownerId: user.id });
         allow('delete', Note, { ownerId: user.id });
-        allow('read', Note, { generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK });
-        return;
+      } else {
+        allow('manage', Note, { ownerId: user.id });
       }
-
-      // Registered users: full access
-      allow('manage', Note, { ownerId: user.id });
 
       allow('read', Note, { generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK });
 
