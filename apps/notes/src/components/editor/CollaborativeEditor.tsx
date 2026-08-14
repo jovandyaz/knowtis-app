@@ -276,6 +276,12 @@ export function CollaborativeEditor({
   const navigate = useNavigate();
 
   const handleSessionExpired = useCallback(() => {
+    // A share link is reachable without an account, so logging out and
+    // redirecting would strand a visitor who never had a session to lose.
+    if (shareToken) {
+      onEditDenied?.();
+      return;
+    }
     performSessionLogout({
       authStore,
       tokenStorage,
@@ -286,7 +292,7 @@ export function CollaborativeEditor({
         });
       },
     });
-  }, [navigate]);
+  }, [navigate, shareToken, onEditDenied]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
   const { isConnected, isSynced } = useHocuspocusCollaboration({
