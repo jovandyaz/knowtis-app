@@ -280,7 +280,10 @@ export function CollaborativeEditor({
       authStore,
       tokenStorage,
       redirect: () => {
-        navigate({ to: ROUTES.LOGIN, search: { redirect: undefined } });
+        navigate({
+          to: ROUTES.LOGIN,
+          search: { redirect: window.location.pathname },
+        });
       },
     });
   }, [navigate]);

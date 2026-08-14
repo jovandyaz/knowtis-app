@@ -112,13 +112,14 @@
   "shared": {
     "loadingSharedNote": "Loading shared note...",
     "linkNotFound": "Link Not Found",
-    "linkNotFoundDesc": "This share link does not exist or has been disabled by the owner.",
+    "linkNotFoundDesc": "This link isn't active. The owner may have paused access, or the link no longer exists.",
     "failedToLoadShared": "Failed to load the shared note. Please try again.",
     "editorBadge": "Editor",
     "viewOnlyBadge": "View only",
     "editButton": "Edit",
     "viewButton": "View",
     "signIn": "Sign in",
+    "goToKnowtis": "Go to Knowtis",
     "byAuthor": "By {{name}}"
   },
   "sidebar": {

@@ -6,7 +6,7 @@ import { Link, useParams } from '@tanstack/react-router';
 import { SharedArtifactSidebar } from '@/components/artifacts/SharedArtifactSidebar';
 import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
-import { ROUTES } from '@/config';
+import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { format } from 'date-fns';
 import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
@@ -26,17 +26,20 @@ import {
 import { ReadOnlyEditor } from '@knowtis/editor';
 import { PERMISSION } from '@knowtis/shared-types';
 
+const HTTP_NOT_FOUND = 404;
+
 export function SharedNotePage() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const { token } = useParams({ from: '/s/$token' });
-  const { data, isLoading, isError, error } = useNoteByToken(token);
+  const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
   const [latestContent, setLatestContent] = useState<string | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const { copied, copy: copyLink } = useCopyLink();
   const hasArtifacts = !!artifacts && artifacts.length > 0;
+  const sharedPath = sharedNotePath(token);
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);
@@ -60,10 +63,10 @@ export function SharedNotePage() {
 
   if (isError) {
     const isNotFound =
-      ApiClientError.isApiClientError(error) && error.status === 404;
+      ApiClientError.isApiClientError(error) && error.status === HTTP_NOT_FOUND;
 
     return (
-      <div className="flex min-h-screen items-center justify-center">
+      <div className="flex min-h-screen flex-col items-center justify-center gap-6">
         <ErrorState
           fullHeight={false}
           title={
@@ -76,7 +79,23 @@ export function SharedNotePage() {
               ? t('shared.linkNotFoundDesc')
               : t('shared.failedToLoadShared')
           }
+          {...(isNotFound
+            ? {}
+            : {
+                onRetry: () => refetch(),
+                retryLabel: tCommon('buttons.tryAgain'),
+              })}
         />
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+            <Button size="sm">{t('shared.signIn')}</Button>
+          </Link>
+          <Link to={ROUTES.DASHBOARD}>
+            <Button variant="outline" size="sm">
+              {t('shared.goToKnowtis')}
+            </Button>
+          </Link>
+        </div>
       </div>
     );
   }
@@ -139,7 +158,7 @@ export function SharedNotePage() {
                 <Eye className="h-4 w-4" />
               </button>
             )}
-            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+            <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
               <Button variant="outline" size="sm">
                 {t('shared.signIn')}
               </Button>
@@ -212,7 +231,7 @@ export function SharedNotePage() {
                   </TooltipContent>
                 </Tooltip>
               )}
-              <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+              <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
                 <Button variant="outline" size="sm">
                   {t('shared.signIn')}
                 </Button>
