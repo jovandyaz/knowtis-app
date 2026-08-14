@@ -10,6 +10,13 @@ const DEFAULT_REFRESH_MARGIN_MS = 60_000;
 
 interface UseSessionManagerOptions {
   refreshMarginMs?: number;
+  /**
+   * Decides whether a failed refresh ends the session. Return false for
+   * failures that may succeed later (server down, network, throttling) so the
+   * session survives and the next refresh attempt can recover it. Defaults to
+   * treating every failure as terminal.
+   */
+  isTerminalRefreshFailure?: (error: unknown) => boolean;
 }
 
 /**
@@ -22,10 +29,16 @@ export function useSessionManager(
   const api = useAuthApi();
   const store = useAuthStore();
   const tokenStorage = useTokenStorage();
-  const { refreshMarginMs = DEFAULT_REFRESH_MARGIN_MS } = options;
+  const {
+    refreshMarginMs = DEFAULT_REFRESH_MARGIN_MS,
+    isTerminalRefreshFailure = () => true,
+  } = options;
 
   const refreshMarginRef = useRef(refreshMarginMs);
   refreshMarginRef.current = refreshMarginMs;
+
+  const isTerminalRef = useRef(isTerminalRefreshFailure);
+  isTerminalRef.current = isTerminalRefreshFailure;
 
   const apiRef = useRef(api);
   apiRef.current = api;
@@ -67,9 +80,14 @@ export function useSessionManager(
           storeRef.current.getState().setLoading(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) {
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        if (isTerminalRef.current(error)) {
           logout();
+        } else {
+          setLoading(false);
         }
       });
 
@@ -97,8 +115,10 @@ export function useSessionManager(
       );
 
       return setTimeout(() => {
-        api.refreshToken().catch(() => {
-          store.getState().logout();
+        api.refreshToken().catch((error: unknown) => {
+          if (isTerminalRef.current(error)) {
+            store.getState().logout();
+          }
         });
       }, delay);
     }
@@ -141,8 +161,10 @@ export function useSessionManager(
         expiresAt !== null && expiresAt - Date.now() < refreshMarginRef.current;
 
       if (tokenMissing || tokenExpiringSoon) {
-        api.refreshToken().catch(() => {
-          store.getState().logout();
+        api.refreshToken().catch((error: unknown) => {
+          if (isTerminalRef.current(error)) {
+            store.getState().logout();
+          }
         });
       }
     }

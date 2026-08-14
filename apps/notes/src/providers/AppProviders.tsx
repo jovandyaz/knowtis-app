@@ -8,6 +8,7 @@ import { AppErrorBoundary } from '@/components/AppErrorBoundary';
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 
+import { classifyRefreshFailure } from '@knowtis/api-client';
 import { YjsProvider } from '@knowtis/crdt';
 import { Toaster, TooltipProvider } from '@knowtis/design-system';
 import { useMediaQuery } from '@knowtis/shared-hooks';
@@ -27,7 +28,11 @@ function AppToaster() {
 }
 
 function SessionManager() {
-  useSessionManager({ refreshMarginMs: 60_000 });
+  useSessionManager({
+    refreshMarginMs: 60_000,
+    isTerminalRefreshFailure: (error) =>
+      classifyRefreshFailure(error) === 'rejected',
+  });
   return null;
 }
 

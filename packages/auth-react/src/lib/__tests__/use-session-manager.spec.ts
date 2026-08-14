@@ -117,6 +117,30 @@ describe('useSessionManager', () => {
       expect(store.getState().isAuthenticated).toBe(false);
       expect(store.getState().user).toBeNull();
     });
+
+    it('keeps the session when the failure is classified as non-terminal', async () => {
+      const failure = new Error('service unavailable');
+      const refreshToken = vi.fn().mockRejectedValue(failure);
+      const { store, wrapper } = setup({ refreshToken });
+
+      store.setState({
+        isAuthenticated: true,
+        isLoading: true,
+        user: { id: '1', email: 'a@b.com', name: 'Test', avatarUrl: null },
+      });
+
+      const isTerminalRefreshFailure = vi.fn().mockReturnValue(false);
+      await act(async () => {
+        renderHook(() => useSessionManager({ isTerminalRefreshFailure }), {
+          wrapper,
+        });
+      });
+
+      expect(isTerminalRefreshFailure).toHaveBeenCalledWith(failure);
+      expect(store.getState().isAuthenticated).toBe(true);
+      expect(store.getState().user).not.toBeNull();
+      expect(store.getState().isLoading).toBe(false);
+    });
   });
 
   describe('proactive refresh timer', () => {
