@@ -29,11 +29,29 @@ type RestoreOutcome = 'restored' | 'rejected' | 'unavailable';
 
 const ANON_MARKER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-function isAuthRejection(error: unknown): boolean {
-  return (
-    ApiClientError.isApiClientError(error) &&
-    (error.status === 401 || error.status === 403)
-  );
+const HTTP_BAD_REQUEST = 400;
+const HTTP_UNAUTHORIZED = 401;
+const HTTP_FORBIDDEN = 403;
+
+/** The refresh credential is absent (400) or refused (401/403). */
+const UNRESTORABLE_STATUSES: ReadonlySet<number> = new Set([
+  HTTP_BAD_REQUEST,
+  HTTP_UNAUTHORIZED,
+  HTTP_FORBIDDEN,
+]);
+
+/**
+ * A restore that failed for a credential reason can never succeed on retry, so
+ * the caller must discard the stored identity and mint a new one. Transport
+ * failures may succeed later and must leave the stored identity untouched.
+ */
+function classifyRestoreFailure(
+  error: unknown
+): Exclude<RestoreOutcome, 'restored'> {
+  if (!ApiClientError.isApiClientError(error)) {
+    return 'unavailable';
+  }
+  return UNRESTORABLE_STATUSES.has(error.status) ? 'rejected' : 'unavailable';
 }
 
 function wasPreviouslyRegistered(): boolean {
@@ -131,7 +149,7 @@ async function migrateLegacySession(
     return 'restored';
   } catch (error) {
     console.warn('[AnonymousSession] Legacy session migration failed:', error);
-    return isAuthRejection(error) ? 'rejected' : 'unavailable';
+    return classifyRestoreFailure(error);
   }
 }
 
@@ -149,7 +167,7 @@ async function restoreSessionViaRefresh(
     return 'restored';
   } catch (error) {
     console.warn('[AnonymousSession] Session refresh failed:', error);
-    return isAuthRejection(error) ? 'rejected' : 'unavailable';
+    return classifyRestoreFailure(error);
   }
 }
 
