@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { sharedNotePath } from '@/config';
 import { Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -63,7 +64,7 @@ export function ShareDialog({
   const canShare = isOwner || (isEditor && editorsCanShare);
   const isPublicAccess = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
   const shareUrl = shareToken
-    ? `${window.location.origin}/s/${shareToken}`
+    ? `${window.location.origin}${sharedNotePath(shareToken)}`
     : null;
 
   const handleUpdate = (input: UpdateNoteInput) => {
