@@ -14,6 +14,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  RadioCardGroup,
 } from '@knowtis/design-system';
 import {
   ACCESS,
@@ -25,7 +26,7 @@ import {
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
-import { AccessInfoBanner, AccessOptionCard, LinkAccessSection } from './share';
+import { AccessInfoBanner, LinkAccessSection } from './share';
 
 type ToastKey =
   | 'share.linkCreatedToast'
@@ -89,6 +90,22 @@ export function ShareDialog({
   const isEditor = accessLevel === ACCESS.EDITOR;
   const canShare = isOwner || (isEditor && editorsCanShare);
   const isPublicAccess = generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK;
+  const generalAccessOptions = [
+    {
+      value: GENERAL_ACCESS.RESTRICTED,
+      icon: Lock,
+      title: t('share.restricted'),
+      description: shareToken
+        ? t('share.restrictedDescPaused')
+        : t('share.restrictedDesc'),
+    },
+    {
+      value: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      icon: Globe,
+      title: t('share.anyoneWithLink'),
+      description: t('share.anyoneWithLinkDesc'),
+    },
+  ];
   const shareUrl = shareToken
     ? `${window.location.origin}${sharedNotePath(shareToken)}`
     : null;
@@ -145,32 +162,13 @@ export function ShareDialog({
               </h3>
             </div>
 
-            <div className="space-y-2">
-              <AccessOptionCard
-                selected={!isPublicAccess}
-                disabled={!canShare || updateNote.isPending || isRefreshing}
-                onClick={() =>
-                  handleGeneralAccessChange(GENERAL_ACCESS.RESTRICTED)
-                }
-                icon={Lock}
-                title={t('share.restricted')}
-                description={
-                  shareToken
-                    ? t('share.restrictedDescPaused')
-                    : t('share.restrictedDesc')
-                }
-              />
-              <AccessOptionCard
-                selected={isPublicAccess}
-                disabled={!canShare || updateNote.isPending || isRefreshing}
-                onClick={() =>
-                  handleGeneralAccessChange(GENERAL_ACCESS.ANYONE_WITH_LINK)
-                }
-                icon={Globe}
-                title={t('share.anyoneWithLink')}
-                description={t('share.anyoneWithLinkDesc')}
-              />
-            </div>
+            <RadioCardGroup
+              aria-label={t('share.generalAccess')}
+              options={generalAccessOptions}
+              value={generalAccess}
+              onValueChange={handleGeneralAccessChange}
+              disabled={!canShare || updateNote.isPending || isRefreshing}
+            />
           </div>
 
           {isPublicAccess && shareUrl && (

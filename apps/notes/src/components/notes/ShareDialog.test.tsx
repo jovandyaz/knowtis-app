@@ -69,7 +69,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ShareDialog>[0]>) {
 }
 
 const clickOption = (name: string) =>
-  userEvent.click(screen.getByRole('button', { name: new RegExp(name) }));
+  userEvent.click(screen.getByRole('radio', { name: new RegExp(name) }));
 
 describe('ShareDialog', () => {
   beforeEach(() => {
@@ -147,7 +147,7 @@ describe('ShareDialog', () => {
   it('confirms a permission change on the link', async () => {
     renderDialog({ shareToken: 'tok', generalAccess: 'anyone_with_link' });
 
-    await userEvent.click(screen.getByRole('button', { name: 'share.editor' }));
+    await userEvent.click(screen.getByRole('radio', { name: 'share.editor' }));
 
     await waitFor(() =>
       expect(toastSuccess).toHaveBeenCalledWith('share.permissionEditorToast')
@@ -193,11 +193,28 @@ describe('ShareDialog', () => {
 
     await waitFor(() =>
       expect(
-        screen.getByRole('button', { name: /share.restricted/ })
+        screen.getByRole('radio', { name: /share.restricted/ })
       ).toBeDisabled()
     );
 
     await clickOption('share.restricted');
     expect(updateMutateAsync).not.toHaveBeenCalled();
+  });
+  it('exposes both option groups and their selection to assistive tech', () => {
+    renderDialog({ generalAccess: 'anyone_with_link', shareToken: 'tok' });
+
+    expect(
+      screen.getByRole('radiogroup', { name: 'share.generalAccess' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('radiogroup', { name: 'share.linkAccess' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('radio', { name: /share.anyoneWithLink/ })
+    ).toBeChecked();
+    expect(
+      screen.getByRole('radio', { name: /share.restricted/ })
+    ).not.toBeChecked();
+    expect(screen.getByRole('radio', { name: 'share.viewer' })).toBeChecked();
   });
 });
