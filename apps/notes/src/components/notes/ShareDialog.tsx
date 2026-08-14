@@ -1,10 +1,13 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 
 import { sharedNotePath } from '@/config';
 import { Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useUpdateNote } from '@knowtis/data-access-notes';
+import { notesQueryKeys, useUpdateNote } from '@knowtis/data-access-notes';
 import {
   Button,
   Dialog,
@@ -31,7 +34,7 @@ type ToastKey =
   | 'share.permissionEditorToast'
   | 'share.permissionViewerToast';
 
-/** A retained token means the note was shared before, so resuming returns the same link. */
+// A retained token means the note was shared before, so resuming returns the same link.
 function accessToastKey(
   next: GeneralAccessLevel,
   shareToken: string | null
@@ -67,6 +70,20 @@ export function ShareDialog({
 }: ShareDialogProps) {
   const { t } = useTranslation(['notes', 'common']);
   const updateNote = useUpdateNote();
+  const queryClient = useQueryClient();
+
+  // The detail query only refetches on its own staleness, so sharing state
+  // changed from another tab or device can be minutes old when this opens.
+  useEffect(() => {
+    if (open) {
+      void queryClient.invalidateQueries({
+        queryKey: notesQueryKeys.detail(noteId),
+      });
+    }
+  }, [open, queryClient, noteId]);
+
+  const isRefreshing =
+    useIsFetching({ queryKey: notesQueryKeys.detail(noteId) }) > 0;
 
   const isOwner = accessLevel === ACCESS.OWNER;
   const isEditor = accessLevel === ACCESS.EDITOR;
@@ -132,7 +149,7 @@ export function ShareDialog({
             <div className="space-y-2">
               <AccessOptionCard
                 selected={!isPublicAccess}
-                disabled={!canShare || updateNote.isPending}
+                disabled={!canShare || updateNote.isPending || isRefreshing}
                 onClick={() =>
                   handleGeneralAccessChange(GENERAL_ACCESS.RESTRICTED)
                 }
@@ -146,7 +163,7 @@ export function ShareDialog({
               />
               <AccessOptionCard
                 selected={isPublicAccess}
-                disabled={!canShare || updateNote.isPending}
+                disabled={!canShare || updateNote.isPending || isRefreshing}
                 onClick={() =>
                   handleGeneralAccessChange(GENERAL_ACCESS.ANYONE_WITH_LINK)
                 }
@@ -161,7 +178,7 @@ export function ShareDialog({
             <LinkAccessSection
               shareUrl={shareUrl}
               permission={generalAccessPermission}
-              disabled={!canShare || updateNote.isPending}
+              disabled={!canShare || updateNote.isPending || isRefreshing}
               onPermissionChange={handlePermissionChange}
             />
           )}
