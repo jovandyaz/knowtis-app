@@ -82,8 +82,8 @@ When "Anyone with the link" is enabled:
 Key features:
 
 - **Single token per note**: Unlike the old model, there's only one share link per note
-- **No expiration**: Links remain valid until the owner changes access back to "Restricted"
-- **Automatic token management**: Token is generated when enabling link access, cleared when restricting
+- **No expiration**: A link never expires on its own
+- **Permanent token**: The token is minted the first time the note is shared and kept for the life of the note. Setting access back to "Restricted" disables the link without clearing the token, so re-enabling resumes the same URL
 - **Public access**: Shared notes can be accessed without authentication via `/s/:token`
 
 ### 2. Direct Permissions (user-to-user)
@@ -379,15 +379,15 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Application (Handlers)
 
-| File                                                                          | Description                                                |
-| ----------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `apps/api/src/modules/notes/application/queries/get-notes.handler.ts`         | List accessible notes (dashboard)                          |
-| `apps/api/src/modules/notes/application/queries/get-note.handler.ts`          | Get single note with access level                          |
-| `apps/api/src/modules/notes/application/queries/get-note-by-token.handler.ts` | Public note access via share token                         |
-| `apps/api/src/modules/notes/application/commands/update-note.handler.ts`      | Update with permission checks, auto-generates/clears token |
-| `apps/api/src/modules/notes/application/commands/share-note.handler.ts`       | Grant direct permission (upsert), respects editorsCanShare |
-| `apps/api/src/modules/notes/application/commands/revoke-access.handler.ts`    | Remove direct permission                                   |
-| `apps/api/src/modules/notes/application/queries/get-collaborators.handler.ts` | List users with access                                     |
+| File                                                                          | Description                                                         |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `apps/api/src/modules/notes/application/queries/get-notes.handler.ts`         | List accessible notes (dashboard)                                   |
+| `apps/api/src/modules/notes/application/queries/get-note.handler.ts`          | Get single note with access level                                   |
+| `apps/api/src/modules/notes/application/queries/get-note-by-token.handler.ts` | Public note access via share token                                  |
+| `apps/api/src/modules/notes/application/commands/update-note.handler.ts`      | Update with permission checks, mints the share token on first share |
+| `apps/api/src/modules/notes/application/commands/share-note.handler.ts`       | Grant direct permission (upsert), respects editorsCanShare          |
+| `apps/api/src/modules/notes/application/commands/revoke-access.handler.ts`    | Remove direct permission                                            |
+| `apps/api/src/modules/notes/application/queries/get-collaborators.handler.ts` | List users with access                                              |
 
 ### WebSocket
 
