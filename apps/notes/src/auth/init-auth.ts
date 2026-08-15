@@ -1,6 +1,8 @@
 import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
 
-/** Thrown when a non-anonymous user's silent refresh fails at boot. */
+import { classifyRefreshFailure } from '@knowtis/api-client';
+
+/** Thrown when a non-anonymous user's refresh credential is rejected at boot. */
 export class SessionExpiredError extends Error {
   constructor() {
     super('Session expired — silent refresh failed for authenticated user');
@@ -26,9 +28,21 @@ export async function runInitAuth(deps: InitAuthDeps): Promise<void> {
     try {
       await authApi.refreshToken();
     } catch (error) {
-      console.error('[initAuth] Silent refresh failed, logging out', error);
-      authStore.getState().logout();
-      throw new SessionExpiredError();
+      if (classifyRefreshFailure(error) === 'rejected') {
+        console.error(
+          '[initAuth] Refresh credential rejected, logging out',
+          error
+        );
+        authStore.getState().logout();
+        throw new SessionExpiredError();
+      }
+      // Falling through would hand a registered user to the anonymous flow,
+      // whose demotion guard throws the very error this branch is avoiding.
+      console.warn(
+        '[initAuth] Silent refresh unavailable, keeping the session',
+        error
+      );
+      return;
     }
   }
 

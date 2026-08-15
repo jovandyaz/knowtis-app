@@ -38,6 +38,12 @@ export class ApiClientError extends Error {
   }
 }
 
+/**
+ * Resolves the new access token, or null when the refresh credential was
+ * rejected and the session is unrecoverable. A transient failure (server down,
+ * network, throttle) must throw instead — the client then fails the original
+ * request with that error and leaves the session for a later retry.
+ */
 type TokenRefreshCallback = () => Promise<string | null>;
 
 export interface TokenProvider {
@@ -215,11 +221,10 @@ export class HttpClient implements IHttpClient {
     this.refreshPromise = this.refreshTokenCallback();
 
     try {
-      const newToken = await this.refreshPromise;
-      return newToken;
+      return await this.refreshPromise;
     } catch (error) {
       logger.error('Token refresh failed', { error, context: 'HttpClient' });
-      return null;
+      throw error;
     } finally {
       this.isRefreshing = false;
       this.refreshPromise = null;

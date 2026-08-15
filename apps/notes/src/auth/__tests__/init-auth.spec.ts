@@ -1,6 +1,8 @@
 import type { AuthStoreInstance, TokenStorage } from '@jovandyaz/auth-react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
+
 import { runInitAuth, SessionExpiredError } from '../init-auth';
 
 function createMockTokenStorage(hasTokens = false): TokenStorage {
@@ -59,15 +61,18 @@ describe('runInitAuth', () => {
       >()
       .mockResolvedValue(undefined);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
-  it('throws SessionExpiredError when silent refresh fails for a previously authenticated non-anonymous user', async () => {
+  it('throws SessionExpiredError when the refresh credential is rejected', async () => {
     const { store, state } = createMockAuthStore({
       isAuthenticated: true,
       user: { isAnonymous: false },
     });
     const tokenStorage = createMockTokenStorage(false);
-    refreshToken.mockRejectedValue(new Error('refresh-token cookie expired'));
+    refreshToken.mockRejectedValue(
+      new ApiClientError('Invalid refresh token', 401)
+    );
 
     await expect(
       runInitAuth({
@@ -80,6 +85,32 @@ describe('runInitAuth', () => {
 
     expect(refreshToken).toHaveBeenCalledTimes(1);
     expect(state.logout).toHaveBeenCalledTimes(1);
+    expect(initAnonymousSession).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['the server is unavailable', new ApiClientError('Boom', 503)],
+    ['the refresh is throttled', new ApiClientError('Slow down', 429)],
+    ['the network is down', new ApiClientError('Network error', 0)],
+    ['the failure is not an API error', new Error('boom')],
+  ])('keeps a registered user signed in when %s', async (_label, failure) => {
+    const { store, state } = createMockAuthStore({
+      isAuthenticated: true,
+      user: { isAnonymous: false },
+    });
+    const tokenStorage = createMockTokenStorage(false);
+    refreshToken.mockRejectedValue(failure);
+
+    await expect(
+      runInitAuth({
+        authStore: store,
+        authApi: { refreshToken },
+        tokenStorage,
+        initAnonymousSession,
+      })
+    ).resolves.toBeUndefined();
+
+    expect(state.logout).not.toHaveBeenCalled();
     expect(initAnonymousSession).not.toHaveBeenCalled();
   });
 

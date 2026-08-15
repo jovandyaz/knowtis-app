@@ -42,6 +42,11 @@ export {
   withAuthRefreshLock,
 } from './lib/session-refresh';
 
+export {
+  classifyRefreshFailure,
+  type RefreshFailure,
+} from './lib/refresh-failure';
+
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
 export type {
   TokenRefreshPolicy,

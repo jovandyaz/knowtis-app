@@ -49,8 +49,9 @@ createCrossTabSync({
 
 export { performSessionLogout } from './perform-session-logout';
 
-/** Restores session or creates an anonymous one. Throws SessionExpiredError
- *  when a non-anonymous user's silent refresh fails. */
+/** Restores the session or creates an anonymous one. Throws SessionExpiredError
+ *  only when the refresh credential is rejected; a server or network failure
+ *  resolves with the stored session intact, for the first request to retry. */
 export async function initAuth(): Promise<void> {
   await runInitAuth({
     authStore,

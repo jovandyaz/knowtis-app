@@ -146,5 +146,37 @@ describe('HttpClient', () => {
       expect(refreshCallback).toHaveBeenCalled();
       expect(result).toEqual({ data: 'success' });
     });
+
+    it('clears the session when the callback reports a rejected credential', async () => {
+      const refreshCallback = vi.fn().mockResolvedValue(null);
+      client.setRefreshTokenCallback(refreshCallback);
+      tokenProvider.getAccessToken.mockReturnValue('expired-token');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      });
+
+      await expect(client.get('/test')).rejects.toMatchObject({ status: 401 });
+      expect(tokenProvider.clearTokens).toHaveBeenCalled();
+    });
+
+    it('propagates a transient refresh failure without clearing the session', async () => {
+      const refreshCallback = vi
+        .fn()
+        .mockRejectedValue(new ApiClientError('Service Unavailable', 503));
+      client.setRefreshTokenCallback(refreshCallback);
+      tokenProvider.getAccessToken.mockReturnValue('expired-token');
+
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        json: () => Promise.resolve({ message: 'Unauthorized' }),
+      });
+
+      await expect(client.get('/test')).rejects.toMatchObject({ status: 503 });
+      expect(tokenProvider.clearTokens).not.toHaveBeenCalled();
+    });
   });
 });
