@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentClient } from './agent.client';
+import type { RefreshOutcome } from './token-refresh-policy';
 
 const emit = vi.fn();
 const handlers = new Map<string, (payload: unknown) => void>();
@@ -264,11 +265,11 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(callbacks.onError).toHaveBeenCalledWith(AUTH_ERROR);
   });
 
-  it('recovers from mid-stream AUTH_REQUIRED when refresh handler resolves true', async () => {
+  it('recovers from mid-stream AUTH_REQUIRED when refresh handler reports refreshed', async () => {
     let token = 'stale-token';
-    const refresh = vi.fn(async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
       token = 'fresh-token';
-      return true;
+      return 'refreshed';
     });
     const callbacks = {
       onChunk: vi.fn(),
@@ -297,7 +298,7 @@ describe('AgentClient – auth/transport failure paths', () => {
   });
 
   it('invokes session-expired handler and calls onError when auth refresh exhausted', async () => {
-    const refresh = vi.fn(async () => false);
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'rejected');
     const onSessionExpired = vi.fn();
     const callbacks = {
       onChunk: vi.fn(),
@@ -445,10 +446,10 @@ describe('AgentClient – auth/transport failure paths', () => {
     let releaseRefresh = () => {};
     const refresh = vi.fn(
       () =>
-        new Promise<boolean>((resolve) => {
+        new Promise<RefreshOutcome>((resolve) => {
           releaseRefresh = () => {
             token = 'fresh-token';
-            resolve(true);
+            resolve('refreshed');
           };
         })
     );
@@ -589,9 +590,9 @@ describe('AgentClient – auth/transport failure paths', () => {
 
   it('replays the decision, not the original message, after auth recovery', async () => {
     let token: string | null = 'stale-token';
-    const refresh = vi.fn(async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
       token = 'fresh-token';
-      return true;
+      return 'refreshed';
     });
     const callbacks = {
       onChunk: vi.fn(),
@@ -682,9 +683,9 @@ describe('AgentClient – auth/transport failure paths', () => {
 
   it('lets auth recovery resume the turn the expiry disconnect interrupted', async () => {
     let token = 'stale-token';
-    const refresh = vi.fn(async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
       token = 'fresh-token';
-      return true;
+      return 'refreshed';
     });
     const callbacks = {
       onChunk: vi.fn(),

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AIAction } from '@knowtis/shared-types';
 
 import { AIClient, type AICompletePayload } from './ai.client';
+import type { RefreshOutcome } from './token-refresh-policy';
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }));
 
@@ -82,9 +83,9 @@ describe('AIClient', () => {
 
   it('refreshes the token before connecting when none is available', async () => {
     let token: string | null = null;
-    const refresh = vi.fn(async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
       token = 'fresh-token';
-      return true;
+      return 'refreshed';
     });
     client.setTokenProvider({
       getAccessToken: () => token,
@@ -122,9 +123,9 @@ describe('AIClient', () => {
 
   it('recovers from AUTH_REQUIRED by refreshing and re-emitting the request', async () => {
     let token = 'stale-token';
-    const refresh = vi.fn(async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => {
       token = 'fresh-token';
-      return true;
+      return 'refreshed';
     });
     const callbacks = createCallbacks();
     client.setTokenProvider({
@@ -147,7 +148,7 @@ describe('AIClient', () => {
   });
 
   it('fails terminally and signals session expiry when refresh fails', async () => {
-    const refresh = vi.fn(async () => false);
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'rejected');
     const onSessionExpired = vi.fn();
     const callbacks = createCallbacks();
     client.setTokenProvider({
@@ -167,8 +168,31 @@ describe('AIClient', () => {
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a connection failure without ending the session when the refresh is unavailable', async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'unavailable');
+    const onSessionExpired = vi.fn();
+    const callbacks = createCallbacks();
+    client.setTokenProvider({
+      getAccessToken: () => 'stale-token',
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+    client.setSessionExpiredHandler(onSessionExpired);
+
+    client.stream(PAYLOAD, callbacks);
+    await flush();
+
+    fake.trigger('ai:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
   it('does not loop: a second AUTH_REQUIRED after recovery forwards the error', async () => {
-    const refresh = vi.fn(async () => true);
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'refreshed');
     const callbacks = createCallbacks();
     client.setTokenProvider({
       getAccessToken: () => 'token',

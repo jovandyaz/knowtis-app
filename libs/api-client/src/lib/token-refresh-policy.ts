@@ -1,11 +1,22 @@
+/**
+ * `refreshed` means the new token is observable afterwards. `rejected` means the
+ * credential is dead and retrying can never help. `unavailable` means the server
+ * or network never answered, so the credential's fate is still unknown.
+ */
+export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
+
 export interface TokenRefreshHandlers {
-  /** Resolves `true` only when the new token is observable afterwards; `false`/throw is terminal. */
-  refresh: () => Promise<boolean>;
+  refresh: () => Promise<RefreshOutcome>;
   /** Runs after a successful refresh — reconnect and/or replay the request. */
   onRefreshed: () => void;
-  /** Runs when recovery is given up: refresh failed, threw, or was already spent. */
+  /** Runs when the credential is dead, or when the single attempt was already spent. */
   onExhausted: () => void;
-  /** Optional sink for a thrown refresh; `onExhausted` still runs afterwards. */
+  /**
+   * Runs when the refresh could not be judged. The attempt is not spent, so the
+   * transport's own reconnect may try again. Falls back to `onExhausted`.
+   */
+  onUnavailable?: () => void;
+  /** Optional sink for a thrown refresh; the throw is treated as `unavailable`. */
   onError?: (error: unknown) => void;
 }
 
@@ -24,6 +35,11 @@ export function createTokenRefreshPolicy(): TokenRefreshPolicy {
   let attempted = false;
   let inFlight = false;
 
+  function giveTheAttemptBack(handlers: TokenRefreshHandlers): void {
+    attempted = false;
+    (handlers.onUnavailable ?? handlers.onExhausted)();
+  }
+
   return {
     reset() {
       attempted = false;
@@ -41,15 +57,17 @@ export function createTokenRefreshPolicy(): TokenRefreshPolicy {
       attempted = true;
       inFlight = true;
       try {
-        const refreshed = await handlers.refresh();
-        if (refreshed) {
+        const outcome = await handlers.refresh();
+        if (outcome === 'refreshed') {
           handlers.onRefreshed();
-        } else {
+        } else if (outcome === 'rejected') {
           handlers.onExhausted();
+        } else {
+          giveTheAttemptBack(handlers);
         }
       } catch (error) {
         handlers.onError?.(error);
-        handlers.onExhausted();
+        giveTheAttemptBack(handlers);
       } finally {
         inFlight = false;
       }

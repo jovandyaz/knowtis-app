@@ -49,6 +49,7 @@ export {
 
 export { createTokenRefreshPolicy } from './lib/token-refresh-policy';
 export type {
+  RefreshOutcome,
   TokenRefreshPolicy,
   TokenRefreshHandlers,
 } from './lib/token-refresh-policy';

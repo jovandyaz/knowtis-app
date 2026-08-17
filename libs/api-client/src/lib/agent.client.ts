@@ -5,6 +5,7 @@ import { logger } from '@knowtis/shared-util';
 import type { TokenProvider } from './http-client';
 import {
   createTokenRefreshPolicy,
+  type RefreshOutcome,
   type TokenRefreshPolicy,
 } from './token-refresh-policy';
 import { deriveWsBaseUrl } from './ws-url';
@@ -78,7 +79,7 @@ export interface AgentStreamHandle {
   cancel: () => void;
 }
 
-export type AuthRefreshHandler = () => Promise<boolean>;
+export type AuthRefreshHandler = () => Promise<RefreshOutcome>;
 
 /**
  * The turn leg the client replays when it has to open a fresh socket — the
@@ -186,7 +187,7 @@ export class AgentClient {
       return callbacks && request ? { callbacks, request } : null;
     };
     return {
-      refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
+      refresh: () => this.authRefreshHandler?.() ?? Promise.resolve('rejected'),
       onRefreshed: () => {
         this.recoveringAuth = false;
         const pendingRequest = pending();
@@ -195,6 +196,13 @@ export class AgentClient {
         }
         this.teardownSocket();
         this.emitPending(pendingRequest.request, pendingRequest.callbacks);
+      },
+      onUnavailable: () => {
+        this.recoveringAuth = false;
+        const pendingRequest = pending();
+        if (pendingRequest) {
+          this.failRequest(pendingRequest.callbacks, CONNECTION_ERROR);
+        }
       },
       onExhausted: () => {
         this.recoveringAuth = false;
