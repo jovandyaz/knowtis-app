@@ -33,14 +33,11 @@ export function FlashcardStudy({ artifact, readOnly }: FlashcardStudyProps) {
       if (readOnly) {
         return;
       }
-      reviewCard.mutate(
-        { cardIndex: session.currentIndex, quality },
-        {
-          onError: () => {
-            toast.error(t('ai.artifacts.flashcards.reviewError'));
-          },
-        }
-      );
+      void reviewCard
+        .mutateAsync({ cardIndex: session.currentIndex, quality })
+        .catch(() => {
+          toast.error(t('ai.artifacts.flashcards.reviewError'));
+        });
     },
     [session.currentIndex, reviewCard, t, readOnly]
   );

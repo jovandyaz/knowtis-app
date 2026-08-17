@@ -111,25 +111,24 @@ export function ArtifactGeneratorDialog({
 
   const handleGenerate = useCallback(
     (type: ArtifactType) => {
-      generateArtifact.mutate(
-        { noteId, type },
-        {
-          onSuccess: () => {
-            closeGenerator();
-            if (useArtifactSidebarStore.getState().activeNoteId === noteId) {
-              useWorkspaceStore.getState().setTab('estudio');
-            }
-            toast.success(t('ai.artifacts.generate.success'));
-          },
-          onError: (error) => {
-            const message =
-              error instanceof Error
-                ? error.message
-                : t('ai.artifacts.generate.error');
-            toast.error(message);
-          },
-        }
-      );
+      // Generation runs for seconds, so the dialog is often gone before it
+      // settles; per-call mutate callbacks are dropped once that happens.
+      void generateArtifact
+        .mutateAsync({ noteId, type })
+        .then(() => {
+          closeGenerator();
+          if (useArtifactSidebarStore.getState().activeNoteId === noteId) {
+            useWorkspaceStore.getState().setTab('estudio');
+          }
+          toast.success(t('ai.artifacts.generate.success'));
+        })
+        .catch((error: unknown) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : t('ai.artifacts.generate.error');
+          toast.error(message);
+        });
     },
     [noteId, generateArtifact, t, closeGenerator]
   );

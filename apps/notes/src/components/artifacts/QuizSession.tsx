@@ -67,14 +67,9 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
     } else {
       setCompleted(true);
       if (!readOnly) {
-        submitQuiz.mutate(
-          { answers: [...answers] },
-          {
-            onError: () => {
-              toast.error(t('ai.artifacts.quiz.submitError'));
-            },
-          }
-        );
+        void submitQuiz.mutateAsync({ answers: [...answers] }).catch(() => {
+          toast.error(t('ai.artifacts.quiz.submitError'));
+        });
       }
     }
   }, [currentIndex, totalQuestions, answers, submitQuiz, t, readOnly]);
