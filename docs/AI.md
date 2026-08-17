@@ -440,7 +440,7 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 ### The tables
 
-`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate`, `promoted` or `retired`. Promotion stamps `promoted_by` and `promoted_at`.
+`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate` or `promoted`. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
 
 `ai_catalog_alerts` records what needs a human: `deprecation`, `price_drift` and `unavailable` (a curated **or promoted** model upstream stopped listing), each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
@@ -473,13 +473,15 @@ A promoted model can be set as `ai_default_model` or reached through intent conf
 
 Admin surface: the **Model catalog** section of the backoffice AI Config page, over these endpoints (admin JWT; model ids contain `/` and must be percent-encoded in the path).
 
-| Method | Path                             | Purpose                                                 |
-| ------ | -------------------------------- | ------------------------------------------------------- |
-| GET    | `/ai/catalog`                    | Candidates, promoted models and open alerts             |
-| POST   | `/ai/catalog/:id/promote`        | Publish a candidate in the chosen tier                  |
-| POST   | `/ai/catalog/:id/retire`         | Withdraw it from the list and from config reads         |
-| PATCH  | `/ai/catalog/:id`                | Admin-owned label and description; survives later syncs |
-| POST   | `/ai/catalog/alerts/:id/resolve` | Idempotent; keeps the original resolution time          |
+| Method | Path                             | Purpose                                                                   |
+| ------ | -------------------------------- | ------------------------------------------------------------------------- |
+| GET    | `/ai/catalog`                    | Promoted models and open alerts                                           |
+| GET    | `/ai/catalog/candidates`         | One ranked page of the promotion queue; `search` matches id or label      |
+| POST   | `/ai/catalog/sync`               | Run the pass the daily cron runs; reports what it wrote or why it skipped |
+| POST   | `/ai/catalog/:id/promote`        | Publish a candidate in the chosen tier                                    |
+| POST   | `/ai/catalog/:id/retire`         | Withdraw it from serving; it rejoins the candidates                       |
+| PATCH  | `/ai/catalog/:id`                | Admin-owned label and description; survives syncs while promoted          |
+| POST   | `/ai/catalog/alerts/:id/resolve` | Idempotent; keeps the original resolution time                            |
 
 ---
 

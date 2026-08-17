@@ -13,6 +13,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import {
+  CANDIDATE_STATUS,
   CATALOG_ALERT_KINDS,
   CATALOG_DESCRIPTION_MAX_LENGTH,
   CATALOG_LABEL_MAX_LENGTH,
@@ -26,7 +27,6 @@ import {
 
 import { users } from './users.schema';
 
-const DEFAULT_CATALOG_MODEL_STATUS: CatalogModelStatus = 'candidate';
 const DEFAULT_CATALOG_MODEL_TIER: ModelTier = 'open';
 
 /** sql.raw does not escape: only compile-time literal arrays, never runtime-derived strings. */
@@ -51,7 +51,7 @@ export const aiCatalogModels = pgTable(
     status: varchar('status', { length: 16 })
       .$type<CatalogModelStatus>()
       .notNull()
-      .default(DEFAULT_CATALOG_MODEL_STATUS),
+      .default(CANDIDATE_STATUS),
     inputCostPerToken: numeric('input_cost_per_token', {
       precision: 12,
       scale: 10,

@@ -127,6 +127,7 @@ export {
   CATALOG_MODEL_STATUSES,
   type CatalogModelStatus,
   PROMOTED_STATUS,
+  CANDIDATE_STATUS,
   CATALOG_ALERT_KINDS,
   type CatalogAlertKind,
   CATALOG_LABEL_MAX_LENGTH,

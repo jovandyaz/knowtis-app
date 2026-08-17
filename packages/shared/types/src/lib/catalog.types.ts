@@ -1,14 +1,14 @@
 import type { ModelTier } from './ai.types';
 
-export const CATALOG_MODEL_STATUSES = [
-  'candidate',
-  'promoted',
-  'retired',
-] as const;
+export const CATALOG_MODEL_STATUSES = ['candidate', 'promoted'] as const;
 export type CatalogModelStatus = (typeof CATALOG_MODEL_STATUSES)[number];
 
 /** The one status that serves a model to users, so several layers gate on it. */
 export const PROMOTED_STATUS = 'promoted' as const satisfies CatalogModelStatus;
+
+/** The queue status: what the sync discovers, and what retiring returns a model to. */
+export const CANDIDATE_STATUS =
+  'candidate' as const satisfies CatalogModelStatus;
 
 export const CATALOG_ALERT_KINDS = [
   'deprecation',

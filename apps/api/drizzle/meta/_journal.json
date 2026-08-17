@@ -211,6 +211,13 @@
       "when": 1786477730035,
       "tag": "0029_typical_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786990671153,
+      "tag": "0030_brief_fixer",
+      "breakpoints": true
     }
   ]
 }

@@ -207,14 +207,14 @@ describe('AiCatalogAdminService', () => {
   });
 
   describe('retire', () => {
-    it('retires without a tier and refreshes the picker', async () => {
+    it('sends the model back to the candidates queue and refreshes the picker', async () => {
       repository.setStatus.mockResolvedValue(
-        createCatalogModel({ id: MODEL_ID, status: 'retired' })
+        createCatalogModel({ id: MODEL_ID, status: 'candidate' })
       );
 
       const result = await service.retire(MODEL_ID, ACTOR_ID);
 
-      const change: CatalogStatusChange = { status: 'retired' };
+      const change: CatalogStatusChange = { status: 'candidate' };
       expect(repository.setStatus).toHaveBeenCalledWith(
         MODEL_ID,
         change,
@@ -224,7 +224,7 @@ describe('AiCatalogAdminService', () => {
       expect(audit.record).toHaveBeenCalledWith(
         expect.objectContaining({ action: 'ai_catalog.retired' })
       );
-      expect(result?.status).toBe('retired');
+      expect(result?.status).toBe('candidate');
     });
 
     it('returns null for an unknown model without touching the cache', async () => {

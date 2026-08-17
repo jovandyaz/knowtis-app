@@ -984,7 +984,7 @@ describe('useRetireCatalogModel', () => {
   it('encodes the slash in the model id instead of splitting the path', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
-      status: 'retired',
+      status: 'candidate',
     });
 
     const { result } = renderHook(() => useRetireCatalogModel(), {
@@ -996,13 +996,13 @@ describe('useRetireCatalogModel', () => {
     expect(httpClient.post).toHaveBeenCalledWith(
       `${ENCODED_MODEL_PATH}/retire`
     );
-    expect(result.current.data?.status).toBe('retired');
+    expect(result.current.data?.status).toBe('candidate');
   });
 
   it('invalidates the catalog, the selectable models and the audit log', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
-      status: 'retired',
+      status: 'candidate',
     });
 
     const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
@@ -1098,7 +1098,7 @@ describe('catalog mutations and the cached candidates page', () => {
       respond: () =>
         vi
           .mocked(httpClient.post)
-          .mockResolvedValue({ ...CATALOG_MODEL, status: 'retired' }),
+          .mockResolvedValue({ ...CATALOG_MODEL, status: 'candidate' }),
     },
     {
       name: 'useUpdateCatalogCopy',

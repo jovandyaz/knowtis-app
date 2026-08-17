@@ -22,16 +22,16 @@ export interface CandidateUpsert {
   upstreamExpirationDate: Date | null;
 }
 
-/** An admin decision on a tracked model. Promotion carries the tier because that is what decides who can reach the model. */
+/** An admin decision on a tracked model. Promotion carries the tier because that is what decides who can reach the model; retiring sends the model back to the candidates queue. */
 export type CatalogStatusChange =
   | { status: 'promoted'; tier: ModelTier }
-  | { status: 'retired' };
+  | { status: 'candidate' };
 
 export interface AiCatalogRepository {
   listByStatus(status: CatalogModelStatus): Promise<CatalogModel[]>;
   /** Records an upstream sighting: inserts as `candidate`, or refreshes metadata and `lastSeenAt` on an existing model without touching its status. Upstream `label`/`description` only land while the model is still a candidate. */
   upsertCandidate(model: CandidateUpsert): Promise<void>;
-  /** Resolves the updated model, or null when `id` is unknown. Stamps `promotedBy`/`promotedAt` when moving to `promoted`. */
+  /** Resolves the updated model, or null when `id` is unknown. Stamps `promotedBy`/`promotedAt` when moving to `promoted`; moving back to `candidate` clears both and resets the tier. */
   setStatus(
     id: string,
     change: CatalogStatusChange,

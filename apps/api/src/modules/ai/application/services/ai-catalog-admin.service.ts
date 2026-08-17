@@ -1,10 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 
-import { PROMOTED_STATUS } from '@knowtis/shared-types';
+import { CANDIDATE_STATUS, PROMOTED_STATUS } from '@knowtis/shared-types';
 import type {
   CatalogAlertDto,
   CatalogModelDto,
-  CatalogModelStatus,
   CatalogOverviewDto,
   CatalogSyncResultDto,
   ModelTier,
@@ -22,7 +21,6 @@ import {
 import { CatalogSyncTask } from '../../infrastructure/catalog/catalog-sync.task';
 import { PromotedModelsCache } from '../../infrastructure/catalog/promoted-models.cache';
 
-const RETIRED_STATUS = 'retired' as const satisfies CatalogModelStatus;
 const OPEN_ALERTS_ONLY = true;
 
 const CATALOG_MODEL_TARGET = 'ai_catalog_model';
@@ -148,11 +146,11 @@ export class AiCatalogAdminService {
     return toCatalogModelDto(model);
   }
 
-  /** Resolves the retired model, or null when `id` is unknown. */
+  /** Resolves the retired model — back in the candidates queue — or null when `id` is unknown. */
   async retire(id: string, actorId: string): Promise<CatalogModelDto | null> {
     const model = await this.repository.setStatus(
       id,
-      { status: RETIRED_STATUS },
+      { status: CANDIDATE_STATUS },
       actorId
     );
     if (!model) {
