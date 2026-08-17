@@ -244,6 +244,26 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
     );
   });
 
+  it('returns a retired model to the candidates queue', async () => {
+    const promoted = await admin.promote(CHEAP_MODEL_ID, 'powerful', ACTOR_ID);
+    expect(promoted?.status).toBe('promoted');
+
+    const retired = await admin.retire(CHEAP_MODEL_ID, ACTOR_ID);
+    expect(retired?.status).toBe('candidate');
+
+    const { items } = await admin.listCandidates({
+      page: 1,
+      limit: 25,
+      search: CHEAP_MODEL_ID,
+    });
+    expect(items.map((model) => model.id)).toContain(CHEAP_MODEL_ID);
+    expect(items.find((model) => model.id === CHEAP_MODEL_ID)).toMatchObject({
+      status: 'candidate',
+      tier: 'open',
+      promotedAt: null,
+    });
+  });
+
   it('serves edited copy to the picker straight away', async () => {
     await admin.promote(CHEAP_MODEL_ID, 'open', ACTOR_ID);
 

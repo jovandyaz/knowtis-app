@@ -1,6 +1,6 @@
 import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
 
-/** A model tracked in the AI catalog: discovered upstream as a candidate, then promoted or retired by an admin. */
+/** A model tracked in the AI catalog: discovered upstream as a candidate, promoted by an admin, and back to candidate when retired. */
 export interface CatalogModel {
   readonly id: string;
   readonly label: string;

@@ -130,7 +130,8 @@ export class AiCatalogController {
 
   @ApiOperation({
     summary: 'Retire a catalog model',
-    description: 'Withdraws the model from the picker and from config reads.',
+    description:
+      'Withdraws the model from the picker and from config reads; it rejoins the candidates queue.',
   })
   @ApiResponse({ status: 200, description: 'The retired model' })
   @ApiResponse({ status: 404, description: UNKNOWN_MODEL })
@@ -147,7 +148,7 @@ export class AiCatalogController {
   @ApiOperation({
     summary: 'Edit the copy shown for a catalog model',
     description:
-      'Admin-owned label and description. Once set they survive later syncs.',
+      'Admin-owned label and description. Once set they survive later syncs while the model stays promoted; after a retire, the next sync that still lists the model replaces both with upstream copy.',
   })
   @ApiResponse({ status: 200, description: 'The updated model' })
   @ApiResponse({ status: 404, description: UNKNOWN_MODEL })

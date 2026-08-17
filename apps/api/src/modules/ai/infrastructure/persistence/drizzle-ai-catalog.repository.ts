@@ -13,10 +13,11 @@ import {
 } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 
-import { PROMOTED_STATUS } from '@knowtis/shared-types';
+import { CANDIDATE_STATUS, PROMOTED_STATUS } from '@knowtis/shared-types';
 import type {
   CatalogAlertKind,
   CatalogModelStatus,
+  ModelTier,
 } from '@knowtis/shared-types';
 
 import {
@@ -36,9 +37,7 @@ import type {
   CatalogStatusChange,
 } from '../../domain/ports/ai-catalog.repository';
 
-const UPSTREAM_OWNED_COPY_STATUS =
-  'candidate' as const satisfies CatalogModelStatus;
-const CANDIDATE_STATUS = 'candidate' as const satisfies CatalogModelStatus;
+const CANDIDATE_TIER = 'open' as const satisfies ModelTier;
 
 function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
   return {
@@ -77,7 +76,7 @@ function proposed(column: PgColumn) {
 }
 
 function keepCuratedCopy(column: PgColumn) {
-  return sql`case when ${aiCatalogModels.status} = ${UPSTREAM_OWNED_COPY_STATUS} then ${proposed(column)} else ${column} end`;
+  return sql`case when ${aiCatalogModels.status} = ${CANDIDATE_STATUS} then ${proposed(column)} else ${column} end`;
 }
 
 /** SET expressions read the pre-update row, so re-promoting keeps the actor and timestamp of the promotion that actually happened. */
@@ -175,7 +174,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
               sql`now()`
             ),
           }
-        : {};
+        : { tier: CANDIDATE_TIER, promotedBy: null, promotedAt: null };
     const [row] = await this.db
       .update(aiCatalogModels)
       .set({ status: change.status, updatedAt: sql`now()`, ...promotion })

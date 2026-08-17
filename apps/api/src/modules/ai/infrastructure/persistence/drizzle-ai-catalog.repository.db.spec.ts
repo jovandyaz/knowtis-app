@@ -54,7 +54,7 @@ const PRICE_DRIFT_DETAIL = 'input cost rose by 40%';
 
 const PROMOTE_OPEN: CatalogStatusChange = { status: 'promoted', tier: 'open' };
 const PROMOTE_FAST: CatalogStatusChange = { status: 'promoted', tier: 'fast' };
-const RETIRE: CatalogStatusChange = { status: 'retired' };
+const RETIRE: CatalogStatusChange = { status: 'candidate' };
 
 function candidate(
   id: string,
@@ -196,7 +196,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
 
   it('should refresh metadata and lastSeenAt on re-upsert without touching status, curated copy or updatedAt', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
-    await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
+    await repo.setStatus(PRIMARY_MODEL_ID, PROMOTE_OPEN, ACTOR_ID);
     await db
       .update(aiCatalogModels)
       .set({
@@ -219,7 +219,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     const afterUpsert = Date.now();
 
     const row = await readModel(PRIMARY_MODEL_ID);
-    expect(row.status).toBe('retired');
+    expect(row.status).toBe('promoted');
     expect(row.label).toBe(SYNCED_LABEL);
     expect(row.description).toBe(SYNCED_DESCRIPTION);
     expect(row.inputCostPerToken).toBe(REFRESHED_INPUT_COST);
@@ -337,14 +337,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleAiCatalogRepository', () => {
     expect(reTiered?.tier).toBe('open');
   });
 
-  it('should leave the tier untouched when retiring', async () => {
+  it('should reset the tier and promotion stamps when retiring', async () => {
     await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
     await repo.setStatus(PRIMARY_MODEL_ID, PROMOTE_FAST, ACTOR_ID);
 
     const retired = await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
 
-    expect(retired?.status).toBe('retired');
-    expect(retired?.tier).toBe('fast');
+    expect(retired?.status).toBe('candidate');
+    expect(retired?.tier).toBe('open');
+    expect(retired?.promotedBy).toBeNull();
+    expect(retired?.promotedAt).toBeNull();
+  });
+
+  it('should hand copy back to upstream after a model is retired', async () => {
+    await repo.upsertCandidate(candidate(PRIMARY_MODEL_ID));
+    await repo.setStatus(PRIMARY_MODEL_ID, PROMOTE_OPEN, ACTOR_ID);
+    await repo.updateCopy(PRIMARY_MODEL_ID, {
+      label: ADMIN_LABEL,
+      description: ADMIN_DESCRIPTION,
+    });
+    await repo.setStatus(PRIMARY_MODEL_ID, RETIRE, ACTOR_ID);
+
+    await repo.upsertCandidate(
+      candidate(PRIMARY_MODEL_ID, {
+        label: UPSTREAM_RENAMED_LABEL,
+        description: UPSTREAM_RENAMED_DESCRIPTION,
+      })
+    );
+
+    const row = await readModel(PRIMARY_MODEL_ID);
+    expect(row.label).toBe(UPSTREAM_RENAMED_LABEL);
+    expect(row.description).toBe(UPSTREAM_RENAMED_DESCRIPTION);
   });
 
   it('should return null when the target model does not exist', async () => {
