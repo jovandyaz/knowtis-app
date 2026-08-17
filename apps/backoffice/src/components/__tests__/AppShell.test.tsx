@@ -62,6 +62,16 @@ describe('AppShell', () => {
       );
     });
 
+    // jsdom does not lay out: the class is the only observable part of "a wide
+    // table scrolls inside its card instead of widening the whole page".
+    it('lets a wide table scroll inside its card instead of the page', async () => {
+      stubDesktopViewport();
+
+      await renderShell();
+
+      expect(screen.getByRole('main')).toHaveClass('min-w-0');
+    });
+
     it('leaves the navigation sheet unmounted', async () => {
       stubDesktopViewport();
 

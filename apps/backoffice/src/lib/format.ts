@@ -18,3 +18,10 @@ const pricePerMillionFormatter = new Intl.NumberFormat('en-US', {
 export function formatUsdPerMillionTokens(costPerToken: number): string {
   return pricePerMillionFormatter.format(costPerToken * TOKENS_PER_MILLION);
 }
+
+const tokenCountFormatter = new Intl.NumberFormat('en-US');
+
+/** Formats a context-window size with en-US grouping, so a row never mixes number conventions with the pinned price columns beside it. */
+export function formatTokenCount(tokens: number): string {
+  return tokenCountFormatter.format(tokens);
+}

@@ -14,7 +14,7 @@ import type {
 } from '@knowtis/data-access-admin';
 import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
-import { CandidatesTable } from '../CandidatesTable';
+import { CANDIDATES_PAGE_SIZE, CandidatesTable } from '../CandidatesTable';
 
 const { useAiCatalogCandidatesMock, promoteMutate, promoteStateMock } =
   vi.hoisted(() => ({
@@ -41,6 +41,7 @@ const CHEAP_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN / 2;
 const EXPENSIVE_OUTPUT_COST = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4;
 const BYOK_ONLY_BADGE = /byok only/i;
 const TOTAL_CANDIDATES = 97;
+const TOTAL_PAGES = Math.ceil(TOTAL_CANDIDATES / CANDIDATES_PAGE_SIZE);
 
 function Wrapper({ children }: { children: ReactNode }) {
   const client = new QueryClient({
@@ -70,7 +71,12 @@ function model(overrides: Partial<CatalogModel> = {}): CatalogModel {
 }
 
 function page(items: CatalogModel[]): PaginatedCandidates {
-  return { items, total: TOTAL_CANDIDATES, page: 1, limit: 25 };
+  return {
+    items,
+    total: TOTAL_CANDIDATES,
+    page: 1,
+    limit: CANDIDATES_PAGE_SIZE,
+  };
 }
 
 function renderTable(
@@ -150,13 +156,13 @@ describe('CandidatesTable', () => {
   it('should page over the server total rather than the rows in hand', () => {
     renderTable();
 
-    expect(screen.getByText('Page 1 of 4')).toBeInTheDocument();
+    expect(screen.getByText(`Page 1 of ${TOTAL_PAGES}`)).toBeInTheDocument();
   });
 
   it('should ask for one page worth of rows, within the API limit cap', () => {
     renderTable();
 
-    expect(lastParams().limit).toBe(25);
+    expect(lastParams().limit).toBe(CANDIDATES_PAGE_SIZE);
   });
 
   it('should keep the rows on screen while the next page is fetched', () => {
@@ -276,7 +282,7 @@ describe('CandidatesTable', () => {
 
   it('should tell the admin when a search matches nothing', () => {
     useAiCatalogCandidatesMock.mockReturnValue({
-      data: { items: [], total: 0, page: 1, limit: 25 },
+      data: { items: [], total: 0, page: 1, limit: CANDIDATES_PAGE_SIZE },
       isLoading: false,
       isError: false,
       refetch: vi.fn(),

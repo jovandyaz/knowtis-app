@@ -1,7 +1,10 @@
 import { useState } from 'react';
 
+import { formatTokenCount, formatUsdPerMillionTokens } from '@/lib/format';
+
 import type { CatalogModel } from '@knowtis/data-access-admin';
 import {
+  Badge,
   Button,
   Card,
   EmptyState,
@@ -17,6 +20,8 @@ import {
   CATALOG_DESCRIPTION_MAX_LENGTH,
   CATALOG_LABEL_MAX_LENGTH,
 } from '@knowtis/shared-types';
+
+import { isByokOnly } from './catalog-pricing';
 
 interface PromotedCopyEdit {
   id: string;
@@ -56,13 +61,42 @@ function PromotedModelRow({
   return (
     <TableRow>
       <TableCell>
-        <span className="font-mono text-xs text-(--muted-foreground)">
-          {model.id}
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <span
+            className="block max-w-44 truncate font-mono text-xs text-(--muted-foreground)"
+            title={model.id}
+          >
+            {model.id}
+          </span>
+          {isByokOnly(model) ? (
+            <Badge variant="outline">BYOK only</Badge>
+          ) : null}
+        </div>
+      </TableCell>
+      <TableCell>
+        <span className="whitespace-nowrap tabular-nums">
+          {model.intelligenceIndex ?? '—'}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="whitespace-nowrap tabular-nums">
+          {formatUsdPerMillionTokens(model.inputCostPerToken)}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="whitespace-nowrap tabular-nums">
+          {formatUsdPerMillionTokens(model.outputCostPerToken)}
+        </span>
+      </TableCell>
+      <TableCell>
+        <span className="whitespace-nowrap tabular-nums">
+          {formatTokenCount(model.maxInputTokens)}
         </span>
       </TableCell>
       <TableCell>
         <Input
           aria-label={`Label for ${model.id}`}
+          className="min-w-40"
           value={label}
           maxLength={CATALOG_LABEL_MAX_LENGTH}
           disabled={disabled}
@@ -72,6 +106,7 @@ function PromotedModelRow({
       <TableCell>
         <Input
           aria-label={`Description for ${model.id}`}
+          className="min-w-72"
           value={description}
           maxLength={CATALOG_DESCRIPTION_MAX_LENGTH}
           disabled={disabled}
@@ -84,7 +119,7 @@ function PromotedModelRow({
             <Button
               size="sm"
               disabled={disabled}
-              aria-label={`Save ${model.label}`}
+              aria-label={`Save ${label}`}
               onClick={() => onSave(label, description)}
             >
               Save
@@ -94,7 +129,7 @@ function PromotedModelRow({
             variant="ghost"
             size="sm"
             disabled={disabled}
-            aria-label={`Retire ${model.label}`}
+            aria-label={`Retire ${label}`}
             onClick={onRetire}
           >
             Retire
@@ -123,6 +158,11 @@ export function PromotedTable({
       <h3 className="text-sm font-medium text-(--muted-foreground)">
         Promoted ({models.length})
       </h3>
+      <p className="text-xs text-(--muted-foreground)">
+        Label and description are admin-owned and shown in the model list.
+        Retiring a model sends it back to the candidates queue; the next sync
+        that still lists it replaces both with upstream copy.
+      </p>
       {models.length === 0 ? (
         <EmptyState
           title="No promoted model"
@@ -134,9 +174,15 @@ export function PromotedTable({
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Model</TableHead>
+              <TableHead className="whitespace-nowrap">Intelligence</TableHead>
+              <TableHead className="whitespace-nowrap">$/M in</TableHead>
+              <TableHead className="whitespace-nowrap">$/M out</TableHead>
+              <TableHead className="whitespace-nowrap">Context</TableHead>
               <TableHead className="whitespace-nowrap">Label</TableHead>
               <TableHead className="whitespace-nowrap">Description</TableHead>
-              <TableHead />
+              <TableHead>
+                <span className="sr-only">Actions</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
