@@ -41,7 +41,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
             .string()
             .max(20000)
             .describe(
-              'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes). Tables, images and raw HTML are not supported.'
+              'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes, and ```mermaid fenced diagrams). Tables, images and raw HTML are not supported.'
             ),
         }),
         execute: async ({ title, contentMarkdown }) => {
@@ -66,7 +66,7 @@ export class NoteMutateToolGroup implements AgentToolGroup {
               .string()
               .max(20000)
               .describe(
-                'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes). Tables, images and raw HTML are not supported.'
+                'The note body in basic Markdown (headings, lists, bold/italic, links, code, blockquotes, and ```mermaid fenced diagrams). Tables, images and raw HTML are not supported.'
               )
               .optional(),
           })
