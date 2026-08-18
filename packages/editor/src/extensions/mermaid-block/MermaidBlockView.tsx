@@ -60,6 +60,7 @@ export function MermaidBlockView({
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const renderSeqRef = useRef(0);
   const reactId = useId();
   const renderId = `mermaid-${reactId.replace(/:/g, '')}`;
 
@@ -73,12 +74,23 @@ export function MermaidBlockView({
         return;
       }
 
+      // mermaid.render deletes any DOM element with the target id — a reused id wipes the mounted svg
+      const seq = ++renderSeqRef.current;
       try {
         const mermaid = await getMermaid();
-        const { svg: rendered } = await mermaid.render(renderId, source);
+        const { svg: rendered } = await mermaid.render(
+          `${renderId}-${seq}`,
+          source
+        );
+        if (seq !== renderSeqRef.current) {
+          return;
+        }
         setSvg(rendered);
         setError('');
       } catch (err) {
+        if (seq !== renderSeqRef.current) {
+          return;
+        }
         setError(err instanceof Error ? err.message : invalidSyntaxFallback);
       }
     },
