@@ -359,7 +359,8 @@ export function CollaborativeEditor({
           yXmlFragment={editorState.yXmlFragment}
           awareness={editorState.awareness}
           currentUser={editorState.currentUser}
-          initialContent={!wsEnabled || isSynced ? initialContent : ''}
+          // With a live provider the server hydrates; a client seed forks a duplicate CRDT copy
+          initialContent={wsEnabled ? '' : initialContent}
           onUpdate={onUpdate}
           placeholder={resolvedPlaceholder}
           editable={editable}
