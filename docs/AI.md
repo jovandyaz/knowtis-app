@@ -427,9 +427,9 @@ The `ai_openrouter_providers` config key (see [Dynamic Model Configuration](#dyn
 Pricing and context-window data come from [LiteLLM's public pricing JSON](https://github.com/BerriAI/litellm/blob/main/model_prices_and_context_window.json) via `LiteLLMCatalog` (`@knowtis/ai-gateway`):
 
 - A vendored snapshot (`model-prices.snapshot.ts`, regenerated with `node tools/refresh-model-catalog.mjs`) ships with the package so the catalog works offline.
-- With `AI_PRICING_REFRESH_ENABLED=true`, `ModelCatalogAdapter` refreshes from the live JSON at boot (10s timeout, fail-soft to the snapshot).
+- With `AI_PRICING_REFRESH_ENABLED=true`, `ModelCatalogAdapter` refreshes from the live JSON at boot (10s timeout, fail-soft to the snapshot). A refresh that parses but stops fully pricing any curated model is rejected (`ai.catalog.refresh_rejected`) and the previous catalog stays in place — an unpriced model would keep routing at `costUsd = 0`, invisible to the spend breaker.
 - `computeTokenCostUsd` prices each request from the served model's rates, including Anthropic cache read/write token rates. Voice transcription is priced per second of audio (`input_cost_per_second`, mode `audio_transcription`) using the real duration reported by the provider.
-- Unknown models record `costUsd = 0` and log `ai.pricing.unknown_model` once per model.
+- Unknown models record `costUsd = 0` and log `ai.pricing.unknown_model` once per model. A model priced on only one side of a completion logs `ai.pricing.partial_model` once — the missing side is charged at $0.
 
 ---
 
