@@ -12,6 +12,13 @@
         "command": "eslint src"
       }
     },
+    "test": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "packages/shared/i18n",
+        "command": "vitest run"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
