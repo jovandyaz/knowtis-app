@@ -9,7 +9,11 @@ import {
 import type { Awareness } from 'y-protocols/awareness';
 import type * as Y from 'yjs';
 
-import { createTokenRefreshPolicy, deriveWsBaseUrl } from '@knowtis/api-client';
+import {
+  createTokenRefreshPolicy,
+  deriveWsBaseUrl,
+  type RefreshOutcome,
+} from '@knowtis/api-client';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -28,10 +32,11 @@ interface UseHocuspocusCollaborationOptions {
   enabled?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
-  /** Must resolve true only after the new token is synchronously observable
-   *  via `getCollaborationToken()`'s storage. False/throw is terminal. */
-  onAuthRefresh?: (() => Promise<boolean>) | undefined;
-  /** Fired once after `onAuthRefresh` resolves false or throws. */
+  /** Must resolve `refreshed` only after the new token is synchronously
+   *  observable via `getCollaborationToken()`'s storage. Only `rejected` ends
+   *  the session; `unavailable` leaves the retry to the next reconnect. */
+  onAuthRefresh?: (() => Promise<RefreshOutcome>) | undefined;
+  /** Fired once after `onAuthRefresh` reports the credential is dead. */
   onSessionExpired?: (() => void) | undefined;
 }
 
@@ -143,9 +148,13 @@ export function useHocuspocusCollaboration({
         setStatus('authenticationFailed');
 
         void authPolicy.recover({
-          refresh: () => onAuthRefreshRef.current?.() ?? Promise.resolve(false),
-          // v4 auto-reconnect re-invokes getToken() on next onOpen; destroy would block it.
+          refresh: () =>
+            onAuthRefreshRef.current?.() ?? Promise.resolve('rejected'),
+          // v4 auto-reconnect re-invokes getToken() on next onOpen, both to pick
+          // up a fresh token and to retry one the server never judged; destroy
+          // would block either.
           onRefreshed: () => {},
+          onUnavailable: () => {},
           onExhausted: () => {
             if (disposed) {
               return;

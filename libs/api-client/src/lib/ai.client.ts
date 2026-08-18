@@ -6,6 +6,7 @@ import { logger } from '@knowtis/shared-util';
 import type { TokenProvider } from './http-client';
 import {
   createTokenRefreshPolicy,
+  type RefreshOutcome,
   type TokenRefreshPolicy,
 } from './token-refresh-policy';
 import { deriveWsBaseUrl } from './ws-url';
@@ -49,8 +50,8 @@ export interface AIStreamHandle {
   cancel: () => void;
 }
 
-/** Resolves `true` only when the new token is observable via the wired `TokenProvider`. */
-export type AuthRefreshHandler = () => Promise<boolean>;
+/** Resolves `refreshed` only when the new token is observable via the wired `TokenProvider`. */
+export type AuthRefreshHandler = () => Promise<RefreshOutcome>;
 
 const AUTH_REQUIRED_CODE = 'AUTH_REQUIRED';
 const AUTH_ERROR: AIErrorPayload = {
@@ -153,7 +154,7 @@ export class AIClient {
       return callbacks && payload ? { callbacks, payload } : null;
     };
     return {
-      refresh: () => this.authRefreshHandler?.() ?? Promise.resolve(false),
+      refresh: () => this.authRefreshHandler?.() ?? Promise.resolve('rejected'),
       onRefreshed: () => {
         this.recoveringAuth = false;
         const request = pending();
@@ -162,6 +163,13 @@ export class AIClient {
         }
         this.teardownSocket();
         this.openAndEmit(request.payload, request.callbacks);
+      },
+      onUnavailable: () => {
+        this.recoveringAuth = false;
+        const request = pending();
+        if (request) {
+          this.failRequest(request.callbacks, CONNECTION_ERROR);
+        }
       },
       onExhausted: () => {
         this.recoveringAuth = false;

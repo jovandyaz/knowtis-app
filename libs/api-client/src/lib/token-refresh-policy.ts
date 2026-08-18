@@ -1,11 +1,25 @@
+import type { RefreshFailure } from './refresh-failure';
+
+/**
+ * `refreshed` means the new token is observable afterwards. `rejected` means the
+ * credential is dead and retrying can never help. `unavailable` means the server
+ * or network never answered, so the credential's fate is still unknown.
+ */
+export type RefreshOutcome = 'refreshed' | RefreshFailure;
+
 export interface TokenRefreshHandlers {
-  /** Resolves `true` only when the new token is observable afterwards; `false`/throw is terminal. */
-  refresh: () => Promise<boolean>;
+  refresh: () => Promise<RefreshOutcome>;
   /** Runs after a successful refresh — reconnect and/or replay the request. */
   onRefreshed: () => void;
-  /** Runs when recovery is given up: refresh failed, threw, or was already spent. */
+  /** Runs when the credential is dead, or when the single attempt was already spent. */
   onExhausted: () => void;
-  /** Optional sink for a thrown refresh; `onExhausted` still runs afterwards. */
+  /**
+   * Runs when the refresh could not be judged. Required, because the attempt is
+   * not spent and the transport's own reconnect is what must try again — a
+   * consumer that cannot do that has to say so by ending the session itself.
+   */
+  onUnavailable: () => void;
+  /** Optional sink for a thrown refresh; the throw is treated as `unavailable`. */
   onError?: (error: unknown) => void;
 }
 
@@ -15,14 +29,20 @@ export interface TokenRefreshPolicy {
 }
 
 /**
- * Transport-agnostic "refresh the token once, then give up" policy shared by the
- * AI Socket.IO client and the Hocuspocus collaboration provider. Holds the
- * spent/in-flight guards; each consumer supplies its own refresh, reconnect, and
- * teardown effects per call.
+ * Transport-agnostic single-attempt token refresh, shared by the AI and agent
+ * Socket.IO clients and the Hocuspocus collaboration provider. The attempt is
+ * only spent on a judged outcome: an `unavailable` refresh hands it back so the
+ * transport's own reconnect can try again. Each consumer supplies its own
+ * refresh, reconnect, and teardown effects per call.
  */
 export function createTokenRefreshPolicy(): TokenRefreshPolicy {
   let attempted = false;
   let inFlight = false;
+
+  function giveTheAttemptBack(handlers: TokenRefreshHandlers): void {
+    attempted = false;
+    handlers.onUnavailable();
+  }
 
   return {
     reset() {
@@ -40,18 +60,30 @@ export function createTokenRefreshPolicy(): TokenRefreshPolicy {
 
       attempted = true;
       inFlight = true;
+      let outcome: RefreshOutcome;
       try {
-        const refreshed = await handlers.refresh();
-        if (refreshed) {
-          handlers.onRefreshed();
-        } else {
-          handlers.onExhausted();
-        }
+        outcome = await handlers.refresh();
       } catch (error) {
         handlers.onError?.(error);
-        handlers.onExhausted();
+        outcome = 'unavailable';
       } finally {
         inFlight = false;
+      }
+
+      switch (outcome) {
+        case 'refreshed':
+          handlers.onRefreshed();
+          break;
+        case 'rejected':
+          handlers.onExhausted();
+          break;
+        case 'unavailable':
+          giveTheAttemptBack(handlers);
+          break;
+        default: {
+          const unhandled: never = outcome;
+          throw new Error(`Unhandled refresh outcome: ${String(unhandled)}`);
+        }
       }
     },
   };

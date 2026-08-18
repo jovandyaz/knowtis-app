@@ -4,7 +4,13 @@ import {
   createTokenStorage,
 } from '@jovandyaz/auth-react';
 
-import { agentClient, aiClient, httpClient } from '@knowtis/api-client';
+import {
+  agentClient,
+  aiClient,
+  classifyRefreshFailure,
+  httpClient,
+  type RefreshOutcome,
+} from '@knowtis/api-client';
 
 import { setTokenStorage as setCollaborationTokenStorage } from '../collaboration/token-provider';
 import { initAnonymousSession } from './anonymous-session';
@@ -70,14 +76,18 @@ export async function ensureGuestSession(): Promise<boolean> {
   });
 }
 
-/** Resolves true only when the refresh succeeded AND tokenStorage has the new token. */
-export async function refreshAccessToken(): Promise<boolean> {
+/**
+ * Resolves `refreshed` only when the new token is observable afterwards.
+ * Distinguishes a dead credential from an unreachable server so a socket can
+ * reconnect through a blip instead of tearing the session down.
+ */
+export async function refreshAccessToken(): Promise<RefreshOutcome> {
   try {
     await authApi.refreshToken();
-    return tokenStorage.hasTokens();
+    return tokenStorage.hasTokens() ? 'refreshed' : 'rejected';
   } catch (error) {
     console.warn('[refreshAccessToken] refresh failed', error);
-    return false;
+    return classifyRefreshFailure(error);
   }
 }
 
