@@ -84,7 +84,7 @@ export function CopilotModelPicker() {
             size="sm"
             className="text-xs text-(--muted-foreground)"
             title={t('aiAssistant.byok.bridgeHint')}
-            onClick={() => openSettings('aiAssistant')}
+            onClick={() => openSettings('aiAssistant', 'aiKeys')}
           >
             {t('aiAssistant.byok.bridge')}
           </Button>

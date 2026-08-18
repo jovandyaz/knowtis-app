@@ -151,4 +151,20 @@ describe('AIKeysManager', () => {
       screen.getByText(/aiAssistant\.byok\.neverUsed/)
     ).toBeInTheDocument();
   });
+
+  it('puts the cursor in the first key field when opened to add a key', () => {
+    render(<AIKeysManager focusFirstField />);
+
+    expect(
+      screen.getAllByPlaceholderText(/aiAssistant\.byok\.placeholder/i)[0]
+    ).toHaveFocus();
+  });
+
+  it('leaves focus alone when reached from the settings nav', () => {
+    render(<AIKeysManager />);
+
+    expect(
+      screen.getAllByPlaceholderText(/aiAssistant\.byok\.placeholder/i)[0]
+    ).not.toHaveFocus();
+  });
 });

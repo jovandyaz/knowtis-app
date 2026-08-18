@@ -1,3 +1,4 @@
+import { useSettingsStore } from '@/stores/settings.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +20,11 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: (key: string) => featureFlag(key),
 }));
 vi.mock('./AIKeysManager', () => ({
-  AIKeysManager: () => <div>byok-keys-manager</div>,
+  AIKeysManager: ({ focusFirstField }: { focusFirstField?: boolean }) => (
+    <div>
+      {focusFirstField ? 'byok-keys-manager-focused' : 'byok-keys-manager'}
+    </div>
+  ),
 }));
 vi.mock('@/hooks', () => ({
   useAvailableModels: () => ({
@@ -91,6 +96,7 @@ function enableFlags(...keys: string[]) {
 describe('AIAssistantSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useSettingsStore.setState({ focusTarget: null });
     enableFlags(FEATURE_FLAG_KEYS.AGENT_BYOK);
     modelsData.mockReturnValue(grantedModels);
     modelsError.mockReturnValue(false);
@@ -124,6 +130,13 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getByText('byok-keys-manager')).toBeInTheDocument();
+  });
+
+  it('lands on the key form when the section was opened to add a key', () => {
+    useSettingsStore.setState({ focusTarget: 'aiKeys' });
+    render(<AIAssistantSection />);
+
+    expect(screen.getByText('byok-keys-manager-focused')).toBeInTheDocument();
   });
 
   it('renders the chips without the keys manager when key management is off', () => {

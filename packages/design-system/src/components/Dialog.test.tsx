@@ -1,3 +1,5 @@
+import { useEffect, useRef } from 'react';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -118,6 +120,30 @@ describe('Dialog accessibility', () => {
 
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: 'Dashboard' })
+    );
+  });
+
+  it('leaves focus where the content already put it', () => {
+    function SelfFocusingField() {
+      const ref = useRef<HTMLInputElement>(null);
+      useEffect(() => {
+        ref.current?.focus();
+      }, []);
+      return <input ref={ref} aria-label="API key" />;
+    }
+
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent>
+          <DialogTitle>Navigation</DialogTitle>
+          <button type="button">Dashboard</button>
+          <SelfFocusingField />
+        </DialogContent>
+      </Dialog>
+    );
+
+    expect(document.activeElement).toBe(
+      screen.getByRole('textbox', { name: 'API key' })
     );
   });
 
