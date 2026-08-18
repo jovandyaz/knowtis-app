@@ -10,7 +10,10 @@ import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
-import { yDocToHtml } from '../../notes/infrastructure/html-to-yjs';
+import {
+  htmlToYjsState,
+  yDocToHtml,
+} from '../../notes/infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../notes/infrastructure/trivial-html';
 import { HandshakeError } from '../handshake-error';
 
@@ -44,8 +47,25 @@ export class HocuspocusPersistenceExtension {
           // keystroke defeats the trivial-fragment guard and overwrites the note.
           throw new HandshakeError(HANDSHAKE_FAILURE.INTERNAL_ERROR);
         }
-        if (!note?.yjsState) {
+        if (!note) {
           return null;
+        }
+        if (!note.yjsState) {
+          // Legacy notes have no CRDT state; hydrating server-side keeps clients from seeding (a client seed races the sync into duplicates)
+          if (isTrivialHtml(note.content)) {
+            return null;
+          }
+          try {
+            const doc = new Y.Doc();
+            Y.applyUpdate(doc, new Uint8Array(htmlToYjsState(note.content)));
+            return doc;
+          } catch (error) {
+            logger.error(
+              `Failed to hydrate legacy note ${documentName} from HTML`,
+              error instanceof Error ? error.stack : error
+            );
+            return null;
+          }
         }
 
         const doc = new Y.Doc();

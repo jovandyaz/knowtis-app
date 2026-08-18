@@ -35,9 +35,13 @@ describe('HocuspocusPersistenceExtension', () => {
     ).toContain('Hello');
   });
 
-  it('should return null when note has no stored state', async () => {
+  it('should return null when note has no stored state and trivial content', async () => {
     const repo = {
-      findById: vi.fn().mockResolvedValue({ id: 'note-1', yjsState: null }),
+      findById: vi.fn().mockResolvedValue({
+        id: 'note-1',
+        yjsState: null,
+        content: '<p></p>',
+      }),
     } as unknown as NoteRepository;
 
     const ext = new HocuspocusPersistenceExtension(repo);
@@ -46,6 +50,51 @@ describe('HocuspocusPersistenceExtension', () => {
     } as never);
 
     expect(loaded).toBeNull();
+  });
+
+  it('should hydrate legacy notes from HTML content when yjsState is missing', async () => {
+    const repo = {
+      findById: vi.fn().mockResolvedValue({
+        id: 'note-1',
+        yjsState: null,
+        content: '<h2>Legacy</h2><p>body text</p>',
+      }),
+    } as unknown as NoteRepository;
+
+    const ext = new HocuspocusPersistenceExtension(repo);
+    const loaded = await ext.toExtension().onLoadDocument?.({
+      documentName: 'note-1',
+    } as never);
+
+    expect(loaded).toBeInstanceOf(Y.Doc);
+    const text = (loaded as Y.Doc)
+      .getXmlFragment(YJS_XML_FRAGMENT_NAME)
+      .toString();
+    expect(text).toContain('Legacy');
+    expect(text).toContain('body text');
+  });
+
+  it('should return null when legacy HTML conversion fails', async () => {
+    const repo = {
+      findById: vi.fn().mockResolvedValue({
+        id: 'note-1',
+        yjsState: null,
+        content: '<h2>Legacy</h2>',
+      }),
+    } as unknown as NoteRepository;
+    const spy = vi
+      .spyOn(htmlToYjs, 'htmlToYjsState')
+      .mockImplementation(() => {
+        throw new Error('parser exploded');
+      });
+
+    const ext = new HocuspocusPersistenceExtension(repo);
+    const loaded = await ext.toExtension().onLoadDocument?.({
+      documentName: 'note-1',
+    } as never);
+
+    expect(loaded).toBeNull();
+    spy.mockRestore();
   });
 
   it('should return null when note does not exist', async () => {
