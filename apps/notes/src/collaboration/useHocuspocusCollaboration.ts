@@ -14,6 +14,7 @@ import {
   deriveWsBaseUrl,
   type RefreshOutcome,
 } from '@knowtis/api-client';
+import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -22,7 +23,17 @@ export type CollaborationStatus =
   | 'connecting'
   | 'connected'
   | 'disconnected'
-  | 'authenticationFailed';
+  | 'authenticationFailed'
+  | 'accessDenied';
+
+/**
+ * Handshake verdicts about the note itself. Refreshing cannot change them, and
+ * reconnecting re-asks a question whose answer is already final.
+ */
+const TERMINAL_HANDSHAKE_DENIALS: ReadonlySet<string> = new Set([
+  HANDSHAKE_FAILURE.FORBIDDEN,
+  HANDSHAKE_FAILURE.NOTE_NOT_FOUND,
+]);
 
 interface UseHocuspocusCollaborationOptions {
   noteId: string;
@@ -145,8 +156,20 @@ export function useHocuspocusCollaboration({
         logger.warn(`Hocuspocus authentication failed: ${reason}`, {
           context: 'useHocuspocusCollaboration',
         });
+        if (TERMINAL_HANDSHAKE_DENIALS.has(reason)) {
+          setStatus('accessDenied');
+          provider.destroy();
+          return;
+        }
         setStatus('authenticationFailed');
+        // The server itself failed; a new token cannot change that answer, so
+        // the reconnect keeps the retry without spending the refresh attempt.
+        if (reason === HANDSHAKE_FAILURE.INTERNAL_ERROR) {
+          return;
+        }
 
+        // Credential reasons — and anything unrecognised, which an older server
+        // collapses into 'permission-denied' — get the single refresh attempt.
         void authPolicy.recover({
           refresh: () =>
             onAuthRefreshRef.current?.() ?? Promise.resolve('rejected'),

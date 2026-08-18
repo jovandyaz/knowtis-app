@@ -24,7 +24,7 @@ import { useAIMenuStore } from '@/stores/ai-menu.store';
 import { useAIStore } from '@/stores/ai.store';
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
 
-import { cn } from '@knowtis/design-system';
+import { cn, ErrorState } from '@knowtis/design-system';
 import {
   CollaborationIndicator,
   EditorErrorBoundary,
@@ -298,7 +298,7 @@ export function CollaborativeEditor({
   }, [navigate, shareToken, onEditDenied]);
 
   const wsEnabled = collaborationEnabled && isWebSocketEnabled();
-  const { isConnected, isSynced } = useHocuspocusCollaboration({
+  const { status, isConnected, isSynced } = useHocuspocusCollaboration({
     noteId,
     yDoc: editorState.yDoc,
     awareness: editorState.awareness,
@@ -309,6 +309,7 @@ export function CollaborativeEditor({
     onAuthRefresh: refreshAccessToken,
     onSessionExpired: handleSessionExpired,
   });
+  const accessDenied = status === 'accessDenied';
 
   useEffect(() => {
     onLiveCollaborationChange?.(wsEnabled && isConnected && isSynced);
@@ -318,6 +319,17 @@ export function CollaborativeEditor({
     return (
       <div className={cn('relative', className)}>
         <EditorLoadingState />
+      </div>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <div className={cn('relative', className)}>
+        <ErrorState
+          title={t('editor.accessLost')}
+          message={t('editor.accessLostDesc')}
+        />
       </div>
     );
   }

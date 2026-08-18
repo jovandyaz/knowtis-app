@@ -5,6 +5,7 @@ import { Awareness } from 'y-protocols/awareness';
 import * as Y from 'yjs';
 
 import type { RefreshOutcome } from '@knowtis/api-client';
+import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
 import { useHocuspocusCollaboration } from '../useHocuspocusCollaboration';
 
@@ -59,8 +60,8 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
 
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(1);
@@ -87,7 +88,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
 
     await waitFor(() => {
       expect(provider.destroy).toHaveBeenCalledTimes(1);
@@ -131,7 +132,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
 
     await waitFor(() => {
       expect(provider.destroy).toHaveBeenCalledTimes(1);
@@ -159,7 +160,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
 
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(1);
@@ -188,12 +189,12 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(1);
     });
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(2);
     });
@@ -228,8 +229,8 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
 
     resolveRefresh?.('refreshed');
 
@@ -242,6 +243,92 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
 
     expect(provider.destroy).not.toHaveBeenCalled();
     expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('rules the note out on denial without touching the session', async () => {
+    const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
+    const onSessionExpired = vi.fn();
+
+    const { result } = renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.FORBIDDEN });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('accessDenied');
+    });
+    expect(provider.destroy).toHaveBeenCalledTimes(1);
+    expect(onAuthRefresh).not.toHaveBeenCalled();
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('leaves a server fault to the reconnect without spending the refresh attempt', async () => {
+    const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
+    const onSessionExpired = vi.fn();
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INTERNAL_ERROR });
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onAuthRefresh).not.toHaveBeenCalled();
+    expect(provider.destroy).not.toHaveBeenCalled();
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('gives an unrecognised reason the refresh attempt, like an older server would need', async () => {
+    const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: 'permission-denied' });
+
+    await waitFor(() => {
+      expect(onAuthRefresh).toHaveBeenCalledTimes(1);
+    });
+    expect(provider.destroy).not.toHaveBeenCalled();
   });
 
   it('does not fire onSessionExpired when the hook unmounts before a rejected refresh lands', async () => {
@@ -270,7 +357,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: 'jwt expired' });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INVALID_TOKEN });
     unmount();
     resolveRefresh?.('rejected');
 

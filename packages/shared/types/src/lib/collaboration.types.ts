@@ -84,3 +84,22 @@ export interface UserLeftPayload {
   userId: string;
   name: string;
 }
+
+/**
+ * Reasons the API refuses the collaboration handshake. They reach the client's
+ * `onAuthenticationFailed` verbatim only when thrown on an error exposing them
+ * as `reason` — hocuspocus transmits `error.reason ?? 'permission-denied'` —
+ * and the wire can still carry strings outside this catalog (older servers, the
+ * provider's own synthesized failures), so consumers must treat an unknown
+ * reason as exactly that.
+ */
+export const HANDSHAKE_FAILURE = {
+  AUTH_REQUIRED: 'Authentication required',
+  INVALID_TOKEN: 'Invalid token',
+  FORBIDDEN: 'Forbidden',
+  NOTE_NOT_FOUND: 'Note not found',
+  INTERNAL_ERROR: 'Internal server error',
+} as const;
+
+export type HandshakeFailureReason =
+  (typeof HANDSHAKE_FAILURE)[keyof typeof HANDSHAKE_FAILURE];

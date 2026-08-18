@@ -23,6 +23,8 @@
     "loadingNote": "Cargando nota...",
     "failedToLoad": "Error al cargar la nota",
     "notFound": "Nota no encontrada",
+    "accessLost": "El acceso a esta nota terminó",
+    "accessLostDesc": "El dueño pudo haber revocado tu acceso, o la nota fue eliminada. Tu cuenta y sesión no se ven afectadas.",
     "loadingEditor": "Cargando editor...",
     "connected": "Conectado al servidor",
     "connecting": "Conectando...",
