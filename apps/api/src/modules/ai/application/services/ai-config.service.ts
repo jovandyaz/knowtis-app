@@ -43,7 +43,6 @@ type ConfigKeyDef =
 const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;
 
-/** Parses a dollars-per-million-output-tokens ceiling, or null when the value is not one. */
 function parseUsdPerMillion(value: string): number | null {
   const trimmed = value.trim();
   if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
@@ -391,9 +390,11 @@ export class AIConfigService {
 
   /** The stored string in the form the runtime parses it, so whitespace alone never reads as a divergence. */
   private canonical(key: ConfigKey, value: string): string {
-    return CONFIG_KEYS[key].kind === 'chain'
-      ? parseChain(value).join(CHAIN_SEPARATOR)
-      : value;
+    const { kind } = CONFIG_KEYS[key];
+    if (kind === 'chain') {
+      return parseChain(value).join(CHAIN_SEPARATOR);
+    }
+    return kind === 'money' ? value.trim() : value;
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */

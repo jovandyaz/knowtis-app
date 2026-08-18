@@ -582,6 +582,22 @@ describe('AIConfigService', () => {
       }
     });
 
+    it('should read a padded ceiling as the operator set it, not as a stale row', async () => {
+      const row = {
+        key: 'ai_free_tier_ceiling',
+        value: ' 2.50 ',
+        description: null,
+        updatedAt: null,
+      };
+      mockRepo.getAllRows.mockResolvedValue([row]);
+
+      const entries = await service.getEffectiveConfig();
+
+      expect(
+        entries.find((e) => e.key === 'ai_free_tier_ceiling')
+      ).toMatchObject({ source: 'custom', value: '2.50', storedValue: null });
+    });
+
     it('should persist a valid ceiling', async () => {
       await service.setConfig('ai_free_tier_ceiling', '2.50', ACTOR);
 
