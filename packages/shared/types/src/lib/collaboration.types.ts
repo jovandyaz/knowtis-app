@@ -86,9 +86,12 @@ export interface UserLeftPayload {
 }
 
 /**
- * Reasons the collaboration handshake can be refused. Hocuspocus delivers the
- * message thrown by `onAuthenticate` to the client verbatim as `reason`, so
- * both sides must agree on these strings exactly.
+ * Reasons the API refuses the collaboration handshake. They reach the client's
+ * `onAuthenticationFailed` verbatim only when thrown on an error exposing them
+ * as `reason` — hocuspocus transmits `error.reason ?? 'permission-denied'` —
+ * and the wire can still carry strings outside this catalog (older servers, the
+ * provider's own synthesized failures), so consumers must treat an unknown
+ * reason as exactly that.
  */
 export const HANDSHAKE_FAILURE = {
   AUTH_REQUIRED: 'Authentication required',
@@ -100,12 +103,3 @@ export const HANDSHAKE_FAILURE = {
 
 export type HandshakeFailureReason =
   (typeof HANDSHAKE_FAILURE)[keyof typeof HANDSHAKE_FAILURE];
-
-/**
- * The reasons a token refresh can repair. Every other reason describes the note
- * or the server, so a new token cannot change the answer.
- */
-export const CREDENTIAL_HANDSHAKE_FAILURES: ReadonlySet<string> = new Set([
-  HANDSHAKE_FAILURE.AUTH_REQUIRED,
-  HANDSHAKE_FAILURE.INVALID_TOKEN,
-]);

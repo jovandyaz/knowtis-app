@@ -32,6 +32,24 @@ const buildPayload = (
 });
 
 describe('HocuspocusAuthExtension', () => {
+  it('should reject with errors that carry the reason where hocuspocus reads it', async () => {
+    const ext = new HocuspocusAuthExtension(
+      { verify: vi.fn() } as never,
+      { findById: vi.fn() } as never,
+      { findById: vi.fn() } as unknown as NoteRepository
+    );
+
+    const extension = ext.toExtension();
+    const thrown = await extension
+      .onAuthenticate?.(buildPayload('') as never)
+      .then(() => null)
+      .catch((error: unknown) => error);
+
+    // @hocuspocus/server transmits `error.reason ?? 'permission-denied'` to the
+    // client; an error without the property collapses every rejection into one.
+    expect(thrown).toMatchObject({ reason: HANDSHAKE_FAILURE.AUTH_REQUIRED });
+  });
+
   it('should reject connection without token', async () => {
     const ext = new HocuspocusAuthExtension(
       { verify: vi.fn() } as never,

@@ -6,11 +6,13 @@ import {
   isTrivialFragment,
   YJS_XML_FRAGMENT_NAME,
 } from '@knowtis/editor-schema';
+import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
 import { NOTE_REPOSITORY } from '../../notes/domain';
 import type { NoteRepository } from '../../notes/domain';
 import { yDocToHtml } from '../../notes/infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../notes/infrastructure/trivial-html';
+import { HandshakeError } from '../handshake-error';
 
 @Injectable()
 export class HocuspocusPersistenceExtension {
@@ -30,7 +32,18 @@ export class HocuspocusPersistenceExtension {
       extensionName: 'KnowtisPersistence',
 
       async onLoadDocument({ documentName }) {
-        const note = await noteRepository.findById(documentName);
+        let note;
+        try {
+          note = await noteRepository.findById(documentName);
+        } catch (error) {
+          logger.error(
+            `Failed to load note ${documentName} for hydration`,
+            error instanceof Error ? error.stack : error
+          );
+          // Returning null would hand the editor a blank doc whose first
+          // keystroke defeats the trivial-fragment guard and overwrites the note.
+          throw new HandshakeError(HANDSHAKE_FAILURE.INTERNAL_ERROR);
+        }
         if (!note?.yjsState) {
           return null;
         }

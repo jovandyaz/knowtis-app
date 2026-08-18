@@ -23,6 +23,8 @@
     "loadingNote": "Loading note...",
     "failedToLoad": "Failed to load note",
     "notFound": "Note not found",
+    "accessLost": "Access to this note ended",
+    "accessLostDesc": "The owner may have revoked your access, or the note was deleted. Your account and session are unaffected.",
     "loadingEditor": "Loading editor...",
     "connected": "Connected to server",
     "connecting": "Connecting...",

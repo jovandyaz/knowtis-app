@@ -24,6 +24,7 @@ import {
   MAX_TIMER_DELAY_MS,
   TOKEN_EXPIRY_GRACE_MS,
 } from '../../websocket/socket-expiry';
+import { HandshakeError } from '../handshake-error';
 
 type AuthenticatedUser = Awaited<ReturnType<UsersService['findById']>>;
 
@@ -135,17 +136,14 @@ export class HocuspocusAuthExtension {
       // unexpected DB/repo failures are normalised so the raw error message
       // (which may include connection strings, SQL, table names) is never
       // delivered as the WebSocket close reason.
-      if (
-        error instanceof Error &&
-        error.message === HANDSHAKE_FAILURE.NOTE_NOT_FOUND
-      ) {
+      if (error instanceof HandshakeError) {
         throw error;
       }
       this.logger.error(
         `Internal error during auth for note ${documentName}`,
         error instanceof Error ? error.stack : error
       );
-      throw new Error(HANDSHAKE_FAILURE.INTERNAL_ERROR);
+      throw new HandshakeError(HANDSHAKE_FAILURE.INTERNAL_ERROR);
     }
 
     const sharedNotes = this.buildSharedNotes(
@@ -171,7 +169,7 @@ export class HocuspocusAuthExtension {
     documentName: string
   ): Promise<{ user: AuthenticatedUser; tokenExpiresAtMs?: number }> {
     if (!token) {
-      throw new Error(HANDSHAKE_FAILURE.AUTH_REQUIRED);
+      throw new HandshakeError(HANDSHAKE_FAILURE.AUTH_REQUIRED);
     }
 
     let payload: JwtPayload;
@@ -183,14 +181,14 @@ export class HocuspocusAuthExtension {
       this.logger.warn(
         `Invalid JWT token for note ${documentName}: ${error instanceof Error ? error.message : error}`
       );
-      throw new Error(HANDSHAKE_FAILURE.INVALID_TOKEN);
+      throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }
 
     if (payload.source === TOKEN_SOURCE_MCP) {
       this.logger.warn(
         `MCP token rejected for collaboration handshake on note ${documentName}`
       );
-      throw new Error(HANDSHAKE_FAILURE.FORBIDDEN);
+      throw new HandshakeError(HANDSHAKE_FAILURE.FORBIDDEN);
     }
 
     let user: AuthenticatedUser | null;
@@ -201,10 +199,10 @@ export class HocuspocusAuthExtension {
         `Failed to load user ${payload.sub} during auth for note ${documentName}`,
         error instanceof Error ? error.stack : error
       );
-      throw new Error(HANDSHAKE_FAILURE.INVALID_TOKEN);
+      throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }
     if (!user) {
-      throw new Error(HANDSHAKE_FAILURE.INVALID_TOKEN);
+      throw new HandshakeError(HANDSHAKE_FAILURE.INVALID_TOKEN);
     }
     return {
       user,
@@ -217,7 +215,7 @@ export class HocuspocusAuthExtension {
   private async loadNote(documentName: string): Promise<NoteEntity> {
     const note = await this.noteRepository.findById(documentName);
     if (!note) {
-      throw new Error(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
+      throw new HandshakeError(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
     }
     return note;
   }
@@ -276,7 +274,7 @@ export class HocuspocusAuthExtension {
     } as const;
 
     if (!ability.can('read', noteSubject)) {
-      throw new Error(HANDSHAKE_FAILURE.FORBIDDEN);
+      throw new HandshakeError(HANDSHAKE_FAILURE.FORBIDDEN);
     }
 
     if (!ability.can('update', noteSubject)) {

@@ -245,7 +245,37 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
 
-  it('does not touch the session when the server denies access to the note', async () => {
+  it('rules the note out on denial without touching the session', async () => {
+    const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
+    const onSessionExpired = vi.fn();
+
+    const { result } = renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+        onSessionExpired,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.FORBIDDEN });
+
+    await waitFor(() => {
+      expect(result.current.status).toBe('accessDenied');
+    });
+    expect(provider.destroy).toHaveBeenCalledTimes(1);
+    expect(onAuthRefresh).not.toHaveBeenCalled();
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('leaves a server fault to the reconnect without spending the refresh attempt', async () => {
     const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
     const onSessionExpired = vi.fn();
 
@@ -265,8 +295,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
       'onAuthenticationFailed'
     ] as (params: { reason: string }) => void;
 
-    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.FORBIDDEN });
-    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.FORBIDDEN });
+    onAuthenticationFailed({ reason: HANDSHAKE_FAILURE.INTERNAL_ERROR });
 
     await Promise.resolve();
     await Promise.resolve();
@@ -274,6 +303,32 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(onAuthRefresh).not.toHaveBeenCalled();
     expect(provider.destroy).not.toHaveBeenCalled();
     expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('gives an unrecognised reason the refresh attempt, like an older server would need', async () => {
+    const onAuthRefresh = vi.fn().mockResolvedValue('refreshed');
+
+    renderHook(() =>
+      useHocuspocusCollaboration({
+        noteId: 'note-1',
+        yDoc,
+        awareness,
+        serverUrl: 'ws://localhost:3333/collaboration',
+        onAuthRefresh,
+      })
+    );
+
+    const provider = mockProviderInstances[0];
+    const onAuthenticationFailed = provider.options[
+      'onAuthenticationFailed'
+    ] as (params: { reason: string }) => void;
+
+    onAuthenticationFailed({ reason: 'permission-denied' });
+
+    await waitFor(() => {
+      expect(onAuthRefresh).toHaveBeenCalledTimes(1);
+    });
+    expect(provider.destroy).not.toHaveBeenCalled();
   });
 
   it('does not fire onSessionExpired when the hook unmounts before a rejected refresh lands', async () => {
