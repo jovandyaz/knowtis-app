@@ -3,6 +3,27 @@ import sanitizeHtml from 'sanitize-html';
 
 const md = new MarkdownIt({ html: false, linkify: false, breaks: false });
 
+const MERMAID_LANGUAGE = 'mermaid';
+const MERMAID_BLOCK_ATTR = 'data-mermaid-block';
+const MERMAID_CODE_ATTR = 'data-code';
+
+interface RenderEnv {
+  readonly mermaidAsDiagram?: boolean;
+}
+
+const defaultFence = md.renderer.rules.fence;
+
+md.renderer.rules.fence = (tokens, idx, options, env: RenderEnv, self) => {
+  const token = tokens[idx];
+  if (env.mermaidAsDiagram && token.info.trim() === MERMAID_LANGUAGE) {
+    const code = md.utils.escapeHtml(token.content);
+    return `<div ${MERMAID_BLOCK_ATTR} ${MERMAID_CODE_ATTR}="${code}"></div>`;
+  }
+  return defaultFence
+    ? defaultFence(tokens, idx, options, env, self)
+    : self.renderToken(tokens, idx, options);
+};
+
 const ALLOWED_TAGS = [
   'p',
   'br',
@@ -23,20 +44,36 @@ const ALLOWED_TAGS = [
   's',
   'a',
   'hr',
+  'div',
 ];
 
-export function markdownToSafeHtml(markdown: string): string {
+function renderSafeHtml(markdown: string, env: RenderEnv): string {
   if (!markdown.trim()) {
     return '';
   }
-  const rendered = md.render(markdown);
+  const rendered = md.render(markdown, env);
   const sanitized = sanitizeHtml(rendered, {
     allowedTags: ALLOWED_TAGS,
-    allowedAttributes: { a: ['href'] },
+    allowedAttributes: {
+      a: ['href'],
+      div: [MERMAID_BLOCK_ATTR, MERMAID_CODE_ATTR],
+    },
+    allowedClasses: { code: ['language-*'] },
     allowedSchemes: ['http', 'https', 'mailto'],
     disallowedTagsMode: 'discard',
   });
   return sanitized.trim();
+}
+
+/** Sanitized note body for the editor: mermaid fences become diagram blocks. */
+export function markdownToNoteHtml(markdown: string): string {
+  return renderSafeHtml(markdown, { mermaidAsDiagram: true });
+}
+
+/** Sanitized proposal preview for the chat card, which renders raw HTML and so
+ *  cannot draw a diagram — mermaid stays a readable code block there. */
+export function markdownToPreviewHtml(markdown: string): string {
+  return renderSafeHtml(markdown, { mermaidAsDiagram: false });
 }
 
 const BLOCK_BOUNDARY_PATTERN =
@@ -58,6 +95,12 @@ export function htmlToPlainText(html: string): string {
   const stripped = sanitizeHtml(withBreaks, {
     allowedTags: [],
     allowedAttributes: {},
+    transformTags: {
+      div: (tagName, attribs) =>
+        MERMAID_BLOCK_ATTR in attribs
+          ? { tagName, attribs: {}, text: attribs[MERMAID_CODE_ATTR] ?? '' }
+          : { tagName, attribs },
+    },
   });
   const decoded = stripped.replace(
     /&(?:amp|lt|gt|quot|#39);/g,

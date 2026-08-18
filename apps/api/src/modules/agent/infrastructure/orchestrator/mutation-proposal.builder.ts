@@ -12,7 +12,10 @@ import {
   ProposedMutation,
   type UpdateMutationPayload,
 } from '../../domain/proposed-mutation';
-import { markdownToSafeHtml } from '../sanitize/html-sanitizer';
+import {
+  markdownToNoteHtml,
+  markdownToPreviewHtml,
+} from '../sanitize/html-sanitizer';
 
 export interface UpdateProposalInput {
   readonly title?: string;
@@ -30,7 +33,7 @@ export class MutationProposalBuilder {
     title: string,
     contentMarkdown: string
   ): Promise<Result<ProposedMutation, AgentDomainError>> {
-    const contentHtml = markdownToSafeHtml(contentMarkdown);
+    const contentHtml = markdownToNoteHtml(contentMarkdown);
     if (contentMarkdown.trim() && !contentHtml) {
       return err(AgentErrors.sanitizeRejected());
     }
@@ -39,7 +42,7 @@ export class MutationProposalBuilder {
       kind: 'create',
       payload: { title, contentHtml },
       summary: `Create note "${title}"`,
-      previewHtml: contentHtml,
+      previewHtml: markdownToPreviewHtml(contentMarkdown),
     });
   }
 
@@ -58,11 +61,13 @@ export class MutationProposalBuilder {
       return err(AgentErrors.noteNotFound(noteId));
     }
     let contentHtml: string | undefined;
+    let previewHtml: string | undefined;
     if (input.contentMarkdown !== undefined) {
-      contentHtml = markdownToSafeHtml(input.contentMarkdown);
+      contentHtml = markdownToNoteHtml(input.contentMarkdown);
       if (input.contentMarkdown.trim() && !contentHtml) {
         return err(AgentErrors.sanitizeRejected());
       }
+      previewHtml = markdownToPreviewHtml(input.contentMarkdown);
     }
     const payload: UpdateMutationPayload = {
       ...(input.title !== undefined && { title: input.title }),
@@ -81,7 +86,7 @@ export class MutationProposalBuilder {
       targetNoteId: noteId,
       payload,
       summary: `Update "${note.title}": ${parts.join(', ') || 'no changes'}`,
-      ...(payload.contentHtml && { previewHtml: payload.contentHtml }),
+      ...(previewHtml && { previewHtml }),
       baseVersion: note.updatedAt,
     });
   }

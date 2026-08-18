@@ -1,34 +1,85 @@
 import { describe, expect, it } from 'vitest';
+import { yDocToProsemirrorJSON } from 'y-prosemirror';
+import * as Y from 'yjs';
 
-import { htmlToPlainText, markdownToSafeHtml } from './html-sanitizer';
+import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
-describe('markdownToSafeHtml', () => {
+import { htmlToYjsState } from '../../../notes/infrastructure/html-to-yjs';
+import {
+  htmlToPlainText,
+  markdownToNoteHtml,
+  markdownToPreviewHtml,
+} from './html-sanitizer';
+
+describe('markdownToNoteHtml', () => {
   it('renders basic markdown to html', () => {
-    const html = markdownToSafeHtml('# Title\n\nHello **world**');
+    const html = markdownToNoteHtml('# Title\n\nHello **world**');
     expect(html).toContain('<h1>Title</h1>');
     expect(html).toContain('<strong>world</strong>');
   });
 
   it('strips raw script tags', () => {
-    const html = markdownToSafeHtml('Hi <script>alert(1)</script>');
+    const html = markdownToNoteHtml('Hi <script>alert(1)</script>');
     expect(html).not.toContain('<script>');
     expect(html).not.toContain('alert(1)</script>');
   });
 
   it('neutralizes javascript: link hrefs but keeps visible text', () => {
-    const html = markdownToSafeHtml('[click](javascript:alert(1))');
+    const html = markdownToNoteHtml('[click](javascript:alert(1))');
     expect(html).toContain('click');
     expect(html).not.toMatch(/href="javascript:/i);
   });
 
   it('preserves the literal word "javascript:" in prose', () => {
-    expect(markdownToSafeHtml('Use the javascript: scheme')).toContain(
+    expect(markdownToNoteHtml('Use the javascript: scheme')).toContain(
       'javascript:'
     );
   });
 
   it('returns empty string for empty/whitespace input', () => {
-    expect(markdownToSafeHtml('   ')).toBe('');
+    expect(markdownToNoteHtml('   ')).toBe('');
+  });
+
+  it('renders a mermaid fence as a mermaid block the editor can parse', () => {
+    const html = markdownToNoteHtml('```mermaid\nflowchart LR\n  A --> B\n```');
+    expect(html).toContain('data-mermaid-block');
+    expect(html).toMatch(/data-code="[^"]*flowchart LR/);
+    expect(html).not.toContain('<pre>');
+  });
+
+  it('keeps the language of a non-mermaid code fence', () => {
+    const html = markdownToNoteHtml('```ts\nconst a = 1;\n```');
+    expect(html).toContain('class="language-ts"');
+  });
+
+  it('still drops author-supplied raw html around a mermaid fence', () => {
+    const html = markdownToNoteHtml(
+      '<div onclick="alert(1)">x</div>\n\n```mermaid\ngraph TD\n```'
+    );
+    expect(html).not.toMatch(/<div[^>]*onclick/i);
+    expect(html).toContain('data-mermaid-block');
+  });
+
+  it('leaves a mermaid fence readable in the chat preview, which cannot draw it', () => {
+    const preview = markdownToPreviewHtml(
+      '```mermaid\nflowchart LR\n  A --> B\n```'
+    );
+    expect(preview).not.toContain('data-mermaid-block');
+    expect(preview).toContain('class="language-mermaid"');
+    expect(preview).toContain('flowchart LR');
+  });
+
+  it('survives the editor persistence round-trip as a mermaidBlock node', () => {
+    const html = markdownToNoteHtml('```mermaid\nflowchart LR\n  A --> B\n```');
+    const doc = new Y.Doc();
+    Y.applyUpdate(doc, htmlToYjsState(html));
+    const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME) as {
+      content: Array<{ type: string; attrs?: { code?: string } }>;
+    };
+    doc.destroy();
+
+    expect(json.content[0].type).toBe('mermaidBlock');
+    expect(json.content[0].attrs?.code).toContain('A --> B');
   });
 });
 
@@ -62,6 +113,14 @@ describe('htmlToPlainText', () => {
     expect(htmlToPlainText('<p>safe</p><script>alert(1)</script>')).toBe(
       'safe'
     );
+  });
+
+  it('keeps the source of a mermaid diagram, which lives in an attribute', () => {
+    const plain = htmlToPlainText(
+      '<div data-code="flowchart LR&#10;  A --&gt; B" data-view-mode="split" data-mermaid-block=""></div>'
+    );
+    expect(plain).toContain('flowchart LR');
+    expect(plain).toContain('A --> B');
   });
 
   it('returns empty string for empty or whitespace input', () => {
