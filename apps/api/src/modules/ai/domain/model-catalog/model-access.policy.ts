@@ -20,33 +20,34 @@ export interface AccessCandidate {
 }
 
 /**
- * The freemium ladder's single policy point.
- *
- * Tier gating is flag-controlled, and while it is off the hand-curated catalog
- * behaves exactly as it did before the ladder existed: everything granted. The
- * price ceiling is deliberately not flag-controlled for anything else — a row
- * reaches the catalog through a promote button rather than a code review, so
- * the platform never absorbs it above the ceiling no matter its tier.
+ * The freemium ladder's single policy point: while tier gating is off the
+ * curated catalog stays granted, and the price ceiling gates everything else.
+ * `maxOutputCostPerToken` falls back to the code default so a caller that
+ * cannot resolve config never opens the tier wider than shipped.
  */
 export function accessFor(
   model: AccessCandidate,
   byokProviders: ReadonlySet<string>,
-  tierGatingOn: boolean
+  tierGatingOn: boolean,
+  maxOutputCostPerToken: number = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
 ): ModelAccess {
   const free = tierGatingOn
-    ? model.tier === FREE_TIER && isPlatformAbsorbable(model)
-    : CURATED_MODEL_IDS.has(model.id) || isPlatformAbsorbable(model);
+    ? model.tier === FREE_TIER &&
+      isPlatformAbsorbable(model, maxOutputCostPerToken)
+    : CURATED_MODEL_IDS.has(model.id) ||
+      isPlatformAbsorbable(model, maxOutputCostPerToken);
   if (free) {
     return GRANTED;
   }
   return byokProviders.has(providerOf(model.id)) ? GRANTED : REQUIRES_BYOK;
 }
 
-function isPlatformAbsorbable(model: AccessCandidate): boolean {
+function isPlatformAbsorbable(
+  model: AccessCandidate,
+  maxOutputCostPerToken: number
+): boolean {
   const cost = model.outputCostPerToken;
   // A stored price below zero is not a discount, it is a broken row: no column
   // constraint keeps it out, and reading it as free would waive the ceiling.
-  return (
-    cost !== null && cost >= 0 && cost <= FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-  );
+  return cost !== null && cost >= 0 && cost <= maxOutputCostPerToken;
 }

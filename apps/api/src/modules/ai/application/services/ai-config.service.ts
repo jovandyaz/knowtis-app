@@ -5,8 +5,10 @@ import type { Cache } from 'cache-manager';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   CHAIN_SEPARATOR,
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   parseChain,
   REASONING_EFFORTS,
+  TOKENS_PER_MILLION,
   type AIConfigSource,
   type ModelIntent,
   type ReasoningEffort,
@@ -14,6 +16,7 @@ import {
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import { CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -30,11 +33,24 @@ const CACHE_TTL_MS = 30_000; // 30 seconds
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
 
-export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list';
+export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list' | 'money';
 
 type ConfigKeyDef =
-  | { default: string; kind: 'model' | 'chain' | 'list' }
+  | { default: string; kind: 'model' | 'chain' | 'list' | 'money' }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
+
+/** Above the price that admits a model into the catalog at all, a higher ceiling can only be a typo: nothing that expensive is ever promotable. */
+const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;
+
+function parseUsdPerMillion(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return parsed <= MAX_FREE_TIER_CEILING_USD_PER_MILLION ? parsed : null;
+}
 
 /**
  * Parses an OpenRouter provider allowlist CSV into an ordered, de-duplicated
@@ -73,6 +89,10 @@ const CONFIG_KEYS = {
   ai_openrouter_providers: {
     default: AI_SETTING_DEFAULTS.ai_openrouter_providers,
     kind: 'list',
+  },
+  ai_free_tier_ceiling: {
+    default: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
+    kind: 'money',
   },
 } as const satisfies Record<string, ConfigKeyDef>;
 
@@ -180,6 +200,19 @@ export class AIConfigService {
     return AI_SETTING_DEFAULTS.ai_reasoning_effort;
   }
 
+  /** Resolves the operator's free-tier ceiling as a per-token rate. Falls back to the code default so a bad row never opens the tier wider than shipped. */
+  async getFreeTierMaxOutputCostPerToken(): Promise<number> {
+    const value = await this.getConfigValue('ai_free_tier_ceiling');
+    const parsed = parseUsdPerMillion(value);
+    if (parsed !== null) {
+      return parsed / TOKENS_PER_MILLION;
+    }
+    this.logger.warn(
+      `Ignoring invalid free-tier ceiling '${value}', using the code default`
+    );
+    return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
+  }
+
   /** Resolves the OpenRouter upstream allowlist; `[]` means no preference (OpenRouter default routing). */
   async getOpenRouterProviderOrder(): Promise<readonly string[]> {
     const value = await this.getConfigValue('ai_openrouter_providers');
@@ -269,6 +302,13 @@ export class AIConfigService {
           );
         }
         return;
+      case 'money':
+        if (parseUsdPerMillion(value) === null) {
+          throw new InvalidAIConfigError(
+            `'${value}' is not a valid ceiling: dollars per million output tokens, up to two decimals, at most ${MAX_FREE_TIER_CEILING_USD_PER_MILLION}`
+          );
+        }
+        return;
       case 'list':
         if (parseProviderOrder(value) === null) {
           throw new InvalidAIConfigError(
@@ -350,9 +390,11 @@ export class AIConfigService {
 
   /** The stored string in the form the runtime parses it, so whitespace alone never reads as a divergence. */
   private canonical(key: ConfigKey, value: string): string {
-    return CONFIG_KEYS[key].kind === 'chain'
-      ? parseChain(value).join(CHAIN_SEPARATOR)
-      : value;
+    const { kind } = CONFIG_KEYS[key];
+    if (kind === 'chain') {
+      return parseChain(value).join(CHAIN_SEPARATOR);
+    }
+    return kind === 'money' ? value.trim() : value;
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
@@ -383,6 +425,10 @@ export class AIConfigService {
           : def.default;
       case 'list':
         return parseProviderOrder(row.value) !== null ? row.value : def.default;
+      case 'money':
+        return parseUsdPerMillion(row.value) !== null
+          ? row.value.trim()
+          : def.default;
       default: {
         const exhaustive: never = def;
         throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);

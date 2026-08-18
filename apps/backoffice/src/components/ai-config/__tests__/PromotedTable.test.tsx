@@ -29,11 +29,15 @@ function model(overrides: Partial<CatalogModel> = {}): CatalogModel {
   };
 }
 
-function renderTable(models: CatalogModel[] = [model()]) {
+function renderTable(
+  models: CatalogModel[] = [model()],
+  maxOutputCostPerToken: number = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+) {
   return render(
     <PromotedTable
       models={models}
       disabled={false}
+      maxOutputCostPerToken={maxOutputCostPerToken}
       onSave={vi.fn()}
       onRetire={vi.fn()}
     />
@@ -75,6 +79,18 @@ describe('PromotedTable', () => {
     renderTable([
       model({ outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 4 }),
     ]);
+
+    expect(
+      within(rowFor(MODEL_ID)).getByText(/byok only/i)
+    ).toBeInTheDocument();
+  });
+
+  // A promoted model can outlive the ceiling that admitted it; the row has to
+  // say so rather than keep vouching for the default the bundle shipped with.
+  it('should mark a promoted model the operator ceiling now excludes', () => {
+    const price = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
+
+    renderTable([model({ outputCostPerToken: price })], price / 2);
 
     expect(
       within(rowFor(MODEL_ID)).getByText(/byok only/i)

@@ -540,6 +540,34 @@ describe('SelectableModelsService', () => {
           service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
         ).toBe(true);
       });
+
+      // Guards the whole point of the operator's ceiling: if the argument stops
+      // reaching accessFor, these two verdicts collapse into one.
+      it('honours a tightened ceiling the operator configured', async () => {
+        const service = await serviceWithPromotedPrice(FREE_TIER_OUTPUT_COST);
+        const tightened = FREE_TIER_OUTPUT_COST / 2;
+
+        expect(
+          service.isSelectable(PROMOTED_ID, ALL_CURATED, NO_BYOK, true)
+        ).toBe(true);
+        expect(
+          service.isSelectable(
+            PROMOTED_ID,
+            ALL_CURATED,
+            NO_BYOK,
+            true,
+            tightened
+          )
+        ).toBe(false);
+        expect(
+          service
+            .list(SYSTEM_DEFAULT, ALL_CURATED, NO_BYOK, true, tightened)
+            .find((m) => m.id === PROMOTED_ID)?.access
+        ).toBe('requires_byok');
+        expect(
+          service.firstSelectable(ALL_CURATED, NO_BYOK, true, tightened)
+        ).not.toBe(PROMOTED_ID);
+      });
     });
 
     it('selects a promoted model the curated catalog does not know', () => {

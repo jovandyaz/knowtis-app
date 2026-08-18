@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
 
+import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { ModelCatalogAdapter } from './model-catalog.adapter';
@@ -110,18 +111,31 @@ describe('ModelCatalogAdapter', () => {
     }
   });
 
-  // accessFor exempts curated ids from the ceiling only while tier gating is off.
-  // A snapshot refresh that pushes one of these over it would silently bill the
-  // platform for the whole free tier, so it has to fail here instead.
-  it('keeps every curated open-tier model within the free-tier ceiling', () => {
+  it('prices every curated open-tier model', () => {
     const adapter = makeAdapter();
 
     for (const model of CURATED_MODELS.filter((m) => m.tier === 'open')) {
-      const outputCostPerToken = adapter.getPricing(
-        model.id
-      )?.outputCostPerToken;
-      expect(outputCostPerToken).toBeTypeOf('number');
-      expect(outputCostPerToken).toBeLessThanOrEqual(
+      expect(adapter.getPricing(model.id)?.outputCostPerToken).toBeTypeOf(
+        'number'
+      );
+    }
+  });
+
+  // These are what a caller with no key runs, so the platform pays for every one
+  // of them. A default over the ceiling contradicts the free tier it defines.
+  it('keeps every model the code defaults name within the free-tier ceiling', () => {
+    const adapter = makeAdapter();
+    const defaults = [
+      AI_SETTING_DEFAULTS.ai_default_model,
+      AI_SETTING_DEFAULTS.ai_fast_model,
+      AI_SETTING_DEFAULTS.ai_deep_model,
+      ...AI_SETTING_DEFAULTS.ai_fallback_chain
+        .split(',')
+        .map((id) => id.trim()),
+    ];
+
+    for (const id of defaults) {
+      expect(adapter.getPricing(id)?.outputCostPerToken).toBeLessThanOrEqual(
         FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
       );
     }
