@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiKeysApi } from '@knowtis/api-client';
 
+import { aiModelsQueryKeys } from './useAvailableModels';
 import {
   providerKeysQueryKeys,
   useDeleteProviderKey,
@@ -107,5 +108,42 @@ describe('useDeleteProviderKey', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(aiKeysApi.remove).toHaveBeenCalledWith('anthropic');
+  });
+});
+
+// Which models a caller may run is derived from the keys they hold, and that
+// list is cached for ten minutes: without this the picker keeps offering the
+// keyless catalog long after the key that unlocks more models was saved.
+describe('provider key mutations and the model list', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('refreshes the available models after a key is stored', async () => {
+    vi.mocked(aiKeysApi.set).mockResolvedValue(mockKeys);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useSetProviderKey(), { wrapper });
+
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-test' });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.list(),
+    });
+  });
+
+  it('refreshes the available models after a key is removed', async () => {
+    vi.mocked(aiKeysApi.remove).mockResolvedValue(undefined);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useDeleteProviderKey(), { wrapper });
+
+    result.current.mutate('anthropic');
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.list(),
+    });
   });
 });

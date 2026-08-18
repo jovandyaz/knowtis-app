@@ -15,12 +15,23 @@ const modelsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsEnabled = vi.fn<(enabled?: boolean) => void>();
 const prefsData = vi.fn();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
+const byokFlag = vi.fn<() => boolean>();
+const openSettings = vi.fn();
+const keysData = vi.fn();
+const keysPending = vi.fn<() => boolean>();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
+}));
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => byokFlag(),
+}));
+vi.mock('@/stores/settings.store', () => ({
+  useSettingsStore: (selector: (s: { open: typeof openSettings }) => unknown) =>
+    selector({ open: openSettings }),
 }));
 vi.mock('@/hooks', () => ({
   useAvailableModels: (enabled?: boolean) => {
@@ -37,6 +48,7 @@ vi.mock('@/hooks', () => ({
     return { data: prefsData() };
   },
   useUpdateAISettings: () => ({ mutate: updatePreferences }),
+  useProviderKeys: () => ({ data: keysData(), isPending: keysPending() }),
 }));
 
 const grantedModels = [
@@ -136,6 +148,78 @@ describe('CopilotModelPicker', () => {
       preferredIntent: null,
     });
     authUser.mockReturnValue({ isAnonymous: false });
+    byokFlag.mockReturnValue(true);
+    keysData.mockReturnValue([]);
+    keysPending.mockReturnValue(false);
+  });
+
+  it('bridges a keyless user to the BYOK settings from the chips', async () => {
+    modelsData.mockReturnValue(withLockedModel);
+    render(<CopilotModelPicker />);
+
+    const bridge = screen.getByRole('button', {
+      name: 'aiAssistant.byok.bridge',
+    });
+    expect(bridge).toHaveAccessibleDescription('aiAssistant.byok.bridgeHint');
+
+    await userEvent.click(bridge);
+
+    expect(openSettings).toHaveBeenCalledWith('aiAssistant');
+  });
+
+  it('offers no bridge while the agent_byok flag is off', () => {
+    byokFlag.mockReturnValue(false);
+    modelsData.mockReturnValue(withLockedModel);
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no bridge once the user already runs on their own key', () => {
+    modelsData.mockReturnValue(withByokModel);
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
+  });
+
+  // Until the list resolves there is no way to know the caller has no key, and
+  // a bridge that flashes at someone who already has one is worse than late.
+  // "No model billed to you" is not the same as "you hold no key": a stored key
+  // unlocks nothing unless a model of that provider is currently wired in, and
+  // that caller must not be told again to do what they already did.
+  it('offers no bridge to a caller who already stored a key', () => {
+    modelsData.mockReturnValue(withLockedModel);
+    keysData.mockReturnValue([{ provider: 'google', keyPrefix: 'AIza***' }]);
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no bridge until the stored keys resolve', () => {
+    modelsData.mockReturnValue(withLockedModel);
+    keysData.mockReturnValue(undefined);
+    keysPending.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('offers no bridge until the model list resolves', () => {
+    modelsData.mockReturnValue(undefined);
+    modelsPending.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
   });
 
   it('offers only the three intent chips to a user without BYOK models', () => {
