@@ -20,17 +20,10 @@ export interface AccessCandidate {
 }
 
 /**
- * The freemium ladder's single policy point.
- *
- * Tier gating is flag-controlled, and while it is off the hand-curated catalog
- * behaves exactly as it did before the ladder existed: everything granted. The
- * price ceiling is deliberately not flag-controlled for anything else — a row
- * reaches the catalog through a promote button rather than a code review, so
- * the platform never absorbs it above the ceiling no matter its tier.
- *
- * `maxOutputCostPerToken` is the operator's ceiling, which admins move from the
- * backoffice; it falls back to the code default so a caller that cannot resolve
- * config still gets the shipped policy rather than an open door.
+ * The freemium ladder's single policy point: while tier gating is off the
+ * curated catalog stays granted, and the price ceiling gates everything else.
+ * `maxOutputCostPerToken` falls back to the code default so a caller that
+ * cannot resolve config never opens the tier wider than shipped.
  */
 export function accessFor(
   model: AccessCandidate,

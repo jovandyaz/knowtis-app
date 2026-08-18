@@ -72,9 +72,13 @@ describe('accessFor', () => {
     expect(accessFor(candidate(), NONE, false)).toBe('granted');
   });
 
-  it('should keep the free tier to models at or under $4.00 per million output tokens', () => {
-    const atTheLine = candidate({ outputCostPerToken: 0.000004 });
-    const overTheLine = candidate({ outputCostPerToken: 0.0000041 });
+  it('should keep the free tier to models at or under the shipped ceiling', () => {
+    const atTheLine = candidate({
+      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+    });
+    const overTheLine = candidate({
+      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 1.025,
+    });
 
     expect(accessFor(atTheLine, NONE, true)).toBe('granted');
     expect(accessFor(overTheLine, NONE, true)).toBe('requires_byok');
@@ -100,6 +104,18 @@ describe('accessFor', () => {
     expect(accessFor(midRange, new Set(['openrouter']), true, tightened)).toBe(
       'granted'
     );
+  });
+
+  // glm-5.2 is curated and open-weight but priced above the ceiling, so gating
+  // is what moves it behind BYOK. Pinned so the shift is a decision, not a surprise.
+  it('should put a curated open model priced over the ceiling behind BYOK once gating is on', () => {
+    const overCeiling = candidate({
+      id: curatedOpen.id,
+      outputCostPerToken: FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN * 1.1,
+    });
+
+    expect(accessFor(overCeiling, NONE, false)).toBe('granted');
+    expect(accessFor(overCeiling, NONE, true)).toBe('requires_byok');
   });
 
   it('should gate a model the catalog cannot price', () => {

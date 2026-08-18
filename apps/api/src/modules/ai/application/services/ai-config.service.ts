@@ -15,6 +15,7 @@ import {
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
+import { CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -39,8 +40,9 @@ type ConfigKeyDef =
 
 /** The free-tier ceiling is stored and edited in dollars per million output tokens; the policy consumes a per-token rate. */
 const TOKENS_PER_MILLION = 1_000_000;
-/** A ceiling above this buys nothing: the priciest model any provider routes for us costs far less, so a larger number can only be a typo. */
-const MAX_FREE_TIER_CEILING_USD_PER_MILLION = 100;
+/** Above the price that admits a model into the catalog at all, a higher ceiling can only be a typo: nothing that expensive is ever promotable. */
+const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;
 
 /** Parses a dollars-per-million-output-tokens ceiling, or null when the value is not one. */
 function parseUsdPerMillion(value: string): number | null {
@@ -424,7 +426,9 @@ export class AIConfigService {
       case 'list':
         return parseProviderOrder(row.value) !== null ? row.value : def.default;
       case 'money':
-        return parseUsdPerMillion(row.value) !== null ? row.value : def.default;
+        return parseUsdPerMillion(row.value) !== null
+          ? row.value.trim()
+          : def.default;
       default: {
         const exhaustive: never = def;
         throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);

@@ -40,13 +40,16 @@ function make(
     }),
     patchSettings: vi.fn().mockResolvedValue(undefined),
   };
+  const ceilingsSeen: (number | undefined)[] = [];
   const selectableSvc = {
     isSelectable: (
       id: string,
       _configured: ReadonlySet<string>,
       providers?: ReadonlySet<string>,
-      tierGatingOn?: boolean
+      tierGatingOn?: boolean,
+      maxOutputCostPerToken?: number
     ) => {
+      ceilingsSeen.push(maxOutputCostPerToken);
       const hasKey = Boolean(providers?.has(id.split(':')[0]));
       if (tierGatingOn) {
         return OPEN_IDS.includes(id) || hasKey;
@@ -105,7 +108,7 @@ function make(
     byok as never,
     flags as never
   );
-  return { svc, repo, aiConfig, byok, flags };
+  return { svc, repo, aiConfig, byok, flags, ceilingsSeen };
 }
 
 describe('ModelPreferenceService', () => {
@@ -382,5 +385,44 @@ describe('ModelPreferenceService', () => {
     );
     flags.isEnabled.mockRejectedValue(new Error('flag store down'));
     expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
+  });
+
+  // Without this the ceiling can stop being forwarded and nothing else notices:
+  // every downstream call falls back to the code default and still answers.
+  describe('forwards the operator ceiling', () => {
+    const CONFIGURED_CEILING = 0.0000025;
+
+    function withCeiling(stored: string | null = null) {
+      const made = make(stored, [SYSTEM_DEFAULT]);
+      made.aiConfig.getFreeTierMaxOutputCostPerToken.mockResolvedValue(
+        CONFIGURED_CEILING
+      );
+      return made;
+    }
+
+    it('passes the resolved ceiling when picking the effective default', async () => {
+      const { svc, ceilingsSeen } = withCeiling();
+
+      await svc.getEffectiveDefault('u1');
+
+      expect(ceilingsSeen.length).toBeGreaterThan(0);
+      expect(ceilingsSeen.every((c) => c === CONFIGURED_CEILING)).toBe(true);
+    });
+
+    it('passes the resolved ceiling when validating a turn', async () => {
+      const { svc, ceilingsSeen } = withCeiling();
+
+      await svc.isSelectableWith(SYSTEM_DEFAULT, new Set(), true);
+
+      expect(ceilingsSeen).toContain(CONFIGURED_CEILING);
+    });
+
+    it('passes the resolved ceiling when storing a preference', async () => {
+      const { svc, ceilingsSeen } = withCeiling();
+
+      await svc.setUserPreferences('u1', { preferredModel: SYSTEM_DEFAULT });
+
+      expect(ceilingsSeen).toContain(CONFIGURED_CEILING);
+    });
   });
 });

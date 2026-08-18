@@ -14,10 +14,10 @@ AI text assistant integrated into the Tiptap editor. Supports streaming response
 | Admin surface | Backoffice app (`apps/backoffice`) — AI Config, AI Metrics, flag pages |
 | Shared Types  | `@knowtis/shared-types` (actions, languages, tones, flag catalog)      |
 
-| Role      | Serves                            | Code default (DB-overridable)     |
-| --------- | --------------------------------- | --------------------------------- |
-| `default` | Most actions and copilot fallback | `openrouter:z-ai/glm-5.2`         |
-| `fast`    | `ghost-text` (latency-optimized)  | `openrouter:minimax/minimax-m2.5` |
+| Role      | Serves                            | Code default (DB-overridable)       |
+| --------- | --------------------------------- | ----------------------------------- |
+| `default` | Most actions and copilot fallback | `openrouter:deepseek/deepseek-v3.2` |
+| `fast`    | `ghost-text` (latency-optimized)  | `openrouter:minimax/minimax-m2.5`   |
 
 Both roles resolve at runtime through the `ai_config` table — see [Dynamic Model Configuration](#dynamic-model-configuration). The table above shows the code defaults, not a fixed assignment.
 
@@ -328,14 +328,15 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 
 **Supported keys:**
 
-| Key                       | Code Default                                                                                | Kind     | Description                                                                                        |
-| ------------------------- | ------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------- |
-| `ai_default_model`        | `openrouter:z-ai/glm-5.2`                                                                   | `model`  | Model for most actions                                                                             |
-| `ai_fast_model`           | `openrouter:minimax/minimax-m2.5`                                                           | `model`  | Model for ghost-text and the Rápido intent                                                         |
-| `ai_deep_model`           | `openrouter:moonshotai/kimi-k2.5`                                                           | `model`  | Model for the Profundo intent                                                                      |
-| `ai_fallback_chain`       | `openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2` | `chain`  | Cross-provider fallback order (CSV)                                                                |
-| `ai_reasoning_effort`     | `medium`                                                                                    | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`)                                     |
-| `ai_openrouter_providers` | `fireworks,baseten`                                                                         | `list`   | Ordered OpenRouter upstream allowlist for `openrouter:*` turns; empty = OpenRouter default routing |
+| Key                       | Code Default                                                                                        | Kind     | Description                                                                                                                                                                                  |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ai_default_model`        | `openrouter:deepseek/deepseek-v3.2`                                                                 | `model`  | Model for most actions                                                                                                                                                                       |
+| `ai_fast_model`           | `openrouter:minimax/minimax-m2.5`                                                                   | `model`  | Model for ghost-text and the Rápido intent                                                                                                                                                   |
+| `ai_deep_model`           | `openrouter:moonshotai/kimi-k2.5`                                                                   | `model`  | Model for the Profundo intent                                                                                                                                                                |
+| `ai_fallback_chain`       | `openrouter:deepseek/deepseek-v3.2,openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5` | `chain`  | Cross-provider fallback order (CSV)                                                                                                                                                          |
+| `ai_reasoning_effort`     | `medium`                                                                                            | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`)                                                                                                                               |
+| `ai_openrouter_providers` | `fireworks,baseten`                                                                                 | `list`   | Ordered OpenRouter upstream allowlist for `openrouter:*` turns; empty = OpenRouter default routing                                                                                           |
+| `ai_free_tier_ceiling`    | `4.00`                                                                                              | `money`  | Dollars per million output tokens the platform absorbs on the free tier; up to two decimals, capped at the catalog admission price. A row that does not parse falls back to the code default |
 
 A `model` key takes a single server-invocable model id — curated, or promoted from the [open-tier catalog](#open-tier-model-catalog); the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A `choice` key takes one member of a fixed list. A `list` key takes a comma-separated allowlist of up to 8 lowercase provider slugs with no duplicates; empty is valid and means no preference (see [OpenRouter Upstream Allowlist](#openrouter-upstream-allowlist)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
 
@@ -391,7 +392,7 @@ The probe (both `PUT` and `test`) sends one cheap turn through the provider's cu
 
 ## Cross-Provider Fallback Chain
 
-`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the code default (`openrouter:z-ai/glm-5.2,openrouter:minimax/minimax-m2.5,openrouter:deepseek/deepseek-v3.2`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). At boot the chain is seeded from the code default (guard-tested against the catalog) so cross-provider fallback works before the first DB refresh; a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
+`FallbackChainService` resolves the ordered candidates for every AI request: the primary model first, then the fallback chain, deduped. The chain resolves **database-first** — the `ai_fallback_chain` `ai_config` row (30s cache) when present, else the code default (`openrouter:deepseek/deepseek-v3.2,openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5`). Providers without credentials or in cooldown are skipped — unless that would leave zero candidates, in which case the unfiltered list is used (a request is never failed without at least one attempt). At boot the chain is seeded from the code default (guard-tested against the catalog) so cross-provider fallback works before the first DB refresh; a DB chain is validated on write (`PUT /ai/config/ai_fallback_chain` rejects unknown ids, duplicates, and a chain with no server-routable member).
 
 Execution semantics (in `@knowtis/ai-gateway`'s `executeWithChain` / `streamWithChain`):
 
@@ -456,10 +457,10 @@ The same run watches the **curated and promoted** models for upstream drift and 
 
 ### Two ceilings, and why they differ
 
-| Constant                              | Value     | Meaning                                                                    |
-| ------------------------------------- | --------- | -------------------------------------------------------------------------- |
-| `CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN` | $20 / M   | Admission. Above this a model never becomes a candidate.                   |
-| `FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN` | $4.40 / M | What the platform absorbs. Above this a model is reachable only with BYOK. |
+| Constant                              | Value     | Meaning                                                                                                                                                                                  |
+| ------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN` | $20 / M   | Admission. Above this a model never becomes a candidate.                                                                                                                                 |
+| `ai_free_tier_ceiling` (`ai_config`)  | $4.00 / M | What the platform absorbs. Above this a model is reachable only with BYOK. Admin-editable; `FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN` is the code default a bad or missing row falls back to. |
 
 The gap between them is intentional: the strongest open-weight models sit there, and they are worth offering to users who bring their own key even though the platform will not pay for them. Promotion is therefore **not** a pricing decision — the stored price is. Promoting an expensive model does not make it free; `accessFor` returns `requires_byok` for anything above the free-tier ceiling whatever tier the admin chose. A model the catalog cannot price is never treated as free.
 

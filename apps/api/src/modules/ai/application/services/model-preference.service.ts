@@ -181,13 +181,6 @@ export class ModelPreferenceService {
     return fallback;
   }
 
-  async isSelectable(modelId: string): Promise<boolean> {
-    return this.selectable.isSelectable(
-      modelId,
-      await this.aiConfig.getConfiguredModelIds()
-    );
-  }
-
   async setUserPreferences(
     userId: string,
     patch: UpdateAiPreferencesInput
