@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { createColumnHelper } from '@tanstack/react-table';
 import type { ColumnDef, PaginationState } from '@tanstack/react-table';
 
-import { formatUsdPerMillionTokens } from '@/lib/format';
+import { formatTokenCount, formatUsdPerMillionTokens } from '@/lib/format';
 
 import {
   useAiCatalogCandidates,
@@ -20,24 +20,15 @@ import {
   MutationErrorAlert,
 } from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
-import {
-  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  type ModelTier,
-} from '@knowtis/shared-types';
+import type { ModelTier } from '@knowtis/shared-types';
 
-/** Stays well under the 100-row cap the API rejects with a 400. */
-const CANDIDATES_PAGE_SIZE = 25;
+import { isByokOnly } from './catalog-pricing';
+
+/** One screenful next to the promoted table; the API caps requests at 100 rows. */
+export const CANDIDATES_PAGE_SIZE = 10;
 
 /** Only open-weight models reach the candidate list, so promotion always joins the open pool. */
 const PROMOTION_TIER = 'open' as const satisfies ModelTier;
-
-/** Mirrors the server's access policy, where a negative stored price is a broken row rather than a discount. */
-function isByokOnly(model: CatalogModel): boolean {
-  return (
-    model.outputCostPerToken < 0 ||
-    model.outputCostPerToken > FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-  );
-}
 
 const columnHelper = createColumnHelper<CatalogModel>();
 
@@ -91,7 +82,7 @@ function candidateColumns(
       header: () => <span className="whitespace-nowrap">Context</span>,
       cell: ({ getValue }) => (
         <span className="whitespace-nowrap tabular-nums">
-          {getValue().toLocaleString()}
+          {formatTokenCount(getValue())}
         </span>
       ),
     }),
@@ -105,6 +96,7 @@ function candidateColumns(
     }),
     columnHelper.display({
       id: 'promote',
+      header: () => <span className="sr-only">Actions</span>,
       cell: ({ row }) => (
         <Button
           variant="outline"

@@ -9,6 +9,7 @@ import type {
   CatalogOverview,
 } from '@knowtis/data-access-admin';
 
+import { CANDIDATES_PAGE_SIZE } from '../CandidatesTable';
 import { CatalogSection } from '../CatalogSection';
 
 const {
@@ -62,7 +63,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
 });
 
 const EMPTY_CANDIDATE_PAGE = {
-  data: { items: [], total: 0, page: 1, limit: 25 },
+  data: { items: [], total: 0, page: 1, limit: CANDIDATES_PAGE_SIZE },
   isLoading: false,
   isError: false,
   refetch: vi.fn(),
@@ -213,7 +214,7 @@ describe('CatalogSection', () => {
         items: [model({ label: 'Cheap One' })],
         total: 1,
         page: 1,
-        limit: 25,
+        limit: CANDIDATES_PAGE_SIZE,
       },
     });
     renderSection();
@@ -256,7 +257,7 @@ describe('CatalogSection', () => {
       '!'
     );
     await userEvent.click(
-      screen.getByRole('button', { name: 'Save Live One' })
+      screen.getByRole('button', { name: 'Save Live One!' })
     );
 
     expect(updateCopyMutate).toHaveBeenCalledWith({
@@ -297,7 +298,7 @@ describe('CatalogSection', () => {
     );
 
     expect(
-      screen.getByRole('button', { name: 'Save Two' })
+      screen.getByRole('button', { name: 'Save Two!' })
     ).toBeInTheDocument();
   });
 
