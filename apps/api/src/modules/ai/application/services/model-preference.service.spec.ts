@@ -1,7 +1,11 @@
 import { BadRequestException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
-import { FEATURE_FLAG_KEYS, type ModelIntent } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_KEYS,
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+  type ModelIntent,
+} from '@knowtis/shared-types';
 
 import { ModelPreferenceService } from './model-preference.service';
 
@@ -66,6 +70,9 @@ function make(
   };
   const aiConfig = {
     getDefaultModel: vi.fn().mockResolvedValue(SYSTEM_DEFAULT),
+    getFreeTierMaxOutputCostPerToken: vi
+      .fn()
+      .mockResolvedValue(FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN),
     getIntentModel: vi
       .fn()
       .mockImplementation((intent: ModelIntent) =>

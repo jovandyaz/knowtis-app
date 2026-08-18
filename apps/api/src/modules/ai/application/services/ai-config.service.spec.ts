@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { REASONING_EFFORTS } from '@knowtis/shared-types';
+import {
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+  REASONING_EFFORTS,
+} from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
 import type { CatalogModel } from '../../domain/model-catalog/catalog-model';
@@ -103,7 +106,9 @@ describe('AIConfigService', () => {
 
   it('should fall back to the code default when no row exists', async () => {
     mockRepo.get.mockResolvedValue(null);
-    expect(await service.getDefaultModel()).toBe('openrouter:z-ai/glm-5.2');
+    expect(await service.getDefaultModel()).toBe(
+      AI_SETTING_DEFAULTS.ai_default_model
+    );
   });
 
   it('should use cache on second call', async () => {
@@ -124,7 +129,9 @@ describe('AIConfigService', () => {
 
   it('should fall back to the code default on DB error', async () => {
     mockRepo.get.mockRejectedValue(new Error('DB down'));
-    expect(await service.getDefaultModel()).toBe('openrouter:z-ai/glm-5.2');
+    expect(await service.getDefaultModel()).toBe(
+      AI_SETTING_DEFAULTS.ai_default_model
+    );
   });
 
   it('should throw on unknown config key', async () => {
@@ -462,6 +469,15 @@ describe('AIConfigService', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_free_tier_ceiling',
+        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
+        kind: 'money',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
     ]);
   });
 
@@ -523,17 +539,64 @@ describe('AIConfigService', () => {
         description: null,
         updatedAt: null,
       },
+      {
+        key: 'ai_free_tier_ceiling',
+        value: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
+        kind: 'money',
+        source: 'default',
+        storedValue: null,
+        description: null,
+        updatedAt: null,
+      },
     ]);
+  });
+
+  describe('free-tier ceiling', () => {
+    it('should serve the code default as a per-token rate', async () => {
+      mockRepo.get.mockResolvedValue(null);
+
+      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
+        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+      );
+    });
+
+    it('should convert the stored dollars per million into a per-token rate', async () => {
+      mockRepo.get.mockResolvedValue('2.50');
+
+      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(0.0000025);
+    });
+
+    it('should fall back to the code default rather than widen the tier on a bad row', async () => {
+      mockRepo.get.mockResolvedValue('not-a-price');
+
+      expect(await service.getFreeTierMaxOutputCostPerToken()).toBe(
+        FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
+      );
+    });
+
+    it('should reject a ceiling that is not a two-decimal dollar amount', async () => {
+      for (const value of ['-1', '1.234', 'abc', '', '1e3', '101']) {
+        await expect(
+          service.setConfig('ai_free_tier_ceiling', value, ACTOR)
+        ).rejects.toThrow(InvalidAIConfigError);
+      }
+    });
+
+    it('should persist a valid ceiling', async () => {
+      await service.setConfig('ai_free_tier_ceiling', '2.50', ACTOR);
+
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_free_tier_ceiling',
+        '2.50',
+        undefined
+      );
+    });
   });
 
   describe('fallback chain', () => {
     it('should parse the code-default chain into a trimmed list of model ids', async () => {
       const chain = await service.getFallbackChain();
-      expect(chain).toEqual([
-        'openrouter:z-ai/glm-5.2',
-        'openrouter:minimax/minimax-m2.5',
-        'openrouter:deepseek/deepseek-v3.2',
-      ]);
+      expect(chain).toEqual(AI_SETTING_DEFAULTS.ai_fallback_chain.split(','));
     });
 
     it('should return the DB chain over the code default', async () => {
@@ -787,13 +850,13 @@ describe('AIConfigService', () => {
   describe('getIntentModel', () => {
     it('maps each intent to its config key default', async () => {
       expect(await service.getIntentModel('fast')).toBe(
-        'openrouter:minimax/minimax-m2.5'
+        AI_SETTING_DEFAULTS.ai_fast_model
       );
       expect(await service.getIntentModel('balanced')).toBe(
-        'openrouter:z-ai/glm-5.2'
+        AI_SETTING_DEFAULTS.ai_default_model
       );
       expect(await service.getIntentModel('powerful')).toBe(
-        'openrouter:moonshotai/kimi-k2.5'
+        AI_SETTING_DEFAULTS.ai_deep_model
       );
     });
   });

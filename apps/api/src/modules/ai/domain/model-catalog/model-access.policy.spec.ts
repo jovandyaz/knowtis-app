@@ -72,6 +72,15 @@ describe('accessFor', () => {
     expect(accessFor(candidate(), NONE, false)).toBe('granted');
   });
 
+  it('should keep the free tier to models at or under $4.00 per million output tokens', () => {
+    const atTheLine = candidate({ outputCostPerToken: 0.000004 });
+    const overTheLine = candidate({ outputCostPerToken: 0.0000041 });
+
+    expect(accessFor(atTheLine, NONE, true)).toBe('granted');
+    expect(accessFor(overTheLine, NONE, true)).toBe('requires_byok');
+    expect(accessFor(overTheLine, NONE, false)).toBe('requires_byok');
+  });
+
   it('should grant a model priced exactly at the free ceiling', () => {
     expect(
       accessFor(
@@ -80,6 +89,17 @@ describe('accessFor', () => {
         true
       )
     ).toBe('granted');
+  });
+
+  it('should apply a tightened ceiling passed in by the caller', () => {
+    const tightened = 0.000002;
+    const midRange = candidate({ outputCostPerToken: 0.000003 });
+
+    expect(accessFor(midRange, NONE, true)).toBe('granted');
+    expect(accessFor(midRange, NONE, true, tightened)).toBe('requires_byok');
+    expect(accessFor(midRange, new Set(['openrouter']), true, tightened)).toBe(
+      'granted'
+    );
   });
 
   it('should gate a model the catalog cannot price', () => {

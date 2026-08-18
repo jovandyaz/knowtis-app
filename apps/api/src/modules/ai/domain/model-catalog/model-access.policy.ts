@@ -27,26 +27,34 @@ export interface AccessCandidate {
  * price ceiling is deliberately not flag-controlled for anything else — a row
  * reaches the catalog through a promote button rather than a code review, so
  * the platform never absorbs it above the ceiling no matter its tier.
+ *
+ * `maxOutputCostPerToken` is the operator's ceiling, which admins move from the
+ * backoffice; it falls back to the code default so a caller that cannot resolve
+ * config still gets the shipped policy rather than an open door.
  */
 export function accessFor(
   model: AccessCandidate,
   byokProviders: ReadonlySet<string>,
-  tierGatingOn: boolean
+  tierGatingOn: boolean,
+  maxOutputCostPerToken: number = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
 ): ModelAccess {
   const free = tierGatingOn
-    ? model.tier === FREE_TIER && isPlatformAbsorbable(model)
-    : CURATED_MODEL_IDS.has(model.id) || isPlatformAbsorbable(model);
+    ? model.tier === FREE_TIER &&
+      isPlatformAbsorbable(model, maxOutputCostPerToken)
+    : CURATED_MODEL_IDS.has(model.id) ||
+      isPlatformAbsorbable(model, maxOutputCostPerToken);
   if (free) {
     return GRANTED;
   }
   return byokProviders.has(providerOf(model.id)) ? GRANTED : REQUIRES_BYOK;
 }
 
-function isPlatformAbsorbable(model: AccessCandidate): boolean {
+function isPlatformAbsorbable(
+  model: AccessCandidate,
+  maxOutputCostPerToken: number
+): boolean {
   const cost = model.outputCostPerToken;
   // A stored price below zero is not a discount, it is a broken row: no column
   // constraint keeps it out, and reading it as free would waive the ceiling.
-  return (
-    cost !== null && cost >= 0 && cost <= FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
-  );
+  return cost !== null && cost >= 0 && cost <= maxOutputCostPerToken;
 }

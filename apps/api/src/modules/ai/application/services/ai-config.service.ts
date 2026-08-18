@@ -5,6 +5,7 @@ import type { Cache } from 'cache-manager';
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
   CHAIN_SEPARATOR,
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   parseChain,
   REASONING_EFFORTS,
   type AIConfigSource,
@@ -30,11 +31,26 @@ const CACHE_TTL_MS = 30_000; // 30 seconds
 const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
 const MAX_OPENROUTER_PROVIDERS = 8;
 
-export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list';
+export type AIConfigKind = 'model' | 'chain' | 'choice' | 'list' | 'money';
 
 type ConfigKeyDef =
-  | { default: string; kind: 'model' | 'chain' | 'list' }
+  | { default: string; kind: 'model' | 'chain' | 'list' | 'money' }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
+
+/** The free-tier ceiling is stored and edited in dollars per million output tokens; the policy consumes a per-token rate. */
+const TOKENS_PER_MILLION = 1_000_000;
+/** A ceiling above this buys nothing: the priciest model any provider routes for us costs far less, so a larger number can only be a typo. */
+const MAX_FREE_TIER_CEILING_USD_PER_MILLION = 100;
+
+/** Parses a dollars-per-million-output-tokens ceiling, or null when the value is not one. */
+function parseUsdPerMillion(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  return parsed <= MAX_FREE_TIER_CEILING_USD_PER_MILLION ? parsed : null;
+}
 
 /**
  * Parses an OpenRouter provider allowlist CSV into an ordered, de-duplicated
@@ -73,6 +89,10 @@ const CONFIG_KEYS = {
   ai_openrouter_providers: {
     default: AI_SETTING_DEFAULTS.ai_openrouter_providers,
     kind: 'list',
+  },
+  ai_free_tier_ceiling: {
+    default: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
+    kind: 'money',
   },
 } as const satisfies Record<string, ConfigKeyDef>;
 
@@ -180,6 +200,19 @@ export class AIConfigService {
     return AI_SETTING_DEFAULTS.ai_reasoning_effort;
   }
 
+  /** Resolves the operator's free-tier ceiling as a per-token rate. Falls back to the code default so a bad row never opens the tier wider than shipped. */
+  async getFreeTierMaxOutputCostPerToken(): Promise<number> {
+    const value = await this.getConfigValue('ai_free_tier_ceiling');
+    const parsed = parseUsdPerMillion(value);
+    if (parsed !== null) {
+      return parsed / TOKENS_PER_MILLION;
+    }
+    this.logger.warn(
+      `Ignoring invalid free-tier ceiling '${value}', using the code default`
+    );
+    return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
+  }
+
   /** Resolves the OpenRouter upstream allowlist; `[]` means no preference (OpenRouter default routing). */
   async getOpenRouterProviderOrder(): Promise<readonly string[]> {
     const value = await this.getConfigValue('ai_openrouter_providers');
@@ -266,6 +299,13 @@ export class AIConfigService {
         if (!def.allowed.includes(value)) {
           throw new InvalidAIConfigError(
             `'${value}' is not one of: ${def.allowed.join(', ')}`
+          );
+        }
+        return;
+      case 'money':
+        if (parseUsdPerMillion(value) === null) {
+          throw new InvalidAIConfigError(
+            `'${value}' is not a valid ceiling: dollars per million output tokens, up to two decimals, at most ${MAX_FREE_TIER_CEILING_USD_PER_MILLION}`
           );
         }
         return;
@@ -383,6 +423,8 @@ export class AIConfigService {
           : def.default;
       case 'list':
         return parseProviderOrder(row.value) !== null ? row.value : def.default;
+      case 'money':
+        return parseUsdPerMillion(row.value) !== null ? row.value : def.default;
       default: {
         const exhaustive: never = def;
         throw new Error(`Unhandled config kind: ${JSON.stringify(exhaustive)}`);
