@@ -262,6 +262,31 @@ describe('AiConfigPage', () => {
     ).toBeInTheDocument();
   });
 
+  it('routes the money kind to the free-tier ceiling editor', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_free_tier_ceiling',
+          value: '4.00',
+          kind: 'money',
+          source: 'default',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    expect(
+      screen.getByRole('heading', { name: 'Free tier' })
+    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/ceiling/i)).toHaveValue('4.00');
+  });
+
   it('renders the model editor when the api predates the chain key', () => {
     useAiConfigMock.mockReturnValue({
       data: [

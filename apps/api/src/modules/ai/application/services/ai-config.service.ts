@@ -4,11 +4,13 @@ import type { Cache } from 'cache-manager';
 
 import { MODEL_CATALOG, type ModelCatalog } from '@knowtis/ai-gateway';
 import {
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   CHAIN_SEPARATOR,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   parseChain,
   REASONING_EFFORTS,
   TOKENS_PER_MILLION,
+  USD_PER_MILLION_FORMAT,
   type AIConfigSource,
   type ModelIntent,
   type ReasoningEffort,
@@ -16,7 +18,6 @@ import {
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
-import { CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN } from '../../domain/model-catalog/candidate-filter';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   AI_CONFIG_REPOSITORY,
@@ -45,7 +46,7 @@ const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
 
 function parseUsdPerMillion(value: string): number | null {
   const trimmed = value.trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) {
+  if (!USD_PER_MILLION_FORMAT.test(trimmed)) {
     return null;
   }
   const parsed = Number(trimmed);

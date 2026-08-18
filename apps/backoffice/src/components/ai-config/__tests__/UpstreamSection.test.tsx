@@ -70,6 +70,24 @@ describe('UpstreamSection', () => {
     expect(screen.getByText(/baseten/)).toBeInTheDocument();
   });
 
+  it('does not revive a saved draft when the entry returns to its old value', async () => {
+    setConfigMutate.mockImplementation(
+      (_input: unknown, options?: { onSuccess?: () => void }) =>
+        options?.onSuccess?.()
+    );
+    const { rerender } = renderSection('fireworks', 'default');
+
+    const input = screen.getByRole('textbox');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'baseten');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    rerender(<UpstreamSection entry={entryWith('baseten', 'custom')} />);
+    rerender(<UpstreamSection entry={entryWith('fireworks', 'default')} />);
+
+    expect(screen.getByRole('textbox')).toHaveValue('fireworks');
+  });
+
   it('saves a valid allowlist trimmed to the config key', async () => {
     renderSection('fireworks');
 
@@ -78,10 +96,13 @@ describe('UpstreamSection', () => {
     await userEvent.type(input, '  fireworks,baseten  ');
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(setConfigMutate).toHaveBeenCalledWith({
-      key: 'ai_openrouter_providers',
-      value: 'fireworks,baseten',
-    });
+    expect(setConfigMutate).toHaveBeenCalledWith(
+      {
+        key: 'ai_openrouter_providers',
+        value: 'fireworks,baseten',
+      },
+      expect.anything()
+    );
   });
 
   it('flags an invalid slug and blocks the save', async () => {
@@ -103,10 +124,13 @@ describe('UpstreamSection', () => {
     await userEvent.clear(input);
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(setConfigMutate).toHaveBeenCalledWith({
-      key: 'ai_openrouter_providers',
-      value: '',
-    });
+    expect(setConfigMutate).toHaveBeenCalledWith(
+      {
+        key: 'ai_openrouter_providers',
+        value: '',
+      },
+      expect.anything()
+    );
   });
 
   it('marks a stored override with a filled custom badge', () => {

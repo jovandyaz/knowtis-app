@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
+import {
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
+  FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+} from '@knowtis/shared-types';
 
 import type { UpstreamModel } from '../ports/openrouter-models.port';
 import {
-  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   isCatalogCandidate,
   MIN_CANDIDATE_CONTEXT_TOKENS,
   toCandidateUpsert,
