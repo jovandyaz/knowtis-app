@@ -14,6 +14,7 @@ import {
   deriveWsBaseUrl,
   type RefreshOutcome,
 } from '@knowtis/api-client';
+import { CREDENTIAL_HANDSHAKE_FAILURES } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import { getCollaborationToken } from './token-provider';
@@ -146,6 +147,13 @@ export function useHocuspocusCollaboration({
           context: 'useHocuspocusCollaboration',
         });
         setStatus('authenticationFailed');
+
+        // Only a dead credential can be repaired by refreshing. A denial or a
+        // server fault would spend the attempt and then end the whole session
+        // on the next reconnect, over a note the user merely cannot open.
+        if (!CREDENTIAL_HANDSHAKE_FAILURES.has(reason)) {
+          return;
+        }
 
         void authPolicy.recover({
           refresh: () =>

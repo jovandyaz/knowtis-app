@@ -25,6 +25,9 @@ export {
 
 export {
   COLLABORATION_EVENTS,
+  CREDENTIAL_HANDSHAKE_FAILURES,
+  HANDSHAKE_FAILURE,
+  type HandshakeFailureReason,
   type CollaborationEventType,
   type CollaborationUser,
   type JoinRoomPayload,

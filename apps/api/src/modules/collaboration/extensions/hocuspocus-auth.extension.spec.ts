@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
+import {
+  GENERAL_ACCESS,
+  HANDSHAKE_FAILURE,
+  PERMISSION,
+} from '@knowtis/shared-types';
 
 import type { NoteRepository } from '../../notes/domain';
 import { HocuspocusAuthExtension } from './hocuspocus-auth.extension';
@@ -38,7 +42,7 @@ describe('HocuspocusAuthExtension', () => {
     const extension = ext.toExtension();
     await expect(
       extension.onAuthenticate?.(buildPayload('') as never)
-    ).rejects.toThrow('Authentication required');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.AUTH_REQUIRED);
   });
 
   it('should set readOnly when user can read but not update', async () => {
@@ -107,7 +111,7 @@ describe('HocuspocusAuthExtension', () => {
 
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow('Forbidden');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
   });
 
   it('should reject MCP-source tokens', async () => {
@@ -125,7 +129,7 @@ describe('HocuspocusAuthExtension', () => {
 
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('mcp-token') as never)
-    ).rejects.toThrow('Forbidden');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
   });
 
   it('should reject when token is invalid', async () => {
@@ -141,7 +145,7 @@ describe('HocuspocusAuthExtension', () => {
 
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('bad-token') as never)
-    ).rejects.toThrow('Invalid token');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.INVALID_TOKEN);
   });
 
   it('should reject with Invalid token when JWT is valid but user no longer exists', async () => {
@@ -160,7 +164,7 @@ describe('HocuspocusAuthExtension', () => {
 
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow('Invalid token');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.INVALID_TOKEN);
   });
 
   it('should mask raw repository errors as Internal server error', async () => {
@@ -212,7 +216,7 @@ describe('HocuspocusAuthExtension', () => {
 
     await expect(
       ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow('Note not found');
+    ).rejects.toThrow(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
   });
 
   it('should grant editor access via valid share token on a public note', async () => {
