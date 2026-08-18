@@ -34,6 +34,7 @@ const columnHelper = createColumnHelper<CatalogModel>();
 
 function candidateColumns(
   disabled: boolean,
+  maxOutputCostPerToken: number,
   onPromote: (model: CatalogModel) => void
 ): ColumnDef<CatalogModel, unknown>[] {
   return [
@@ -44,7 +45,7 @@ function candidateColumns(
         <div className="flex min-w-0 flex-col">
           <span className="flex flex-wrap items-center gap-2">
             {row.original.label}
-            {isByokOnly(row.original) ? (
+            {isByokOnly(row.original, maxOutputCostPerToken) ? (
               <Badge variant="outline">BYOK only</Badge>
             ) : null}
           </span>
@@ -114,9 +115,13 @@ function candidateColumns(
 
 interface CandidatesTableProps {
   disabled?: boolean;
+  maxOutputCostPerToken: number;
 }
 
-export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
+export function CandidatesTable({
+  disabled = false,
+  maxOutputCostPerToken,
+}: CandidatesTableProps) {
   const [search, setSearch] = useState('');
   const debouncedSearch = useDebounce(search);
   const [pagination, setPagination] = useState<PaginationState>({
@@ -135,10 +140,10 @@ export function CandidatesTable({ disabled = false }: CandidatesTableProps) {
   const promoteModel = promote.mutate;
   const columns = useMemo(
     () =>
-      candidateColumns(locked, (model) =>
+      candidateColumns(locked, maxOutputCostPerToken, (model) =>
         promoteModel({ id: model.id, tier: PROMOTION_TIER })
       ),
-    [locked, promoteModel]
+    [locked, maxOutputCostPerToken, promoteModel]
   );
 
   return (

@@ -32,6 +32,7 @@ interface PromotedCopyEdit {
 interface PromotedModelRowProps {
   model: CatalogModel;
   disabled: boolean;
+  maxOutputCostPerToken: number;
   onSave: (label: string, description: string) => void;
   onRetire: () => void;
 }
@@ -39,6 +40,7 @@ interface PromotedModelRowProps {
 function PromotedModelRow({
   model,
   disabled,
+  maxOutputCostPerToken,
   onSave,
   onRetire,
 }: PromotedModelRowProps) {
@@ -68,7 +70,7 @@ function PromotedModelRow({
           >
             {model.id}
           </span>
-          {isByokOnly(model) ? (
+          {isByokOnly(model, maxOutputCostPerToken) ? (
             <Badge variant="outline">BYOK only</Badge>
           ) : null}
         </div>
@@ -143,6 +145,7 @@ function PromotedModelRow({
 interface PromotedTableProps {
   models: CatalogModel[];
   disabled: boolean;
+  maxOutputCostPerToken: number;
   onSave: (edit: PromotedCopyEdit) => void;
   onRetire: (id: string) => void;
 }
@@ -150,6 +153,7 @@ interface PromotedTableProps {
 export function PromotedTable({
   models,
   disabled,
+  maxOutputCostPerToken,
   onSave,
   onRetire,
 }: PromotedTableProps) {
@@ -191,6 +195,7 @@ export function PromotedTable({
                 key={model.id}
                 model={model}
                 disabled={disabled}
+                maxOutputCostPerToken={maxOutputCostPerToken}
                 onSave={(label, description) =>
                   onSave({ id: model.id, label, description })
                 }

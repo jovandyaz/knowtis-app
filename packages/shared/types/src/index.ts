@@ -133,6 +133,7 @@ export {
   CATALOG_LABEL_MAX_LENGTH,
   CATALOG_DESCRIPTION_MAX_LENGTH,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+  TOKENS_PER_MILLION,
   type CatalogModelDto,
   type CatalogAlertDto,
   type CatalogOverviewDto,

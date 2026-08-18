@@ -23,6 +23,9 @@ export const CATALOG_DESCRIPTION_MAX_LENGTH = 500;
 /** Ceiling the platform absorbs on the free tier: $4.00 per million output tokens. Above it a model is reachable only with BYOK. */
 export const FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN = 0.000004;
 
+/** Model prices are quoted per million tokens but stored and compared per token; API and backoffice must convert identically. */
+export const TOKENS_PER_MILLION = 1_000_000;
+
 export interface CatalogModelDto {
   id: string;
   label: string;

@@ -1,5 +1,6 @@
 import {
   useAiCatalog,
+  useAiConfig,
   useResolveCatalogAlert,
   useRetireCatalogModel,
   useSyncCatalog,
@@ -15,6 +16,7 @@ import {
 import type { CatalogSyncSkipReason } from '@knowtis/shared-types';
 
 import { CandidatesTable } from './CandidatesTable';
+import { freeTierCeilingFrom } from './catalog-pricing';
 import { CatalogAlerts } from './CatalogAlerts';
 import { ConfigSection } from './ConfigSection';
 import { PromotedTable } from './PromotedTable';
@@ -38,6 +40,7 @@ function syncSummary(result: CatalogSyncResult): string {
 
 export function CatalogSection() {
   const catalog = useAiCatalog();
+  const config = useAiConfig();
   const retire = useRetireCatalogModel();
   const updateCopy = useUpdateCatalogCopy();
   const resolveAlert = useResolveCatalogAlert();
@@ -48,6 +51,7 @@ export function CatalogSection() {
   const failed = mutations.find((mutation) => mutation.isError);
 
   const overview = catalog.isError ? null : (catalog.data ?? null);
+  const maxOutputCostPerToken = freeTierCeilingFrom(config.data);
 
   return (
     <ConfigSection
@@ -94,12 +98,16 @@ export function CatalogSection() {
         <LoadingState />
       )}
 
-      <CandidatesTable disabled={mutating} />
+      <CandidatesTable
+        disabled={mutating}
+        maxOutputCostPerToken={maxOutputCostPerToken}
+      />
 
       {overview ? (
         <PromotedTable
           models={overview.promoted}
           disabled={mutating}
+          maxOutputCostPerToken={maxOutputCostPerToken}
           onSave={({ id, label, description }) =>
             updateCopy.mutate({ id, patch: { label, description } })
           }

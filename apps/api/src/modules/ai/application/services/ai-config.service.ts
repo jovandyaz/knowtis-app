@@ -8,6 +8,7 @@ import {
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   parseChain,
   REASONING_EFFORTS,
+  TOKENS_PER_MILLION,
   type AIConfigSource,
   type ModelIntent,
   type ReasoningEffort,
@@ -38,8 +39,6 @@ type ConfigKeyDef =
   | { default: string; kind: 'model' | 'chain' | 'list' | 'money' }
   | { default: string; kind: 'choice'; allowed: readonly string[] };
 
-/** The free-tier ceiling is stored and edited in dollars per million output tokens; the policy consumes a per-token rate. */
-const TOKENS_PER_MILLION = 1_000_000;
 /** Above the price that admits a model into the catalog at all, a higher ceiling can only be a typo: nothing that expensive is ever promotable. */
 const MAX_FREE_TIER_CEILING_USD_PER_MILLION =
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;

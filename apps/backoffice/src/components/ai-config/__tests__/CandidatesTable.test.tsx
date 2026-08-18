@@ -81,7 +81,8 @@ function page(items: CatalogModel[]): PaginatedCandidates {
 
 function renderTable(
   items: CatalogModel[] = [model()],
-  query: Record<string, unknown> = {}
+  query: Record<string, unknown> = {},
+  maxOutputCostPerToken: number = FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN
 ) {
   useAiCatalogCandidatesMock.mockReturnValue({
     data: page(items),
@@ -91,7 +92,10 @@ function renderTable(
     refetch: vi.fn(),
     ...query,
   });
-  return render(<CandidatesTable />, { wrapper: Wrapper });
+  return render(
+    <CandidatesTable maxOutputCostPerToken={maxOutputCostPerToken} />,
+    { wrapper: Wrapper }
+  );
 }
 
 function lastParams(): AiCatalogCandidatesParams {
@@ -181,6 +185,21 @@ describe('CandidatesTable', () => {
     ).toBeInTheDocument();
   });
 
+  // The operator can tighten the ceiling below what this bundle shipped with;
+  // a badge still reading the default would offer the admin a model the server
+  // now gates.
+  it('should mark a candidate the operator ceiling excludes, not only the default one', () => {
+    renderTable(
+      [model({ label: 'Mid priced', outputCostPerToken: CHEAP_OUTPUT_COST })],
+      {},
+      CHEAP_OUTPUT_COST / 2
+    );
+
+    expect(
+      within(rowFor('Mid priced')).getByText(BYOK_ONLY_BADGE)
+    ).toBeInTheDocument();
+  });
+
   it('should mark a candidate stored with a negative price as BYOK only, as the server reads it', () => {
     renderTable([
       model({ label: 'Broken row', outputCostPerToken: -CHEAP_OUTPUT_COST }),
@@ -253,7 +272,13 @@ describe('CandidatesTable', () => {
       isError: false,
       refetch: vi.fn(),
     });
-    render(<CandidatesTable disabled />, { wrapper: Wrapper });
+    render(
+      <CandidatesTable
+        disabled
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+      />,
+      { wrapper: Wrapper }
+    );
 
     expect(screen.getByRole('button', { name: 'Promote One' })).toBeDisabled();
   });
@@ -272,7 +297,12 @@ describe('CandidatesTable', () => {
       isError: false,
       refetch: vi.fn(),
     });
-    render(<CandidatesTable />, { wrapper: Wrapper });
+    render(
+      <CandidatesTable
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+      />,
+      { wrapper: Wrapper }
+    );
 
     expect(
       screen.getByRole('table', { name: /candidates/i })
@@ -287,7 +317,12 @@ describe('CandidatesTable', () => {
       isError: false,
       refetch: vi.fn(),
     });
-    render(<CandidatesTable />, { wrapper: Wrapper });
+    render(
+      <CandidatesTable
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+      />,
+      { wrapper: Wrapper }
+    );
 
     expect(screen.getByText(/no candidates found/i)).toBeInTheDocument();
   });
@@ -300,7 +335,12 @@ describe('CandidatesTable', () => {
       isError: true,
       refetch,
     });
-    render(<CandidatesTable />, { wrapper: Wrapper });
+    render(
+      <CandidatesTable
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+      />,
+      { wrapper: Wrapper }
+    );
 
     await userEvent.click(screen.getByRole('button', { name: /try again/i }));
 
