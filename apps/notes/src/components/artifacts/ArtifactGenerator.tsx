@@ -116,8 +116,8 @@ export function ArtifactGeneratorDialog({
       void generateArtifact
         .mutateAsync({ noteId, type })
         .then(() => {
-          closeGenerator();
           if (useArtifactSidebarStore.getState().activeNoteId === noteId) {
+            closeGenerator();
             useWorkspaceStore.getState().setTab('estudio');
           }
           toast.success(t('ai.artifacts.generate.success'));
