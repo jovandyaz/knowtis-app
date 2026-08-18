@@ -4,10 +4,18 @@ import * as es from './locales/es';
 import type { InterpolationVariables } from './types';
 import { interpolate } from './utils/interpolate';
 
+type TranslationShape<T> = {
+  [K in keyof T]: T[K] extends string ? string : TranslationShape<T[K]>;
+};
+
 /**
- * Available locales mapping
+ * Available locales mapping. Every locale is held to the shape of `en`: a key
+ * it omits reaches the reader as the raw key, since `t` has no fallback locale.
  */
-const locales = { en, es } as const;
+const locales = { en, es } satisfies Record<
+  Locale,
+  TranslationShape<typeof en>
+>;
 
 /**
  * Available namespace names
