@@ -32,8 +32,9 @@ interface UseHocuspocusCollaborationOptions {
   enabled?: boolean;
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
-  /** Must resolve true only after the new token is synchronously observable
-   *  via `getCollaborationToken()`'s storage. False/throw is terminal. */
+  /** Must resolve `refreshed` only after the new token is synchronously
+   *  observable via `getCollaborationToken()`'s storage. Only `rejected` ends
+   *  the session; `unavailable` leaves the retry to the next reconnect. */
   onAuthRefresh?: (() => Promise<RefreshOutcome>) | undefined;
   /** Fired once after `onAuthRefresh` reports the credential is dead. */
   onSessionExpired?: (() => void) | undefined;
@@ -149,7 +150,9 @@ export function useHocuspocusCollaboration({
         void authPolicy.recover({
           refresh: () =>
             onAuthRefreshRef.current?.() ?? Promise.resolve('rejected'),
-          // v4 auto-reconnect re-invokes getToken() on next onOpen; destroy would block it.
+          // v4 auto-reconnect re-invokes getToken() on next onOpen, both to pick
+          // up a fresh token and to retry one the server never judged; destroy
+          // would block either.
           onRefreshed: () => {},
           onUnavailable: () => {},
           onExhausted: () => {

@@ -139,7 +139,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     });
   });
 
-  it('keeps the provider alive when onAuthRefresh throws, so reconnect can retry', async () => {
+  it('keeps the provider alive when onAuthRefresh throws', async () => {
     const onAuthRefresh = vi.fn().mockRejectedValue(new Error('network down'));
     const onSessionExpired = vi.fn();
 
@@ -168,7 +168,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
 
-  it('keeps the provider alive when the refresh is unavailable', async () => {
+  it('gives the attempt back so the next auth failure refreshes again', async () => {
     const onAuthRefresh = vi.fn().mockResolvedValue('unavailable');
     const onSessionExpired = vi.fn();
 
@@ -189,10 +189,15 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     ] as (params: { reason: string }) => void;
 
     onAuthenticationFailed({ reason: 'jwt expired' });
-
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(1);
     });
+
+    onAuthenticationFailed({ reason: 'jwt expired' });
+    await waitFor(() => {
+      expect(onAuthRefresh).toHaveBeenCalledTimes(2);
+    });
+
     expect(provider.destroy).not.toHaveBeenCalled();
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
@@ -239,7 +244,7 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     expect(onSessionExpired).not.toHaveBeenCalled();
   });
 
-  it('does not fire onSessionExpired when the hook unmounts while refresh is in-flight and then resolves false', async () => {
+  it('does not fire onSessionExpired when the hook unmounts before a rejected refresh lands', async () => {
     let resolveRefresh: ((value: RefreshOutcome) => void) | undefined;
     const onAuthRefresh = vi.fn(
       () =>
@@ -268,46 +273,6 @@ describe('useHocuspocusCollaboration — auth failure recovery', () => {
     onAuthenticationFailed({ reason: 'jwt expired' });
     unmount();
     resolveRefresh?.('rejected');
-
-    await waitFor(() => {
-      expect(onAuthRefresh).toHaveBeenCalledTimes(1);
-    });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(provider.destroy).toHaveBeenCalledTimes(1);
-    expect(onSessionExpired).not.toHaveBeenCalled();
-  });
-
-  it('does not fire onSessionExpired when the hook unmounts while refresh is in-flight and then throws', async () => {
-    let rejectRefresh: ((reason: Error) => void) | undefined;
-    const onAuthRefresh = vi.fn(
-      () =>
-        new Promise<RefreshOutcome>((_, reject) => {
-          rejectRefresh = reject;
-        })
-    );
-    const onSessionExpired = vi.fn();
-
-    const { unmount } = renderHook(() =>
-      useHocuspocusCollaboration({
-        noteId: 'note-1',
-        yDoc,
-        awareness,
-        serverUrl: 'ws://localhost:3333/collaboration',
-        onAuthRefresh,
-        onSessionExpired,
-      })
-    );
-
-    const provider = mockProviderInstances[0];
-    const onAuthenticationFailed = provider.options[
-      'onAuthenticationFailed'
-    ] as (params: { reason: string }) => void;
-
-    onAuthenticationFailed({ reason: 'jwt expired' });
-    unmount();
-    rejectRefresh?.(new Error('network down'));
 
     await waitFor(() => {
       expect(onAuthRefresh).toHaveBeenCalledTimes(1);

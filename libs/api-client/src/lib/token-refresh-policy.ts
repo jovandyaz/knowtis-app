@@ -1,9 +1,11 @@
+import type { RefreshFailure } from './refresh-failure';
+
 /**
  * `refreshed` means the new token is observable afterwards. `rejected` means the
  * credential is dead and retrying can never help. `unavailable` means the server
  * or network never answered, so the credential's fate is still unknown.
  */
-export type RefreshOutcome = 'refreshed' | 'rejected' | 'unavailable';
+export type RefreshOutcome = 'refreshed' | RefreshFailure;
 
 export interface TokenRefreshHandlers {
   refresh: () => Promise<RefreshOutcome>;
@@ -26,10 +28,11 @@ export interface TokenRefreshPolicy {
 }
 
 /**
- * Transport-agnostic "refresh the token once, then give up" policy shared by the
- * AI Socket.IO client and the Hocuspocus collaboration provider. Holds the
- * spent/in-flight guards; each consumer supplies its own refresh, reconnect, and
- * teardown effects per call.
+ * Transport-agnostic single-attempt token refresh, shared by the AI and agent
+ * Socket.IO clients and the Hocuspocus collaboration provider. The attempt is
+ * only spent on a judged outcome: an `unavailable` refresh hands it back so the
+ * transport's own reconnect can try again. Each consumer supplies its own
+ * refresh, reconnect, and teardown effects per call.
  */
 export function createTokenRefreshPolicy(): TokenRefreshPolicy {
   let attempted = false;
@@ -56,20 +59,30 @@ export function createTokenRefreshPolicy(): TokenRefreshPolicy {
 
       attempted = true;
       inFlight = true;
+      let outcome: RefreshOutcome;
       try {
-        const outcome = await handlers.refresh();
-        if (outcome === 'refreshed') {
-          handlers.onRefreshed();
-        } else if (outcome === 'rejected') {
-          handlers.onExhausted();
-        } else {
-          giveTheAttemptBack(handlers);
-        }
+        outcome = await handlers.refresh();
       } catch (error) {
         handlers.onError?.(error);
-        giveTheAttemptBack(handlers);
+        outcome = 'unavailable';
       } finally {
         inFlight = false;
+      }
+
+      switch (outcome) {
+        case 'refreshed':
+          handlers.onRefreshed();
+          break;
+        case 'rejected':
+          handlers.onExhausted();
+          break;
+        case 'unavailable':
+          giveTheAttemptBack(handlers);
+          break;
+        default: {
+          const unhandled: never = outcome;
+          throw new Error(`Unhandled refresh outcome: ${String(unhandled)}`);
+        }
       }
     },
   };

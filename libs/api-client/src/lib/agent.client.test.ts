@@ -322,6 +322,70 @@ describe('AgentClient – auth/transport failure paths', () => {
     expect(onSessionExpired).toHaveBeenCalledTimes(1);
   });
 
+  it('reports a connection failure without ending the session when the refresh is unavailable', async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'unavailable');
+    const onSessionExpired = vi.fn();
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'stale-token',
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+    client.setSessionExpiredHandler(onSessionExpired);
+
+    client.sendMessage('hi', callbacks);
+    await flush();
+
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(onSessionExpired).not.toHaveBeenCalled();
+  });
+
+  it('fails a proposal-suspended turn exactly once when the refresh after approval is unavailable', async () => {
+    const refresh = vi.fn(async (): Promise<RefreshOutcome> => 'unavailable');
+    const onSessionExpired = vi.fn();
+    const callbacks = {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+      onProposal: vi.fn(),
+    };
+    client.setTokenProvider({
+      getAccessToken: () => 'stale-token',
+      clearTokens: vi.fn(),
+    });
+    client.setAuthRefreshHandler(refresh);
+    client.setSessionExpiredHandler(onSessionExpired);
+
+    client.sendMessage('create a note', callbacks);
+    await flush();
+    fake.trigger('agent:proposal', PROPOSAL);
+
+    client.approve('p1');
+    await flush();
+    fake.trigger('agent:error', AUTH_ERROR);
+    await flush();
+
+    expect(callbacks.onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'CONNECTION_FAILED' })
+    );
+    expect(onSessionExpired).not.toHaveBeenCalled();
+
+    fake.socket.connected = false;
+    fake.socket.active = false;
+    fake.trigger('disconnect', 'io server disconnect');
+
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+  });
+
   it('fails the active request with CONNECTION_FAILED after maxReconnectAttempts connect_error events', async () => {
     const callbacks = {
       onChunk: vi.fn(),
