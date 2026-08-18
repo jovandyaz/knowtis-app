@@ -126,7 +126,9 @@
       "stored": "Key stored ({{prefix}}…)",
       "billedBadge": "Your key",
       "lastUsed": "Last used {{when}}",
-      "neverUsed": "Not used yet"
+      "neverUsed": "Not used yet",
+      "bridge": "Add your API key",
+      "bridgeHint": "Run more models on your own provider key"
     }
   },
   "aiModels": {

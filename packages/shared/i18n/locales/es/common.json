@@ -126,7 +126,9 @@
       "stored": "Clave guardada ({{prefix}}…)",
       "billedBadge": "Tu clave",
       "lastUsed": "Último uso {{when}}",
-      "neverUsed": "Sin usar todavía"
+      "neverUsed": "Sin usar todavía",
+      "bridge": "Agrega tu clave",
+      "bridgeHint": "Usa tu propia clave de API para ejecutar más modelos"
     }
   },
   "aiModels": {

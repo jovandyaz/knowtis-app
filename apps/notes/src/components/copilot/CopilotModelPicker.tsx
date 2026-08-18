@@ -3,13 +3,17 @@ import { useTranslation } from 'react-i18next';
 import {
   useAISettings,
   useAvailableModels,
+  useProviderKeys,
   useUpdateAISettings,
 } from '@/hooks';
+import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
-import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import { Button, ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
   DEFAULT_MODEL_INTENT,
+  FEATURE_FLAG_KEYS,
   isModelIntent,
   MODEL_TIERS,
 } from '@knowtis/shared-types';
@@ -34,6 +38,15 @@ export function CopilotModelPicker() {
   } = useAvailableModels(showPicker);
   const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
+  const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
+  const openSettings = useSettingsStore((s) => s.open);
+  const { data: keys, isPending: keysPending } = useProviderKeys(
+    showPicker && byokEnabled
+  );
+  // A stored key can unlock nothing routable, so "no model billed to you" is
+  // not the same question as "do you hold a key".
+  const offerBridge =
+    byokEnabled && !isPending && !keysPending && keys?.length === 0;
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
   const override = advancedOverride(prefs?.preferredModel, models);
@@ -57,12 +70,26 @@ export function CopilotModelPicker() {
 
   if (advancedOptions.length === 0 && !isError && !resolvingOverride) {
     return (
-      <SegmentedControl
-        aria-label={t('aiAssistant.intent.label')}
-        options={intentChipOptions(t)}
-        value={override ? null : intent}
-        onValueChange={select}
-      />
+      <div className="flex min-w-0 flex-wrap items-center gap-1">
+        <SegmentedControl
+          aria-label={t('aiAssistant.intent.label')}
+          options={intentChipOptions(t)}
+          value={override ? null : intent}
+          onValueChange={select}
+        />
+        {offerBridge ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-xs text-(--muted-foreground)"
+            title={t('aiAssistant.byok.bridgeHint')}
+            onClick={() => openSettings('aiAssistant')}
+          >
+            {t('aiAssistant.byok.bridge')}
+          </Button>
+        ) : null}
+      </div>
     );
   }
 
