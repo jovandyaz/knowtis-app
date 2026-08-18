@@ -1,3 +1,5 @@
+import { CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN } from '@knowtis/shared-types';
+
 import type { CandidateUpsert } from '../ports/ai-catalog.repository';
 import type { UpstreamModel } from '../ports/openrouter-models.port';
 import {
@@ -16,9 +18,6 @@ export const OPEN_WEIGHT_AUTHORS = [
 ] as const;
 
 export const MIN_CANDIDATE_CONTEXT_TOKENS = 128_000;
-
-/** Ceiling for admission into the catalog. Anything between this and the free-tier ceiling is only reachable with BYOK or a paid plan. */
-export const CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN = 0.00002;
 
 const OPEN_WEIGHT_AUTHOR_SET: ReadonlySet<string> = new Set(
   OPEN_WEIGHT_AUTHORS

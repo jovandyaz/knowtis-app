@@ -9,49 +9,36 @@ import {
   Input,
   MutationErrorAlert,
 } from '@knowtis/design-system';
+import {
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
+  TOKENS_PER_MILLION,
+  USD_PER_MILLION_FORMAT,
+} from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 import { useForkedDraft } from './useForkedDraft';
 
-const OPENROUTER_PROVIDER_SLUG = /^[a-z0-9-]+(\/[a-z0-9.-]+)?$/;
-const MAX_OPENROUTER_PROVIDERS = 8;
-const UPSTREAMS_INPUT_ID = 'ai-openrouter-upstreams';
-
-function normalizeCsv(value: string): string {
-  const trimmed = value.trim();
-  if (trimmed === '') {
-    return '';
-  }
-  return trimmed
-    .split(',')
-    .map((slug) => slug.trim())
-    .join(',');
-}
+const CEILING_INPUT_ID = 'ai-free-tier-ceiling';
+const MAX_CEILING_USD_PER_MILLION =
+  CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN * TOKENS_PER_MILLION;
 
 function validate(value: string): string | null {
   const trimmed = value.trim();
-  if (trimmed === '') {
-    return null;
+  if (!USD_PER_MILLION_FORMAT.test(trimmed)) {
+    return 'Dollars per million output tokens, up to two decimals.';
   }
-  const slugs = trimmed.split(',').map((slug) => slug.trim());
-  if (slugs.length > MAX_OPENROUTER_PROVIDERS) {
-    return `Use at most ${MAX_OPENROUTER_PROVIDERS} providers.`;
-  }
-  if (slugs.some((slug) => !OPENROUTER_PROVIDER_SLUG.test(slug))) {
-    return 'Each provider is a lowercase slug (letters, numbers, hyphens), optionally with a /variant.';
-  }
-  if (new Set(slugs).size !== slugs.length) {
-    return 'Providers must be unique.';
+  if (Number(trimmed) > MAX_CEILING_USD_PER_MILLION) {
+    return `At most $${MAX_CEILING_USD_PER_MILLION} — the price past which nothing enters the catalog.`;
   }
   return null;
 }
 
-interface UpstreamSectionProps {
+interface CeilingSectionProps {
   entry: AiConfigEntry;
 }
 
-export function UpstreamSection({ entry }: UpstreamSectionProps) {
+export function CeilingSection({ entry }: CeilingSectionProps) {
   const setConfig = useSetAiConfig();
   const resetConfig = useResetAiConfig();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
@@ -61,43 +48,42 @@ export function UpstreamSection({ entry }: UpstreamSectionProps) {
 
   return (
     <ConfigSection
-      title="OpenRouter upstreams"
-      description="The upstream providers OpenRouter may route a turn to, tried in order. Applies only to models served through OpenRouter."
+      title="Free tier"
+      description="The output price the platform absorbs, in dollars per million tokens. Models at or under it serve every signed-in user; anything above is BYOK only."
     >
       <MutationErrorAlert
         error={setConfig.error}
         isError={setConfig.isError}
-        fallbackMessage="Could not update the upstream allowlist."
+        fallbackMessage="Could not update the free-tier ceiling."
       />
       <ConfigSourceCell
         entry={entry}
-        label="provider allowlist"
+        label="free-tier ceiling"
         disabled={mutating}
         onReset={() => resetConfig.mutate({ key: entry.key })}
       />
       <FormField
-        id={UPSTREAMS_INPUT_ID}
-        label="Provider allowlist"
+        id={CEILING_INPUT_ID}
+        label="Ceiling ($/M output)"
         error={error ?? undefined}
       >
         <Input
-          id={UPSTREAMS_INPUT_ID}
+          id={CEILING_INPUT_ID}
           value={value}
           disabled={mutating}
+          inputMode="decimal"
           spellCheck={false}
           autoComplete="off"
           aria-invalid={error !== null}
           aria-describedby={
-            error !== null ? `${UPSTREAMS_INPUT_ID}-error` : undefined
+            error !== null ? `${CEILING_INPUT_ID}-error` : undefined
           }
-          placeholder="fireworks,baseten"
           onChange={(event) => edit(event.target.value)}
         />
       </FormField>
       <p className="text-xs text-(--muted-foreground)">
-        Comma-separated lowercase slugs, up to {MAX_OPENROUTER_PROVIDERS}. Leave
-        it empty for OpenRouter’s default routing. Measured-good defaults:
-        fireworks, baseten.
+        Applies within a minute. The catalog tables below re-mark “BYOK only”
+        against the value you save.
       </p>
       {isDirty ? (
         <div className="flex flex-wrap items-center gap-2">
@@ -105,7 +91,7 @@ export function UpstreamSection({ entry }: UpstreamSectionProps) {
             disabled={mutating || error !== null}
             onClick={() =>
               setConfig.mutate(
-                { key: entry.key, value: normalizeCsv(value) },
+                { key: entry.key, value: value.trim() },
                 { onSuccess: discard }
               )
             }

@@ -121,7 +121,7 @@ describe('CatalogSection', () => {
     resolveAlertMutate.mockReset();
     useAiCatalogMock.mockReset();
     useAiConfigMock.mockReset();
-    useAiConfigMock.mockReturnValue({ data: undefined });
+    useAiConfigMock.mockReturnValue({ data: [] });
     useAiCatalogCandidatesMock.mockReset();
     useAiCatalogCandidatesMock.mockReturnValue(EMPTY_CANDIDATE_PAGE);
     mutationStateMock.mockReset();
@@ -151,6 +151,29 @@ describe('CatalogSection', () => {
       name: 'Promoted models',
     });
     expect(within(promotedTable).getByText(/byok only/i)).toBeInTheDocument();
+  });
+
+  // Same lesson as the ceiling: roles are derived from the effective config,
+  // so the wiring from useAiConfig into the table is what this test guards.
+  it('marks the promoted rows the effective config is serving', () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        { key: 'ai_default_model', value: 'openrouter:vendor/cheap-one' },
+        {
+          key: 'ai_fallback_chain',
+          value: 'openrouter:vendor/cheap-one,openrouter:vendor/other',
+        },
+      ],
+    });
+
+    renderSection({ promoted: [model({ status: 'promoted' })] });
+
+    const promotedTable = screen.getByRole('table', {
+      name: 'Promoted models',
+    });
+    expect(
+      within(promotedTable).getByText('Serves Default · Fallback')
+    ).toBeInTheDocument();
   });
 
   it('lists an open alert with its kind, model and detail', () => {

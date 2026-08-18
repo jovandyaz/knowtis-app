@@ -20,6 +20,7 @@ import { freeTierCeilingFrom } from './catalog-pricing';
 import { CatalogAlerts } from './CatalogAlerts';
 import { ConfigSection } from './ConfigSection';
 import { PromotedTable } from './PromotedTable';
+import { servingRolesFrom } from './serving-roles';
 
 const SYNC_SKIP_MESSAGES: Record<string, string> = {
   flag_disabled: 'Skipped: the ai_catalog_sync flag is off.',
@@ -52,6 +53,7 @@ export function CatalogSection() {
 
   const overview = catalog.isError ? null : (catalog.data ?? null);
   const maxOutputCostPerToken = freeTierCeilingFrom(config.data);
+  const servingRoles = config.data ? servingRolesFrom(config.data) : null;
 
   return (
     <ConfigSection
@@ -108,6 +110,7 @@ export function CatalogSection() {
           models={overview.promoted}
           disabled={mutating}
           maxOutputCostPerToken={maxOutputCostPerToken}
+          servingRoles={servingRoles}
           onSave={({ id, label, description }) =>
             updateCopy.mutate({ id, patch: { label, description } })
           }

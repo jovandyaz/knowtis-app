@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
 import { CatalogSection } from '@/components/ai-config/CatalogSection';
+import { CeilingSection } from '@/components/ai-config/CeilingSection';
 import { ModelsSection } from '@/components/ai-config/ModelsSection';
 import { ProvidersSection } from '@/components/ai-config/ProvidersSection';
 import { ReasoningSection } from '@/components/ai-config/ReasoningSection';
@@ -82,6 +83,7 @@ export function AiConfigPage() {
   const flags = useFeatureFlags();
 
   const chain = config.data?.find((entry) => entry.kind === 'chain');
+  const ceiling = config.data?.find((entry) => entry.kind === 'money');
   const effort = config.data?.find((entry) => entry.kind === 'choice');
   const upstreams = config.data?.find((entry) => entry.kind === 'list');
   const modelEntries = (config.data ?? []).filter(
@@ -193,6 +195,7 @@ export function AiConfigPage() {
               >
                 {chain ? <RoutingSection entry={chain} /> : null}
                 {effort ? <ReasoningSection entry={effort} /> : null}
+                {ceiling ? <CeilingSection entry={ceiling} /> : null}
               </div>
             </>
           )}

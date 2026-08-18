@@ -7,6 +7,12 @@ import {
   Badge,
   Button,
   Card,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
   EmptyState,
   Input,
   Table,
@@ -22,6 +28,9 @@ import {
 } from '@knowtis/shared-types';
 
 import { isByokOnly } from './catalog-pricing';
+import type { ServingRole } from './serving-roles';
+
+const ROLE_SEPARATOR = ' · ';
 
 interface PromotedCopyEdit {
   id: string;
@@ -33,6 +42,8 @@ interface PromotedModelRowProps {
   model: CatalogModel;
   disabled: boolean;
   maxOutputCostPerToken: number;
+  /** `null` while the config query is unresolved: the guard cannot rule the model out, so retiring asks. */
+  roles: readonly ServingRole[] | null;
   onSave: (label: string, description: string) => void;
   onRetire: () => void;
 }
@@ -41,9 +52,11 @@ function PromotedModelRow({
   model,
   disabled,
   maxOutputCostPerToken,
+  roles,
   onSave,
   onRetire,
 }: PromotedModelRowProps) {
+  const [confirmingRetire, setConfirmingRetire] = useState(false);
   // A draft holds the edit and `base` drops it if another admin writes
   // meanwhile — saving over their change would silently revert it.
   const [draft, setDraft] = useState<{
@@ -72,6 +85,11 @@ function PromotedModelRow({
           </span>
           {isByokOnly(model, maxOutputCostPerToken) ? (
             <Badge variant="outline">BYOK only</Badge>
+          ) : null}
+          {roles !== null && roles.length > 0 ? (
+            <Badge variant="secondary">
+              Serves {roles.join(ROLE_SEPARATOR)}
+            </Badge>
           ) : null}
         </div>
       </TableCell>
@@ -132,10 +150,44 @@ function PromotedModelRow({
             size="sm"
             disabled={disabled}
             aria-label={`Retire ${label}`}
-            onClick={onRetire}
+            onClick={() =>
+              roles === null || roles.length > 0
+                ? setConfirmingRetire(true)
+                : onRetire()
+            }
           >
             Retire
           </Button>
+          <Dialog open={confirmingRetire} onOpenChange={setConfirmingRetire}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Retire {label}?</DialogTitle>
+                <DialogDescription>
+                  {roles === null
+                    ? 'Whether the config still points at this model could not be checked. Retiring does not repoint any settings.'
+                    : `This model is still configured as ${roles.join(ROLE_SEPARATOR)}. Retiring does not repoint those settings — point them at another model.`}
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button
+                  variant="ghost"
+                  onClick={() => setConfirmingRetire(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={disabled}
+                  onClick={() => {
+                    setConfirmingRetire(false);
+                    onRetire();
+                  }}
+                >
+                  Retire anyway
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </TableCell>
     </TableRow>
@@ -146,6 +198,8 @@ interface PromotedTableProps {
   models: CatalogModel[];
   disabled: boolean;
   maxOutputCostPerToken: number;
+  /** `null` while the config query is unresolved; see PromotedModelRowProps.roles. */
+  servingRoles: ReadonlyMap<string, readonly ServingRole[]> | null;
   onSave: (edit: PromotedCopyEdit) => void;
   onRetire: (id: string) => void;
 }
@@ -154,6 +208,7 @@ export function PromotedTable({
   models,
   disabled,
   maxOutputCostPerToken,
+  servingRoles,
   onSave,
   onRetire,
 }: PromotedTableProps) {
@@ -196,6 +251,11 @@ export function PromotedTable({
                 model={model}
                 disabled={disabled}
                 maxOutputCostPerToken={maxOutputCostPerToken}
+                roles={
+                  servingRoles === null
+                    ? null
+                    : (servingRoles.get(model.id) ?? [])
+                }
                 onSave={(label, description) =>
                   onSave({ id: model.id, label, description })
                 }
