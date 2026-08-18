@@ -279,8 +279,10 @@ function DialogContent({
 
   // DialogPortal renders null until its own mount effect runs, so the content node
   // does not exist yet on the commit that opens the dialog — hence keying off the node.
+  // That extra commit lands after the content's own effects, so content that focused a
+  // field of its own already holds focus here and must keep it.
   useEffect(() => {
-    if (!open || !contentNode) {
+    if (!open || !contentNode || contentNode.contains(document.activeElement)) {
       return;
     }
     const [firstFocusable] = getFocusableElements();
