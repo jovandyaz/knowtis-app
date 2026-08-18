@@ -46,14 +46,14 @@ export function ArtifactList({
 
   const handleDelete = (e: React.MouseEvent, artifactId: string) => {
     e.stopPropagation();
-    deleteArtifact.mutate(artifactId, {
-      onSuccess: () => {
+    void deleteArtifact
+      .mutateAsync(artifactId)
+      .then(() => {
         toast.success(t('ai.artifacts.list.deleted'));
-      },
-      onError: () => {
+      })
+      .catch(() => {
         toast.error(t('ai.artifacts.list.deleteError'));
-      },
-    });
+      });
   };
 
   if (isLoading) {

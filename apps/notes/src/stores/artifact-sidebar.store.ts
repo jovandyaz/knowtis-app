@@ -11,7 +11,10 @@ interface ArtifactSidebarStore {
 export const useArtifactSidebarStore = create<ArtifactSidebarStore>((set) => ({
   activeNoteId: null,
   generatorOpen: false,
-  setActiveNoteId: (noteId) => set({ activeNoteId: noteId }),
+  // The generator belongs to one note, so leaving that note ends its dialog;
+  // otherwise it stays open and greets the next note already unfolded.
+  setActiveNoteId: (noteId) =>
+    set({ activeNoteId: noteId, generatorOpen: false }),
   openGenerator: () => set({ generatorOpen: true }),
   closeGenerator: () => set({ generatorOpen: false }),
 }));
