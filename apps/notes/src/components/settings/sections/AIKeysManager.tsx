@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -20,7 +20,11 @@ const PROVIDER_LABEL: Record<ByokProvider, string> = {
   openrouter: 'OpenRouter',
 };
 
-export function AIKeysManager() {
+interface AIKeysManagerProps {
+  focusFirstField?: boolean;
+}
+
+export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
   const { t, i18n } = useTranslation('common');
   const { data: keys } = useProviderKeys(true);
   const setKey = useSetProviderKey();
@@ -28,6 +32,13 @@ export function AIKeysManager() {
   const [drafts, setDrafts] = useState<Partial<Record<ByokProvider, string>>>(
     {}
   );
+  const firstField = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (focusFirstField) {
+      firstField.current?.focus();
+    }
+  }, [focusFirstField]);
 
   return (
     <section className="space-y-4">
@@ -36,7 +47,7 @@ export function AIKeysManager() {
         description={t('aiAssistant.byok.description')}
       />
       <div className="space-y-4">
-        {BYOK_PROVIDERS.map((provider) => {
+        {BYOK_PROVIDERS.map((provider, index) => {
           const stored = keys?.find((k) => k.provider === provider);
           const draft = drafts[provider] ?? '';
           return (
@@ -65,6 +76,7 @@ export function AIKeysManager() {
               ) : null}
               <div className="flex gap-2">
                 <PasswordInput
+                  ref={index === 0 ? firstField : undefined}
                   value={draft}
                   placeholder={t('aiAssistant.byok.placeholder', {
                     provider: PROVIDER_LABEL[provider],

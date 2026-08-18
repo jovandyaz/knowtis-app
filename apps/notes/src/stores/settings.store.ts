@@ -11,16 +11,25 @@ export type SettingsSection =
   | 'account'
   | 'aiAssistant';
 
+export type SettingsFocusTarget = 'aiKeys';
+
 interface SettingsStore {
   isOpen: boolean;
   activeSection: SettingsSection;
-  open: (section?: SettingsSection) => void;
+  focusTarget: SettingsFocusTarget | null;
+  open: (section?: SettingsSection, focusTarget?: SettingsFocusTarget) => void;
   close: () => void;
 }
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
   isOpen: false,
   activeSection: 'profile',
-  open: (section = 'profile') => set({ isOpen: true, activeSection: section }),
-  close: () => set({ isOpen: false }),
+  focusTarget: null,
+  open: (section = 'profile', focusTarget) =>
+    set({
+      isOpen: true,
+      activeSection: section,
+      focusTarget: focusTarget ?? null,
+    }),
+  close: () => set({ isOpen: false, focusTarget: null }),
 }));

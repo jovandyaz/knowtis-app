@@ -5,6 +5,7 @@ import {
   useAvailableModels,
   useUpdateAISettings,
 } from '@/hooks';
+import { useSettingsStore } from '@/stores/settings.store';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { DEFAULT_MODEL_INTENT, FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
@@ -20,6 +21,7 @@ export function AIAssistantSection() {
   const { data: prefs } = useAISettings();
   const { mutate: update } = useUpdateAISettings();
   const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
+  const focusTarget = useSettingsStore((s) => s.focusTarget);
 
   return (
     <div className="space-y-8">
@@ -48,7 +50,9 @@ export function AIAssistantSection() {
         />
       </section>
 
-      {byokEnabled ? <AIKeysManager /> : null}
+      {byokEnabled ? (
+        <AIKeysManager focusFirstField={focusTarget === 'aiKeys'} />
+      ) : null}
     </div>
   );
 }

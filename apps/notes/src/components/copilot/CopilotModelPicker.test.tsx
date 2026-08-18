@@ -153,7 +153,7 @@ describe('CopilotModelPicker', () => {
     keysPending.mockReturnValue(false);
   });
 
-  it('bridges a keyless user to the BYOK settings from the chips', async () => {
+  it('bridges a keyless user to the key form itself, not just its section', async () => {
     modelsData.mockReturnValue(withLockedModel);
     render(<CopilotModelPicker />);
 
@@ -164,7 +164,7 @@ describe('CopilotModelPicker', () => {
 
     await userEvent.click(bridge);
 
-    expect(openSettings).toHaveBeenCalledWith('aiAssistant');
+    expect(openSettings).toHaveBeenCalledWith('aiAssistant', 'aiKeys');
   });
 
   it('offers no bridge while the agent_byok flag is off', () => {
