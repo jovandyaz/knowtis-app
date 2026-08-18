@@ -10,6 +10,7 @@ function createHandlers(refresh: () => Promise<RefreshOutcome>) {
     refresh: vi.fn(refresh),
     onRefreshed: vi.fn(),
     onExhausted: vi.fn(),
+    onUnavailable: vi.fn(),
     onError: vi.fn(),
   };
 }
@@ -38,10 +39,7 @@ describe('createTokenRefreshPolicy', () => {
 
   it('routes an unavailable refresh to onUnavailable, never to onExhausted', async () => {
     const policy = createTokenRefreshPolicy();
-    const h = {
-      ...createHandlers(async () => 'unavailable'),
-      onUnavailable: vi.fn(),
-    };
+    const h = createHandlers(async () => 'unavailable');
 
     await policy.recover(h);
 
@@ -53,10 +51,7 @@ describe('createTokenRefreshPolicy', () => {
   it('does not spend the attempt on an unavailable refresh', async () => {
     const policy = createTokenRefreshPolicy();
     const outcomes: RefreshOutcome[] = ['unavailable', 'refreshed'];
-    const h = {
-      ...createHandlers(async () => outcomes.shift() ?? 'rejected'),
-      onUnavailable: vi.fn(),
-    };
+    const h = createHandlers(async () => outcomes.shift() ?? 'rejected');
 
     await policy.recover(h);
     await policy.recover(h);
@@ -68,10 +63,7 @@ describe('createTokenRefreshPolicy', () => {
 
   it('still spends the attempt once the credential is rejected', async () => {
     const policy = createTokenRefreshPolicy();
-    const h = {
-      ...createHandlers(async () => 'rejected'),
-      onUnavailable: vi.fn(),
-    };
+    const h = createHandlers(async () => 'rejected');
 
     await policy.recover(h);
     await policy.recover(h);
@@ -80,24 +72,12 @@ describe('createTokenRefreshPolicy', () => {
     expect(h.onExhausted).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to onExhausted when a consumer declares no onUnavailable', async () => {
-    const policy = createTokenRefreshPolicy();
-    const h = createHandlers(async () => 'unavailable');
-
-    await policy.recover(h);
-
-    expect(h.onExhausted).toHaveBeenCalledTimes(1);
-  });
-
   it('treats a thrown refresh as unavailable, reporting it through onError', async () => {
     const policy = createTokenRefreshPolicy();
     const boom = new Error('network down');
-    const h = {
-      ...createHandlers(async () => {
-        throw boom;
-      }),
-      onUnavailable: vi.fn(),
-    };
+    const h = createHandlers(async () => {
+      throw boom;
+    });
 
     await policy.recover(h);
 

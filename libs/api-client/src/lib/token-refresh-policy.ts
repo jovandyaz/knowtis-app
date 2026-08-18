@@ -14,10 +14,11 @@ export interface TokenRefreshHandlers {
   /** Runs when the credential is dead, or when the single attempt was already spent. */
   onExhausted: () => void;
   /**
-   * Runs when the refresh could not be judged. The attempt is not spent, so the
-   * transport's own reconnect may try again. Falls back to `onExhausted`.
+   * Runs when the refresh could not be judged. Required, because the attempt is
+   * not spent and the transport's own reconnect is what must try again — a
+   * consumer that cannot do that has to say so by ending the session itself.
    */
-  onUnavailable?: () => void;
+  onUnavailable: () => void;
   /** Optional sink for a thrown refresh; the throw is treated as `unavailable`. */
   onError?: (error: unknown) => void;
 }
@@ -40,7 +41,7 @@ export function createTokenRefreshPolicy(): TokenRefreshPolicy {
 
   function giveTheAttemptBack(handlers: TokenRefreshHandlers): void {
     attempted = false;
-    (handlers.onUnavailable ?? handlers.onExhausted)();
+    handlers.onUnavailable();
   }
 
   return {
