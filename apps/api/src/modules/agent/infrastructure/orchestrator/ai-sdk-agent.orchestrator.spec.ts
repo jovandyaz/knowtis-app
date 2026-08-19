@@ -613,6 +613,43 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(JSON.stringify(opts?.messages)).toContain('created');
   });
 
+  // The readonly leg drops the propose* tools while the base prompt still says
+  // notes change ONLY through them; without a correction, weaker models read
+  // that as having lost the ability and narrate a refusal beside the success badge.
+  it('tells a resumed turn the decision is final and the tools are absent on purpose', async () => {
+    const orchestrator = makeOrchestrator();
+
+    await collect(
+      orchestrator.run({
+        ...baseInput,
+        messages: [{ role: 'user', content: 'ok' }],
+        resume: {
+          toolName: 'proposeCreateNote',
+          outcome: 'created the note "E2E HITL"',
+        },
+      })
+    );
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.system).toContain('decision on your earlier proposal');
+    expect(opts?.system).toContain('never deny that ability');
+    const lastMessage = (opts?.messages as { content: string }[]).at(-1);
+    expect(lastMessage?.content).toContain(
+      'The user has decided on your proposal'
+    );
+    expect(lastMessage?.content).toContain('created the note "E2E HITL"');
+    expect(lastMessage?.content).toContain('already happened');
+  });
+
+  it('keeps the resume framing out of a normal turn', async () => {
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
+    expect(opts?.system).not.toContain('decision on your earlier proposal');
+  });
+
   it('passes a timeout-combined abort signal, output cap, retries, and temperature to streamText', async () => {
     const orchestrator = makeOrchestrator();
     const controller = new AbortController();
