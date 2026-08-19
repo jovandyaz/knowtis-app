@@ -150,7 +150,11 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
         </p>
       </div>
 
-      <div className="space-y-3">
+      <div
+        role="radiogroup"
+        aria-label={currentQuestion.question}
+        className="space-y-3"
+      >
         {currentQuestion.options.map((option, index) => {
           const isSelected = selectedOption === index;
           const isCorrect = index === currentQuestion.correctIndex;
@@ -178,6 +182,8 @@ export function QuizSession({ artifact, readOnly }: QuizSessionProps) {
             <button
               key={index}
               type="button"
+              role="radio"
+              aria-checked={isSelected}
               className={`flex w-full items-center gap-3 ${optionClass}`}
               onClick={() => handleSelect(index)}
               disabled={answered}

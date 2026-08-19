@@ -22,6 +22,7 @@ import {
   FormField,
   Input,
   LoadingButton,
+  RadioCardGroup,
 } from '@knowtis/design-system';
 
 interface ScopeOptionCopy {
@@ -173,31 +174,19 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
           </FormField>
 
           <div className="space-y-2">
-            <label className="text-sm font-medium text-(--foreground)">
+            <span className="text-sm font-medium text-(--foreground)">
               {t('integrations.scopes')}
-            </label>
-            <div className="flex flex-col gap-2">
-              {SCOPE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={selectedScopes === option.value}
-                  onClick={() => setValue('scopes', option.value)}
-                  className={`rounded-md border px-3 py-2 text-left text-sm transition-colors ${
-                    selectedScopes === option.value
-                      ? 'border-(--primary) bg-(--primary)/10 text-(--foreground)'
-                      : 'border-(--border) text-(--muted-foreground) hover:border-(--primary)/50'
-                  }`}
-                >
-                  <span className="block font-medium text-(--foreground)">
-                    {t(option.labelKey)}
-                  </span>
-                  <span className="block text-xs text-(--muted-foreground)">
-                    {t(option.descriptionKey)}
-                  </span>
-                </button>
-              ))}
-            </div>
+            </span>
+            <RadioCardGroup
+              aria-label={t('integrations.scopes')}
+              options={SCOPE_OPTIONS.map((option) => ({
+                value: option.value,
+                title: t(option.labelKey),
+                description: t(option.descriptionKey),
+              }))}
+              value={selectedScopes}
+              onValueChange={(value) => setValue('scopes', value)}
+            />
           </div>
 
           <DialogFooter>
