@@ -150,3 +150,5 @@ export {
   type PromoteCatalogModelInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';
+
+export * from './lib/organization.types';
