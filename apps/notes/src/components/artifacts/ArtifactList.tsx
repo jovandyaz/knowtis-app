@@ -77,8 +77,16 @@ export function ArtifactList({
         return (
           <div
             key={artifact.id}
-            className="group relative flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 p-3 cursor-pointer transition-all hover:border-primary/30 hover:bg-muted/50"
+            role="button"
+            tabIndex={0}
+            className="group relative flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 p-3 cursor-pointer transition-all hover:border-primary/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             onClick={() => onSelect(artifact)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onSelect(artifact);
+              }
+            }}
           >
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10">
               <Icon className="h-4 w-4 text-primary" />

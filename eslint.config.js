@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import nxPlugin from '@nx/eslint-plugin';
 import eslintConfigPrettier from 'eslint-config-prettier';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
 import { defineConfig, globalIgnores } from 'eslint/config';
@@ -134,6 +135,25 @@ export default defineConfig([
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
+      ],
+    },
+  },
+  // Accessibility - a single-select group without exposed state ships silently otherwise
+  {
+    files: [
+      'apps/notes/**/*.tsx',
+      'apps/backoffice/**/*.tsx',
+      'libs/**/*.tsx',
+      'packages/**/*.tsx',
+    ],
+    extends: [jsxA11y.flatConfigs.recommended],
+    rules: {
+      // Deliberate focus management (dialog fields, the note editor) is the
+      // house pattern; the blanket ban fights it without adding access.
+      'jsx-a11y/no-autofocus': 'off',
+      'jsx-a11y/label-has-associated-control': [
+        'error',
+        { controlComponents: ['Switch'] },
       ],
     },
   },
