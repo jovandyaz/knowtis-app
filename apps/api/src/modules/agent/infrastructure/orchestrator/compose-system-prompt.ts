@@ -5,7 +5,7 @@ const MEMORY_INJECT_MAX_CHARS = 300;
 
 /** Render an untrusted value as a JSON string literal so embedded newlines or
  * control text cannot break the surrounding prompt structure. */
-const toPromptLiteral = (value: string): string => JSON.stringify(value);
+export const toPromptLiteral = (value: string): string => JSON.stringify(value);
 
 export function composeSystemPrompt(
   noteId?: string,
