@@ -83,6 +83,14 @@ export default defineConfig({
         __dirname,
         '../../libs/data-access/feature-flags/src/index.ts'
       ),
+      '@knowtis/data-access-users': resolve(
+        __dirname,
+        '../../libs/data-access/users/src/index.ts'
+      ),
+      '@knowtis/data-access-mcp-keys': resolve(
+        __dirname,
+        '../../libs/data-access/mcp-keys/src/index.ts'
+      ),
     },
   },
 });

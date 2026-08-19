@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuthStore, useAuthUser } from '@jovandyaz/auth-react';
 
 import { useUpdateProfile } from '@knowtis/data-access-users';
-import { cn } from '@knowtis/design-system';
+import { SegmentedControl } from '@knowtis/design-system';
 import type { SupportedLocale } from '@knowtis/shared-util';
 import { SUPPORTED_LOCALES } from '@knowtis/shared-util';
 
@@ -45,27 +45,21 @@ export function LanguageSection() {
         description={t('settings.descriptions.language')}
       />
 
-      <div className="flex gap-3">
-        {SUPPORTED_LOCALES.map((locale) => {
-          const isActive =
-            i18n.language === locale || i18n.language?.startsWith(`${locale}-`);
-          return (
-            <button
-              key={locale}
-              type="button"
-              onClick={() => handleLanguageChange(locale)}
-              className={cn(
-                'flex-1 rounded-lg border px-4 py-3 text-sm font-medium transition-colors',
-                isActive
-                  ? 'border-(--foreground) bg-(--foreground) text-(--background)'
-                  : 'border-(--border) text-(--muted-foreground) hover:border-(--foreground)/50 hover:text-(--foreground)'
-              )}
-            >
-              {t(`language.${locale}`)}
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedControl
+        aria-label={t('settings.sections.language')}
+        options={SUPPORTED_LOCALES.map((locale) => ({
+          value: locale,
+          label: t(`language.${locale}`),
+        }))}
+        value={
+          SUPPORTED_LOCALES.find(
+            (locale) =>
+              i18n.language === locale ||
+              i18n.language?.startsWith(`${locale}-`)
+          ) ?? null
+        }
+        onValueChange={handleLanguageChange}
+      />
     </div>
   );
 }

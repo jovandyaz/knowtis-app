@@ -113,6 +113,7 @@ export function AIMenuContent({
   };
 
   return (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- augments keys bubbling from the focusable menu rows; the wrapper itself is never a tab stop
     <div onKeyDown={handleKeyDown} className="outline-none">
       <CommandMenuGroup {...(groupLabel ? { label: groupLabel } : {})}>
         {canGoBack && (

@@ -296,6 +296,7 @@ function DialogContent({
   return (
     <DialogPortal>
       <DialogOverlay />
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the APG dialog pattern traps Tab on the dialog container itself */}
       <div
         ref={setContentNode}
         role="dialog"
@@ -366,6 +367,7 @@ function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 function DialogTitle({
   className,
+  children,
   ...props
 }: Omit<HTMLAttributes<HTMLHeadingElement>, 'id'>) {
   const { titleId, setTitlePresent } = useDialogContext();
@@ -381,7 +383,9 @@ function DialogTitle({
         'text-lg font-semibold leading-none tracking-tight',
         className
       )}
-    />
+    >
+      {children}
+    </h2>
   );
 }
 
