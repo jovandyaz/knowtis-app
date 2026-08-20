@@ -225,6 +225,13 @@
       "when": 1787183966523,
       "tag": "0031_smart_nekra",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1787261129957,
+      "tag": "0032_elite_luminals",
+      "breakpoints": true
     }
   ]
 }

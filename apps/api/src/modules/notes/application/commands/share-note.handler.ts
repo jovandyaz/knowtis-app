@@ -62,20 +62,7 @@ export class ShareNoteHandler {
       }
     }
 
-    const existing = await this.noteRepository.findPermission(
-      input.noteId,
-      targetUserIdResult.value
-    );
-
-    if (existing) {
-      return this.noteRepository.updatePermission(
-        input.noteId,
-        targetUserIdResult.value,
-        input.permission
-      );
-    }
-
-    return this.noteRepository.createPermission({
+    return this.noteRepository.upsertPermission({
       noteId: input.noteId,
       userId: targetUserIdResult.value,
       permission: input.permission,

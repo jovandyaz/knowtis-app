@@ -20,10 +20,10 @@ import {
 import {
   NoteErrors,
   PermissionLevel,
-  type CreatePermissionData,
   type NoteDomainError,
   type NotePermissionEntity,
   type PermissionRepository,
+  type UpsertPermissionData,
 } from '../../domain';
 
 @Injectable()
@@ -120,8 +120,8 @@ export class DrizzlePermissionRepository implements PermissionRepository {
     return mapped;
   }
 
-  async createPermission(
-    data: CreatePermissionData
+  async upsertPermission(
+    data: UpsertPermissionData
   ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
     try {
       const levelResult = PermissionLevel.create(data.permission);
@@ -138,10 +138,16 @@ export class DrizzlePermissionRepository implements PermissionRepository {
       const result = await this.db
         .insert(notePermissions)
         .values(newPerm)
+        .onConflictDoUpdate({
+          target: [notePermissions.noteId, notePermissions.userId],
+          set: { permission: newPerm.permission },
+        })
         .returning();
 
       if (!result[0]) {
-        return err(NoteErrors.noteNotFound(data.noteId));
+        return err(
+          NoteErrors.persistenceError('upsertPermission', data.noteId)
+        );
       }
 
       return ok({
@@ -151,50 +157,10 @@ export class DrizzlePermissionRepository implements PermissionRepository {
       });
     } catch (error) {
       this.logger.error(
-        `Failed to create permission for note ${data.noteId}`,
+        `Failed to upsert permission for note ${data.noteId}`,
         error instanceof Error ? error.stack : error
       );
-      return err(NoteErrors.persistenceError('createPermission', data.noteId));
-    }
-  }
-
-  async updatePermission(
-    noteId: string,
-    userId: UserId,
-    permission: string
-  ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
-    try {
-      const levelResult = PermissionLevel.create(permission);
-      if (levelResult.isErr()) {
-        return err(levelResult.error);
-      }
-
-      const result = await this.db
-        .update(notePermissions)
-        .set({ permission: permission as PermissionLevelType })
-        .where(
-          and(
-            eq(notePermissions.noteId, noteId),
-            eq(notePermissions.userId, userId.value)
-          )
-        )
-        .returning();
-
-      if (!result[0]) {
-        return err(NoteErrors.noteNotFound(noteId));
-      }
-
-      return ok({
-        noteId: result[0].noteId,
-        userId: result[0].userId,
-        permission: levelResult.value,
-      });
-    } catch (error) {
-      this.logger.error(
-        `Failed to update permission for note ${noteId}`,
-        error instanceof Error ? error.stack : error
-      );
-      return err(NoteErrors.persistenceError('updatePermission', noteId));
+      return err(NoteErrors.persistenceError('upsertPermission', data.noteId));
     }
   }
 
