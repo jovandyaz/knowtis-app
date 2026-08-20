@@ -12,6 +12,7 @@ import {
   workspaceTabId,
 } from '@/components/editor/workspace-tab-ids';
 import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
+import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
@@ -27,10 +28,12 @@ import { toast } from 'sonner';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
-import type {
-  GeneralAccessLevel,
-  NoteAccessLevel,
-  PermissionLevel,
+import {
+  ACCESS,
+  type GeneralAccessLevel,
+  type NoteAccessLevel,
+  type ParaBucket,
+  type PermissionLevel,
 } from '@knowtis/shared-types';
 
 interface NoteEditorProps {
@@ -38,6 +41,7 @@ interface NoteEditorProps {
   initialTitle: string;
   initialContent: string;
   accessLevel: NoteAccessLevel;
+  bucket: ParaBucket | null;
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
@@ -49,6 +53,7 @@ function NoteEditor({
   initialTitle,
   initialContent,
   accessLevel,
+  bucket,
   generalAccess,
   generalAccessPermission,
   shareToken,
@@ -255,6 +260,12 @@ function NoteEditor({
           />
         </div>
 
+        <NotePropertiesRow
+          noteId={noteId}
+          bucket={bucket}
+          isOwner={accessLevel === ACCESS.OWNER}
+        />
+
         <CollaborativeEditor
           noteId={noteId}
           initialContent={initialContent}
@@ -326,6 +337,7 @@ export function NoteEditorPage() {
       initialTitle={note.title}
       initialContent={note.content}
       accessLevel={note.accessLevel}
+      bucket={note.bucket}
       generalAccess={note.generalAccess}
       generalAccessPermission={note.generalAccessPermission}
       shareToken={note.shareToken}

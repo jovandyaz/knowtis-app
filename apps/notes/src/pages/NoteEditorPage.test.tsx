@@ -51,6 +51,7 @@ vi.mock('@knowtis/data-access-notes', () => ({
       title: 'My Note',
       content: '<p>hello</p>',
       accessLevel: 'owner',
+      bucket: null,
       generalAccess: 'restricted',
       generalAccessPermission: 'viewer',
       shareToken: null,
