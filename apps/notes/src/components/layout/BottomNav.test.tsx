@@ -83,6 +83,32 @@ describe('BottomNav', () => {
     expect(screen.getByTestId('bucket-nav')).toBeInTheDocument();
   });
 
+  it('exposes the sheet as a labelled dialog that hides the page behind it', async () => {
+    const user = userEvent.setup();
+    render(<BottomNav />);
+
+    await user.click(screen.getByRole('button', { name: 'labels.explore' }));
+
+    expect(
+      screen.getByRole('dialog', { name: 'organization.explore' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'labels.explore' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('closes the sheet on Escape', async () => {
+    const user = userEvent.setup();
+    render(<BottomNav />);
+
+    await user.click(screen.getByRole('button', { name: 'labels.explore' }));
+    expect(screen.getByTestId('bucket-nav')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByTestId('bucket-nav')).not.toBeInTheDocument();
+  });
+
   it('closes the sheet once a bucket is picked', async () => {
     const user = userEvent.setup();
     render(<BottomNav />);
