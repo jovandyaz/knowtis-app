@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
-import { act, render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -35,6 +36,7 @@ vi.mock('@tiptap/react', () => ({
 }));
 
 const CODE = 'flowchart LR\n  A[Start] --> B[End]';
+const SETTLE_TIMEOUT_MS = 3000;
 
 function Harness({ initialViewMode }: { initialViewMode: MermaidViewMode }) {
   const [attrs, setAttrs] = useState<{
@@ -51,73 +53,58 @@ function Harness({ initialViewMode }: { initialViewMode: MermaidViewMode }) {
   return <MermaidBlockView {...props} />;
 }
 
-async function settleRender() {
-  await act(async () => {
-    await vi.advanceTimersByTimeAsync(400);
+const previewArea = () =>
+  screen.getByTestId('node-view').querySelector('.mermaid-preview-area svg');
+
+// The view debounces, then awaits a dynamic import() whose resolution is not on
+// the timer queue — polling for the result is the only race-free way to observe it.
+function findSvg() {
+  return waitFor(() => expect(previewArea()).not.toBeNull(), {
+    timeout: SETTLE_TIMEOUT_MS,
   });
+}
+
+function switchMode(user: ReturnType<typeof userEvent.setup>, key: string) {
+  return user.click(screen.getByRole('button', { name: key }));
 }
 
 describe('MermaidBlockView', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
     renderMock.mockClear();
     document.body.innerHTML = '';
   });
 
   it('renders the diagram svg in split view', async () => {
     render(<Harness initialViewMode={MERMAID_VIEW_MODE.SPLIT} />);
-    await settleRender();
 
-    const view = screen.getByTestId('node-view');
-    expect(view.querySelector('.mermaid-preview-area svg')).not.toBeNull();
+    await findSvg();
   });
 
   it('keeps the svg when the view mode changes and the code is unchanged', async () => {
+    const user = userEvent.setup();
     render(<Harness initialViewMode={MERMAID_VIEW_MODE.SPLIT} />);
-    await settleRender();
+    await findSvg();
 
-    const view = screen.getByTestId('node-view');
-    expect(view.querySelector('.mermaid-preview-area svg')).not.toBeNull();
+    await switchMode(user, 'editor.mermaid.modePreview');
+    await findSvg();
 
-    const previewButton = screen.getByRole('button', {
-      name: 'editor.mermaid.modePreview',
-    });
-    await act(async () => {
-      previewButton.click();
-    });
-    await settleRender();
-
-    expect(view.querySelector('.mermaid-preview-area svg')).not.toBeNull();
-
-    const splitButton = screen.getByRole('button', {
-      name: 'editor.mermaid.modeSplit',
-    });
-    await act(async () => {
-      splitButton.click();
-    });
-    await settleRender();
-
-    expect(view.querySelector('.mermaid-preview-area svg')).not.toBeNull();
+    await switchMode(user, 'editor.mermaid.modeSplit');
+    await findSvg();
   });
 
   it('never asks mermaid to render into the id of the currently mounted svg', async () => {
+    const user = userEvent.setup();
     render(<Harness initialViewMode={MERMAID_VIEW_MODE.SPLIT} />);
-    await settleRender();
+    await findSvg();
 
-    expect(renderMock).toHaveBeenCalled();
-    const mountedId = screen
-      .getByTestId('node-view')
-      .querySelector('.mermaid-preview-area svg')
-      ?.getAttribute('id');
+    const mountedId = previewArea()?.getAttribute('id');
     expect(mountedId).toBeTruthy();
 
-    const previewButton = screen.getByRole('button', {
-      name: 'editor.mermaid.modePreview',
-    });
-    await act(async () => {
-      previewButton.click();
-    });
-    await settleRender();
+    await switchMode(user, 'editor.mermaid.modePreview');
+    await waitFor(
+      () => expect(renderMock.mock.calls.length).toBeGreaterThan(1),
+      { timeout: SETTLE_TIMEOUT_MS }
+    );
 
     const laterIds = renderMock.mock.calls.slice(1).map(([id]) => id);
     expect(laterIds).not.toContain(mountedId);
