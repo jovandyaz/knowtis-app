@@ -42,7 +42,7 @@ export function NoteList() {
     isLoading,
     isError,
     error,
-  } = useNotes(debouncedSearch);
+  } = useNotes(debouncedSearch ? { search: debouncedSearch } : undefined);
 
   const renderNotes = () => {
     if (isLoading) {
