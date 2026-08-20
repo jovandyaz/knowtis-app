@@ -16,7 +16,9 @@ const CREDENTIAL: McpCredential = { kind: 'api-key', apiKey: TEST_API_KEY };
 
 function createMockNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
   return {
-    list: vi.fn().mockResolvedValue([]),
+    list: vi
+      .fn()
+      .mockResolvedValue({ items: [], total: 0, page: 1, limit: 20 }),
     get: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -148,14 +150,20 @@ describe('registerNotesTools', () => {
       updatedAt: '2026-01-02T00:00:00.000Z',
     };
     notesApi = createMockNotesApi({
-      list: vi.fn().mockResolvedValue([fullNote]),
+      list: vi
+        .fn()
+        .mockResolvedValue({ items: [fullNote], total: 1, page: 1, limit: 20 }),
     });
     const { server, tools } = createFakeServer();
     registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const result = await getTool(tools, 'list-notes').cb({ search: 'my' });
 
-    expect(notesApi.list).toHaveBeenCalledWith('jwt-token-123', 'my');
+    expect(notesApi.list).toHaveBeenCalledWith('jwt-token-123', {
+      search: 'my',
+      page: 1,
+      limit: 20,
+    });
     expect(result.isError).toBeUndefined();
     expect(result.structuredContent).toEqual({
       notes: [
@@ -168,7 +176,7 @@ describe('registerNotesTools', () => {
     });
   });
 
-  it('should paginate list-notes and expose nextCursor', async () => {
+  it('should walk the server pages rather than slicing one payload', async () => {
     const note = (id: string, updatedAt: string): NoteResponse => ({
       id,
       title: `Note ${id}`,
@@ -177,31 +185,37 @@ describe('registerNotesTools', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt,
     });
-    const upstream = [
-      note('note-1', '2026-01-01T00:00:00.000Z'),
-      note('note-2', '2026-01-02T00:00:00.000Z'),
-      note('note-3', '2026-01-03T00:00:00.000Z'),
-    ];
-    notesApi = createMockNotesApi({
-      list: vi.fn().mockResolvedValue(upstream),
-    });
+    const list = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [
+          note('note-3', '2026-01-03T00:00:00.000Z'),
+          note('note-2', '2026-01-02T00:00:00.000Z'),
+        ],
+        total: 3,
+        page: 1,
+        limit: 2,
+      })
+      .mockResolvedValueOnce({
+        items: [note('note-1', '2026-01-01T00:00:00.000Z')],
+        total: 3,
+        page: 2,
+        limit: 2,
+      });
+    notesApi = createMockNotesApi({ list });
     const { server, tools } = createFakeServer();
     registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
 
     const page1 = await getTool(tools, 'list-notes').cb({ limit: 2 });
 
     expect(page1.isError).toBeUndefined();
-    expect(page1.structuredContent?.notes).toEqual([
-      {
-        id: 'note-3',
-        title: 'Note note-3',
-        updatedAt: '2026-01-03T00:00:00.000Z',
-      },
-      {
-        id: 'note-2',
-        title: 'Note note-2',
-        updatedAt: '2026-01-02T00:00:00.000Z',
-      },
+    expect(list).toHaveBeenLastCalledWith('jwt-token-123', {
+      page: 1,
+      limit: 2,
+    });
+    expect(page1.structuredContent?.notes.map((n) => n.id)).toEqual([
+      'note-3',
+      'note-2',
     ]);
     const nextCursor = page1.structuredContent?.nextCursor;
     expect(typeof nextCursor).toBe('string');
@@ -212,13 +226,11 @@ describe('registerNotesTools', () => {
     });
 
     expect(page2.isError).toBeUndefined();
-    expect(page2.structuredContent?.notes).toEqual([
-      {
-        id: 'note-1',
-        title: 'Note note-1',
-        updatedAt: '2026-01-01T00:00:00.000Z',
-      },
-    ]);
+    expect(list).toHaveBeenLastCalledWith('jwt-token-123', {
+      page: 2,
+      limit: 2,
+    });
+    expect(page2.structuredContent?.notes.map((n) => n.id)).toEqual(['note-1']);
     expect(page2.structuredContent?.nextCursor).toBeUndefined();
   });
 

@@ -78,7 +78,12 @@ describe('note resources', () => {
 
   beforeEach(() => {
     notesApi = {
-      list: vi.fn().mockResolvedValue([NOTE_C, NOTE_A, NOTE_B]),
+      list: vi.fn().mockResolvedValue({
+        items: [NOTE_C, NOTE_A, NOTE_B],
+        total: 3,
+        page: 1,
+        limit: 20,
+      }),
       get: vi.fn().mockResolvedValue(NOTE_A),
     };
   });
@@ -87,33 +92,60 @@ describe('note resources', () => {
     vi.unstubAllGlobals();
   });
 
-  it('should list recent notes as resources ordered by recency', async () => {
+  it('should keep the order the server returned instead of re-sorting', async () => {
     const client = await connect(notesApi as unknown as NotesApi);
     const result = await client.listResources();
+    expect(result.resources.map((r) => r.uri)).toEqual([
+      `knowtis://notes/${NOTE_C.id}`,
+      `knowtis://notes/${NOTE_A.id}`,
+      `knowtis://notes/${NOTE_B.id}`,
+    ]);
     expect(result.resources[0]).toMatchObject({
-      uri: `knowtis://notes/${NOTE_A.id}`,
-      name: NOTE_A.title,
+      name: NOTE_C.title,
       mimeType: 'text/markdown',
     });
-    expect(result.resources).toHaveLength(3);
   });
 
-  it('should paginate resources/list with nextCursor', async () => {
-    notesApi.list.mockResolvedValue(
-      Array.from({ length: 25 }, (_, i) =>
+  it('should walk the server pages rather than slicing one payload', async () => {
+    const pageOf = (from: number, count: number) =>
+      Array.from({ length: count }, (_, i) =>
         note(
-          `${String(i).padStart(8, '0')}-0000-4000-8000-000000000000`,
-          new Date(Date.UTC(2026, 5, 1 + i)).toISOString()
+          `${String(from + i).padStart(8, '0')}-0000-4000-8000-000000000000`,
+          new Date(Date.UTC(2026, 5, 1 + from + i)).toISOString()
         )
-      )
-    );
+      );
+    notesApi.list
+      .mockResolvedValueOnce({
+        items: pageOf(0, 20),
+        total: 25,
+        page: 1,
+        limit: 20,
+      })
+      .mockResolvedValueOnce({
+        items: pageOf(20, 5),
+        total: 25,
+        page: 2,
+        limit: 20,
+      });
+
     const client = await connect(notesApi as unknown as NotesApi);
     const page1 = await client.listResources();
+
     expect(page1.resources).toHaveLength(20);
     expect(page1.nextCursor).toBeDefined();
+    expect(notesApi.list).toHaveBeenLastCalledWith('jwt-token', {
+      page: 1,
+      limit: 20,
+    });
+
     const page2 = await client.listResources({ cursor: page1.nextCursor });
+
     expect(page2.resources).toHaveLength(5);
     expect(page2.nextCursor).toBeUndefined();
+    expect(notesApi.list).toHaveBeenLastCalledWith('jwt-token', {
+      page: 2,
+      limit: 20,
+    });
   });
 
   it('should read a note as Markdown', async () => {
@@ -192,7 +224,10 @@ describe('note resources', () => {
     const result = await client.listResources();
 
     expect(result.resources).toHaveLength(3);
-    expect(notesApi.list).toHaveBeenCalledWith('exchanged-jwt');
+    expect(notesApi.list).toHaveBeenCalledWith('exchanged-jwt', {
+      page: 1,
+      limit: 20,
+    });
   });
 
   it('should reject resources/read and resources/list with an InvalidRequest McpError when no credential is present', async () => {

@@ -9,6 +9,13 @@ export interface NoteResponse {
   updatedAt: string;
 }
 
+export interface NotesPageResponse {
+  items: NoteResponse[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
 export class NotesApi {
   private readonly client: KnowtisApiClient;
 
@@ -16,13 +23,17 @@ export class NotesApi {
     this.client = client;
   }
 
-  async list(token: string, search?: string): Promise<NoteResponse[]> {
+  async list(
+    token: string,
+    { search, page, limit }: { search?: string; page: number; limit: number }
+  ): Promise<NotesPageResponse> {
     const params = new URLSearchParams();
+    params.set('page', String(page));
+    params.set('limit', String(limit));
     if (search) {
       params.set('search', search);
     }
-    const query = params.toString();
-    return this.client.get(`/api/v1/notes${query ? `?${query}` : ''}`, token);
+    return this.client.get(`/api/v1/notes?${params.toString()}`, token);
   }
 
   async get(token: string, noteId: string): Promise<NoteResponse> {
