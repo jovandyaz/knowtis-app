@@ -1,17 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsEnum,
   IsIn,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
+  Max,
   MaxLength,
+  Min,
 } from 'class-validator';
 
 import {
   BUCKET_FILTERS,
+  DEFAULT_NOTES_PAGE_SIZE,
   GENERAL_ACCESS_LEVELS,
   NOTE_LIST_VIEWS,
   NOTE_TITLE_MAX_LENGTH,
@@ -23,6 +28,8 @@ import {
   type ParaBucket,
   type PermissionLevel,
 } from '@knowtis/shared-types';
+
+import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
 
 export class CreateNoteDto {
   @ApiPropertyOptional({
@@ -147,6 +154,26 @@ export class ShareNoteDto {
 }
 
 export class NotesQueryDto {
+  @ApiPropertyOptional({ minimum: 1, maximum: MAX_PAGE, default: 1 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_PAGE)
+  @IsOptional()
+  page?: number;
+
+  @ApiPropertyOptional({
+    minimum: 1,
+    maximum: MAX_LIMIT,
+    default: DEFAULT_NOTES_PAGE_SIZE,
+  })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(MAX_LIMIT)
+  @IsOptional()
+  limit?: number;
+
   @ApiPropertyOptional({
     description: 'Search term to filter notes by title',
     example: 'meeting',

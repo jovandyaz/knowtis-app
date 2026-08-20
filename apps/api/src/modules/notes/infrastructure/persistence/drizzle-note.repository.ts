@@ -9,11 +9,13 @@ import type {
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import type {
+  AccessibleNotePage,
   AccessibleNotesCount,
   CreateNoteData,
   NoteDomainError,
   NoteEntity,
   NoteListFilters,
+  NotePageRequest,
   NotePermissionEntity,
   NoteRepository,
   NoteSummary,
@@ -60,9 +62,10 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   findAccessibleByUser(
     userId: UserId,
+    page: NotePageRequest,
     filters?: NoteListFilters
-  ): Promise<{ note: NoteView; permission?: string }[]> {
-    return this.readRepo.findAccessibleByUser(userId, filters);
+  ): Promise<AccessibleNotePage> {
+    return this.readRepo.findAccessibleByUser(userId, page, filters);
   }
 
   findAccessibleSummariesByUser(
