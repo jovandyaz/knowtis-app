@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { Check, ChevronDown, KeyRound, Loader2 } from 'lucide-react';
+import { ChevronDown, KeyRound, Loader2 } from 'lucide-react';
 
 import { cn } from '../utils';
 import { Button } from './Button';
@@ -106,17 +106,14 @@ export interface ModelSelectProps {
 function OptionRow({
   label,
   description,
-  selected,
   badge,
   cost,
 }: {
   label: string;
   description?: string | undefined;
-  selected: boolean;
   badge?: ReactNode | undefined;
   cost?: string | undefined;
 }) {
-  const check = selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null;
   return (
     <>
       <div className="flex w-full items-center justify-between gap-2">
@@ -125,15 +122,10 @@ function OptionRow({
           {badge}
         </span>
         {cost ? (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <span className="font-normal text-(--muted-foreground)">
-              {cost}
-            </span>
-            {check}
+          <span className="shrink-0 font-normal text-(--muted-foreground)">
+            {cost}
           </span>
-        ) : (
-          check
-        )}
+        ) : null}
       </div>
       {description && (
         <span
@@ -258,8 +250,6 @@ export function ModelSelect({
       : undefined;
   const groups = flatGroup ? [flatGroup] : tierGroups;
 
-  const selectedId = rowsAreActions ? null : value;
-
   const triggerText = ((): string => {
     if (active) {
       return active.label;
@@ -314,7 +304,6 @@ export function ModelSelect({
                 <OptionRow
                   label={option.label}
                   description={option.description}
-                  selected={option.id === selectedId}
                 />
               </OptionItem>
             ))}
@@ -365,7 +354,6 @@ export function ModelSelect({
                         <OptionRow
                           label={m.label}
                           description={description}
-                          selected={m.id === selectedId}
                           cost={
                             flatGroup && rowLevel > NO_COST_LEVEL
                               ? costGlyphs(rowLevel)
