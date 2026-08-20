@@ -71,8 +71,7 @@ describe('ShareNoteHandler', () => {
       restore: vi.fn(),
       findPermission: vi.fn(),
       findPermissionsByNote: vi.fn(),
-      createPermission: vi.fn(),
-      updatePermission: vi.fn(),
+      upsertPermission: vi.fn(),
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
     };
@@ -82,8 +81,7 @@ describe('ShareNoteHandler', () => {
   describe('Owner sharing', () => {
     it('should allow owner to share note', async () => {
       vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(null);
-      vi.mocked(noteRepo.createPermission).mockResolvedValue(
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
         ok(mockPermission)
       );
 
@@ -97,17 +95,16 @@ describe('ShareNoteHandler', () => {
       const result = await handler.execute(input);
 
       expect(result.isOk()).toBe(true);
-      expect(noteRepo.createPermission).toHaveBeenCalledWith({
+      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
         noteId: 'note-1',
         userId: expect.any(Object),
         permission: PERMISSION.VIEWER,
       });
     });
 
-    it('should allow owner to update existing permission', async () => {
+    it('should re-grant an existing permission at the new level', async () => {
       vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(mockPermission);
-      vi.mocked(noteRepo.updatePermission).mockResolvedValue(
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
         ok({
           ...mockPermission,
           permission: mockViewerPermissionVO as PermissionLevel,
@@ -124,11 +121,27 @@ describe('ShareNoteHandler', () => {
       const result = await handler.execute(input);
 
       expect(result.isOk()).toBe(true);
-      expect(noteRepo.updatePermission).toHaveBeenCalledWith(
-        'note-1',
-        expect.any(Object),
-        PERMISSION.VIEWER
+      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
+        noteId: 'note-1',
+        userId: expect.any(Object),
+        permission: PERMISSION.VIEWER,
+      });
+    });
+
+    it('should not read the target permission before writing it', async () => {
+      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
+        ok(mockPermission)
       );
+
+      await handler.execute({
+        noteId: 'note-1',
+        userId: 'owner-1',
+        targetUserId: 'user-2',
+        permission: PERMISSION.VIEWER,
+      });
+
+      expect(noteRepo.findPermission).not.toHaveBeenCalled();
     });
   });
 
@@ -140,10 +153,8 @@ describe('ShareNoteHandler', () => {
       };
 
       vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission)
-        .mockResolvedValueOnce(mockPermission) // First call: check caller permission
-        .mockResolvedValueOnce(null); // Second call: check target user permission
-      vi.mocked(noteRepo.createPermission).mockResolvedValue(
+      vi.mocked(noteRepo.findPermission).mockResolvedValue(mockPermission);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
         ok({
           ...mockPermission,
           userId: 'user-3',
@@ -160,28 +171,22 @@ describe('ShareNoteHandler', () => {
       const result = await handler.execute(input);
 
       expect(result.isOk()).toBe(true);
-      expect(noteRepo.createPermission).toHaveBeenCalled();
+      expect(noteRepo.upsertPermission).toHaveBeenCalled();
+      expect(noteRepo.findPermission).toHaveBeenCalledTimes(1);
     });
 
-    it('should allow editor to update existing permission when editorsCanShare is true', async () => {
+    it('should allow editor to raise an existing permission when editorsCanShare is true', async () => {
       const noteWithEditorsCanShare: NoteEntity = {
         ...mockNote,
         editorsCanShare: true,
       };
 
-      const existingViewerPermission: NotePermissionEntity = {
-        ...mockPermission,
-        userId: 'user-3',
-        permission: mockViewerPermissionVO as PermissionLevel,
-      };
-
       vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission)
-        .mockResolvedValueOnce(mockPermission) // First call: check caller permission
-        .mockResolvedValueOnce(existingViewerPermission); // Second call: check target user permission
-      vi.mocked(noteRepo.updatePermission).mockResolvedValue(
+      vi.mocked(noteRepo.findPermission).mockResolvedValue(mockPermission);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
         ok({
-          ...existingViewerPermission,
+          ...mockPermission,
+          userId: 'user-3',
           permission: mockEditorPermissionVO as PermissionLevel,
         })
       );
@@ -196,7 +201,11 @@ describe('ShareNoteHandler', () => {
       const result = await handler.execute(input);
 
       expect(result.isOk()).toBe(true);
-      expect(noteRepo.updatePermission).toHaveBeenCalled();
+      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
+        noteId: 'note-1',
+        userId: expect.any(Object),
+        permission: PERMISSION.EDITOR,
+      });
     });
   });
 

@@ -11,7 +11,6 @@ import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import type {
   AccessibleNotesCount,
   CreateNoteData,
-  CreatePermissionData,
   NoteDomainError,
   NoteEntity,
   NoteListFilters,
@@ -22,6 +21,7 @@ import type {
   NoteViewWithOwner,
   UpdateNoteContentData,
   UpdateNoteData,
+  UpsertPermissionData,
 } from '../../domain';
 import { DrizzleNoteReadRepository } from './drizzle-note-read.repository';
 import { DrizzleNoteWriteRepository } from './drizzle-note-write.repository';
@@ -171,18 +171,10 @@ export class DrizzleNoteRepository implements NoteRepository {
     return this.permissionRepo.findPermissionsByNote(noteId);
   }
 
-  createPermission(
-    data: CreatePermissionData
+  upsertPermission(
+    data: UpsertPermissionData
   ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
-    return this.permissionRepo.createPermission(data);
-  }
-
-  updatePermission(
-    noteId: string,
-    userId: UserId,
-    permission: string
-  ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
-    return this.permissionRepo.updatePermission(noteId, userId, permission);
+    return this.permissionRepo.upsertPermission(data);
   }
 
   deletePermission(

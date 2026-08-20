@@ -7,6 +7,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -88,7 +89,7 @@ export const notePermissions = pgTable(
   (table) => [
     index('permissions_note_id_idx').on(table.noteId),
     index('permissions_user_id_idx').on(table.userId),
-    index('permissions_note_user_idx').on(table.noteId, table.userId),
+    uniqueIndex('permissions_note_user_idx').on(table.noteId, table.userId),
   ]
 );
 

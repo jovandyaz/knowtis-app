@@ -51,8 +51,7 @@ describe('GetNotesHandler', () => {
       restore: vi.fn(),
       findPermission: vi.fn(),
       findPermissionsByNote: vi.fn(),
-      createPermission: vi.fn(),
-      updatePermission: vi.fn(),
+      upsertPermission: vi.fn(),
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
     };
