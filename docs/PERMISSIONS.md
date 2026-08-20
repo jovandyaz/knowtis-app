@@ -412,12 +412,12 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Frontend
 
-| File                                                     | Description                                            |
-| -------------------------------------------------------- | ------------------------------------------------------ |
-| `apps/notes/src/routes/_authenticated/notes/$noteId.tsx` | Authenticated note editor route                        |
-| `apps/notes/src/routes/s.$token.tsx`                     | Public shared note route                               |
-| `apps/notes/src/pages/NoteEditorPage.tsx`                | Editor with access-based UI                            |
-| `apps/notes/src/pages/SharedNotePage.tsx`                | Shared note view                                       |
-| `apps/notes/src/components/notes/ShareDialog.tsx`        | Share dialog (general access, permissions)             |
-| `libs/api-client/src/lib/notes.api.ts`                   | API client methods                                     |
-| `libs/data-access/notes/src/notes.hooks.ts`              | React Query hooks (`useNotes`, `useNoteByToken`, etc.) |
+| File                                              | Description                                            |
+| ------------------------------------------------- | ------------------------------------------------------ |
+| `apps/notes/src/routes/_app/notes/$noteId.tsx`    | Authenticated note editor route                        |
+| `apps/notes/src/routes/s.$token.tsx`              | Public shared note route                               |
+| `apps/notes/src/pages/NoteEditorPage.tsx`         | Editor with access-based UI                            |
+| `apps/notes/src/pages/SharedNotePage.tsx`         | Shared note view                                       |
+| `apps/notes/src/components/notes/ShareDialog.tsx` | Share dialog (general access, permissions)             |
+| `libs/api-client/src/lib/notes.api.ts`            | API client methods                                     |
+| `libs/data-access/notes/src/notes.hooks.ts`       | React Query hooks (`useNotes`, `useNoteByToken`, etc.) |
