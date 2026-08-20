@@ -37,10 +37,15 @@ describe('VoiceButton', () => {
 
   it('keeps the tap target at 56px for the lg size in either emphasis', () => {
     const { rerender } = render(<VoiceButton size="lg" />);
-    expect(screen.getByRole('button').className).toContain('h-14 w-14');
+    expect(screen.getByRole('button').className).toContain('size-14');
 
     rerender(<VoiceButton size="lg" emphasis="quiet" />);
-    expect(screen.getByRole('button').className).toContain('h-14 w-14');
+    expect(screen.getByRole('button').className).toContain('size-14');
+  });
+
+  it('keeps the md size above the 44px tap-target floor', () => {
+    render(<VoiceButton size="md" emphasis="quiet" />);
+    expect(screen.getByRole('button').className).toContain('size-12');
   });
 
   it('disables the button while processing', () => {

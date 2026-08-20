@@ -13,11 +13,11 @@ interface MobileFabRailProps {
  */
 export function MobileFabRail({ children }: MobileFabRailProps) {
   return (
-    <div className="fixed right-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-center gap-4 md:hidden">
+    <div className="fixed end-4 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-50 flex flex-col items-end gap-4 md:hidden">
       {children}
       <div
         id={MOBILE_FAB_SLOT_ID}
-        className="flex flex-col items-center gap-4 empty:hidden"
+        className="flex flex-col items-end gap-4 empty:hidden"
       />
     </div>
   );

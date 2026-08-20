@@ -23,10 +23,11 @@ const voiceButtonVariants = cva(
         quiet: '',
       },
       size: {
-        sm: 'h-8 w-8',
-        default: 'h-10 w-10',
-        lg: 'h-14 w-14',
-        xl: 'h-16 w-16',
+        sm: 'size-8',
+        default: 'size-10',
+        md: 'size-12',
+        lg: 'size-14',
+        xl: 'size-16',
       },
     },
     compoundVariants: [
@@ -60,10 +61,11 @@ const ariaLabelMap: Record<NonNullable<VoiceButtonProps['state']>, string> = {
 };
 
 const iconSizeMap = {
-  sm: 'h-4 w-4',
-  default: 'h-5 w-5',
-  lg: 'h-6 w-6',
-  xl: 'h-7 w-7',
+  sm: 'size-4',
+  default: 'size-5',
+  md: 'size-5',
+  lg: 'size-6',
+  xl: 'size-7',
 } as const;
 
 export interface VoiceButtonProps

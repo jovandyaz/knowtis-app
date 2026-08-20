@@ -31,17 +31,17 @@ export function FloatingCreateButton({
     <AnimatePresence>
       {isVisible && (
         <motion.div
-          className="flex flex-col items-center gap-4"
+          className="flex flex-col items-end gap-4"
           initial={{ scale: 0 }}
           animate={{ scale: 1 }}
           exit={{ scale: 0 }}
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
         >
-          {aiEnabled && <VoiceNoteRecorder emphasis="quiet" />}
+          {aiEnabled && <VoiceNoteRecorder size="md" emphasis="quiet" />}
           <button
             type="button"
             className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-full',
+              'flex size-14 items-center justify-center rounded-full',
               'bg-primary text-primary-foreground',
               'shadow-lg shadow-primary/25',
               'active:scale-95 transition-transform'
@@ -50,7 +50,7 @@ export function FloatingCreateButton({
             onClick={onCreateNote}
             onPointerDown={preloadEditorChunk}
           >
-            <Plus className="h-6 w-6" />
+            <Plus className="size-6" />
           </button>
         </motion.div>
       )}

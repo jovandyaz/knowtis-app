@@ -15,6 +15,7 @@ import {
   RecordingModal,
   RecordingTimer,
   VoiceButton,
+  type VoiceButtonProps,
 } from '@knowtis/design-system';
 
 import { LivePreview } from './LivePreview';
@@ -42,8 +43,8 @@ type FlowState = 'idle' | 'recording' | 'processing' | 'result' | 'error';
 const MAX_DURATION = 300;
 
 interface VoiceNoteRecorderProps {
-  size?: 'sm' | 'default' | 'lg' | 'xl';
-  emphasis?: 'solid' | 'quiet';
+  size?: VoiceButtonProps['size'];
+  emphasis?: VoiceButtonProps['emphasis'];
   mode?: 'create' | 'insert';
   open?: boolean;
   onClose?: () => void;

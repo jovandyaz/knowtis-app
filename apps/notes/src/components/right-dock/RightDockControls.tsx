@@ -29,10 +29,10 @@ export function CopilotMobileFAB() {
     <button
       type="button"
       onClick={() => open()}
-      className="flex h-12 w-12 items-center justify-center rounded-full border border-(--border) bg-(--card) text-(--primary) shadow-lg transition-transform active:scale-95"
+      className="flex size-12 items-center justify-center rounded-full border border-(--border) bg-(--card) text-(--primary) shadow-lg transition-transform active:scale-95"
       aria-label={t('labels.copilot', 'Copilot')}
     >
-      <Sparkles className="h-5 w-5" />
+      <Sparkles className="size-5" />
     </button>
   );
 }
