@@ -43,6 +43,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-bucket-projects: var(--bucket-projects);
+  --color-bucket-areas: var(--bucket-areas);
+  --color-bucket-resources: var(--bucket-resources);
+  --color-bucket-archive: var(--bucket-archive);
 }
 
 :root {
@@ -71,6 +76,10 @@
   --chart-3: var(--color-semantic-light-chart-3);
   --chart-4: var(--color-semantic-light-chart-4);
   --chart-5: var(--color-semantic-light-chart-5);
+  --bucket-projects: var(--color-semantic-light-bucket-projects);
+  --bucket-areas: var(--color-semantic-light-bucket-areas);
+  --bucket-resources: var(--color-semantic-light-bucket-resources);
+  --bucket-archive: var(--color-semantic-light-bucket-archive);
 }
 
 .dark {
@@ -98,6 +107,10 @@
   --chart-3: var(--color-semantic-dark-chart-3);
   --chart-4: var(--color-semantic-dark-chart-4);
   --chart-5: var(--color-semantic-dark-chart-5);
+  --bucket-projects: var(--color-semantic-dark-bucket-projects);
+  --bucket-areas: var(--color-semantic-dark-bucket-areas);
+  --bucket-resources: var(--color-semantic-dark-bucket-resources);
+  --bucket-archive: var(--color-semantic-dark-bucket-archive);
 }
 
 @layer base {

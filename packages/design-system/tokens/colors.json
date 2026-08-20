@@ -105,7 +105,23 @@
         "chart-2": { "value": "{color.primitive.blue.500}", "type": "color" },
         "chart-3": { "value": "{color.primitive.green.500}", "type": "color" },
         "chart-4": { "value": "{color.primitive.yellow.600}", "type": "color" },
-        "chart-5": { "value": "{color.primitive.pink.500}", "type": "color" }
+        "chart-5": { "value": "{color.primitive.pink.500}", "type": "color" },
+        "bucket-projects": {
+          "value": "{color.primitive.blue.500}",
+          "type": "color"
+        },
+        "bucket-areas": {
+          "value": "{color.primitive.green.500}",
+          "type": "color"
+        },
+        "bucket-resources": {
+          "value": "{color.primitive.yellow.600}",
+          "type": "color"
+        },
+        "bucket-archive": {
+          "value": "{color.primitive.neutral.500}",
+          "type": "color"
+        }
       },
       "dark": {
         "background": {
@@ -152,7 +168,23 @@
         "chart-2": { "value": "{color.primitive.blue.400}", "type": "color" },
         "chart-3": { "value": "{color.primitive.green.400}", "type": "color" },
         "chart-4": { "value": "{color.primitive.yellow.400}", "type": "color" },
-        "chart-5": { "value": "{color.primitive.pink.400}", "type": "color" }
+        "chart-5": { "value": "{color.primitive.pink.400}", "type": "color" },
+        "bucket-projects": {
+          "value": "{color.primitive.blue.400}",
+          "type": "color"
+        },
+        "bucket-areas": {
+          "value": "{color.primitive.green.400}",
+          "type": "color"
+        },
+        "bucket-resources": {
+          "value": "{color.primitive.yellow.400}",
+          "type": "color"
+        },
+        "bucket-archive": {
+          "value": "{color.primitive.neutral.500}",
+          "type": "color"
+        }
       }
     }
   }
