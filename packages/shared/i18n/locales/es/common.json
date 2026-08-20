@@ -25,7 +25,9 @@
     "expandSidebar": "Expandir barra lateral",
     "collapseSidebar": "Contraer barra lateral",
     "resizeSidebar": "Redimensionar barra lateral",
-    "copilot": "Copilot"
+    "copilot": "Copilot",
+    "explore": "Explorar",
+    "close": "Cerrar"
   },
   "states": {
     "loading": "Cargando...",
@@ -56,7 +58,8 @@
     "logOut": "Cerrar sesión",
     "signedOutSuccess": "Sesión cerrada exitosamente",
     "createAccount": "Crear cuenta",
-    "signIn": "Iniciar sesión"
+    "signIn": "Iniciar sesión",
+    "account": "Cuenta"
   },
   "welcome": {
     "goodMorning": "Buenos días",

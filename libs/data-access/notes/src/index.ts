@@ -1,5 +1,6 @@
 export {
   useNotes,
+  useNoteCounts,
   useNote,
   useCreateNote,
   useUpdateNote,
