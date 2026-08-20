@@ -51,6 +51,7 @@ export function useCreateAndNavigateToNote() {
       generalAccessPermission: 'viewer',
       shareToken: null,
       editorsCanShare: false,
+      bucket: null,
       createdAt: now,
       updatedAt: now,
       accessLevel: 'owner',
