@@ -43,6 +43,7 @@ const MAX_DURATION = 300;
 
 interface VoiceNoteRecorderProps {
   size?: 'sm' | 'default' | 'lg' | 'xl';
+  emphasis?: 'solid' | 'quiet';
   mode?: 'create' | 'insert';
   open?: boolean;
   onClose?: () => void;
@@ -52,6 +53,7 @@ interface VoiceNoteRecorderProps {
 
 export function VoiceNoteRecorder({
   size = 'lg',
+  emphasis = 'solid',
   mode = 'create',
   open: controlledOpen,
   onClose: controlledOnClose,
@@ -252,6 +254,7 @@ export function VoiceNoteRecorder({
       {!isInsertMode && (
         <VoiceButton
           state={voiceButtonState}
+          emphasis={emphasis}
           size={size}
           onClick={handleOpen}
           aria-label={t('ai.voice.recordVoiceNote')}

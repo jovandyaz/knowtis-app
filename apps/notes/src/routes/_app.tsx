@@ -8,6 +8,7 @@ import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import { ArtifactGeneratorDialog } from '@/components/artifacts';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { MobileFabRail } from '@/components/layout/MobileFabRail';
 import { Sidebar } from '@/components/layout/Sidebar';
 import {
   CopilotMobileFAB,
@@ -114,7 +115,7 @@ function AppLayout() {
       {!isAnonymous && <SettingsModal />}
       <AnonymousLimitModal open={showLimitModal} onClose={closeLimitModal} />
       <BottomNav />
-      {aiEnabled && <CopilotMobileFAB />}
+      <MobileFabRail>{aiEnabled && <CopilotMobileFAB />}</MobileFabRail>
 
       <main
         className="flex-1 flex min-w-0 min-h-0 pb-20 md:pb-0"
