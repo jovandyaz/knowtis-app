@@ -58,6 +58,7 @@ describe('Notes Hooks', () => {
           generalAccessPermission: 'viewer',
           shareToken: null,
           editorsCanShare: false,
+          bucket: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -71,6 +72,7 @@ describe('Notes Hooks', () => {
           generalAccessPermission: 'editor',
           shareToken: 'token-abc',
           editorsCanShare: true,
+          bucket: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -111,6 +113,7 @@ describe('Notes Hooks', () => {
         generalAccessPermission: 'viewer' as const,
         shareToken: null,
         editorsCanShare: false,
+        bucket: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
