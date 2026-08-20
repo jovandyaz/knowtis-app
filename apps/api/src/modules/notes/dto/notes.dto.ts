@@ -15,10 +15,12 @@ import {
   GENERAL_ACCESS_LEVELS,
   NOTE_LIST_VIEWS,
   NOTE_TITLE_MAX_LENGTH,
+  PARA_BUCKETS,
   PERMISSION_LEVELS,
   type BucketFilter,
   type GeneralAccessLevel,
   type NoteListView,
+  type ParaBucket,
   type PermissionLevel,
 } from '@knowtis/shared-types';
 
@@ -111,6 +113,15 @@ export class UpdateNoteDto {
   @IsBoolean()
   @IsOptional()
   editorsCanShare?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'PARA bucket; null returns the note to Inbox',
+    enum: [...PARA_BUCKETS],
+    nullable: true,
+  })
+  @IsIn(PARA_BUCKETS)
+  @IsOptional()
+  bucket?: ParaBucket | null;
 }
 
 export class ShareNoteDto {

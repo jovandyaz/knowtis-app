@@ -29,6 +29,10 @@ const mockNote: NoteEntity = {
   updatedAt: new Date(),
 };
 
+const noteId = mockNote.id;
+const OWNER_ID = mockNote.ownerId;
+const EDITOR_ID = 'editor-1';
+
 describe('UpdateNoteHandler', () => {
   let handler: UpdateNoteHandler;
   let mockRepository: NoteRepository;
@@ -395,5 +399,77 @@ describe('UpdateNoteHandler', () => {
     if (result.isErr()) {
       expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
     }
+  });
+
+  it('owner sets a bucket', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({ ...mockNote, bucket: 'projects' })
+    );
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      bucket: 'projects',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      noteId,
+      expect.objectContaining({ bucket: 'projects' })
+    );
+  });
+
+  it('owner clears the bucket back to Inbox with null', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      bucket: 'projects',
+    });
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      bucket: null,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      noteId,
+      expect.objectContaining({ bucket: null })
+    );
+  });
+
+  it('editor setting a bucket is rejected with PERMISSION_DENIED', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
+
+    const result = await handler.execute({
+      noteId,
+      userId: EDITOR_ID,
+      bucket: 'areas',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
+    }
+    expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('editor editing title only is unaffected', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({ ...mockNote, title: 'ok' })
+    );
+
+    const result = await handler.execute({
+      noteId,
+      userId: EDITOR_ID,
+      title: 'ok',
+    });
+
+    expect(result.isOk()).toBe(true);
   });
 });

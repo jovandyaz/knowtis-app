@@ -315,6 +315,7 @@ export class NotesController {
         'generalAccess',
         'generalAccessPermission',
         'editorsCanShare',
+        'bucket',
       ]),
     });
     return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);

@@ -8,6 +8,7 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   GENERAL_ACCESS,
   type GeneralAccessLevel,
+  type ParaBucket,
   type PermissionLevel,
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
@@ -39,6 +40,7 @@ export interface UpdateNoteInput {
   readonly editorsCanShare?: boolean;
   readonly force?: boolean;
   readonly skipYjsState?: boolean;
+  readonly bucket?: ParaBucket | null;
 }
 
 interface PersistUpdateResult {
@@ -52,6 +54,7 @@ const SHARING_FIELDS = [
   'generalAccessPermission',
   'editorsCanShare',
 ] as const;
+const ORGANIZATION_FIELDS = ['bucket'] as const;
 
 @Injectable()
 export class UpdateNoteHandler {
@@ -109,7 +112,11 @@ export class UpdateNoteHandler {
     note: NoteEntity
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     const updateData: UpdateNoteData = {
-      ...pickDefined(input, [...CONTENT_FIELDS, ...SHARING_FIELDS]),
+      ...pickDefined(input, [
+        ...CONTENT_FIELDS,
+        ...SHARING_FIELDS,
+        ...ORGANIZATION_FIELDS,
+      ]),
       ...this.resolveShareToken(input, note),
     };
 
@@ -132,6 +139,13 @@ export class UpdateNoteHandler {
     );
     if (!canEdit) {
       return err(NoteErrors.editPermissionDenied());
+    }
+
+    const hasOrganizationFields = ORGANIZATION_FIELDS.some(
+      (field) => input[field] !== undefined
+    );
+    if (hasOrganizationFields) {
+      return err(NoteErrors.ownerOnly('set organization fields'));
     }
 
     const hasSharingFields = SHARING_FIELDS.some(
