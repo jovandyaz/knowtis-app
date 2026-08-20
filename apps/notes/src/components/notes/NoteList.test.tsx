@@ -114,7 +114,7 @@ describe('NoteList', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('still lists notes for an anonymous visitor landing on a shared view', async () => {
+  it('ignores a view left in the URL for an anonymous visitor', async () => {
     authUser.mockReturnValue({ isAnonymous: true });
     useNotes.mockReturnValue({
       data: [note('note-1', 'Anonymous note')],
@@ -125,7 +125,7 @@ describe('NoteList', () => {
     await renderAt('/notes?view=shared');
 
     expect(screen.getByText('Anonymous note')).toBeInTheDocument();
-    expect(lastFilters()).toEqual({ view: 'shared' });
+    expect(lastFilters()).toEqual({});
   });
 
   it('omits the default view from the filters so the cache key stays shared', async () => {
@@ -175,6 +175,26 @@ describe('NoteList', () => {
     expect(screen.getByText('list.startCollection')).toBeInTheDocument();
     expect(
       screen.queryByText('organization.empty.bucketTitle')
+    ).not.toBeInTheDocument();
+  });
+
+  it('explains an empty view rather than claiming the user has no notes', async () => {
+    await renderAt('/notes?view=shared');
+
+    expect(
+      screen.getByText('organization.empty.sharedTitle')
+    ).toBeInTheDocument();
+    expect(screen.queryByText('list.startCollection')).not.toBeInTheDocument();
+  });
+
+  it('prefers the bucket empty state when both a bucket and a view are set', async () => {
+    await renderAt('/notes?bucket=projects&view=mine');
+
+    expect(
+      screen.getByText('organization.empty.bucketTitle')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('organization.empty.mineTitle')
     ).not.toBeInTheDocument();
   });
 

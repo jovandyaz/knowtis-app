@@ -31,7 +31,11 @@
       "inboxTitle": "Inbox zero",
       "inboxDescription": "Everything is filed. New notes land here until you sort them.",
       "bucketTitle": "Nothing in {{bucket}}",
-      "bucketDescription": "Move a note here from its organization chip."
+      "bucketDescription": "Move a note here from its organization chip.",
+      "mineTitle": "No notes of your own yet",
+      "mineDescription": "Notes you create appear here, separate from the ones shared with you.",
+      "sharedTitle": "Nothing shared with you",
+      "sharedDescription": "Notes other people give you access to appear here."
     }
   },
   "editor": {

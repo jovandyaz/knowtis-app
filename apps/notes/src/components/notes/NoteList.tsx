@@ -5,6 +5,7 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
 import { BucketDot } from '@/components/organization/BucketDot';
 import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
+import { ViewEmptyState } from '@/components/organization/ViewEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
@@ -47,7 +48,12 @@ export function NoteList() {
 
   // The route tree's types are circular through this component, so useSearch()
   // widens the validated params back to plain strings; re-parsing restores them.
-  const { bucket, view } = notesSearchSchema.parse(routeApi.useSearch());
+  const { bucket, view: requestedView } = notesSearchSchema.parse(
+    routeApi.useSearch()
+  );
+  // Anonymous visitors get no view picker, so a view left in the URL would
+  // filter them into an empty list they have no control to clear.
+  const view = isAnonymous ? 'all' : requestedView;
   const navigate = useNavigate();
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
@@ -78,6 +84,16 @@ export function NoteList() {
 
   const clearBucket = () =>
     void navigate({ to: ROUTES.NOTES, search: { view } });
+
+  const renderEmptyState = () => {
+    if (bucket) {
+      return <BucketEmptyState bucket={bucket} />;
+    }
+    if (view !== 'all') {
+      return <ViewEmptyState view={view} />;
+    }
+    return <EmptyState hasSearch={!!debouncedSearch} />;
+  };
 
   const renderNotes = () => {
     if (isLoading) {
@@ -114,11 +130,7 @@ export function NoteList() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              {bucket ? (
-                <BucketEmptyState bucket={bucket} />
-              ) : (
-                <EmptyState hasSearch={!!debouncedSearch} />
-              )}
+              {renderEmptyState()}
             </motion.div>
           ) : (
             notes.map((note) => <NoteCard key={note.id} note={note} />)

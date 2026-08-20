@@ -31,7 +31,11 @@
       "inboxTitle": "Inbox vacío",
       "inboxDescription": "Todo está en su lugar. Las notas nuevas llegan aquí hasta que las clasificas.",
       "bucketTitle": "Nada en {{bucket}}",
-      "bucketDescription": "Mueve una nota aquí desde su chip de organización."
+      "bucketDescription": "Mueve una nota aquí desde su chip de organización.",
+      "mineTitle": "Todavía no tienes notas propias",
+      "mineDescription": "Las notas que crees aparecen aquí, aparte de las que te comparten.",
+      "sharedTitle": "Nadie ha compartido notas contigo",
+      "sharedDescription": "Las notas a las que otras personas te den acceso aparecen aquí."
     }
   },
   "editor": {
