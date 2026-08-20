@@ -195,7 +195,20 @@ export class NotesController {
   }
 
   @ApiOperation({ summary: 'Get accessible note counts per PARA bucket' })
-  @ApiResponse({ status: 200, description: 'Counts grouped by bucket' })
+  @ApiResponse({
+    status: 200,
+    description: 'Counts grouped by bucket',
+    schema: {
+      type: 'object',
+      properties: {
+        inbox: { type: 'integer', example: 12 },
+        projects: { type: 'integer', example: 4 },
+        areas: { type: 'integer', example: 2 },
+        resources: { type: 'integer', example: 7 },
+        archive: { type: 'integer', example: 1 },
+      },
+    },
+  })
   @Get('counts')
   @RequirePermission('read', SUBJECTS.Note)
   @RequireMcpScope(MCP_SCOPES.READ)

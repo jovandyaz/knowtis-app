@@ -174,9 +174,11 @@ export function NoteList() {
             {t(`organization.buckets.${bucket}`)}
             <X className="h-3 w-3 opacity-70" />
           </button>
-          <span className="text-xs text-muted-foreground/70">
-            {t('organization.notesCount', { count: notes.length })}
-          </span>
+          {!isLoading && !isError && (
+            <span className="text-xs text-muted-foreground/70">
+              {t('organization.notesCount', { count: notes.length })}
+            </span>
+          )}
         </div>
       )}
 

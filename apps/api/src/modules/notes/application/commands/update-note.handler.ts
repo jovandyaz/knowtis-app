@@ -256,6 +256,8 @@ export class UpdateNoteHandler {
     noteId: string,
     yjsState: Buffer | undefined
   ): void {
+    // ORGANIZATION_FIELDS stay out of this pick on purpose: they are not live
+    // document state, so collaborators pick them up on their next refetch.
     const updates = pickDefined(input, [
       ...CONTENT_FIELDS,
       ...SHARING_FIELDS,

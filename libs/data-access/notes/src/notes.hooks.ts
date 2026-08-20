@@ -31,15 +31,17 @@ export const notesQueryKeys = {
     [...notesQueryKeys.all, 'shared', token] as const,
 } as const;
 
+const LIST_STALE_TIME_MS = 1000 * 60;
+const COUNTS_STALE_TIME_MS = 1000 * 30;
+const DETAIL_STALE_TIME_MS = 1000 * 30;
+
 export function useNotes(filters?: NotesListFilters) {
   return useQuery({
     queryKey: notesQueryKeys.list(filters),
     queryFn: () => notesApi.getAll(filters),
-    staleTime: 1000 * 60,
+    staleTime: LIST_STALE_TIME_MS,
   });
 }
-
-const COUNTS_STALE_TIME_MS = 1000 * 30;
 
 export function useNoteCounts() {
   return useQuery({
@@ -59,7 +61,7 @@ export function useNote(noteId: string | undefined) {
       return notesApi.getById(noteId);
     },
     enabled: !!noteId,
-    staleTime: 1000 * 30,
+    staleTime: DETAIL_STALE_TIME_MS,
   });
 }
 
