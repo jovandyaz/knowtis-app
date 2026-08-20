@@ -10,7 +10,7 @@ const voiceButtonVariants = cva(
   {
     variants: {
       state: {
-        idle: 'bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90 cursor-pointer',
+        idle: 'cursor-pointer',
         listening:
           'bg-red-500 text-white cursor-pointer animate-pulse shadow-[0_0_16px_4px_rgba(239,68,68,0.4)]',
         paused: 'bg-amber-500 text-white cursor-pointer hover:bg-amber-500/90',
@@ -18,15 +18,35 @@ const voiceButtonVariants = cva(
         disabled:
           'bg-(--muted) text-(--muted-foreground) opacity-50 cursor-not-allowed',
       },
+      emphasis: {
+        solid: '',
+        quiet: '',
+      },
       size: {
-        sm: 'h-8 w-8',
-        default: 'h-10 w-10',
-        lg: 'h-14 w-14',
-        xl: 'h-16 w-16',
+        sm: 'size-8',
+        default: 'size-10',
+        md: 'size-12',
+        lg: 'size-14',
+        xl: 'size-16',
       },
     },
+    compoundVariants: [
+      {
+        state: 'idle',
+        emphasis: 'solid',
+        class:
+          'bg-(--primary) text-(--primary-foreground) hover:bg-(--primary)/90',
+      },
+      {
+        state: 'idle',
+        emphasis: 'quiet',
+        class:
+          'border border-(--border) bg-(--card) text-(--primary) shadow-lg hover:bg-(--muted)',
+      },
+    ],
     defaultVariants: {
       state: 'idle',
+      emphasis: 'solid',
       size: 'default',
     },
   }
@@ -41,10 +61,11 @@ const ariaLabelMap: Record<NonNullable<VoiceButtonProps['state']>, string> = {
 };
 
 const iconSizeMap = {
-  sm: 'h-4 w-4',
-  default: 'h-5 w-5',
-  lg: 'h-6 w-6',
-  xl: 'h-7 w-7',
+  sm: 'size-4',
+  default: 'size-5',
+  md: 'size-5',
+  lg: 'size-6',
+  xl: 'size-7',
 } as const;
 
 export interface VoiceButtonProps
@@ -53,7 +74,7 @@ export interface VoiceButtonProps
     VariantProps<typeof voiceButtonVariants> {}
 
 export const VoiceButton = forwardRef<HTMLButtonElement, VoiceButtonProps>(
-  ({ className, state, size, ...props }, ref) => {
+  ({ className, state, emphasis, size, ...props }, ref) => {
     const resolvedState = state ?? 'idle';
     const resolvedSize = size ?? 'default';
     const iconClass = iconSizeMap[resolvedSize];
@@ -76,7 +97,9 @@ export const VoiceButton = forwardRef<HTMLButtonElement, VoiceButtonProps>(
     return (
       <button
         type="button"
-        className={cn(voiceButtonVariants({ state, size, className }))}
+        className={cn(
+          voiceButtonVariants({ state, emphasis, size, className })
+        )}
         ref={ref}
         disabled={
           resolvedState === 'disabled' || resolvedState === 'processing'

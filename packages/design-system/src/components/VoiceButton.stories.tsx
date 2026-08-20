@@ -11,6 +11,10 @@ const meta: Meta<typeof VoiceButton> = {
       control: 'select',
       options: ['idle', 'listening', 'paused', 'processing', 'disabled'],
     },
+    emphasis: {
+      control: 'select',
+      options: ['solid', 'quiet'],
+    },
     size: {
       control: 'select',
       options: ['sm', 'default', 'lg', 'xl'],
@@ -53,6 +57,24 @@ export const AllStates: Story = {
       <VoiceButton state="paused" />
       <VoiceButton state="processing" />
       <VoiceButton state="disabled" />
+    </div>
+  ),
+};
+
+export const QuietIdle: Story = {
+  args: {
+    state: 'idle',
+    emphasis: 'quiet',
+    size: 'lg',
+  },
+};
+
+export const EmphasisComparison: Story = {
+  render: () => (
+    <div className="flex items-center gap-4">
+      <VoiceButton size="lg" emphasis="solid" />
+      <VoiceButton size="lg" emphasis="quiet" />
+      <VoiceButton size="lg" emphasis="quiet" state="listening" />
     </div>
   ),
 };

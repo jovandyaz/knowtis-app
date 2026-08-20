@@ -2,11 +2,17 @@ import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import { ACCESS, type NoteAccessLevel } from '@knowtis/shared-types';
+import {
+  ACCESS,
+  type BucketFilter,
+  type NoteAccessLevel,
+  type NoteListView,
+} from '@knowtis/shared-types';
 
 import {
   NOTE_REPOSITORY,
   type NoteDomainError,
+  type NoteListFilters,
   type NoteRepository,
   type NoteView,
 } from '../../domain';
@@ -14,6 +20,8 @@ import {
 export interface GetNotesInput {
   readonly userId: string;
   readonly search?: string;
+  readonly bucket?: BucketFilter;
+  readonly view?: NoteListView;
 }
 
 export type AccessibleNote = NoteView & {
@@ -34,9 +42,14 @@ export class GetNotesHandler {
       return err(userIdResult.error as NoteDomainError);
     }
 
+    const filters: NoteListFilters = {
+      ...(input.search ? { search: input.search } : {}),
+      ...(input.bucket ? { bucket: input.bucket } : {}),
+    };
+
     const results = await this.noteRepository.findAccessibleByUser(
       userIdResult.value,
-      input.search
+      filters
     );
 
     const accessibleNotes: AccessibleNote[] = results.map(
@@ -48,6 +61,16 @@ export class GetNotesHandler {
       })
     );
 
-    return ok(accessibleNotes);
+    const view = input.view ?? 'all';
+    const filtered =
+      view === 'all'
+        ? accessibleNotes
+        : accessibleNotes.filter((note) =>
+            view === 'mine'
+              ? note.accessLevel === ACCESS.OWNER
+              : note.accessLevel !== ACCESS.OWNER
+          );
+
+    return ok(filtered);
   }
 }

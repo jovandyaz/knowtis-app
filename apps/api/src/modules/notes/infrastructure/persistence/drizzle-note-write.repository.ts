@@ -43,6 +43,9 @@ function buildUpdatePayload(
   if (data.editorsCanShare !== undefined) {
     payload.editorsCanShare = data.editorsCanShare;
   }
+  if (data.bucket !== undefined) {
+    payload.bucket = data.bucket;
+  }
 
   return payload;
 }

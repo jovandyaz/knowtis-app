@@ -1,4 +1,8 @@
+import { createPortal } from 'react-dom';
+
+import { MOBILE_FAB_SLOT_ID } from '@/components/layout/MobileFabRail';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { usePortalTarget } from '@/hooks/usePortalTarget';
 import { preloadEditorChunk } from '@/lib/preload-editor';
 import { useAIStore } from '@/stores/ai.store';
 import { Plus } from 'lucide-react';
@@ -17,28 +21,27 @@ export function FloatingCreateButton({
   const scrollDirection = useScrollDirection();
   const isVisible = scrollDirection !== 'down';
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const portalTarget = usePortalTarget(MOBILE_FAB_SLOT_ID);
 
-  return (
+  if (!portalTarget) {
+    return null;
+  }
+
+  return createPortal(
     <AnimatePresence>
       {isVisible && (
-        <div className="fixed bottom-20 right-5 z-50 flex flex-col items-center gap-3 md:hidden">
-          {aiEnabled && (
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0 }}
-              transition={{ type: 'spring', stiffness: 400, damping: 15 }}
-            >
-              <VoiceNoteRecorder />
-            </motion.div>
-          )}
-          <motion.button
-            initial={{ scale: 0 }}
-            animate={{ scale: 1 }}
-            exit={{ scale: 0 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+        <motion.div
+          className="flex flex-col items-end gap-4"
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          exit={{ scale: 0 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 15 }}
+        >
+          {aiEnabled && <VoiceNoteRecorder size="md" emphasis="quiet" />}
+          <button
+            type="button"
             className={cn(
-              'flex h-14 w-14 items-center justify-center rounded-full',
+              'flex size-14 items-center justify-center rounded-full',
               'bg-primary text-primary-foreground',
               'shadow-lg shadow-primary/25',
               'active:scale-95 transition-transform'
@@ -47,10 +50,11 @@ export function FloatingCreateButton({
             onClick={onCreateNote}
             onPointerDown={preloadEditorChunk}
           >
-            <Plus className="h-6 w-6" />
-          </motion.button>
-        </div>
+            <Plus className="size-6" />
+          </button>
+        </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    portalTarget
   );
 }

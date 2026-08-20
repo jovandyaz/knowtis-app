@@ -25,7 +25,9 @@
     "expandSidebar": "Expand sidebar",
     "collapseSidebar": "Collapse sidebar",
     "resizeSidebar": "Resize sidebar",
-    "copilot": "Copilot"
+    "copilot": "Copilot",
+    "explore": "Explore",
+    "close": "Close"
   },
   "states": {
     "loading": "Loading...",
@@ -56,7 +58,8 @@
     "logOut": "Log out",
     "signedOutSuccess": "Signed out successfully",
     "createAccount": "Create account",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "account": "Account"
   },
   "welcome": {
     "goodMorning": "Good morning",

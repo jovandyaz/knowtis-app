@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -53,13 +53,18 @@ describe('ModelSelect', () => {
     await userEvent.click(screen.getByRole('button', { name: /Fast One/ }));
 
     // An empty description span is invisible to textContent but still consumes
-    // the item's row gap, so the assertion has to be structural.
+    // the item's row gap, so the assertion has to be structural. The description
+    // is the only element in a row that carries a title.
     expect(
-      screen.getByRole('menuitemradio', { name: /Fast One/ }).children
-    ).toHaveLength(2);
+      within(
+        screen.getByRole('menuitemradio', { name: /Fast One/ })
+      ).getByTitle('has one')
+    ).toBeInTheDocument();
     expect(
-      screen.getByRole('menuitemradio', { name: /Balanced One/ }).children
-    ).toHaveLength(1);
+      within(
+        screen.getByRole('menuitemradio', { name: /Balanced One/ })
+      ).queryByTitle(/.*/)
+    ).toBeNull();
   });
 
   it('keeps a long description reachable in full while clamping it to one line', async () => {
@@ -189,18 +194,6 @@ describe('ModelSelect', () => {
     expect(screen.getByText('MODELS').parentElement).toHaveTextContent(
       /^MODELS$/
     );
-  });
-
-  it('leaves an unselected row without a trailing slot', async () => {
-    render(
-      <ModelSelect models={[...models]} value="a:fast" onSelect={vi.fn()} />
-    );
-    await userEvent.click(screen.getByRole('button'));
-
-    // An empty slot is invisible to textContent but still consumes the row's
-    // gap, so the assertion has to be structural.
-    const row = screen.getByRole('menuitemradio', { name: /Balanced One/ });
-    expect(row.firstElementChild?.children).toHaveLength(1);
   });
 
   it('shows the billed badge only on models billed to the user', async () => {

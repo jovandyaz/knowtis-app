@@ -1,29 +1,60 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getRouteApi, useNavigate } from '@tanstack/react-router';
+
+import { BucketDot } from '@/components/organization/BucketDot';
+import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
+import { ViewEmptyState } from '@/components/organization/ViewEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { ROUTES } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { DEBOUNCE_DELAYS } from '@/lib';
+import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
-import { Plus, Search } from 'lucide-react';
+import { useAuthUser } from '@jovandyaz/auth-react';
+import { Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
-import { Button, ErrorState, Input } from '@knowtis/design-system';
+import {
+  Button,
+  ErrorState,
+  Input,
+  SegmentedControl,
+} from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
+import {
+  NOTE_LIST_VIEWS,
+  type NoteListView,
+  type NotesListFilters,
+} from '@knowtis/shared-types';
 
 import { EmptyState } from './EmptyState';
 import { FloatingCreateButton } from './FloatingCreateButton';
 import { NoteCard } from './NoteCard';
 import { NoteCardSkeleton } from './NoteCardSkeleton';
 
+const routeApi = getRouteApi('/_app/notes/');
+
 export function NoteList() {
   const { t } = useTranslation('notes');
   const { t: tCommon } = useTranslation('common');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const { createNote } = useCreateNoteAction();
+
+  // The route tree's types are circular through this component, so useSearch()
+  // widens the validated params back to plain strings; re-parsing restores them.
+  const { bucket, view: requestedView } = notesSearchSchema.parse(
+    routeApi.useSearch()
+  );
+  // Anonymous visitors get no view picker, so a view left in the URL would
+  // filter them into an empty list they have no control to clear.
+  const view = isAnonymous ? 'all' : requestedView;
+  const navigate = useNavigate();
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
     useNotesSearchStore();
@@ -37,12 +68,32 @@ export function NoteList() {
     }
   }, [focusRequested, clearFocusRequest]);
 
-  const {
-    data: notes = [],
-    isLoading,
-    isError,
-    error,
-  } = useNotes(debouncedSearch);
+  const filters: NotesListFilters = {
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(bucket ? { bucket } : {}),
+    ...(view !== 'all' ? { view } : {}),
+  };
+
+  const { data: notes = [], isLoading, isError, error } = useNotes(filters);
+
+  const setView = (next: NoteListView) =>
+    void navigate({
+      to: ROUTES.NOTES,
+      search: { ...(bucket ? { bucket } : {}), view: next },
+    });
+
+  const clearBucket = () =>
+    void navigate({ to: ROUTES.NOTES, search: { view } });
+
+  const renderEmptyState = () => {
+    if (bucket) {
+      return <BucketEmptyState bucket={bucket} />;
+    }
+    if (view !== 'all') {
+      return <ViewEmptyState view={view} />;
+    }
+    return <EmptyState hasSearch={!!debouncedSearch} />;
+  };
 
   const renderNotes = () => {
     if (isLoading) {
@@ -79,7 +130,7 @@ export function NoteList() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <EmptyState hasSearch={!!debouncedSearch} />
+              {renderEmptyState()}
             </motion.div>
           ) : (
             notes.map((note) => <NoteCard key={note.id} note={note} />)
@@ -103,14 +154,49 @@ export function NoteList() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="hidden md:flex md:items-center md:gap-3">
-          {aiEnabled && <VoiceNoteRecorder size="default" />}
-          <Button className="gap-2" onClick={createNote}>
-            <Plus className="h-4 w-4" />
-            {t('create.newNote')}
-          </Button>
+        <div className="flex items-center gap-3">
+          {!isAnonymous && (
+            <SegmentedControl
+              aria-label={t('organization.viewsLabel')}
+              value={view}
+              onValueChange={setView}
+              options={NOTE_LIST_VIEWS.map((v) => ({
+                value: v,
+                label: t(`organization.views.${v}`),
+              }))}
+            />
+          )}
+          <div className="hidden md:flex md:items-center md:gap-3">
+            {aiEnabled && <VoiceNoteRecorder size="default" />}
+            <Button className="gap-2" onClick={createNote}>
+              <Plus className="h-4 w-4" />
+              {t('create.newNote')}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {bucket && (
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={clearBucket}
+            aria-label={t('organization.clearBucketFilter', {
+              bucket: t(`organization.buckets.${bucket}`),
+            })}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+          >
+            <BucketDot bucket={bucket} className="size-2" />
+            {t(`organization.buckets.${bucket}`)}
+            <X className="h-3 w-3 opacity-70" />
+          </button>
+          {!isLoading && !isError && (
+            <span className="text-xs text-muted-foreground/70">
+              {t('organization.notesCount', { count: notes.length })}
+            </span>
+          )}
+        </div>
+      )}
 
       {renderNotes()}
 

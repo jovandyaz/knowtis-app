@@ -7,18 +7,22 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
+import type { NoteBucketCounts } from '@knowtis/shared-types';
 
 import {
   notesQueryKeys,
   useCreateNote,
+  useNoteCounts,
   useNotes,
   useRestoreNote,
+  useUpdateNote,
 } from './notes.hooks';
 
 // Mock the API
 vi.mock('@knowtis/api-client', () => ({
   notesApi: {
     getAll: vi.fn(),
+    getCounts: vi.fn(),
     getById: vi.fn(),
     create: vi.fn(),
     update: vi.fn(),
@@ -58,6 +62,7 @@ describe('Notes Hooks', () => {
           generalAccessPermission: 'viewer',
           shareToken: null,
           editorsCanShare: false,
+          bucket: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -71,6 +76,7 @@ describe('Notes Hooks', () => {
           generalAccessPermission: 'editor',
           shareToken: 'token-abc',
           editorsCanShare: true,
+          bucket: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -90,13 +96,53 @@ describe('Notes Hooks', () => {
     it('should pass search parameter', async () => {
       vi.mocked(notesApi.getAll).mockResolvedValue([]);
 
-      const { result } = renderHook(() => useNotes('search term'), { wrapper });
+      const { result } = renderHook(() => useNotes({ search: 'search term' }), {
+        wrapper,
+      });
 
       await waitFor(() => {
         expect(result.current.isSuccess).toBe(true);
       });
 
       expect(notesApi.getAll).toHaveBeenCalledWith({ search: 'search term' });
+    });
+
+    it('forwards filters to notesApi.getAll', async () => {
+      vi.mocked(notesApi.getAll).mockResolvedValue([]);
+
+      const { result } = renderHook(
+        () => useNotes({ bucket: 'projects', view: 'mine' }),
+        { wrapper }
+      );
+
+      await waitFor(() => {
+        expect(result.current.isSuccess).toBe(true);
+      });
+
+      expect(notesApi.getAll).toHaveBeenCalledWith({
+        bucket: 'projects',
+        view: 'mine',
+      });
+    });
+  });
+
+  describe('useNoteCounts', () => {
+    it('hits /notes/counts and caches under the counts key', async () => {
+      const counts: NoteBucketCounts = {
+        inbox: 1,
+        projects: 0,
+        areas: 0,
+        resources: 0,
+        archive: 0,
+      };
+      vi.mocked(notesApi.getCounts).mockResolvedValue(counts);
+
+      const { result } = renderHook(() => useNoteCounts(), { wrapper });
+
+      await waitFor(() => expect(result.current.data?.inbox).toBe(1));
+
+      expect(notesApi.getCounts).toHaveBeenCalled();
+      expect(queryClient.getQueryData(notesQueryKeys.counts())).toEqual(counts);
     });
   });
 
@@ -111,6 +157,7 @@ describe('Notes Hooks', () => {
         generalAccessPermission: 'viewer' as const,
         shareToken: null,
         editorsCanShare: false,
+        bucket: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -125,6 +172,22 @@ describe('Notes Hooks', () => {
       });
 
       expect(notesApi.create).toHaveBeenCalledWith({ title: 'New Note' });
+    });
+  });
+
+  describe('useUpdateNote', () => {
+    it('invalidates counts', async () => {
+      vi.mocked(notesApi.update).mockResolvedValue({
+        id: 'n1',
+        bucket: 'areas',
+      } as never);
+      const spy = vi.spyOn(queryClient, 'invalidateQueries');
+      const { result } = renderHook(() => useUpdateNote(), { wrapper });
+
+      result.current.mutate({ id: 'n1', input: { bucket: 'areas' } });
+
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(spy).toHaveBeenCalledWith({ queryKey: ['notes', 'counts'] });
     });
   });
 
@@ -151,11 +214,12 @@ describe('Notes Hooks', () => {
     it('should generate correct query keys', () => {
       expect(notesQueryKeys.all).toEqual(['notes']);
       expect(notesQueryKeys.lists()).toEqual(['notes', 'list']);
-      expect(notesQueryKeys.list('search')).toEqual([
+      expect(notesQueryKeys.list({ search: 'search' })).toEqual([
         'notes',
         'list',
-        { search: 'search' },
+        { search: 'search', bucket: undefined, view: undefined },
       ]);
+      expect(notesQueryKeys.counts()).toEqual(['notes', 'counts']);
       expect(notesQueryKeys.detail('123')).toEqual(['notes', 'detail', '123']);
     });
   });

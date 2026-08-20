@@ -3,6 +3,7 @@ import type { Result } from 'neverthrow';
 
 import type {
   GeneralAccessLevel,
+  ParaBucket,
   PermissionLevel,
 } from '@knowtis/shared-types';
 
@@ -23,6 +24,7 @@ export interface UpdateNoteData {
   readonly generalAccessPermission?: PermissionLevel;
   readonly shareToken?: string | null;
   readonly editorsCanShare?: boolean;
+  readonly bucket?: ParaBucket | null;
 }
 
 export type UpdateNoteContentData = UpdateNoteData & {

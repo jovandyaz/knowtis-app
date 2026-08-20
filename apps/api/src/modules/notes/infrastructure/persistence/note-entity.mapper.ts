@@ -20,6 +20,7 @@ export function mapToNoteView(record: NoteViewRecord): NoteView {
     generalAccessPermission: record.generalAccessPermission,
     shareToken: record.shareToken,
     editorsCanShare: record.editorsCanShare,
+    bucket: record.bucket,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useNavigate } from '@tanstack/react-router';
 
+import { BucketNav } from '@/components/organization/BucketNav';
 import { NAVIGATION_LINKS, ROUTES } from '@/config';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
@@ -24,6 +25,7 @@ const COLLAPSE_THRESHOLD = 80;
 
 export function Sidebar() {
   const user = useAuthUser();
+  const isAnonymous = user?.isAnonymous ?? false;
   const { t } = useTranslation('common');
   const collapsed = useSidebarStore((s) => s.collapsed);
   const setCollapsed = useSidebarStore((s) => s.setCollapsed);
@@ -86,11 +88,12 @@ export function Sidebar() {
           </button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-4">
+          {!isAnonymous && <BucketNav />}
           <SidebarNotesSection />
         </div>
         <SidebarUserMenu
           username={user?.name ?? ''}
-          isAnonymous={user?.isAnonymous ?? false}
+          isAnonymous={isAnonymous}
         />
       </div>
     </ResizablePanel>

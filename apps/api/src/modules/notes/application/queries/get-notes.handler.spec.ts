@@ -15,6 +15,7 @@ function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
     generalAccessPermission: 'viewer',
     shareToken: null,
     editorsCanShare: false,
+    bucket: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -22,6 +23,7 @@ function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
 }
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
+const OTHER_USER_ID = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
 
 describe('GetNotesHandler', () => {
   let handler: GetNotesHandler;
@@ -39,6 +41,7 @@ describe('GetNotesHandler', () => {
       findAccessibleNotesByLexicalRank: vi.fn(),
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
+      countAccessibleByBucket: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),
@@ -158,8 +161,54 @@ describe('GetNotesHandler', () => {
 
     expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
       expect.objectContaining({ value: VALID_UUID }),
-      'test query'
+      { search: 'test query' }
     );
+  });
+
+  it('passes bucket filter to the repository', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([]);
+
+    await handler.execute({ userId: VALID_UUID, bucket: 'projects' });
+
+    expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+      expect.anything(),
+      { bucket: 'projects' }
+    );
+  });
+
+  it('view=mine keeps only owned notes', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
+      { note: createMockNote({ ownerId: VALID_UUID }) },
+      {
+        note: createMockNote({ id: 'shared', ownerId: OTHER_USER_ID }),
+        permission: 'editor',
+      },
+    ]);
+
+    const result = await handler.execute({ userId: VALID_UUID, view: 'mine' });
+
+    expect(result._unsafeUnwrap().map((note) => note.ownerId)).toEqual([
+      VALID_UUID,
+    ]);
+  });
+
+  it('view=shared keeps only non-owned notes', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
+      { note: createMockNote({ ownerId: VALID_UUID }) },
+      {
+        note: createMockNote({ id: 'shared', ownerId: OTHER_USER_ID }),
+        permission: 'viewer',
+      },
+    ]);
+
+    const result = await handler.execute({
+      userId: VALID_UUID,
+      view: 'shared',
+    });
+
+    expect(result._unsafeUnwrap().map((note) => note.ownerId)).toEqual([
+      OTHER_USER_ID,
+    ]);
   });
 
   it('should fail with empty user id', async () => {

@@ -8,6 +8,36 @@
     "createFirst": "Your ideas are waiting.",
     "noContentYet": "No content yet..."
   },
+  "organization": {
+    "title": "Organization",
+    "explore": "Explore",
+    "buckets": {
+      "inbox": "Inbox",
+      "projects": "Projects",
+      "areas": "Areas",
+      "resources": "Resources",
+      "archive": "Archive"
+    },
+    "views": {
+      "all": "All",
+      "mine": "Mine",
+      "shared": "Shared"
+    },
+    "viewsLabel": "View",
+    "clearBucketFilter": "Clear the {{bucket}} filter",
+    "notesCount_one": "{{count}} note",
+    "notesCount_other": "{{count}} notes",
+    "empty": {
+      "inboxTitle": "Inbox zero",
+      "inboxDescription": "Everything is filed. New notes land here until you sort them.",
+      "bucketTitle": "Nothing in {{bucket}}",
+      "bucketDescription": "Move a note here from its organization chip.",
+      "mineTitle": "No notes of your own yet",
+      "mineDescription": "Notes you create appear here, separate from the ones shared with you.",
+      "sharedTitle": "Nothing shared with you",
+      "sharedDescription": "Notes other people give you access to appear here."
+    }
+  },
   "editor": {
     "back": "Back",
     "backToNotes": "Back to Notes",

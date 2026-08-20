@@ -37,6 +37,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { SUBJECTS } from '@knowtis/authorization';
+import { PARA_BUCKETS } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -54,6 +55,7 @@ import {
   DeleteNoteHandler,
   GetCollaboratorsHandler,
   GetNoteByTokenHandler,
+  GetNoteCountsHandler,
   GetNoteHandler,
   GetNotesHandler,
   RestoreNoteHandler,
@@ -100,6 +102,11 @@ const noteProperties = {
   },
   shareToken: { type: 'string', nullable: true },
   editorsCanShare: { type: 'boolean' },
+  bucket: {
+    type: 'string',
+    nullable: true,
+    enum: [...PARA_BUCKETS] as string[],
+  },
   createdAt: { type: 'string', format: 'date-time' },
   updatedAt: { type: 'string', format: 'date-time' },
 };
@@ -136,6 +143,7 @@ export class NotesController {
   constructor(
     private readonly createNoteHandler: CreateNoteHandler,
     private readonly getNotesHandler: GetNotesHandler,
+    private readonly getNoteCountsHandler: GetNoteCountsHandler,
     private readonly getNoteHandler: GetNoteHandler,
     private readonly updateNoteHandler: UpdateNoteHandler,
     private readonly deleteNoteHandler: DeleteNoteHandler,
@@ -150,7 +158,7 @@ export class NotesController {
   @ApiOperation({
     summary: 'List accessible notes',
     description:
-      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term on the title.',
+      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term, a PARA bucket, and an owned/shared view.',
   })
   @ApiResponse({
     status: 200,
@@ -180,6 +188,33 @@ export class NotesController {
     const result = await this.getNotesHandler.execute({
       userId: user.id,
       ...(query.search ? { search: query.search } : {}),
+      ...(query.bucket ? { bucket: query.bucket } : {}),
+      ...(query.view ? { view: query.view } : {}),
+    });
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({ summary: 'Get accessible note counts per PARA bucket' })
+  @ApiResponse({
+    status: 200,
+    description: 'Counts grouped by bucket',
+    schema: {
+      type: 'object',
+      properties: {
+        inbox: { type: 'integer', example: 12 },
+        projects: { type: 'integer', example: 4 },
+        areas: { type: 'integer', example: 2 },
+        resources: { type: 'integer', example: 7 },
+        archive: { type: 'integer', example: 1 },
+      },
+    },
+  })
+  @Get('counts')
+  @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.READ)
+  async getCounts(@CurrentUser() user: RequestUser) {
+    const result = await this.getNoteCountsHandler.execute({
+      userId: user.id,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
@@ -307,6 +342,7 @@ export class NotesController {
         'generalAccess',
         'generalAccessPermission',
         'editorsCanShare',
+        'bucket',
       ]),
     });
     return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);

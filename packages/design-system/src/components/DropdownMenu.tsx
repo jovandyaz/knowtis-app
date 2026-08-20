@@ -6,6 +6,7 @@ import {
 } from 'react';
 
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { Check } from 'lucide-react';
 
 import { cn } from '../utils';
 import { Switch } from './Switch';
@@ -55,12 +56,17 @@ const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 const DropdownMenuRadioItem = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
-    className={cn(MENU_ITEM_CLASSES, className)}
+    className={cn(MENU_ITEM_CLASSES, 'relative pr-8', className)}
     {...props}
-  />
+  >
+    {children}
+    <DropdownMenuPrimitive.ItemIndicator className="absolute right-2 top-1/2 -translate-y-1/2">
+      <Check className="h-3.5 w-3.5" />
+    </DropdownMenuPrimitive.ItemIndicator>
+  </DropdownMenuPrimitive.RadioItem>
 ));
 DropdownMenuRadioItem.displayName = 'DropdownMenuRadioItem';
 

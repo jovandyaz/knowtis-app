@@ -2,7 +2,9 @@ import type {
   CreateNoteInput,
   Note,
   NoteAccessLevel,
+  NoteBucketCounts,
   NotePermission,
+  NotesListFilters,
   NoteWithOwner,
   ShareNoteInput,
   UpdateNoteInput,
@@ -15,13 +17,6 @@ import { httpClient } from './http-client';
  */
 export interface NoteWithAccess extends Note {
   accessLevel: NoteAccessLevel;
-}
-
-/**
- * Notes query parameters
- */
-export interface NotesQueryParams {
-  search?: string;
 }
 
 /**
@@ -41,12 +36,23 @@ export const notesApi = {
   /**
    * Get all accessible notes
    */
-  async getAll(params?: NotesQueryParams): Promise<NoteWithAccess[]> {
-    const queryString = params?.search
-      ? `?search=${encodeURIComponent(params.search)}`
-      : '';
+  async getAll(params?: NotesListFilters): Promise<NoteWithAccess[]> {
+    const query = new URLSearchParams();
+    if (params?.search) {
+      query.set('search', params.search);
+    }
+    if (params?.bucket) {
+      query.set('bucket', params.bucket);
+    }
+    if (params?.view && params.view !== 'all') {
+      query.set('view', params.view);
+    }
+    const qs = query.toString();
+    return httpClient.get<NoteWithAccess[]>(`/notes${qs ? `?${qs}` : ''}`);
+  },
 
-    return httpClient.get<NoteWithAccess[]>(`/notes${queryString}`);
+  async getCounts(): Promise<NoteBucketCounts> {
+    return httpClient.get<NoteBucketCounts>('/notes/counts');
   },
 
   async getById(

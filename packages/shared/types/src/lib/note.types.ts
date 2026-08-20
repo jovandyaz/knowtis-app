@@ -1,3 +1,5 @@
+import type { ParaBucket } from './organization.types';
+
 export const NOTE_TITLE_MAX_LENGTH = 200;
 
 export const PERMISSION = {
@@ -38,6 +40,7 @@ export interface Note {
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
   editorsCanShare: boolean;
+  bucket: ParaBucket | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -62,6 +65,7 @@ export interface UpdateNoteInput {
   generalAccess?: GeneralAccessLevel;
   generalAccessPermission?: PermissionLevel;
   editorsCanShare?: boolean;
+  bucket?: ParaBucket | null;
 }
 
 export interface NotePermission {

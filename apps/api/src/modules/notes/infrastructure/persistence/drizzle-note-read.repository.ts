@@ -13,7 +13,12 @@ import {
   type SQL,
 } from 'drizzle-orm';
 
-import { GENERAL_ACCESS } from '@knowtis/shared-types';
+import {
+  GENERAL_ACCESS,
+  INBOX_FILTER,
+  type BucketFilter,
+  type NoteBucketCounts,
+} from '@knowtis/shared-types';
 
 import {
   DATABASE_CONNECTION,
@@ -27,6 +32,7 @@ import { escapeLike } from '../../../../database/escape-like';
 import type {
   AccessibleNotesCount,
   NoteEntity,
+  NoteListFilters,
   NoteReadRepository,
   NoteSummary,
   NoteView,
@@ -43,6 +49,7 @@ const noteViewColumns = {
   generalAccessPermission: notes.generalAccessPermission,
   shareToken: notes.shareToken,
   editorsCanShare: notes.editorsCanShare,
+  bucket: notes.bucket,
   createdAt: notes.createdAt,
   updatedAt: notes.updatedAt,
 };
@@ -136,7 +143,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
 
   async findAccessibleByUser(
     userId: UserId,
-    search?: string
+    filters?: NoteListFilters
   ): Promise<{ note: NoteView; permission?: string }[]> {
     const results = await this.db
       .select({
@@ -145,7 +152,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       })
       .from(notes)
       .leftJoin(notePermissions, this.permissionJoinCondition(userId))
-      .where(this.accessibleWhere(userId, search))
+      .where(this.accessibleWhere(userId, filters))
       .orderBy(desc(notes.updatedAt));
 
     return results.map((row) => {
@@ -167,7 +174,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .select(noteSummaryColumns)
       .from(notes)
       .leftJoin(notePermissions, this.permissionJoinCondition(userId))
-      .where(this.accessibleWhere(userId, search))
+      .where(this.accessibleWhere(userId, search ? { search } : undefined))
       .orderBy(desc(notes.updatedAt));
   }
 
@@ -181,7 +188,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
         .select(noteSummaryColumns)
         .from(notes)
         .leftJoin(notePermissions, this.permissionJoinCondition(userId))
-        .where(this.accessibleWhere(userId, query))
+        .where(this.accessibleWhere(userId, { search: query }))
         .orderBy(desc(notes.updatedAt))
         .limit(limit);
     }
@@ -227,6 +234,27 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .where(this.accessCondition(userId));
 
     return result[0] ?? { total: 0, owned: 0 };
+  }
+
+  async countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts> {
+    const rows = await this.db
+      .select({ bucket: notes.bucket, value: count() })
+      .from(notes)
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(this.accessCondition(userId))
+      .groupBy(notes.bucket);
+
+    const counts: NoteBucketCounts = {
+      inbox: 0,
+      projects: 0,
+      areas: 0,
+      resources: 0,
+      archive: 0,
+    };
+    for (const row of rows) {
+      counts[row.bucket ?? INBOX_FILTER] = Number(row.value);
+    }
+    return counts;
   }
 
   async findByShareToken(token: string): Promise<NoteViewWithOwner | null> {
@@ -277,9 +305,24 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     );
   }
 
-  private accessibleWhere(userId: UserId, search?: string): SQL | undefined {
-    const access = this.accessCondition(userId);
-    const searchCondition = this.searchCondition(search);
-    return searchCondition ? and(access, searchCondition) : access;
+  private bucketCondition(bucket?: BucketFilter): SQL | undefined {
+    if (!bucket) {
+      return undefined;
+    }
+    return bucket === INBOX_FILTER
+      ? isNull(notes.bucket)
+      : eq(notes.bucket, bucket);
+  }
+
+  private accessibleWhere(
+    userId: UserId,
+    filters?: NoteListFilters
+  ): SQL | undefined {
+    const conditions = [
+      this.accessCondition(userId),
+      this.searchCondition(filters?.search),
+      this.bucketCondition(filters?.bucket),
+    ].filter((condition): condition is SQL => condition !== undefined);
+    return and(...conditions);
   }
 }

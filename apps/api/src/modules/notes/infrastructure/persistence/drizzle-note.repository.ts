@@ -2,7 +2,10 @@ import type { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import type { Result } from 'neverthrow';
 
-import type { PermissionLevel as PermissionLevelType } from '@knowtis/shared-types';
+import type {
+  NoteBucketCounts,
+  PermissionLevel as PermissionLevelType,
+} from '@knowtis/shared-types';
 
 import { DATABASE_CONNECTION, type Database } from '../../../../database';
 import type {
@@ -11,6 +14,7 @@ import type {
   CreatePermissionData,
   NoteDomainError,
   NoteEntity,
+  NoteListFilters,
   NotePermissionEntity,
   NoteRepository,
   NoteSummary,
@@ -56,9 +60,9 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   findAccessibleByUser(
     userId: UserId,
-    search?: string
+    filters?: NoteListFilters
   ): Promise<{ note: NoteView; permission?: string }[]> {
-    return this.readRepo.findAccessibleByUser(userId, search);
+    return this.readRepo.findAccessibleByUser(userId, filters);
   }
 
   findAccessibleSummariesByUser(
@@ -92,6 +96,10 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     return this.readRepo.countAccessibleByUser(userId);
+  }
+
+  countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts> {
+    return this.readRepo.countAccessibleByBucket(userId);
   }
 
   findByShareToken(token: string): Promise<NoteViewWithOwner | null> {

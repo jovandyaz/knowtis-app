@@ -28,6 +28,10 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ noteId: 'note-1' }),
 }));
 
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => ({ isAnonymous: false }),
+}));
+
 vi.mock('@/stores/ai.store', () => ({
   useAIStore: (selector: (s: { aiEnabled: boolean }) => unknown) =>
     selector({ aiEnabled: aiState.aiEnabled }),
@@ -64,6 +68,7 @@ vi.mock('@knowtis/data-access-notes', () => ({
       title: 'My Note',
       content: '<p>hello</p>',
       accessLevel: 'owner',
+      bucket: null,
       generalAccess: 'restricted',
       generalAccessPermission: 'viewer',
       shareToken: null,
