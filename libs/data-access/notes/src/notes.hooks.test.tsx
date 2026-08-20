@@ -107,7 +107,7 @@ describe('Notes Hooks', () => {
       expect(notesApi.getAll).toHaveBeenCalledWith({ search: 'search term' });
     });
 
-    it('builds the query string from filters', async () => {
+    it('forwards filters to notesApi.getAll', async () => {
       vi.mocked(notesApi.getAll).mockResolvedValue([]);
 
       const { result } = renderHook(
