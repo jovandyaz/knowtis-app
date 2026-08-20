@@ -1,10 +1,7 @@
 import type { notes } from '../../../../database';
 import type { NoteEntity, NoteView } from '../../domain';
 
-type NoteViewRecord = Omit<
-  typeof notes.$inferSelect,
-  'yjsState' | 'deletedAt' | 'bucket'
->;
+type NoteViewRecord = Omit<typeof notes.$inferSelect, 'yjsState' | 'deletedAt'>;
 
 export function mapToNoteEntity(record: typeof notes.$inferSelect): NoteEntity {
   return {
@@ -23,6 +20,7 @@ export function mapToNoteView(record: NoteViewRecord): NoteView {
     generalAccessPermission: record.generalAccessPermission,
     shareToken: record.shareToken,
     editorsCanShare: record.editorsCanShare,
+    bucket: record.bucket,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

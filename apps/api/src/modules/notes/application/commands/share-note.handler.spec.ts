@@ -21,6 +21,7 @@ const mockNote: NoteEntity = {
   generalAccessPermission: 'viewer',
   shareToken: null,
   editorsCanShare: false,
+  bucket: null,
   yjsState: null,
   createdAt: new Date(),
   updatedAt: new Date(),

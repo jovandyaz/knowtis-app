@@ -11,6 +11,7 @@ import type {
   CreatePermissionData,
   NoteDomainError,
   NoteEntity,
+  NoteListFilters,
   NotePermissionEntity,
   NoteRepository,
   NoteSummary,
@@ -56,9 +57,9 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   findAccessibleByUser(
     userId: UserId,
-    search?: string
+    filters?: NoteListFilters
   ): Promise<{ note: NoteView; permission?: string }[]> {
-    return this.readRepo.findAccessibleByUser(userId, search);
+    return this.readRepo.findAccessibleByUser(userId, filters);
   }
 
   findAccessibleSummariesByUser(

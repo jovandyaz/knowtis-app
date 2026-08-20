@@ -1,11 +1,18 @@
 import type { UserId } from '@jovandyaz/auth/server';
 
+import type { BucketFilter } from '@knowtis/shared-types';
+
 import type {
   NoteEntity,
   NoteSummary,
   NoteView,
   NoteViewWithOwner,
 } from '../entities';
+
+export interface NoteListFilters {
+  readonly search?: string;
+  readonly bucket?: BucketFilter;
+}
 
 export interface AccessibleNotesCount {
   readonly total: number;
@@ -19,7 +26,7 @@ export interface NoteReadRepository {
   findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]>;
   findAccessibleByUser(
     userId: UserId,
-    search?: string
+    filters?: NoteListFilters
   ): Promise<{ note: NoteView; permission?: string }[]>;
   findAccessibleSummariesByUser(
     userId: UserId,

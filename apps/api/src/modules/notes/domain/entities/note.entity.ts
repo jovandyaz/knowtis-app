@@ -1,3 +1,5 @@
+import type { ParaBucket } from '@knowtis/shared-types';
+
 import type { PermissionLevel } from '../value-objects';
 
 export interface NotePermissionEntity {
@@ -15,6 +17,7 @@ export interface NoteEntity {
   readonly generalAccessPermission: string;
   readonly shareToken: string | null;
   readonly editorsCanShare: boolean;
+  readonly bucket: ParaBucket | null;
   readonly yjsState: Buffer | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -32,6 +35,7 @@ export function toNoteView(entity: NoteEntity): NoteView {
     generalAccessPermission: entity.generalAccessPermission,
     shareToken: entity.shareToken,
     editorsCanShare: entity.editorsCanShare,
+    bucket: entity.bucket,
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,
   };

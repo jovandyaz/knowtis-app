@@ -37,6 +37,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { SUBJECTS } from '@knowtis/authorization';
+import { PARA_BUCKETS } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -100,6 +101,11 @@ const noteProperties = {
   },
   shareToken: { type: 'string', nullable: true },
   editorsCanShare: { type: 'boolean' },
+  bucket: {
+    type: 'string',
+    nullable: true,
+    enum: [...PARA_BUCKETS] as string[],
+  },
   createdAt: { type: 'string', format: 'date-time' },
   updatedAt: { type: 'string', format: 'date-time' },
 };
@@ -150,7 +156,7 @@ export class NotesController {
   @ApiOperation({
     summary: 'List accessible notes',
     description:
-      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term on the title.',
+      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term, a PARA bucket, and an owned/shared view.',
   })
   @ApiResponse({
     status: 200,
@@ -180,6 +186,8 @@ export class NotesController {
     const result = await this.getNotesHandler.execute({
       userId: user.id,
       ...(query.search ? { search: query.search } : {}),
+      ...(query.bucket ? { bucket: query.bucket } : {}),
+      ...(query.view ? { view: query.view } : {}),
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }

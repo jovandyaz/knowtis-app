@@ -49,6 +49,7 @@ const noteView = (
   generalAccessPermission: 'viewer',
   shareToken: null,
   editorsCanShare: false,
+  bucket: null,
   createdAt: BASE_DATE,
   updatedAt: BASE_DATE,
   ...overrides,

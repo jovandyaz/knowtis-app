@@ -18,6 +18,7 @@ const mockNote: NoteViewWithOwner = {
   generalAccessPermission: PERMISSION.VIEWER,
   shareToken: 'valid-token-abc123',
   editorsCanShare: false,
+  bucket: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   owner: { id: 'user-1', name: 'Test Owner', avatarUrl: null },

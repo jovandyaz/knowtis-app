@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsEnum,
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -10,10 +11,14 @@ import {
 } from 'class-validator';
 
 import {
+  BUCKET_FILTERS,
   GENERAL_ACCESS_LEVELS,
+  NOTE_LIST_VIEWS,
   NOTE_TITLE_MAX_LENGTH,
   PERMISSION_LEVELS,
+  type BucketFilter,
   type GeneralAccessLevel,
+  type NoteListView,
   type PermissionLevel,
 } from '@knowtis/shared-types';
 
@@ -138,4 +143,20 @@ export class NotesQueryDto {
   @IsString()
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by PARA bucket',
+    enum: [...BUCKET_FILTERS],
+  })
+  @IsIn(BUCKET_FILTERS)
+  @IsOptional()
+  bucket?: BucketFilter;
+
+  @ApiPropertyOptional({
+    description: 'Restrict to owned or shared notes',
+    enum: [...NOTE_LIST_VIEWS],
+  })
+  @IsIn(NOTE_LIST_VIEWS)
+  @IsOptional()
+  view?: NoteListView;
 }

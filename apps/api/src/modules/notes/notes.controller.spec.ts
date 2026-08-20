@@ -13,6 +13,7 @@ const noteEntity: NoteEntity = {
   generalAccessPermission: 'viewer',
   shareToken: null,
   editorsCanShare: false,
+  bucket: null,
   yjsState: Buffer.from([1, 2, 3]),
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-02T00:00:00Z'),
