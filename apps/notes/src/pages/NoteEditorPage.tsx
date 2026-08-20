@@ -22,6 +22,7 @@ import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
 import { useWorkspaceStore } from '@/stores/workspace.store';
+import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
@@ -61,6 +62,7 @@ function NoteEditor({
 }: NoteEditorProps) {
   const { t } = useTranslation('notes');
   const navigate = useNavigate();
+  const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
   const refreshNotesList = useNotesListRefresh();
@@ -260,11 +262,13 @@ function NoteEditor({
           />
         </div>
 
-        <NotePropertiesRow
-          noteId={noteId}
-          bucket={bucket}
-          isOwner={accessLevel === ACCESS.OWNER}
-        />
+        {!isAnonymous && (
+          <NotePropertiesRow
+            noteId={noteId}
+            bucket={bucket}
+            isOwner={accessLevel === ACCESS.OWNER}
+          />
+        )}
 
         <CollaborativeEditor
           noteId={noteId}

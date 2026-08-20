@@ -12,6 +12,8 @@ const renderWithClient = (ui: ReactElement) =>
     <QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>
   );
 
+const authUser = vi.fn<() => { isAnonymous: boolean }>();
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
@@ -19,6 +21,14 @@ vi.mock('react-i18next', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
   useParams: () => ({ noteId: 'note-1' }),
+}));
+
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => authUser(),
+}));
+
+vi.mock('@/components/organization/NotePropertiesRow', () => ({
+  NotePropertiesRow: () => <div data-testid="note-properties-row" />,
 }));
 
 const editorRenders: { count: number } = { count: 0 };
@@ -70,11 +80,25 @@ describe('NoteEditorPage', () => {
   beforeEach(() => {
     editorRenders.count = 0;
     capturedOnUpdate = undefined;
+    authUser.mockReturnValue({ isAnonymous: false });
   });
 
   it('renders the editor', () => {
     renderWithClient(<NoteEditorPage />);
     expect(screen.getByTestId('collaborative-editor')).toBeInTheDocument();
+  });
+
+  it('offers the organization properties to a signed-up owner', () => {
+    renderWithClient(<NoteEditorPage />);
+    expect(screen.getByTestId('note-properties-row')).toBeInTheDocument();
+  });
+
+  it('hides the organization properties from an anonymous owner', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(screen.queryByTestId('note-properties-row')).not.toBeInTheDocument();
   });
 
   it('does not re-render the editor subtree on content keystrokes', () => {

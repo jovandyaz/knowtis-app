@@ -50,14 +50,16 @@ export function BottomNav() {
     return null;
   }
 
+  const exploreTab: BottomNavTab = {
+    icon: FolderOpen,
+    labelKey: 'labels.explore',
+    action: () => setIsExploreSheetOpen(true),
+  };
+
   const tabs: BottomNavTab[] = [
     { icon: Home, labelKey: 'labels.home', to: ROUTES.DASHBOARD },
     { icon: FileText, labelKey: 'labels.notes', to: ROUTES.NOTES },
-    {
-      icon: FolderOpen,
-      labelKey: 'labels.explore',
-      action: () => setIsExploreSheetOpen(true),
-    },
+    ...(isAnonymous ? [] : [exploreTab]),
     {
       icon: Settings,
       labelKey: 'settings.title',
@@ -120,13 +122,15 @@ export function BottomNav() {
         </div>
       </nav>
 
-      <MobileSheet
-        isOpen={isExploreSheetOpen}
-        onClose={() => setIsExploreSheetOpen(false)}
-        label={tNotes('organization.explore')}
-      >
-        <BucketNav onNavigate={() => setIsExploreSheetOpen(false)} />
-      </MobileSheet>
+      {!isAnonymous && (
+        <MobileSheet
+          isOpen={isExploreSheetOpen}
+          onClose={() => setIsExploreSheetOpen(false)}
+          label={tNotes('organization.explore')}
+        >
+          <BucketNav onNavigate={() => setIsExploreSheetOpen(false)} />
+        </MobileSheet>
+      )}
 
       {isAnonymous && (
         <MobileSheet

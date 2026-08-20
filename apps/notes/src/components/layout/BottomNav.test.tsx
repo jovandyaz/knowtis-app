@@ -62,6 +62,17 @@ describe('BottomNav', () => {
     ]);
   });
 
+  it('hides explore from an anonymous visitor', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+    render(<BottomNav />);
+
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'labels.home',
+      'labels.notes',
+      'settings.title',
+    ]);
+  });
+
   it('opens the bucket sheet from the explore tab', async () => {
     const user = userEvent.setup();
     render(<BottomNav />);
