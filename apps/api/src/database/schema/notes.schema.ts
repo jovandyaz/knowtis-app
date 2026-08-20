@@ -10,6 +10,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
+import type { ParaBucket } from '@knowtis/shared-types';
+
 import { users } from './users.schema';
 
 const bytea = customType<{ data: Buffer; driverData: Buffer }>({
@@ -42,6 +44,7 @@ export const notes = pgTable(
       .default('viewer'),
     shareToken: text('share_token').unique(),
     editorsCanShare: boolean('editors_can_share').notNull().default(false),
+    bucket: text('bucket').$type<ParaBucket>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -57,6 +60,9 @@ export const notes = pgTable(
     index('notes_share_token_idx').on(table.shareToken),
     index('notes_active_owner_updated_idx')
       .on(table.ownerId, table.updatedAt)
+      .where(sql`${table.deletedAt} IS NULL`),
+    index('notes_owner_bucket_idx')
+      .on(table.ownerId, table.bucket)
       .where(sql`${table.deletedAt} IS NULL`),
   ]
 );

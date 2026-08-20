@@ -218,6 +218,13 @@
       "when": 1786990671153,
       "tag": "0030_brief_fixer",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1787183966523,
+      "tag": "0031_smart_nekra",
+      "breakpoints": true
     }
   ]
 }
