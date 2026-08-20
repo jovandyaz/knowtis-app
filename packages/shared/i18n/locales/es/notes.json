@@ -8,6 +8,32 @@
     "createFirst": "Tus ideas están esperando.",
     "noContentYet": "Sin contenido aún..."
   },
+  "organization": {
+    "title": "Organización",
+    "explore": "Explorar",
+    "buckets": {
+      "inbox": "Inbox",
+      "projects": "Proyectos",
+      "areas": "Áreas",
+      "resources": "Recursos",
+      "archive": "Archivo"
+    },
+    "views": {
+      "all": "Todas",
+      "mine": "Mías",
+      "shared": "Compartidas"
+    },
+    "viewsLabel": "Vista",
+    "clearBucketFilter": "Quitar el filtro {{bucket}}",
+    "notesCount_one": "{{count}} nota",
+    "notesCount_other": "{{count}} notas",
+    "empty": {
+      "inboxTitle": "Inbox vacío",
+      "inboxDescription": "Todo está en su lugar. Las notas nuevas llegan aquí hasta que las clasificas.",
+      "bucketTitle": "Nada en {{bucket}}",
+      "bucketDescription": "Mueve una nota aquí desde su chip de organización."
+    }
+  },
   "editor": {
     "back": "Volver",
     "backToNotes": "Volver a Notas",

@@ -1,22 +1,40 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getRouteApi, useNavigate } from '@tanstack/react-router';
+
+import { BucketDot } from '@/components/organization/BucketDot';
+import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
+import { ROUTES } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { DEBOUNCE_DELAYS } from '@/lib';
+import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
-import { Button, ErrorState, Input } from '@knowtis/design-system';
+import {
+  Button,
+  ErrorState,
+  Input,
+  SegmentedControl,
+} from '@knowtis/design-system';
 import { useDebounce } from '@knowtis/shared-hooks';
+import {
+  NOTE_LIST_VIEWS,
+  type NoteListView,
+  type NotesListFilters,
+} from '@knowtis/shared-types';
 
 import { EmptyState } from './EmptyState';
 import { FloatingCreateButton } from './FloatingCreateButton';
 import { NoteCard } from './NoteCard';
 import { NoteCardSkeleton } from './NoteCardSkeleton';
+
+const routeApi = getRouteApi('/_app/notes/');
 
 export function NoteList() {
   const { t } = useTranslation('notes');
@@ -24,6 +42,11 @@ export function NoteList() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
   const { createNote } = useCreateNoteAction();
+
+  // The route tree's types are circular through this component, so useSearch()
+  // widens the validated params back to plain strings; re-parsing restores them.
+  const { bucket, view } = notesSearchSchema.parse(routeApi.useSearch());
+  const navigate = useNavigate();
 
   const { query, setQuery, focusRequested, clearFocusRequest } =
     useNotesSearchStore();
@@ -37,12 +60,22 @@ export function NoteList() {
     }
   }, [focusRequested, clearFocusRequest]);
 
-  const {
-    data: notes = [],
-    isLoading,
-    isError,
-    error,
-  } = useNotes(debouncedSearch ? { search: debouncedSearch } : undefined);
+  const filters: NotesListFilters = {
+    ...(debouncedSearch ? { search: debouncedSearch } : {}),
+    ...(bucket ? { bucket } : {}),
+    ...(view !== 'all' ? { view } : {}),
+  };
+
+  const { data: notes = [], isLoading, isError, error } = useNotes(filters);
+
+  const setView = (next: NoteListView) =>
+    void navigate({
+      to: ROUTES.NOTES,
+      search: { ...(bucket ? { bucket } : {}), view: next },
+    });
+
+  const clearBucket = () =>
+    void navigate({ to: ROUTES.NOTES, search: { view } });
 
   const renderNotes = () => {
     if (isLoading) {
@@ -79,7 +112,11 @@ export function NoteList() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
             >
-              <EmptyState hasSearch={!!debouncedSearch} />
+              {bucket ? (
+                <BucketEmptyState bucket={bucket} />
+              ) : (
+                <EmptyState hasSearch={!!debouncedSearch} />
+              )}
             </motion.div>
           ) : (
             notes.map((note) => <NoteCard key={note.id} note={note} />)
@@ -103,14 +140,45 @@ export function NoteList() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <div className="hidden md:flex md:items-center md:gap-3">
-          {aiEnabled && <VoiceNoteRecorder size="default" />}
-          <Button className="gap-2" onClick={createNote}>
-            <Plus className="h-4 w-4" />
-            {t('create.newNote')}
-          </Button>
+        <div className="flex items-center gap-3">
+          <SegmentedControl
+            aria-label={t('organization.viewsLabel')}
+            value={view}
+            onValueChange={setView}
+            options={NOTE_LIST_VIEWS.map((v) => ({
+              value: v,
+              label: t(`organization.views.${v}`),
+            }))}
+          />
+          <div className="hidden md:flex md:items-center md:gap-3">
+            {aiEnabled && <VoiceNoteRecorder size="default" />}
+            <Button className="gap-2" onClick={createNote}>
+              <Plus className="h-4 w-4" />
+              {t('create.newNote')}
+            </Button>
+          </div>
         </div>
       </div>
+
+      {bucket && (
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={clearBucket}
+            aria-label={t('organization.clearBucketFilter', {
+              bucket: t(`organization.buckets.${bucket}`),
+            })}
+            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+          >
+            <BucketDot bucket={bucket} className="size-2" />
+            {t(`organization.buckets.${bucket}`)}
+            <X className="h-3 w-3 opacity-70" />
+          </button>
+          <span className="text-xs text-muted-foreground/70">
+            {t('organization.notesCount', { count: notes.length })}
+          </span>
+        </div>
+      )}
 
       {renderNotes()}
 
