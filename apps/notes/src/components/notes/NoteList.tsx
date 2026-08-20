@@ -12,6 +12,7 @@ import { DEBOUNCE_DELAYS } from '@/lib';
 import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
+import { useAuthUser } from '@jovandyaz/auth-react';
 import { Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
@@ -41,6 +42,7 @@ export function NoteList() {
   const { t: tCommon } = useTranslation('common');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const { createNote } = useCreateNoteAction();
 
   // The route tree's types are circular through this component, so useSearch()
@@ -141,15 +143,17 @@ export function NoteList() {
           />
         </div>
         <div className="flex items-center gap-3">
-          <SegmentedControl
-            aria-label={t('organization.viewsLabel')}
-            value={view}
-            onValueChange={setView}
-            options={NOTE_LIST_VIEWS.map((v) => ({
-              value: v,
-              label: t(`organization.views.${v}`),
-            }))}
-          />
+          {!isAnonymous && (
+            <SegmentedControl
+              aria-label={t('organization.viewsLabel')}
+              value={view}
+              onValueChange={setView}
+              options={NOTE_LIST_VIEWS.map((v) => ({
+                value: v,
+                label: t(`organization.views.${v}`),
+              }))}
+            />
+          )}
           <div className="hidden md:flex md:items-center md:gap-3">
             {aiEnabled && <VoiceNoteRecorder size="default" />}
             <Button className="gap-2" onClick={createNote}>

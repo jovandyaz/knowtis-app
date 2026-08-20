@@ -67,11 +67,11 @@ export function NotePropertiesRow({
     <div className="mt-3 flex items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger
-          className={`${CHIP_CLASSES} cursor-pointer transition-colors hover:bg-muted/40`}
+          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
         >
           <BucketDot bucket={activeFilter} />
           {label}
-          <ChevronDown className="h-3 w-3 opacity-70" />
+          <ChevronDown className="size-3 opacity-70" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-52">
           <DropdownMenuRadioGroup
