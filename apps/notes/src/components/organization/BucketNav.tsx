@@ -46,6 +46,8 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
               search={{ bucket, view: 'all' }}
               onClick={onNavigate}
               activeOptions={{ exact: true }}
+              activeProps={{}}
+              inactiveProps={{}}
               aria-current={isActive ? 'page' : undefined}
               className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${
                 isActive

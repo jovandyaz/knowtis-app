@@ -59,8 +59,9 @@ async function renderAt(path: string, onNavigate?: () => void) {
     history: createMemoryHistory({ initialEntries: [path] }),
   });
 
-  render(<RouterProvider router={router} />);
+  const result = render(<RouterProvider router={router} />);
   await screen.findByText('Organización');
+  return result;
 }
 
 const rowFor = (label: string) => screen.getByText(label).closest('a');
@@ -126,6 +127,18 @@ describe('BucketNav', () => {
     await renderAt('/notes?bucket=projects');
 
     expect(rowFor('Proyectos')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('renders the same row markup regardless of whether the URL is the canonical one', async () => {
+    const canonical = await renderAt('/notes?bucket=projects&view=all');
+    const canonicalClassName = rowFor('Proyectos')?.className;
+    canonical.unmount();
+
+    await renderAt('/notes?bucket=projects&view=mine');
+    const nonCanonicalClassName = rowFor('Proyectos')?.className;
+
+    expect(nonCanonicalClassName).toBe(canonicalClassName);
+    expect(canonicalClassName).toContain('bg-muted');
   });
 
   it('marks no bucket current while a note is open with a stale bucket param', async () => {
