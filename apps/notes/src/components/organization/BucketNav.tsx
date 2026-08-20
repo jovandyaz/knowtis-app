@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation, useSearch } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
 
@@ -24,6 +24,9 @@ interface BucketNavProps {
 export function BucketNav({ onNavigate }: BucketNavProps) {
   const { t } = useTranslation('notes');
   const { data: counts } = useNoteCounts();
+  const pathname = useLocation({ select: (location) => location.pathname });
+  const search = useSearch({ strict: false }) as { bucket?: BucketFilter };
+  const onNotesList = pathname === ROUTES.NOTES;
 
   return (
     <div className="flex flex-col gap-1">
@@ -34,6 +37,7 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
         {NAV_ORDER.map((bucket) => {
           const count = counts?.[bucket] ?? 0;
           const showsCount = bucket !== UNCOUNTED_BUCKET && count > 0;
+          const isActive = onNotesList && search.bucket === bucket;
 
           return (
             <Link
@@ -42,14 +46,12 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
               search={{ bucket, view: 'all' }}
               onClick={onNavigate}
               activeOptions={{ exact: true }}
-              className="flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer"
-              activeProps={{
-                className: 'bg-muted text-foreground font-medium',
-              }}
-              inactiveProps={{
-                className:
-                  'text-muted-foreground hover:bg-primary/5 hover:text-primary',
-              }}
+              aria-current={isActive ? 'page' : undefined}
+              className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${
+                isActive
+                  ? 'bg-muted text-foreground font-medium'
+                  : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
+              }`}
             >
               <BucketDot bucket={bucket} />
               <span className="flex-1 truncate">

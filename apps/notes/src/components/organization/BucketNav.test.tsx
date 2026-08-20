@@ -116,6 +116,18 @@ describe('BucketNav', () => {
     expect(rowFor('Inbox')).not.toHaveAttribute('aria-current');
   });
 
+  it('keeps the bucket current when the view filter is not the default', async () => {
+    await renderAt('/notes?bucket=projects&view=mine');
+
+    expect(rowFor('Proyectos')).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the bucket current when the URL carries no view param', async () => {
+    await renderAt('/notes?bucket=projects');
+
+    expect(rowFor('Proyectos')).toHaveAttribute('aria-current', 'page');
+  });
+
   it('marks no bucket current while a note is open with a stale bucket param', async () => {
     await renderAt('/notes/note-1?bucket=projects&view=all');
 
