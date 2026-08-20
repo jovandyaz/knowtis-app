@@ -8,3 +8,17 @@ class ResizeObserverPolyfill implements ResizeObserver {
 }
 
 globalThis.ResizeObserver = ResizeObserverPolyfill;
+
+class IntersectionObserverPolyfill implements IntersectionObserver {
+  readonly root = null;
+  readonly rootMargin = '';
+  readonly thresholds: readonly number[] = [];
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+}
+
+globalThis.IntersectionObserver = IntersectionObserverPolyfill;

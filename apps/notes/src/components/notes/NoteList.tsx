@@ -9,6 +9,7 @@ import { ViewEmptyState } from '@/components/organization/ViewEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
+import { useInfiniteScrollSentinel } from '@/hooks/useInfiniteScrollSentinel';
 import { DEBOUNCE_DELAYS } from '@/lib';
 import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
@@ -37,6 +38,9 @@ import { NoteCard } from './NoteCard';
 import { NoteCardSkeleton } from './NoteCardSkeleton';
 
 const routeApi = getRouteApi('/_app/notes/');
+
+const INITIAL_SKELETONS = 6;
+const NEXT_PAGE_SKELETONS = 3;
 
 export function NoteList() {
   const { t } = useTranslation('notes');
@@ -74,7 +78,24 @@ export function NoteList() {
     ...(view !== 'all' ? { view } : {}),
   };
 
-  const { data: notes = [], isLoading, isError, error } = useNotes(filters);
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useNotes(filters);
+
+  const notes = data?.pages.flatMap((page) => page.items) ?? [];
+  const total = data?.pages[0]?.total ?? 0;
+
+  const sentinelRef = useInfiniteScrollSentinel({
+    hasMore: hasNextPage,
+    isLoading: isFetchingNextPage,
+    onLoadMore: () => void fetchNextPage(),
+  });
 
   const setView = (next: NoteListView) =>
     void navigate({
@@ -99,7 +120,7 @@ export function NoteList() {
     if (isLoading) {
       return (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
+          {Array.from({ length: INITIAL_SKELETONS }).map((_, i) => (
             <NoteCardSkeleton key={i} />
           ))}
         </div>
@@ -135,6 +156,10 @@ export function NoteList() {
           ) : (
             notes.map((note) => <NoteCard key={note.id} note={note} />)
           )}
+          {isFetchingNextPage &&
+            Array.from({ length: NEXT_PAGE_SKELETONS }).map((_, i) => (
+              <NoteCardSkeleton key={`next-${i}`} />
+            ))}
         </AnimatePresence>
       </motion.div>
     );
@@ -192,13 +217,15 @@ export function NoteList() {
           </button>
           {!isLoading && !isError && (
             <span className="text-xs text-muted-foreground/70">
-              {t('organization.notesCount', { count: notes.length })}
+              {t('organization.notesCount', { count: total })}
             </span>
           )}
         </div>
       )}
 
       {renderNotes()}
+
+      <div ref={sentinelRef} aria-hidden className="h-px" />
 
       <FloatingCreateButton onCreateNote={createNote} />
     </div>

@@ -13,15 +13,45 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteWithAccess } from '@knowtis/api-client';
-import type { NotesListFilters } from '@knowtis/shared-types';
+import type { NotesListFilters, NotesPage } from '@knowtis/shared-types';
 
 import { NoteList } from './NoteList';
 
 interface NotesQueryResult {
-  data?: NoteWithAccess[];
+  data?: { pages: NotesPage<NoteWithAccess>[] };
   isLoading: boolean;
   isError: boolean;
   error?: Error;
+  fetchNextPage: () => void;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+}
+
+const fetchNextPage = vi.fn();
+
+function loaded(
+  items: NoteWithAccess[],
+  total = items.length
+): NotesQueryResult {
+  return {
+    data: { pages: [{ items, total, page: 1, limit: 25 }] },
+    isLoading: false,
+    isError: false,
+    fetchNextPage,
+    hasNextPage: total > items.length,
+    isFetchingNextPage: false,
+  };
+}
+
+function pending(overrides: Partial<NotesQueryResult>): NotesQueryResult {
+  return {
+    isLoading: false,
+    isError: false,
+    fetchNextPage,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    ...overrides,
+  };
 }
 
 const useNotes = vi.fn<(filters?: NotesListFilters) => NotesQueryResult>();
@@ -34,7 +64,10 @@ vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
 }));
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string, opts?: { count?: number }) =>
+      opts?.count === undefined ? key : `${key}:${opts.count}`,
+  }),
 }));
 vi.mock('@/hooks/useCreateNoteAction', () => ({
   useCreateNoteAction: () => ({ createNote: vi.fn() }),
@@ -91,7 +124,7 @@ const lastFilters = () => useNotes.mock.calls.at(-1)?.[0];
 describe('NoteList', () => {
   beforeEach(() => {
     useNotes.mockReset();
-    useNotes.mockReturnValue({ data: [], isLoading: false, isError: false });
+    useNotes.mockReturnValue(loaded([]));
     authUser.mockReturnValue({ isAnonymous: false });
     useNotesSearchStore.setState({ query: '', focusRequested: false });
   });
@@ -116,11 +149,7 @@ describe('NoteList', () => {
 
   it('ignores a view left in the URL for an anonymous visitor', async () => {
     authUser.mockReturnValue({ isAnonymous: true });
-    useNotes.mockReturnValue({
-      data: [note('note-1', 'Anonymous note')],
-      isLoading: false,
-      isError: false,
-    });
+    useNotes.mockReturnValue(loaded([note('note-1', 'Anonymous note')]));
 
     await renderAt('/notes?view=shared');
 
@@ -199,39 +228,64 @@ describe('NoteList', () => {
   });
 
   it('counts the notes in the active bucket once they have loaded', async () => {
-    useNotes.mockReturnValue({
-      data: [note('note-1', 'One'), note('note-2', 'Two')],
-      isLoading: false,
-      isError: false,
-    });
+    useNotes.mockReturnValue(
+      loaded([note('note-1', 'One'), note('note-2', 'Two')])
+    );
 
     await renderAt('/notes?bucket=projects');
 
-    expect(screen.getByText('organization.notesCount')).toBeInTheDocument();
+    expect(screen.getByText('organization.notesCount:2')).toBeInTheDocument();
+  });
+
+  it('renders every loaded page as one grid', async () => {
+    useNotes.mockReturnValue({
+      data: {
+        pages: [
+          { items: [note('a', 'First')], total: 2, page: 1, limit: 1 },
+          { items: [note('b', 'Second')], total: 2, page: 2, limit: 1 },
+        ],
+      },
+      isLoading: false,
+      isError: false,
+      fetchNextPage,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+    });
+
+    await renderAt('/notes');
+
+    expect(screen.getByText('First')).toBeInTheDocument();
+    expect(screen.getByText('Second')).toBeInTheDocument();
+  });
+
+  it('counts every note the server reports, not just the loaded ones', async () => {
+    useNotes.mockReturnValue(loaded([note('note-1', 'One')], 287));
+
+    await renderAt('/notes?bucket=projects');
+
+    expect(screen.getByText('organization.notesCount:287')).toBeInTheDocument();
   });
 
   it('hides the count while the notes are loading', async () => {
-    useNotes.mockReturnValue({ isLoading: true, isError: false });
+    useNotes.mockReturnValue(pending({ isLoading: true }));
 
     await renderAt('/notes?bucket=projects');
 
     expect(
-      screen.queryByText('organization.notesCount')
+      screen.queryByText(/^organization\.notesCount/)
     ).not.toBeInTheDocument();
   });
 
   it('hides the count when the notes fail to load', async () => {
-    useNotes.mockReturnValue({
-      isLoading: false,
-      isError: true,
-      error: new Error('boom'),
-    });
+    useNotes.mockReturnValue(
+      pending({ isError: true, error: new Error('boom') })
+    );
 
     await renderAt('/notes?bucket=projects');
 
     expect(screen.getByText('list.errorLoading')).toBeInTheDocument();
     expect(
-      screen.queryByText('organization.notesCount')
+      screen.queryByText(/^organization\.notesCount/)
     ).not.toBeInTheDocument();
   });
 });

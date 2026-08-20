@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link } from '@tanstack/react-router';
@@ -11,7 +10,7 @@ import { FilePlus, FileText } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import type { NoteWithAccess } from '@knowtis/api-client';
-import { useNotes } from '@knowtis/data-access-notes';
+import { useRecentNotes } from '@knowtis/data-access-notes';
 import { Button, buttonVariants, cn } from '@knowtis/design-system';
 import { formatRelativeTime } from '@knowtis/shared-util';
 
@@ -31,24 +30,15 @@ function getGreetingKey(): GreetingKey {
   return 'welcome.goodEvening';
 }
 
+const WELCOME_RECENT_NOTES = 5;
+
 export function WelcomePage() {
   const { t, i18n } = useTranslation(['common', 'notes']);
   const user = useAuthUser();
-  const { data: notes, isLoading } = useNotes();
+  const { data: recentNotes = [], isLoading } =
+    useRecentNotes(WELCOME_RECENT_NOTES);
   const { createNote } = useCreateNoteAction();
   const firstName = user?.name?.split(' ')[0] ?? '';
-
-  const recentNotes = useMemo(() => {
-    if (!notes) {
-      return [];
-    }
-    return [...notes]
-      .sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      )
-      .slice(0, 5);
-  }, [notes]);
 
   const lastNote: NoteWithAccess | undefined = recentNotes[0];
 
