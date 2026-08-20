@@ -10,7 +10,6 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { Route as rootRoute } from './routes/__root';
 import { Route as AppImport } from './routes/_app';
-import { Route as AuthenticatedImport } from './routes/_authenticated';
 import { Route as ForgotPasswordImport } from './routes/forgot-password';
 import { Route as LoginImport } from './routes/login';
 import { Route as RegisterImport } from './routes/register';
@@ -22,9 +21,6 @@ import { Route as AppDashboardImport } from './routes/_app/dashboard';
 import { Route as AppOauthConsentImport } from './routes/_app/oauth.consent';
 import { Route as AppNotesIndexImport } from './routes/_app/notes/index';
 import { Route as AppNotesNoteIdImport } from './routes/_app/notes/$noteId';
-import { Route as AuthenticatedIndexImport } from './routes/_authenticated/index';
-import { Route as AuthenticatedNotesIndexImport } from './routes/_authenticated/notes/index';
-import { Route as AuthenticatedNotesNoteIdImport } from './routes/_authenticated/notes/$noteId';
 
 // Create Virtual Childrent
 
@@ -32,11 +28,6 @@ import { Route as AuthenticatedNotesNoteIdImport } from './routes/_authenticated
 
 const AppRoute = AppImport.update({
   id: '/_app',
-  getParentRoute: () => rootRoute,
-} as any);
-
-const AuthenticatedRoute = AuthenticatedImport.update({
-  id: '/_authenticated',
   getParentRoute: () => rootRoute,
 } as any);
 
@@ -106,24 +97,6 @@ const AppNotesNoteIdRoute = AppNotesNoteIdImport.update({
   getParentRoute: () => AppRoute,
 } as any);
 
-const AuthenticatedIndexRoute = AuthenticatedIndexImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-
-const AuthenticatedNotesIndexRoute = AuthenticatedNotesIndexImport.update({
-  id: '/notes/',
-  path: '/notes/',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-
-const AuthenticatedNotesNoteIdRoute = AuthenticatedNotesNoteIdImport.update({
-  id: '/notes/$noteId',
-  path: '/notes/$noteId',
-  getParentRoute: () => AuthenticatedRoute,
-} as any);
-
 // Populate the FileRoutesByPath interface
 
 declare module '@tanstack/react-router' {
@@ -133,13 +106,6 @@ declare module '@tanstack/react-router' {
       path: '';
       fullPath: '';
       preLoaderRoute: typeof AppImport;
-      parentRoute: typeof rootRoute;
-    };
-    '/_authenticated': {
-      id: '/_authenticated';
-      path: '';
-      fullPath: '';
-      preLoaderRoute: typeof AuthenticatedImport;
       parentRoute: typeof rootRoute;
     };
     '/forgot-password': {
@@ -219,27 +185,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppNotesNoteIdImport;
       parentRoute: typeof AppImport;
     };
-    '/_authenticated/': {
-      id: '/_authenticated/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof AuthenticatedIndexImport;
-      parentRoute: typeof AuthenticatedImport;
-    };
-    '/_authenticated/notes/': {
-      id: '/_authenticated/notes/';
-      path: '/notes';
-      fullPath: '/notes';
-      preLoaderRoute: typeof AuthenticatedNotesIndexImport;
-      parentRoute: typeof AuthenticatedImport;
-    };
-    '/_authenticated/notes/$noteId': {
-      id: '/_authenticated/notes/$noteId';
-      path: '/notes/$noteId';
-      fullPath: '/notes/$noteId';
-      preLoaderRoute: typeof AuthenticatedNotesNoteIdImport;
-      parentRoute: typeof AuthenticatedImport;
-    };
   }
 }
 
@@ -277,7 +222,6 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRoute;
   '/_app': typeof AppRoute;
-  '/_authenticated': typeof AuthenticatedRoute;
   '/forgot-password': typeof ForgotPasswordRoute;
   '/login': typeof LoginRoute;
   '/register': typeof RegisterRoute;
@@ -289,9 +233,6 @@ export interface FileRoutesById {
   '/_app/oauth/consent': typeof AppOauthConsentRoute;
   '/_app/notes/': typeof AppNotesIndexRoute;
   '/_app/notes/$noteId': typeof AppNotesNoteIdRoute;
-  '/_authenticated/': typeof AuthenticatedIndexRoute;
-  '/_authenticated/notes/': typeof AuthenticatedNotesIndexRoute;
-  '/_authenticated/notes/$noteId': typeof AuthenticatedNotesNoteIdRoute;
 }
 
 export interface FileRouteTypes {
@@ -299,7 +240,7 @@ export interface FileRouteTypes {
   fullPaths: '' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/oauth/consent' | '/notes' | '/notes/$noteId';
   fileRoutesByTo: FileRoutesByTo;
   to: '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/' | '/dashboard' | '/oauth/consent' | '/notes' | '/notes/$noteId';
-  id: '__root__' | '/_app' | '/_authenticated' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/dashboard' | '/_app/oauth/consent' | '/_app/notes/' | '/_app/notes/$noteId' | '/_authenticated/' | '/_authenticated/notes/' | '/_authenticated/notes/$noteId';
+  id: '__root__' | '/_app' | '/forgot-password' | '/login' | '/register' | '/reset-password' | '/verify-email' | '/s/$token' | '/_app/' | '/_app/dashboard' | '/_app/oauth/consent' | '/_app/notes/' | '/_app/notes/$noteId';
   fileRoutesById: FileRoutesById;
 }
 
@@ -321,23 +262,8 @@ const AppRouteChildren: AppRouteChildren = {
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 
-export interface AuthenticatedRouteChildren {
-  AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute;
-  AuthenticatedNotesIndexRoute: typeof AuthenticatedNotesIndexRoute;
-  AuthenticatedNotesNoteIdRoute: typeof AuthenticatedNotesNoteIdRoute;
-}
-
-const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedNotesIndexRoute: AuthenticatedNotesIndexRoute,
-  AuthenticatedNotesNoteIdRoute: AuthenticatedNotesNoteIdRoute,
-};
-
-const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(AuthenticatedRouteChildren);
-
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
-  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren;
   ForgotPasswordRoute: typeof ForgotPasswordRoute;
   LoginRoute: typeof LoginRoute;
   RegisterRoute: typeof RegisterRoute;
@@ -348,7 +274,6 @@ export interface RootRouteChildren {
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
-  AuthenticatedRoute: AuthenticatedRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
@@ -368,7 +293,6 @@ export const routeTree = rootRoute
       "filePath": "__root.tsx",
       "children": [
         "/_app",
-        "/_authenticated",
         "/forgot-password",
         "/login",
         "/register",
@@ -385,14 +309,6 @@ export const routeTree = rootRoute
         "/_app/oauth/consent",
         "/_app/notes/",
         "/_app/notes/$noteId"
-      ]
-    },
-    "/_authenticated": {
-      "filePath": "_authenticated.tsx",
-      "children": [
-        "/_authenticated/",
-        "/_authenticated/notes/",
-        "/_authenticated/notes/$noteId"
       ]
     },
     "/forgot-password": {
@@ -432,18 +348,6 @@ export const routeTree = rootRoute
     "/_app/notes/$noteId": {
       "filePath": "_app/notes/$noteId.tsx",
       "parent": "/_app"
-    },
-    "/_authenticated/": {
-      "filePath": "_authenticated/index.tsx",
-      "parent": "/_authenticated"
-    },
-    "/_authenticated/notes/": {
-      "filePath": "_authenticated/notes/index.tsx",
-      "parent": "/_authenticated"
-    },
-    "/_authenticated/notes/$noteId": {
-      "filePath": "_authenticated/notes/$noteId.tsx",
-      "parent": "/_authenticated"
     }
   }
 }

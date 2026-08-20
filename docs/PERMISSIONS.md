@@ -235,10 +235,10 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 
 ### Routes
 
-| Route                           | Auth Required | Description                                |
-| ------------------------------- | ------------- | ------------------------------------------ |
-| `/_authenticated/notes/$noteId` | Yes           | Full note editor (owns or has permissions) |
-| `/s/$token`                     | No            | Shared note view via token                 |
+| Route                 | Auth Required | Description                                |
+| --------------------- | ------------- | ------------------------------------------ |
+| `/_app/notes/$noteId` | Yes           | Full note editor (owns or has permissions) |
+| `/s/$token`           | No            | Shared note view via token                 |
 
 ### Dashboard ("My Notes")
 
