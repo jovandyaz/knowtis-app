@@ -17,6 +17,7 @@ import {
   GENERAL_ACCESS,
   INBOX_FILTER,
   type BucketFilter,
+  type NoteBucketCounts,
 } from '@knowtis/shared-types';
 
 import {
@@ -233,6 +234,27 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .where(this.accessCondition(userId));
 
     return result[0] ?? { total: 0, owned: 0 };
+  }
+
+  async countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts> {
+    const rows = await this.db
+      .select({ bucket: notes.bucket, value: count() })
+      .from(notes)
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(this.accessCondition(userId))
+      .groupBy(notes.bucket);
+
+    const counts: NoteBucketCounts = {
+      inbox: 0,
+      projects: 0,
+      areas: 0,
+      resources: 0,
+      archive: 0,
+    };
+    for (const row of rows) {
+      counts[row.bucket ?? INBOX_FILTER] = Number(row.value);
+    }
+    return counts;
   }
 
   async findByShareToken(token: string): Promise<NoteViewWithOwner | null> {

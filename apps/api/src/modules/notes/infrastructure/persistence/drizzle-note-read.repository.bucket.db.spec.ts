@@ -36,6 +36,22 @@ const NOTE_IDS = [
   DELETED_PROJECTS_NOTE,
 ];
 
+const COUNTS_OWNER = '00000000-0000-4000-8000-000000000109';
+const COUNTS_OTHER_OWNER = '00000000-0000-4000-8000-000000000110';
+const COUNTS_INBOX_NOTE = '00000000-0000-4000-8000-000000000111';
+const COUNTS_PROJECTS_NOTE_1 = '00000000-0000-4000-8000-000000000112';
+const COUNTS_PROJECTS_NOTE_2 = '00000000-0000-4000-8000-000000000113';
+const COUNTS_FOREIGN_AREAS_NOTE = '00000000-0000-4000-8000-000000000114';
+const COUNTS_DELETED_ARCHIVE_NOTE = '00000000-0000-4000-8000-000000000115';
+
+const COUNTS_NOTE_IDS = [
+  COUNTS_INBOX_NOTE,
+  COUNTS_PROJECTS_NOTE_1,
+  COUNTS_PROJECTS_NOTE_2,
+  COUNTS_FOREIGN_AREAS_NOTE,
+  COUNTS_DELETED_ARCHIVE_NOTE,
+];
+
 describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   let moduleRef: TestingModule;
   let db: Database;
@@ -190,5 +206,109 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
         [SHARED_PROJECTS_NOTE, 'projects'],
       ].sort()
     );
+  });
+});
+
+describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository counts', () => {
+  let moduleRef: TestingModule;
+  let db: Database;
+  let repo: DrizzleNoteReadRepository;
+  const ownerId = UserId.create(COUNTS_OWNER)._unsafeUnwrap();
+
+  beforeAll(async () => {
+    moduleRef = await Test.createTestingModule({
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          validate: validateEnv,
+          envFilePath: ['.env.local', '.env'],
+        }),
+        DatabaseModule,
+      ],
+    }).compile();
+    db = moduleRef.get<Database>(DATABASE_CONNECTION);
+    repo = new DrizzleNoteReadRepository(db);
+
+    await db
+      .insert(users)
+      .values([
+        {
+          id: COUNTS_OWNER,
+          email: `e-${COUNTS_OWNER}@test.local`,
+          name: 'Counts Owner',
+          isAnonymous: true,
+        },
+        {
+          id: COUNTS_OTHER_OWNER,
+          email: `e-${COUNTS_OTHER_OWNER}@test.local`,
+          name: 'Counts Other',
+          isAnonymous: true,
+        },
+      ])
+      .onConflictDoNothing();
+    await db.delete(notes).where(inArray(notes.id, COUNTS_NOTE_IDS));
+    await db.insert(notes).values([
+      {
+        id: COUNTS_INBOX_NOTE,
+        ownerId: COUNTS_OWNER,
+        title: 'unfiled',
+        content: 'body',
+        bucket: null,
+      },
+      {
+        id: COUNTS_PROJECTS_NOTE_1,
+        ownerId: COUNTS_OWNER,
+        title: 'projects one',
+        content: 'body',
+        bucket: 'projects',
+      },
+      {
+        id: COUNTS_PROJECTS_NOTE_2,
+        ownerId: COUNTS_OWNER,
+        title: 'projects two',
+        content: 'body',
+        bucket: 'projects',
+      },
+      {
+        id: COUNTS_FOREIGN_AREAS_NOTE,
+        ownerId: COUNTS_OTHER_OWNER,
+        title: 'shared areas',
+        content: 'body',
+        bucket: 'areas',
+      },
+      {
+        id: COUNTS_DELETED_ARCHIVE_NOTE,
+        ownerId: COUNTS_OWNER,
+        title: 'deleted archive',
+        content: 'body',
+        bucket: 'archive',
+        deletedAt: new Date(),
+      },
+    ]);
+    await db.insert(notePermissions).values({
+      noteId: COUNTS_FOREIGN_AREAS_NOTE,
+      userId: COUNTS_OWNER,
+      permission: PERMISSION.VIEWER,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(notes).where(inArray(notes.id, COUNTS_NOTE_IDS));
+    await db
+      .delete(users)
+      .where(inArray(users.id, [COUNTS_OWNER, COUNTS_OTHER_OWNER]));
+    await moduleRef.close();
+  });
+
+  it('groups counts by bucket over the accessible set, nulls as inbox', async () => {
+    const counts = await repo.countAccessibleByBucket(ownerId);
+
+    expect(counts).toEqual({
+      inbox: 1,
+      projects: 2,
+      areas: 1,
+      resources: 0,
+      archive: 0,
+    });
   });
 });

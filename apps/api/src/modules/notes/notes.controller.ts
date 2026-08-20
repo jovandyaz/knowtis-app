@@ -55,6 +55,7 @@ import {
   DeleteNoteHandler,
   GetCollaboratorsHandler,
   GetNoteByTokenHandler,
+  GetNoteCountsHandler,
   GetNoteHandler,
   GetNotesHandler,
   RestoreNoteHandler,
@@ -142,6 +143,7 @@ export class NotesController {
   constructor(
     private readonly createNoteHandler: CreateNoteHandler,
     private readonly getNotesHandler: GetNotesHandler,
+    private readonly getNoteCountsHandler: GetNoteCountsHandler,
     private readonly getNoteHandler: GetNoteHandler,
     private readonly updateNoteHandler: UpdateNoteHandler,
     private readonly deleteNoteHandler: DeleteNoteHandler,
@@ -188,6 +190,18 @@ export class NotesController {
       ...(query.search ? { search: query.search } : {}),
       ...(query.bucket ? { bucket: query.bucket } : {}),
       ...(query.view ? { view: query.view } : {}),
+    });
+    return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({ summary: 'Get accessible note counts per PARA bucket' })
+  @ApiResponse({ status: 200, description: 'Counts grouped by bucket' })
+  @Get('counts')
+  @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.READ)
+  async getCounts(@CurrentUser() user: RequestUser) {
+    const result = await this.getNoteCountsHandler.execute({
+      userId: user.id,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }

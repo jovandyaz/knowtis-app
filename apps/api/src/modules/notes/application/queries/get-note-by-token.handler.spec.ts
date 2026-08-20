@@ -40,6 +40,7 @@ describe('GetNoteByTokenHandler', () => {
       findAccessibleNotesByLexicalRank: vi.fn(),
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
+      countAccessibleByBucket: vi.fn(),
     };
     handler = new GetNoteByTokenHandler(noteReadRepo);
   });

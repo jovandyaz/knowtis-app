@@ -41,6 +41,7 @@ describe('GetNotesHandler', () => {
       findAccessibleNotesByLexicalRank: vi.fn(),
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
+      countAccessibleByBucket: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),

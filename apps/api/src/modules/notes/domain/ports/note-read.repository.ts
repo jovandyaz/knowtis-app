@@ -1,6 +1,6 @@
 import type { UserId } from '@jovandyaz/auth/server';
 
-import type { BucketFilter } from '@knowtis/shared-types';
+import type { BucketFilter, NoteBucketCounts } from '@knowtis/shared-types';
 
 import type {
   NoteEntity,
@@ -44,6 +44,7 @@ export interface NoteReadRepository {
     limit: number
   ): Promise<NoteSummary[]>;
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount>;
+  countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts>;
   findByShareToken(token: string): Promise<NoteViewWithOwner | null>;
 }
 
