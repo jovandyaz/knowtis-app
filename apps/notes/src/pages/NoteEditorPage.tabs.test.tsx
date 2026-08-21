@@ -90,6 +90,11 @@ vi.mock('@knowtis/data-access-notes', () => ({
   useRestoreNote: () => ({ mutate: vi.fn() }),
   useTags: () => ({ data: [] }),
   useSupertagCatalog: () => ({ data: undefined }),
+  useSuggestOrganization: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    reset: vi.fn(),
+  }),
 }));
 
 describe('NoteEditorPage workspace tabs', () => {

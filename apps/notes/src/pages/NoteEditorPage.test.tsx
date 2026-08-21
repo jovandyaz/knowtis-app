@@ -79,6 +79,11 @@ vi.mock('@knowtis/data-access-notes', () => ({
   useUpdateNote: () => ({ mutate: updateNoteMutate, isPending: false }),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
+  useSuggestOrganization: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    reset: vi.fn(),
+  }),
 }));
 
 describe('NoteEditorPage', () => {

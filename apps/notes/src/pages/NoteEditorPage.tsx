@@ -13,10 +13,12 @@ import {
 } from '@/components/editor/workspace-tab-ids';
 import { WorkspaceTabBar } from '@/components/editor/WorkspaceTabBar';
 import { NotePropertiesRow } from '@/components/organization/NotePropertiesRow';
+import { OrganizeSuggestionCard } from '@/components/organization/OrganizeSuggestionCard';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
 import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
+import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
@@ -27,11 +29,13 @@ import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
 import {
   ACCESS,
+  FEATURE_FLAG_KEYS,
   type GeneralAccessLevel,
   type NoteAccessLevel,
   type ParaBucket,
@@ -73,6 +77,22 @@ function NoteEditor({
   const navigate = useNavigate();
   const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const canEdit = canPerformNoteAction(accessLevel, 'update');
+  const isOwner = accessLevel === ACCESS.OWNER;
+  const suggestionsEnabled =
+    useFeatureFlag(FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE) &&
+    !isAnonymous &&
+    isOwner;
+  const suggestion = useNoteSuggestion({
+    noteId,
+    bucket,
+    isOwner,
+    enabled: suggestionsEnabled,
+  });
+  // Held in a ref so the editor's change handler stays stable across keystrokes.
+  const suggestionTriggerRef = useRef(suggestion.noteEdited);
+  useEffect(() => {
+    suggestionTriggerRef.current = suggestion.noteEdited;
+  }, [suggestion.noteEdited]);
   const updateNote = useUpdateNote();
   const { getYDoc } = useYjs();
   const refreshNotesList = useNotesListRefresh();
@@ -187,6 +207,7 @@ function NoteEditor({
       } else {
         refreshNotesList();
       }
+      suggestionTriggerRef.current(newContent);
       deriveAutoTitle(newContent);
     },
     [canEdit, debouncedUpdateNote, deriveAutoTitle, refreshNotesList]
@@ -289,6 +310,16 @@ function NoteEditor({
             supertag={supertag}
             supertagFields={supertagFields}
             isOwner={accessLevel === ACCESS.OWNER}
+            {...(suggestionsEnabled ? { onSuggest: suggestion.request } : {})}
+            isSuggesting={suggestion.isPending}
+          />
+        )}
+
+        {suggestion.suggestion && (
+          <OrganizeSuggestionCard
+            suggestion={suggestion.suggestion}
+            currentTags={tags}
+            onDismiss={suggestion.dismiss}
           />
         )}
 

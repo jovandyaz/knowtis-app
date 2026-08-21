@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChevronDown, Hash, Shapes, X } from 'lucide-react';
+import { ChevronDown, Hash, Shapes, Sparkles, X } from 'lucide-react';
 
 import { useSupertagCatalog, useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -48,6 +48,9 @@ interface NotePropertiesRowProps {
   supertag: Supertag | null;
   supertagFields: SupertagFields | null;
   isOwner: boolean;
+  /** Omitted when suggestions are off, which is what hides the affordance. */
+  onSuggest?: () => void;
+  isSuggesting?: boolean;
 }
 
 export function NotePropertiesRow({
@@ -57,6 +60,8 @@ export function NotePropertiesRow({
   supertag,
   supertagFields,
   isOwner,
+  onSuggest,
+  isSuggesting = false,
 }: NotePropertiesRowProps) {
   const { t } = useTranslation('notes');
   const { mutate: updateNote } = useUpdateNote();
@@ -208,6 +213,21 @@ export function NotePropertiesRow({
         onAdd={(path) => setTags([...tags, path])}
         triggerClassName={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
       />
+
+      {onSuggest && (
+        <button
+          type="button"
+          onClick={onSuggest}
+          disabled={isSuggesting}
+          aria-label={t('organization.suggestion.ask')}
+          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-60 md:min-h-0`}
+        >
+          <Sparkles className="size-3 opacity-70" />
+          {isSuggesting
+            ? t('organization.suggestion.pending')
+            : t('organization.suggestion.ask')}
+        </button>
+      )}
 
       {editingSupertag && catalog && (
         <SupertagFieldsForm

@@ -16,6 +16,7 @@ export {
   type SupertagCatalog,
 } from './lib/notes.api';
 
+export { organizationApi } from './lib/organization.api';
 export { tagsApi, type UpdateTagInput } from './lib/tags.api';
 
 export { aiClient, AIClient } from './lib/ai.client';
