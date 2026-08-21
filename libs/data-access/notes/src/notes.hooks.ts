@@ -3,64 +3,27 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
-  type InfiniteData,
 } from '@tanstack/react-query';
 
-import {
-  notesApi,
-  type NoteDetail,
-  type NoteWithAccess,
-} from '@knowtis/api-client';
+import { notesApi, type NoteDetail } from '@knowtis/api-client';
 import {
   DEFAULT_NOTES_PAGE_SIZE,
   type CreateNoteInput,
   type Note,
   type NotesListFilters,
-  type NotesPage,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
+import {
+  dropLoadedNote,
+  mapLoadedNotes,
+  type NoteListPages,
+} from './note-cache';
 import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
 const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
 const DETAIL_STALE_TIME_MS = 1000 * 30;
-
-type NoteListPages = InfiniteData<NotesPage<NoteWithAccess>>;
-
-function mapLoadedNotes(
-  data: NoteListPages | undefined,
-  map: (note: NoteWithAccess) => NoteWithAccess
-): NoteListPages | undefined {
-  if (!data) {
-    return data;
-  }
-  return {
-    ...data,
-    pages: data.pages.map((page) => ({ ...page, items: page.items.map(map) })),
-  };
-}
-
-function dropLoadedNote(
-  data: NoteListPages | undefined,
-  id: string
-): NoteListPages | undefined {
-  if (!data) {
-    return data;
-  }
-  const pages = data.pages.map((page) => ({
-    ...page,
-    items: page.items.filter((note) => note.id !== id),
-  }));
-  const dropped = data.pages.reduce(
-    (sum, page, i) => sum + page.items.length - (pages[i]?.items.length ?? 0),
-    0
-  );
-  return {
-    ...data,
-    pages: pages.map((page) => ({ ...page, total: page.total - dropped })),
-  };
-}
 
 export function useNotes(filters?: NotesListFilters) {
   return useInfiniteQuery({
