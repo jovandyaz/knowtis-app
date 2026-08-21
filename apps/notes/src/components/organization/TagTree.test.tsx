@@ -151,4 +151,31 @@ describe('TagTree', () => {
 
     expect(screen.getByText('personal')).toHaveClass('min-w-0', 'truncate');
   });
+
+  it('should let the whole row reach the tag, not just the label', async () => {
+    await renderAt('/notes');
+
+    expect(rowFor('personal')?.parentElement).toHaveClass('relative');
+    expect(rowFor('personal')).toHaveClass('after:absolute', 'after:inset-0');
+  });
+
+  it('should keep the collapse control above the row-wide link', async () => {
+    await renderAt('/notes');
+
+    const chevron = screen.getByRole('button', {
+      name: /organization.tags.collapse/,
+    });
+
+    expect(chevron).toHaveClass('relative', 'z-10');
+  });
+
+  it('should give the collapse control a touch-sized target on mobile', async () => {
+    await renderAt('/notes');
+
+    const chevron = screen.getByRole('button', {
+      name: /organization.tags.collapse/,
+    });
+
+    expect(chevron).toHaveClass('after:-inset-y-4', 'md:after:-inset-y-1');
+  });
 });
