@@ -9,6 +9,14 @@ import { INBOX_FILTER, PARA_BUCKETS } from '@knowtis/shared-types';
 import type { BucketFilter } from '@knowtis/shared-types';
 
 import { BucketDot } from './BucketDot';
+import {
+  NAV_COUNT,
+  NAV_ICON_SLOT,
+  NAV_LABEL,
+  NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
+} from './nav-row.styles';
 
 const NAV_ORDER = [
   INBOX_FILTER,
@@ -49,21 +57,15 @@ export function BucketNav({ onNavigate }: BucketNavProps) {
               activeProps={{}}
               inactiveProps={{}}
               aria-current={isActive ? 'page' : undefined}
-              className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${
-                isActive
-                  ? 'bg-muted text-foreground font-medium'
-                  : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
-              }`}
+              className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
             >
-              <BucketDot bucket={bucket} />
-              <span className="flex-1 truncate">
+              <span className={NAV_ICON_SLOT}>
+                <BucketDot bucket={bucket} />
+              </span>
+              <span className={NAV_LABEL}>
                 {t(`organization.buckets.${bucket}`)}
               </span>
-              {showsCount && (
-                <span className="text-xs text-muted-foreground/60">
-                  {count}
-                </span>
-              )}
+              {showsCount && <span className={NAV_COUNT}>{count}</span>}
             </Link>
           );
         })}

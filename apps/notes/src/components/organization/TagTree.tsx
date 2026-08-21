@@ -8,6 +8,14 @@ import { ChevronDown, ChevronRight, Hash } from 'lucide-react';
 
 import { useTags } from '@knowtis/data-access-notes';
 
+import {
+  NAV_COUNT,
+  NAV_ICON_SLOT,
+  NAV_LABEL,
+  NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
+} from './nav-row.styles';
 import { buildTagTree, type TagTreeItem } from './tag-tree.utils';
 
 const INDENT_PER_DEPTH_REM = 0.75;
@@ -42,11 +50,15 @@ export function TagTree({ onNavigate }: TagTreeProps) {
     const isCollapsed = collapsed.has(item.path);
     const hasChildren = item.children.length > 0;
 
+    const isActive = activeTag === item.path;
+    const tint = item.color ? { color: item.color } : undefined;
+    const Chevron = isCollapsed ? ChevronRight : ChevronDown;
+
     return (
       <div key={item.path} className="flex flex-col gap-0.5">
         <div
-          className="flex items-center gap-1"
-          style={{ paddingLeft: `${item.depth * INDENT_PER_DEPTH_REM}rem` }}
+          className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
+          style={{ marginLeft: `${item.depth * INDENT_PER_DEPTH_REM}rem` }}
         >
           {hasChildren ? (
             <button
@@ -59,16 +71,14 @@ export function TagTree({ onNavigate }: TagTreeProps) {
                   : 'organization.tags.collapse',
                 { tag: item.path }
               )}
-              className="rounded p-0.5 text-muted-foreground/60 hover:text-foreground cursor-pointer"
+              className={`${NAV_ICON_SLOT} relative cursor-pointer after:absolute after:-inset-2 after:content-['']`}
             >
-              {isCollapsed ? (
-                <ChevronRight className="h-3 w-3" />
-              ) : (
-                <ChevronDown className="h-3 w-3" />
-              )}
+              <Chevron className="h-3 w-3" style={tint} />
             </button>
           ) : (
-            <span className="w-4" aria-hidden />
+            <span className={NAV_ICON_SLOT} aria-hidden>
+              <Hash className="h-3 w-3" style={tint} />
+            </span>
           )}
 
           <Link
@@ -77,22 +87,12 @@ export function TagTree({ onNavigate }: TagTreeProps) {
             onClick={onNavigate}
             activeProps={{}}
             inactiveProps={{}}
-            aria-current={activeTag === item.path ? 'page' : undefined}
-            className={`flex min-h-8 flex-1 items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${
-              activeTag === item.path
-                ? 'bg-muted text-foreground font-medium'
-                : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
-            }`}
+            aria-current={isActive ? 'page' : undefined}
+            className="flex min-w-0 flex-1 items-center gap-2"
           >
-            <Hash
-              className="h-3 w-3 shrink-0"
-              style={item.color ? { color: item.color } : undefined}
-            />
-            <span className="flex-1 truncate">{item.label}</span>
+            <span className={NAV_LABEL}>{item.label}</span>
             {item.noteCount > 0 && (
-              <span className="text-xs text-muted-foreground/60">
-                {item.noteCount}
-              </span>
+              <span className={NAV_COUNT}>{item.noteCount}</span>
             )}
           </Link>
         </div>

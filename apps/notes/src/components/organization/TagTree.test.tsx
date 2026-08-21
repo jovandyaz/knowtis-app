@@ -135,4 +135,20 @@ describe('TagTree', () => {
 
     expect(rowFor('work')).toHaveTextContent('5');
   });
+
+  it('should hang a branch and a leaf on the same icon rail', async () => {
+    await renderAt('/notes');
+
+    const slotOf = (label: string) =>
+      rowFor(label)?.parentElement?.firstElementChild;
+
+    expect(slotOf('work')).toHaveClass('w-3', 'shrink-0');
+    expect(slotOf('personal')).toHaveClass('w-3', 'shrink-0');
+  });
+
+  it('should let a long tag ellipsise rather than squeeze its icon slot', async () => {
+    await renderAt('/notes');
+
+    expect(screen.getByText('personal')).toHaveClass('min-w-0', 'truncate');
+  });
 });
