@@ -8,6 +8,15 @@ import { Shapes } from 'lucide-react';
 import { useNoteCounts } from '@knowtis/data-access-notes';
 import { SUPERTAGS, type Supertag } from '@knowtis/shared-types';
 
+import {
+  NAV_COUNT,
+  NAV_ICON_SLOT,
+  NAV_LABEL,
+  NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
+} from './nav-row.styles';
+
 interface SupertagNavProps {
   onNavigate?: () => void;
 }
@@ -41,19 +50,17 @@ export function SupertagNav({ onNavigate }: SupertagNavProps) {
             activeProps={{}}
             inactiveProps={{}}
             aria-current={activeType === type ? 'page' : undefined}
-            className={`flex min-h-8 items-center gap-2 rounded-md px-2 py-1 text-sm transition-colors cursor-pointer ${
-              activeType === type
-                ? 'bg-muted text-foreground font-medium'
-                : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
+            className={`${NAV_ROW} ${
+              activeType === type ? NAV_ROW_ACTIVE : NAV_ROW_IDLE
             }`}
           >
-            <Shapes className="h-3 w-3 shrink-0 opacity-60" />
-            <span className="flex-1 truncate">
+            <span className={NAV_ICON_SLOT}>
+              <Shapes className="h-3 w-3 opacity-60" />
+            </span>
+            <span className={NAV_LABEL}>
               {t(`organization.supertags.names.${type}`)}
             </span>
-            <span className="text-xs text-muted-foreground/60">
-              {counts?.supertags[type]}
-            </span>
+            <span className={NAV_COUNT}>{counts?.supertags[type]}</span>
           </Link>
         ))}
       </div>
