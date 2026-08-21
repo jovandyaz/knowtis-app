@@ -14,7 +14,10 @@ import { AIModel } from '../../domain/value-objects/ai-model.vo';
 import { AIConfigService } from './ai-config.service';
 import { PromptLoaderService } from './prompt-loader.service';
 
-const FAST_MODEL_ACTIONS = new Set<SupportedAIAction>([AI_ACTION.GHOST_TEXT]);
+const FAST_MODEL_ACTIONS = new Set<SupportedAIAction>([
+  AI_ACTION.GHOST_TEXT,
+  AI_ACTION.SUGGEST_ORGANIZATION,
+]);
 
 @Injectable()
 export class AIOrchestrator {

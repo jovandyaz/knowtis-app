@@ -13,6 +13,7 @@ export const AIErrorCodes = {
   INVALID_MODEL: 'AI_INVALID_MODEL',
   INVALID_ACTION: 'AI_INVALID_ACTION',
   INVALID_INPUT: 'AI_INVALID_INPUT',
+  FORBIDDEN: 'AI_FORBIDDEN',
   PROMPT_INJECTION_DETECTED: 'PROMPT_INJECTION_DETECTED',
   INTERNAL_ERROR: 'AI_INTERNAL_ERROR',
   AUTH_REQUIRED: 'AUTH_REQUIRED',
@@ -61,6 +62,8 @@ export const AIErrors = {
       AIErrorCodes.PROMPT_INJECTION_DETECTED,
       'Request blocked for safety reasons.'
     ),
+
+  forbidden: (reason: string) => createAIError(AIErrorCodes.FORBIDDEN, reason),
 
   invalidInput: (reason: string) =>
     createAIError(AIErrorCodes.INVALID_INPUT, `Invalid AI input: ${reason}`),
