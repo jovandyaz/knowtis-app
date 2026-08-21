@@ -19,8 +19,8 @@ export type {
   AIBlockProvider,
   AIBlockStatus,
 } from './extensions/ai-block/AIBlockNode';
-export { SlashCommands } from './extensions/slash-commands';
-export type { SlashCommandsOptions } from './extensions/slash-commands';
+export { SuggestionMenu } from './extensions/suggestion-menu';
+export type { SuggestionMenuOptions } from './extensions/suggestion-menu';
 export { ImageNode } from './extensions/image/ImageNode';
 export type { ImageAttributes } from './extensions/image/ImageNode';
 export {

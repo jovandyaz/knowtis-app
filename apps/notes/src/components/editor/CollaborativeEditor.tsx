@@ -85,6 +85,7 @@ function InternalEditor({
   placeholder,
   editable,
   isSynced,
+  canTag,
   autoFocus,
   onEditorReady,
   onVoiceNote,
@@ -110,7 +111,8 @@ function InternalEditor({
     yDoc,
     yXmlFragment,
     awareness,
-    currentUser
+    currentUser,
+    canTag
   );
 
   const editor = useEditor({
@@ -242,6 +244,7 @@ export function CollaborativeEditor({
   placeholder,
   className,
   editable = true,
+  canTag = false,
   shareToken,
   onEditDenied,
   autoFocus,
@@ -365,6 +368,7 @@ export function CollaborativeEditor({
           placeholder={resolvedPlaceholder}
           editable={editable}
           isSynced={!wsEnabled || isSynced}
+          canTag={canTag}
           autoFocus={autoFocus}
           onEditorReady={onEditorReady}
           onVoiceNote={onVoiceNote}

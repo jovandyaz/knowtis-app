@@ -14,6 +14,9 @@ export interface CollaborativeEditorProps {
   shareToken?: string | undefined;
   onEditDenied?: (() => void) | undefined;
 
+  /** Owner-only: enables the inline `#` tag menu. Tags are the owner's
+   *  classification, so a collaborator's `#` would only earn a 403. */
+  canTag?: boolean | undefined;
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;
   onVoiceNote?: (() => void) | undefined;
@@ -36,6 +39,7 @@ export interface InternalEditorProps {
   placeholder: string[];
   editable: boolean;
   isSynced: boolean;
+  canTag: boolean;
 
   autoFocus?: boolean | undefined;
   onEditorReady?: ((editor: Editor) => void) | undefined;

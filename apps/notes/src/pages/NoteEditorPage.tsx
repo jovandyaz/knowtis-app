@@ -286,6 +286,7 @@ function NoteEditor({
           initialContent={initialContent}
           onUpdate={handleContentChange}
           editable={canEdit}
+          canTag={!isAnonymous && accessLevel === ACCESS.OWNER}
           autoFocus={canEdit && isNewNote}
           localFirst={isNewNote}
           onEditorReady={handleEditorReady}

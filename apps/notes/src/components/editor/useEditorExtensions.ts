@@ -16,7 +16,7 @@ import {
   GhostText,
   ImageNode,
   ImageUpload,
-  SlashCommands,
+  SuggestionMenu,
 } from '@knowtis/editor';
 import { AI_ACTION } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
@@ -24,6 +24,7 @@ import { logger } from '@knowtis/shared-util';
 import { createAiClientProvider } from './ai/aiClientProvider';
 import { slashCommandsSuggestion } from './ai/SlashCommandMenu';
 import { createImageUploadProvider } from './image/createImageUploadProvider';
+import { createTagSuggestion } from './tags/tag-suggestion';
 
 const ghostTextProvider = createAiClientProvider(AI_ACTION.GHOST_TEXT);
 const aiBlockProvider = createAiClientProvider(AI_ACTION.LEARN_TOPIC);
@@ -33,7 +34,8 @@ export function useEditorExtensions(
   yDoc: Y.Doc,
   yXmlFragment: Y.XmlFragment,
   awareness: Awareness | null,
-  currentUser: CollaborativeUser
+  currentUser: CollaborativeUser,
+  canTag: boolean
 ): AnyExtension[] {
   return useMemo(() => {
     const imageUploadProvider = createImageUploadProvider(() => noteId);
@@ -55,7 +57,7 @@ export function useEditorExtensions(
         document: yDoc,
         fragment: yXmlFragment,
       }),
-      SlashCommands.configure({
+      SuggestionMenu.extend({ name: 'slashCommands' }).configure({
         suggestion: slashCommandsSuggestion,
       }),
       GhostText.configure({
@@ -72,6 +74,14 @@ export function useEditorExtensions(
         },
       }),
     ];
+
+    if (canTag) {
+      extensions.push(
+        SuggestionMenu.extend({ name: 'tagSuggestions' }).configure({
+          suggestion: createTagSuggestion(noteId),
+        })
+      );
+    }
 
     if (awareness) {
       extensions.push(
@@ -93,5 +103,6 @@ export function useEditorExtensions(
     awareness,
     currentUser.name,
     currentUser.color,
+    canTag,
   ]);
 }
