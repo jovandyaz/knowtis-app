@@ -5,6 +5,7 @@ import { PermissionRepository } from './permission.repository';
 export * from './note-read.repository';
 export * from './note-write.repository';
 export * from './permission.repository';
+export * from './tag.repository';
 
 export interface NoteRepository
   extends NoteReadRepository, NoteWriteRepository, PermissionRepository {}

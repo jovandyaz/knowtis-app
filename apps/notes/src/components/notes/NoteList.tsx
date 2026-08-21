@@ -5,6 +5,7 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
 import { BucketDot } from '@/components/organization/BucketDot';
 import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
+import { TagEmptyState } from '@/components/organization/TagEmptyState';
 import { ViewEmptyState } from '@/components/organization/ViewEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
 import { ROUTES } from '@/config';
@@ -15,7 +16,7 @@ import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { Plus, Search, X } from 'lucide-react';
+import { Hash, Plus, Search, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
@@ -52,9 +53,11 @@ export function NoteList() {
 
   // The route tree's types are circular through this component, so useSearch()
   // widens the validated params back to plain strings; re-parsing restores them.
-  const { bucket, view: requestedView } = notesSearchSchema.parse(
-    routeApi.useSearch()
-  );
+  const {
+    bucket,
+    view: requestedView,
+    tag,
+  } = notesSearchSchema.parse(routeApi.useSearch());
   // Anonymous visitors get no view picker, so a view left in the URL would
   // filter them into an empty list they have no control to clear.
   const view = isAnonymous ? 'all' : requestedView;
@@ -76,6 +79,7 @@ export function NoteList() {
     ...(debouncedSearch ? { search: debouncedSearch } : {}),
     ...(bucket ? { bucket } : {}),
     ...(view !== 'all' ? { view } : {}),
+    ...(tag ? { tag } : {}),
   };
 
   const {
@@ -100,13 +104,29 @@ export function NoteList() {
   const setView = (next: NoteListView) =>
     void navigate({
       to: ROUTES.NOTES,
-      search: { ...(bucket ? { bucket } : {}), view: next },
+      search: {
+        ...(bucket ? { bucket } : {}),
+        ...(tag ? { tag } : {}),
+        view: next,
+      },
     });
 
   const clearBucket = () =>
-    void navigate({ to: ROUTES.NOTES, search: { view } });
+    void navigate({
+      to: ROUTES.NOTES,
+      search: { ...(tag ? { tag } : {}), view },
+    });
+
+  const clearTag = () =>
+    void navigate({
+      to: ROUTES.NOTES,
+      search: { ...(bucket ? { bucket } : {}), view },
+    });
 
   const renderEmptyState = () => {
+    if (tag) {
+      return <TagEmptyState tag={tag} />;
+    }
     if (bucket) {
       return <BucketEmptyState bucket={bucket} />;
     }
@@ -201,20 +221,34 @@ export function NoteList() {
         </div>
       </div>
 
-      {bucket && (
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={clearBucket}
-            aria-label={t('organization.clearBucketFilter', {
-              bucket: t(`organization.buckets.${bucket}`),
-            })}
-            className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
-          >
-            <BucketDot bucket={bucket} className="size-2" />
-            {t(`organization.buckets.${bucket}`)}
-            <X className="h-3 w-3 opacity-70" />
-          </button>
+      {(bucket || tag) && (
+        <div className="flex flex-wrap items-center gap-2.5">
+          {bucket && (
+            <button
+              type="button"
+              onClick={clearBucket}
+              aria-label={t('organization.clearBucketFilter', {
+                bucket: t(`organization.buckets.${bucket}`),
+              })}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+            >
+              <BucketDot bucket={bucket} className="size-2" />
+              {t(`organization.buckets.${bucket}`)}
+              <X className="h-3 w-3 opacity-70" />
+            </button>
+          )}
+          {tag && (
+            <button
+              type="button"
+              onClick={clearTag}
+              aria-label={t('organization.tags.clearFilter', { tag })}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+            >
+              <Hash className="h-3 w-3 opacity-70" />
+              {tag}
+              <X className="h-3 w-3 opacity-70" />
+            </button>
+          )}
           {!isLoading && !isError && (
             <span className="text-xs text-muted-foreground/70">
               {t('organization.notesCount', { count: total })}

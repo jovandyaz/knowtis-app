@@ -10,7 +10,13 @@ import { toast } from 'sonner';
 
 import { ApiClientError, type NoteWithAccess } from '@knowtis/api-client';
 import { artifactsQueryKeys } from '@knowtis/data-access-artifacts';
-import { notesQueryKeys, useCreateNote } from '@knowtis/data-access-notes';
+import {
+  dropLoadedNote,
+  notesQueryKeys,
+  prependLoadedNote,
+  useCreateNote,
+  type NoteListPages,
+} from '@knowtis/data-access-notes';
 import { generateId } from '@knowtis/shared-util';
 
 interface CreateAndNavigateOptions {
@@ -52,15 +58,16 @@ export function useCreateAndNavigateToNote() {
       shareToken: null,
       editorsCanShare: false,
       bucket: null,
+      tags: [],
       createdAt: now,
       updatedAt: now,
       accessLevel: 'owner',
     };
 
     queryClient.setQueryData(notesQueryKeys.detail(noteId), optimisticNote);
-    queryClient.setQueriesData<NoteWithAccess[]>(
+    queryClient.setQueriesData<NoteListPages>(
       { queryKey: notesQueryKeys.lists() },
-      (old) => (old ? [optimisticNote, ...old] : undefined)
+      (old) => prependLoadedNote(old, optimisticNote)
     );
     queryClient.setQueryData(artifactsQueryKeys.byNote(noteId), []);
 
@@ -89,9 +96,9 @@ export function useCreateAndNavigateToNote() {
         queryClient.removeQueries({
           queryKey: artifactsQueryKeys.byNote(noteId),
         });
-        queryClient.setQueriesData<NoteWithAccess[]>(
+        queryClient.setQueriesData<NoteListPages>(
           { queryKey: notesQueryKeys.lists() },
-          (old) => old?.filter((n) => n.id !== noteId)
+          (old) => dropLoadedNote(old, noteId)
         );
         queryClient.invalidateQueries({
           queryKey: notesQueryKeys.lists(),

@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsIn,
@@ -22,6 +24,9 @@ import {
   NOTE_TITLE_MAX_LENGTH,
   PARA_BUCKETS,
   PERMISSION_LEVELS,
+  TAG_COLOR_MAX_LENGTH,
+  TAG_MAX_PER_NOTE,
+  TAG_PATH_MAX_LENGTH,
   type BucketFilter,
   type GeneralAccessLevel,
   type NoteListView,
@@ -129,6 +134,18 @@ export class UpdateNoteDto {
   @IsIn(PARA_BUCKETS)
   @IsOptional()
   bucket?: ParaBucket | null;
+
+  @ApiPropertyOptional({
+    description:
+      "The note's complete tag set as paths; replaces whatever it carried",
+    type: [String],
+    example: ['work/projects/alpha', 'ai'],
+  })
+  @IsArray()
+  @IsString({ each: true })
+  @ArrayMaxSize(TAG_MAX_PER_NOTE)
+  @IsOptional()
+  tags?: string[];
 }
 
 export class ShareNoteDto {
@@ -197,4 +214,33 @@ export class NotesQueryDto {
   @IsIn(NOTE_LIST_VIEWS)
   @IsOptional()
   view?: NoteListView;
+
+  @ApiPropertyOptional({
+    description: 'Filter by tag branch: the exact path or any descendant',
+    example: 'work/projects',
+  })
+  @IsString()
+  @MaxLength(TAG_PATH_MAX_LENGTH)
+  @IsOptional()
+  tag?: string;
+}
+
+export class UpdateTagDto {
+  @ApiPropertyOptional({
+    description: 'New path for the tag; descendants follow by prefix',
+    example: 'work/projects/beta',
+  })
+  @IsString()
+  @MaxLength(TAG_PATH_MAX_LENGTH)
+  @IsOptional()
+  path?: string;
+
+  @ApiPropertyOptional({
+    description: 'Colour token for the branch; null clears it',
+    nullable: true,
+  })
+  @IsString()
+  @MaxLength(TAG_COLOR_MAX_LENGTH)
+  @IsOptional()
+  color?: string | null;
 }

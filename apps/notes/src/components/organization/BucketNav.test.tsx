@@ -19,6 +19,7 @@ const noteCounts = vi.fn<() => NoteBucketCounts | undefined>();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNoteCounts: () => ({ data: noteCounts() }),
+  useTags: () => ({ data: [] }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

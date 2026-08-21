@@ -19,6 +19,13 @@ import { httpClient } from './http-client';
  */
 export interface NoteWithAccess extends Note {
   accessLevel: NoteAccessLevel;
+  tags: string[];
+}
+
+/** A single note read: the owner block the list omits, plus its tag paths. */
+export interface NoteDetail extends NoteWithOwner {
+  accessLevel: NoteAccessLevel;
+  tags: string[];
 }
 
 /**
@@ -51,6 +58,9 @@ export const notesApi = {
     if (params?.view && params.view !== 'all') {
       query.set('view', params.view);
     }
+    if (params?.tag) {
+      query.set('tag', params.tag);
+    }
     return httpClient.get<NotesPage<NoteWithAccess>>(
       `/notes?${query.toString()}`
     );
@@ -60,12 +70,8 @@ export const notesApi = {
     return httpClient.get<NoteBucketCounts>('/notes/counts');
   },
 
-  async getById(
-    id: string
-  ): Promise<NoteWithOwner & { accessLevel: NoteAccessLevel }> {
-    return httpClient.get<NoteWithOwner & { accessLevel: NoteAccessLevel }>(
-      `/notes/${id}`
-    );
+  async getById(id: string): Promise<NoteDetail> {
+    return httpClient.get<NoteDetail>(`/notes/${id}`);
   },
 
   async create(input: CreateNoteInput): Promise<Note> {

@@ -43,6 +43,7 @@ interface NoteEditorProps {
   initialContent: string;
   accessLevel: NoteAccessLevel;
   bucket: ParaBucket | null;
+  tags: string[];
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
@@ -55,6 +56,7 @@ function NoteEditor({
   initialContent,
   accessLevel,
   bucket,
+  tags,
   generalAccess,
   generalAccessPermission,
   shareToken,
@@ -266,6 +268,7 @@ function NoteEditor({
           <NotePropertiesRow
             noteId={noteId}
             bucket={bucket}
+            tags={tags}
             isOwner={accessLevel === ACCESS.OWNER}
           />
         )}
@@ -342,6 +345,7 @@ export function NoteEditorPage() {
       initialContent={note.content}
       accessLevel={note.accessLevel}
       bucket={note.bucket}
+      tags={note.tags}
       generalAccess={note.generalAccess}
       generalAccessPermission={note.generalAccessPermission}
       shareToken={note.shareToken}

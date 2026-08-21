@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Hash, X } from 'lucide-react';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
 import {
@@ -17,6 +17,7 @@ import {
 } from '@knowtis/shared-types';
 
 import { BucketDot } from './BucketDot';
+import { TagPicker } from './TagPicker';
 
 const CHIP_CLASSES =
   'inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground';
@@ -28,12 +29,14 @@ function isParaBucket(value: string): value is ParaBucket {
 interface NotePropertiesRowProps {
   noteId: string;
   bucket: ParaBucket | null;
+  tags: string[];
   isOwner: boolean;
 }
 
 export function NotePropertiesRow({
   noteId,
   bucket,
+  tags,
   isOwner,
 }: NotePropertiesRowProps) {
   const { t } = useTranslation('notes');
@@ -43,14 +46,23 @@ export function NotePropertiesRow({
 
   if (!isOwner) {
     return (
-      <div className="mt-3 flex items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className={CHIP_CLASSES}>
           <BucketDot bucket={activeFilter} />
           {label}
         </span>
+        {tags.map((path) => (
+          <span key={path} className={CHIP_CLASSES}>
+            <Hash className="size-3 opacity-60" />
+            {path}
+          </span>
+        ))}
       </div>
     );
   }
+
+  const setTags = (next: string[]) =>
+    updateNote({ id: noteId, input: { tags: next } });
 
   const setBucket = (next: ParaBucket | null) => {
     if (next === bucket) {
@@ -64,7 +76,7 @@ export function NotePropertiesRow({
   };
 
   return (
-    <div className="mt-3 flex items-center gap-2">
+    <div className="mt-3 flex flex-wrap items-center gap-2">
       <DropdownMenu>
         <DropdownMenuTrigger
           className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
@@ -91,6 +103,26 @@ export function NotePropertiesRow({
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      {tags.map((path) => (
+        <button
+          key={path}
+          type="button"
+          onClick={() => setTags(tags.filter((current) => current !== path))}
+          aria-label={t('organization.tags.remove', { path })}
+          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+        >
+          <Hash className="size-3 opacity-60" />
+          {path}
+          <X className="size-3 opacity-70" />
+        </button>
+      ))}
+
+      <TagPicker
+        selected={tags}
+        onAdd={(path) => setTags([...tags, path])}
+        triggerClassName={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+      />
     </div>
   );
 }

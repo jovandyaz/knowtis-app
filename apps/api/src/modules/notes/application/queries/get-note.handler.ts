@@ -11,9 +11,11 @@ import {
 import {
   NOTE_REPOSITORY,
   NoteErrors,
+  TAG_REPOSITORY,
   type NoteDomainError,
   type NoteRepository,
   type NoteViewWithOwner,
+  type TagRepository,
 } from '../../domain';
 
 export interface GetNoteInput {
@@ -23,12 +25,14 @@ export interface GetNoteInput {
 
 export type NoteWithAccess = NoteViewWithOwner & {
   accessLevel: NoteAccessLevel;
+  tags: string[];
 };
 
 @Injectable()
 export class GetNoteHandler {
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    @Inject(TAG_REPOSITORY) private readonly tagRepository: TagRepository
   ) {}
 
   async execute(
@@ -45,7 +49,11 @@ export class GetNoteHandler {
     }
 
     if (note.ownerId === input.userId) {
-      return ok({ ...note, accessLevel: ACCESS.OWNER });
+      return ok({
+        ...note,
+        accessLevel: ACCESS.OWNER,
+        tags: await this.tagsOf(note.id),
+      });
     }
 
     const permission = await this.noteRepository.findPermission(
@@ -57,9 +65,14 @@ export class GetNoteHandler {
       const accessLevel: NoteAccessLevel = permission
         ? permission.permission.value
         : ACCESS.VIEWER;
-      return ok({ ...note, accessLevel });
+      return ok({ ...note, accessLevel, tags: await this.tagsOf(note.id) });
     }
 
     return err(NoteErrors.permissionDenied());
+  }
+
+  private async tagsOf(noteId: string): Promise<string[]> {
+    const byNote = await this.tagRepository.findPathsByNotes([noteId]);
+    return byNote.get(noteId) ?? [];
   }
 }

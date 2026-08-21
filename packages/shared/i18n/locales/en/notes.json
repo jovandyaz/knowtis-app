@@ -36,6 +36,23 @@
       "mineDescription": "Notes you create appear here, separate from the ones shared with you.",
       "sharedTitle": "Nothing shared with you",
       "sharedDescription": "Notes other people give you access to appear here."
+    },
+    "tagsTitle": "Tags",
+    "tags": {
+      "empty": "No tags yet",
+      "addLabel": "Add a tag",
+      "placeholder": "Search or create a tag…",
+      "create": "Create #{{path}}",
+      "remove": "Remove #{{path}}",
+      "invalid": "Use lowercase letters, digits and hyphens, up to {{depth}} levels deep",
+      "expand": "Expand {{tag}}",
+      "collapse": "Collapse {{tag}}",
+      "clearFilter": "Clear the #{{tag}} filter",
+      "rename": "Rename",
+      "delete": "Delete",
+      "deleteConfirm": "Delete #{{path}} and everything nested under it? Your notes stay.",
+      "emptyTitle": "Nothing tagged #{{tag}}",
+      "emptyDescription": "Tag a note from its properties row to see it here."
     }
   },
   "editor": {
