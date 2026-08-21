@@ -2,7 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PARA_BUCKETS } from '@knowtis/shared-types';
+import { MAX_SUGGESTED_TAGS, PARA_BUCKETS } from '@knowtis/shared-types';
 
 import { SuggestOrganizationHandler } from './suggest-organization.handler';
 
@@ -102,7 +102,7 @@ describe('SuggestOrganizationHandler', () => {
       noteIds: [NOTE_ID],
     });
 
-    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('AI_FORBIDDEN');
     expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
   });
 
@@ -114,7 +114,7 @@ describe('SuggestOrganizationHandler', () => {
       noteIds: [NOTE_ID],
     });
 
-    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('AI_FORBIDDEN');
     expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
   });
 
@@ -184,12 +184,72 @@ describe('SuggestOrganizationHandler', () => {
     expect(suggestion?.tags).toEqual([{ path: 'work', isNew: false }]);
   });
 
+  it('normalizes and dedupes the paths the model returns', async () => {
+    structuredOutput.generateStructuredOutput.mockResolvedValue({
+      object: { bucket: null, tags: ['  WORK  ', 'work', 'work/Alpha'] },
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'anthropic:fast',
+    });
+
+    const [suggestion] = (
+      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    )._unsafeUnwrap();
+
+    expect(suggestion?.tags).toEqual([
+      { path: 'work', isNew: false },
+      { path: 'work/alpha', isNew: false },
+    ]);
+  });
+
+  it('never returns more tags than the cap, whatever the model sends', async () => {
+    structuredOutput.generateStructuredOutput.mockResolvedValue({
+      object: {
+        bucket: null,
+        tags: Array.from({ length: 12 }, (_, i) => `topic-${i}`),
+      },
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'anthropic:fast',
+    });
+
+    const [suggestion] = (
+      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    )._unsafeUnwrap();
+
+    expect(suggestion?.tags).toHaveLength(MAX_SUGGESTED_TAGS);
+  });
+
+  it('still suggests when the vocabulary lookup fails', async () => {
+    tagRepository.findTreeByOwner.mockRejectedValue(new Error('pg is down'));
+
+    const [suggestion] = (
+      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    )._unsafeUnwrap();
+
+    expect(suggestion?.tags).toEqual([{ path: 'work/alpha', isNew: true }]);
+  });
+
+  it('rejects a blank user id before touching any repository', async () => {
+    const result = await handler.execute({
+      userId: '   ',
+      noteIds: [NOTE_ID],
+    });
+
+    expect(result._unsafeUnwrapErr().code).toBe('AI_INVALID_INPUT');
+    expect(noteRepository.findById).not.toHaveBeenCalled();
+  });
+
   it('offers the vocabulary most-used first', async () => {
     await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
 
     const prompt = structuredOutput.generateStructuredOutput.mock
       .calls[0][0] as string;
-    expect(prompt.indexOf('work\n')).toBeLessThan(prompt.indexOf('work/alpha'));
+    const broad = prompt.indexOf('work\n');
+    const narrow = prompt.indexOf('work/alpha');
+    expect(broad).toBeGreaterThanOrEqual(0);
+    expect(narrow).toBeGreaterThanOrEqual(0);
+    expect(broad).toBeLessThan(narrow);
   });
 
   it('sends the note as plain text, not as editor markup', async () => {

@@ -203,12 +203,30 @@ export class SuggestOrganizationHandler {
   private async loadVocabulary(
     userId: UserId
   ): Promise<{ vocabulary: string[]; known: Set<string> }> {
-    const tree = await this.tagRepository.findTreeByOwner(userId);
+    const tree = await this.readTagTree(userId);
     const vocabulary = [...tree]
       .sort((a, b) => b.noteCount - a.noteCount)
       .slice(0, MAX_VOCABULARY_TAGS)
       .map((tag) => tag.path);
     return { vocabulary, known: new Set(tree.map((tag) => tag.path)) };
+  }
+
+  /**
+   * The vocabulary is optional context, so a lookup failure must not escape the
+   * `Result` contract as an unmapped 500. Without it every tag reads as new.
+   */
+  private async readTagTree(
+    userId: UserId
+  ): Promise<{ path: string; noteCount: number }[]> {
+    try {
+      return await this.tagRepository.findTreeByOwner(userId);
+    } catch (error) {
+      this.logger.warn({
+        event: 'ai.suggest-organization.vocabulary-failed',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return [];
+    }
   }
 
   /**
