@@ -9,16 +9,16 @@ import {
 
 import { AI_LANGUAGES, AI_TONES } from '@knowtis/shared-types';
 
-import { SUPPORTED_AI_ACTIONS } from '../domain/value-objects/ai-action.vo';
+import { COMPLETION_AI_ACTIONS } from '../domain/value-objects/ai-action.vo';
 
 export class AICompleteDto {
   @ApiProperty({
     description: 'The AI action to perform',
-    enum: [...SUPPORTED_AI_ACTIONS],
+    enum: [...COMPLETION_AI_ACTIONS],
     example: 'summarize',
   })
   @IsString()
-  @IsIn([...SUPPORTED_AI_ACTIONS])
+  @IsIn([...COMPLETION_AI_ACTIONS])
   action!: string;
 
   @ApiProperty({

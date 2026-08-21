@@ -29,10 +29,10 @@ import {
 import { SocketExpiryTimers } from '../websocket/socket-expiry';
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { AIErrors } from './domain/errors/ai.errors';
-import { SUPPORTED_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
+import { COMPLETION_AI_ACTIONS } from './domain/value-objects/ai-action.vo';
 
 const aiCompletePayloadSchema = z.object({
-  action: z.enum(SUPPORTED_AI_ACTIONS),
+  action: z.enum(COMPLETION_AI_ACTIONS),
   content: z.string().min(1).max(50000),
   selection: z.string().max(10000).optional(),
   suffix: z.string().max(10000).optional(),
