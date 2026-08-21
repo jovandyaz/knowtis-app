@@ -409,8 +409,11 @@ export class UpdateNoteHandler {
     noteId: string,
     yjsState: Buffer | undefined
   ): void {
-    // ORGANIZATION_FIELDS stay out of this pick on purpose: they are not live
-    // document state, so collaborators pick them up on their next refetch.
+    // ORGANIZATION_FIELDS stay out of this pick on purpose. Hocuspocus
+    // authorizes per connection, not per field, so anything reaching the
+    // document stream is writable by every editor — which would make the
+    // owner-only 403 on these fields meaningless. Collaborators pick them
+    // up on their next refetch instead.
     const updates = pickDefined(input, [
       ...CONTENT_FIELDS,
       ...SHARING_FIELDS,
