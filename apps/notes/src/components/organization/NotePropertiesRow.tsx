@@ -218,7 +218,7 @@ export function NotePropertiesRow({
           type="button"
           onClick={onSuggest}
           disabled={isSuggesting}
-          aria-label={t('organization.suggestion.ask')}
+          aria-busy={isSuggesting}
           className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-60 md:min-h-0`}
         >
           <Sparkles className="size-3 opacity-70" />

@@ -9,7 +9,11 @@ import { toast } from 'sonner';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
 import { Button } from '@knowtis/design-system';
-import type { OrganizationSuggestion } from '@knowtis/shared-types';
+import {
+  TAG_MAX_PER_NOTE,
+  type OrganizationSuggestion,
+  type ParaBucket,
+} from '@knowtis/shared-types';
 
 import { BucketDot } from './BucketDot';
 
@@ -21,12 +25,14 @@ const CHIP_REJECTED =
 
 interface OrganizeSuggestionCardProps {
   suggestion: OrganizationSuggestion;
+  currentBucket: ParaBucket | null;
   currentTags: string[];
   onDismiss: () => void;
 }
 
 export function OrganizeSuggestionCard({
   suggestion,
+  currentBucket,
   currentTags,
   onDismiss,
 }: OrganizeSuggestionCardProps) {
@@ -35,13 +41,16 @@ export function OrganizeSuggestionCard({
   const [bucketAccepted, setBucketAccepted] = useState(true);
   const [rejectedTags, setRejectedTags] = useState<Set<string>>(new Set());
 
-  const offeredTags = suggestion.tags.filter(
-    (tag) => !currentTags.includes(tag.path)
-  );
+  const roomForTags = Math.max(TAG_MAX_PER_NOTE - currentTags.length, 0);
+  const offeredTags = suggestion.tags
+    .filter((tag) => !currentTags.includes(tag.path))
+    .slice(0, roomForTags);
   const acceptedTags = offeredTags
     .map((tag) => tag.path)
     .filter((path) => !rejectedTags.has(path));
-  const movesBucket = bucketAccepted && suggestion.bucket !== null;
+  const offersBucket =
+    suggestion.bucket !== null && suggestion.bucket !== currentBucket;
+  const movesBucket = bucketAccepted && offersBucket;
   const hasSomethingToApply = movesBucket || acceptedTags.length > 0;
 
   const toggleTag = (path: string) =>
@@ -88,14 +97,14 @@ export function OrganizeSuggestionCard({
           type="button"
           onClick={onDismiss}
           aria-label={t('organization.suggestion.dismiss')}
-          className="ml-auto rounded p-1 text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer"
+          className="ml-auto flex min-h-11 min-w-11 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground cursor-pointer md:min-h-0 md:min-w-0 md:p-1"
         >
           <X className="size-3.5" />
         </button>
       </div>
 
       <div className="flex flex-col gap-2">
-        {suggestion.bucket && (
+        {offersBucket && suggestion.bucket && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground/70">
               {t('organization.suggestion.moveTo')}

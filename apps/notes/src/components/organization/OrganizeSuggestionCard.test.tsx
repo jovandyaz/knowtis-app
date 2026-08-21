@@ -11,7 +11,10 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { OrganizationSuggestion } from '@knowtis/shared-types';
+import {
+  TAG_MAX_PER_NOTE,
+  type OrganizationSuggestion,
+} from '@knowtis/shared-types';
 
 import { OrganizeSuggestionCard } from './OrganizeSuggestionCard';
 
@@ -48,6 +51,7 @@ async function renderCard(
       <>
         <OrganizeSuggestionCard
           suggestion={suggestion}
+          currentBucket={null}
           currentTags={[]}
           onDismiss={vi.fn()}
           {...overrides}
@@ -159,6 +163,35 @@ describe('OrganizeSuggestionCard', () => {
       'work/alpha',
       'ai/agents',
     ]);
+  });
+
+  it('should not offer the bucket the note is already in', async () => {
+    await renderCard({ currentBucket: 'projects' });
+
+    expect(
+      screen.queryByRole('button', { name: /buckets.projects/ })
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText('organization.suggestion.moveTo')).toBeNull();
+  });
+
+  it('should not offer more tags than the note has room for', async () => {
+    const user = userEvent.setup();
+    const nearlyFull = Array.from(
+      { length: TAG_MAX_PER_NOTE - 1 },
+      (_, index) => `existing/${index}`
+    );
+    await renderCard({ currentTags: nearlyFull });
+
+    expect(screen.getByRole('button', { name: /work\/alpha/ })).toBeVisible();
+    expect(
+      screen.queryByRole('button', { name: /ai\/agents/ })
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByText('organization.suggestion.apply'));
+
+    expect(updateNote.mock.calls[0][0].input.tags).toHaveLength(
+      TAG_MAX_PER_NOTE
+    );
   });
 
   it('should say so when applying the suggestion fails', async () => {

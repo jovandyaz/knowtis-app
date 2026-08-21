@@ -78,10 +78,12 @@ function NoteEditor({
   const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const isOwner = accessLevel === ACCESS.OWNER;
+  const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const autoOrganizeEnabled = useFeatureFlag(
+    FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE
+  );
   const suggestionsEnabled =
-    useFeatureFlag(FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE) &&
-    !isAnonymous &&
-    isOwner;
+    aiEnabled && autoOrganizeEnabled && !isAnonymous && isOwner;
   const suggestion = useNoteSuggestion({
     noteId,
     bucket,
@@ -150,7 +152,6 @@ function NoteEditor({
     onAutoTitleChange: (newTitle) => debouncedUpdateNote({ title: newTitle }),
   });
 
-  const aiEnabled = useAIStore((s) => s.aiEnabled);
   const setActiveNoteId = useArtifactSidebarStore((s) => s.setActiveNoteId);
   const workspaceTab = useWorkspaceStore((s) => s.activeTab);
   const setWorkspaceTab = useWorkspaceStore((s) => s.setTab);
@@ -317,6 +318,7 @@ function NoteEditor({
         {suggestion.suggestion && (
           <OrganizeSuggestionCard
             suggestion={suggestion.suggestion}
+            currentBucket={bucket}
             currentTags={tags}
             onDismiss={suggestion.dismiss}
           />

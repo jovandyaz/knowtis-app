@@ -31,8 +31,24 @@ vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
 }));
 
+const propertiesRowProps = vi.fn();
+
 vi.mock('@/components/organization/NotePropertiesRow', () => ({
-  NotePropertiesRow: () => <div data-testid="note-properties-row" />,
+  NotePropertiesRow: (props: { onSuggest?: () => void }) => {
+    propertiesRowProps(props);
+    return <div data-testid="note-properties-row" />;
+  },
+}));
+
+const aiEnabled = vi.fn<() => boolean>();
+const autoOrganizeEnabled = vi.fn<() => boolean>();
+
+vi.mock('@/stores/ai.store', () => ({
+  useAIStore: (selector: (s: { aiEnabled: boolean }) => unknown) =>
+    selector({ aiEnabled: aiEnabled() }),
+}));
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => autoOrganizeEnabled(),
 }));
 
 const editorRenders: { count: number } = { count: 0 };
@@ -91,7 +107,26 @@ describe('NoteEditorPage', () => {
     editorRenders.count = 0;
     capturedOnUpdate = undefined;
     updateNoteMutate.mockClear();
+    propertiesRowProps.mockClear();
     authUser.mockReturnValue({ isAnonymous: false });
+    aiEnabled.mockReturnValue(true);
+    autoOrganizeEnabled.mockReturnValue(true);
+  });
+
+  it('offers the suggestion affordance when both AI flags are on', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    expect(propertiesRowProps.mock.calls[0][0].onSuggest).toBeInstanceOf(
+      Function
+    );
+  });
+
+  it('hides the suggestion affordance when the master AI flag is off', () => {
+    aiEnabled.mockReturnValue(false);
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(propertiesRowProps.mock.calls[0][0].onSuggest).toBeUndefined();
   });
 
   it('renders the editor', () => {

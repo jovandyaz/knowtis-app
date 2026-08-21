@@ -173,6 +173,108 @@ describe('useNoteSuggestion', () => {
     expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.empty');
   });
 
+  it('should treat a suggestion with nothing in it as nothing to suggest', () => {
+    const placed = {
+      noteId: 'note-x',
+      bucket: null,
+      tags: [],
+      relatedNotes: [],
+    };
+    suggestMutate.mockImplementation((_ids, handlers) =>
+      handlers.onSuccess?.([placed])
+    );
+    const { result } = setup();
+
+    act(() => result.current.request());
+
+    expect(result.current.suggestion).toBeNull();
+    expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.empty');
+  });
+
+  it('should drop an armed pass when the author dismisses first', () => {
+    const { result } = setup();
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    act(() => result.current.dismiss());
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).not.toHaveBeenCalled();
+  });
+
+  it('should drop an armed pass when the author asks first', () => {
+    const { result } = setup();
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    act(() => result.current.request());
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should spend the note pass on an ask the author made', () => {
+    const { result } = setup();
+
+    act(() => result.current.request());
+    act(() => result.current.reportEdit(LONG_BODY));
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should drop an armed pass when the note gets filed before it fires', () => {
+    const noteId = freshNoteId();
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useNoteSuggestion>[0]) =>
+        useNoteSuggestion(props),
+      {
+        initialProps: {
+          noteId,
+          bucket: null,
+          isOwner: true,
+          enabled: true,
+        } as Parameters<typeof useNoteSuggestion>[0],
+      }
+    );
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    rerender({ noteId, bucket: 'projects', isOwner: true, enabled: true });
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).not.toHaveBeenCalled();
+  });
+
+  it('should drop an armed pass when suggestions get switched off mid-wait', () => {
+    const noteId = freshNoteId();
+    const { result, rerender } = renderHook(
+      (props: Parameters<typeof useNoteSuggestion>[0]) =>
+        useNoteSuggestion(props),
+      {
+        initialProps: {
+          noteId,
+          bucket: null,
+          isOwner: true,
+          enabled: true,
+        } as Parameters<typeof useNoteSuggestion>[0],
+      }
+    );
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    rerender({ noteId, bucket: null, isOwner: true, enabled: false });
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).not.toHaveBeenCalled();
+  });
+
+  it('should not let html entities pad a thin note past the threshold', () => {
+    const { result } = setup();
+    const entityPadded = `<p>${'&nbsp;'.repeat(60)}short</p>`;
+
+    act(() => result.current.reportEdit(entityPadded));
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).not.toHaveBeenCalled();
+  });
+
   it('should stay quiet when the unsolicited pass finds nothing', () => {
     suggestMutate.mockImplementation((_ids, handlers) => {
       handlers.onSuccess?.([]);
