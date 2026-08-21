@@ -27,6 +27,9 @@ vi.mock('@/components/organization/BucketNav', () => ({
 vi.mock('@/components/organization/TagTree', () => ({
   TagTree: () => <div data-testid="tag-tree" />,
 }));
+vi.mock('@/components/organization/SupertagNav', () => ({
+  SupertagNav: () => <div data-testid="supertag-nav" />,
+}));
 vi.mock('./NavigationLinks', () => ({ NavigationLinks: () => null }));
 vi.mock('./SidebarBrand', () => ({ SidebarBrand: () => null }));
 vi.mock('./SidebarNotesSection', () => ({ SidebarNotesSection: () => null }));

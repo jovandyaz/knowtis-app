@@ -22,6 +22,8 @@ const note = (id: string): NoteWithAccess => ({
   editorsCanShare: false,
   bucket: null,
   tags: [],
+  supertag: null,
+  supertagFields: null,
   createdAt: new Date(),
   updatedAt: new Date(),
 });

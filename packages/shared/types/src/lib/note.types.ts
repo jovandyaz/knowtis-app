@@ -1,4 +1,8 @@
-import type { ParaBucket } from './organization.types';
+import type {
+  ParaBucket,
+  Supertag,
+  SupertagFields,
+} from './organization.types';
 
 export const NOTE_TITLE_MAX_LENGTH = 200;
 
@@ -41,6 +45,8 @@ export interface Note {
   shareToken: string | null;
   editorsCanShare: boolean;
   bucket: ParaBucket | null;
+  supertag: Supertag | null;
+  supertagFields: SupertagFields | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -68,6 +74,8 @@ export interface UpdateNoteInput {
   bucket?: ParaBucket | null;
   /** The note's complete tag set as paths; a partial patch would lose updates between tabs. */
   tags?: string[];
+  supertag?: Supertag | null;
+  supertagFields?: SupertagFields;
 }
 
 export interface NotePermission {

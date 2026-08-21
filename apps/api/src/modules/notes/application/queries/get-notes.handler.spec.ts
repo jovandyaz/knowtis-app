@@ -231,6 +231,25 @@ describe('GetNotesHandler', () => {
     }
   );
 
+  it('passes the type filter to the repository instead of the page', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
+
+    await handler.execute({
+      ...PAGE_ONE,
+      userId: VALID_UUID,
+      supertag: 'person',
+    });
+
+    expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+      expect.anything(),
+      PAGE_ONE,
+      { supertag: 'person' }
+    );
+  });
+
   it('omits the default view so the query stays unfiltered', async () => {
     vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
       items: [],

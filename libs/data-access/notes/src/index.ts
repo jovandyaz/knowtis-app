@@ -8,6 +8,7 @@ export {
   useDeleteNote,
   useRestoreNote,
   useNoteByToken,
+  useSupertagCatalog,
 } from './notes.hooks';
 
 export { notesQueryKeys, tagsQueryKeys } from './query-keys';

@@ -6,11 +6,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
 import {
-  DEFAULT_NOTES_PAGE_SIZE,
-  type NoteBucketCounts,
-} from '@knowtis/shared-types';
+  notesApi,
+  type NoteCounts,
+  type NoteWithAccess,
+} from '@knowtis/api-client';
+import { DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
 import {
   useCreateNote,
@@ -73,6 +74,8 @@ describe('Notes Hooks', () => {
           editorsCanShare: false,
           bucket: null,
           tags: [],
+          supertag: null,
+          supertagFields: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -88,6 +91,8 @@ describe('Notes Hooks', () => {
           editorsCanShare: true,
           bucket: null,
           tags: [],
+          supertag: null,
+          supertagFields: null,
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -153,12 +158,13 @@ describe('Notes Hooks', () => {
 
   describe('useNoteCounts', () => {
     it('hits /notes/counts and caches under the counts key', async () => {
-      const counts: NoteBucketCounts = {
+      const counts: NoteCounts = {
         inbox: 1,
         projects: 0,
         areas: 0,
         resources: 0,
         archive: 0,
+        supertags: { person: 0, book: 0, project: 0, meeting: 0, idea: 0 },
       };
       vi.mocked(notesApi.getCounts).mockResolvedValue(counts);
 
@@ -183,6 +189,8 @@ describe('Notes Hooks', () => {
         shareToken: null,
         editorsCanShare: false,
         bucket: null,
+        supertag: null,
+        supertagFields: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ChevronDown, Hash, X } from 'lucide-react';
+import { ChevronDown, Hash, Shapes, X } from 'lucide-react';
 
-import { useUpdateNote } from '@knowtis/data-access-notes';
+import { useSupertagCatalog, useUpdateNote } from '@knowtis/data-access-notes';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,10 +14,14 @@ import {
 import {
   INBOX_FILTER,
   PARA_BUCKETS,
+  SUPERTAGS,
   type ParaBucket,
+  type Supertag,
+  type SupertagFields,
 } from '@knowtis/shared-types';
 
 import { BucketDot } from './BucketDot';
+import { SupertagFieldsForm } from './SupertagFieldsForm';
 import { TagPicker } from './TagPicker';
 
 const CHIP_CLASSES =
@@ -26,14 +31,22 @@ const CHIP_CLASSES =
 // toolbar below is `sticky top-0` and would otherwise start flush against them.
 const ROW_CLASSES = 'mt-1 mb-6 flex flex-wrap items-center gap-2';
 
+const NO_SUPERTAG = 'none';
+
 function isParaBucket(value: string): value is ParaBucket {
   return (PARA_BUCKETS as readonly string[]).includes(value);
+}
+
+function isSupertag(value: string): value is Supertag {
+  return (SUPERTAGS as readonly string[]).includes(value);
 }
 
 interface NotePropertiesRowProps {
   noteId: string;
   bucket: ParaBucket | null;
   tags: string[];
+  supertag: Supertag | null;
+  supertagFields: SupertagFields | null;
   isOwner: boolean;
 }
 
@@ -41,10 +54,15 @@ export function NotePropertiesRow({
   noteId,
   bucket,
   tags,
+  supertag,
+  supertagFields,
   isOwner,
 }: NotePropertiesRowProps) {
   const { t } = useTranslation('notes');
   const { mutate: updateNote } = useUpdateNote();
+  const { data: catalog } = useSupertagCatalog();
+  const [pendingSupertag, setPendingSupertag] = useState<Supertag | null>(null);
+  const editingSupertag = pendingSupertag ?? supertag;
   const activeFilter = bucket ?? INBOX_FILTER;
   const label = t(`organization.buckets.${activeFilter}`);
 
@@ -55,6 +73,12 @@ export function NotePropertiesRow({
           <BucketDot bucket={activeFilter} />
           {label}
         </span>
+        {supertag && (
+          <span className={CHIP_CLASSES}>
+            <Shapes className="size-3 opacity-60" />
+            {t(`organization.supertags.names.${supertag}`)}
+          </span>
+        )}
         {tags.map((path) => (
           <span key={path} className={CHIP_CLASSES}>
             <Hash className="size-3 opacity-60" />
@@ -67,6 +91,31 @@ export function NotePropertiesRow({
 
   const setTags = (next: string[]) =>
     updateNote({ id: noteId, input: { tags: next } });
+
+  const setSupertag = (next: Supertag | null) => {
+    if (next === supertag) {
+      return;
+    }
+    if (next === null) {
+      setPendingSupertag(null);
+      updateNote({ id: noteId, input: { supertag: null } });
+      return;
+    }
+    // A type only persists once its required fields are filled, so picking one
+    // opens the form instead of writing an assignment the API would reject.
+    setPendingSupertag(next);
+  };
+
+  const saveSupertagFields = (values: SupertagFields) => {
+    if (!editingSupertag) {
+      return;
+    }
+    updateNote({
+      id: noteId,
+      input: { supertag: editingSupertag, supertagFields: values },
+    });
+    setPendingSupertag(null);
+  };
 
   const setBucket = (next: ParaBucket | null) => {
     if (next === bucket) {
@@ -122,11 +171,54 @@ export function NotePropertiesRow({
         </button>
       ))}
 
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          aria-label={t('organization.supertags.label')}
+          className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
+        >
+          <Shapes className="size-3 opacity-60" />
+          {supertag
+            ? t(`organization.supertags.names.${supertag}`)
+            : t('organization.supertags.none')}
+          <ChevronDown className="size-3 opacity-70" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-52">
+          <DropdownMenuRadioGroup
+            value={supertag ?? NO_SUPERTAG}
+            onValueChange={(value) =>
+              setSupertag(isSupertag(value) ? value : null)
+            }
+          >
+            <DropdownMenuRadioItem value={NO_SUPERTAG}>
+              <span className="flex-1">{t('organization.supertags.none')}</span>
+            </DropdownMenuRadioItem>
+            {SUPERTAGS.map((type) => (
+              <DropdownMenuRadioItem key={type} value={type}>
+                <span className="flex-1">
+                  {t(`organization.supertags.names.${type}`)}
+                </span>
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
       <TagPicker
         selected={tags}
         onAdd={(path) => setTags([...tags, path])}
         triggerClassName={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
       />
+
+      {editingSupertag && catalog && (
+        <SupertagFieldsForm
+          key={editingSupertag}
+          supertag={editingSupertag}
+          fields={catalog[editingSupertag]}
+          values={editingSupertag === supertag ? supertagFields : null}
+          onSave={saveSupertagFields}
+          onCancel={() => setPendingSupertag(null)}
+        />
+      )}
     </div>
   );
 }

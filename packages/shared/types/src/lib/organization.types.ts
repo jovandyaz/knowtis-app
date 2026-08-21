@@ -21,6 +21,7 @@ export interface NotesListFilters {
   bucket?: BucketFilter;
   view?: NoteListView;
   tag?: string;
+  supertag?: Supertag;
 }
 
 export const TAG_PATH_SEPARATOR = '/';

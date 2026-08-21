@@ -11,11 +11,13 @@ export const notesQueryKeys = {
         bucket: filters.bucket,
         view: filters.view,
         tag: filters.tag,
+        supertag: filters.supertag,
       },
     ] as const,
   recents: () => [...notesQueryKeys.all, 'recent'] as const,
   recent: (limit: number) => [...notesQueryKeys.recents(), limit] as const,
   counts: () => [...notesQueryKeys.all, 'counts'] as const,
+  supertagCatalog: () => [...notesQueryKeys.all, 'supertag-catalog'] as const,
   details: () => [...notesQueryKeys.all, 'detail'] as const,
   detail: (id: string) => [...notesQueryKeys.details(), id] as const,
   sharedNote: (token: string) =>

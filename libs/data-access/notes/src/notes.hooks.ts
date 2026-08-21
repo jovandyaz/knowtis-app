@@ -59,6 +59,15 @@ export function useNoteCounts() {
   });
 }
 
+/** The type catalog never changes at runtime, so it is fetched once and kept. */
+export function useSupertagCatalog() {
+  return useQuery({
+    queryKey: notesQueryKeys.supertagCatalog(),
+    queryFn: () => notesApi.getSupertagCatalog(),
+    staleTime: Infinity,
+  });
+}
+
 export function useNote(noteId: string | undefined) {
   return useQuery({
     queryKey: notesQueryKeys.detail(noteId ?? ''),

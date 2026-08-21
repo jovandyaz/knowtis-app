@@ -7,8 +7,11 @@ import {
   type NotePermission,
   type NotesListFilters,
   type NotesPage,
+  type NoteSupertagCounts,
   type NoteWithOwner,
   type ShareNoteInput,
+  type Supertag,
+  type SupertagField,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
@@ -21,6 +24,12 @@ export interface NoteWithAccess extends Note {
   accessLevel: NoteAccessLevel;
   tags: string[];
 }
+
+export type NoteCounts = NoteBucketCounts & {
+  supertags: NoteSupertagCounts;
+};
+
+export type SupertagCatalog = Record<Supertag, readonly SupertagField[]>;
 
 /** A single note read: the owner block the list omits, plus its tag paths. */
 export interface NoteDetail extends NoteWithOwner {
@@ -61,13 +70,21 @@ export const notesApi = {
     if (params?.tag) {
       query.set('tag', params.tag);
     }
+    if (params?.supertag) {
+      query.set('supertag', params.supertag);
+    }
     return httpClient.get<NotesPage<NoteWithAccess>>(
       `/notes?${query.toString()}`
     );
   },
 
-  async getCounts(): Promise<NoteBucketCounts> {
-    return httpClient.get<NoteBucketCounts>('/notes/counts');
+  async getCounts(): Promise<NoteCounts> {
+    return httpClient.get<NoteCounts>('/notes/counts');
+  },
+
+  /** Static field descriptors per note type; safe to cache for the session. */
+  async getSupertagCatalog(): Promise<SupertagCatalog> {
+    return httpClient.get<SupertagCatalog>('/notes/supertags');
   },
 
   async getById(id: string): Promise<NoteDetail> {
