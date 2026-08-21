@@ -156,7 +156,12 @@ describe('TagTree', () => {
     await renderAt('/notes');
 
     expect(rowFor('personal')?.parentElement).toHaveClass('relative');
-    expect(rowFor('personal')).toHaveClass('after:absolute', 'after:inset-0');
+    // A ::after with no content value generates no box, so that class carries the hit area.
+    expect(rowFor('personal')).toHaveClass(
+      'after:absolute',
+      'after:inset-0',
+      "after:content-['']"
+    );
   });
 
   it('should keep the collapse control above the row-wide link', async () => {
@@ -176,6 +181,36 @@ describe('TagTree', () => {
       name: /organization.tags.collapse/,
     });
 
-    expect(chevron).toHaveClass('after:-inset-y-4', 'md:after:-inset-y-1');
+    expect(chevron).toHaveClass(
+      'after:absolute',
+      "after:content-['']",
+      'after:-inset-x-2',
+      'after:-inset-y-4',
+      'md:after:-inset-y-1'
+    );
+    expect(chevron.querySelector('svg')).toHaveClass('h-3', 'w-3');
+  });
+
+  it('should hand the collapse control the row colour rather than the tag colour', async () => {
+    tagTree.mockReturnValue([
+      { id: 'id-pale', path: 'pale', color: '#f5f5f5', noteCount: 1 },
+      { id: 'id-pale-child', path: 'pale/child', color: null, noteCount: 1 },
+    ]);
+    await renderAt('/notes');
+
+    const chevron = screen.getByRole('button', {
+      name: /organization.tags.collapse/,
+    });
+
+    expect(chevron.querySelector('svg')).not.toHaveAttribute('style');
+  });
+
+  it('should give a tag row a touch-sized height on mobile', async () => {
+    await renderAt('/notes');
+
+    expect(rowFor('personal')?.parentElement).toHaveClass(
+      'min-h-11',
+      'md:min-h-8'
+    );
   });
 });

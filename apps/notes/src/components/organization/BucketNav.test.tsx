@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NoteBucketCounts } from '@knowtis/shared-types';
 
 import { BucketNav } from './BucketNav';
+import { NAV_ICON_SLOT, NAV_ROW } from './nav-row.styles';
 
 const noteCounts = vi.fn<() => NoteBucketCounts | undefined>();
 
@@ -156,5 +157,13 @@ describe('BucketNav', () => {
     await user.click(screen.getByText('Recursos'));
 
     expect(onNavigate).toHaveBeenCalledTimes(1);
+  });
+  it('should sit on the rail every organization list shares', async () => {
+    await renderAt('/notes');
+
+    const row = rowFor('Proyectos');
+
+    expect(row).toHaveClass(...NAV_ROW.split(' '));
+    expect(row?.firstElementChild).toHaveClass(...NAV_ICON_SLOT.split(' '));
   });
 });
