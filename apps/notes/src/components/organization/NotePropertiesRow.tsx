@@ -22,6 +22,10 @@ import { TagPicker } from './TagPicker';
 const CHIP_CLASSES =
   'inline-flex items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-[13px] text-muted-foreground';
 
+// The chips describe the note, so they sit close under its title; the editor
+// toolbar below is `sticky top-0` and would otherwise start flush against them.
+const ROW_CLASSES = 'mt-1 mb-6 flex flex-wrap items-center gap-2';
+
 function isParaBucket(value: string): value is ParaBucket {
   return (PARA_BUCKETS as readonly string[]).includes(value);
 }
@@ -46,7 +50,7 @@ export function NotePropertiesRow({
 
   if (!isOwner) {
     return (
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className={ROW_CLASSES}>
         <span className={CHIP_CLASSES}>
           <BucketDot bucket={activeFilter} />
           {label}
@@ -76,7 +80,7 @@ export function NotePropertiesRow({
   };
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className={ROW_CLASSES}>
       <DropdownMenu>
         <DropdownMenuTrigger
           className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 md:min-h-0`}
