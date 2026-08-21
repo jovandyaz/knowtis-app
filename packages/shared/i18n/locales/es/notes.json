@@ -42,6 +42,7 @@
       "empty": "Aún no hay etiquetas",
       "addLabel": "Agregar etiqueta",
       "placeholder": "Buscar o crear una etiqueta…",
+      "suggestionTitle": "Etiquetar",
       "create": "Crear #{{path}}",
       "remove": "Quitar #{{path}}",
       "invalid": "Usa minúsculas, dígitos y guiones, hasta {{depth}} niveles",
@@ -52,7 +53,7 @@
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar #{{path}} y todo lo anidado debajo? Tus notas se quedan.",
       "emptyTitle": "Nada etiquetado #{{tag}}",
-      "emptyDescription": "Etiqueta una nota desde su fila de propiedades para verla aquí."
+      "emptyDescription": "Escribe # en una nota, o etiquétala desde su fila de propiedades, para verla aquí."
     },
     "typesTitle": "Tipos",
     "supertags": {

@@ -42,6 +42,7 @@
       "empty": "No tags yet",
       "addLabel": "Add a tag",
       "placeholder": "Search or create a tag…",
+      "suggestionTitle": "Tag",
       "create": "Create #{{path}}",
       "remove": "Remove #{{path}}",
       "invalid": "Use lowercase letters, digits and hyphens, up to {{depth}} levels deep",
@@ -52,7 +53,7 @@
       "delete": "Delete",
       "deleteConfirm": "Delete #{{path}} and everything nested under it? Your notes stay.",
       "emptyTitle": "Nothing tagged #{{tag}}",
-      "emptyDescription": "Tag a note from its properties row to see it here."
+      "emptyDescription": "Type # inside a note, or tag it from its properties row, to see it here."
     },
     "typesTitle": "Types",
     "supertags": {
