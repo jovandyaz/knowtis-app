@@ -10,8 +10,11 @@ export {
 export {
   notesApi,
   type NoteWithAccess,
+  type NoteDetail,
   type NoteCollaborator,
 } from './lib/notes.api';
+
+export { tagsApi, type UpdateTagInput } from './lib/tags.api';
 
 export { aiClient, AIClient } from './lib/ai.client';
 export type {

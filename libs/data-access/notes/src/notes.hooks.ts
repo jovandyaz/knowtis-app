@@ -6,40 +6,21 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query';
 
-import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
+import {
+  notesApi,
+  type NoteDetail,
+  type NoteWithAccess,
+} from '@knowtis/api-client';
 import {
   DEFAULT_NOTES_PAGE_SIZE,
   type CreateNoteInput,
   type Note,
-  type NoteAccessLevel,
   type NotesListFilters,
   type NotesPage,
-  type NoteWithOwner,
   type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
-type NoteDetail = NoteWithOwner & { accessLevel: NoteAccessLevel };
-
-export const notesQueryKeys = {
-  all: ['notes'] as const,
-  lists: () => [...notesQueryKeys.all, 'list'] as const,
-  list: (filters: NotesListFilters = {}) =>
-    [
-      ...notesQueryKeys.lists(),
-      {
-        search: filters.search,
-        bucket: filters.bucket,
-        view: filters.view,
-      },
-    ] as const,
-  recents: () => [...notesQueryKeys.all, 'recent'] as const,
-  recent: (limit: number) => [...notesQueryKeys.recents(), limit] as const,
-  counts: () => [...notesQueryKeys.all, 'counts'] as const,
-  details: () => [...notesQueryKeys.all, 'detail'] as const,
-  detail: (id: string) => [...notesQueryKeys.details(), id] as const,
-  sharedNote: (token: string) =>
-    [...notesQueryKeys.all, 'shared', token] as const,
-} as const;
+import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
 const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
@@ -141,6 +122,7 @@ export function useCreateNote() {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
     },
   });
 }
@@ -210,6 +192,7 @@ export function useUpdateNote() {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
     },
   });
 }
@@ -244,6 +227,7 @@ export function useDeleteNote() {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
     },
   });
 }
@@ -258,6 +242,7 @@ export function useRestoreNote() {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
+      queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
     },
   });
 }

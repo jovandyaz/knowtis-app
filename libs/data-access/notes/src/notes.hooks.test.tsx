@@ -13,13 +13,13 @@ import {
 } from '@knowtis/shared-types';
 
 import {
-  notesQueryKeys,
   useCreateNote,
   useNoteCounts,
   useNotes,
   useRestoreNote,
   useUpdateNote,
 } from './notes.hooks';
+import { notesQueryKeys } from './query-keys';
 
 // Mock the API
 vi.mock('@knowtis/api-client', () => ({
@@ -73,6 +73,7 @@ describe('Notes Hooks', () => {
           shareToken: null,
           editorsCanShare: false,
           bucket: null,
+          tags: [],
           createdAt: new Date(),
           updatedAt: new Date(),
         },
@@ -87,6 +88,7 @@ describe('Notes Hooks', () => {
           shareToken: 'token-abc',
           editorsCanShare: true,
           bucket: null,
+          tags: [],
           createdAt: new Date(),
           updatedAt: new Date(),
         },

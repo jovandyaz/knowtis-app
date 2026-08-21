@@ -66,6 +66,8 @@ export interface UpdateNoteInput {
   generalAccessPermission?: PermissionLevel;
   editorsCanShare?: boolean;
   bucket?: ParaBucket | null;
+  /** The note's complete tag set as paths; a partial patch would lose updates between tabs. */
+  tags?: string[];
 }
 
 export interface NotePermission {

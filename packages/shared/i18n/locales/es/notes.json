@@ -36,6 +36,23 @@
       "mineDescription": "Las notas que crees aparecen aquí, aparte de las que te comparten.",
       "sharedTitle": "Nadie ha compartido notas contigo",
       "sharedDescription": "Las notas a las que otras personas te den acceso aparecen aquí."
+    },
+    "tagsTitle": "Etiquetas",
+    "tags": {
+      "empty": "Aún no hay etiquetas",
+      "addLabel": "Agregar etiqueta",
+      "placeholder": "Buscar o crear una etiqueta…",
+      "create": "Crear #{{path}}",
+      "remove": "Quitar #{{path}}",
+      "invalid": "Usa minúsculas, dígitos y guiones, hasta {{depth}} niveles",
+      "expand": "Expandir {{tag}}",
+      "collapse": "Contraer {{tag}}",
+      "clearFilter": "Quitar el filtro #{{tag}}",
+      "rename": "Renombrar",
+      "delete": "Eliminar",
+      "deleteConfirm": "¿Eliminar #{{path}} y todo lo anidado debajo? Tus notas se quedan.",
+      "emptyTitle": "Nada etiquetado #{{tag}}",
+      "emptyDescription": "Etiqueta una nota desde su fila de propiedades para verla aquí."
     }
   },
   "editor": {

@@ -8,6 +8,7 @@ const updateMock = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useUpdateNote: () => ({ mutate: updateMock }),
+  useTags: () => ({ data: [] }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -29,7 +30,7 @@ describe('NotePropertiesRow', () => {
 
   it('owner picks a bucket → PATCH with { bucket }', async () => {
     const user = userEvent.setup();
-    render(<NotePropertiesRow noteId="n1" bucket={null} isOwner />);
+    render(<NotePropertiesRow noteId="n1" bucket={null} tags={[]} isOwner />);
 
     await user.click(screen.getByRole('button', { name: /inbox/i }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Proyectos' }));
@@ -41,7 +42,7 @@ describe('NotePropertiesRow', () => {
 
   it('picking Inbox clears the bucket', async () => {
     const user = userEvent.setup();
-    render(<NotePropertiesRow noteId="n1" bucket="areas" isOwner />);
+    render(<NotePropertiesRow noteId="n1" bucket="areas" tags={[]} isOwner />);
 
     await user.click(screen.getByRole('button', { name: /áreas/i }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Inbox' }));
@@ -53,7 +54,7 @@ describe('NotePropertiesRow', () => {
 
   it('marks the current bucket as checked for assistive tech', async () => {
     const user = userEvent.setup();
-    render(<NotePropertiesRow noteId="n1" bucket="areas" isOwner />);
+    render(<NotePropertiesRow noteId="n1" bucket="areas" tags={[]} isOwner />);
 
     await user.click(screen.getByRole('button', { name: /áreas/i }));
 
@@ -67,7 +68,7 @@ describe('NotePropertiesRow', () => {
 
   it('re-selecting the current bucket is a no-op', async () => {
     const user = userEvent.setup();
-    render(<NotePropertiesRow noteId="n1" bucket="areas" isOwner />);
+    render(<NotePropertiesRow noteId="n1" bucket="areas" tags={[]} isOwner />);
 
     await user.click(screen.getByRole('button', { name: /áreas/i }));
     await user.click(screen.getByRole('menuitemradio', { name: 'Áreas' }));
@@ -76,7 +77,9 @@ describe('NotePropertiesRow', () => {
   });
 
   it('non-owner sees a static label, no menu', () => {
-    render(<NotePropertiesRow noteId="n1" bucket="areas" isOwner={false} />);
+    render(
+      <NotePropertiesRow noteId="n1" bucket="areas" tags={[]} isOwner={false} />
+    );
 
     expect(screen.getByText('Áreas')).toBeInTheDocument();
     expect(

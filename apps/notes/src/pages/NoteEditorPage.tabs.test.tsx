@@ -69,6 +69,7 @@ vi.mock('@knowtis/data-access-notes', () => ({
       content: '<p>hello</p>',
       accessLevel: 'owner',
       bucket: null,
+      tags: [],
       generalAccess: 'restricted',
       generalAccessPermission: 'viewer',
       shareToken: null,
@@ -81,6 +82,7 @@ vi.mock('@knowtis/data-access-notes', () => ({
   useUpdateNote: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
+  useTags: () => ({ data: [] }),
 }));
 
 describe('NoteEditorPage workspace tabs', () => {

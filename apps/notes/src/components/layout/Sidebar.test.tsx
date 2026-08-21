@@ -24,6 +24,9 @@ vi.mock('@knowtis/design-system', () => ({
 vi.mock('@/components/organization/BucketNav', () => ({
   BucketNav: () => <div data-testid="bucket-nav" />,
 }));
+vi.mock('@/components/organization/TagTree', () => ({
+  TagTree: () => <div data-testid="tag-tree" />,
+}));
 vi.mock('./NavigationLinks', () => ({ NavigationLinks: () => null }));
 vi.mock('./SidebarBrand', () => ({ SidebarBrand: () => null }));
 vi.mock('./SidebarNotesSection', () => ({ SidebarNotesSection: () => null }));

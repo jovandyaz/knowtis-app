@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useRouter } from '@tanstack/react-router';
 
 import { BucketNav } from '@/components/organization/BucketNav';
+import { TagTree } from '@/components/organization/TagTree';
 import { ROUTES } from '@/config';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
@@ -128,7 +129,10 @@ export function BottomNav() {
           onClose={() => setIsExploreSheetOpen(false)}
           label={tNotes('organization.explore')}
         >
-          <BucketNav onNavigate={() => setIsExploreSheetOpen(false)} />
+          <div className="flex flex-col gap-4">
+            <BucketNav onNavigate={() => setIsExploreSheetOpen(false)} />
+            <TagTree onNavigate={() => setIsExploreSheetOpen(false)} />
+          </div>
         </MobileSheet>
       )}
 
