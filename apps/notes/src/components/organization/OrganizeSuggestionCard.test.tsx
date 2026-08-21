@@ -16,9 +16,13 @@ import type { OrganizationSuggestion } from '@knowtis/shared-types';
 import { OrganizeSuggestionCard } from './OrganizeSuggestionCard';
 
 const updateNote = vi.fn();
+const toastError = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useUpdateNote: () => ({ mutate: updateNote, isPending: false }),
+}));
+vi.mock('sonner', () => ({
+  toast: { error: (...args: unknown[]) => toastError(...args) },
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -70,6 +74,8 @@ async function renderCard(
 describe('OrganizeSuggestionCard', () => {
   beforeEach(() => {
     updateNote.mockClear();
+    toastError.mockClear();
+    updateNote.mockImplementation(() => undefined);
   });
 
   it('should apply the whole suggestion in a single note update', async () => {
@@ -135,6 +141,15 @@ describe('OrganizeSuggestionCard', () => {
   });
 
   it('should not offer a tag the note already carries', async () => {
+    await renderCard({ currentTags: ['work/alpha'] });
+
+    expect(
+      screen.queryByRole('button', { name: /work\/alpha/ })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /ai\/agents/ })).toBeVisible();
+  });
+
+  it('should keep a tag the note already carries in the update', async () => {
     const user = userEvent.setup();
     await renderCard({ currentTags: ['work/alpha'] });
 
@@ -144,5 +159,17 @@ describe('OrganizeSuggestionCard', () => {
       'work/alpha',
       'ai/agents',
     ]);
+  });
+
+  it('should say so when applying the suggestion fails', async () => {
+    updateNote.mockImplementation((_vars, handlers) => handlers.onError?.());
+    const user = userEvent.setup();
+    await renderCard();
+
+    await user.click(screen.getByText('organization.suggestion.apply'));
+
+    expect(toastError).toHaveBeenCalledWith(
+      'organization.suggestion.applyFailed'
+    );
   });
 });

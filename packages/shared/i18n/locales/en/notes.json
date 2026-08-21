@@ -111,7 +111,8 @@
       "dismiss": "Dismiss",
       "pending": "Thinking…",
       "empty": "Nothing to suggest for this note yet.",
-      "failed": "Could not get a suggestion. Try again."
+      "failed": "Could not get a suggestion. Try again.",
+      "applyFailed": "Could not apply the suggestion. Try again."
     }
   },
   "editor": {

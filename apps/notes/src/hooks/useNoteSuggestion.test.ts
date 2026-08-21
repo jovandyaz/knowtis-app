@@ -6,12 +6,22 @@ import { SUGGEST_IDLE_MS } from '@knowtis/shared-types';
 import { useNoteSuggestion } from './useNoteSuggestion';
 
 const suggestMutate = vi.fn();
+const toastError = vi.fn();
+const toastPlain = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useSuggestOrganization: () => ({
     mutate: suggestMutate,
     isPending: false,
     reset: vi.fn(),
+  }),
+}));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key }),
+}));
+vi.mock('sonner', () => ({
+  toast: Object.assign((...args: unknown[]) => toastPlain(...args), {
+    error: (...args: unknown[]) => toastError(...args),
   }),
 }));
 
@@ -38,6 +48,9 @@ describe('useNoteSuggestion', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     suggestMutate.mockClear();
+    toastError.mockClear();
+    toastPlain.mockClear();
+    suggestMutate.mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -137,5 +150,41 @@ describe('useNoteSuggestion', () => {
     act(() => result.current.request());
 
     expect(suggestMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should tell the author when their own ask fails', () => {
+    suggestMutate.mockImplementation((_ids, handlers) => handlers.onError?.());
+    const { result } = setup();
+
+    act(() => result.current.request());
+
+    expect(toastError).toHaveBeenCalledWith('organization.suggestion.failed');
+  });
+
+  it('should tell the author when their own ask came back empty', () => {
+    suggestMutate.mockImplementation((_ids, handlers) =>
+      handlers.onSuccess?.([])
+    );
+    const { result } = setup();
+
+    act(() => result.current.request());
+
+    expect(result.current.suggestion).toBeNull();
+    expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.empty');
+  });
+
+  it('should stay quiet when the unsolicited pass finds nothing', () => {
+    suggestMutate.mockImplementation((_ids, handlers) => {
+      handlers.onSuccess?.([]);
+      expect(handlers.onError).toBeUndefined();
+    });
+    const { result } = setup();
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).toHaveBeenCalledTimes(1);
+    expect(toastPlain).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

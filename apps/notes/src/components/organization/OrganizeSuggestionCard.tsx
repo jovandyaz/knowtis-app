@@ -5,6 +5,7 @@ import { Link } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
 import { Hash, Sparkles, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { useUpdateNote } from '@knowtis/data-access-notes';
 import { Button } from '@knowtis/design-system';
@@ -34,9 +35,12 @@ export function OrganizeSuggestionCard({
   const [bucketAccepted, setBucketAccepted] = useState(true);
   const [rejectedTags, setRejectedTags] = useState<Set<string>>(new Set());
 
-  const acceptedTags = suggestion.tags
+  const offeredTags = suggestion.tags.filter(
+    (tag) => !currentTags.includes(tag.path)
+  );
+  const acceptedTags = offeredTags
     .map((tag) => tag.path)
-    .filter((path) => !rejectedTags.has(path) && !currentTags.includes(path));
+    .filter((path) => !rejectedTags.has(path));
   const movesBucket = bucketAccepted && suggestion.bucket !== null;
   const hasSomethingToApply = movesBucket || acceptedTags.length > 0;
 
@@ -60,7 +64,10 @@ export function OrganizeSuggestionCard({
             : {}),
         },
       },
-      { onSuccess: onDismiss }
+      {
+        onSuccess: onDismiss,
+        onError: () => toast.error(t('organization.suggestion.applyFailed')),
+      }
     );
   };
 
@@ -105,12 +112,12 @@ export function OrganizeSuggestionCard({
           </div>
         )}
 
-        {suggestion.tags.length > 0 && (
+        {offeredTags.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted-foreground/70">
               {t('organization.suggestion.tags')}
             </span>
-            {suggestion.tags.map((tag) => {
+            {offeredTags.map((tag) => {
               const accepted = !rejectedTags.has(tag.path);
               return (
                 <button

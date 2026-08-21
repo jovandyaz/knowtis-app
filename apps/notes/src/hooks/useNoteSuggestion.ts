@@ -1,4 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { toast } from 'sonner';
 
 import { useSuggestOrganization } from '@knowtis/data-access-notes';
 import {
@@ -34,17 +37,35 @@ export function useNoteSuggestion({
   isOwner,
   enabled,
 }: NoteSuggestionParams): NoteSuggestionState {
+  const { t } = useTranslation('notes');
   const { mutate, isPending, reset } = useSuggestOrganization();
   const [suggestion, setSuggestion] = useState<OrganizationSuggestion | null>(
     null
   );
   const idleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const request = useCallback(() => {
-    mutate([noteId], {
-      onSuccess: (results) => setSuggestion(results[0] ?? null),
-    });
-  }, [mutate, noteId]);
+  // The idle pass is unsolicited, so it stays quiet; only an ask the author
+  // made reports back when there is nothing to show or the call fails.
+  const run = useCallback(
+    (announce: boolean) =>
+      mutate([noteId], {
+        onSuccess: (results) => {
+          const [first] = results;
+          setSuggestion(first ?? null);
+          if (!first && announce) {
+            toast(t('organization.suggestion.empty'));
+          }
+        },
+        ...(announce
+          ? {
+              onError: () => toast.error(t('organization.suggestion.failed')),
+            }
+          : {}),
+      }),
+    [mutate, noteId, t]
+  );
+
+  const request = useCallback(() => run(true), [run]);
 
   const dismiss = useCallback(() => {
     dismissed.add(noteId);
@@ -77,10 +98,10 @@ export function useNoteSuggestion({
 
       idleTimer.current = setTimeout(() => {
         autoRequested.add(noteId);
-        request();
+        run(false);
       }, SUGGEST_IDLE_MS);
     },
-    [enabled, isOwner, bucket, noteId, request]
+    [enabled, isOwner, bucket, noteId, run]
   );
 
   useEffect(
