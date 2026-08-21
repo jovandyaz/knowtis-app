@@ -245,37 +245,26 @@ export class UpdateNoteHandler {
       return result.map((entity) => ({ entity }));
     }
 
-    // No yjsState on the result: this state came FROM the editor, so
-    // broadcasting it back would clear and refill the sender's own document.
-    if (clientYjsState) {
-      const result = await this.noteRepository.updateContentWithYjsState(
-        noteId,
-        { ...updateData, content },
-        clientYjsState
-      );
-      return result.map((entity) => ({ entity }));
+    const stateResult = clientYjsState
+      ? ok(clientYjsState)
+      : this.generateYjsState(noteId, content, existingYjsState);
+    if (stateResult.isErr()) {
+      return err(stateResult.error);
     }
+    const yjsState = stateResult.value;
 
-    if (legacySkipYjsState) {
-      const result = await this.noteRepository.update(noteId, {
-        ...updateData,
-        content,
-      });
-      return result.map((entity) => ({ entity }));
-    }
-
-    const yjsResult = this.generateYjsState(noteId, content, existingYjsState);
-    if (yjsResult.isErr()) {
-      return err(yjsResult.error);
-    }
-
-    const yjsState = yjsResult.value;
     const result = await this.noteRepository.updateContentWithYjsState(
       noteId,
       { ...updateData, content },
       yjsState
     );
-    return result.map((entity) => ({ entity, yjsState }));
+
+    // A write that came from the editor is not an external mutation:
+    // broadcasting it back would clear and refill the sender's own document.
+    const fromEditor = clientYjsState !== undefined || legacySkipYjsState;
+    return result.map((entity) =>
+      fromEditor ? { entity } : { entity, yjsState }
+    );
   }
 
   /**
