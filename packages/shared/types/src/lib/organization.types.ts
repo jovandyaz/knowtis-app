@@ -43,6 +43,91 @@ export interface TagNode {
   noteCount: number;
 }
 
+export const SUPERTAGS = [
+  'person',
+  'book',
+  'project',
+  'meeting',
+  'idea',
+] as const;
+export type Supertag = (typeof SUPERTAGS)[number];
+
+const KIND = {
+  text: 'text',
+  date: 'date',
+  url: 'url',
+  number: 'number',
+} as const;
+
+export const SUPERTAG_FIELD_KINDS = [
+  KIND.text,
+  KIND.date,
+  KIND.url,
+  KIND.number,
+] as const;
+export type SupertagFieldKind = (typeof SUPERTAG_FIELD_KINDS)[number];
+
+export interface SupertagField {
+  readonly key: string;
+  readonly kind: SupertagFieldKind;
+  readonly required: boolean;
+  readonly maxLength?: number;
+}
+
+const SHORT_TEXT = 120;
+const LONG_TEXT = 200;
+const URL_LENGTH = 500;
+const ROSTER_LENGTH = 500;
+const STATUS_LENGTH = 60;
+
+/**
+ * The single source every consumer derives from: the API builds a validator,
+ * the frontend a form plus its Zod schema, MCP a tool input schema. Descriptors
+ * rather than Zod so this package keeps its zero runtime dependencies.
+ */
+export const SUPERTAG_CATALOG = {
+  person: [
+    { key: 'name', kind: KIND.text, required: true, maxLength: SHORT_TEXT },
+    { key: 'role', kind: KIND.text, required: false, maxLength: SHORT_TEXT },
+    { key: 'contact', kind: KIND.text, required: false, maxLength: LONG_TEXT },
+  ],
+  book: [
+    { key: 'title', kind: KIND.text, required: true, maxLength: LONG_TEXT },
+    { key: 'author', kind: KIND.text, required: false, maxLength: SHORT_TEXT },
+    { key: 'url', kind: KIND.url, required: false, maxLength: URL_LENGTH },
+    { key: 'rating', kind: KIND.number, required: false },
+  ],
+  project: [
+    { key: 'name', kind: KIND.text, required: true, maxLength: SHORT_TEXT },
+    {
+      key: 'status',
+      kind: KIND.text,
+      required: false,
+      maxLength: STATUS_LENGTH,
+    },
+    { key: 'due', kind: KIND.date, required: false },
+  ],
+  meeting: [
+    { key: 'subject', kind: KIND.text, required: true, maxLength: LONG_TEXT },
+    { key: 'date', kind: KIND.date, required: false },
+    {
+      key: 'attendees',
+      kind: KIND.text,
+      required: false,
+      maxLength: ROSTER_LENGTH,
+    },
+  ],
+  idea: [
+    { key: 'summary', kind: KIND.text, required: true, maxLength: LONG_TEXT },
+    { key: 'source', kind: KIND.url, required: false, maxLength: URL_LENGTH },
+  ],
+} as const satisfies Record<Supertag, readonly SupertagField[]>;
+
+/** Values are null, never undefined — undefined does not survive a JSON round trip into jsonb. */
+export type SupertagFields = Record<string, string | number | null>;
+
+export type NoteSupertagCounts = Record<Supertag, number>;
+
 /** Server default and the page size the notes list requests; both sides must agree or pages overlap. */
 export const DEFAULT_NOTES_PAGE_SIZE = 25;
 

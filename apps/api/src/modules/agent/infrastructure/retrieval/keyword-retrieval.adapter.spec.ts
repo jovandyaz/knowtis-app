@@ -50,6 +50,8 @@ const noteView = (
   shareToken: null,
   editorsCanShare: false,
   bucket: null,
+  supertag: null,
+  supertagFields: null,
   createdAt: BASE_DATE,
   updatedAt: BASE_DATE,
   ...overrides,

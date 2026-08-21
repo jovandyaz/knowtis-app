@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ilike,
+  isNotNull,
   isNull,
   ne,
   or,
@@ -17,9 +18,12 @@ import {
 import {
   GENERAL_ACCESS,
   INBOX_FILTER,
+  SUPERTAGS,
   type BucketFilter,
   type NoteBucketCounts,
   type NoteListView,
+  type NoteSupertagCounts,
+  type Supertag,
 } from '@knowtis/shared-types';
 
 import {
@@ -56,6 +60,8 @@ const noteViewColumns = {
   shareToken: notes.shareToken,
   editorsCanShare: notes.editorsCanShare,
   bucket: notes.bucket,
+  supertag: notes.supertag,
+  supertagFields: notes.supertagFields,
   createdAt: notes.createdAt,
   updatedAt: notes.updatedAt,
 };
@@ -278,6 +284,25 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     return counts;
   }
 
+  async countAccessibleBySupertag(userId: UserId): Promise<NoteSupertagCounts> {
+    const rows = await this.db
+      .select({ supertag: notes.supertag, value: count() })
+      .from(notes)
+      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+      .where(and(this.accessCondition(userId), isNotNull(notes.supertag)))
+      .groupBy(notes.supertag);
+
+    const counts = Object.fromEntries(
+      SUPERTAGS.map((supertag) => [supertag, 0])
+    ) as NoteSupertagCounts;
+    for (const row of rows) {
+      if (row.supertag) {
+        counts[row.supertag] = Number(row.value);
+      }
+    }
+    return counts;
+  }
+
   async findByShareToken(token: string): Promise<NoteViewWithOwner | null> {
     const result = await this.db
       .select({ note: noteViewColumns, owner: ownerColumns })
@@ -359,6 +384,10 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
     )`;
   }
 
+  private supertagCondition(supertag?: Supertag): SQL | undefined {
+    return supertag ? eq(notes.supertag, supertag) : undefined;
+  }
+
   private accessibleWhere(
     userId: UserId,
     filters?: NoteListFilters
@@ -369,6 +398,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       this.bucketCondition(filters?.bucket),
       this.viewCondition(userId, filters?.view),
       this.tagCondition(filters?.tag),
+      this.supertagCondition(filters?.supertag),
     ].filter((condition): condition is SQL => condition !== undefined);
     return and(...conditions);
   }

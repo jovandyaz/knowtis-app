@@ -19,6 +19,8 @@ const mockNote: NoteViewWithOwner = {
   shareToken: 'valid-token-abc123',
   editorsCanShare: false,
   bucket: null,
+  supertag: null,
+  supertagFields: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   owner: { id: 'user-1', name: 'Test Owner', avatarUrl: null },
@@ -41,6 +43,7 @@ describe('GetNoteByTokenHandler', () => {
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
+      countAccessibleBySupertag: vi.fn(),
     };
     handler = new GetNoteByTokenHandler(noteReadRepo);
   });

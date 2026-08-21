@@ -10,6 +10,8 @@ import {
   type GeneralAccessLevel,
   type ParaBucket,
   type PermissionLevel,
+  type Supertag,
+  type SupertagFields,
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
@@ -18,6 +20,7 @@ import {
   NoteContent,
   NoteErrors,
   NoteTitle,
+  SupertagAssignment,
   TAG_REPOSITORY,
   TagPath,
   type NoteDomainError,
@@ -45,6 +48,8 @@ export interface UpdateNoteInput {
   readonly skipYjsState?: boolean;
   readonly bucket?: ParaBucket | null;
   readonly tags?: string[];
+  readonly supertag?: Supertag | null;
+  readonly supertagFields?: SupertagFields;
 }
 
 interface PersistUpdateResult {
@@ -59,7 +64,12 @@ const SHARING_FIELDS = [
   'editorsCanShare',
 ] as const;
 const ORGANIZATION_COLUMNS = ['bucket'] as const;
-const ORGANIZATION_FIELDS = [...ORGANIZATION_COLUMNS, 'tags'] as const;
+const ORGANIZATION_FIELDS = [
+  ...ORGANIZATION_COLUMNS,
+  'tags',
+  'supertag',
+  'supertagFields',
+] as const;
 
 @Injectable()
 export class UpdateNoteHandler {
@@ -137,6 +147,7 @@ export class UpdateNoteHandler {
         ...ORGANIZATION_COLUMNS,
       ]),
       ...this.resolveShareToken(input, note),
+      ...this.resolveSupertag(input),
     };
 
     return this.persistUpdate(
@@ -252,6 +263,16 @@ export class UpdateNoteHandler {
       }
     }
 
+    if (input.supertag !== undefined && input.supertag !== null) {
+      const assignment = SupertagAssignment.create(
+        input.supertag,
+        input.supertagFields
+      );
+      if (assignment.isErr()) {
+        return err(assignment.error);
+      }
+    }
+
     // Tags are validated here rather than at write time so a bad path rejects
     // the whole PATCH instead of landing a half-applied update.
     if (input.tags !== undefined) {
@@ -298,6 +319,29 @@ export class UpdateNoteHandler {
       !note.shareToken
       ? { shareToken: randomBytes(16).toString('hex') }
       : {};
+  }
+
+  /**
+   * Clearing the type clears its fields in the same write; assigning one always
+   * writes the normalized blob so a stale field from the previous type cannot
+   * survive the change.
+   */
+  private resolveSupertag(input: UpdateNoteInput): {
+    supertag?: Supertag | null;
+    supertagFields?: SupertagFields | null;
+  } {
+    if (input.supertag === undefined) {
+      return {};
+    }
+    if (input.supertag === null) {
+      return SupertagAssignment.clear().toPrimitive();
+    }
+    const assignment = SupertagAssignment.create(
+      input.supertag,
+      input.supertagFields
+    );
+    // validateFields already rejected an invalid assignment, so this holds.
+    return assignment.isOk() ? assignment.value.toPrimitive() : {};
   }
 
   private emitUpdateEvent(

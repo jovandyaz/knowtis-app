@@ -8,6 +8,7 @@ export const NoteErrorCodes = {
   INVALID_CONTENT: 'INVALID_CONTENT',
   INVALID_PERMISSION: 'INVALID_PERMISSION',
   INVALID_TAG: 'INVALID_TAG',
+  INVALID_SUPERTAG: 'INVALID_SUPERTAG',
   TAG_NOT_FOUND: 'TAG_NOT_FOUND',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
@@ -44,6 +45,12 @@ export const NoteErrors = {
 
   invalidTag: (reason: string) =>
     createNoteError(NoteErrorCodes.INVALID_TAG, `Invalid tag: ${reason}`),
+
+  invalidSupertag: (reason: string) =>
+    createNoteError(
+      NoteErrorCodes.INVALID_SUPERTAG,
+      `Invalid supertag: ${reason}`
+    ),
 
   tagNotFound: (id: string) =>
     createNoteError(NoteErrorCodes.TAG_NOT_FOUND, `Tag not found: ${id}`),

@@ -21,6 +21,8 @@ export function mapToNoteView(record: NoteViewRecord): NoteView {
     shareToken: record.shareToken,
     editorsCanShare: record.editorsCanShare,
     bucket: record.bucket,
+    supertag: record.supertag,
+    supertagFields: record.supertagFields,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };

@@ -37,7 +37,12 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { SUBJECTS } from '@knowtis/authorization';
-import { DEFAULT_NOTES_PAGE_SIZE, PARA_BUCKETS } from '@knowtis/shared-types';
+import {
+  DEFAULT_NOTES_PAGE_SIZE,
+  PARA_BUCKETS,
+  SUPERTAG_CATALOG,
+  SUPERTAGS,
+} from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -96,6 +101,12 @@ const noteProperties = {
     nullable: true,
     enum: [...PARA_BUCKETS] as string[],
   },
+  supertag: {
+    type: 'string',
+    nullable: true,
+    enum: [...SUPERTAGS] as string[],
+  },
+  supertagFields: { type: 'object', nullable: true },
   createdAt: { type: 'string', format: 'date-time' },
   updatedAt: { type: 'string', format: 'date-time' },
 };
@@ -190,11 +201,27 @@ export class NotesController {
       ...(query.bucket ? { bucket: query.bucket } : {}),
       ...(query.view ? { view: query.view } : {}),
       ...(query.tag ? { tag: query.tag } : {}),
+      ...(query.supertag ? { supertag: query.supertag } : {}),
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
 
-  @ApiOperation({ summary: 'Get accessible note counts per PARA bucket' })
+  @ApiOperation({
+    summary: 'Get the note type catalog',
+    description:
+      'Static field descriptors per type. Consumers derive their own validator, form or tool schema from these.',
+  })
+  @ApiResponse({ status: 200, description: 'Field descriptors keyed by type' })
+  @Get('supertags')
+  @RequirePermission('read', SUBJECTS.Note)
+  @RequireMcpScope(MCP_SCOPES.READ)
+  getSupertags() {
+    return SUPERTAG_CATALOG;
+  }
+
+  @ApiOperation({
+    summary: 'Get accessible note counts per PARA bucket and type',
+  })
   @ApiResponse({
     status: 200,
     description: 'Counts grouped by bucket',
@@ -206,6 +233,10 @@ export class NotesController {
         areas: { type: 'integer', example: 2 },
         resources: { type: 'integer', example: 7 },
         archive: { type: 'integer', example: 1 },
+        supertags: {
+          type: 'object',
+          additionalProperties: { type: 'integer' },
+        },
       },
     },
   })
@@ -344,6 +375,8 @@ export class NotesController {
         'editorsCanShare',
         'bucket',
         'tags',
+        'supertag',
+        'supertagFields',
       ]),
     });
     return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);

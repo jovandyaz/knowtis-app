@@ -4,6 +4,8 @@ import type {
   BucketFilter,
   NoteBucketCounts,
   NoteListView,
+  NoteSupertagCounts,
+  Supertag,
 } from '@knowtis/shared-types';
 
 import type {
@@ -18,6 +20,7 @@ export interface NoteListFilters {
   readonly bucket?: BucketFilter;
   readonly view?: NoteListView;
   readonly tag?: string;
+  readonly supertag?: Supertag;
 }
 
 export interface NotePageRequest {
@@ -61,6 +64,7 @@ export interface NoteReadRepository {
     limit: number
   ): Promise<NoteSummary[]>;
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount>;
+  countAccessibleBySupertag(userId: UserId): Promise<NoteSupertagCounts>;
   countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts>;
   findByShareToken(token: string): Promise<NoteViewWithOwner | null>;
 }

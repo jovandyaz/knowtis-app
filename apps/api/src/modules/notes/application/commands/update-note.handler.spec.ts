@@ -25,6 +25,8 @@ const mockNote: NoteEntity = {
   shareToken: null,
   editorsCanShare: false,
   bucket: null,
+  supertag: null,
+  supertagFields: null,
   yjsState: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -53,6 +55,7 @@ describe('UpdateNoteHandler', () => {
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
+      countAccessibleBySupertag: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),
@@ -441,6 +444,8 @@ describe('UpdateNoteHandler', () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue({
       ...mockNote,
       bucket: 'projects',
+      supertag: null,
+      supertagFields: null,
     });
     vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
 
