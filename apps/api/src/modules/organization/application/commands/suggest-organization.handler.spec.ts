@@ -9,12 +9,13 @@ import { SuggestOrganizationHandler } from './suggest-organization.handler';
 const OWNER_ID = '00000000-0000-4000-8000-00000000f401';
 const STRANGER_ID = '00000000-0000-4000-8000-00000000f402';
 const NOTE_ID = '11111111-1111-4111-8111-111111111401';
+const OTHER_NOTE_ID = '11111111-1111-4111-8111-111111111402';
 
 function noteFixture(overrides: Record<string, unknown> = {}) {
   return {
     id: NOTE_ID,
     title: 'Alpha kickoff',
-    content: 'We are starting the alpha launch next week.',
+    content: '<p>We are starting the alpha launch next week.</p>',
     ownerId: OWNER_ID,
     ...overrides,
   };
@@ -26,11 +27,16 @@ describe('SuggestOrganizationHandler', () => {
   let tagRepository: { findTreeByOwner: ReturnType<typeof vi.fn> };
   let retrieval: { search: ReturnType<typeof vi.fn> };
   let structuredOutput: { generateStructuredOutput: ReturnType<typeof vi.fn> };
-  let rateLimit: { checkLimit: ReturnType<typeof vi.fn> };
+  let rateLimit: {
+    checkLimit: ReturnType<typeof vi.fn>;
+    recordUsage: ReturnType<typeof vi.fn>;
+    releaseReservation: ReturnType<typeof vi.fn>;
+  };
   let orchestrator: {
     selectModel: ReturnType<typeof vi.fn>;
     getSystemPrompt: ReturnType<typeof vi.fn>;
   };
+  let modelCatalog: { getPricing: ReturnType<typeof vi.fn> };
 
   beforeEach(() => {
     noteRepository = { findById: vi.fn().mockResolvedValue(noteFixture()) };
@@ -44,15 +50,23 @@ describe('SuggestOrganizationHandler', () => {
     structuredOutput = {
       generateStructuredOutput: vi.fn().mockResolvedValue({
         object: { bucket: PARA_BUCKETS[0], tags: ['work/alpha'] },
+        inputTokens: 800,
+        outputTokens: 20,
+        model: 'anthropic:fast',
       }),
     };
-    rateLimit = { checkLimit: vi.fn().mockResolvedValue({ allowed: true }) };
+    rateLimit = {
+      checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      recordUsage: vi.fn().mockResolvedValue(undefined),
+      releaseReservation: vi.fn().mockResolvedValue(undefined),
+    };
     orchestrator = {
       selectModel: vi
         .fn()
         .mockResolvedValue(ok({ toPrimitive: () => 'anthropic:fast' })),
       getSystemPrompt: vi.fn().mockReturnValue('system'),
     };
+    modelCatalog = { getPricing: vi.fn().mockReturnValue(undefined) };
 
     handler = new SuggestOrganizationHandler(
       orchestrator as never,
@@ -61,7 +75,8 @@ describe('SuggestOrganizationHandler', () => {
       noteRepository as never,
       tagRepository as never,
       retrieval as never,
-      structuredOutput as never
+      structuredOutput as never,
+      modelCatalog as never
     );
   });
 
@@ -77,7 +92,6 @@ describe('SuggestOrganizationHandler', () => {
     expect(suggestion?.bucket).toBe(PARA_BUCKETS[0]);
   });
 
-  // D2: suggestions set a classification only the owner may write.
   it('refuses the whole request when a note belongs to someone else', async () => {
     noteRepository.findById.mockResolvedValue(
       noteFixture({ ownerId: STRANGER_ID })
@@ -104,10 +118,22 @@ describe('SuggestOrganizationHandler', () => {
     expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
   });
 
-  // The model is never asked whether a tag exists; the server decides.
+  it('bills a repeated id once', async () => {
+    const result = await handler.execute({
+      userId: OWNER_ID,
+      noteIds: [NOTE_ID, NOTE_ID, NOTE_ID],
+    });
+
+    expect(structuredOutput.generateStructuredOutput).toHaveBeenCalledTimes(1);
+    expect(result._unsafeUnwrap()).toHaveLength(1);
+  });
+
   it('marks tags absent from the vocabulary as new', async () => {
     structuredOutput.generateStructuredOutput.mockResolvedValue({
       object: { bucket: null, tags: ['work/alpha', 'reading'] },
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'anthropic:fast',
     });
 
     const [suggestion] = (
@@ -120,12 +146,84 @@ describe('SuggestOrganizationHandler', () => {
     ]);
   });
 
+  it('does not call a tag new just because it fell outside the prompt slice', async () => {
+    tagRepository.findTreeByOwner.mockResolvedValue(
+      Array.from({ length: 80 }, (_, i) => ({
+        id: `t${i}`,
+        path: `topic-${i}`,
+        color: null,
+        noteCount: 80 - i,
+      }))
+    );
+    structuredOutput.generateStructuredOutput.mockResolvedValue({
+      object: { bucket: null, tags: ['topic-78'] },
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'anthropic:fast',
+    });
+
+    const [suggestion] = (
+      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    )._unsafeUnwrap();
+
+    expect(suggestion?.tags).toEqual([{ path: 'topic-78', isNew: false }]);
+  });
+
+  it('drops tag paths the note update would reject', async () => {
+    structuredOutput.generateStructuredOutput.mockResolvedValue({
+      object: { bucket: null, tags: ['alpha launch', 'a/b/c/d/e', 'work'] },
+      inputTokens: 1,
+      outputTokens: 1,
+      model: 'anthropic:fast',
+    });
+
+    const [suggestion] = (
+      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    )._unsafeUnwrap();
+
+    expect(suggestion?.tags).toEqual([{ path: 'work', isNew: false }]);
+  });
+
   it('offers the vocabulary most-used first', async () => {
     await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
 
     const prompt = structuredOutput.generateStructuredOutput.mock
       .calls[0][0] as string;
     expect(prompt.indexOf('work\n')).toBeLessThan(prompt.indexOf('work/alpha'));
+  });
+
+  it('sends the note as plain text, not as editor markup', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const prompt = structuredOutput.generateStructuredOutput.mock
+      .calls[0][0] as string;
+    expect(prompt).toContain('We are starting the alpha launch next week.');
+    expect(prompt).not.toContain('<p>');
+  });
+
+  it('caps the provider call so a hung request cannot run unbounded', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const options = structuredOutput.generateStructuredOutput.mock
+      .calls[0][2] as { timeoutMs?: number; maxOutputTokens?: number };
+    expect(options.timeoutMs).toBeGreaterThan(0);
+    expect(options.maxOutputTokens).toBeGreaterThan(0);
+  });
+
+  it('looks related notes up by title, never by the note body', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const [, query] = retrieval.search.mock.calls[0];
+    expect(query).toBe('Alpha kickoff');
+  });
+
+  it('falls back to a content lead when the note has no title', async () => {
+    noteRepository.findById.mockResolvedValue(noteFixture({ title: '   ' }));
+
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const [, query] = retrieval.search.mock.calls[0];
+    expect(query).toBe('We are starting the alpha launch next week.');
   });
 
   // Related notes come from the embedding index, so a hallucinated id cannot exist.
@@ -144,22 +242,61 @@ describe('SuggestOrganizationHandler', () => {
     ]);
   });
 
-  // One bad note must not cost the user the rest of a bulk pass.
-  it('degrades a failing note to an empty suggestion', async () => {
-    structuredOutput.generateStructuredOutput.mockRejectedValue(
-      new Error('provider exploded')
-    );
+  it('records what the note actually cost', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
 
-    const [suggestion] = (
-      await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] })
+    expect(rateLimit.recordUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: OWNER_ID,
+        inputTokens: 800,
+        outputTokens: 20,
+        model: 'anthropic:fast',
+      })
+    );
+  });
+
+  it('degrades a failing note to an empty suggestion and gives its reserve back', async () => {
+    noteRepository.findById.mockImplementation((id: string) =>
+      Promise.resolve(noteFixture({ id }))
+    );
+    structuredOutput.generateStructuredOutput
+      .mockRejectedValueOnce(new Error('provider exploded'))
+      .mockResolvedValueOnce({
+        object: { bucket: PARA_BUCKETS[0], tags: [] },
+        inputTokens: 10,
+        outputTokens: 2,
+        model: 'anthropic:fast',
+      });
+
+    const suggestions = (
+      await handler.execute({
+        userId: OWNER_ID,
+        noteIds: [NOTE_ID, OTHER_NOTE_ID],
+      })
     )._unsafeUnwrap();
 
-    expect(suggestion).toEqual({
+    expect(suggestions[0]).toEqual({
       noteId: NOTE_ID,
       bucket: null,
       tags: [],
       relatedNotes: [],
     });
+    expect(suggestions[1]?.bucket).toBe(PARA_BUCKETS[0]);
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails the request when no note could be classified', async () => {
+    structuredOutput.generateStructuredOutput.mockRejectedValue(
+      new Error('provider exploded')
+    );
+
+    const result = await handler.execute({
+      userId: OWNER_ID,
+      noteIds: [NOTE_ID],
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('AI_PROVIDER_ERROR');
   });
 
   it('drops a note whose body carries an injection attempt', async () => {
@@ -190,6 +327,7 @@ describe('SuggestOrganizationHandler', () => {
     });
 
     expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('AI_RATE_LIMIT_EXCEEDED');
     expect(structuredOutput.generateStructuredOutput).not.toHaveBeenCalled();
   });
 });

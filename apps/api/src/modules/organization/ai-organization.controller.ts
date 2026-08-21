@@ -18,7 +18,10 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 
-import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
+import {
+  FEATURE_FLAG_KEYS,
+  type OrganizationSuggestion,
+} from '@knowtis/shared-types';
 
 import { unwrapOrThrow } from '../../core/http';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
@@ -31,6 +34,8 @@ import { SuggestOrganizationDto } from './dto/suggest-organization.dto';
 const AI_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AIErrorCodes.RATE_LIMIT_EXCEEDED]: HttpStatus.TOO_MANY_REQUESTS,
   [AIErrorCodes.PROVIDER_ERROR]: HttpStatus.BAD_GATEWAY,
+  [AIErrorCodes.PROVIDER_OVERLOADED]: HttpStatus.SERVICE_UNAVAILABLE,
+  [AIErrorCodes.INVALID_MODEL]: HttpStatus.INTERNAL_SERVER_ERROR,
   [AIErrorCodes.TIMEOUT]: HttpStatus.GATEWAY_TIMEOUT,
   [AIErrorCodes.FEATURE_DISABLED]: HttpStatus.FORBIDDEN,
   [AIErrorCodes.FORBIDDEN]: HttpStatus.FORBIDDEN,
@@ -65,7 +70,7 @@ export class AiOrganizationController {
     @CurrentUser() user: RequestUser,
     @Body() dto: SuggestOrganizationDto,
     @Req() request: Request
-  ) {
+  ): Promise<OrganizationSuggestion[]> {
     const result = await this.suggestHandler.execute({
       userId: user.id,
       noteIds: dto.noteIds,
