@@ -97,7 +97,7 @@ function NoteEditor({
     setIsPendingUpdate(true);
     // Content saves carry the doc's own CRDT state: the server stores it
     // verbatim, so it never mints a parallel history from the HTML — the
-    // root cause of notes duplicating on reload (#288).
+    // root cause of notes duplicating on reload.
     updateNote.mutate(
       {
         id: noteId,

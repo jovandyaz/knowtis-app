@@ -1,6 +1,7 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as Y from 'yjs';
 
 import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
@@ -232,7 +233,7 @@ describe('UpdateNoteHandler', () => {
   });
 
   // The client state is stored verbatim: regenerating from HTML here would
-  // mint a second CRDT history and duplicate the note on reload (#288).
+  // mint a second CRDT history and duplicate the note on reload.
   it('should store the client CRDT state with the content instead of regenerating from HTML', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
@@ -256,9 +257,49 @@ describe('UpdateNoteHandler', () => {
     expect(dataArg).toEqual({ content: '<p>Editor content</p>' });
     expect(Buffer.compare(bufferArg as Buffer, clientState)).toBe(0);
 
+    // Broadcasting it back would clear and refill the sender's own document.
     const emitted = vi.mocked(mockEventEmitter.emit).mock
       .calls[0]?.[1] as NoteUpdatedEvent;
-    expect(Buffer.compare(emitted.yjsState as Buffer, clientState)).toBe(0);
+    expect(emitted.yjsState).toBeUndefined();
+  });
+
+  // A fresh mint would leave any client holding the old history to merge two
+  // parallel copies of the same text.
+  it('evolves the existing CRDT history on a server-side content write', async () => {
+    const existing = clientStateFor('<p>Original</p>');
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      yjsState: existing,
+    });
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
+      ok({ ...mockNote, content: '<p>Rewritten by the copilot</p>' })
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p>Rewritten by the copilot</p>',
+    });
+
+    expect(result.isOk()).toBe(true);
+    const [, , bufferArg] = vi.mocked(mockRepository.updateContentWithYjsState)
+      .mock.calls[0];
+
+    // The stored state carries the original history forward instead of
+    // replacing it, and renders only the new text.
+    const merged = new Y.Doc();
+    Y.applyUpdate(merged, new Uint8Array(bufferArg as Buffer));
+    const html = htmlToYjsModule.yDocToHtml(merged);
+    merged.destroy();
+    expect(html).toContain('Rewritten by the copilot');
+    expect(html).not.toContain('Original');
+
+    const replayed = new Y.Doc();
+    Y.applyUpdate(replayed, new Uint8Array(existing));
+    Y.applyUpdate(replayed, new Uint8Array(bufferArg as Buffer));
+    const replayedHtml = htmlToYjsModule.yDocToHtml(replayed);
+    replayed.destroy();
+    expect(replayedHtml).toBe(html);
   });
 
   it('should reject a yjsState sent without content', async () => {

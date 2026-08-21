@@ -109,7 +109,7 @@ describe('NoteEditorPage', () => {
 
   // Autosaved content must carry the doc's own CRDT state — a content write
   // without it lets the server mint a parallel history and duplicate the
-  // note on reload (#288).
+  // note on reload.
   it('sends the doc CRDT state with every content autosave', async () => {
     vi.useFakeTimers();
     try {

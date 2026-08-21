@@ -33,7 +33,10 @@ import {
   NoteUpdatedEvent,
   type NoteUpdatedEventUpdates,
 } from '../../domain/events';
-import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
+import {
+  evolveYjsState,
+  htmlToYjsState,
+} from '../../infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
 import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
 
@@ -49,7 +52,7 @@ export interface UpdateNoteInput {
   /**
    * The editor's own CRDT state, base64-encoded. When present it is stored
    * verbatim with the content, so the server never mints a parallel history
-   * from the HTML — the root cause of duplicated notes (#288).
+   * from the HTML — the root cause of duplicated notes.
    */
   readonly yjsState?: string;
   /** Deprecated pre-rollout flag; honoured so old bundles keep autosaving. */
@@ -140,6 +143,7 @@ export class UpdateNoteHandler {
       ? await this.executeOwnerUpdate(input, note, clientYjsState)
       : await this.executeEditorUpdate(
           input,
+          note,
           userIdResult.value,
           clientYjsState
         );
@@ -184,12 +188,14 @@ export class UpdateNoteHandler {
       updateData,
       input.content,
       clientYjsState,
+      note.yjsState,
       input.skipYjsState
     );
   }
 
   private async executeEditorUpdate(
     input: UpdateNoteInput,
+    note: NoteEntity,
     userId: UserId,
     clientYjsState: Buffer | undefined
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
@@ -221,6 +227,7 @@ export class UpdateNoteHandler {
       pickDefined(input, [...CONTENT_FIELDS]),
       input.content,
       clientYjsState,
+      note.yjsState,
       input.skipYjsState
     );
   }
@@ -230,6 +237,7 @@ export class UpdateNoteHandler {
     updateData: UpdateNoteData,
     content: string | undefined,
     clientYjsState: Buffer | undefined,
+    existingYjsState: Buffer | null,
     legacySkipYjsState?: boolean
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     if (content === undefined) {
@@ -237,13 +245,15 @@ export class UpdateNoteHandler {
       return result.map((entity) => ({ entity }));
     }
 
+    // No yjsState on the result: this state came FROM the editor, so
+    // broadcasting it back would clear and refill the sender's own document.
     if (clientYjsState) {
       const result = await this.noteRepository.updateContentWithYjsState(
         noteId,
         { ...updateData, content },
         clientYjsState
       );
-      return result.map((entity) => ({ entity, yjsState: clientYjsState }));
+      return result.map((entity) => ({ entity }));
     }
 
     if (legacySkipYjsState) {
@@ -254,7 +264,7 @@ export class UpdateNoteHandler {
       return result.map((entity) => ({ entity }));
     }
 
-    const yjsResult = this.generateYjsState(noteId, content);
+    const yjsResult = this.generateYjsState(noteId, content, existingYjsState);
     if (yjsResult.isErr()) {
       return err(yjsResult.error);
     }
@@ -268,12 +278,23 @@ export class UpdateNoteHandler {
     return result.map((entity) => ({ entity, yjsState }));
   }
 
+  /**
+   * Server-side content writes (copilot, MCP, REST) evolve the note's
+   * existing CRDT history when it has one. Minting a fresh doc instead
+   * would leave any client holding the old history to merge two parallel
+   * copies of the same text.
+   */
   private generateYjsState(
     noteId: string,
-    content: string
+    content: string,
+    existingYjsState: Buffer | null
   ): Result<Buffer, NoteDomainError> {
     try {
-      return ok(htmlToYjsState(content));
+      return ok(
+        existingYjsState && existingYjsState.byteLength > 0
+          ? evolveYjsState(existingYjsState, content)
+          : htmlToYjsState(content)
+      );
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown parser error';
