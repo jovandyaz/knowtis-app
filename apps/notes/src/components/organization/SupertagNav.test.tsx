@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NoteSupertagCounts } from '@knowtis/shared-types';
 
+import { NAV_ICON_SLOT, NAV_ROW } from './nav-row.styles';
 import { SupertagNav } from './SupertagNav';
 
 const supertagCounts = vi.fn<() => NoteSupertagCounts | undefined>();
@@ -118,5 +119,13 @@ describe('SupertagNav', () => {
     expect(rowFor('organization.supertags.names.person')).toHaveTextContent(
       '3'
     );
+  });
+  it('should sit on the rail every organization list shares', async () => {
+    await renderAt('/notes');
+
+    const row = rowFor('organization.supertags.names.person');
+
+    expect(row).toHaveClass(...NAV_ROW.split(' '));
+    expect(row?.firstElementChild).toHaveClass(...NAV_ICON_SLOT.split(' '));
   });
 });

@@ -73,7 +73,9 @@ export function MobileSheet({
                   <div className="h-1 w-10 rounded-full bg-(--muted-foreground)/30 mx-auto" />
                 </div>
 
-                <div className="px-5 pb-6">{children}</div>
+                <div className="max-h-[70vh] overflow-y-auto overscroll-contain px-5 pb-6">
+                  {children}
+                </div>
 
                 <DialogPrimitive.Close
                   className="absolute right-4 top-4 rounded-full p-1.5 text-(--muted-foreground)/50 transition-colors active:text-(--muted-foreground)"

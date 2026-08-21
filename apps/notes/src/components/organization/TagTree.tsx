@@ -57,7 +57,9 @@ export function TagTree({ onNavigate }: TagTreeProps) {
     return (
       <div key={item.path} className="flex flex-col gap-0.5">
         <div
-          className={`${NAV_ROW} ${isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE}`}
+          className={`${NAV_ROW} relative has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-(--ring) ${
+            isActive ? NAV_ROW_ACTIVE : NAV_ROW_IDLE
+          }`}
           style={{ marginLeft: `${item.depth * INDENT_PER_DEPTH_REM}rem` }}
         >
           {hasChildren ? (
@@ -71,9 +73,9 @@ export function TagTree({ onNavigate }: TagTreeProps) {
                   : 'organization.tags.collapse',
                 { tag: item.path }
               )}
-              className={`${NAV_ICON_SLOT} relative cursor-pointer after:absolute after:-inset-2 after:content-['']`}
+              className={`${NAV_ICON_SLOT} relative z-10 cursor-pointer after:absolute after:-inset-x-2 after:-inset-y-4 after:content-[''] md:after:-inset-x-1 md:after:-inset-y-1`}
             >
-              <Chevron className="h-3 w-3" style={tint} />
+              <Chevron className="h-3 w-3" />
             </button>
           ) : (
             <span className={NAV_ICON_SLOT} aria-hidden>
@@ -88,7 +90,7 @@ export function TagTree({ onNavigate }: TagTreeProps) {
             activeProps={{}}
             inactiveProps={{}}
             aria-current={isActive ? 'page' : undefined}
-            className="flex min-w-0 flex-1 items-center gap-2"
+            className="flex min-w-0 flex-1 items-center gap-2 after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
           >
             <span className={NAV_LABEL}>{item.label}</span>
             {item.noteCount > 0 && (
