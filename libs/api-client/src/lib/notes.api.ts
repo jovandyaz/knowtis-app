@@ -98,10 +98,10 @@ export const notesApi = {
   async update(
     id: string,
     input: UpdateNoteInput,
-    options?: { skipYjsState?: boolean | undefined }
+    options?: { yjsState?: string | undefined }
   ): Promise<Note> {
-    const body = options?.skipYjsState
-      ? { ...input, skipYjsState: true }
+    const body = options?.yjsState
+      ? { ...input, yjsState: options.yjsState }
       : input;
     return httpClient.patch<Note>(`/notes/${id}`, body);
   },

@@ -106,12 +106,12 @@ export function useUpdateNote() {
     mutationFn: ({
       id,
       input,
-      skipYjsState,
+      yjsState,
     }: {
       id: string;
       input: UpdateNoteInput;
-      skipYjsState?: boolean;
-    }) => notesApi.update(id, input, { skipYjsState }),
+      yjsState?: string;
+    }) => notesApi.update(id, input, { yjsState }),
     onMutate: async ({ id, input }) => {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.detail(id) });
 

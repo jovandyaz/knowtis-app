@@ -15,6 +15,9 @@ import { NoteUpdatedEvent } from '../../domain/events';
 import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
 import { UpdateNoteHandler } from './update-note.handler';
 
+const clientStateFor = (html: string): Buffer =>
+  htmlToYjsModule.htmlToYjsState(html);
+
 const mockNote: NoteEntity = {
   id: 'note-1',
   title: 'Original Title',
@@ -228,29 +231,84 @@ describe('UpdateNoteHandler', () => {
     expect((bufferArg as Buffer).byteLength).toBeGreaterThan(0);
   });
 
-  it('should persist content to the column without regenerating yjsState when skipYjsState is set', async () => {
+  // The client state is stored verbatim: regenerating from HTML here would
+  // mint a second CRDT history and duplicate the note on reload (#288).
+  it('should store the client CRDT state with the content instead of regenerating from HTML', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
-    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
       ok({ ...mockNote, content: '<p>Editor content</p>' })
     );
+    const clientState = clientStateFor('<p>Editor content</p>');
+    const htmlSpy = vi.spyOn(htmlToYjsModule, 'htmlToYjsState');
 
     const result = await handler.execute({
       noteId: 'note-1',
       userId: 'owner-1',
       content: '<p>Editor content</p>',
+      yjsState: clientState.toString('base64'),
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(htmlSpy).not.toHaveBeenCalled();
+    const [, dataArg, bufferArg] = vi.mocked(
+      mockRepository.updateContentWithYjsState
+    ).mock.calls[0];
+    expect(dataArg).toEqual({ content: '<p>Editor content</p>' });
+    expect(Buffer.compare(bufferArg as Buffer, clientState)).toBe(0);
+
+    const emitted = vi.mocked(mockEventEmitter.emit).mock
+      .calls[0]?.[1] as NoteUpdatedEvent;
+    expect(Buffer.compare(emitted.yjsState as Buffer, clientState)).toBe(0);
+  });
+
+  it('should reject a yjsState sent without content', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      title: 'Just a rename',
+      yjsState: clientStateFor('<p>orphan</p>').toString('base64'),
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(mockRepository.update).not.toHaveBeenCalled();
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+  });
+
+  it('honours the deprecated skipYjsState from a pre-rollout bundle', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({ ...mockNote, content: '<p>Old tab</p>' })
+    );
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p>Old tab</p>',
       skipYjsState: true,
     });
 
     expect(result.isOk()).toBe(true);
     expect(mockRepository.update).toHaveBeenCalledWith(
       'note-1',
-      expect.objectContaining({ content: '<p>Editor content</p>' })
+      expect.objectContaining({ content: '<p>Old tab</p>' })
     );
     expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
+  });
 
-    const emitted = vi.mocked(mockEventEmitter.emit).mock
-      .calls[0]?.[1] as NoteUpdatedEvent;
-    expect(emitted.yjsState).toBeUndefined();
+  it('should reject bytes that are not a Yjs update', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+
+    const result = await handler.execute({
+      noteId: 'note-1',
+      userId: 'owner-1',
+      content: '<p>ok</p>',
+      yjsState: Buffer.from('definitely not a yjs update').toString('base64'),
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
   });
 
   it('should take atomic transactional path when owner updates content', async () => {

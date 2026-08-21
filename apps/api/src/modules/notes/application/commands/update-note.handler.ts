@@ -35,6 +35,7 @@ import {
 } from '../../domain/events';
 import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
 import { isTrivialHtml } from '../../infrastructure/trivial-html';
+import { decodeYjsStateUpdate } from '../../infrastructure/yjs-state-update';
 
 export interface UpdateNoteInput {
   readonly noteId: string;
@@ -45,6 +46,13 @@ export interface UpdateNoteInput {
   readonly generalAccessPermission?: PermissionLevel;
   readonly editorsCanShare?: boolean;
   readonly force?: boolean;
+  /**
+   * The editor's own CRDT state, base64-encoded. When present it is stored
+   * verbatim with the content, so the server never mints a parallel history
+   * from the HTML — the root cause of duplicated notes (#288).
+   */
+  readonly yjsState?: string;
+  /** Deprecated pre-rollout flag; honoured so old bundles keep autosaving. */
   readonly skipYjsState?: boolean;
   readonly bucket?: ParaBucket | null;
   readonly tags?: string[];
@@ -111,10 +119,30 @@ export class UpdateNoteHandler {
       return validationError;
     }
 
+    let clientYjsState: Buffer | undefined;
+    if (input.yjsState !== undefined) {
+      if (input.content === undefined) {
+        return err(
+          NoteErrors.invalidContent(
+            'yjsState requires content in the same update'
+          )
+        );
+      }
+      const decoded = decodeYjsStateUpdate(input.yjsState);
+      if (decoded.isErr()) {
+        return err(decoded.error);
+      }
+      clientYjsState = decoded.value;
+    }
+
     const isOwner = note.ownerId === input.userId;
     const persisted = isOwner
-      ? await this.executeOwnerUpdate(input, note)
-      : await this.executeEditorUpdate(input, userIdResult.value);
+      ? await this.executeOwnerUpdate(input, note, clientYjsState)
+      : await this.executeEditorUpdate(
+          input,
+          userIdResult.value,
+          clientYjsState
+        );
 
     if (persisted.isErr()) {
       return err(persisted.error);
@@ -138,7 +166,8 @@ export class UpdateNoteHandler {
 
   private async executeOwnerUpdate(
     input: UpdateNoteInput,
-    note: NoteEntity
+    note: NoteEntity,
+    clientYjsState: Buffer | undefined
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     const updateData: UpdateNoteData = {
       ...pickDefined(input, [
@@ -154,13 +183,15 @@ export class UpdateNoteHandler {
       input.noteId,
       updateData,
       input.content,
+      clientYjsState,
       input.skipYjsState
     );
   }
 
   private async executeEditorUpdate(
     input: UpdateNoteInput,
-    userId: UserId
+    userId: UserId,
+    clientYjsState: Buffer | undefined
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     const canEdit = await this.noteRepository.hasAccess(
       input.noteId,
@@ -189,6 +220,7 @@ export class UpdateNoteHandler {
       input.noteId,
       pickDefined(input, [...CONTENT_FIELDS]),
       input.content,
+      clientYjsState,
       input.skipYjsState
     );
   }
@@ -197,14 +229,24 @@ export class UpdateNoteHandler {
     noteId: string,
     updateData: UpdateNoteData,
     content: string | undefined,
-    skipYjsState: boolean | undefined
+    clientYjsState: Buffer | undefined,
+    legacySkipYjsState?: boolean
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     if (content === undefined) {
       const result = await this.noteRepository.update(noteId, updateData);
       return result.map((entity) => ({ entity }));
     }
 
-    if (skipYjsState) {
+    if (clientYjsState) {
+      const result = await this.noteRepository.updateContentWithYjsState(
+        noteId,
+        { ...updateData, content },
+        clientYjsState
+      );
+      return result.map((entity) => ({ entity, yjsState: clientYjsState }));
+    }
+
+    if (legacySkipYjsState) {
       const result = await this.noteRepository.update(noteId, {
         ...updateData,
         content,

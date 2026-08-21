@@ -12,3 +12,4 @@ export type {
 
 export { getRemoteUserStates } from './awareness.utils';
 export { createUserDecorations } from './cursor-decorations.utils';
+export { docStateToBase64 } from './doc-state';

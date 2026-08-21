@@ -23,6 +23,10 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ noteId: 'note-1' }),
 }));
 
+vi.mock('@knowtis/crdt', () => ({
+  useYjs: () => ({ getYDoc: () => ({}) }),
+  docStateToBase64: () => 'AAA=',
+}));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
 }));
@@ -33,6 +37,7 @@ vi.mock('@/components/organization/NotePropertiesRow', () => ({
 
 const editorRenders: { count: number } = { count: 0 };
 let capturedOnUpdate: ((html: string) => void) | undefined;
+const updateNoteMutate = vi.fn();
 
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
   CollaborativeEditor: (props: { onUpdate: (html: string) => void }) => {
@@ -71,7 +76,7 @@ vi.mock('@knowtis/data-access-notes', () => ({
     isError: false,
     error: null,
   }),
-  useUpdateNote: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateNote: () => ({ mutate: updateNoteMutate, isPending: false }),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
 }));
@@ -80,6 +85,7 @@ describe('NoteEditorPage', () => {
   beforeEach(() => {
     editorRenders.count = 0;
     capturedOnUpdate = undefined;
+    updateNoteMutate.mockClear();
     authUser.mockReturnValue({ isAnonymous: false });
   });
 
@@ -99,6 +105,28 @@ describe('NoteEditorPage', () => {
     renderWithClient(<NoteEditorPage />);
 
     expect(screen.queryByTestId('note-properties-row')).not.toBeInTheDocument();
+  });
+
+  // Autosaved content must carry the doc's own CRDT state — a content write
+  // without it lets the server mint a parallel history and duplicate the
+  // note on reload (#288).
+  it('sends the doc CRDT state with every content autosave', async () => {
+    vi.useFakeTimers();
+    try {
+      renderWithClient(<NoteEditorPage />);
+      capturedOnUpdate?.('<p>hello world</p>');
+      await vi.runAllTimersAsync();
+
+      expect(updateNoteMutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({ content: '<p>hello world</p>' }),
+          yjsState: 'AAA=',
+        }),
+        expect.anything()
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not re-render the editor subtree on content keystrokes', () => {

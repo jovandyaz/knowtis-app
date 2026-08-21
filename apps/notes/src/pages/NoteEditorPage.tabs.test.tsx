@@ -28,6 +28,10 @@ vi.mock('@tanstack/react-router', () => ({
   useParams: () => ({ noteId: 'note-1' }),
 }));
 
+vi.mock('@knowtis/crdt', () => ({
+  useYjs: () => ({ getYDoc: () => ({}) }),
+  docStateToBase64: () => 'AAA=',
+}));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => ({ isAnonymous: false }),
 }));
