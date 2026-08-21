@@ -8,7 +8,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 
 import { ApiError } from '../api-client/client.js';
-import type { NotesApi } from '../api-client/notes.api.js';
+import type { NotesApi, NotesPageResponse } from '../api-client/notes.api.js';
 import type { AuthService } from '../auth/auth-service.js';
 import {
   InsufficientScopeError,
@@ -17,7 +17,7 @@ import {
 } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
-import { paginateByRecency } from '../utils/note-cursor.js';
+import { decodePageCursor, nextPageCursor } from '../utils/note-cursor.js';
 
 const NOTE_URI_PATTERN =
   /^knowtis:\/\/notes\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
@@ -95,27 +95,26 @@ export function registerNoteResources(
     ListResourcesRequestSchema,
     async (request) => {
       const token = await resolveToken(authService, credential);
-      let notes;
+      let envelope: NotesPageResponse;
       try {
-        notes = await notesApi.list(token);
+        envelope = await notesApi.list(token, {
+          page: decodePageCursor(request.params?.cursor),
+          limit: PAGE_SIZE,
+        });
       } catch (error) {
         if (error instanceof ApiError) {
           throw apiErrorToMcpError(error, 'Failed to list notes.');
         }
         throw error;
       }
-      const { page, nextCursor } = paginateByRecency(
-        notes,
-        PAGE_SIZE,
-        request.params?.cursor
-      );
+      const next = nextPageCursor(envelope);
       return {
-        resources: page.map((note) => ({
+        resources: envelope.items.map((note) => ({
           uri: `knowtis://notes/${note.id}`,
           name: note.title,
           mimeType: 'text/markdown',
         })),
-        ...(nextCursor ? { nextCursor } : {}),
+        ...(next ? { nextCursor: next } : {}),
       };
     }
   );

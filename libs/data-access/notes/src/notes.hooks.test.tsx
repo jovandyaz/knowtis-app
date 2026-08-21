@@ -7,7 +7,10 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
-import type { NoteBucketCounts } from '@knowtis/shared-types';
+import {
+  DEFAULT_NOTES_PAGE_SIZE,
+  type NoteBucketCounts,
+} from '@knowtis/shared-types';
 
 import {
   notesQueryKeys,
@@ -30,6 +33,13 @@ vi.mock('@knowtis/api-client', () => ({
     restore: vi.fn(),
   },
 }));
+
+const EMPTY_PAGE = {
+  items: [],
+  total: 0,
+  page: 1,
+  limit: DEFAULT_NOTES_PAGE_SIZE,
+};
 
 describe('Notes Hooks', () => {
   let queryClient: QueryClient;
@@ -81,7 +91,12 @@ describe('Notes Hooks', () => {
           updatedAt: new Date(),
         },
       ];
-      vi.mocked(notesApi.getAll).mockResolvedValue(mockNotes);
+      vi.mocked(notesApi.getAll).mockResolvedValue({
+        items: mockNotes,
+        total: mockNotes.length,
+        page: 1,
+        limit: DEFAULT_NOTES_PAGE_SIZE,
+      });
 
       const { result } = renderHook(() => useNotes(), { wrapper });
 
@@ -89,12 +104,15 @@ describe('Notes Hooks', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(result.current.data).toEqual(mockNotes);
-      expect(notesApi.getAll).toHaveBeenCalledWith(undefined);
+      expect(result.current.data?.pages[0].items).toEqual(mockNotes);
+      expect(notesApi.getAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: DEFAULT_NOTES_PAGE_SIZE,
+      });
     });
 
     it('should pass search parameter', async () => {
-      vi.mocked(notesApi.getAll).mockResolvedValue([]);
+      vi.mocked(notesApi.getAll).mockResolvedValue(EMPTY_PAGE);
 
       const { result } = renderHook(() => useNotes({ search: 'search term' }), {
         wrapper,
@@ -104,11 +122,15 @@ describe('Notes Hooks', () => {
         expect(result.current.isSuccess).toBe(true);
       });
 
-      expect(notesApi.getAll).toHaveBeenCalledWith({ search: 'search term' });
+      expect(notesApi.getAll).toHaveBeenCalledWith({
+        search: 'search term',
+        page: 1,
+        limit: DEFAULT_NOTES_PAGE_SIZE,
+      });
     });
 
     it('forwards filters to notesApi.getAll', async () => {
-      vi.mocked(notesApi.getAll).mockResolvedValue([]);
+      vi.mocked(notesApi.getAll).mockResolvedValue(EMPTY_PAGE);
 
       const { result } = renderHook(
         () => useNotes({ bucket: 'projects', view: 'mine' }),
@@ -120,6 +142,8 @@ describe('Notes Hooks', () => {
       });
 
       expect(notesApi.getAll).toHaveBeenCalledWith({
+        page: 1,
+        limit: DEFAULT_NOTES_PAGE_SIZE,
         bucket: 'projects',
         view: 'mine',
       });

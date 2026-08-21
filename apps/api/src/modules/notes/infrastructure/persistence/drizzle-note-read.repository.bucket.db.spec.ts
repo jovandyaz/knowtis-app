@@ -52,6 +52,8 @@ const COUNTS_NOTE_IDS = [
   COUNTS_DELETED_ARCHIVE_NOTE,
 ];
 
+const ALL = { page: 1, limit: 100 } as const;
+
 describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   let moduleRef: TestingModule;
   let db: Database;
@@ -149,7 +151,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   });
 
   it('bucket filter returns only that bucket', async () => {
-    const rows = await repo.findAccessibleByUser(ownerId, {
+    const { items: rows } = await repo.findAccessibleByUser(ownerId, ALL, {
       bucket: 'projects',
     });
 
@@ -163,7 +165,9 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   });
 
   it('inbox filter returns only bucket IS NULL', async () => {
-    const rows = await repo.findAccessibleByUser(ownerId, { bucket: 'inbox' });
+    const { items: rows } = await repo.findAccessibleByUser(ownerId, ALL, {
+      bucket: 'inbox',
+    });
 
     expect(rows).toHaveLength(1);
     expect(rows[0].note.id).toBe(INBOX_NOTE);
@@ -171,7 +175,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   });
 
   it('bucket filter includes notes shared with the caller', async () => {
-    const rows = await repo.findAccessibleByUser(ownerId, {
+    const { items: rows } = await repo.findAccessibleByUser(ownerId, ALL, {
       bucket: 'projects',
     });
 
@@ -182,7 +186,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   });
 
   it('soft-deleted notes never match a bucket filter', async () => {
-    const rows = await repo.findAccessibleByUser(ownerId, {
+    const { items: rows } = await repo.findAccessibleByUser(ownerId, ALL, {
       bucket: 'projects',
     });
 
@@ -190,7 +194,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleNoteReadRepository bucket filter', () => {
   });
 
   it('an unfiltered listing still carries the bucket of every note', async () => {
-    const rows = await repo.findAccessibleByUser(ownerId);
+    const { items: rows } = await repo.findAccessibleByUser(ownerId, ALL);
 
     expect(
       rows

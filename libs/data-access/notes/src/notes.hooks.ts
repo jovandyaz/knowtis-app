@@ -1,13 +1,21 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+} from '@tanstack/react-query';
 
 import { notesApi, type NoteWithAccess } from '@knowtis/api-client';
-import type {
-  CreateNoteInput,
-  Note,
-  NoteAccessLevel,
-  NotesListFilters,
-  NoteWithOwner,
-  UpdateNoteInput,
+import {
+  DEFAULT_NOTES_PAGE_SIZE,
+  type CreateNoteInput,
+  type Note,
+  type NoteAccessLevel,
+  type NotesListFilters,
+  type NotesPage,
+  type NoteWithOwner,
+  type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
 type NoteDetail = NoteWithOwner & { accessLevel: NoteAccessLevel };
@@ -24,6 +32,8 @@ export const notesQueryKeys = {
         view: filters.view,
       },
     ] as const,
+  recents: () => [...notesQueryKeys.all, 'recent'] as const,
+  recent: (limit: number) => [...notesQueryKeys.recents(), limit] as const,
   counts: () => [...notesQueryKeys.all, 'counts'] as const,
   details: () => [...notesQueryKeys.all, 'detail'] as const,
   detail: (id: string) => [...notesQueryKeys.details(), id] as const,
@@ -35,11 +45,65 @@ const LIST_STALE_TIME_MS = 1000 * 60;
 const COUNTS_STALE_TIME_MS = 1000 * 30;
 const DETAIL_STALE_TIME_MS = 1000 * 30;
 
+type NoteListPages = InfiniteData<NotesPage<NoteWithAccess>>;
+
+function mapLoadedNotes(
+  data: NoteListPages | undefined,
+  map: (note: NoteWithAccess) => NoteWithAccess
+): NoteListPages | undefined {
+  if (!data) {
+    return data;
+  }
+  return {
+    ...data,
+    pages: data.pages.map((page) => ({ ...page, items: page.items.map(map) })),
+  };
+}
+
+function dropLoadedNote(
+  data: NoteListPages | undefined,
+  id: string
+): NoteListPages | undefined {
+  if (!data) {
+    return data;
+  }
+  const pages = data.pages.map((page) => ({
+    ...page,
+    items: page.items.filter((note) => note.id !== id),
+  }));
+  const dropped = data.pages.reduce(
+    (sum, page, i) => sum + page.items.length - (pages[i]?.items.length ?? 0),
+    0
+  );
+  return {
+    ...data,
+    pages: pages.map((page) => ({ ...page, total: page.total - dropped })),
+  };
+}
+
 export function useNotes(filters?: NotesListFilters) {
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: notesQueryKeys.list(filters),
-    queryFn: () => notesApi.getAll(filters),
+    queryFn: ({ pageParam }) =>
+      notesApi.getAll({
+        ...filters,
+        page: pageParam,
+        limit: DEFAULT_NOTES_PAGE_SIZE,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (last) =>
+      last.page * last.limit < last.total ? last.page + 1 : undefined,
     staleTime: LIST_STALE_TIME_MS,
+  });
+}
+
+/** First page only, for surfaces that show a short recency list rather than the browsable list. */
+export function useRecentNotes(limit: number) {
+  return useQuery({
+    queryKey: notesQueryKeys.recent(limit),
+    queryFn: () => notesApi.getAll({ page: 1, limit }),
+    staleTime: LIST_STALE_TIME_MS,
+    select: (page) => page.items,
   });
 }
 
@@ -75,6 +139,7 @@ export function useCreateNote() {
         queryKey: notesQueryKeys.detail(newNote.id),
       });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
     },
   });
@@ -97,7 +162,7 @@ export function useUpdateNote() {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.detail(id) });
 
       const previousNote = queryClient.getQueryData(notesQueryKeys.detail(id));
-      const previousLists = queryClient.getQueriesData<NoteWithAccess[]>({
+      const previousLists = queryClient.getQueriesData<NoteListPages>({
         queryKey: notesQueryKeys.lists(),
       });
 
@@ -109,10 +174,10 @@ export function useUpdateNote() {
         });
       }
 
-      queryClient.setQueriesData<NoteWithAccess[]>(
+      queryClient.setQueriesData<NoteListPages>(
         { queryKey: notesQueryKeys.lists() },
         (old) =>
-          old?.map((note) =>
+          mapLoadedNotes(old, (note) =>
             note.id === id ? { ...note, ...input, updatedAt: new Date() } : note
           )
       );
@@ -143,6 +208,7 @@ export function useUpdateNote() {
     onSettled: (_data, _error, { id }) => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
     },
   });
@@ -156,13 +222,13 @@ export function useDeleteNote() {
     onMutate: async (id) => {
       await queryClient.cancelQueries({ queryKey: notesQueryKeys.lists() });
 
-      const previousLists = queryClient.getQueriesData<NoteWithAccess[]>({
+      const previousLists = queryClient.getQueriesData<NoteListPages>({
         queryKey: notesQueryKeys.lists(),
       });
 
-      queryClient.setQueriesData<NoteWithAccess[]>(
+      queryClient.setQueriesData<NoteListPages>(
         { queryKey: notesQueryKeys.lists() },
-        (old) => old?.filter((note) => note.id !== id)
+        (old) => dropLoadedNote(old, id)
       );
 
       return { previousLists };
@@ -176,6 +242,7 @@ export function useDeleteNote() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
     },
   });
@@ -188,6 +255,7 @@ export function useRestoreNote() {
     mutationFn: (id: string) => notesApi.restore(id),
     onSettled: (_data, _error, id) => {
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.lists() });
+      queryClient.invalidateQueries({ queryKey: notesQueryKeys.recents() });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: notesQueryKeys.counts() });
     },

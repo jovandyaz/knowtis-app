@@ -1,13 +1,15 @@
-import type {
-  CreateNoteInput,
-  Note,
-  NoteAccessLevel,
-  NoteBucketCounts,
-  NotePermission,
-  NotesListFilters,
-  NoteWithOwner,
-  ShareNoteInput,
-  UpdateNoteInput,
+import {
+  DEFAULT_NOTES_PAGE_SIZE,
+  type CreateNoteInput,
+  type Note,
+  type NoteAccessLevel,
+  type NoteBucketCounts,
+  type NotePermission,
+  type NotesListFilters,
+  type NotesPage,
+  type NoteWithOwner,
+  type ShareNoteInput,
+  type UpdateNoteInput,
 } from '@knowtis/shared-types';
 
 import { httpClient } from './http-client';
@@ -33,11 +35,13 @@ export interface NoteCollaborator {
 }
 
 export const notesApi = {
-  /**
-   * Get all accessible notes
-   */
-  async getAll(params?: NotesListFilters): Promise<NoteWithAccess[]> {
+  /** Returns one page of accessible notes, newest first, alongside the unpaged total. */
+  async getAll(
+    params?: NotesListFilters & { page?: number; limit?: number }
+  ): Promise<NotesPage<NoteWithAccess>> {
     const query = new URLSearchParams();
+    query.set('page', String(params?.page ?? 1));
+    query.set('limit', String(params?.limit ?? DEFAULT_NOTES_PAGE_SIZE));
     if (params?.search) {
       query.set('search', params.search);
     }
@@ -47,8 +51,9 @@ export const notesApi = {
     if (params?.view && params.view !== 'all') {
       query.set('view', params.view);
     }
-    const qs = query.toString();
-    return httpClient.get<NoteWithAccess[]>(`/notes${qs ? `?${qs}` : ''}`);
+    return httpClient.get<NotesPage<NoteWithAccess>>(
+      `/notes?${query.toString()}`
+    );
   },
 
   async getCounts(): Promise<NoteBucketCounts> {

@@ -7,13 +7,15 @@ import type { AuthService } from '../auth/auth-service.js';
 import type { McpCredential } from '../auth/credentials.js';
 import { htmlToMarkdown } from '../utils/html-to-markdown.js';
 import { markdownToHtml } from '../utils/markdown-to-html.js';
-import { paginateByRecency } from '../utils/note-cursor.js';
+import { decodePageCursor, nextPageCursor } from '../utils/note-cursor.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
   NON_DESTRUCTIVE,
   READ_ONLY,
 } from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
+
+const DEFAULT_LIST_NOTES_LIMIT = 20;
 
 const noteSummaryShape = {
   id: z.string(),
@@ -80,19 +82,19 @@ export function registerNotesTools(
       'list-notes',
       authService,
       async (token, { search, limit, cursor }) => {
-        const notes = await notesApi.list(token, search);
-        const { page, nextCursor } = paginateByRecency(
-          notes,
-          limit ?? 20,
-          cursor
-        );
+        const envelope = await notesApi.list(token, {
+          ...(search ? { search } : {}),
+          page: decodePageCursor(cursor),
+          limit: limit ?? DEFAULT_LIST_NOTES_LIMIT,
+        });
+        const next = nextPageCursor(envelope);
         return {
-          notes: page.map(({ id, title, updatedAt }) => ({
+          notes: envelope.items.map(({ id, title, updatedAt }) => ({
             id,
             title,
             updatedAt,
           })),
-          ...(nextCursor ? { nextCursor } : {}),
+          ...(next ? { nextCursor: next } : {}),
         };
       },
       credential

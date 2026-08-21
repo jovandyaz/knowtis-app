@@ -8,6 +8,7 @@ import {
   eq,
   ilike,
   isNull,
+  ne,
   or,
   sql,
   type SQL,
@@ -18,6 +19,7 @@ import {
   INBOX_FILTER,
   type BucketFilter,
   type NoteBucketCounts,
+  type NoteListView,
 } from '@knowtis/shared-types';
 
 import {
@@ -30,9 +32,11 @@ import {
 } from '../../../../database';
 import { escapeLike } from '../../../../database/escape-like';
 import type {
+  AccessibleNotePage,
   AccessibleNotesCount,
   NoteEntity,
   NoteListFilters,
+  NotePageRequest,
   NoteReadRepository,
   NoteSummary,
   NoteView,
@@ -143,27 +147,42 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
 
   async findAccessibleByUser(
     userId: UserId,
+    page: NotePageRequest,
     filters?: NoteListFilters
-  ): Promise<{ note: NoteView; permission?: string }[]> {
-    const results = await this.db
-      .select({
-        note: noteViewColumns,
-        permission: notePermissions.permission,
-      })
-      .from(notes)
-      .leftJoin(notePermissions, this.permissionJoinCondition(userId))
-      .where(this.accessibleWhere(userId, filters))
-      .orderBy(desc(notes.updatedAt));
+  ): Promise<AccessibleNotePage> {
+    const where = this.accessibleWhere(userId, filters);
+    const [results, totals] = await Promise.all([
+      this.db
+        .select({
+          note: noteViewColumns,
+          permission: notePermissions.permission,
+        })
+        .from(notes)
+        .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+        .where(where)
+        // updatedAt alone is not a total order, so ties would repeat or skip rows across pages
+        .orderBy(desc(notes.updatedAt), desc(notes.id))
+        .limit(page.limit)
+        .offset((page.page - 1) * page.limit),
+      this.db
+        .select({ value: count() })
+        .from(notes)
+        .leftJoin(notePermissions, this.permissionJoinCondition(userId))
+        .where(where),
+    ]);
 
-    return results.map((row) => {
-      const mapped: { note: NoteView; permission?: string } = {
-        note: mapToNoteView(row.note),
-      };
-      if (row.permission) {
-        mapped.permission = row.permission;
-      }
-      return mapped;
-    });
+    return {
+      items: results.map((row) => {
+        const mapped: { note: NoteView; permission?: string } = {
+          note: mapToNoteView(row.note),
+        };
+        if (row.permission) {
+          mapped.permission = row.permission;
+        }
+        return mapped;
+      }),
+      total: totals[0]?.value ?? 0,
+    };
   }
 
   async findAccessibleSummariesByUser(
@@ -314,6 +333,15 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       : eq(notes.bucket, bucket);
   }
 
+  private viewCondition(userId: UserId, view?: NoteListView): SQL | undefined {
+    if (!view || view === 'all') {
+      return undefined;
+    }
+    return view === 'mine'
+      ? eq(notes.ownerId, userId.value)
+      : ne(notes.ownerId, userId.value);
+  }
+
   private accessibleWhere(
     userId: UserId,
     filters?: NoteListFilters
@@ -322,6 +350,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       this.accessCondition(userId),
       this.searchCondition(filters?.search),
       this.bucketCondition(filters?.bucket),
+      this.viewCondition(userId, filters?.view),
     ].filter((condition): condition is SQL => condition !== undefined);
     return and(...conditions);
   }

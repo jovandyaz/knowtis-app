@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ACCESS } from '@knowtis/shared-types';
+import { ACCESS, DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
 import type { NoteRepository, NoteView } from '../../domain';
 import { GetNotesHandler } from './get-notes.handler';
@@ -23,7 +23,8 @@ function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
 }
 
 const VALID_UUID = '550e8400-e29b-41d4-a716-446655440000';
-const OTHER_USER_ID = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
+const PAGE_ONE = { page: 1, limit: DEFAULT_NOTES_PAGE_SIZE } as const;
 
 describe('GetNotesHandler', () => {
   let handler: GetNotesHandler;
@@ -61,17 +62,18 @@ describe('GetNotesHandler', () => {
   it('should return owned notes with owner access level', async () => {
     const ownedNote = createMockNote({ ownerId: VALID_UUID });
 
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: ownedNote },
-    ]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: ownedNote }],
+      total: 1,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0].accessLevel).toBe(ACCESS.OWNER);
-      expect(result.value[0].id).toBe('note-1');
+      expect(result.value.items).toHaveLength(1);
+      expect(result.value.items[0].accessLevel).toBe(ACCESS.OWNER);
+      expect(result.value.items[0].id).toBe('note-1');
     }
   });
 
@@ -81,31 +83,33 @@ describe('GetNotesHandler', () => {
       ownerId: 'other-user',
     });
 
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: sharedNote, permission: 'editor' },
-    ]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: sharedNote, permission: 'editor' }],
+      total: 1,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toHaveLength(1);
-      expect(result.value[0].accessLevel).toBe(ACCESS.EDITOR);
+      expect(result.value.items).toHaveLength(1);
+      expect(result.value.items[0].accessLevel).toBe(ACCESS.EDITOR);
     }
   });
 
   it('should return viewer access for shared notes with viewer permission', async () => {
     const sharedNote = createMockNote({ ownerId: 'other-user' });
 
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: sharedNote, permission: 'viewer' },
-    ]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: sharedNote, permission: 'viewer' }],
+      total: 1,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value[0].accessLevel).toBe(ACCESS.VIEWER);
+      expect(result.value.items[0].accessLevel).toBe(ACCESS.VIEWER);
     }
   });
 
@@ -113,105 +117,147 @@ describe('GetNotesHandler', () => {
     const ownedNote = createMockNote({ id: 'owned', ownerId: VALID_UUID });
     const sharedNote = createMockNote({ id: 'shared', ownerId: 'other-user' });
 
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: ownedNote },
-      { note: sharedNote, permission: 'editor' },
-    ]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: ownedNote }, { note: sharedNote, permission: 'editor' }],
+      total: 2,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toHaveLength(2);
-      expect(result.value[0].accessLevel).toBe(ACCESS.OWNER);
-      expect(result.value[1].accessLevel).toBe(ACCESS.EDITOR);
+      expect(result.value.items).toHaveLength(2);
+      expect(result.value.items[0].accessLevel).toBe(ACCESS.OWNER);
+      expect(result.value.items[1].accessLevel).toBe(ACCESS.EDITOR);
     }
   });
 
   it('should not expose yjsState on list items', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: createMockNote({ ownerId: VALID_UUID }) },
-    ]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: createMockNote({ ownerId: VALID_UUID }) }],
+      total: 1,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value[0]).not.toHaveProperty('yjsState');
-      expect(result.value[0]).toHaveProperty('content');
+      expect(result.value.items[0]).not.toHaveProperty('yjsState');
+      expect(result.value.items[0]).toHaveProperty('content');
     }
   });
 
   it('should return empty array when user has no notes', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
 
-    const result = await handler.execute({ userId: VALID_UUID });
+    const result = await handler.execute({ ...PAGE_ONE, userId: VALID_UUID });
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toHaveLength(0);
+      expect(result.value.items).toHaveLength(0);
     }
   });
 
   it('should pass search term to repository', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
 
-    await handler.execute({ userId: VALID_UUID, search: 'test query' });
+    await handler.execute({
+      ...PAGE_ONE,
+      userId: VALID_UUID,
+      search: 'test query',
+    });
 
     expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
       expect.objectContaining({ value: VALID_UUID }),
+      { page: 1, limit: DEFAULT_NOTES_PAGE_SIZE },
       { search: 'test query' }
     );
   });
 
   it('passes bucket filter to the repository', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([]);
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
 
-    await handler.execute({ userId: VALID_UUID, bucket: 'projects' });
+    await handler.execute({
+      ...PAGE_ONE,
+      userId: VALID_UUID,
+      bucket: 'projects',
+    });
 
     expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
       expect.anything(),
+      { page: 1, limit: DEFAULT_NOTES_PAGE_SIZE },
       { bucket: 'projects' }
     );
   });
 
-  it('view=mine keeps only owned notes', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: createMockNote({ ownerId: VALID_UUID }) },
-      {
-        note: createMockNote({ id: 'shared', ownerId: OTHER_USER_ID }),
-        permission: 'editor',
-      },
-    ]);
+  it.each(['mine', 'shared'] as const)(
+    'delegates view=%s to the repository instead of filtering the page',
+    async (view) => {
+      vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+        items: [],
+        total: 0,
+      });
 
-    const result = await handler.execute({ userId: VALID_UUID, view: 'mine' });
+      await handler.execute({ ...PAGE_ONE, userId: VALID_UUID, view });
 
-    expect(result._unsafeUnwrap().map((note) => note.ownerId)).toEqual([
-      VALID_UUID,
-    ]);
+      expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+        expect.anything(),
+        PAGE_ONE,
+        { view }
+      );
+    }
+  );
+
+  it('omits the default view so the query stays unfiltered', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
+
+    await handler.execute({ ...PAGE_ONE, userId: VALID_UUID, view: 'all' });
+
+    expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+      expect.anything(),
+      PAGE_ONE,
+      {}
+    );
   });
 
-  it('view=shared keeps only non-owned notes', async () => {
-    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue([
-      { note: createMockNote({ ownerId: VALID_UUID }) },
-      {
-        note: createMockNote({ id: 'shared', ownerId: OTHER_USER_ID }),
-        permission: 'viewer',
-      },
-    ]);
+  it('reports the page it was asked for alongside the unpaged total', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [{ note: createMockNote({ ownerId: VALID_UUID }) }],
+      total: 287,
+    });
 
     const result = await handler.execute({
       userId: VALID_UUID,
-      view: 'shared',
+      page: 3,
+      limit: 10,
     });
 
-    expect(result._unsafeUnwrap().map((note) => note.ownerId)).toEqual([
-      OTHER_USER_ID,
-    ]);
+    expect(result._unsafeUnwrap()).toMatchObject({
+      total: 287,
+      page: 3,
+      limit: 10,
+    });
+    expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+      expect.anything(),
+      { page: 3, limit: 10 },
+      {}
+    );
   });
 
   it('should fail with empty user id', async () => {
-    const result = await handler.execute({ userId: '' });
+    const result = await handler.execute({ ...PAGE_ONE, userId: '' });
 
     expect(result.isErr()).toBe(true);
     expect(noteRepository.findAccessibleByUser).not.toHaveBeenCalled();

@@ -37,7 +37,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import { SUBJECTS } from '@knowtis/authorization';
-import { PARA_BUCKETS } from '@knowtis/shared-types';
+import { DEFAULT_NOTES_PAGE_SIZE, PARA_BUCKETS } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
 import { unwrapOrThrow } from '../../core/http';
@@ -158,22 +158,30 @@ export class NotesController {
   @ApiOperation({
     summary: 'List accessible notes',
     description:
-      'Returns all notes owned by or shared with the authenticated user. Optionally filtered by a search term, a PARA bucket, and an owned/shared view.',
+      'Returns a page of notes owned by or shared with the authenticated user, newest first. Optionally filtered by a search term, a PARA bucket, and an owned/shared view.',
   })
   @ApiResponse({
     status: 200,
-    description: 'List of notes with access level',
+    description: 'Page of notes with access level',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          ...noteProperties,
-          accessLevel: {
-            type: 'string',
-            enum: ['owner', 'editor', 'viewer'],
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              ...noteProperties,
+              accessLevel: {
+                type: 'string',
+                enum: ['owner', 'editor', 'viewer'],
+              },
+            },
           },
         },
+        total: { type: 'integer', example: 287 },
+        page: { type: 'integer', example: 1 },
+        limit: { type: 'integer', example: DEFAULT_NOTES_PAGE_SIZE },
       },
     },
   })
@@ -187,6 +195,8 @@ export class NotesController {
   ) {
     const result = await this.getNotesHandler.execute({
       userId: user.id,
+      page: query.page ?? 1,
+      limit: query.limit ?? DEFAULT_NOTES_PAGE_SIZE,
       ...(query.search ? { search: query.search } : {}),
       ...(query.bucket ? { bucket: query.bucket } : {}),
       ...(query.view ? { view: query.view } : {}),

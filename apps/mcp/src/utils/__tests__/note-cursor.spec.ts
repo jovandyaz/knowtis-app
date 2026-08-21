@@ -1,74 +1,48 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  decodeNoteCursor,
-  encodeNoteCursor,
-  paginateByRecency,
+  decodePageCursor,
+  encodePageCursor,
+  nextPageCursor,
 } from '../note-cursor.js';
 
-function item(id: string, updatedAt: string) {
-  return { id, updatedAt, title: `t-${id}` };
-}
-
-const items = [
-  item('a', '2026-07-01T10:00:00.000Z'),
-  item('b', '2026-07-03T10:00:00.000Z'),
-  item('c', '2026-07-02T10:00:00.000Z'),
-  item('d', '2026-07-02T10:00:00.000Z'),
-];
-
 describe('note cursor', () => {
-  it('should round-trip encode/decode', () => {
-    const cursor = encodeNoteCursor({ u: '2026-07-01T00:00:00.000Z', i: 'x' });
-    expect(decodeNoteCursor(cursor)).toEqual({
-      u: '2026-07-01T00:00:00.000Z',
-      i: 'x',
-    });
+  it('should round-trip a page number', () => {
+    expect(decodePageCursor(encodePageCursor(7))).toBe(7);
   });
 
-  it('should return null for garbage cursors', () => {
-    expect(decodeNoteCursor('not-base64url-json')).toBeNull();
-    expect(
-      decodeNoteCursor(Buffer.from('{}').toString('base64url'))
-    ).toBeNull();
+  it('should stay opaque rather than leaking the page in the clear', () => {
+    expect(encodePageCursor(7)).not.toContain('7');
   });
 
-  it('should order by updatedAt desc then id desc and paginate without gaps or dupes', () => {
-    const page1 = paginateByRecency(items, 2);
-    expect(page1.page.map((n) => n.id)).toEqual(['b', 'd']);
-    expect(decodeNoteCursor(page1.nextCursor ?? '')).toEqual({
-      u: '2026-07-02T10:00:00.000Z',
-      i: 'd',
-    });
-
-    const page2 = paginateByRecency(items, 2, page1.nextCursor);
-    expect(page2.page.map((n) => n.id)).toEqual(['c', 'a']);
-    expect(page2.nextCursor).toBeUndefined();
+  it('should start from the first page with no cursor', () => {
+    expect(decodePageCursor()).toBe(1);
   });
 
-  it('should return an empty page and no cursor for empty input', () => {
-    expect(paginateByRecency([], 2)).toEqual({ page: [] });
+  it.each(['garbage', '', Buffer.from('{}').toString('base64url')])(
+    'should treat %j as start-from-beginning',
+    (raw) => {
+      expect(decodePageCursor(raw)).toBe(1);
+    }
+  );
+
+  it.each([0, -3, 1.5])('should refuse %s as a page', (page) => {
+    expect(decodePageCursor(encodePageCursor(page))).toBe(1);
   });
 
-  it('should resume from the next item when the cursor points to a deleted note', () => {
-    const cursorForD = encodeNoteCursor({
-      u: '2026-07-02T10:00:00.000Z',
-      i: 'd',
-    });
-    const withoutD = items.filter((n) => n.id !== 'd');
+  it('should offer the next page while the server has more rows', () => {
+    const next = nextPageCursor({ total: 30, page: 1, limit: 25 });
 
-    const { page } = paginateByRecency(withoutD, 2, cursorForD);
-
-    expect(page.map((n) => n.id)).toEqual(['c', 'a']);
+    expect(next).toBeDefined();
+    expect(decodePageCursor(next)).toBe(2);
   });
 
-  it('should omit nextCursor when the page is not full', () => {
-    const { nextCursor } = paginateByRecency(items, 10);
-    expect(nextCursor).toBeUndefined();
+  it('should omit the cursor once the page reaches the total', () => {
+    expect(nextPageCursor({ total: 25, page: 1, limit: 25 })).toBeUndefined();
+    expect(nextPageCursor({ total: 30, page: 2, limit: 25 })).toBeUndefined();
   });
 
-  it('should treat an invalid cursor as start-from-beginning', () => {
-    const { page } = paginateByRecency(items, 2, 'garbage');
-    expect(page.map((n) => n.id)).toEqual(['b', 'd']);
+  it('should omit the cursor for an empty result', () => {
+    expect(nextPageCursor({ total: 0, page: 1, limit: 25 })).toBeUndefined();
   });
 });

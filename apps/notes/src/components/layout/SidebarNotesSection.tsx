@@ -9,8 +9,10 @@ import { canPerformNoteAction } from '@/lib';
 import { preloadEditorChunk } from '@/lib/preload-editor';
 import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react';
 
-import { useNotes } from '@knowtis/data-access-notes';
+import { useRecentNotes } from '@knowtis/data-access-notes';
 import { useCollapsible } from '@knowtis/shared-hooks';
+
+const SIDEBAR_RECENT_NOTES = 20;
 
 export function SidebarNotesSection() {
   const { t } = useTranslation('notes');
@@ -18,7 +20,7 @@ export function SidebarNotesSection() {
   const { isCollapsed, toggle: toggleCollapsed } = useCollapsible(
     STORAGE_KEYS.SIDEBAR_NOTES_COLLAPSED
   );
-  const { data: notes } = useNotes();
+  const { data: notes } = useRecentNotes(SIDEBAR_RECENT_NOTES);
   const { createNote } = useCreateNoteAction();
   const params = useParams({ strict: false }) as { noteId?: string };
   const activeNoteId = params.noteId;

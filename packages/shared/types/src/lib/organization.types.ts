@@ -21,3 +21,13 @@ export interface NotesListFilters {
   bucket?: BucketFilter;
   view?: NoteListView;
 }
+
+/** Server default and the page size the notes list requests; both sides must agree or pages overlap. */
+export const DEFAULT_NOTES_PAGE_SIZE = 25;
+
+export interface NotesPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  limit: number;
+}
