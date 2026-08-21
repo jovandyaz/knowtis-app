@@ -48,7 +48,6 @@ interface NotePropertiesRowProps {
   supertag: Supertag | null;
   supertagFields: SupertagFields | null;
   isOwner: boolean;
-  /** Omitted when suggestions are off, which is what hides the affordance. */
   onSuggest?: () => void;
   isSuggesting?: boolean;
 }

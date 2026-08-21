@@ -10,10 +10,6 @@ import {
 
 const HTML_TAG_PATTERN = /<[^>]*>/g;
 
-/**
- * Session-scoped rather than component state: navigating away and back must not
- * earn a note a second automatic suggestion, and a dismissal has to stick.
- */
 const autoRequested = new Set<string>();
 const dismissed = new Set<string>();
 
@@ -29,8 +25,7 @@ export interface NoteSuggestionState {
   isPending: boolean;
   request: () => void;
   dismiss: () => void;
-  /** Call on every local edit; the automatic suggestion fires once typing stops. */
-  noteEdited: (contentHtml: string) => void;
+  reportEdit: (contentHtml: string) => void;
 }
 
 export function useNoteSuggestion({
@@ -57,9 +52,7 @@ export function useNoteSuggestion({
     reset();
   }, [noteId, reset]);
 
-  // A CRDT editor fires no save event, so the automatic trigger is idleness:
-  // every keystroke pushes the deadline out, and the card never lands mid-typing.
-  const noteEdited = useCallback(
+  const reportEdit = useCallback(
     (contentHtml: string) => {
       if (idleTimer.current) {
         clearTimeout(idleTimer.current);
@@ -99,5 +92,5 @@ export function useNoteSuggestion({
     []
   );
 
-  return { suggestion, isPending, request, dismiss, noteEdited };
+  return { suggestion, isPending, request, dismiss, reportEdit };
 }

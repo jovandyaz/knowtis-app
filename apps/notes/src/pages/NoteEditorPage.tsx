@@ -88,11 +88,10 @@ function NoteEditor({
     isOwner,
     enabled: suggestionsEnabled,
   });
-  // Held in a ref so the editor's change handler stays stable across keystrokes.
-  const suggestionTriggerRef = useRef(suggestion.noteEdited);
+  const reportEditRef = useRef(suggestion.reportEdit);
   useEffect(() => {
-    suggestionTriggerRef.current = suggestion.noteEdited;
-  }, [suggestion.noteEdited]);
+    reportEditRef.current = suggestion.reportEdit;
+  }, [suggestion.reportEdit]);
   const updateNote = useUpdateNote();
   const { getYDoc } = useYjs();
   const refreshNotesList = useNotesListRefresh();
@@ -207,7 +206,7 @@ function NoteEditor({
       } else {
         refreshNotesList();
       }
-      suggestionTriggerRef.current(newContent);
+      reportEditRef.current(newContent);
       deriveAutoTitle(newContent);
     },
     [canEdit, debouncedUpdateNote, deriveAutoTitle, refreshNotesList]

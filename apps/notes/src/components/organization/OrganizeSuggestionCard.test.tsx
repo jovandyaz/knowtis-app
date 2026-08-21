@@ -110,7 +110,6 @@ describe('OrganizeSuggestionCard', () => {
     });
   });
 
-  // Applying nothing would still issue a PATCH and a toast for no change.
   it('should refuse to apply once every chip is rejected', async () => {
     const user = userEvent.setup();
     await renderCard();
