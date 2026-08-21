@@ -59,6 +59,32 @@ describe('SupertagAssignment', () => {
     expect(value.supertagFields?.['rating']).toBe(5);
   });
 
+  it('should reject a value that is neither text nor a number', () => {
+    const result = SupertagAssignment.create('person', {
+      name: { first: 'Ada' },
+    });
+
+    expect(result.isErr()).toBe(true);
+  });
+
+  it('should reject text in a field the catalog declares numeric', () => {
+    const result = SupertagAssignment.create('book', {
+      title: 'SICP',
+      rating: 'five',
+    });
+
+    expect(result.isErr()).toBe(true);
+  });
+
+  it('should store a blank optional value as null', () => {
+    const value = SupertagAssignment.create('book', {
+      title: 'SICP',
+      author: '   ',
+    })._unsafeUnwrap().value;
+
+    expect(value.supertagFields?.['author']).toBeNull();
+  });
+
   it('should clear the fields along with the type', () => {
     expect(SupertagAssignment.clear().value).toEqual({
       supertag: null,

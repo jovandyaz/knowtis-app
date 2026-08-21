@@ -49,7 +49,7 @@ export interface UpdateNoteInput {
   readonly bucket?: ParaBucket | null;
   readonly tags?: string[];
   readonly supertag?: Supertag | null;
-  readonly supertagFields?: SupertagFields;
+  readonly supertagFields?: Record<string, unknown>;
 }
 
 interface PersistUpdateResult {
@@ -261,6 +261,14 @@ export class UpdateNoteHandler {
       if (contentRes.isErr()) {
         return err(contentRes.error);
       }
+    }
+
+    if (input.supertagFields !== undefined && !input.supertag) {
+      return err(
+        NoteErrors.invalidSupertag(
+          'supertagFields requires a supertag in the same update'
+        )
+      );
     }
 
     if (input.supertag !== undefined && input.supertag !== null) {

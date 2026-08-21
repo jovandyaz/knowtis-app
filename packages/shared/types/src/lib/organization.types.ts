@@ -53,12 +53,14 @@ export const SUPERTAGS = [
 ] as const;
 export type Supertag = (typeof SUPERTAGS)[number];
 
-const KIND = {
+export const SUPERTAG_FIELD_KIND = {
   text: 'text',
   date: 'date',
   url: 'url',
   number: 'number',
 } as const;
+
+const KIND = SUPERTAG_FIELD_KIND;
 
 export const SUPERTAG_FIELD_KINDS = [
   KIND.text,

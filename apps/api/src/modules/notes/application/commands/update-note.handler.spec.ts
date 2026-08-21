@@ -521,6 +521,22 @@ describe('UpdateNoteHandler', () => {
     expect(mockRepository.update).not.toHaveBeenCalled();
   });
 
+  it('rejects fields sent without the type they belong to', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      supertagFields: { name: 'Ada' },
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.INVALID_SUPERTAG);
+    }
+    expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
   it('editor setting a type is rejected with PERMISSION_DENIED', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
     vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);

@@ -2,6 +2,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import {
   SUPERTAG_CATALOG,
+  SUPERTAG_FIELD_KIND,
   SUPERTAGS,
   type Supertag,
   type SupertagField,
@@ -23,6 +24,14 @@ function isBlank(value: string | number | null): boolean {
   return value === null || (typeof value === 'string' && value.trim() === '');
 }
 
+function isFieldValue(value: unknown): value is string | number | null {
+  return (
+    value === null ||
+    typeof value === 'string' ||
+    (typeof value === 'number' && Number.isFinite(value))
+  );
+}
+
 function describe(supertag: Supertag): string {
   return `type "${supertag}"`;
 }
@@ -42,9 +51,14 @@ export class SupertagAssignment {
     return this.value;
   }
 
+  /**
+   * Validates a type assignment against the catalog and returns the fields blob
+   * normalized to exactly the declared keys. `fields` is untrusted: the DTO only
+   * proves it is an object, so every value is type-checked here.
+   */
   static create(
     supertag: string,
-    fields: SupertagFields | undefined
+    fields: Record<string, unknown> | undefined
   ): Result<SupertagAssignment, NoteDomainError> {
     if (!isSupertag(supertag)) {
       return err(NoteErrors.invalidSupertag(`Unknown supertag "${supertag}"`));
@@ -65,12 +79,33 @@ export class SupertagAssignment {
 
     const normalized: SupertagFields = {};
     for (const descriptor of descriptors) {
-      const raw = provided[descriptor.key] ?? null;
+      const value = provided[descriptor.key] ?? null;
 
-      if (descriptor.required && isBlank(raw)) {
+      if (!isFieldValue(value)) {
+        return err(
+          NoteErrors.invalidSupertag(
+            `"${descriptor.key}" of ${label} must be text, a number, or null`
+          )
+        );
+      }
+
+      const raw = isBlank(value) ? null : value;
+
+      if (descriptor.required && raw === null) {
         return err(
           NoteErrors.invalidSupertag(
             `"${descriptor.key}" is required for ${label}`
+          )
+        );
+      }
+
+      if (
+        descriptor.kind === SUPERTAG_FIELD_KIND.number &&
+        typeof raw === 'string'
+      ) {
+        return err(
+          NoteErrors.invalidSupertag(
+            `"${descriptor.key}" of ${label} must be a number`
           )
         );
       }

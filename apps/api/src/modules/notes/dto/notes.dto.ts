@@ -35,7 +35,6 @@ import {
   type ParaBucket,
   type PermissionLevel,
   type Supertag,
-  type SupertagFields,
 } from '@knowtis/shared-types';
 
 import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
@@ -167,7 +166,7 @@ export class UpdateNoteDto {
   })
   @IsObject()
   @IsOptional()
-  supertagFields?: SupertagFields;
+  supertagFields?: Record<string, unknown>;
 }
 
 export class ShareNoteDto {
