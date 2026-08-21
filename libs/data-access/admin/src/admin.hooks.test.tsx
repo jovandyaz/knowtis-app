@@ -506,6 +506,8 @@ describe('useSelectableModels', () => {
         contextWindow: 1000000,
         isDefault: true,
         billedToUser: false,
+        routableByServer: true,
+        access: 'granted',
       },
     ]);
 
