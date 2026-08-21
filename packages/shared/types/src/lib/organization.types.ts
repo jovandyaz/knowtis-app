@@ -146,6 +146,9 @@ export const MAX_BULK_SUGGEST_NOTES = 20;
 export const MAX_SUGGESTED_TAGS = 5;
 export const MAX_RELATED_NOTES = 3;
 
+export const SUGGEST_IDLE_MS = 30_000;
+export const SUGGEST_MIN_CONTENT_CHARS = 200;
+
 export interface SuggestedTag {
   path: string;
   /** Server truth: the model is never asked whether a tag already exists. */

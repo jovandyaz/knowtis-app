@@ -98,6 +98,21 @@
         "summary": "Summary",
         "source": "Source"
       }
+    },
+    "suggestion": {
+      "title": "Suggestion",
+      "subtitle": "from the note's content",
+      "ask": "Suggest organization",
+      "moveTo": "Move to",
+      "tags": "Tags",
+      "related": "Related",
+      "newTag": "new",
+      "apply": "Apply",
+      "dismiss": "Dismiss",
+      "pending": "Thinking…",
+      "empty": "Nothing to suggest for this note yet.",
+      "failed": "Could not get a suggestion. Try again.",
+      "applyFailed": "Could not apply the suggestion. Try again."
     }
   },
   "editor": {

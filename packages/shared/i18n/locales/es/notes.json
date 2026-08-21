@@ -98,6 +98,21 @@
         "summary": "Resumen",
         "source": "Fuente"
       }
+    },
+    "suggestion": {
+      "title": "Sugerencia",
+      "subtitle": "a partir del contenido",
+      "ask": "Sugerir organización",
+      "moveTo": "Mover a",
+      "tags": "Etiquetas",
+      "related": "Relacionadas",
+      "newTag": "nueva",
+      "apply": "Aplicar",
+      "dismiss": "Descartar",
+      "pending": "Pensando…",
+      "empty": "Todavía no hay nada que sugerir para esta nota.",
+      "failed": "No se pudo obtener una sugerencia. Inténtalo de nuevo.",
+      "applyFailed": "No se pudo aplicar la sugerencia. Inténtalo de nuevo."
     }
   },
   "editor": {
