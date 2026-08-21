@@ -7,6 +7,8 @@ export const NoteErrorCodes = {
   INVALID_TITLE: 'INVALID_TITLE',
   INVALID_CONTENT: 'INVALID_CONTENT',
   INVALID_PERMISSION: 'INVALID_PERMISSION',
+  INVALID_TAG: 'INVALID_TAG',
+  TAG_NOT_FOUND: 'TAG_NOT_FOUND',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
@@ -39,6 +41,12 @@ export const NoteErrors = {
       NoteErrorCodes.INVALID_PERMISSION,
       'Invalid permission level'
     ),
+
+  invalidTag: (reason: string) =>
+    createNoteError(NoteErrorCodes.INVALID_TAG, `Invalid tag: ${reason}`),
+
+  tagNotFound: (id: string) =>
+    createNoteError(NoteErrorCodes.TAG_NOT_FOUND, `Tag not found: ${id}`),
 
   noteNotFound: (id: string) =>
     createNoteError(NoteErrorCodes.NOTE_NOT_FOUND, `Note not found: ${id}`),

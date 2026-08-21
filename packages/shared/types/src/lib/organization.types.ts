@@ -20,6 +20,27 @@ export interface NotesListFilters {
   search?: string;
   bucket?: BucketFilter;
   view?: NoteListView;
+  tag?: string;
+}
+
+export const TAG_PATH_SEPARATOR = '/';
+export const TAG_MAX_DEPTH = 4;
+export const TAG_SEGMENT_MAX_LENGTH = 32;
+export const TAG_PATH_MAX_LENGTH = 120;
+export const TAG_SEGMENT_PATTERN = /^[a-z0-9-]+$/;
+export const TAG_COLOR_MAX_LENGTH = 32;
+export const TAG_MAX_PER_NOTE = 20;
+
+/** A tag's depth-1 root, which is the only level that carries a colour. */
+export function tagRootOf(path: string): string {
+  return path.split(TAG_PATH_SEPARATOR)[0] ?? path;
+}
+
+export interface TagNode {
+  id: string;
+  path: string;
+  color: string | null;
+  noteCount: number;
 }
 
 /** Server default and the page size the notes list requests; both sides must agree or pages overlap. */

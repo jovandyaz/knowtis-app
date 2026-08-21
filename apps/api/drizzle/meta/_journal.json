@@ -232,6 +232,13 @@
       "when": 1787261129957,
       "tag": "0032_elite_luminals",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1787273364198,
+      "tag": "0033_open_shooting_star",
+      "breakpoints": true
     }
   ]
 }

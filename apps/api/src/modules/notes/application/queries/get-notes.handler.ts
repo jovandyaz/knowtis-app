@@ -11,10 +11,12 @@ import {
 
 import {
   NOTE_REPOSITORY,
+  TAG_REPOSITORY,
   type NoteDomainError,
   type NoteListFilters,
   type NoteRepository,
   type NoteView,
+  type TagRepository,
 } from '../../domain';
 
 export interface GetNotesInput {
@@ -24,10 +26,12 @@ export interface GetNotesInput {
   readonly search?: string;
   readonly bucket?: BucketFilter;
   readonly view?: NoteListView;
+  readonly tag?: string;
 }
 
 export type AccessibleNote = NoteView & {
   accessLevel: NoteAccessLevel;
+  tags: string[];
 };
 
 export interface AccessibleNotesPage {
@@ -40,7 +44,8 @@ export interface AccessibleNotesPage {
 @Injectable()
 export class GetNotesHandler {
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    @Inject(TAG_REPOSITORY) private readonly tagRepository: TagRepository
   ) {}
 
   async execute(
@@ -55,6 +60,7 @@ export class GetNotesHandler {
       ...(input.search ? { search: input.search } : {}),
       ...(input.bucket ? { bucket: input.bucket } : {}),
       ...(input.view && input.view !== 'all' ? { view: input.view } : {}),
+      ...(input.tag ? { tag: input.tag } : {}),
     };
 
     const { items, total } = await this.noteRepository.findAccessibleByUser(
@@ -63,12 +69,18 @@ export class GetNotesHandler {
       filters
     );
 
+    // One query for the whole page: a lookup per note would be an N+1.
+    const tagsByNote = await this.tagRepository.findPathsByNotes(
+      items.map(({ note }) => note.id)
+    );
+
     return ok({
       items: items.map(({ note, permission }) => ({
         ...note,
         accessLevel: (note.ownerId === input.userId
           ? ACCESS.OWNER
           : (permission ?? ACCESS.VIEWER)) as NoteAccessLevel,
+        tags: tagsByNote.get(note.id) ?? [],
       })),
       total,
       page: input.page,

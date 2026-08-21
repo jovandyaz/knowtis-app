@@ -27,6 +27,8 @@ import {
   noteEmbeddings,
   notePermissions,
   notes,
+  noteTags,
+  tags,
   users,
   type Database,
 } from '../../../../database';
@@ -342,6 +344,21 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       : ne(notes.ownerId, userId.value);
   }
 
+  // Matched by path rather than by tag row: paths are semantic, so a note
+  // carrying its own owner's `work/alpha` belongs in the viewer's `work/alpha`.
+  private tagCondition(tag?: string): SQL | undefined {
+    if (!tag) {
+      return undefined;
+    }
+    const branch = escapeLike(tag);
+    return sql`EXISTS (
+      SELECT 1 FROM ${noteTags}
+      INNER JOIN ${tags} ON ${tags.id} = ${noteTags.tagId}
+      WHERE ${noteTags.noteId} = ${notes.id}
+        AND (${tags.path} = ${tag} OR ${tags.path} LIKE ${`${branch}/%`})
+    )`;
+  }
+
   private accessibleWhere(
     userId: UserId,
     filters?: NoteListFilters
@@ -351,6 +368,7 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       this.searchCondition(filters?.search),
       this.bucketCondition(filters?.bucket),
       this.viewCondition(userId, filters?.view),
+      this.tagCondition(filters?.tag),
     ].filter((condition): condition is SQL => condition !== undefined);
     return and(...conditions);
   }

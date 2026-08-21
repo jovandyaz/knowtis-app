@@ -64,7 +64,7 @@ import {
   UpdateNoteHandler,
 } from './application';
 import { UploadImageHandler } from './application/commands/upload-image.handler';
-import { NoteErrorCodes, toNoteView } from './domain';
+import { toNoteView } from './domain';
 import {
   CreateNoteDto,
   NotesQueryDto,
@@ -74,18 +74,7 @@ import {
 import { UploadImageDto } from './dto/upload-image.dto';
 import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 import { sanitizeFilename } from './infrastructure/filename.util';
-import { NOTE_UPDATE_THROTTLE } from './notes.constants';
-
-const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
-  [NoteErrorCodes.INVALID_TITLE]: HttpStatus.BAD_REQUEST,
-  [NoteErrorCodes.INVALID_CONTENT]: HttpStatus.BAD_REQUEST,
-  [NoteErrorCodes.INVALID_PERMISSION]: HttpStatus.BAD_REQUEST,
-  [NoteErrorCodes.NOTE_NOT_FOUND]: HttpStatus.NOT_FOUND,
-  [NoteErrorCodes.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
-  [NoteErrorCodes.SHARE_TOKEN_NOT_FOUND]: HttpStatus.NOT_FOUND,
-  [NoteErrorCodes.CONTENT_OVERWRITE_REFUSED]: HttpStatus.CONFLICT,
-  [NoteErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
-};
+import { NOTE_ERROR_STATUS_MAP, NOTE_UPDATE_THROTTLE } from './notes.constants';
 
 const noteProperties = {
   id: { type: 'string', format: 'uuid' },
@@ -200,6 +189,7 @@ export class NotesController {
       ...(query.search ? { search: query.search } : {}),
       ...(query.bucket ? { bucket: query.bucket } : {}),
       ...(query.view ? { view: query.view } : {}),
+      ...(query.tag ? { tag: query.tag } : {}),
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
   }
@@ -353,6 +343,7 @@ export class NotesController {
         'generalAccessPermission',
         'editorsCanShare',
         'bucket',
+        'tags',
       ]),
     });
     return unwrapOrThrow(result.map(toNoteView), NOTE_ERROR_STATUS_MAP);

@@ -18,9 +18,12 @@ import {
   NoteContent,
   NoteErrors,
   NoteTitle,
+  TAG_REPOSITORY,
+  TagPath,
   type NoteDomainError,
   type NoteEntity,
   type NoteRepository,
+  type TagRepository,
   type UpdateNoteData,
 } from '../../domain';
 import {
@@ -41,6 +44,7 @@ export interface UpdateNoteInput {
   readonly force?: boolean;
   readonly skipYjsState?: boolean;
   readonly bucket?: ParaBucket | null;
+  readonly tags?: string[];
 }
 
 interface PersistUpdateResult {
@@ -54,7 +58,8 @@ const SHARING_FIELDS = [
   'generalAccessPermission',
   'editorsCanShare',
 ] as const;
-const ORGANIZATION_FIELDS = ['bucket'] as const;
+const ORGANIZATION_COLUMNS = ['bucket'] as const;
+const ORGANIZATION_FIELDS = [...ORGANIZATION_COLUMNS, 'tags'] as const;
 
 @Injectable()
 export class UpdateNoteHandler {
@@ -62,6 +67,7 @@ export class UpdateNoteHandler {
 
   constructor(
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    @Inject(TAG_REPOSITORY) private readonly tagRepository: TagRepository,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -100,11 +106,24 @@ export class UpdateNoteHandler {
       ? await this.executeOwnerUpdate(input, note)
       : await this.executeEditorUpdate(input, userIdResult.value);
 
-    if (persisted.isOk()) {
-      this.emitUpdateEvent(input, note.id, persisted.value.yjsState);
+    if (persisted.isErr()) {
+      return err(persisted.error);
     }
 
-    return persisted.map(({ entity }) => entity);
+    if (isOwner && input.tags !== undefined) {
+      const tagged = await this.replaceTags(
+        note.id,
+        userIdResult.value,
+        input.tags
+      );
+      if (tagged.isErr()) {
+        return err(tagged.error);
+      }
+    }
+
+    this.emitUpdateEvent(input, note.id, persisted.value.yjsState);
+
+    return ok(persisted.value.entity);
   }
 
   private async executeOwnerUpdate(
@@ -115,7 +134,7 @@ export class UpdateNoteHandler {
       ...pickDefined(input, [
         ...CONTENT_FIELDS,
         ...SHARING_FIELDS,
-        ...ORGANIZATION_FIELDS,
+        ...ORGANIZATION_COLUMNS,
       ]),
       ...this.resolveShareToken(input, note),
     };
@@ -233,7 +252,37 @@ export class UpdateNoteHandler {
       }
     }
 
+    // Tags are validated here rather than at write time so a bad path rejects
+    // the whole PATCH instead of landing a half-applied update.
+    if (input.tags !== undefined) {
+      for (const raw of input.tags) {
+        const pathRes = TagPath.create(raw);
+        if (pathRes.isErr()) {
+          return err(pathRes.error);
+        }
+      }
+    }
+
     return null;
+  }
+
+  private async replaceTags(
+    noteId: string,
+    userId: UserId,
+    rawPaths: string[]
+  ): Promise<Result<void, NoteDomainError>> {
+    const paths: TagPath[] = [];
+    for (const raw of rawPaths) {
+      const pathRes = TagPath.create(raw);
+      if (pathRes.isErr()) {
+        return err(pathRes.error);
+      }
+      paths.push(pathRes.value);
+    }
+
+    const tagIds = await this.tagRepository.ensurePaths(userId, paths);
+    await this.tagRepository.replaceNoteTags(noteId, tagIds);
+    return ok(undefined);
   }
 
   /**

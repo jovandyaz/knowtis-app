@@ -9,6 +9,7 @@ import {
   NoteErrorCodes,
   NoteErrors,
   NoteRepository,
+  TagRepository,
 } from '../../domain';
 import { NoteUpdatedEvent } from '../../domain/events';
 import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
@@ -36,6 +37,7 @@ const EDITOR_ID = 'editor-1';
 describe('UpdateNoteHandler', () => {
   let handler: UpdateNoteHandler;
   let mockRepository: NoteRepository;
+  let mockTagRepository: TagRepository;
   let mockEventEmitter: EventEmitter2;
 
   beforeEach(() => {
@@ -69,7 +71,22 @@ describe('UpdateNoteHandler', () => {
       emit: vi.fn(),
     } as unknown as EventEmitter2;
 
-    handler = new UpdateNoteHandler(mockRepository, mockEventEmitter);
+    mockTagRepository = {
+      findTreeByOwner: vi.fn(),
+      findById: vi.fn(),
+      ensurePaths: vi.fn().mockResolvedValue([]),
+      replaceNoteTags: vi.fn(),
+      findPathsByNotes: vi.fn(),
+      renameBranch: vi.fn(),
+      recolor: vi.fn(),
+      deleteBranch: vi.fn(),
+    };
+
+    handler = new UpdateNoteHandler(
+      mockRepository,
+      mockTagRepository,
+      mockEventEmitter
+    );
   });
 
   it('should allow owner to update all fields and emit event', async () => {

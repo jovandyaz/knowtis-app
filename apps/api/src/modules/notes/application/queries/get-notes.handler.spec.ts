@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ACCESS, DEFAULT_NOTES_PAGE_SIZE } from '@knowtis/shared-types';
 
-import type { NoteRepository, NoteView } from '../../domain';
+import type { NoteRepository, NoteView, TagRepository } from '../../domain';
 import { GetNotesHandler } from './get-notes.handler';
 
 function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
@@ -29,6 +29,7 @@ const PAGE_ONE = { page: 1, limit: DEFAULT_NOTES_PAGE_SIZE } as const;
 describe('GetNotesHandler', () => {
   let handler: GetNotesHandler;
   let noteRepository: NoteRepository;
+  let tagRepository: TagRepository;
 
   beforeEach(() => {
     noteRepository = {
@@ -56,7 +57,17 @@ describe('GetNotesHandler', () => {
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
     };
-    handler = new GetNotesHandler(noteRepository);
+    tagRepository = {
+      findTreeByOwner: vi.fn(),
+      findById: vi.fn(),
+      ensurePaths: vi.fn(),
+      replaceNoteTags: vi.fn(),
+      findPathsByNotes: vi.fn().mockResolvedValue(new Map()),
+      renameBranch: vi.fn(),
+      recolor: vi.fn(),
+      deleteBranch: vi.fn(),
+    };
+    handler = new GetNotesHandler(noteRepository, tagRepository);
   });
 
   it('should return owned notes with owner access level', async () => {

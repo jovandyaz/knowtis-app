@@ -17,6 +17,7 @@ export interface NoteListFilters {
   readonly search?: string;
   readonly bucket?: BucketFilter;
   readonly view?: NoteListView;
+  readonly tag?: string;
 }
 
 export interface NotePageRequest {
