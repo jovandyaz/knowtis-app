@@ -270,6 +270,14 @@ describe('SuggestOrganizationHandler', () => {
     expect(options.maxOutputTokens).toBeGreaterThan(0);
   });
 
+  it('classifies at a fixed temperature so the same note keeps its bucket', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const options = structuredOutput.generateStructuredOutput.mock
+      .calls[0][2] as { temperature?: number };
+    expect(options.temperature).toBe(0);
+  });
+
   it('looks related notes up by title, never by the note body', async () => {
     await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
 

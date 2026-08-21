@@ -110,6 +110,12 @@ function NoteEditor({
     isLiveCollabRef.current = isLive;
   }, []);
 
+  const requestSuggestion = suggestion.request;
+  const handleSuggest = useCallback(
+    () => requestSuggestion(contentRef.current),
+    [requestSuggestion]
+  );
+
   const debouncedUpdateNote = useDebouncedMerge<{
     title: string;
     content: string;
@@ -310,7 +316,7 @@ function NoteEditor({
             supertag={supertag}
             supertagFields={supertagFields}
             isOwner={accessLevel === ACCESS.OWNER}
-            {...(suggestionsEnabled ? { onSuggest: suggestion.request } : {})}
+            {...(suggestionsEnabled ? { onSuggest: handleSuggest } : {})}
             isSuggesting={suggestion.isPending}
           />
         )}

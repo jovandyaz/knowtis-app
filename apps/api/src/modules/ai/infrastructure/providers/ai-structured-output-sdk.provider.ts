@@ -62,6 +62,9 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
       ...(options.maxOutputTokens
         ? { maxOutputTokens: options.maxOutputTokens }
         : {}),
+      ...(options.temperature !== undefined
+        ? { temperature: options.temperature }
+        : {}),
       ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
       ...(options.telemetry
         ? {

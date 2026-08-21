@@ -67,6 +67,11 @@ const ESTIMATED_TOKENS_PER_NOTE = 2_300;
 const SUGGEST_TIMEOUT_MS = 30_000;
 /** A bucket plus at most five tag paths; the ceiling only has to survive a verbose model. */
 const SUGGEST_MAX_OUTPUT_TOKENS = 512;
+/**
+ * Classification, not composition. At the provider default a note sitting on the
+ * prompt's "too thin to place" line lands in a different bucket run to run.
+ */
+const SUGGEST_TEMPERATURE = 0;
 
 const NOTE_FAILURE = {
   RATE_LIMIT: 'rate-limit',
@@ -299,6 +304,7 @@ export class SuggestOrganizationHandler {
             model,
             system,
             maxOutputTokens: SUGGEST_MAX_OUTPUT_TOKENS,
+            temperature: SUGGEST_TEMPERATURE,
             timeoutMs: SUGGEST_TIMEOUT_MS,
             maxRetries: this.configService.get('AI_MAX_RETRIES'),
           }

@@ -45,7 +45,7 @@ interface NoteSuggestionParams {
 export interface NoteSuggestionState {
   suggestion: OrganizationSuggestion | null;
   isPending: boolean;
-  request: () => void;
+  request: (contentHtml: string) => void;
   dismiss: () => void;
   reportEdit: (contentHtml: string) => void;
 }
@@ -108,11 +108,18 @@ export function useNoteSuggestion({
     [mutate, noteId, t]
   );
 
-  const request = useCallback(() => {
-    cancelIdlePass();
-    autoRequested.add(noteId);
-    run(true);
-  }, [cancelIdlePass, noteId, run]);
+  const request = useCallback(
+    (contentHtml: string) => {
+      cancelIdlePass();
+      if (bodyLengthOf(contentHtml) < SUGGEST_MIN_CONTENT_CHARS) {
+        toast(t('organization.suggestion.tooShort'));
+        return;
+      }
+      autoRequested.add(noteId);
+      run(true);
+    },
+    [cancelIdlePass, noteId, run, t]
+  );
 
   const dismiss = useCallback(() => {
     cancelIdlePass();

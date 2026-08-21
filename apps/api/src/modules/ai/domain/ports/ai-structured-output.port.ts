@@ -7,6 +7,7 @@ export interface StructuredOutputOptions {
   readonly system?: string;
   readonly maxRetries?: number;
   readonly maxOutputTokens?: number;
+  readonly temperature?: number;
   readonly timeoutMs?: number;
   readonly telemetry?: AITelemetryContext;
 }
