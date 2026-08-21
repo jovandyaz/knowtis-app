@@ -61,8 +61,12 @@ export function createOidcMount(app: INestApplication): RequestHandler {
  * bodyParser: false) everywhere except the oauth surfaces — oidc-provider
  * reads the raw request stream itself and a pre-parsed body breaks it.
  */
+// Content autosaves carry the note's CRDT state alongside its HTML, which
+// roughly doubles the payload; express's 100kb default cut those off.
+const JSON_BODY_LIMIT = '2mb';
+
 export function applyBodyParsersExcludingOauth(app: INestApplication): void {
-  const jsonParser = express.json();
+  const jsonParser = express.json({ limit: JSON_BODY_LIMIT });
   const urlencodedParser = express.urlencoded({ extended: true });
   app.use((req: Request, res: Response, next: NextFunction) =>
     isOauthPath(req.path) ? next() : jsonParser(req, res, next)

@@ -369,6 +369,7 @@ export class NotesController {
       ...pickDefined(dto, [
         'title',
         'content',
+        'yjsState',
         'skipYjsState',
         'generalAccess',
         'generalAccessPermission',

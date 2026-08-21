@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBase64,
   IsBoolean,
   IsEnum,
   IsIn,
@@ -38,6 +39,13 @@ import {
 } from '@knowtis/shared-types';
 
 import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
+import { YJS_STATE_MAX_BYTES } from '../infrastructure/yjs-state-update';
+
+const BASE64_BYTES_PER_GROUP = 3;
+const BASE64_CHARS_PER_GROUP = 4;
+const YJS_STATE_MAX_BASE64_LENGTH = Math.ceil(
+  (YJS_STATE_MAX_BYTES / BASE64_BYTES_PER_GROUP) * BASE64_CHARS_PER_GROUP
+);
 
 export class CreateNoteDto {
   @ApiPropertyOptional({
@@ -92,8 +100,17 @@ export class UpdateNoteDto {
 
   @ApiPropertyOptional({
     description:
-      'Editor fallback: persist content to the column without regenerating yjsState from HTML (the live Y.Doc owns the CRDT state)',
-    example: true,
+      "Editor fallback: the client doc's own CRDT state, base64-encoded, stored verbatim with the content so the server never mints a parallel history from the HTML",
+  })
+  @IsBase64()
+  @MaxLength(YJS_STATE_MAX_BASE64_LENGTH)
+  @IsOptional()
+  yjsState?: string;
+
+  @ApiPropertyOptional({
+    deprecated: true,
+    description:
+      'Superseded by yjsState. Tolerated so tabs still running the previous bundle do not lose every autosave to forbidNonWhitelisted during the rollout.',
   })
   @IsBoolean()
   @IsOptional()

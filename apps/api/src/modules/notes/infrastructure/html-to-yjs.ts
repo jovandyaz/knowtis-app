@@ -26,3 +26,27 @@ export function yDocToHtml(doc: Y.Doc): string {
   const json = yDocToProsemirrorJSON(doc, YJS_XML_FRAGMENT_NAME);
   return generateHTML(json, tiptapExtensions);
 }
+
+/**
+ * Rewrites an existing note's CRDT state to `html`, keeping its history.
+ *
+ * The old content is tombstoned rather than discarded, so a client holding
+ * the previous state merges this as an edit instead of as a second parallel
+ * copy of the note — the same clear-then-apply the live-document broadcast
+ * performs.
+ */
+export function evolveYjsState(existing: Buffer, html: string): Buffer {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, new Uint8Array(existing));
+
+  const next = htmlToYjsState(html);
+  doc.transact(() => {
+    const fragment = doc.getXmlFragment(YJS_XML_FRAGMENT_NAME);
+    fragment.delete(0, fragment.length);
+    Y.applyUpdate(doc, new Uint8Array(next));
+  });
+
+  const state = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return Buffer.from(state);
+}

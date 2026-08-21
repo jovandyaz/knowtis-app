@@ -6,12 +6,35 @@ import { httpClient } from './http-client';
 import { notesApi } from './notes.api';
 
 vi.mock('./http-client', () => ({
-  httpClient: { get: vi.fn() },
+  httpClient: { get: vi.fn(), patch: vi.fn() },
 }));
 
 describe('notesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  describe('update', () => {
+    it('sends the CRDT state in the body when provided', async () => {
+      vi.mocked(httpClient.patch).mockResolvedValue({});
+      await notesApi.update(
+        'note-1',
+        { content: '<p>x</p>' },
+        { yjsState: 'AAECAw==' }
+      );
+      expect(httpClient.patch).toHaveBeenCalledWith('/notes/note-1', {
+        content: '<p>x</p>',
+        yjsState: 'AAECAw==',
+      });
+    });
+
+    it('leaves the body untouched when no state travels', async () => {
+      vi.mocked(httpClient.patch).mockResolvedValue({});
+      await notesApi.update('note-1', { title: 'renamed' });
+      expect(httpClient.patch).toHaveBeenCalledWith('/notes/note-1', {
+        title: 'renamed',
+      });
+    });
   });
 
   describe('getAll', () => {

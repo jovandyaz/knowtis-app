@@ -26,6 +26,7 @@ import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
+import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
 import { cn, ErrorState, Input, LoadingState } from '@knowtis/design-system';
 import { useDebouncedMerge } from '@knowtis/shared-hooks';
@@ -73,6 +74,7 @@ function NoteEditor({
   const isAnonymous = useAuthUser()?.isAnonymous ?? false;
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const updateNote = useUpdateNote();
+  const { getYDoc } = useYjs();
   const refreshNotesList = useNotesListRefresh();
   const isNewNote = useMemo(() => !initialContent, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -93,8 +95,17 @@ function NoteEditor({
   }>((updates) => {
     pendingUpdateRef.current = true;
     setIsPendingUpdate(true);
+    // Content saves carry the doc's own CRDT state: the server stores it
+    // verbatim, so it never mints a parallel history from the HTML — the
+    // root cause of notes duplicating on reload.
     updateNote.mutate(
-      { id: noteId, input: updates, skipYjsState: true },
+      {
+        id: noteId,
+        input: updates,
+        ...(updates.content !== undefined
+          ? { yjsState: docStateToBase64(getYDoc(noteId)) }
+          : {}),
+      },
       {
         onSuccess: () => {
           setLastSaved(new Date());
