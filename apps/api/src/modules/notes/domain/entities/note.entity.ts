@@ -1,4 +1,8 @@
-import type { ParaBucket } from '@knowtis/shared-types';
+import type {
+  ParaBucket,
+  Supertag,
+  SupertagFields,
+} from '@knowtis/shared-types';
 
 import type { PermissionLevel } from '../value-objects';
 
@@ -18,6 +22,8 @@ export interface NoteEntity {
   readonly shareToken: string | null;
   readonly editorsCanShare: boolean;
   readonly bucket: ParaBucket | null;
+  readonly supertag: Supertag | null;
+  readonly supertagFields: SupertagFields | null;
   readonly yjsState: Buffer | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -36,6 +42,8 @@ export function toNoteView(entity: NoteEntity): NoteView {
     shareToken: entity.shareToken,
     editorsCanShare: entity.editorsCanShare,
     bucket: entity.bucket,
+    supertag: entity.supertag,
+    supertagFields: entity.supertagFields,
     createdAt: entity.createdAt,
     updatedAt: entity.updatedAt,
   };

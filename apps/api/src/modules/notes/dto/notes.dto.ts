@@ -8,6 +8,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -24,6 +25,7 @@ import {
   NOTE_TITLE_MAX_LENGTH,
   PARA_BUCKETS,
   PERMISSION_LEVELS,
+  SUPERTAGS,
   TAG_COLOR_MAX_LENGTH,
   TAG_MAX_PER_NOTE,
   TAG_PATH_MAX_LENGTH,
@@ -32,6 +34,7 @@ import {
   type NoteListView,
   type ParaBucket,
   type PermissionLevel,
+  type Supertag,
 } from '@knowtis/shared-types';
 
 import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
@@ -146,6 +149,24 @@ export class UpdateNoteDto {
   @ArrayMaxSize(TAG_MAX_PER_NOTE)
   @IsOptional()
   tags?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Note type; null clears the type and its fields',
+    enum: [...SUPERTAGS],
+    nullable: true,
+  })
+  @IsIn(SUPERTAGS)
+  @IsOptional()
+  supertag?: Supertag | null;
+
+  @ApiPropertyOptional({
+    description: 'Values for the fields the type declares',
+    type: 'object',
+    additionalProperties: true,
+  })
+  @IsObject()
+  @IsOptional()
+  supertagFields?: Record<string, unknown>;
 }
 
 export class ShareNoteDto {
@@ -223,6 +244,14 @@ export class NotesQueryDto {
   @MaxLength(TAG_PATH_MAX_LENGTH)
   @IsOptional()
   tag?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by note type',
+    enum: [...SUPERTAGS],
+  })
+  @IsIn(SUPERTAGS)
+  @IsOptional()
+  supertag?: Supertag;
 }
 
 export class UpdateTagDto {

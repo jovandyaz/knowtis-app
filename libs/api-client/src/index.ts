@@ -12,6 +12,8 @@ export {
   type NoteWithAccess,
   type NoteDetail,
   type NoteCollaborator,
+  type NoteCounts,
+  type SupertagCatalog,
 } from './lib/notes.api';
 
 export { tagsApi, type UpdateTagInput } from './lib/tags.api';

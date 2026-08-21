@@ -4,6 +4,7 @@ import type { Result } from 'neverthrow';
 
 import type {
   NoteBucketCounts,
+  NoteSupertagCounts,
   PermissionLevel as PermissionLevelType,
 } from '@knowtis/shared-types';
 
@@ -99,6 +100,10 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   countAccessibleByUser(userId: UserId): Promise<AccessibleNotesCount> {
     return this.readRepo.countAccessibleByUser(userId);
+  }
+
+  countAccessibleBySupertag(userId: UserId): Promise<NoteSupertagCounts> {
+    return this.readRepo.countAccessibleBySupertag(userId);
   }
 
   countAccessibleByBucket(userId: UserId): Promise<NoteBucketCounts> {

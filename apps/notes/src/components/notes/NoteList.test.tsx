@@ -94,6 +94,8 @@ const note = (id: string, title: string): NoteWithAccess => ({
   editorsCanShare: false,
   bucket: null,
   tags: [],
+  supertag: null,
+  supertagFields: null,
   createdAt: new Date(0),
   updatedAt: new Date(0),
 });

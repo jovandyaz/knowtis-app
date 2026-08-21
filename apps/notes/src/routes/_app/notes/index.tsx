@@ -8,6 +8,7 @@ import { LoadingState } from '@knowtis/design-system';
 import {
   BUCKET_FILTERS,
   NOTE_LIST_VIEWS,
+  SUPERTAGS,
   TAG_PATH_MAX_LENGTH,
 } from '@knowtis/shared-types';
 
@@ -21,6 +22,7 @@ export const notesSearchSchema = z.object({
   // /notes are not forced to carry search params; .catch covers junk values.
   view: z.enum(NOTE_LIST_VIEWS).catch('all').default('all'),
   tag: z.string().max(TAG_PATH_MAX_LENGTH).optional().catch(undefined),
+  supertag: z.enum(SUPERTAGS).optional().catch(undefined),
 });
 
 export const Route = createFileRoute('/_app/notes/')({

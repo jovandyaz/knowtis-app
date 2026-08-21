@@ -35,6 +35,8 @@ import {
   type NoteAccessLevel,
   type ParaBucket,
   type PermissionLevel,
+  type Supertag,
+  type SupertagFields,
 } from '@knowtis/shared-types';
 
 interface NoteEditorProps {
@@ -44,6 +46,8 @@ interface NoteEditorProps {
   accessLevel: NoteAccessLevel;
   bucket: ParaBucket | null;
   tags: string[];
+  supertag: Supertag | null;
+  supertagFields: SupertagFields | null;
   generalAccess: GeneralAccessLevel;
   generalAccessPermission: PermissionLevel;
   shareToken: string | null;
@@ -57,6 +61,8 @@ function NoteEditor({
   accessLevel,
   bucket,
   tags,
+  supertag,
+  supertagFields,
   generalAccess,
   generalAccessPermission,
   shareToken,
@@ -269,6 +275,8 @@ function NoteEditor({
             noteId={noteId}
             bucket={bucket}
             tags={tags}
+            supertag={supertag}
+            supertagFields={supertagFields}
             isOwner={accessLevel === ACCESS.OWNER}
           />
         )}
@@ -346,6 +354,8 @@ export function NoteEditorPage() {
       accessLevel={note.accessLevel}
       bucket={note.bucket}
       tags={note.tags}
+      supertag={note.supertag}
+      supertagFields={note.supertagFields}
       generalAccess={note.generalAccess}
       generalAccessPermission={note.generalAccessPermission}
       shareToken={note.shareToken}

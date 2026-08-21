@@ -7,6 +7,7 @@ import {
   type BucketFilter,
   type NoteAccessLevel,
   type NoteListView,
+  type Supertag,
 } from '@knowtis/shared-types';
 
 import {
@@ -27,6 +28,7 @@ export interface GetNotesInput {
   readonly bucket?: BucketFilter;
   readonly view?: NoteListView;
   readonly tag?: string;
+  readonly supertag?: Supertag;
 }
 
 export type AccessibleNote = NoteView & {
@@ -61,6 +63,7 @@ export class GetNotesHandler {
       ...(input.bucket ? { bucket: input.bucket } : {}),
       ...(input.view && input.view !== 'all' ? { view: input.view } : {}),
       ...(input.tag ? { tag: input.tag } : {}),
+      ...(input.supertag ? { supertag: input.supertag } : {}),
     };
 
     const { items, total } = await this.noteRepository.findAccessibleByUser(

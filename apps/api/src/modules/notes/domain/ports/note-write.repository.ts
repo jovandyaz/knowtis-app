@@ -5,6 +5,8 @@ import type {
   GeneralAccessLevel,
   ParaBucket,
   PermissionLevel,
+  Supertag,
+  SupertagFields,
 } from '@knowtis/shared-types';
 
 import type { NoteEntity } from '../entities';
@@ -25,6 +27,8 @@ export interface UpdateNoteData {
   readonly shareToken?: string | null;
   readonly editorsCanShare?: boolean;
   readonly bucket?: ParaBucket | null;
+  readonly supertag?: Supertag | null;
+  readonly supertagFields?: SupertagFields | null;
 }
 
 export type UpdateNoteContentData = UpdateNoteData & {

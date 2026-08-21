@@ -16,6 +16,8 @@ function createMockNote(overrides: Partial<NoteView> = {}): NoteView {
     shareToken: null,
     editorsCanShare: false,
     bucket: null,
+    supertag: null,
+    supertagFields: null,
     createdAt: new Date(),
     updatedAt: new Date(),
     ...overrides,
@@ -44,6 +46,7 @@ describe('GetNotesHandler', () => {
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
+      countAccessibleBySupertag: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),
@@ -227,6 +230,25 @@ describe('GetNotesHandler', () => {
       );
     }
   );
+
+  it('passes the type filter to the repository instead of the page', async () => {
+    vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({
+      items: [],
+      total: 0,
+    });
+
+    await handler.execute({
+      ...PAGE_ONE,
+      userId: VALID_UUID,
+      supertag: 'person',
+    });
+
+    expect(noteRepository.findAccessibleByUser).toHaveBeenCalledWith(
+      expect.anything(),
+      PAGE_ONE,
+      { supertag: 'person' }
+    );
+  });
 
   it('omits the default view so the query stays unfiltered', async () => {
     vi.mocked(noteRepository.findAccessibleByUser).mockResolvedValue({

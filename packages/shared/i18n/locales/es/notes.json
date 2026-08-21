@@ -53,6 +53,50 @@
       "deleteConfirm": "¿Eliminar #{{path}} y todo lo anidado debajo? Tus notas se quedan.",
       "emptyTitle": "Nada etiquetado #{{tag}}",
       "emptyDescription": "Etiqueta una nota desde su fila de propiedades para verla aquí."
+    },
+    "typesTitle": "Tipos",
+    "supertags": {
+      "none": "Sin tipo",
+      "label": "Tipo",
+      "save": "Guardar",
+      "cancel": "Cancelar",
+      "clearFilter": "Quitar el filtro {{type}}",
+      "emptyTitle": "Nada de tipo {{type}}",
+      "emptyDescription": "Asigna este tipo a una nota desde su fila de propiedades para verla aquí.",
+      "names": {
+        "person": "Persona",
+        "book": "Libro",
+        "project": "Proyecto",
+        "meeting": "Reunión",
+        "idea": "Idea"
+      }
+    },
+    "supertagFields": {
+      "person": {
+        "name": "Nombre",
+        "role": "Rol",
+        "contact": "Contacto"
+      },
+      "book": {
+        "title": "Título",
+        "author": "Autor",
+        "url": "Enlace",
+        "rating": "Valoración"
+      },
+      "project": {
+        "name": "Nombre",
+        "status": "Estado",
+        "due": "Fecha límite"
+      },
+      "meeting": {
+        "subject": "Asunto",
+        "date": "Fecha",
+        "attendees": "Asistentes"
+      },
+      "idea": {
+        "summary": "Resumen",
+        "source": "Fuente"
+      }
     }
   },
   "editor": {

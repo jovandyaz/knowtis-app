@@ -5,6 +5,7 @@ import { getRouteApi, useNavigate } from '@tanstack/react-router';
 
 import { BucketDot } from '@/components/organization/BucketDot';
 import { BucketEmptyState } from '@/components/organization/BucketEmptyState';
+import { SupertagEmptyState } from '@/components/organization/SupertagEmptyState';
 import { TagEmptyState } from '@/components/organization/TagEmptyState';
 import { ViewEmptyState } from '@/components/organization/ViewEmptyState';
 import { VoiceNoteRecorder } from '@/components/voice-note/VoiceNoteRecorder';
@@ -16,7 +17,7 @@ import { notesSearchSchema } from '@/routes/_app/notes/index';
 import { useAIStore } from '@/stores/ai.store';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { Hash, Plus, Search, X } from 'lucide-react';
+import { Hash, Plus, Search, Shapes, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 
 import { useNotes } from '@knowtis/data-access-notes';
@@ -57,6 +58,7 @@ export function NoteList() {
     bucket,
     view: requestedView,
     tag,
+    supertag,
   } = notesSearchSchema.parse(routeApi.useSearch());
   // Anonymous visitors get no view picker, so a view left in the URL would
   // filter them into an empty list they have no control to clear.
@@ -80,6 +82,7 @@ export function NoteList() {
     ...(bucket ? { bucket } : {}),
     ...(view !== 'all' ? { view } : {}),
     ...(tag ? { tag } : {}),
+    ...(supertag ? { supertag } : {}),
   };
 
   const {
@@ -107,6 +110,7 @@ export function NoteList() {
       search: {
         ...(bucket ? { bucket } : {}),
         ...(tag ? { tag } : {}),
+        ...(supertag ? { supertag } : {}),
         view: next,
       },
     });
@@ -114,16 +118,33 @@ export function NoteList() {
   const clearBucket = () =>
     void navigate({
       to: ROUTES.NOTES,
-      search: { ...(tag ? { tag } : {}), view },
+      search: {
+        ...(tag ? { tag } : {}),
+        ...(supertag ? { supertag } : {}),
+        view,
+      },
     });
 
   const clearTag = () =>
     void navigate({
       to: ROUTES.NOTES,
-      search: { ...(bucket ? { bucket } : {}), view },
+      search: {
+        ...(bucket ? { bucket } : {}),
+        ...(supertag ? { supertag } : {}),
+        view,
+      },
+    });
+
+  const clearSupertag = () =>
+    void navigate({
+      to: ROUTES.NOTES,
+      search: { ...(bucket ? { bucket } : {}), ...(tag ? { tag } : {}), view },
     });
 
   const renderEmptyState = () => {
+    if (supertag) {
+      return <SupertagEmptyState supertag={supertag} />;
+    }
     if (tag) {
       return <TagEmptyState tag={tag} />;
     }
@@ -221,7 +242,7 @@ export function NoteList() {
         </div>
       </div>
 
-      {(bucket || tag) && (
+      {(bucket || tag || supertag) && (
         <div className="flex flex-wrap items-center gap-2.5">
           {bucket && (
             <button
@@ -246,6 +267,20 @@ export function NoteList() {
             >
               <Hash className="h-3 w-3 opacity-70" />
               {tag}
+              <X className="h-3 w-3 opacity-70" />
+            </button>
+          )}
+          {supertag && (
+            <button
+              type="button"
+              onClick={clearSupertag}
+              aria-label={t('organization.supertags.clearFilter', {
+                type: t(`organization.supertags.names.${supertag}`),
+              })}
+              className="inline-flex cursor-pointer items-center gap-1.5 rounded-full border border-border/60 bg-muted/25 px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted/40"
+            >
+              <Shapes className="h-3 w-3 opacity-70" />
+              {t(`organization.supertags.names.${supertag}`)}
               <X className="h-3 w-3 opacity-70" />
             </button>
           )}

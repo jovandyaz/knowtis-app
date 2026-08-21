@@ -25,6 +25,8 @@ const mockNote: NoteEntity = {
   shareToken: null,
   editorsCanShare: false,
   bucket: null,
+  supertag: null,
+  supertagFields: null,
   yjsState: null,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -53,6 +55,7 @@ describe('UpdateNoteHandler', () => {
       findAccessibleNotesByEmbedding: vi.fn(),
       countAccessibleByUser: vi.fn(),
       countAccessibleByBucket: vi.fn(),
+      countAccessibleBySupertag: vi.fn(),
       create: vi.fn(),
       createWithYjsState: vi.fn(),
       update: vi.fn(),
@@ -441,6 +444,8 @@ describe('UpdateNoteHandler', () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue({
       ...mockNote,
       bucket: 'projects',
+      supertag: null,
+      supertagFields: null,
     });
     vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
 
@@ -455,6 +460,99 @@ describe('UpdateNoteHandler', () => {
       noteId,
       expect.objectContaining({ bucket: null })
     );
+  });
+
+  it('owner assigning a type persists it with the normalized field blob', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      supertag: 'person',
+      supertagFields: { name: 'Ada' },
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      noteId,
+      expect.objectContaining({
+        supertag: 'person',
+        supertagFields: { name: 'Ada', role: null, contact: null },
+      })
+    );
+  });
+
+  it('owner clearing the type clears its fields in the same write', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue({
+      ...mockNote,
+      supertag: 'person',
+      supertagFields: { name: 'Ada', role: null, contact: null },
+    });
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(mockNote));
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      supertag: null,
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mockRepository.update).toHaveBeenCalledWith(
+      noteId,
+      expect.objectContaining({ supertag: null, supertagFields: null })
+    );
+  });
+
+  it('rejects a type whose required field is missing, before touching the row', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      title: 'Also renamed',
+      supertag: 'person',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.INVALID_SUPERTAG);
+    }
+    expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects fields sent without the type they belong to', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+
+    const result = await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      supertagFields: { name: 'Ada' },
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.INVALID_SUPERTAG);
+    }
+    expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('editor setting a type is rejected with PERMISSION_DENIED', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
+
+    const result = await handler.execute({
+      noteId,
+      userId: EDITOR_ID,
+      supertag: 'person',
+      supertagFields: { name: 'Ada' },
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
+    }
+    expect(mockRepository.update).not.toHaveBeenCalled();
   });
 
   it('editor setting a bucket is rejected with PERMISSION_DENIED', async () => {

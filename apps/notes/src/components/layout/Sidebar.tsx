@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from '@tanstack/react-router';
 
 import { BucketNav } from '@/components/organization/BucketNav';
+import { SupertagNav } from '@/components/organization/SupertagNav';
 import { TagTree } from '@/components/organization/TagTree';
 import { NAVIGATION_LINKS, ROUTES } from '@/config';
 import { useNotesSearchStore } from '@/stores/notes-search.store';
@@ -90,6 +91,7 @@ export function Sidebar() {
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-4">
           {!isAnonymous && <BucketNav />}
+          {!isAnonymous && <SupertagNav />}
           {!isAnonymous && <TagTree />}
           <SidebarNotesSection />
         </div>

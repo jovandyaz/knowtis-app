@@ -6,6 +6,8 @@ import { Test } from '@nestjs/testing';
 import { ok } from 'neverthrow';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { SUPERTAGS } from '@knowtis/shared-types';
+
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -34,6 +36,8 @@ const noteEntity: NoteEntity = {
   shareToken: null,
   editorsCanShare: false,
   bucket: null,
+  supertag: null,
+  supertagFields: null,
   yjsState: Buffer.from([1, 2, 3]),
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-02T00:00:00Z'),
@@ -158,6 +162,15 @@ describe('NotesController route order', () => {
       archive: 0,
     });
     expect(getNoteCounts).toHaveBeenCalledWith({ userId: routeOrderUser.id });
+    expect(findOne).not.toHaveBeenCalled();
+  });
+
+  it('routes GET /notes/supertags to the catalog, not :id ParseUUIDPipe', async () => {
+    const response = await fetch(`${base}/notes/supertags`);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(Object.keys(body)).toEqual([...SUPERTAGS]);
     expect(findOne).not.toHaveBeenCalled();
   });
 });

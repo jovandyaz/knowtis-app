@@ -2,10 +2,10 @@
  * Picks only the properties from `source` whose values are not `undefined`.
  * Useful for building partial update objects from optional inputs.
  */
-export function pickDefined<T extends object>(
+export function pickDefined<T extends object, K extends keyof T>(
   source: T,
-  keys: readonly (keyof T)[]
-): Partial<Pick<T, (typeof keys)[number]>> {
+  keys: readonly K[]
+): Partial<Pick<T, K>> {
   const result: Partial<T> = {};
 
   for (const key of keys) {

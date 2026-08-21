@@ -3,6 +3,7 @@ import {
   boolean,
   customType,
   index,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -11,7 +12,11 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 
-import type { ParaBucket } from '@knowtis/shared-types';
+import type {
+  ParaBucket,
+  Supertag,
+  SupertagFields,
+} from '@knowtis/shared-types';
 
 import { users } from './users.schema';
 
@@ -46,6 +51,8 @@ export const notes = pgTable(
     shareToken: text('share_token').unique(),
     editorsCanShare: boolean('editors_can_share').notNull().default(false),
     bucket: text('bucket').$type<ParaBucket>(),
+    supertag: text('supertag').$type<Supertag>(),
+    supertagFields: jsonb('supertag_fields').$type<SupertagFields>(),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -65,6 +72,9 @@ export const notes = pgTable(
     index('notes_owner_bucket_idx')
       .on(table.ownerId, table.bucket)
       .where(sql`${table.deletedAt} IS NULL`),
+    index('notes_owner_supertag_idx')
+      .on(table.ownerId, table.supertag)
+      .where(sql`${table.supertag} IS NOT NULL`),
   ]
 );
 

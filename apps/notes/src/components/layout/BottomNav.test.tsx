@@ -30,6 +30,9 @@ vi.mock('@/components/organization/BucketNav', () => ({
 vi.mock('@/components/organization/TagTree', () => ({
   TagTree: () => <div data-testid="tag-tree" />,
 }));
+vi.mock('@/components/organization/SupertagNav', () => ({
+  SupertagNav: () => <div data-testid="supertag-nav" />,
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));

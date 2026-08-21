@@ -53,6 +53,50 @@
       "deleteConfirm": "Delete #{{path}} and everything nested under it? Your notes stay.",
       "emptyTitle": "Nothing tagged #{{tag}}",
       "emptyDescription": "Tag a note from its properties row to see it here."
+    },
+    "typesTitle": "Types",
+    "supertags": {
+      "none": "No type",
+      "label": "Type",
+      "save": "Save",
+      "cancel": "Cancel",
+      "clearFilter": "Clear the {{type}} filter",
+      "emptyTitle": "Nothing typed {{type}}",
+      "emptyDescription": "Give a note this type from its properties row to see it here.",
+      "names": {
+        "person": "Person",
+        "book": "Book",
+        "project": "Project",
+        "meeting": "Meeting",
+        "idea": "Idea"
+      }
+    },
+    "supertagFields": {
+      "person": {
+        "name": "Name",
+        "role": "Role",
+        "contact": "Contact"
+      },
+      "book": {
+        "title": "Title",
+        "author": "Author",
+        "url": "Link",
+        "rating": "Rating"
+      },
+      "project": {
+        "name": "Name",
+        "status": "Status",
+        "due": "Due"
+      },
+      "meeting": {
+        "subject": "Subject",
+        "date": "Date",
+        "attendees": "Attendees"
+      },
+      "idea": {
+        "summary": "Summary",
+        "source": "Source"
+      }
     }
   },
   "editor": {

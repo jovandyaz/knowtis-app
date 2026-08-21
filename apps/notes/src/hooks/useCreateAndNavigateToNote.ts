@@ -59,6 +59,8 @@ export function useCreateAndNavigateToNote() {
       editorsCanShare: false,
       bucket: null,
       tags: [],
+      supertag: null,
+      supertagFields: null,
       createdAt: now,
       updatedAt: now,
       accessLevel: 'owner',
