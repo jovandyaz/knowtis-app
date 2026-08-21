@@ -136,7 +136,6 @@ describe('TagTree', () => {
     expect(rowFor('work')).toHaveTextContent('5');
   });
 
-  // jsdom has no layout, so the rail is pinned through the shared classes.
   it('should hang a branch and a leaf on the same icon rail', async () => {
     await renderAt('/notes');
 
