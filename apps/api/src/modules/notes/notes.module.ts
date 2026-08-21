@@ -82,6 +82,7 @@ import { TagsController } from './tags.controller';
     GetNoteByTokenHandler,
     NOTE_REPOSITORY,
     NOTE_READ_REPOSITORY,
+    TAG_REPOSITORY,
   ],
 })
 export class NotesModule {}

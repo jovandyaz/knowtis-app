@@ -140,3 +140,31 @@ export interface NotesPage<T> {
   page: number;
   limit: number;
 }
+
+/** Bulk "Organize Inbox" pass size; more than this and the user repeats the pass. */
+export const MAX_BULK_SUGGEST_NOTES = 20;
+export const MAX_SUGGESTED_TAGS = 5;
+export const MAX_RELATED_NOTES = 3;
+
+/** Idle window after a local edit before an Inbox note asks for a suggestion. */
+export const SUGGEST_IDLE_MS = 30_000;
+export const SUGGEST_MIN_CONTENT_CHARS = 200;
+
+export interface SuggestedTag {
+  path: string;
+  /** Server truth: the model is never asked whether a tag already exists. */
+  isNew: boolean;
+}
+
+export interface RelatedNote {
+  id: string;
+  title: string;
+}
+
+export interface OrganizationSuggestion {
+  /** Echoed from the request — never model-produced, so a hallucinated id cannot exist. */
+  noteId: string;
+  bucket: ParaBucket | null;
+  tags: SuggestedTag[];
+  relatedNotes: RelatedNote[];
+}

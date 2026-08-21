@@ -14,6 +14,7 @@ export const FEATURE_FLAG_KEYS = {
   AI_ANON_IP_BUDGET: 'ai_anon_ip_budget',
   AI_TIER_GATING: 'ai_tier_gating',
   AI_CATALOG_SYNC: 'ai_catalog_sync',
+  AI_AUTO_ORGANIZE: 'ai_auto_organize',
 } as const;
 
 export type FeatureFlagKey =
@@ -138,6 +139,11 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.AI,
     group: FLAG_GROUP.CAPABILITY,
     label: 'Catalog sync',
+  },
+  ai_auto_organize: {
+    domain: FLAG_DOMAIN.AI,
+    group: FLAG_GROUP.CAPABILITY,
+    label: 'Organization suggestions',
   },
 } as const satisfies Record<FeatureFlagKey, FlagMeta>;
 

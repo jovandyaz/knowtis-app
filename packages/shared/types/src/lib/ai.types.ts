@@ -19,6 +19,7 @@ export const AI_ACTION = {
   GENERATE_MIND_MAP: 'generate-mind-map',
   GENERATE_OUTLINE: 'generate-outline',
   LEARN_TOPIC: 'learn-topic',
+  SUGGEST_ORGANIZATION: 'suggest-organization',
 } as const;
 
 export const AI_ACTIONS = Object.values(AI_ACTION);
