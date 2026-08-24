@@ -14,9 +14,9 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AI_ACTION,
+  isClassifiable,
   MAX_RELATED_NOTES,
   MAX_SUGGESTED_TAGS,
-  SUGGEST_MIN_CONTENT_CHARS,
   type OrganizationSuggestion,
   type RelatedNote,
   type SuggestedTag,
@@ -277,7 +277,7 @@ export class SuggestOrganizationHandler {
     // The client applies the same floor for instant feedback, but only this
     // check binds: MCP callers, bulk passes, and a body the editor has not
     // persisted yet all reach here without it.
-    if (content.trim().length < SUGGEST_MIN_CONTENT_CHARS) {
+    if (!isClassifiable(content)) {
       return { suggestion: empty };
     }
 

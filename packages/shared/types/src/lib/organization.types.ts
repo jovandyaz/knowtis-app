@@ -149,6 +149,15 @@ export const MAX_RELATED_NOTES = 3;
 export const SUGGEST_IDLE_MS = 30_000;
 export const SUGGEST_MIN_CONTENT_CHARS = 200;
 
+/**
+ * Whether a note carries enough prose to classify. Takes plain text so both
+ * sides weigh the same thing: the editor strips its own markup, the API
+ * measures the persisted body after `htmlToPlainText`.
+ */
+export function isClassifiable(plainText: string): boolean {
+  return plainText.trim().length >= SUGGEST_MIN_CONTENT_CHARS;
+}
+
 export interface SuggestedTag {
   path: string;
   /** Server truth: the model is never asked whether a tag already exists. */

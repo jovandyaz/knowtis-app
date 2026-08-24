@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 
 import { useSuggestOrganization } from '@knowtis/data-access-notes';
 import {
+  isClassifiable,
   SUGGEST_IDLE_MS,
-  SUGGEST_MIN_CONTENT_CHARS,
   type OrganizationSuggestion,
   type ParaBucket,
 } from '@knowtis/shared-types';
@@ -29,11 +29,9 @@ function isActionable(
 }
 
 function meetsSuggestionFloor(contentHtml: string): boolean {
-  const bodyLength = contentHtml
-    .replace(HTML_TAG_PATTERN, '')
-    .replace(HTML_ENTITY_PATTERN, ' ')
-    .trim().length;
-  return bodyLength >= SUGGEST_MIN_CONTENT_CHARS;
+  return isClassifiable(
+    contentHtml.replace(HTML_TAG_PATTERN, '').replace(HTML_ENTITY_PATTERN, ' ')
+  );
 }
 
 interface NoteSuggestionParams {
