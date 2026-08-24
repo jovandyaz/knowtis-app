@@ -111,6 +111,21 @@ describe('resolveChainCandidates', () => {
     ).toEqual([MINIMAX]);
   });
 
+  // The deployed config (read from prod 2026-08-24), not the code defaults:
+  // scoping must leave the classifier alone with its own family.
+  it('strips the cross-vendor entry from the deployed chain', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: 'openrouter:minimax/minimax-m3',
+        chain: [
+          'openrouter:minimax/minimax-m3',
+          'openrouter:deepseek/deepseek-v4-flash-0731',
+        ],
+        scope: 'same-family',
+      })
+    ).toEqual(['openrouter:minimax/minimax-m3']);
+  });
+
   it('keeps an aggregator sibling from the same vendor', () => {
     expect(
       resolveChainCandidates({
