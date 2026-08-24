@@ -45,6 +45,45 @@ describe('AIStructuredOutputSDKProvider', () => {
     languageModel.mockClear();
   });
 
+  it('should hand the fallback scope to the chain resolver', async () => {
+    const { registry, chain } = createTestChain(createMockConfig());
+    const spy = vi.spyOn(chain, 'candidatesFor');
+    const provider = new AIStructuredOutputSDKProvider(registry, chain);
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      fallbackScope: 'same-family',
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      'anthropic:claude-sonnet-4-20250514',
+      'same-family'
+    );
+  });
+
+  it('should forward a zero temperature rather than drop it as falsy', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider();
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      temperature: 0,
+    });
+
+    expect(generateText.mock.calls[0]?.[0]).toMatchObject({ temperature: 0 });
+  });
+
+  it('should leave temperature to the provider when none is asked for', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider();
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty('temperature');
+  });
+
   it('should generate structured output via the registry', async () => {
     const provider = createProvider();
 

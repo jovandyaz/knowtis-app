@@ -3,6 +3,7 @@ import { generateText, Output } from 'ai';
 import type { ZodType } from 'zod';
 
 import { executeWithChain } from '@knowtis/ai-gateway';
+import { pickDefined } from '@knowtis/shared-util';
 
 import type {
   AIStructuredOutputProvider,
@@ -40,7 +41,10 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
         );
       },
       {
-        candidates: this.fallbackChain.candidatesFor(options.model),
+        candidates: this.fallbackChain.candidatesFor(
+          options.model,
+          options.fallbackScope
+        ),
         cooldown: this.fallbackChain.cooldown,
         logger: this.logger,
       }
@@ -59,9 +63,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
       prompt,
       output: Output.object({ schema }),
       maxRetries: options.maxRetries ?? 3,
-      ...(options.maxOutputTokens
-        ? { maxOutputTokens: options.maxOutputTokens }
-        : {}),
+      ...pickDefined(options, ['maxOutputTokens', 'temperature']),
       ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
       ...(options.telemetry
         ? {

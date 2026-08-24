@@ -144,19 +144,39 @@ describe('useNoteSuggestion', () => {
     expect(suggestMutate).not.toHaveBeenCalled();
   });
 
-  it('should let the author ask on demand whatever the note looks like', () => {
+  it('should let the author ask on demand for an already filed note', () => {
     const { result } = setup({ bucket: 'archive' });
 
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
 
     expect(suggestMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('should not spend a provider call on a note too thin to classify', () => {
+    const { result } = setup();
+
+    act(() => result.current.request(SHORT_BODY));
+
+    expect(suggestMutate).not.toHaveBeenCalled();
+    expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.tooShort');
+  });
+
+  it('should not kill an already armed idle pass with an ask it refused', () => {
+    const { result } = setup();
+
+    act(() => result.current.reportEdit(LONG_BODY));
+    act(() => result.current.request(SHORT_BODY));
+    act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
+
+    expect(suggestMutate).toHaveBeenCalledTimes(1);
+    expect(suggestMutate.mock.calls[0]?.[1]).not.toHaveProperty('onError');
   });
 
   it('should tell the author when their own ask fails', () => {
     suggestMutate.mockImplementation((_ids, handlers) => handlers.onError?.());
     const { result } = setup();
 
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
 
     expect(toastError).toHaveBeenCalledWith('organization.suggestion.failed');
   });
@@ -167,7 +187,7 @@ describe('useNoteSuggestion', () => {
     );
     const { result } = setup();
 
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
 
     expect(result.current.suggestion).toBeNull();
     expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.empty');
@@ -185,7 +205,7 @@ describe('useNoteSuggestion', () => {
     );
     const { result } = setup();
 
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
 
     expect(result.current.suggestion).toBeNull();
     expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.empty');
@@ -205,7 +225,7 @@ describe('useNoteSuggestion', () => {
     const { result } = setup();
 
     act(() => result.current.reportEdit(LONG_BODY));
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
     act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
 
     expect(suggestMutate).toHaveBeenCalledTimes(1);
@@ -214,7 +234,7 @@ describe('useNoteSuggestion', () => {
   it('should spend the note pass on an ask the author made', () => {
     const { result } = setup();
 
-    act(() => result.current.request());
+    act(() => result.current.request(LONG_BODY));
     act(() => result.current.reportEdit(LONG_BODY));
     act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
 

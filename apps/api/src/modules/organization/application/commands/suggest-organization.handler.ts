@@ -14,6 +14,7 @@ import {
 } from '@knowtis/ai-gateway';
 import {
   AI_ACTION,
+  isClassifiable,
   MAX_RELATED_NOTES,
   MAX_SUGGESTED_TAGS,
   type OrganizationSuggestion,
@@ -67,6 +68,18 @@ const ESTIMATED_TOKENS_PER_NOTE = 2_300;
 const SUGGEST_TIMEOUT_MS = 30_000;
 /** A bucket plus at most five tag paths; the ceiling only has to survive a verbose model. */
 const SUGGEST_MAX_OUTPUT_TOKENS = 512;
+/**
+ * Classification, not composition. At the provider default a note sitting on the
+ * prompt's "too thin to place" line lands in a different bucket run to run.
+ */
+const SUGGEST_TEMPERATURE = 0;
+/**
+ * The bucket is persisted as the user's data: a cross-family fallback swaps
+ * the classifier mid-flight, so the same note lands in a different bucket
+ * depending on which provider was healthy. Degrading to no suggestion is
+ * cheaper than an inconsistent one.
+ */
+const SUGGEST_FALLBACK_SCOPE = 'same-family' as const;
 
 const NOTE_FAILURE = {
   RATE_LIMIT: 'rate-limit',
@@ -260,6 +273,14 @@ export class SuggestOrganizationHandler {
       0,
       MAX_CONTENT_CHARS
     );
+
+    // The client applies the same floor for instant feedback, but only this
+    // check binds: MCP callers, bulk passes, and a body the editor has not
+    // persisted yet all reach here without it.
+    if (!isClassifiable(content)) {
+      return { suggestion: empty };
+    }
+
     const injection = detectPromptInjection(`${title}\n${content}`);
     if (!injection.safe) {
       this.logger.warn({
@@ -299,6 +320,8 @@ export class SuggestOrganizationHandler {
             model,
             system,
             maxOutputTokens: SUGGEST_MAX_OUTPUT_TOKENS,
+            temperature: SUGGEST_TEMPERATURE,
+            fallbackScope: SUGGEST_FALLBACK_SCOPE,
             timeoutMs: SUGGEST_TIMEOUT_MS,
             maxRetries: this.configService.get('AI_MAX_RETRIES'),
           }

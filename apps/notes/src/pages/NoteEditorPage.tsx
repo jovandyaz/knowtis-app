@@ -110,6 +110,14 @@ function NoteEditor({
     isLiveCollabRef.current = isLive;
   }, []);
 
+  const requestSuggestion = suggestion.request;
+  // The editor buffer, not contentRef: before the collab socket syncs, edits
+  // never reach contentRef, so a visibly full note would measure as empty.
+  const handleSuggest = useCallback(
+    () => requestSuggestion(editorRef.current?.getHTML() ?? contentRef.current),
+    [requestSuggestion]
+  );
+
   const debouncedUpdateNote = useDebouncedMerge<{
     title: string;
     content: string;
@@ -310,7 +318,7 @@ function NoteEditor({
             supertag={supertag}
             supertagFields={supertagFields}
             isOwner={accessLevel === ACCESS.OWNER}
-            {...(suggestionsEnabled ? { onSuggest: suggestion.request } : {})}
+            {...(suggestionsEnabled ? { onSuggest: handleSuggest } : {})}
             isSuggesting={suggestion.isPending}
           />
         )}

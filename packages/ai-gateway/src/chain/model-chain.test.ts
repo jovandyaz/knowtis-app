@@ -89,6 +89,63 @@ describe('resolveChainCandidates', () => {
     ).toEqual([SONNET, HAIKU, GPT]);
   });
 
+  it('drops cross-provider chain entries when scoped to the same family', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: SONNET,
+        chain: [HAIKU, GPT, GEMINI],
+        scope: 'same-family',
+      })
+    ).toEqual([SONNET, HAIKU]);
+  });
+
+  // The shipped default chain is all-openrouter: the provider prefix alone
+  // would call three vendors one family and scope nothing.
+  it('treats each aggregator vendor as its own family', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: MINIMAX,
+        chain: [DEEPSEEK, MINIMAX, GLM],
+        scope: 'same-family',
+      })
+    ).toEqual([MINIMAX]);
+  });
+
+  // The deployed config (read from prod 2026-08-24), not the code defaults:
+  // scoping must leave the classifier alone with its own family.
+  it('strips the cross-vendor entry from the deployed chain', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: 'openrouter:minimax/minimax-m3',
+        chain: [
+          'openrouter:minimax/minimax-m3',
+          'openrouter:deepseek/deepseek-v4-flash-0731',
+        ],
+        scope: 'same-family',
+      })
+    ).toEqual(['openrouter:minimax/minimax-m3']);
+  });
+
+  it('keeps an aggregator sibling from the same vendor', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: DEEPSEEK,
+        chain: ['openrouter:deepseek/deepseek-v3.1', MINIMAX],
+        scope: 'same-family',
+      })
+    ).toEqual([DEEPSEEK, 'openrouter:deepseek/deepseek-v3.1']);
+  });
+
+  it('still returns the primary when scoping empties the chain', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: SONNET,
+        chain: [GPT, GEMINI],
+        scope: 'same-family',
+      })
+    ).toEqual([SONNET]);
+  });
+
   it('skips models whose provider has no credentials', () => {
     expect(
       resolveChainCandidates({

@@ -111,6 +111,7 @@
       "dismiss": "Descartar",
       "pending": "Pensando…",
       "empty": "Todavía no hay nada que sugerir para esta nota.",
+      "tooShort": "Escribe un poco más y vuelve a pedirlo.",
       "failed": "No se pudo obtener una sugerencia. Inténtalo de nuevo.",
       "applyFailed": "No se pudo aplicar la sugerencia. Inténtalo de nuevo."
     }

@@ -141,6 +141,25 @@ describe('FallbackChainService', () => {
       expect(candidates[0]).toBe('anthropic:claude-sonnet-5');
     });
 
+    // With OpenAI credentialed, only the scope can keep gpt-4o-mini out —
+    // the default mock config would mask a dropped scope behind the
+    // credential filter.
+    it('should confine candidates to the primary provider when the caller scopes it', () => {
+      const { service } = buildWithSource(async () => TEST_CHAIN_MODELS, {
+        OPENAI_API_KEY: 'test-key',
+      });
+
+      const candidates = service.candidatesFor(
+        'anthropic:claude-sonnet-5',
+        'same-family'
+      );
+
+      expect(candidates).toEqual([
+        'anthropic:claude-sonnet-5',
+        'anthropic:claude-haiku-4-5-20251001',
+      ]);
+    });
+
     it('should apply a runtime chain override from the source after the first request', async () => {
       // The anthropic-only override drops openai:gpt-4o-mini from the env seed.
       const { service, chainSource } = buildWithSource(

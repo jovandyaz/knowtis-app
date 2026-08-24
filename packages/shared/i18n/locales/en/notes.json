@@ -111,6 +111,7 @@
       "dismiss": "Dismiss",
       "pending": "Thinking…",
       "empty": "Nothing to suggest for this note yet.",
+      "tooShort": "Write a bit more, then ask again.",
       "failed": "Could not get a suggestion. Try again.",
       "applyFailed": "Could not apply the suggestion. Try again."
     }

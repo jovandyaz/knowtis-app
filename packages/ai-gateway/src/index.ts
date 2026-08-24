@@ -23,6 +23,7 @@ export {
   resolveChainCandidates,
   streamWithChain,
   type ChainAttemptInfo,
+  type ChainScope,
   type ChainContext,
   type ChainResolutionInput,
   type StreamChainContext,

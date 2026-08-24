@@ -5,8 +5,8 @@ import { toast } from 'sonner';
 
 import { useSuggestOrganization } from '@knowtis/data-access-notes';
 import {
+  isClassifiable,
   SUGGEST_IDLE_MS,
-  SUGGEST_MIN_CONTENT_CHARS,
   type OrganizationSuggestion,
   type ParaBucket,
 } from '@knowtis/shared-types';
@@ -28,11 +28,10 @@ function isActionable(
   );
 }
 
-function bodyLengthOf(contentHtml: string): number {
-  return contentHtml
-    .replace(HTML_TAG_PATTERN, '')
-    .replace(HTML_ENTITY_PATTERN, ' ')
-    .trim().length;
+function meetsSuggestionFloor(contentHtml: string): boolean {
+  return isClassifiable(
+    contentHtml.replace(HTML_TAG_PATTERN, '').replace(HTML_ENTITY_PATTERN, ' ')
+  );
 }
 
 interface NoteSuggestionParams {
@@ -45,7 +44,7 @@ interface NoteSuggestionParams {
 export interface NoteSuggestionState {
   suggestion: OrganizationSuggestion | null;
   isPending: boolean;
-  request: () => void;
+  request: (contentHtml: string) => void;
   dismiss: () => void;
   reportEdit: (contentHtml: string) => void;
 }
@@ -108,11 +107,18 @@ export function useNoteSuggestion({
     [mutate, noteId, t]
   );
 
-  const request = useCallback(() => {
-    cancelIdlePass();
-    autoRequested.add(noteId);
-    run(true);
-  }, [cancelIdlePass, noteId, run]);
+  const request = useCallback(
+    (contentHtml: string) => {
+      if (!meetsSuggestionFloor(contentHtml)) {
+        toast(t('organization.suggestion.tooShort'));
+        return;
+      }
+      cancelIdlePass();
+      autoRequested.add(noteId);
+      run(true);
+    },
+    [cancelIdlePass, noteId, run, t]
+  );
 
   const dismiss = useCallback(() => {
     cancelIdlePass();
@@ -125,10 +131,7 @@ export function useNoteSuggestion({
     (contentHtml: string) => {
       cancelIdlePass();
 
-      if (
-        !idlePassAllowed() ||
-        bodyLengthOf(contentHtml) < SUGGEST_MIN_CONTENT_CHARS
-      ) {
+      if (!idlePassAllowed() || !meetsSuggestionFloor(contentHtml)) {
         return;
       }
 
