@@ -151,7 +151,7 @@ describe('FallbackChainService', () => {
 
       const candidates = service.candidatesFor(
         'anthropic:claude-sonnet-5',
-        'same-provider'
+        'same-family'
       );
 
       expect(candidates).toEqual([

@@ -10,7 +10,7 @@ export interface StructuredOutputOptions {
   readonly maxRetries?: number;
   readonly maxOutputTokens?: number;
   readonly temperature?: number;
-  /** 'same-provider' confines fallback to the primary's family; default falls through the whole chain. */
+  /** 'same-family' confines fallback to the primary's model family; default falls through the whole chain. */
   readonly fallbackScope?: ChainScope;
   readonly timeoutMs?: number;
   readonly telemetry?: AITelemetryContext;

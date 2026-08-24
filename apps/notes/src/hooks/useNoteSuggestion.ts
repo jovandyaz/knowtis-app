@@ -28,11 +28,12 @@ function isActionable(
   );
 }
 
-function bodyLengthOf(contentHtml: string): number {
-  return contentHtml
+function meetsSuggestionFloor(contentHtml: string): boolean {
+  const bodyLength = contentHtml
     .replace(HTML_TAG_PATTERN, '')
     .replace(HTML_ENTITY_PATTERN, ' ')
     .trim().length;
+  return bodyLength >= SUGGEST_MIN_CONTENT_CHARS;
 }
 
 interface NoteSuggestionParams {
@@ -110,11 +111,11 @@ export function useNoteSuggestion({
 
   const request = useCallback(
     (contentHtml: string) => {
-      cancelIdlePass();
-      if (bodyLengthOf(contentHtml) < SUGGEST_MIN_CONTENT_CHARS) {
+      if (!meetsSuggestionFloor(contentHtml)) {
         toast(t('organization.suggestion.tooShort'));
         return;
       }
+      cancelIdlePass();
       autoRequested.add(noteId);
       run(true);
     },
@@ -132,10 +133,7 @@ export function useNoteSuggestion({
     (contentHtml: string) => {
       cancelIdlePass();
 
-      if (
-        !idlePassAllowed() ||
-        bodyLengthOf(contentHtml) < SUGGEST_MIN_CONTENT_CHARS
-      ) {
+      if (!idlePassAllowed() || !meetsSuggestionFloor(contentHtml)) {
         return;
       }
 

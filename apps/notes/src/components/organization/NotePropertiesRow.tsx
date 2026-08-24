@@ -216,7 +216,7 @@ export function NotePropertiesRow({
       {onSuggest && (
         <button
           type="button"
-          onClick={onSuggest}
+          onClick={() => onSuggest()}
           disabled={isSuggesting}
           aria-busy={isSuggesting}
           className={`${CHIP_CLASSES} min-h-11 cursor-pointer transition-colors hover:bg-muted/40 disabled:cursor-default disabled:opacity-60 md:min-h-0`}

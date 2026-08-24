@@ -111,8 +111,10 @@ function NoteEditor({
   }, []);
 
   const requestSuggestion = suggestion.request;
+  // The editor buffer, not contentRef: before the collab socket syncs, edits
+  // never reach contentRef, so a visibly full note would measure as empty.
   const handleSuggest = useCallback(
-    () => requestSuggestion(contentRef.current),
+    () => requestSuggestion(editorRef.current?.getHTML() ?? contentRef.current),
     [requestSuggestion]
   );
 

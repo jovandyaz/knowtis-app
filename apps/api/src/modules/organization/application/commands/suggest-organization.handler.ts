@@ -16,6 +16,7 @@ import {
   AI_ACTION,
   MAX_RELATED_NOTES,
   MAX_SUGGESTED_TAGS,
+  SUGGEST_MIN_CONTENT_CHARS,
   type OrganizationSuggestion,
   type RelatedNote,
   type SuggestedTag,
@@ -78,7 +79,7 @@ const SUGGEST_TEMPERATURE = 0;
  * depending on which provider was healthy. Degrading to no suggestion is
  * cheaper than an inconsistent one.
  */
-const SUGGEST_FALLBACK_SCOPE = 'same-provider' as const;
+const SUGGEST_FALLBACK_SCOPE = 'same-family' as const;
 
 const NOTE_FAILURE = {
   RATE_LIMIT: 'rate-limit',
@@ -272,6 +273,14 @@ export class SuggestOrganizationHandler {
       0,
       MAX_CONTENT_CHARS
     );
+
+    // The client applies the same floor for instant feedback, but only this
+    // check binds: MCP callers, bulk passes, and a body the editor has not
+    // persisted yet all reach here without it.
+    if (content.trim().length < SUGGEST_MIN_CONTENT_CHARS) {
+      return { suggestion: empty };
+    }
+
     const injection = detectPromptInjection(`${title}\n${content}`);
     if (!injection.safe) {
       this.logger.warn({

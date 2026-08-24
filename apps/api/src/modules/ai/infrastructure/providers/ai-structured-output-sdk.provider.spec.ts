@@ -52,12 +52,12 @@ describe('AIStructuredOutputSDKProvider', () => {
 
     await provider.generateStructuredOutput('prompt', schema, {
       model: 'anthropic:claude-sonnet-4-20250514',
-      fallbackScope: 'same-provider',
+      fallbackScope: 'same-family',
     });
 
     expect(spy).toHaveBeenCalledWith(
       'anthropic:claude-sonnet-4-20250514',
-      'same-provider'
+      'same-family'
     );
   });
 

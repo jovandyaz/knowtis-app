@@ -161,11 +161,11 @@ describe('useNoteSuggestion', () => {
     expect(toastPlain).toHaveBeenCalledWith('organization.suggestion.tooShort');
   });
 
-  it('should leave the idle pass armed after an ask it refused to send', () => {
+  it('should not kill an already armed idle pass with an ask it refused', () => {
     const { result } = setup();
 
-    act(() => result.current.request(SHORT_BODY));
     act(() => result.current.reportEdit(LONG_BODY));
+    act(() => result.current.request(SHORT_BODY));
     act(() => vi.advanceTimersByTime(SUGGEST_IDLE_MS));
 
     expect(suggestMutate).toHaveBeenCalledTimes(1);

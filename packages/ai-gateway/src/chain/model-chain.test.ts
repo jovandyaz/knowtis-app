@@ -89,14 +89,36 @@ describe('resolveChainCandidates', () => {
     ).toEqual([SONNET, HAIKU, GPT]);
   });
 
-  it('drops cross-provider chain entries when scoped to the same provider', () => {
+  it('drops cross-provider chain entries when scoped to the same family', () => {
     expect(
       resolveChainCandidates({
         primaryModel: SONNET,
         chain: [HAIKU, GPT, GEMINI],
-        scope: 'same-provider',
+        scope: 'same-family',
       })
     ).toEqual([SONNET, HAIKU]);
+  });
+
+  // The shipped default chain is all-openrouter: the provider prefix alone
+  // would call three vendors one family and scope nothing.
+  it('treats each aggregator vendor as its own family', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: MINIMAX,
+        chain: [DEEPSEEK, MINIMAX, GLM],
+        scope: 'same-family',
+      })
+    ).toEqual([MINIMAX]);
+  });
+
+  it('keeps an aggregator sibling from the same vendor', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: DEEPSEEK,
+        chain: ['openrouter:deepseek/deepseek-v3.1', MINIMAX],
+        scope: 'same-family',
+      })
+    ).toEqual([DEEPSEEK, 'openrouter:deepseek/deepseek-v3.1']);
   });
 
   it('still returns the primary when scoping empties the chain', () => {
@@ -104,7 +126,7 @@ describe('resolveChainCandidates', () => {
       resolveChainCandidates({
         primaryModel: SONNET,
         chain: [GPT, GEMINI],
-        scope: 'same-provider',
+        scope: 'same-family',
       })
     ).toEqual([SONNET]);
   });

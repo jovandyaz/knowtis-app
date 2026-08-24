@@ -22,7 +22,6 @@ export {
   providerOf,
   resolveChainCandidates,
   streamWithChain,
-  CHAIN_SCOPES,
   type ChainAttemptInfo,
   type ChainScope,
   type ChainContext,
