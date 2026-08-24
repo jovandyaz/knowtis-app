@@ -1,9 +1,19 @@
 import type { GatewayLogger } from '../logger';
 import type { ProviderCooldown } from './provider-cooldown.tracker';
 
+/**
+ * 'same-provider' keeps degradation inside the primary's model family — for
+ * output a consumer persists as data, where a silent family switch changes the
+ * judgement, not just the wording. 'any-provider' is the availability-first
+ * default.
+ */
+export const CHAIN_SCOPES = ['any-provider', 'same-provider'] as const;
+export type ChainScope = (typeof CHAIN_SCOPES)[number];
+
 export interface ChainResolutionInput {
   readonly primaryModel: string;
   readonly chain: readonly string[];
+  readonly scope?: ChainScope | undefined;
   readonly isModelAvailable?: ((modelId: string) => boolean) | undefined;
   readonly cooldown?: ProviderCooldown | undefined;
 }
@@ -74,7 +84,9 @@ export function providerOf(modelId: string): string {
 }
 
 // OpenRouter multiplexes each model to independent upstreams — failures are per-model.
-const PER_MODEL_COOLDOWN_PROVIDERS: ReadonlySet<string> = new Set(['openrouter']);
+const PER_MODEL_COOLDOWN_PROVIDERS: ReadonlySet<string> = new Set([
+  'openrouter',
+]);
 
 /**
  * The circuit-breaker bucket for a model: the full model id for aggregator
@@ -93,9 +105,15 @@ export function cooldownKeyOf(modelId: string): string {
  * list is returned (a request is never failed without at least one attempt).
  */
 export function resolveChainCandidates(input: ChainResolutionInput): string[] {
+  const chain =
+    input.scope === 'same-provider'
+      ? input.chain.filter(
+          (m) => providerOf(m) === providerOf(input.primaryModel)
+        )
+      : input.chain;
   const ordered = [
     input.primaryModel,
-    ...input.chain.filter((m) => m !== input.primaryModel),
+    ...chain.filter((m) => m !== input.primaryModel),
   ].filter((model, index, all) => all.indexOf(model) === index);
 
   const available = input.isModelAvailable

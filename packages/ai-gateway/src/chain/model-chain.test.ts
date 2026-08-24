@@ -89,6 +89,26 @@ describe('resolveChainCandidates', () => {
     ).toEqual([SONNET, HAIKU, GPT]);
   });
 
+  it('drops cross-provider chain entries when scoped to the same provider', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: SONNET,
+        chain: [HAIKU, GPT, GEMINI],
+        scope: 'same-provider',
+      })
+    ).toEqual([SONNET, HAIKU]);
+  });
+
+  it('still returns the primary when scoping empties the chain', () => {
+    expect(
+      resolveChainCandidates({
+        primaryModel: SONNET,
+        chain: [GPT, GEMINI],
+        scope: 'same-provider',
+      })
+    ).toEqual([SONNET]);
+  });
+
   it('skips models whose provider has no credentials', () => {
     expect(
       resolveChainCandidates({

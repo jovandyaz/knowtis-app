@@ -40,7 +40,10 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
         );
       },
       {
-        candidates: this.fallbackChain.candidatesFor(options.model),
+        candidates: this.fallbackChain.candidatesFor(
+          options.model,
+          options.fallbackScope
+        ),
         cooldown: this.fallbackChain.cooldown,
         logger: this.logger,
       }

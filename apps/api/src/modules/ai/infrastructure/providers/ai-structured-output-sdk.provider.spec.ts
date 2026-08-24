@@ -45,6 +45,22 @@ describe('AIStructuredOutputSDKProvider', () => {
     languageModel.mockClear();
   });
 
+  it('should hand the fallback scope to the chain resolver', async () => {
+    const { registry, chain } = createTestChain(createMockConfig());
+    const spy = vi.spyOn(chain, 'candidatesFor');
+    const provider = new AIStructuredOutputSDKProvider(registry, chain);
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+      fallbackScope: 'same-provider',
+    });
+
+    expect(spy).toHaveBeenCalledWith(
+      'anthropic:claude-sonnet-4-20250514',
+      'same-provider'
+    );
+  });
+
   it('should forward a zero temperature rather than drop it as falsy', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     const provider = createProvider();

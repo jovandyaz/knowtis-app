@@ -5,6 +5,7 @@ import {
   ProviderCooldownTracker,
   providerOf,
   resolveChainCandidates,
+  type ChainScope,
 } from '@knowtis/ai-gateway';
 import { parseChain } from '@knowtis/shared-types';
 
@@ -81,11 +82,12 @@ export class FallbackChainService implements OnModuleInit {
     this.chain = seedChain;
   }
 
-  candidatesFor(primaryModel: string): string[] {
+  candidatesFor(primaryModel: string, scope?: ChainScope): string[] {
     this.refreshChainIfStale();
     return resolveChainCandidates({
       primaryModel,
       chain: this.chain,
+      scope,
       isModelAvailable: (model) =>
         this.providerRegistry.isModelAvailable(model),
       cooldown: this.cooldown,

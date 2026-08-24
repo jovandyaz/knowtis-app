@@ -72,6 +72,13 @@ const SUGGEST_MAX_OUTPUT_TOKENS = 512;
  * prompt's "too thin to place" line lands in a different bucket run to run.
  */
 const SUGGEST_TEMPERATURE = 0;
+/**
+ * The bucket is persisted as the user's data: a cross-family fallback swaps
+ * the classifier mid-flight, so the same note lands in a different bucket
+ * depending on which provider was healthy. Degrading to no suggestion is
+ * cheaper than an inconsistent one.
+ */
+const SUGGEST_FALLBACK_SCOPE = 'same-provider' as const;
 
 const NOTE_FAILURE = {
   RATE_LIMIT: 'rate-limit',
@@ -305,6 +312,7 @@ export class SuggestOrganizationHandler {
             system,
             maxOutputTokens: SUGGEST_MAX_OUTPUT_TOKENS,
             temperature: SUGGEST_TEMPERATURE,
+            fallbackScope: SUGGEST_FALLBACK_SCOPE,
             timeoutMs: SUGGEST_TIMEOUT_MS,
             maxRetries: this.configService.get('AI_MAX_RETRIES'),
           }

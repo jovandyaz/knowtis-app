@@ -278,6 +278,14 @@ describe('SuggestOrganizationHandler', () => {
     expect(options.temperature).toBe(0);
   });
 
+  it('refuses to let the classifier fall back across model families', async () => {
+    await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
+
+    const options = structuredOutput.generateStructuredOutput.mock
+      .calls[0][2] as { fallbackScope?: string };
+    expect(options.fallbackScope).toBe('same-provider');
+  });
+
   it('looks related notes up by title, never by the note body', async () => {
     await handler.execute({ userId: OWNER_ID, noteIds: [NOTE_ID] });
 
