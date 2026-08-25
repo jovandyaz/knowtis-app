@@ -66,8 +66,12 @@ const RELATED_QUERY_MAX_CHARS = 120;
 const SUGGEST_CONCURRENCY = 4;
 const ESTIMATED_TOKENS_PER_NOTE = 2_300;
 const SUGGEST_TIMEOUT_MS = 30_000;
-/** A bucket plus at most five tag paths; the ceiling only has to survive a verbose model. */
-const SUGGEST_MAX_OUTPUT_TOKENS = 512;
+/**
+ * The answer is ~60 tokens; the rest is headroom for a reasoning model that
+ * cannot be told to skip thinking. Reasoning counts against this budget, so a
+ * ceiling near the answer size returns nothing at all instead of a suggestion.
+ */
+const SUGGEST_MAX_OUTPUT_TOKENS = 1_024;
 /**
  * Classification, not composition. At the provider default a note sitting on the
  * prompt's "too thin to place" line lands in a different bucket run to run.
