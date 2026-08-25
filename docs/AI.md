@@ -420,7 +420,18 @@ OpenRouter's default routing load-balances a model's traffic across upstream hos
 
 The `ai_openrouter_providers` config key (see [Dynamic Model Configuration](#dynamic-model-configuration)) pins an ordered upstream allowlist, sent as `providerOptions.openrouter.provider: { order, allow_fallbacks: true }` on `openrouter:*` requests only — other providers ignore the option. `allow_fallbacks: true` keeps OpenRouter's own failover as the safety net when every vetted upstream is down, so a request never hard-fails just because the allowlist is unavailable. It applies to BYOK OpenRouter turns too — routing shapes answer quality and costs nothing extra to enforce.
 
-Today the allowlist is applied only on the copilot agent's calls (`agent-step-loop.ts`); structured-output calls (`suggest-organization`, memory extraction, artifacts, voice notes) still ride OpenRouter's default price-based routing (#330).
+Both the copilot's step loop and every structured-output call (`suggest-organization`, memory extraction, artifacts, voice notes) build the block through the shared `openrouterProviderOptions` seam. Structured output additionally asks for `require_parameters: true` — OpenRouter records parameter support per _endpoint_, not per model, so this is the documented way to keep a `json_schema` request on upstreams that can honour it.
+
+On `minimax/minimax-m3` — the fast model prod classifies with — the measured effect is much larger than parameter support alone (30 concurrent classifications per arm, 2026-08):
+
+| routing                                            | upstreams reached                   | unparseable answers |
+| -------------------------------------------------- | ----------------------------------- | ------------------- |
+| no `provider` block                                | Parasail 22, ModelRun 5, Together 3 | **22/30**           |
+| `order` + `allow_fallbacks` + `require_parameters` | CoreWeave 30                        | 0/30                |
+
+Parasail's endpoint returns the object in `message.reasoning` and leaves `message.content` empty, which reaches the caller as an empty suggestion; no client-side reasoning flag recovers it, and `require_parameters` does not exclude it because it advertises full support. Sending an order at all is what moved routing away from it — a side effect of leaving OpenRouter's default weighted balancing, not a guarantee, so the durable fix is an operator-editable ignore list (#333).
+
+Two levers were measured and rejected. A fixed `seed` did not stabilise output (12 runs pinned to one upstream still produced 3 distinct answers) and pushed routing onto Parasail. `quantizations: ['fp8']` would pin harder still, but the only fp8 upstream that also supports structured outputs on this model _is_ Parasail.
 
 **Runbook:** an upstream degrades → edit `ai_openrouter_providers` in the backoffice AI Config page; effective within 30s (the config cache TTL), no deploy.
 

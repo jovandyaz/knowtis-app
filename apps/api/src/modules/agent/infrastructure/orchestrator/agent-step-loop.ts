@@ -14,10 +14,10 @@ import {
 } from '@knowtis/ai-gateway';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
+import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
-import { openrouterProviderOptions } from './openrouter-options';
 import { ProposalCollector } from './proposal-collector';
 import {
   errorEvent,
@@ -151,11 +151,11 @@ export async function* runAgentStepLoop(
   const byok = Boolean(input.byokApiKey);
 
   let currentModel = params.model;
-  let providerOptions = openrouterProviderOptions(
-    currentModel,
-    input.reasoningEffort,
-    input.openrouterProviderOrder
-  );
+  let providerOptions = openrouterProviderOptions({
+    model: currentModel,
+    reasoningEffort: input.reasoningEffort,
+    providerOrder: input.openrouterProviderOrder,
+  });
   const modelsUsed: string[] = [currentModel];
   const failoverCandidates = [...params.stepFailoverCandidates];
 
@@ -251,11 +251,11 @@ export async function* runAgentStepLoop(
             });
             currentModel = nextModel;
             params.onModelSettled?.(currentModel);
-            providerOptions = openrouterProviderOptions(
-              currentModel,
-              input.reasoningEffort,
-              input.openrouterProviderOrder
-            );
+            providerOptions = openrouterProviderOptions({
+              model: currentModel,
+              reasoningEffort: input.reasoningEffort,
+              providerOrder: input.openrouterProviderOrder,
+            });
             modelsUsed.push(currentModel);
             history = pruneMessages({ messages: history, reasoning: 'all' });
             failedOver = true;

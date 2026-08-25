@@ -19,6 +19,7 @@ import {
   cacheableSystem,
   withLastMessageCache,
 } from '../../../ai/infrastructure/providers/anthropic-cache';
+import type { OpenrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type {
   AgentEvent,
@@ -26,7 +27,6 @@ import type {
   AgentTurnUsage,
 } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
-import type { OpenrouterProviderOptions } from './openrouter-options';
 import {
   createHealth,
   openrouterUpstreamOf,

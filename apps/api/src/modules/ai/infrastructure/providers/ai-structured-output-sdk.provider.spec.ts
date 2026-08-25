@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createTestChain } from '../../testing/create-test-chain';
 import { AIStructuredOutputSDKProvider } from './ai-structured-output-sdk.provider';
+import type { OpenRouterRoutingSource } from './openrouter-options';
 
 const { languageModel } = vi.hoisted(() => ({
   languageModel: vi.fn().mockReturnValue('mock-model'),
@@ -28,10 +29,25 @@ vi.mock('@ai-sdk/openai', () => ({
 }));
 
 const schema = z.object({ answer: z.number() });
+const OPENROUTER_MODEL = 'openrouter:minimax/minimax-m3';
 
-function createProvider(config = createMockConfig(), fallbackChain?: string) {
+function createRoutingSource(
+  providerOrder: readonly string[] = []
+): OpenRouterRoutingSource {
+  return { getOpenRouterProviderOrder: async () => providerOrder };
+}
+
+function createProvider(
+  config = createMockConfig(),
+  fallbackChain?: string,
+  providerOrder?: readonly string[]
+) {
   const { registry, chain } = createTestChain(config, fallbackChain);
-  return new AIStructuredOutputSDKProvider(registry, chain);
+  return new AIStructuredOutputSDKProvider(
+    registry,
+    chain,
+    createRoutingSource(providerOrder)
+  );
 }
 
 describe('AIStructuredOutputSDKProvider', () => {
@@ -48,7 +64,11 @@ describe('AIStructuredOutputSDKProvider', () => {
   it('should hand the fallback scope to the chain resolver', async () => {
     const { registry, chain } = createTestChain(createMockConfig());
     const spy = vi.spyOn(chain, 'candidatesFor');
-    const provider = new AIStructuredOutputSDKProvider(registry, chain);
+    const provider = new AIStructuredOutputSDKProvider(
+      registry,
+      chain,
+      createRoutingSource()
+    );
 
     await provider.generateStructuredOutput('prompt', schema, {
       model: 'anthropic:claude-sonnet-4-20250514',
@@ -82,6 +102,90 @@ describe('AIStructuredOutputSDKProvider', () => {
     });
 
     expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty('temperature');
+  });
+
+  it('should keep an OpenRouter call off upstreams that would ignore the schema', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider(
+      createMockConfig({ OPENROUTER_API_KEY: 'test-key' }),
+      OPENROUTER_MODEL
+    );
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: OPENROUTER_MODEL,
+    });
+
+    expect(generateText.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: {
+        openrouter: { provider: { require_parameters: true } },
+      },
+    });
+  });
+
+  it("should hand OpenRouter the operator's vetted upstream order", async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider(
+      createMockConfig({ OPENROUTER_API_KEY: 'test-key' }),
+      OPENROUTER_MODEL,
+      ['fireworks', 'baseten']
+    );
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: OPENROUTER_MODEL,
+    });
+
+    expect(generateText.mock.calls[0]?.[0]).toMatchObject({
+      providerOptions: {
+        openrouter: {
+          provider: {
+            order: ['fireworks', 'baseten'],
+            allow_fallbacks: true,
+            require_parameters: true,
+          },
+        },
+      },
+    });
+  });
+
+  it('should route the fallback candidate, not just the model first asked for', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    generateText.mockRejectedValueOnce(new Error('primary down'));
+    const provider = createProvider(
+      createMockConfig({ OPENROUTER_API_KEY: 'test-key' }),
+      `anthropic:claude-sonnet-4-20250514,${OPENROUTER_MODEL}`,
+      ['fireworks']
+    );
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(languageModel).toHaveBeenLastCalledWith(OPENROUTER_MODEL);
+    expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty(
+      'providerOptions'
+    );
+    expect(generateText.mock.calls[1]?.[0]).toMatchObject({
+      providerOptions: {
+        openrouter: {
+          provider: { order: ['fireworks'], require_parameters: true },
+        },
+      },
+    });
+  });
+
+  it('should not send OpenRouter routing to a direct-provider model', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider(createMockConfig(), undefined, [
+      'fireworks',
+    ]);
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(generateText.mock.calls[0]?.[0]).not.toHaveProperty(
+      'providerOptions'
+    );
   });
 
   it('should generate structured output via the registry', async () => {
