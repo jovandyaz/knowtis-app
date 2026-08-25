@@ -66,6 +66,7 @@ import {
   FALLBACK_CHAIN_SOURCE,
   FallbackChainService,
 } from './infrastructure/providers/fallback-chain.service';
+import { OPENROUTER_ROUTING_SOURCE } from './infrastructure/providers/openrouter-options';
 import {
   ProviderRegistryFactory,
   SYSTEM_PROVIDER_KEYS_SOURCE,
@@ -113,6 +114,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     WebhookAlertService,
     FallbackChainService,
     { provide: FALLBACK_CHAIN_SOURCE, useExisting: AIConfigService },
+    { provide: OPENROUTER_ROUTING_SOURCE, useExisting: AIConfigService },
     SystemProviderKeysService,
     {
       provide: SYSTEM_PROVIDER_KEYS_REPOSITORY,
