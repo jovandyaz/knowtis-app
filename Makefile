@@ -5,7 +5,7 @@
 # Run 'make help' to see all available commands
 # ============================================================================
 
-.PHONY: help install dev dev-api dev-backoffice dev-all build build-api \
+.PHONY: help install dev dev-api dev-backoffice dev-all dev-stop build build-api \
         build-backoffice test lint format \
         docker-up docker-down db-push db-generate db-migrate db-studio \
         clean typecheck graph storybook preview prepare
@@ -59,19 +59,46 @@ setup: install docker-up db-push ## Full setup: install deps, start DB, push sch
 # ============================================================================
 ##@ Development
 
+# A standalone `nx serve <project>` that outlives its terminal keeps the Nx task
+# lock, so the next run stalls on "Waiting for <project>:serve in another nx
+# process" with the port free. Match only that shape: a live run-many worker
+# reads as "<project>:serve:development" and is never touched.
+define stop_stale_serves
+	@for project in $(1); do \
+		pids=$$(pgrep -f "nx\.js serve $$project" 2>/dev/null || true); \
+		for pid in $$pids; do \
+			echo "$(YELLOW)⚠️  Stale 'nx serve $$project' (pid $$pid) holds the Nx lock — stopping it$(RESET)"; \
+			parent=$$(ps -o ppid= -p $$pid 2>/dev/null | tr -d ' '); \
+			case "$$(ps -o command= -p $$parent 2>/dev/null)" in \
+				*"nx serve $$project"*) kill $$parent 2>/dev/null || true;; \
+			esac; \
+			pkill -P $$pid 2>/dev/null || true; \
+			kill $$pid 2>/dev/null || true; \
+		done; \
+	done
+endef
+
+dev-stop: ## Stop leftover 'nx serve' processes holding the Nx task lock
+	$(call stop_stale_serves,notes api backoffice mcp)
+	@echo "$(GREEN)✅ No stale serve locks left$(RESET)"
+
 dev: ## Start Notes frontend (http://localhost:4200)
+	$(call stop_stale_serves,notes)
 	@echo "$(CYAN)🚀 Starting Notes app...$(RESET)"
 	pnpm dev
 
 dev-api: ## Start API backend (http://localhost:3333)
+	$(call stop_stale_serves,api)
 	@echo "$(CYAN)🚀 Starting API server...$(RESET)"
 	pnpm dev:api
 
 dev-backoffice: ## Start Backoffice frontend (http://localhost:4400)
+	$(call stop_stale_serves,backoffice)
 	@echo "$(CYAN)🚀 Starting Backoffice app...$(RESET)"
 	pnpm dev:backoffice
 
 dev-all: ## Start Notes, Backoffice and API simultaneously
+	$(call stop_stale_serves,notes api backoffice)
 	@echo "$(CYAN)🚀 Starting all services...$(RESET)"
 	pnpm dev:all
 
