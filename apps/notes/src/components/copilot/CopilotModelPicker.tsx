@@ -28,8 +28,10 @@ import {
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
   const user = useAuthUser();
-  // Anonymous users cannot persist preferences, so they run on the server default intent and get no picker.
-  const showPicker = user != null && !user.isAnonymous;
+  const showPicker = user != null;
+  // The key endpoints reject a guest, so BYOK stays registered-only.
+  const canUseByok =
+    useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && user?.isAnonymous !== true;
   const {
     data: models,
     isPending,
@@ -38,21 +40,18 @@ export function CopilotModelPicker() {
   } = useAvailableModels(showPicker);
   const { data: prefs } = useAISettings(showPicker);
   const { mutate: update } = useUpdateAISettings();
-  const byokEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK);
   const openSettings = useSettingsStore((s) => s.open);
   const { data: keys, isPending: keysPending } = useProviderKeys(
-    showPicker && byokEnabled
+    showPicker && canUseByok
   );
-  // A stored key can unlock nothing routable, so "no model billed to you" is
-  // not the same question as "do you hold a key".
   const offerBridge =
-    byokEnabled && !isPending && !keysPending && keys?.length === 0;
+    canUseByok && !isPending && !keysPending && keys?.length === 0;
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
   const override = advancedOverride(prefs?.preferredModel, models);
   const advancedOptions = advancedModelOptions(models);
-  // An unresolved list keeps a stored model an override, so the chips would render with
-  // nothing active. That caller's control is the dropdown — show it loading instead.
+  // Until the list resolves, a stored model stays an override and the chips would
+  // render with nothing active — keep that caller on the dropdown instead.
   const resolvingOverride = isPending && override !== null;
 
   const select = (id: string) => {
