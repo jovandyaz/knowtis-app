@@ -19,6 +19,7 @@ const byokFlag = vi.fn<() => boolean>();
 const openSettings = vi.fn();
 const keysData = vi.fn();
 const keysPending = vi.fn<() => boolean>();
+const keysEnabled = vi.fn<(enabled?: boolean) => void>();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
@@ -48,7 +49,10 @@ vi.mock('@/hooks', () => ({
     return { data: prefsData() };
   },
   useUpdateAISettings: () => ({ mutate: updatePreferences }),
-  useProviderKeys: () => ({ data: keysData(), isPending: keysPending() }),
+  useProviderKeys: (enabled?: boolean) => {
+    keysEnabled(enabled);
+    return { data: keysData(), isPending: keysPending() };
+  },
 }));
 
 const grantedModels = [
@@ -459,20 +463,34 @@ describe('CopilotModelPicker', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('renders no picker at all for an anonymous user', () => {
-    modelsData.mockReturnValue(withByokModel);
-    authUser.mockReturnValue({ isAnonymous: true });
-    const { container } = render(<CopilotModelPicker />);
-
-    expect(container).toBeEmptyDOMElement();
-  });
-
-  it('never queries models or preferences for an anonymous user', () => {
+  it('offers the style chips to an anonymous user', () => {
+    modelsData.mockReturnValue(withLockedModel);
     authUser.mockReturnValue({ isAnonymous: true });
     render(<CopilotModelPicker />);
 
-    expect(modelsEnabled).toHaveBeenCalledWith(false);
-    expect(prefsEnabled).toHaveBeenCalledWith(false);
+    expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(
+      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
+    ).toHaveAttribute('data-state', 'on');
+  });
+
+  it('queries models and preferences, but never keys, for an anonymous user', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+    render(<CopilotModelPicker />);
+
+    expect(modelsEnabled).toHaveBeenCalledWith(true);
+    expect(prefsEnabled).toHaveBeenCalledWith(true);
+    expect(keysEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('never advertises BYOK to an anonymous user', () => {
+    modelsData.mockReturnValue(withLockedModel);
+    authUser.mockReturnValue({ isAnonymous: true });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
+    ).not.toBeInTheDocument();
   });
 
   it('queries models and preferences for a signed-in user', () => {
