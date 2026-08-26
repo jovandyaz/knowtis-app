@@ -9,7 +9,7 @@ interface VerifyEmailProps {
 
 export const VerifyEmailEmail = ({
   name = 'John Doe',
-  verificationUrl = 'https://knowtis.com/verify-email?token=preview-token',
+  verificationUrl = 'https://knowtis.app/verify-email?token=preview-token',
   locale = DEFAULT_LOCALE,
 }: VerifyEmailProps) => (
   <AuthEmailTemplate
