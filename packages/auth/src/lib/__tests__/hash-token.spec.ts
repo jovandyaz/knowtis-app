@@ -2,14 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { hashToken } from '../tokens/hash-token';
 
-const KEY = Buffer.from(
-  'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=',
-  'base64'
-);
-const OTHER_KEY = Buffer.from(
-  'JXe1kJhpqIu6RCbTvfNy4L4gCrpJfrjxwiHFBnhYyxk=',
-  'base64'
-);
+const KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+const OTHER_KEY = 'JXe1kJhpqIu6RCbTvfNy4L4gCrpJfrjxwiHFBnhYyxk=';
 
 describe('hashToken', () => {
   it('should produce a consistent digest for the same token and key', () => {
@@ -41,10 +35,7 @@ describe('hashToken', () => {
 
   it('should match the published HMAC-SHA256 vector for key "key" over "The quick brown fox jumps over the lazy dog"', () => {
     expect(
-      hashToken(
-        'The quick brown fox jumps over the lazy dog',
-        Buffer.from('key')
-      )
+      hashToken('The quick brown fox jumps over the lazy dog', 'key')
     ).toBe('f7bc83f430538424b13298e6aa6fb143ef4d59a14946175997479dbc2d1a3cd8');
   });
 });

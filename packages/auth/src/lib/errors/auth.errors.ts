@@ -20,6 +20,9 @@ export const AuthErrorCodes = {
   INVALID_VERIFICATION_TOKEN: 'INVALID_VERIFICATION_TOKEN',
   VERIFICATION_TOKEN_EXPIRED: 'VERIFICATION_TOKEN_EXPIRED',
   EMAIL_ALREADY_VERIFIED: 'EMAIL_ALREADY_VERIFIED',
+  INVALID_VERIFICATION_CODE: 'INVALID_VERIFICATION_CODE',
+  TOO_MANY_VERIFICATION_ATTEMPTS: 'TOO_MANY_VERIFICATION_ATTEMPTS',
+  RESEND_COOLDOWN: 'RESEND_COOLDOWN',
   EMAIL_SEND_FAILED: 'EMAIL_SEND_FAILED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
@@ -118,6 +121,24 @@ export const AuthErrors = {
     createAuthError(
       AuthErrorCodes.EMAIL_ALREADY_VERIFIED,
       'Email is already verified'
+    ),
+
+  invalidVerificationCode: () =>
+    createAuthError(
+      AuthErrorCodes.INVALID_VERIFICATION_CODE,
+      'Invalid or expired verification code'
+    ),
+
+  tooManyVerificationAttempts: () =>
+    createAuthError(
+      AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
+      'Too many attempts — request a new code'
+    ),
+
+  resendCooldown: () =>
+    createAuthError(
+      AuthErrorCodes.RESEND_COOLDOWN,
+      'Wait before requesting another email'
     ),
 
   emailSendFailed: () =>
