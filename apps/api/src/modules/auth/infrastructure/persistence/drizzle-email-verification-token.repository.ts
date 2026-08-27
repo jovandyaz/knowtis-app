@@ -6,7 +6,7 @@ import type {
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { desc, eq, lt, sql } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -36,6 +36,8 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
           userId: data.userId,
           tokenHash: data.tokenHash,
           expiresAt: data.expiresAt,
+          codeHash: data.codeHash,
+          codeExpiresAt: data.codeExpiresAt,
         })
         .returning();
 
@@ -66,10 +68,44 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
     return this.mapToEntity(result[0]);
   }
 
+  async findByUserId(
+    userId: string
+  ): Promise<EmailVerificationTokenEntity | null> {
+    const result = await this.db
+      .select()
+      .from(emailVerificationTokens)
+      .where(eq(emailVerificationTokens.userId, userId))
+      .orderBy(desc(emailVerificationTokens.createdAt))
+      .limit(1);
+
+    if (result.length === 0) {
+      return null;
+    }
+
+    return this.mapToEntity(result[0]);
+  }
+
+  /** A single UPDATE ... RETURNING keeps two concurrent code attempts from both reading the same pre-increment count. */
+  async incrementAttempts(id: string): Promise<number | null> {
+    const result = await this.db
+      .update(emailVerificationTokens)
+      .set({ attempts: sql`${emailVerificationTokens.attempts} + 1` })
+      .where(eq(emailVerificationTokens.id, id))
+      .returning({ attempts: emailVerificationTokens.attempts });
+
+    return result[0]?.attempts ?? null;
+  }
+
   async deleteAllByUserId(userId: string): Promise<void> {
     await this.db
       .delete(emailVerificationTokens)
       .where(eq(emailVerificationTokens.userId, userId));
+  }
+
+  async deleteExpired(cutoff: Date): Promise<void> {
+    await this.db
+      .delete(emailVerificationTokens)
+      .where(lt(emailVerificationTokens.expiresAt, cutoff));
   }
 
   private mapToEntity(
@@ -80,6 +116,9 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
       userId: token.userId,
       tokenHash: token.tokenHash,
       expiresAt: token.expiresAt,
+      codeHash: token.codeHash,
+      codeExpiresAt: token.codeExpiresAt,
+      attempts: token.attempts,
       createdAt: token.createdAt,
     };
   }

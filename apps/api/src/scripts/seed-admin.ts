@@ -66,6 +66,7 @@ async function seedAdmin() {
         passwordHash,
         provider: 'local',
         role: USER_ROLE.ADMIN,
+        emailVerifiedAt: new Date(),
       });
       console.log(`Admin user ${email} created.`);
     }
