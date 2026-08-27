@@ -1,6 +1,7 @@
 import i18n from '@/lib/i18n';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import {
+  AuthErrorCodes,
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_RESEND_COOLDOWN_MS,
 } from '@jovandyaz/auth';
@@ -135,12 +136,14 @@ describe('VerifyEmailDialog', () => {
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
   });
 
-  it('arms the hold when the server refuses the resend, so the throttle is not burned', async () => {
+  it('arms the cooldown hold when the server says the last code is too recent', async () => {
     vi.useFakeTimers();
     const api = createAuthApiMock({
       resendVerification: vi
         .fn()
-        .mockRejectedValue(new ApiClientError('Too many', 429, 'RATE_LIMITED')),
+        .mockRejectedValue(
+          new ApiClientError('Wait', 429, AuthErrorCodes.RESEND_COOLDOWN)
+        ),
     });
     renderDialog(api);
     openDialog();
@@ -157,6 +160,49 @@ describe('VerifyEmailDialog', () => {
       vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
     });
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
+  });
+
+  it('stops offering a resend the endpoint throttle has locked out', async () => {
+    vi.useFakeTimers();
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(new ApiClientError('Too many requests', 429)),
+    });
+    renderDialog(api);
+    openDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+    await flushPromises();
+
+    // No countdown: the throttle window is the server's, and it is not 60s.
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeDisabled();
+    expect(
+      screen.queryByRole('button', { name: 'Resend in 60s' })
+    ).not.toBeInTheDocument();
+
+    act(() => {
+      vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
+    });
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeDisabled();
+  });
+
+  it('says the wait is minutes, not a moment, once the throttle locks out', async () => {
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(new ApiClientError('Too many requests', 429)),
+    });
+    renderDialog(api);
+    openDialog();
+
+    await userEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+
+    expect(
+      await screen.findByText(
+        'Too many requests for a new code. Wait a few minutes before trying again.'
+      )
+    ).toBeInTheDocument();
   });
 
   it('leaves the resend free when it failed for a reason other than the cooldown', async () => {

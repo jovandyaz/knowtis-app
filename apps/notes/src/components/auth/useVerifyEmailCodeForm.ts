@@ -16,6 +16,9 @@ import {
 import { ApiClientError } from '@knowtis/api-client';
 
 const CODE_INVALID_KEY = 'verifyEmail.codeInvalid';
+const RATE_LIMIT_KEY = 'verifyEmail.rateLimitToast';
+const RESEND_LOCKED_OUT_KEY = 'verifyEmail.resendLockedOut';
+const RESENT_FAILED_KEY = 'verifyEmail.resentFailed';
 const ATTEMPTS_SPENT_KEY = 'verifyEmail.codeTooManyAttempts';
 const ATTEMPTS_SPENT_WAIT_KEY = 'verifyEmail.codeTooManyAttemptsWait';
 const GENERIC_ERROR_KEY = 'verifyEmail.genericError';
@@ -24,6 +27,11 @@ type VerifyErrorKey =
   | typeof CODE_INVALID_KEY
   | typeof ATTEMPTS_SPENT_KEY
   | typeof GENERIC_ERROR_KEY;
+
+type ResendErrorKey =
+  | typeof RATE_LIMIT_KEY
+  | typeof RESEND_LOCKED_OUT_KEY
+  | typeof RESENT_FAILED_KEY;
 
 export interface ResendNotice {
   tone: 'success' | 'error';
@@ -50,6 +58,14 @@ export interface VerifyEmailCodeForm {
   resendNotice: ResendNotice | undefined;
 }
 
+/** True only for the per-code cooldown, whose window this client can name. */
+function isResendCooldown(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.code === AuthErrorCodes.RESEND_COOLDOWN
+  );
+}
+
 function verifyErrorKey(error: Error | null): VerifyErrorKey | undefined {
   if (!error) {
     return undefined;
@@ -71,6 +87,16 @@ function verifyErrorKey(error: Error | null): VerifyErrorKey | undefined {
  * The code-entry interaction shared by the registration step and the in-app
  * dialog: submit, the attempt-cap copy, and a resend the server cooldown holds.
  */
+function resendErrorKey(
+  lockedOut: boolean,
+  rateLimited: boolean
+): ResendErrorKey {
+  if (lockedOut) {
+    return RESEND_LOCKED_OUT_KEY;
+  }
+  return rateLimited ? RATE_LIMIT_KEY : RESENT_FAILED_KEY;
+}
+
 export function useVerifyEmailCodeForm({
   onVerified,
   startHeld = true,
@@ -87,17 +113,19 @@ export function useVerifyEmailCodeForm({
   );
   const [code, setCode] = useState('');
   const [attemptsSpent, setAttemptsSpent] = useState(false);
+  const [lockedOut, setLockedOut] = useState(false);
 
   const errorKey = verifyErrorKey(verifyCode.error);
   // The server gates the resend purely on elapsed time, so nothing but the
   // countdown may release it — a spent attempt budget least of all.
-  const resendHeld = secondsLeft > 0;
+  const cooldownHeld = secondsLeft > 0;
+  const resendHeld = cooldownHeld || lockedOut;
 
   // A spent budget does not lift the cooldown: the spent row survives on the
   // server precisely because the cooldown keys off it, so a resend inside the
   // window is refused. Name the wait rather than offer a rejected action.
   const attemptsSpentMessage = attemptsSpent
-    ? t(resendHeld ? ATTEMPTS_SPENT_WAIT_KEY : ATTEMPTS_SPENT_KEY, {
+    ? t(cooldownHeld ? ATTEMPTS_SPENT_WAIT_KEY : ATTEMPTS_SPENT_KEY, {
         seconds: secondsLeft,
       })
     : undefined;
@@ -105,12 +133,7 @@ export function useVerifyEmailCodeForm({
   const resendNotice: ResendNotice | undefined = resendVerification.isSuccess
     ? { tone: 'success', message: t('verifyEmail.resentSuccess') }
     : resendVerification.isError
-      ? {
-          tone: 'error',
-          message: rateLimited
-            ? t('verifyEmail.rateLimitToast')
-            : t('verifyEmail.resentFailed'),
-        }
+      ? { tone: 'error', message: t(resendErrorKey(lockedOut, rateLimited)) }
       : undefined;
 
   const onCodeChange = (next: string) => {
@@ -142,10 +165,18 @@ export function useVerifyEmailCodeForm({
         restart();
       },
       // The 3-per-15-minutes throttle counts refused requests too, so a
-      // refusal has to arm the hold or three clicks lock the user out.
+      // refusal has to hold the resend or three clicks lock the user out.
+      // Only the cooldown has a window worth counting down: re-arming 60s
+      // against the throttle would just invite the click that spends the
+      // next slot.
       onError: (error) => {
-        if (checkRateLimit(error)) {
+        if (!checkRateLimit(error)) {
+          return;
+        }
+        if (isResendCooldown(error)) {
           restart();
+        } else {
+          setLockedOut(true);
         }
       },
     });
@@ -161,7 +192,7 @@ export function useVerifyEmailCodeForm({
     onResend,
     isResending: resendVerification.isPending,
     resendHeld,
-    resendLabel: resendHeld
+    resendLabel: cooldownHeld
       ? t('verifyEmail.resendCountdown', { seconds: secondsLeft })
       : t('verifyEmail.resendButton'),
     resendNotice,
