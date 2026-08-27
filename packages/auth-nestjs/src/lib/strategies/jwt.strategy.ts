@@ -103,7 +103,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         email: user.email,
         name: user.name,
         avatarUrl: user.avatarUrl,
+        emailVerifiedAt: user.emailVerifiedAt,
+        locale: user.locale,
         ...(payload.isAnonymous && { isAnonymous: true }),
+        familyId: payload.familyId,
         role: user.role,
       };
     } catch {

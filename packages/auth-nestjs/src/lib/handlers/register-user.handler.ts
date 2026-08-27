@@ -4,6 +4,7 @@ import {
   Email,
   Password,
   UserRegisteredEvent,
+  VERIFICATION_CODE_EXPIRY_MS,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth/server';
 import type {
@@ -33,6 +34,7 @@ import type { UserRepository } from '../ports/user.repository';
 import { TokenHasher } from '../services/token-hasher.service';
 import { createSessionWithTokens } from './shared/create-session';
 import { generateSecureToken } from './shared/generate-secure-token';
+import { generateVerificationCode } from './shared/generate-verification-code';
 
 export interface RegisterUserInput {
   readonly email: string;
@@ -121,14 +123,17 @@ export class RegisterUserHandler {
 
     const tokens = tokensResult.value;
 
-    this.sendVerificationEmail(user.id, user.email, user.name).catch(
-      (error) => {
-        this.logger.error(
-          'Unexpected error sending verification email',
-          error instanceof Error ? error.stack : error
-        );
-      }
-    );
+    this.sendVerificationEmail(
+      user.id,
+      user.email,
+      user.name,
+      user.locale
+    ).catch((error) => {
+      this.logger.error(
+        'Unexpected error sending verification email',
+        error instanceof Error ? error.stack : error
+      );
+    });
 
     this.eventEmitter.emit(
       AuthEventName.REGISTER,
@@ -155,14 +160,18 @@ export class RegisterUserHandler {
   private async sendVerificationEmail(
     userId: string,
     email: string,
-    name: string
+    name: string,
+    locale: string | null
   ): Promise<void> {
     const { plainToken, tokenHash } = generateSecureToken(this.tokenHasher);
+    const { plainCode, codeHash } = generateVerificationCode(this.tokenHasher);
 
     const createResult = await this.verificationTokenRepository.create({
       userId,
       tokenHash,
       expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS),
+      codeHash,
+      codeExpiresAt: new Date(Date.now() + VERIFICATION_CODE_EXPIRY_MS),
     });
     if (createResult.isErr()) {
       this.logger.error('Failed to create email verification token');
@@ -171,8 +180,9 @@ export class RegisterUserHandler {
 
     const emailResult = await this.emailService.sendEmailVerification(
       email,
-      plainToken,
-      name
+      { token: plainToken, code: plainCode },
+      name,
+      locale ?? undefined
     );
     if (emailResult.isErr()) {
       this.logger.error('Failed to send verification email');

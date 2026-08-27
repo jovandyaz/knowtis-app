@@ -1,5 +1,6 @@
 import {
   AuthEventName,
+  type EmailVerifiedEvent,
   type LoginFailedEvent,
   type PasswordResetCompletedEvent,
   type PasswordResetRequestedEvent,
@@ -19,6 +20,13 @@ export class AuthAuditListener {
   handleRegister(event: UserRegisteredEvent): void {
     this.logger.log(
       `User registered: userId=${event.userId} email=${event.email} ip=${event.ipAddress}`
+    );
+  }
+
+  @OnEvent(AuthEventName.EMAIL_VERIFIED)
+  handleEmailVerified(event: EmailVerifiedEvent): void {
+    this.logger.log(
+      `Email verified: userId=${event.userId} source=${event.source}`
     );
   }
 
