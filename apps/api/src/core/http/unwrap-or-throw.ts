@@ -8,7 +8,8 @@ export interface DomainErrorLike {
 
 /**
  * Returns the Result value, or throws an HttpException whose status comes
- * from statusMap[error.code] (BAD_REQUEST when the code is unmapped).
+ * from statusMap[error.code] (BAD_REQUEST when the code is unmapped). The
+ * domain code is echoed as `code`, the only field `ApiClientError` reads.
  */
 export function unwrapOrThrow<T, E extends DomainErrorLike>(
   result: Result<T, E>,
@@ -20,6 +21,7 @@ export function unwrapOrThrow<T, E extends DomainErrorLike>(
       {
         statusCode: status,
         error: result.error.code,
+        code: result.error.code,
         message: result.error.message,
       },
       status
