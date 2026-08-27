@@ -2823,6 +2823,7 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.
   it('logs agent.tool.error and counts tool activity in turn health', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2856,9 +2857,9 @@ describe('AiSdkAgentOrchestrator', () => {
         userId: 'u1',
       })
     );
-    const healthCall = logSpy.mock.calls
-      .map((c) => c[0] as Record<string, unknown>)
-      .find((c) => c?.event === 'agent.turn.health');
-    expect(healthCall).toMatchObject({ toolCalls: 1, toolErrors: 1 });
+    expect(healthLogsFrom(logSpy).at(-1)).toMatchObject({
+      toolCalls: 1,
+      toolErrors: 1,
+    });
   });
 });
