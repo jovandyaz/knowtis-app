@@ -1,11 +1,11 @@
 import {
+  AUTH_ERROR_STATUS_MAP,
   CurrentUser,
   ForgotPasswordHandler,
   JwtAuthGuard,
   Public,
   ResendVerificationHandler,
   ResetPasswordHandler,
-  unwrapOrThrow,
   VerifyEmailCodeHandler,
   VerifyEmailHandler,
 } from '@jovandyaz/auth-nestjs';
@@ -28,6 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
+import { unwrapOrThrow } from '../../core/http';
 import {
   ForgotPasswordDto,
   ResetPasswordDto,
@@ -60,7 +61,7 @@ export class AuthAccountController {
     const result = await this.forgotPasswordHandler.execute({
       email: dto.email,
     });
-    unwrapOrThrow(result);
+    unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     return { message: 'If the email exists, a reset link will be sent' };
   }
 
@@ -79,7 +80,7 @@ export class AuthAccountController {
       token: dto.token,
       newPassword: dto.newPassword,
     });
-    unwrapOrThrow(result);
+    unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     return { message: 'Password has been reset successfully' };
   }
 
@@ -97,7 +98,7 @@ export class AuthAccountController {
     const result = await this.verifyEmailHandler.execute({
       token: dto.token,
     });
-    unwrapOrThrow(result);
+    unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     return { message: 'Email verified successfully' };
   }
 
@@ -130,7 +131,7 @@ export class AuthAccountController {
       code: dto.code,
       familyId: user.familyId,
     });
-    unwrapOrThrow(result);
+    unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     return { message: 'Email verified successfully' };
   }
 
@@ -156,7 +157,7 @@ export class AuthAccountController {
     const result = await this.resendVerificationHandler.execute({
       userId: user.id,
     });
-    unwrapOrThrow(result);
+    unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     return { message: 'Verification email sent successfully' };
   }
 

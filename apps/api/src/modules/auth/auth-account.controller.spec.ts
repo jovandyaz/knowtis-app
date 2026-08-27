@@ -1,15 +1,12 @@
-import {
-  IS_PUBLIC_KEY,
-  JwtAuthGuard,
-  RetryAfterHttpException,
-} from '@jovandyaz/auth-nestjs';
+import { IS_PUBLIC_KEY, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
 import { AuthErrorCodes, AuthErrors, USER_ROLE } from '@jovandyaz/auth/server';
 import type { AuthDomainError, RequestUser } from '@jovandyaz/auth/server';
-import { ForbiddenException, HttpStatus } from '@nestjs/common';
+import { ForbiddenException, HttpException, HttpStatus } from '@nestjs/common';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { err, ok, type Result } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
+import { RetryAfterHttpException } from '../../core/http';
 import { AuthAccountController } from './auth-account.controller';
 
 const DEFAULT_THROTTLE_LIMIT = 'THROTTLER:LIMITdefault';
@@ -26,25 +23,6 @@ function makeCaller(overrides: Partial<RequestUser> = {}): RequestUser {
     role: USER_ROLE.USER,
     ...overrides,
   };
-}
-
-interface ThrownHttpError {
-  getStatus(): number;
-  getResponse(): unknown;
-}
-
-// `packages/auth-nestjs` resolves its own physical copy of `@nestjs/common`, so
-// the HttpException it throws is a different class identity than this app's and
-// `instanceof` is false here — the deployed bundle externalizes both to one copy.
-function asHttpError(error: unknown): ThrownHttpError {
-  const candidate = error as Partial<ThrownHttpError>;
-  if (
-    typeof candidate?.getStatus !== 'function' ||
-    typeof candidate.getResponse !== 'function'
-  ) {
-    throw new Error(`Expected an HTTP exception, received: ${String(error)}`);
-  }
-  return candidate as ThrownHttpError;
 }
 
 function createController(
@@ -102,10 +80,12 @@ describe('AuthAccountController.verifyEmailCode', () => {
       .verifyEmailCode(makeCaller(), { code: CODE })
       .catch((error: unknown) => error);
 
-    expect(asHttpError(thrown).getStatus()).toBe(HttpStatus.BAD_REQUEST);
-    expect(asHttpError(thrown).getResponse()).toMatchObject({
+    expect(thrown).toBeInstanceOf(HttpException);
+    expect((thrown as HttpException).getResponse()).toEqual({
+      statusCode: HttpStatus.BAD_REQUEST,
       error: AuthErrorCodes.INVALID_VERIFICATION_CODE,
       code: AuthErrorCodes.INVALID_VERIFICATION_CODE,
+      message: expect.any(String),
     });
   });
 
@@ -118,10 +98,12 @@ describe('AuthAccountController.verifyEmailCode', () => {
       .verifyEmailCode(makeCaller(), { code: CODE })
       .catch((error: unknown) => error);
 
-    expect(asHttpError(thrown).getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
-    expect(asHttpError(thrown).getResponse()).toMatchObject({
+    expect(thrown).toBeInstanceOf(HttpException);
+    expect((thrown as HttpException).getResponse()).toEqual({
+      statusCode: HttpStatus.TOO_MANY_REQUESTS,
       error: AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
       code: AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
+      message: expect.any(String),
     });
   });
 

@@ -1,4 +1,3 @@
-import { RetryAfterHttpException } from '@jovandyaz/auth-nestjs';
 import {
   BadRequestException,
   HttpStatus,
@@ -9,6 +8,7 @@ import {
 import { ThrottlerException } from '@nestjs/throttler';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { RetryAfterHttpException } from '../http/retry-after.exception';
 import { GlobalExceptionFilter } from './http-exception.filter';
 
 interface CapturedResponse {
