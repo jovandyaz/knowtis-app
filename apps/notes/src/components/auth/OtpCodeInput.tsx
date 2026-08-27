@@ -1,10 +1,11 @@
 import { forwardRef } from 'react';
 
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
+
 import { cn, Input, type InputProps } from '@knowtis/design-system';
 
-export const VERIFICATION_CODE_LENGTH = 6;
-
 const NON_DIGITS = /\D/g;
+const CODE_MASK = '0'.repeat(VERIFICATION_CODE_LENGTH);
 
 export interface OtpCodeInputProps extends Omit<
   InputProps,
@@ -13,6 +14,7 @@ export interface OtpCodeInputProps extends Omit<
   | 'maxLength'
   | 'onChange'
   | 'onPaste'
+  | 'placeholder'
   | 'type'
   | 'value'
 > {
@@ -37,6 +39,7 @@ export const OtpCodeInput = forwardRef<HTMLInputElement, OtpCodeInputProps>(
       inputMode="numeric"
       autoComplete="one-time-code"
       maxLength={VERIFICATION_CODE_LENGTH}
+      placeholder={CODE_MASK}
       value={value}
       onChange={(event) => onChange(toCode(event.target.value))}
       // maxLength truncates a paste before onChange can filter it, which would

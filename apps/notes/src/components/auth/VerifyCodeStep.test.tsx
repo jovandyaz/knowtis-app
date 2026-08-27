@@ -1,5 +1,8 @@
 import i18n from '@/lib/i18n';
-import { VERIFICATION_RESEND_COOLDOWN_MS } from '@jovandyaz/auth';
+import {
+  VERIFICATION_CODE_LENGTH,
+  VERIFICATION_RESEND_COOLDOWN_MS,
+} from '@jovandyaz/auth';
 import {
   act,
   fireEvent,
@@ -59,6 +62,14 @@ describe('VerifyCodeStep', () => {
 
     await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
     expect(api.verifyEmailCode).toHaveBeenCalledWith(CODE);
+  });
+
+  it('tells the user how many digits to look for', () => {
+    renderStep();
+
+    expect(
+      screen.getByText(`${VERIFICATION_CODE_LENGTH}-digit`, { exact: false })
+    ).toBeInTheDocument();
   });
 
   it('waits for the full six digits before it lets the code be submitted', async () => {

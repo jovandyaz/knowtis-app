@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
 import { Mail } from 'lucide-react';
 
 import {
@@ -43,7 +44,7 @@ export function VerifyCodeStep({
           {t('verifyEmail.checkEmail')}
         </CardTitle>
         <CardDescription>
-          {t('verifyEmail.sentCodeTo')}{' '}
+          {t('verifyEmail.sentCodeTo', { length: VERIFICATION_CODE_LENGTH })}{' '}
           <span className="font-medium text-(--foreground)">{email}</span>
         </CardDescription>
       </CardHeader>
@@ -59,7 +60,6 @@ export function VerifyCodeStep({
               id={CODE_FIELD_ID}
               value={form.code}
               onChange={form.onCodeChange}
-              placeholder={t('verifyEmail.codePlaceholder')}
               autoFocus
               aria-invalid={!!form.errorMessage}
               aria-describedby={

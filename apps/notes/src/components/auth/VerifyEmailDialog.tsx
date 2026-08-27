@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { Mail } from 'lucide-react';
 import { toast } from 'sonner';
@@ -40,7 +41,10 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
       <DialogHeader>
         <DialogTitle>{t('verifyEmail.gateDialogTitle')}</DialogTitle>
         <DialogDescription>
-          {t('verifyEmail.gateDialogDesc', { email })}
+          {t('verifyEmail.gateDialogDesc', {
+            email,
+            length: VERIFICATION_CODE_LENGTH,
+          })}
         </DialogDescription>
       </DialogHeader>
 
@@ -54,7 +58,6 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
             id={CODE_FIELD_ID}
             value={form.code}
             onChange={form.onCodeChange}
-            placeholder={t('verifyEmail.codePlaceholder')}
             autoFocus
             aria-invalid={!!form.errorMessage}
             aria-describedby={

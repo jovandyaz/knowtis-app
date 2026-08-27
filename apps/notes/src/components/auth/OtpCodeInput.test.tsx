@@ -1,10 +1,11 @@
 import { useState } from 'react';
 
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 
-import { OtpCodeInput, VERIFICATION_CODE_LENGTH } from './OtpCodeInput';
+import { OtpCodeInput } from './OtpCodeInput';
 
 const LABEL = 'Verification code';
 // A real one-time-code line carries digits after the code — a reference number,
@@ -36,6 +37,14 @@ describe('OtpCodeInput', () => {
       'maxlength',
       String(VERIFICATION_CODE_LENGTH)
     );
+  });
+
+  it('masks the field with one digit per digit of the code', () => {
+    render(<ControlledCode />);
+
+    expect(
+      screen.getByLabelText(LABEL).getAttribute('placeholder')
+    ).toHaveLength(VERIFICATION_CODE_LENGTH);
   });
 
   it('keeps the digits and drops everything else', async () => {

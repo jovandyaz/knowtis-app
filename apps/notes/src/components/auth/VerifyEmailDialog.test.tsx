@@ -1,6 +1,9 @@
 import i18n from '@/lib/i18n';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
-import { VERIFICATION_RESEND_COOLDOWN_MS } from '@jovandyaz/auth';
+import {
+  VERIFICATION_CODE_LENGTH,
+  VERIFICATION_RESEND_COOLDOWN_MS,
+} from '@jovandyaz/auth';
 import {
   act,
   fireEvent,
@@ -75,6 +78,17 @@ async function flushPromises() {
 }
 
 describe('VerifyEmailDialog', () => {
+  it('names the address and how many digits the code has', () => {
+    renderDialog();
+    openDialog();
+
+    expect(
+      screen.getByText(
+        new RegExp(`${VERIFICATION_CODE_LENGTH}-digit.*${HARNESS_PROFILE.email}`)
+      )
+    ).toBeInTheDocument();
+  });
+
   it('stays out of the way until something opens it', () => {
     renderDialog();
 

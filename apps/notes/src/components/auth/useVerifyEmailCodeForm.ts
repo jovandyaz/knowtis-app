@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useCountdown } from '@/hooks/useCountdown';
 import {
   AuthErrorCodes,
+  VERIFICATION_CODE_LENGTH,
   VERIFICATION_RESEND_COOLDOWN_MS,
 } from '@jovandyaz/auth';
 import {
@@ -13,8 +14,6 @@ import {
 } from '@jovandyaz/auth-react';
 
 import { ApiClientError } from '@knowtis/api-client';
-
-import { VERIFICATION_CODE_LENGTH } from './OtpCodeInput';
 
 const CODE_INVALID_KEY = 'verifyEmail.codeInvalid';
 const ATTEMPTS_SPENT_KEY = 'verifyEmail.codeTooManyAttempts';
