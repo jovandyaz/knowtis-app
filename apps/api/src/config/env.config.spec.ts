@@ -309,15 +309,39 @@ describe('env.config TOKEN_HASH_KEY', () => {
     ).toThrow(/TOKEN_HASH_KEY must be 32 bytes/);
   });
 
-  it('rejects an empty TOKEN_HASH_KEY rather than treating it as unset', () => {
-    expect(() => validateEnv({ ...validEnv, TOKEN_HASH_KEY: '' })).toThrow(
-      /TOKEN_HASH_KEY must be 32 bytes/
+  it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
+    expect(() => validateEnv({ ...prodEnv, TOKEN_HASH_KEY: '' })).toThrow(
+      /TOKEN_HASH_KEY is required/
     );
+  });
+
+  it('rejects a production TOKEN_HASH_KEY still set to the example placeholder', () => {
+    expect(() =>
+      validateEnv({
+        ...prodEnv,
+        TOKEN_HASH_KEY: 'changemechangemechangemechangemechangemecha=',
+      })
+    ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
   });
 
   it('rejects a boot without TOKEN_HASH_KEY outside production too', () => {
     const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = validEnv;
 
     expect(() => validateEnv(withoutKey)).toThrow(/TOKEN_HASH_KEY is required/);
+  });
+});
+
+describe('env.config blank assignments', () => {
+  it('treats a blank optional URL as absent instead of an invalid URL', () => {
+    expect(
+      validateEnv({ ...validEnv, OAUTH_ISSUER: '' }).OAUTH_ISSUER
+    ).toBeUndefined();
+  });
+
+  it('falls back to the default when a defaulted var is blank, not to a coerced 0', () => {
+    expect(
+      validateEnv({ ...validEnv, AI_DAILY_TOKEN_LIMIT: '' })
+        .AI_DAILY_TOKEN_LIMIT
+    ).toBe(100000);
   });
 });
