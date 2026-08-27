@@ -32,5 +32,9 @@ export interface SessionRepository {
   deleteById(id: string): Promise<void>;
   deleteByFamilyId(familyId: string): Promise<void>;
   deleteAllByUserId(userId: string): Promise<void>;
+  deleteAllByUserIdExceptFamily(
+    userId: string,
+    familyId: string
+  ): Promise<void>;
   deleteRotatedBefore(cutoff: Date): Promise<void>;
 }
