@@ -1,8 +1,13 @@
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { PERMISSION } from '@knowtis/shared-types';
+import { EMAIL_NOT_VERIFIED_CODE, PERMISSION } from '@knowtis/shared-types';
 
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../../test-support/verified-identity';
 import {
   NoteErrorCodes,
   PermissionLevel,
@@ -78,7 +83,10 @@ describe('ShareNoteHandler', () => {
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
     };
-    handler = new ShareNoteHandler(noteRepo);
+    handler = new ShareNoteHandler(
+      noteRepo,
+      policyFor(IDENTITY_STATE.VERIFIED)
+    );
   });
 
   describe('Owner sharing', () => {
@@ -287,6 +295,50 @@ describe('ShareNoteHandler', () => {
       if (result.isErr()) {
         expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
       }
+    });
+  });
+
+  describe('Verified email gate', () => {
+    const shareAs = (state: IdentityState) => {
+      const gated = new ShareNoteHandler(noteRepo, policyFor(state));
+      return gated.execute({
+        noteId: 'note-1',
+        userId: 'owner-1',
+        targetUserId: 'user-2',
+        permission: PERMISSION.VIEWER,
+      });
+    };
+
+    beforeEach(() => {
+      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
+        ok(mockPermission)
+      );
+    });
+
+    it('lets an unverified owner share while the gate flag is off', async () => {
+      const result = await shareAs(IDENTITY_STATE.GATE_OFF);
+
+      expect(result.isOk()).toBe(true);
+      expect(noteRepo.upsertPermission).toHaveBeenCalled();
+    });
+
+    it('rejects an unverified owner without reading or writing anything', async () => {
+      const result = await shareAs(IDENTITY_STATE.UNVERIFIED);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(noteRepo.findById).not.toHaveBeenCalled();
+      expect(noteRepo.upsertPermission).not.toHaveBeenCalled();
+    });
+
+    it('lets a verified owner share', async () => {
+      const result = await shareAs(IDENTITY_STATE.VERIFIED);
+
+      expect(result.isOk()).toBe(true);
+      expect(noteRepo.upsertPermission).toHaveBeenCalled();
     });
   });
 

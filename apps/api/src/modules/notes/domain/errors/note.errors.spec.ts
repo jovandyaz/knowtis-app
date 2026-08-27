@@ -1,6 +1,14 @@
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
 import { NoteErrorCodes, NoteErrors } from './note.errors';
 
 describe('NoteErrors', () => {
+  it('should create verificationRequired with the shared gate code', () => {
+    const error = NoteErrors.verificationRequired();
+    expect(error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+    expect(NoteErrorCodes.EMAIL_NOT_VERIFIED).toBe(EMAIL_NOT_VERIFIED_CODE);
+  });
+
   it('should have INTERNAL_ERROR code', () => {
     expect(NoteErrorCodes.INTERNAL_ERROR).toBe('INTERNAL_ERROR');
   });

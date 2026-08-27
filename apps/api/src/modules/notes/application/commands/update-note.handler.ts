@@ -15,6 +15,7 @@ import {
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
+import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
   NOTE_REPOSITORY,
   NoteContent,
@@ -89,7 +90,8 @@ export class UpdateNoteHandler {
   constructor(
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
     @Inject(TAG_REPOSITORY) private readonly tagRepository: TagRepository,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   async execute(
@@ -139,6 +141,20 @@ export class UpdateNoteHandler {
     }
 
     const isOwner = note.ownerId === input.userId;
+
+    // Only an owner widening the link is gated. Narrowing stays free — an
+    // unverified user must be able to revoke a link they already exposed —
+    // and a non-owner is refused below for lacking the right at all, which
+    // is the truer answer than telling them to verify.
+    if (
+      isOwner &&
+      input.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
+      note.generalAccess !== GENERAL_ACCESS.ANYONE_WITH_LINK &&
+      !(await this.verifiedIdentity.isVerified(input.userId))
+    ) {
+      return err(NoteErrors.verificationRequired());
+    }
+
     const persisted = isOwner
       ? await this.executeOwnerUpdate(input, note, clientYjsState)
       : await this.executeEditorUpdate(

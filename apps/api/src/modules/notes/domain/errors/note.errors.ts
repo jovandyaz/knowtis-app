@@ -1,3 +1,5 @@
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
 export interface NoteDomainError {
   readonly code: string;
   readonly message: string;
@@ -12,6 +14,7 @@ export const NoteErrorCodes = {
   TAG_NOT_FOUND: 'TAG_NOT_FOUND',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
+  EMAIL_NOT_VERIFIED: EMAIL_NOT_VERIFIED_CODE,
   SHARE_TOKEN_NOT_FOUND: 'SHARE_TOKEN_NOT_FOUND',
   CONTENT_OVERWRITE_REFUSED: 'CONTENT_OVERWRITE_REFUSED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -65,6 +68,12 @@ export const NoteErrors = {
     createNoteError(
       NoteErrorCodes.PERMISSION_DENIED,
       'You do not have permission to edit this note'
+    ),
+
+  verificationRequired: () =>
+    createNoteError(
+      NoteErrorCodes.EMAIL_NOT_VERIFIED,
+      'Verify your email address before sharing this note'
     ),
 
   ownerOnly: (action: string) =>
