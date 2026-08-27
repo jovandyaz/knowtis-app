@@ -78,6 +78,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       };
     }),
   };

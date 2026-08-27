@@ -27,6 +27,7 @@ describe('drainEvents', () => {
           sources: [{ id: 'n1', title: 'Note 1' }],
           knownNotes: [],
           webSources: [],
+          stopReason: 'completed',
         },
       ])
     );

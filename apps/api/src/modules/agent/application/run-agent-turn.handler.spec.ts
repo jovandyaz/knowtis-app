@@ -87,6 +87,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]
   );
@@ -226,6 +227,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const conversations = makeConversations();
@@ -585,6 +587,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [{ id: 'n1', title: 'Productividad' }],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -629,6 +632,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -669,6 +673,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [{ id: 'n1', title: 'GTD' }],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const conversations = makeConversations([
@@ -846,6 +851,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1008,6 +1014,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1470,6 +1477,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -2083,6 +2091,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -2825,6 +2834,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const modelPreference = makeModelPreference();

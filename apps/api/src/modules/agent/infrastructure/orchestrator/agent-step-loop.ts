@@ -16,7 +16,12 @@ import {
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
-import type { AgentEvent, AgentSource } from '../../domain/agent-event';
+import {
+  AGENT_STOP_REASON,
+  type AgentEvent,
+  type AgentSource,
+  type AgentStopReason,
+} from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { ProposalCollector } from './proposal-collector';
 import {
@@ -372,6 +377,23 @@ export async function* runAgentStepLoop(
             );
             return;
           }
+          let stopReason: AgentStopReason = AGENT_STOP_REASON.COMPLETED;
+          if (result.finishReason === FINISH_REASON_TOOL_CALLS) {
+            stopReason = AGENT_STOP_REASON.MAX_STEPS;
+            logger.warn({
+              event: 'agent.turn.max_steps_reached',
+              userId: input.userId,
+              model: currentModel,
+              maxSteps: input.maxSteps,
+            });
+          } else if (result.finishReason === FINISH_REASON_LENGTH) {
+            stopReason = AGENT_STOP_REASON.LENGTH;
+            logger.warn({
+              event: 'agent.turn.output_truncated',
+              userId: input.userId,
+              model: currentModel,
+            });
+          }
           emitTurnHealth(
             logger,
             input.userId,
@@ -389,6 +411,7 @@ export async function* runAgentStepLoop(
             sources: [...params.sources.values()],
             knownNotes: [...params.knownNotes.values()],
             webSources: params.webSources.all,
+            stopReason,
           };
           return;
         }

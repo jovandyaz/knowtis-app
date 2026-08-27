@@ -25,6 +25,15 @@ export interface AgentCommitResult {
   readonly kind: 'create' | 'update' | 'share';
 }
 
+export const AGENT_STOP_REASON = {
+  COMPLETED: 'completed',
+  MAX_STEPS: 'max_steps',
+  LENGTH: 'length',
+  TOKEN_BUDGET: 'token_budget',
+} as const;
+export type AgentStopReason =
+  (typeof AGENT_STOP_REASON)[keyof typeof AGENT_STOP_REASON];
+
 export type AgentEvent =
   | { readonly type: 'thinking'; readonly text: string }
   | { readonly type: 'chunk'; readonly text: string }
@@ -34,6 +43,7 @@ export type AgentEvent =
       readonly sources: readonly AgentSource[];
       readonly knownNotes: readonly AgentSource[];
       readonly webSources: readonly WebSource[];
+      readonly stopReason: AgentStopReason;
     }
   | {
       readonly type: 'proposal';

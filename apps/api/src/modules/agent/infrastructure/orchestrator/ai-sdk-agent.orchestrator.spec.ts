@@ -2823,6 +2823,47 @@ describe('AiSdkAgentOrchestrator', () => {
     });
   });
 
+  it('marks done with stopReason max_steps when the model still wants tools at the cap', async () => {
+    streamTextMock.mockImplementation(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'searching…' };
+        yield { type: 'finish', finishReason: 'tool-calls' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, maxSteps: 1 })
+    );
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('max_steps');
+  });
+
+  it('marks done with stopReason length when output was truncated mid-answer', async () => {
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'respuesta cortada' };
+        yield { type: 'finish', finishReason: 'length' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('length');
+  });
+
   // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.
   it('logs agent.tool.error and counts tool activity in turn health', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
