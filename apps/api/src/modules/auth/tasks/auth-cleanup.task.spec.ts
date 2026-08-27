@@ -1,32 +1,24 @@
 import type { EmailVerificationTokenRepository } from '@jovandyaz/auth-nestjs';
 import { Logger } from '@nestjs/common';
-import type { SQL } from 'drizzle-orm';
-import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Database } from '../../../database';
+import type { DrizzleAnonymousUserRepository } from '../infrastructure/persistence/drizzle-anonymous-user.repository';
 import { AuthCleanupTask } from './auth-cleanup.task';
 
 const NOW = new Date('2026-08-26T03:00:00.000Z');
+const MAX_AGE_DAYS = 30;
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function createMockDb(result: Promise<{ id: string }[]>) {
-  const returning = vi.fn().mockReturnValue(result);
-  const where = vi.fn().mockReturnValue({ returning });
-  const del = vi.fn().mockReturnValue({ where });
-  return { db: { delete: del } as unknown as Database, where };
+function createAnonymousUserRepository(
+  deleteAbandoned = vi.fn().mockResolvedValue(0)
+) {
+  return { deleteAbandoned } as unknown as DrizzleAnonymousUserRepository;
 }
 
 function createTokenRepository(
   deleteExpired = vi.fn().mockResolvedValue(undefined)
 ) {
-  return {
-    deleteExpired,
-  } as unknown as EmailVerificationTokenRepository;
-}
-
-function renderDeletePredicate(where: ReturnType<typeof vi.fn>): string {
-  const condition = where.mock.calls[0]?.[0] as SQL;
-  return new PgDialect().sqlToQuery(condition).sql;
+  return { deleteExpired } as unknown as EmailVerificationTokenRepository;
 }
 
 describe('AuthCleanupTask', () => {
@@ -40,7 +32,7 @@ describe('AuthCleanupTask', () => {
 
   it('logs the number of deleted users on success', async () => {
     const task = new AuthCleanupTask(
-      createMockDb(Promise.resolve([{ id: 'u1' }, { id: 'u2' }])).db,
+      createAnonymousUserRepository(vi.fn().mockResolvedValue(2)),
       createTokenRepository()
     );
     const logSpy = vi
@@ -54,9 +46,45 @@ describe('AuthCleanupTask', () => {
     );
   });
 
-  it('logs the error and does not throw when the delete fails', async () => {
+  it('stays quiet when nothing was abandoned', async () => {
     const task = new AuthCleanupTask(
-      createMockDb(Promise.reject(new Error('db down'))).db,
+      createAnonymousUserRepository(),
+      createTokenRepository()
+    );
+    const logSpy = vi
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => undefined);
+
+    await task.handleCleanup();
+
+    expect(logSpy).not.toHaveBeenCalled();
+  });
+
+  it('only sweeps anonymous users older than the retention window', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(NOW);
+    const anonymousUserRepository = createAnonymousUserRepository();
+    const task = new AuthCleanupTask(
+      anonymousUserRepository,
+      createTokenRepository()
+    );
+
+    await task.handleCleanup();
+
+    const [createdBefore, sessionsLiveAt] = vi.mocked(
+      anonymousUserRepository.deleteAbandoned
+    ).mock.calls[0];
+    expect(sessionsLiveAt).toEqual(NOW);
+    expect(NOW.getTime() - createdBefore.getTime()).toBe(
+      MAX_AGE_DAYS * MS_PER_DAY
+    );
+  });
+
+  it('logs the error and does not throw when the user delete fails', async () => {
+    const task = new AuthCleanupTask(
+      createAnonymousUserRepository(
+        vi.fn().mockRejectedValue(new Error('db down'))
+      ),
       createTokenRepository()
     );
     const errorSpy = vi
@@ -71,35 +99,12 @@ describe('AuthCleanupTask', () => {
     );
   });
 
-  it('spares anonymous users that still hold an unexpired session', async () => {
-    const { db, where } = createMockDb(Promise.resolve([]));
-    const task = new AuthCleanupTask(db, createTokenRepository());
-
-    await task.handleCleanup();
-
-    const sql = renderDeletePredicate(where);
-    expect(sql).toContain('not exists');
-    expect(sql).toContain('"sessions"."user_id" = "users"."id"');
-    expect(sql).toContain('"sessions"."expires_at" >');
-  });
-
-  it('only targets anonymous users created more than 30 days ago', async () => {
-    const { db, where } = createMockDb(Promise.resolve([]));
-    const task = new AuthCleanupTask(db, createTokenRepository());
-
-    await task.handleCleanup();
-
-    const sql = renderDeletePredicate(where);
-    expect(sql).toContain('"users"."is_anonymous" =');
-    expect(sql).toContain('"users"."created_at" <');
-  });
-
   it('sweeps verification rows whose emailed link has already expired', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(NOW);
     const tokenRepository = createTokenRepository();
     const task = new AuthCleanupTask(
-      createMockDb(Promise.resolve([])).db,
+      createAnonymousUserRepository(),
       tokenRepository
     );
 
@@ -112,7 +117,9 @@ describe('AuthCleanupTask', () => {
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     const tokenRepository = createTokenRepository();
     const task = new AuthCleanupTask(
-      createMockDb(Promise.reject(new Error('db down'))).db,
+      createAnonymousUserRepository(
+        vi.fn().mockRejectedValue(new Error('db down'))
+      ),
       tokenRepository
     );
 
@@ -126,7 +133,7 @@ describe('AuthCleanupTask', () => {
       .spyOn(Logger.prototype, 'error')
       .mockImplementation(() => undefined);
     const task = new AuthCleanupTask(
-      createMockDb(Promise.resolve([])).db,
+      createAnonymousUserRepository(),
       createTokenRepository(
         vi.fn().mockRejectedValue(new Error('tokens table gone'))
       )
