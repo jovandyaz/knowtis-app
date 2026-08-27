@@ -4,6 +4,7 @@ export const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  *  concurrent refreshes (multiple tabs) aren't flagged as theft. */
 export const REFRESH_TOKEN_GRACE_MS = 30 * 1000;
 export const VERIFICATION_TOKEN_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const VERIFICATION_CODE_LENGTH = 6;
 export const VERIFICATION_CODE_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 export const VERIFICATION_CODE_MAX_ATTEMPTS = 5;
 export const VERIFICATION_RESEND_COOLDOWN_MS = 60 * 1000; // 1 minute

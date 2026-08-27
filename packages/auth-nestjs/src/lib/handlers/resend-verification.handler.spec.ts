@@ -1,6 +1,7 @@
 import {
   AuthErrorCodes,
   VERIFICATION_CODE_EXPIRY_MS,
+  VERIFICATION_CODE_LENGTH,
   VERIFICATION_RESEND_COOLDOWN_MS,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth/server';
@@ -54,6 +55,8 @@ function makeUser(overrides: Partial<UserEntity> = {}): UserEntity {
   };
 }
 
+const CODE_PATTERN = new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`);
+
 describe('ResendVerificationHandler', () => {
   let userRepository: UserRepository;
   let emailService: EmailService;
@@ -100,7 +103,7 @@ describe('ResendVerificationHandler', () => {
 
     expect(result.isOk()).toBe(true);
     const payload = sentPayload();
-    expect(payload.code).toMatch(/^\d{6}$/);
+    expect(payload.code).toMatch(CODE_PATTERN);
 
     const [stored] = vi.mocked(tokenRepository.create).mock.calls[0];
     expect(stored.codeHash).toBe(tokenHasher.hash(payload.code));

@@ -1,3 +1,4 @@
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth/server';
 import { Logger } from '@nestjs/common';
 import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok } from 'neverthrow';
@@ -37,6 +38,8 @@ function makeUser(overrides: Partial<UserEntity> = {}): UserEntity {
     ...overrides,
   };
 }
+
+const CODE_PATTERN = new RegExp(`^\\d{${VERIFICATION_CODE_LENGTH}}$`);
 
 describe('RegisterUserHandler', () => {
   let userRepository: UserRepository;
@@ -113,7 +116,7 @@ describe('RegisterUserHandler', () => {
   it('delivers the freshly minted code and link token that it stored hashed', async () => {
     const payload = await registerAndAwaitEmail();
 
-    expect(payload.code).toMatch(/^\d{6}$/);
+    expect(payload.code).toMatch(CODE_PATTERN);
 
     const [stored] = vi.mocked(tokenRepository.create).mock.calls[0];
     expect(stored.codeHash).toBe(tokenHasher.hash(payload.code));
