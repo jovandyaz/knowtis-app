@@ -10,6 +10,7 @@ import { AnonymousAuthService } from './application/services/anonymous-auth.serv
 import { AuthAccountController } from './auth-account.controller';
 import { AuthSessionController } from './auth-session.controller';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
+import { DrizzleAnonymousUserRepository } from './infrastructure/persistence/drizzle-anonymous-user.repository';
 import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
 import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
@@ -59,6 +60,7 @@ const configService = new ConfigService();
   providers: [
     AnonymousAuthService,
     DrizzleAnonymousDataMigrationRepository,
+    DrizzleAnonymousUserRepository,
     AuthCleanupTask,
   ],
   exports: [AnonymousAuthService],
