@@ -73,6 +73,7 @@ function makeConfig(
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_STALL_MS: STALL_MS,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
+    AI_AGENT_TURN_TOKEN_BUDGET: 150000,
     AI_MAX_RETRIES: 3,
     AI_COOLDOWN_ALLOWED_FAILS: 3,
     AI_COOLDOWN_SECONDS: 120,
@@ -2862,6 +2863,32 @@ describe('AiSdkAgentOrchestrator', () => {
         (e as { type: string }).type === 'done'
     );
     expect(done?.stopReason).toBe('length');
+  });
+
+  it('stops continuing to the next step once the turn token budget is spent', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementation(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'leyendo notas…' };
+        yield { type: 'finish', finishReason: 'tool-calls' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 4000, outputTokens: 1000 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TURN_TOKEN_BUDGET: 5000 })
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, maxSteps: 8 })
+    );
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('token_budget');
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
   });
 
   // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.

@@ -137,6 +137,7 @@ export interface AgentStepLoopParams {
     readonly maxOutputTokens: number;
     readonly maxRetries: number;
     readonly maxMs: number;
+    readonly maxTurnTokens: number;
   };
   readonly sources: Map<string, AgentSource>;
   readonly knownNotes: Map<string, AgentSource>;
@@ -340,9 +341,16 @@ export async function* runAgentStepLoop(
             };
             return;
           }
+          const spentTurnTokens =
+            turnUsage.inputTokens + turnUsage.outputTokens;
+          const withinTokenBudget =
+            spentTurnTokens < params.budgets.maxTurnTokens;
+          const wantsMoreTools =
+            result.finishReason === FINISH_REASON_TOOL_CALLS;
           const willContinue =
-            result.finishReason === FINISH_REASON_TOOL_CALLS &&
-            completedSteps + 1 < input.maxSteps;
+            wantsMoreTools &&
+            completedSteps + 1 < input.maxSteps &&
+            withinTokenBudget;
           if (willContinue) {
             emitTurnHealth(
               logger,
@@ -378,7 +386,16 @@ export async function* runAgentStepLoop(
             return;
           }
           let stopReason: AgentStopReason = AGENT_STOP_REASON.COMPLETED;
-          if (result.finishReason === FINISH_REASON_TOOL_CALLS) {
+          if (wantsMoreTools && !withinTokenBudget) {
+            stopReason = AGENT_STOP_REASON.TOKEN_BUDGET;
+            logger.warn({
+              event: 'agent.turn.token_budget_reached',
+              userId: input.userId,
+              model: currentModel,
+              spentTurnTokens,
+              maxTurnTokens: params.budgets.maxTurnTokens,
+            });
+          } else if (wantsMoreTools) {
             stopReason = AGENT_STOP_REASON.MAX_STEPS;
             logger.warn({
               event: 'agent.turn.max_steps_reached',

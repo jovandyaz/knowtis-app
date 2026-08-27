@@ -1050,6 +1050,7 @@ When a turn proposes a mutation (create/update note), the pending proposal is pa
 | `AI_AGENT_STALL_MS`             | No       | `60000`  | Stream-silence budget per candidate (ms) — the operative limit.                                                                |
 | `AI_AGENT_MAX_MS`               | No       | `300000` | Per-turn wall-clock ceiling (ms) — a backstop, not the budget.                                                                 |
 | `AI_AGENT_MAX_OUTPUT_TOKENS`    | No       | `8192`   | Max output tokens per LLM response — leaves headroom for reasoning-model thinking tokens, which count against the same budget. |
+| `AI_AGENT_TURN_TOKEN_BUDGET`    | No       | `150000` | Ceiling on accumulated `inputTokens` + `outputTokens` per turn; once spent, the loop stops advancing to the next step.         |
 | `AI_AGENT_HISTORY_LIMIT`        | No       | `40`     | Max prior conversation messages loaded per turn.                                                                               |
 | `AI_AGENT_PROPOSAL_TTL_SECONDS` | No       | `600`    | TTL of a pending HITL proposal in Redis (the approval window).                                                                 |
 
