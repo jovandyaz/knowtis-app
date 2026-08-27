@@ -16,7 +16,7 @@ import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-s
 import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
 import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
-import { CleanupAnonymousTask } from './tasks/cleanup-anonymous.task';
+import { AuthCleanupTask } from './tasks/auth-cleanup.task';
 
 const configService = new ConfigService();
 
@@ -44,6 +44,7 @@ const configService = new ConfigService();
           configService.get('OAUTH_JWKS')
         ),
       },
+      tokenHashKey: configService.getOrThrow('TOKEN_HASH_KEY'),
       userRepository: DrizzleUserRepository,
       sessionRepository: DrizzleSessionRepository,
       tokenService: JwtTokenService,
@@ -58,7 +59,7 @@ const configService = new ConfigService();
   providers: [
     AnonymousAuthService,
     DrizzleAnonymousDataMigrationRepository,
-    CleanupAnonymousTask,
+    AuthCleanupTask,
   ],
   exports: [AnonymousAuthService],
 })

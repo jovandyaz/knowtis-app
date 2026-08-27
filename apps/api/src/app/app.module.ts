@@ -71,6 +71,7 @@ import { AppService } from './app.service';
         provider: configService.get('EMAIL_PROVIDER'),
         resend: { apiKey: configService.get('RESEND_API_KEY') ?? '' },
         defaults: { from: configService.get('EMAIL_FROM') },
+        environment: configService.get('NODE_ENV'),
       }),
       inject: [ConfigService],
     }),

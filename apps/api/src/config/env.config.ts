@@ -13,6 +13,13 @@ const envSchemaBase = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
+  TOKEN_HASH_KEY: z
+    .string()
+    .refine(
+      (v) => Buffer.from(v, 'base64').length === 32,
+      'TOKEN_HASH_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)'
+    )
+    .optional(),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   BACKOFFICE_URL: z.url().optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
@@ -150,6 +157,16 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
         'BACKOFFICE_URL is required in production — without it the backoffice and the notes app resolve to the same refresh cookie and hand each other their sessions',
       path: ['BACKOFFICE_URL'],
       input: data.BACKOFFICE_URL,
+    });
+  }
+
+  if (data.NODE_ENV === 'production' && !data.TOKEN_HASH_KEY) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'TOKEN_HASH_KEY is required in production — it keys every stored token hash, and without one a 6-digit verification code is recoverable from a stolen hash',
+      path: ['TOKEN_HASH_KEY'],
+      input: data.TOKEN_HASH_KEY,
     });
   }
 

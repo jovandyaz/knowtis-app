@@ -273,11 +273,47 @@ describe('env.config BACKOFFICE_URL', () => {
     const env = validateEnv({
       ...prodEnv,
       BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+      TOKEN_HASH_KEY: 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=',
     });
     expect(env.BACKOFFICE_URL).toBe('https://backoffice.knowtis.app');
   });
 
   it('leaves BACKOFFICE_URL optional outside production', () => {
     expect(validateEnv(validEnv).BACKOFFICE_URL).toBeUndefined();
+  });
+});
+
+describe('env.config TOKEN_HASH_KEY', () => {
+  const KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+  const prodEnv = {
+    ...validEnv,
+    NODE_ENV: 'production',
+    BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+  };
+
+  it('rejects a production boot without TOKEN_HASH_KEY', () => {
+    expect(() => validateEnv(prodEnv)).toThrow(/TOKEN_HASH_KEY is required/);
+  });
+
+  it('accepts a production boot with a 32-byte base64 TOKEN_HASH_KEY', () => {
+    expect(
+      validateEnv({ ...prodEnv, TOKEN_HASH_KEY: KEY }).TOKEN_HASH_KEY
+    ).toBe(KEY);
+  });
+
+  it('rejects a TOKEN_HASH_KEY that does not decode to 32 bytes', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, TOKEN_HASH_KEY: 'dG9vLXNob3J0' })
+    ).toThrow(/TOKEN_HASH_KEY must be 32 bytes/);
+  });
+
+  it('rejects an empty TOKEN_HASH_KEY rather than treating it as unset', () => {
+    expect(() => validateEnv({ ...validEnv, TOKEN_HASH_KEY: '' })).toThrow(
+      /TOKEN_HASH_KEY must be 32 bytes/
+    );
+  });
+
+  it('leaves TOKEN_HASH_KEY optional outside production', () => {
+    expect(validateEnv(validEnv).TOKEN_HASH_KEY).toBeUndefined();
   });
 });

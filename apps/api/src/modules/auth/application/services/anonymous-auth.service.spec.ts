@@ -1,3 +1,4 @@
+import { TokenHasher } from '@jovandyaz/auth-nestjs';
 import type { SessionRepository, TokenService } from '@jovandyaz/auth-nestjs';
 import type { ConfigService } from '@nestjs/config';
 import type { JwtService } from '@nestjs/jwt';
@@ -6,6 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UsersService } from '../../../users/users.service';
 import { AnonymousAuthService } from './anonymous-auth.service';
+
+const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
 
 describe('AnonymousAuthService', () => {
   let usersService: {
@@ -42,7 +45,8 @@ describe('AnonymousAuthService', () => {
         getOrThrow: vi.fn().mockReturnValue('secret'),
       } as unknown as ConfigService,
       tokenService as unknown as TokenService,
-      sessionRepository as unknown as SessionRepository
+      sessionRepository as unknown as SessionRepository,
+      new TokenHasher(TEST_KEY)
     );
   });
 
