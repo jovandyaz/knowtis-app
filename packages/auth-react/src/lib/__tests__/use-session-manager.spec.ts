@@ -26,6 +26,7 @@ function createMockApi(
     forgotPassword: vi.fn(),
     resetPassword: vi.fn(),
     verifyEmail: vi.fn(),
+    verifyEmailCode: vi.fn(),
     resendVerification: vi.fn(),
     ...overrides,
   };

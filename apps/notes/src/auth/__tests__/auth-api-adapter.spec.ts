@@ -446,6 +446,23 @@ describe('createAuthApiAdapter', () => {
     });
   });
 
+  describe('verifyEmailCode', () => {
+    it('calls POST /auth/verify-email/code (authenticated)', async () => {
+      httpClient.post.mockResolvedValue(undefined);
+      const adapter = createAuthApiAdapter({
+        httpClient,
+        tokenStorage,
+        authStore,
+      });
+
+      await adapter.verifyEmailCode('123456');
+
+      expect(httpClient.post).toHaveBeenCalledWith('/auth/verify-email/code', {
+        code: '123456',
+      });
+    });
+  });
+
   describe('resendVerification', () => {
     it('calls POST /auth/resend-verification (authenticated)', async () => {
       httpClient.post.mockResolvedValue(undefined);

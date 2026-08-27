@@ -14,8 +14,10 @@ export interface AuthUserProfile {
   email: string;
   name: string;
   avatarUrl: string | null;
-  isEmailVerified?: boolean;
-  locale?: string;
+  /** ISO timestamp as it arrives over HTTP; `null` when unverified and
+   *  `undefined` while no profile fetch has resolved yet. */
+  emailVerifiedAt?: string | null;
+  locale?: string | null;
   isAnonymous?: boolean;
   role?: UserRole;
 }
@@ -33,5 +35,6 @@ export interface AuthApiAdapter {
   forgotPassword(email: string): Promise<void>;
   resetPassword(token: string, newPassword: string): Promise<void>;
   verifyEmail(token: string): Promise<void>;
+  verifyEmailCode(code: string): Promise<void>;
   resendVerification(): Promise<void>;
 }

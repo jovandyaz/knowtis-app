@@ -119,9 +119,27 @@ export function useResetPassword(): UseMutationResult<
 
 export function useVerifyEmail(): UseMutationResult<void, Error, string> {
   const api = useAuthApi();
+  const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (token: string) => api.verifyEmail(token),
+    // Same contract as the code path: without this the banner outlives a
+    // successful link verification for the profile query's whole staleTime.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: authQueryKeys.profile() }),
+  });
+}
+
+export function useVerifyEmailCode(): UseMutationResult<void, Error, string> {
+  const api = useAuthApi();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (code: string) => api.verifyEmailCode(code),
+    // Returning the promise keeps the mutation pending until the refreshed
+    // profile lands, so callers never render success against a stale one.
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: authQueryKeys.profile() }),
   });
 }
 

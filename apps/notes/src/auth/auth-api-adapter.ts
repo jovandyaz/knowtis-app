@@ -138,6 +138,10 @@ export function createAuthApiAdapter(
       );
     },
 
+    async verifyEmailCode(code: string): Promise<void> {
+      await httpClient.post('/auth/verify-email/code', { code });
+    },
+
     async resendVerification(): Promise<void> {
       await httpClient.post('/auth/resend-verification', {});
     },
