@@ -1,14 +1,23 @@
 import { randomBytes } from 'node:crypto';
 
 import {
+  HttpStatus,
   ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { generateText } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ByokProvider } from '@knowtis/shared-types';
+import {
+  EMAIL_NOT_VERIFIED_CODE,
+  type ByokProvider,
+} from '@knowtis/shared-types';
 
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../../test-support/verified-identity';
 import {
   decryptSecret,
   encryptSecret,
@@ -24,6 +33,7 @@ const masterKey = Buffer.from(masterKeyB64, 'base64');
 
 interface MakeOverrides {
   flagOn?: boolean;
+  identity?: IdentityState;
   validate?: (provider: ByokProvider, key: string) => Promise<void>;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
 }
@@ -56,11 +66,12 @@ function makeService(overrides: MakeOverrides) {
     repo as never,
     flags as never,
     config as never,
-    registry as never
+    registry as never,
+    policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED)
   );
-  (service as never as { validateKey: unknown }).validateKey =
-    overrides.validate ?? (async () => undefined);
-  return { service, repo, flags, store };
+  const validateKey = vi.fn(overrides.validate ?? (async () => undefined));
+  (service as never as { validateKey: unknown }).validateKey = validateKey;
+  return { service, repo, flags, store, validateKey };
 }
 
 describe('ByokService', () => {
@@ -171,7 +182,8 @@ describe('ByokService', () => {
       repo as never,
       flags as never,
       config as never,
-      registry as never
+      registry as never,
+      policyFor(IDENTITY_STATE.VERIFIED)
     );
 
     await expect(
@@ -199,7 +211,8 @@ describe('ByokService', () => {
       repo as never,
       flags as never,
       config as never,
-      registry as never
+      registry as never,
+      policyFor(IDENTITY_STATE.VERIFIED)
     );
 
     await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
@@ -233,5 +246,42 @@ describe('ByokService', () => {
       loggedPayloads.some((p) => p.includes('byok.validation_failed'))
     ).toBe(true);
     warn.mockRestore();
+  });
+
+  describe('verified email gate', () => {
+    it('stores a key for an unverified user while the gate flag is off', async () => {
+      const { service, repo } = makeService({
+        identity: IDENTITY_STATE.GATE_OFF,
+      });
+
+      await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
+
+      expect(repo.upsert).toHaveBeenCalled();
+    });
+
+    it('refuses an unverified user with EMAIL_NOT_VERIFIED and stores nothing', async () => {
+      const { service, repo, validateKey } = makeService({
+        identity: IDENTITY_STATE.UNVERIFIED,
+      });
+
+      await expect(
+        service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345')
+      ).rejects.toMatchObject({
+        status: HttpStatus.FORBIDDEN,
+        response: { code: EMAIL_NOT_VERIFIED_CODE },
+      });
+      expect(validateKey).not.toHaveBeenCalled();
+      expect(repo.upsert).not.toHaveBeenCalled();
+    });
+
+    it('stores a key for a verified user', async () => {
+      const { service, repo } = makeService({
+        identity: IDENTITY_STATE.VERIFIED,
+      });
+
+      await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
+
+      expect(repo.upsert).toHaveBeenCalled();
+    });
   });
 });
