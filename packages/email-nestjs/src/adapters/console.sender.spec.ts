@@ -1,9 +1,12 @@
+import { renderEmail, SUPPORTED_LOCALES } from '@jovandyaz/email';
 import { Logger } from '@nestjs/common';
 
 import { ConsoleSender } from './console.sender';
 
 const CODE = '680944';
 const LINK = 'http://localhost:4200/verify-email?token=abc&next=/notes';
+const RENDERED_LINK = 'http://localhost:4200/verify-email?token=abc';
+const ANY_HTML_ENTITY = /&(#\d+|#x[\da-f]+|[a-z]+);/i;
 
 const VERIFICATION_HTML = [
   '<html><head><style>.code { color: red }</style></head>',
@@ -108,4 +111,44 @@ describe('ConsoleSender', () => {
     expect(output).toContain(MESSAGE.subject);
     expect(output).toContain(MESSAGE.from);
   });
+});
+
+/**
+ * The handcrafted fixture above is a guess at react-email's output. These drive
+ * the converter with the real thing, which is where the rules earn their keep:
+ * `@react-email/button` pads its label with `&#8202;` runs and React escapes
+ * every apostrophe to `&#x27;`, so a converter that skips entity decoding
+ * publishes `&#8202;&#8202;&#8202;Verify email&#8202;&#8202;&#8202;&#8203;`.
+ */
+describe('ConsoleSender against a real rendered email', () => {
+  async function sendRendered(locale: (typeof SUPPORTED_LOCALES)[number]) {
+    const html = await renderEmail('verify-email', {
+      name: 'Jane',
+      verificationUrl: RENDERED_LINK,
+      code: CODE,
+      locale,
+    });
+
+    await new ConsoleSender(DEVELOPMENT).send({ ...MESSAGE, html });
+    return logged.join('\n');
+  }
+
+  it.each(SUPPORTED_LOCALES)(
+    'hands a %s reader the code and a link they can paste',
+    async (locale) => {
+      const output = await sendRendered(locale);
+
+      expect(output).toContain(CODE);
+      expect(output).toContain(`(${RENDERED_LINK})`);
+    }
+  );
+
+  it.each(SUPPORTED_LOCALES)(
+    'leaves no HTML entity in the %s text a developer reads',
+    async (locale) => {
+      const output = await sendRendered(locale);
+
+      expect(output).not.toMatch(ANY_HTML_ENTITY);
+    }
+  );
 });

@@ -3,7 +3,12 @@ import { ResetPasswordEmail } from './auth/reset-password';
 import { VerifyEmailEmail } from './auth/verify-email';
 
 export interface TemplatePropsMap {
-  'verify-email': { name: string; verificationUrl: string; locale: Locale };
+  'verify-email': {
+    name: string;
+    verificationUrl: string;
+    code: string;
+    locale: Locale;
+  };
   'reset-password': { name: string; resetUrl: string; locale: Locale };
 }
 
