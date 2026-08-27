@@ -64,14 +64,31 @@ describe('createBackofficeAuthApi', () => {
     expect(tokenStorage.setAccessToken).toHaveBeenCalledWith('new-token');
   });
 
-  it('register is not supported in the backoffice', async () => {
+  it('refuses every self-service flow the backoffice does not offer', async () => {
     const api = createBackofficeAuthApi({
       httpClient: mockHttpClient(),
       tokenStorage,
     });
 
+    // The port is whole on purpose: an operation this app does not offer has
+    // to fail loudly here rather than be absent and blow up at the call site.
     await expect(
       api.register({ email: 'a@b.c', password: 'x', name: 'x' })
-    ).rejects.toThrow('not supported');
+    ).rejects.toThrow('register not supported');
+    await expect(api.forgotPassword('a@b.c')).rejects.toThrow(
+      'forgotPassword not supported'
+    );
+    await expect(api.resetPassword('token', 'password')).rejects.toThrow(
+      'resetPassword not supported'
+    );
+    await expect(api.verifyEmail('token')).rejects.toThrow(
+      'verifyEmail not supported'
+    );
+    await expect(api.verifyEmailCode('123456')).rejects.toThrow(
+      'verifyEmailCode not supported'
+    );
+    await expect(api.resendVerification()).rejects.toThrow(
+      'resendVerification not supported'
+    );
   });
 });
