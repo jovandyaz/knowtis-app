@@ -364,6 +364,26 @@ describe('SuggestOrganizationHandler', () => {
     expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
   });
 
+  it('releases the failed reserve against the user subject only, never the raw IP', async () => {
+    noteRepository.findById.mockImplementation((id: string) =>
+      Promise.resolve(noteFixture({ id }))
+    );
+    structuredOutput.generateStructuredOutput.mockRejectedValueOnce(
+      new Error('provider exploded')
+    );
+
+    await handler.execute({
+      userId: OWNER_ID,
+      noteIds: [NOTE_ID],
+      clientIp: '203.0.113.7',
+    });
+
+    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(rateLimit.releaseReservation).mock.calls[0];
+    expect(call[0]).toBe(OWNER_ID);
+    expect(call[3]).toBeUndefined();
+  });
+
   it('fails the request when no note could be classified', async () => {
     structuredOutput.generateStructuredOutput.mockRejectedValue(
       new Error('provider exploded')
