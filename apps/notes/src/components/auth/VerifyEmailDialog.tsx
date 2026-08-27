@@ -25,6 +25,7 @@ const CODE_FIELD_ID = 'verify-email-dialog-code';
 function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
   const { t } = useTranslation('auth');
   const email = useAuthUser()?.email ?? '';
+  const source = useVerifyEmailStore((s) => s.source);
   // No code was just sent — the user may be days past registration — so the
   // first send must be one click away rather than held by a phantom cooldown.
   const form = useVerifyEmailCodeForm({
@@ -40,6 +41,11 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
       <DialogHeader>
         <DialogTitle>{t('verifyEmail.gateDialogTitle')}</DialogTitle>
         <DialogDescription>
+          {source === 'emailLink' && (
+            <span className="mb-3 block rounded-md bg-(--primary)/10 p-3 text-(--foreground)">
+              {t('verifyEmail.emailLinkNotice')}
+            </span>
+          )}
           {t('verifyEmail.gateDialogDesc', {
             email,
             length: VERIFICATION_CODE_LENGTH,

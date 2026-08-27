@@ -1,4 +1,5 @@
 import i18n from '@/lib/i18n';
+import type { VerifyEmailPromptSource } from '@/stores/verify-email.store';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import {
   AuthErrorCodes,
@@ -36,6 +37,8 @@ const CODE = '123456';
 const CODE_LABEL = 'Verification code';
 const VERIFY_BUTTON = 'Verify email';
 const RESEND_BUTTON = 'Resend verification email';
+const LINK_NOTICE =
+  "We didn't open that link — verifying that way signs you out on every device, including this one. Use the code from the same email to finish here instead.";
 
 const toastSuccess = vi.fn();
 vi.mock('sonner', () => ({
@@ -51,7 +54,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useVerifyEmailStore.setState({ isOpen: false });
+  useVerifyEmailStore.setState({ isOpen: false, source: 'inApp' });
 });
 
 afterEach(() => {
@@ -65,9 +68,9 @@ function renderDialog(api = createAuthApiMock()) {
   return { api };
 }
 
-function openDialog() {
+function openDialog(source: VerifyEmailPromptSource = 'inApp') {
   act(() => {
-    useVerifyEmailStore.getState().open();
+    useVerifyEmailStore.getState().open(source);
   });
 }
 
@@ -90,6 +93,24 @@ describe('VerifyEmailDialog', () => {
         )
       )
     ).toBeInTheDocument();
+  });
+
+  it('explains why the link the user clicked did not verify them', () => {
+    renderDialog();
+    openDialog('emailLink');
+
+    // Part of the description, so the reason is announced with the dialog
+    // rather than waiting to be found somewhere inside it.
+    expect(screen.getByRole('dialog')).toHaveAccessibleDescription(
+      expect.stringContaining(LINK_NOTICE)
+    );
+  });
+
+  it('says nothing about links when the app itself raised the dialog', () => {
+    renderDialog();
+    openDialog();
+
+    expect(screen.queryByText(LINK_NOTICE)).not.toBeInTheDocument();
   });
 
   it('stays out of the way until something opens it', () => {

@@ -1,8 +1,15 @@
 import { create } from 'zustand';
 
+/**
+ * Where the open request came from. A link click is the one case the user
+ * expected to be verified by already, so the dialog owes them an explanation.
+ */
+export type VerifyEmailPromptSource = 'inApp' | 'emailLink';
+
 interface VerifyEmailStore {
   isOpen: boolean;
-  open: () => void;
+  source: VerifyEmailPromptSource;
+  open: (source: VerifyEmailPromptSource) => void;
   close: () => void;
 }
 
@@ -12,6 +19,7 @@ interface VerifyEmailStore {
  */
 export const useVerifyEmailStore = create<VerifyEmailStore>((set) => ({
   isOpen: false,
-  open: () => set({ isOpen: true }),
+  source: 'inApp',
+  open: (source) => set({ isOpen: true, source }),
   close: () => set({ isOpen: false }),
 }));

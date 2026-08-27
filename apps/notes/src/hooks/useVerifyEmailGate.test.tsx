@@ -44,7 +44,7 @@ function renderGate(user?: AuthUserProfile) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useVerifyEmailStore.setState({ isOpen: false });
+  useVerifyEmailStore.setState({ isOpen: false, source: 'inApp' });
 });
 
 describe('useVerifyEmailGate', () => {

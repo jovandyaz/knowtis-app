@@ -36,7 +36,7 @@ export function useVerifyEmailGate(): VerifyEmailGate {
       toast.error(t(SIGN_UP_TOAST_KEY));
       return;
     }
-    open();
+    open('inApp');
   }, [canVerify, open, t]);
 
   const handleError = useCallback(

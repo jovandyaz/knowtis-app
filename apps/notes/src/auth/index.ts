@@ -10,3 +10,7 @@ export {
 export { createAuthApiAdapter } from './auth-api-adapter';
 export { redirectToLoginWithReload } from './redirect-to-login';
 export { resolvePostLoginRedirect } from './resolve-redirect';
+export {
+  guardVerifyEmailRoute,
+  parseVerifyEmailSearch,
+} from './verify-email-guard';

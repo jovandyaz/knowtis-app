@@ -62,7 +62,7 @@ function UnverifiedEmailBanner() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
-        <Button size="sm" onClick={openVerifyDialog}>
+        <Button size="sm" onClick={() => openVerifyDialog('inApp')}>
           {t('verifyEmail.bannerCta')}
         </Button>
         <Button
