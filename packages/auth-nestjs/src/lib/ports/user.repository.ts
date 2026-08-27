@@ -13,6 +13,7 @@ export interface UserEntity {
   readonly avatarUrl: string | null;
   readonly passwordHash: string | null;
   readonly emailVerifiedAt: Date | null;
+  readonly locale: string | null;
   readonly role: UserRole;
   readonly createdAt: Date;
   readonly updatedAt: Date;

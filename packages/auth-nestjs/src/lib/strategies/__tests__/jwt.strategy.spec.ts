@@ -20,6 +20,7 @@ const USER: UserEntity = {
   avatarUrl: null,
   passwordHash: null,
   emailVerifiedAt: new Date(),
+  locale: 'en',
   role: USER_ROLE.USER,
   createdAt: new Date(),
   updatedAt: new Date(),
@@ -185,6 +186,7 @@ describe('JwtStrategy', () => {
 
 describe('JwtStrategy.validate', () => {
   const SESSION_USER_ID = '11111111-1111-1111-1111-111111111111';
+  const VERIFIED_AT = new Date('2026-08-01T10:00:00.000Z');
 
   const options = {
     tokenConfig: {
@@ -198,6 +200,8 @@ describe('JwtStrategy.validate', () => {
     email: 'user@example.com',
     name: 'Test User',
     avatarUrl: null,
+    emailVerifiedAt: VERIFIED_AT,
+    locale: 'es',
     role: 'user',
   };
 
@@ -229,6 +233,37 @@ describe('JwtStrategy.validate', () => {
     expect(sessionRepository.hasLiveSessionForFamily).toHaveBeenCalledWith(
       'family-1'
     );
+  });
+
+  it('should carry the stored profile fields the client reads', async () => {
+    const result = await strategy.validate(sessionPayload);
+
+    expect(result.emailVerifiedAt).toEqual(VERIFIED_AT);
+    expect(result.locale).toBe('es');
+  });
+
+  it('should report an unverified email as null rather than omitting it', async () => {
+    vi.mocked(userRepository.findById).mockResolvedValue({
+      ...sessionUser,
+      emailVerifiedAt: null,
+      locale: null,
+    } as unknown as UserEntity);
+
+    const result = await strategy.validate(sessionPayload);
+
+    expect(result.emailVerifiedAt).toBeNull();
+    expect(result.locale).toBeNull();
+  });
+
+  it('should serialize the verified timestamp as an ISO string over HTTP', async () => {
+    const result = await strategy.validate(sessionPayload);
+
+    const overTheWire: unknown = JSON.parse(JSON.stringify(result));
+    const emailVerifiedAt = (overTheWire as { emailVerifiedAt?: unknown })
+      .emailVerifiedAt;
+
+    expect(typeof emailVerifiedAt).toBe('string');
+    expect(emailVerifiedAt).toBe(VERIFIED_AT.toISOString());
   });
 
   it('should reject a session token after its family is revoked', async () => {
