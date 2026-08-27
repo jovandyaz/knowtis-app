@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
 import {
@@ -36,6 +36,7 @@ export function VerifyEmailPage() {
   const verifyEmail = useVerifyEmail();
   const resendVerification = useResendVerification();
   const isAuthenticated = useIsAuthenticated();
+  const navigate = useNavigate();
   const hasAttempted = useRef(false);
 
   useEffect(() => {
@@ -45,12 +46,21 @@ export function VerifyEmailPage() {
         onSuccess: () => {
           toast.success(t('verifyEmail.verifiedToast'));
         },
+        // The token must not survive in history or in a referrer header.
+        onSettled: () => {
+          void navigate({
+            to: ROUTES.VERIFY_EMAIL,
+            search: {},
+            replace: true,
+          });
+        },
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  if (!token) {
+  // Scrubbing the token empties `token`, so only a bare visit is a bad link.
+  if (!token && !hasAttempted.current) {
     return (
       <AuthPageLayout>
         <CardHeader className="space-y-1 text-center">
