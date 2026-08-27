@@ -118,6 +118,7 @@ export class DrizzleUserRepository implements UserRepository {
     avatarUrl: string | null;
     passwordHash: string | null;
     emailVerifiedAt: Date | null;
+    locale: string | null;
     role: string;
     createdAt: Date;
     updatedAt: Date;
@@ -129,6 +130,7 @@ export class DrizzleUserRepository implements UserRepository {
       avatarUrl: user.avatarUrl,
       passwordHash: user.passwordHash,
       emailVerifiedAt: user.emailVerifiedAt,
+      locale: user.locale,
       role: user.role as UserRole,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
