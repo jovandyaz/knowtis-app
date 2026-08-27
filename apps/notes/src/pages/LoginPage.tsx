@@ -10,10 +10,7 @@ import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { LoginFormData } from '@jovandyaz/auth-react';
-import {
-  createLoginSchema,
-  useLogin,
-} from '@jovandyaz/auth-react';
+import { createLoginSchema, useLogin } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';

@@ -13,10 +13,7 @@ import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
 import type { RegisterFormData } from '@jovandyaz/auth-react';
-import {
-  createRegisterSchema,
-  useRegister,
-} from '@jovandyaz/auth-react';
+import { createRegisterSchema, useRegister } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';

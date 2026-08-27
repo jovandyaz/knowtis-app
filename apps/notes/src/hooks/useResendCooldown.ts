@@ -55,7 +55,10 @@ function isResendCooldown(error: unknown): boolean {
   );
 }
 
-function resendErrorKey(lockedOut: boolean, rateLimited: boolean): ResendErrorKey {
+function resendErrorKey(
+  lockedOut: boolean,
+  rateLimited: boolean
+): ResendErrorKey {
   if (lockedOut) {
     return RESEND_LOCKED_OUT_KEY;
   }

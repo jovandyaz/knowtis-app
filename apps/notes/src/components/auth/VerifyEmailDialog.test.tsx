@@ -85,7 +85,9 @@ describe('VerifyEmailDialog', () => {
 
     expect(
       screen.getByText(
-        new RegExp(`${VERIFICATION_CODE_LENGTH}-digit.*${HARNESS_PROFILE.email}`)
+        new RegExp(
+          `${VERIFICATION_CODE_LENGTH}-digit.*${HARNESS_PROFILE.email}`
+        )
       )
     ).toBeInTheDocument();
   });

@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
-import { Mail } from 'lucide-react';
-
 import type { ResendControls } from '@/hooks/useResendCooldown';
+import { Mail } from 'lucide-react';
 
 import { cn, LoadingButton } from '@knowtis/design-system';
 
