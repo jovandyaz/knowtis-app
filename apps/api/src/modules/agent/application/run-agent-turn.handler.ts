@@ -322,13 +322,19 @@ export class RunAgentTurnHandler {
     assistantText: string,
     sources: readonly AgentSource[]
   ): Promise<void> {
+    const hasAssistantText = assistantText.length > 0;
+    if (persistence.userContent === undefined && !hasAssistantText) {
+      return;
+    }
     try {
       await this.conversations.appendTurn({
         conversationId: persistence.conversationId,
         ...(persistence.userContent !== undefined
           ? { userMessage: { content: persistence.userContent } }
           : {}),
-        assistantMessage: { content: assistantText, sources },
+        ...(hasAssistantText
+          ? { assistantMessage: { content: assistantText, sources } }
+          : {}),
       });
     } catch (error) {
       this.logger.error({
@@ -634,11 +640,17 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
+            if (persistence) {
+              await this.persistTurn(persistence, assistantText, []);
+            }
             callbacks.onError(event.error);
             return;
           case 'aborted':
             await this.recordUsageSafe(input.userId, ctx, event.usage);
             ctx.reconciled = true;
+            if (persistence) {
+              await this.persistTurn(persistence, assistantText, []);
+            }
             return;
           case 'done': {
             let costUsd: number;
@@ -724,6 +736,9 @@ export class RunAgentTurnHandler {
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
+      if (persistence) {
+        await this.persistTurn(persistence, assistantText, []);
+      }
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(input.userId, ctx, {

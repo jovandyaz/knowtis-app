@@ -129,6 +129,36 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows[0].content).toBe('proactive');
   });
 
+  it('appends a user-only turn when the assistant produced nothing', async () => {
+    const { id } = await repo.create({
+      userId: USER,
+      title: 'turno abortado',
+    });
+
+    await repo.appendTurn({
+      conversationId: id,
+      userMessage: { content: 'pregunta perdida' },
+    });
+
+    const rows = await repo.loadMessages(id, 10);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      role: 'user',
+      content: 'pregunta perdida',
+    });
+  });
+
+  it('is a no-op when the turn carries no messages', async () => {
+    const { id } = await repo.create({
+      userId: USER,
+      title: 'turno vacío',
+    });
+
+    await repo.appendTurn({ conversationId: id });
+
+    expect(await repo.loadMessages(id, 10)).toEqual([]);
+  });
+
   it('setModel persists, findByIdForUser returns it (scoped to owner)', async () => {
     const { id } = await repo.create({ userId: USER, title: 'model-test' });
     await repo.setModel(id, USER, 'openai:gpt-4o-mini');

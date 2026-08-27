@@ -91,27 +91,32 @@ export class DrizzleConversationRepository implements ConversationRepository {
   }
 
   async appendTurn(input: AppendTurnInput): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      const values: {
-        conversationId: string;
-        role: AgentRole;
-        content: string;
-        sources: { id: string; title: string }[] | null;
-      }[] = [];
-      if (input.userMessage) {
-        values.push({
-          conversationId: input.conversationId,
-          role: 'user',
-          content: input.userMessage.content,
-          sources: null,
-        });
-      }
+    const values: {
+      conversationId: string;
+      role: AgentRole;
+      content: string;
+      sources: { id: string; title: string }[] | null;
+    }[] = [];
+    if (input.userMessage) {
+      values.push({
+        conversationId: input.conversationId,
+        role: 'user',
+        content: input.userMessage.content,
+        sources: null,
+      });
+    }
+    if (input.assistantMessage) {
       values.push({
         conversationId: input.conversationId,
         role: 'assistant',
         content: input.assistantMessage.content,
         sources: Array.from(input.assistantMessage.sources),
       });
+    }
+    if (values.length === 0) {
+      return;
+    }
+    await this.db.transaction(async (tx) => {
       await tx.insert(conversationMessages).values(values);
       await tx
         .update(conversations)

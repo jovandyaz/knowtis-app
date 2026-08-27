@@ -1418,6 +1418,49 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('persists the user message and partial text when the turn errors mid-stream', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'respuesta a medias' },
+      {
+        type: 'error',
+        error: { code: 'AI_PROVIDER_ERROR', message: 'boom' },
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalled();
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: { content: 'hola' },
+        assistantMessage: expect.objectContaining({
+          content: 'respuesta a medias',
+        }),
+      })
+    );
+  });
+
   it('bills best-effort usage when a stalled turn ends in a timeout error', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -1549,6 +1592,51 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('persists the user message alone when the turn aborts before any text', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.userMessage).toEqual({ content: 'hola' });
+    expect(appended).not.toHaveProperty('assistantMessage');
   });
 
   it('estimates tokens with the real tokenizer plus a fixed prompt-overhead margin', async () => {
