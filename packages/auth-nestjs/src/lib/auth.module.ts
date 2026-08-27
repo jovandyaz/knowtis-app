@@ -14,6 +14,7 @@ import {
   PASSWORD_HASHER,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   SESSION_REPOSITORY,
+  TOKEN_HASHER,
   TOKEN_SERVICE,
   USER_REPOSITORY,
 } from './constants';
@@ -26,8 +27,10 @@ import { RefreshTokensHandler } from './handlers/refresh-tokens.handler';
 import { RegisterUserHandler } from './handlers/register-user.handler';
 import { ResendVerificationHandler } from './handlers/resend-verification.handler';
 import { ResetPasswordHandler } from './handlers/reset-password.handler';
+import { VerifyEmailCodeHandler } from './handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from './handlers/verify-email.handler';
 import { AuthAuditListener } from './logging/auth-audit.listener';
+import { TokenHasher } from './services/token-hasher.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
@@ -44,6 +47,8 @@ type InjectableClass = Type<any>;
 
 export interface AuthModuleOptions {
   readonly tokenConfig: TokenConfig;
+  /** Server-side secret keying every stored token hash. 32 bytes, base64. */
+  readonly tokenHashKey: string;
   readonly passwordSaltRounds?: number;
   readonly imports?: Array<Type<any> | DynamicModule>;
   readonly userRepository: InjectableClass;
@@ -64,6 +69,7 @@ const HANDLERS = [
   ForgotPasswordHandler,
   ResetPasswordHandler,
   VerifyEmailHandler,
+  VerifyEmailCodeHandler,
   ResendVerificationHandler,
 ];
 
@@ -90,6 +96,10 @@ export class AuthNestjsModule {
       {
         provide: PASSWORD_HASHER,
         useClass: options.passwordHasher,
+      },
+      {
+        provide: TOKEN_HASHER,
+        useValue: new TokenHasher(options.tokenHashKey),
       },
       JwtStrategy,
       LocalStrategy,
@@ -142,6 +152,7 @@ export class AuthNestjsModule {
         SESSION_REPOSITORY,
         TOKEN_SERVICE,
         PASSWORD_HASHER,
+        TOKEN_HASHER,
         ...(options.emailService ? [EMAIL_SERVICE] : []),
         ...(options.emailVerificationTokenRepository
           ? [EMAIL_VERIFICATION_TOKEN_REPOSITORY]
