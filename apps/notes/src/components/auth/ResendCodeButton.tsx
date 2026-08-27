@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next';
 
 import { Mail } from 'lucide-react';
 
-import { cn, LoadingButton } from '@knowtis/design-system';
+import type { ResendControls } from '@/hooks/useResendCooldown';
 
-import type { ResendControls } from './useVerifyEmailCodeForm';
+import { cn, LoadingButton } from '@knowtis/design-system';
 
 export interface ResendCodeButtonProps {
   resend: ResendControls;

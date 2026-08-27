@@ -1,6 +1,6 @@
-import { cn } from '@knowtis/design-system';
+import type { ResendNotice } from '@/hooks/useResendCooldown';
 
-import type { ResendNotice } from './useVerifyEmailCodeForm';
+import { cn } from '@knowtis/design-system';
 
 const TONE_CLASS = {
   success: 'bg-(--primary)/10 text-(--primary)',

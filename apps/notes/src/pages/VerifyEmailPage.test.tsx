@@ -9,6 +9,7 @@ import {
 } from '@tanstack/react-router';
 
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { VerifyEmailPage } from './VerifyEmailPage';
@@ -17,6 +18,7 @@ const TOKEN = 'secret-token';
 const VERIFY_EMAIL_PATH = '/verify-email';
 
 const verifyMutate = vi.fn();
+const resendMutate = vi.fn();
 let currentUser: { isAnonymous?: boolean } | null = null;
 const verifyState = {
   isPending: false,
@@ -32,7 +34,7 @@ vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => currentUser,
   useResendVerification: () => ({
-    mutate: vi.fn(),
+    mutate: resendMutate,
     isPending: false,
     isSuccess: false,
     isError: false,
@@ -215,5 +217,18 @@ describe('the resend offer on a failed verification', () => {
     expect(
       await screen.findByRole('button', { name: RESEND_BUTTON })
     ).toBeInTheDocument();
+  });
+
+  it('holds the next send for the cooldown, like every other resend', async () => {
+    resendMutate.mockImplementation((_input, { onSuccess }) => onSuccess());
+    renderAt(`?token=${TOKEN}`);
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: RESEND_BUTTON })
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'verifyEmail.resendCountdown' })
+    ).toBeDisabled();
   });
 });
