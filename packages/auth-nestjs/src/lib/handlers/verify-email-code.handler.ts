@@ -2,16 +2,13 @@ import { timingSafeEqual } from 'node:crypto';
 
 import {
   AuthErrors,
-  AuthEventName,
   EMAIL_VERIFICATION_SOURCE,
-  EmailVerifiedEvent,
-  UserId,
   VERIFICATION_CODE_MAX_ATTEMPTS,
 } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { err, ok, type Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
@@ -23,6 +20,7 @@ import type { EmailVerificationTokenRepository } from '../ports/email-verificati
 import type { SessionRepository } from '../ports/session.repository';
 import type { UserRepository } from '../ports/user.repository';
 import { TokenHasher } from '../services/token-hasher.service';
+import { completeEmailVerification } from './shared/complete-email-verification';
 
 export interface VerifyEmailCodeInput {
   readonly userId: string;
@@ -76,34 +74,20 @@ export class VerifyEmailCodeHandler {
       return err(AuthErrors.invalidVerificationCode());
     }
 
-    const userId = UserId.fromTrusted(input.userId);
-    const user = await this.userRepository.findById(userId);
-    if (user?.emailVerifiedAt) {
-      await this.verificationTokenRepository.deleteAllByUserId(input.userId);
-      return err(AuthErrors.emailAlreadyVerified());
-    }
-
-    const verifyResult = await this.userRepository.markEmailVerified(userId);
-    if (verifyResult.isErr()) {
-      this.logger.error(
-        `Failed to mark email verified for user ${input.userId}`
-      );
-      return err(verifyResult.error);
-    }
-
-    await this.verificationTokenRepository.deleteAllByUserId(input.userId);
-    await this.revokeOtherSessions(input.userId, input.familyId);
-
-    this.eventEmitter.emit(
-      AuthEventName.EMAIL_VERIFIED,
-      new EmailVerifiedEvent(
-        input.userId,
-        EMAIL_VERIFICATION_SOURCE.CODE,
-        new Date()
-      )
+    return completeEmailVerification(
+      {
+        userRepository: this.userRepository,
+        verificationTokenRepository: this.verificationTokenRepository,
+        sessionRepository: this.sessionRepository,
+        eventEmitter: this.eventEmitter,
+        logger: this.logger,
+      },
+      {
+        userId: input.userId,
+        source: EMAIL_VERIFICATION_SOURCE.CODE,
+        keepSessionFamilyId: input.familyId,
+      }
     );
-
-    return ok(undefined);
   }
 
   private codeMatches(codeHash: string, submittedCode: string): boolean {
@@ -113,19 +97,5 @@ export class VerifyEmailCodeHandler {
       expected.length === submitted.length &&
       timingSafeEqual(expected, submitted)
     );
-  }
-
-  private async revokeOtherSessions(
-    userId: string,
-    familyId: string | undefined
-  ): Promise<void> {
-    if (familyId) {
-      await this.sessionRepository.deleteAllByUserIdExceptFamily(
-        userId,
-        familyId
-      );
-      return;
-    }
-    await this.sessionRepository.deleteAllByUserId(userId);
   }
 }
