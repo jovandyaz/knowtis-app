@@ -31,6 +31,7 @@ import { VerifyEmailCodeHandler } from './handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from './handlers/verify-email.handler';
 import { AuthAuditListener } from './logging/auth-audit.listener';
 import { TokenHasher } from './services/token-hasher.service';
+import { VerificationEmailIssuer } from './services/verification-email-issuer.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
@@ -101,6 +102,7 @@ export class AuthNestjsModule {
         provide: TOKEN_HASHER,
         useValue: new TokenHasher(options.tokenHashKey),
       },
+      VerificationEmailIssuer,
       JwtStrategy,
       LocalStrategy,
       JwtAuthGuard,

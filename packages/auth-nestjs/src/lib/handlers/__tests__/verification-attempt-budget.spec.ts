@@ -16,6 +16,7 @@ import type { EmailService } from '../../ports/email.service';
 import type { SessionRepository } from '../../ports/session.repository';
 import type { UserEntity, UserRepository } from '../../ports/user.repository';
 import { TokenHasher } from '../../services/token-hasher.service';
+import { VerificationEmailIssuer } from '../../services/verification-email-issuer.service';
 import { ResendVerificationHandler } from '../resend-verification.handler';
 import { VerifyEmailCodeHandler } from '../verify-email-code.handler';
 import { VerifyEmailHandler } from '../verify-email.handler';
@@ -129,9 +130,8 @@ describe('verification attempt budget', () => {
 
     resendHandler = new ResendVerificationHandler(
       userRepository,
-      emailService,
       tokenRepository,
-      tokenHasher
+      new VerificationEmailIssuer(tokenRepository, emailService, tokenHasher)
     );
     const eventEmitter = { emit: vi.fn() } as unknown as EventEmitter2;
 
