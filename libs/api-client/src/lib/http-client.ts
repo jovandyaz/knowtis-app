@@ -1,3 +1,4 @@
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE, logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
@@ -36,6 +37,20 @@ export class ApiClientError extends Error {
   static isApiClientError(error: unknown): error is ApiClientError {
     return error instanceof ApiClientError;
   }
+}
+
+const EMAIL_NOT_VERIFIED_STATUS = 403;
+
+/**
+ * True when the API refused an action because the account's email is still
+ * unverified, so the caller can offer verification instead of a dead error.
+ */
+export function isEmailNotVerifiedError(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.status === EMAIL_NOT_VERIFIED_STATUS &&
+    error.code === EMAIL_NOT_VERIFIED_CODE
+  );
 }
 
 /**

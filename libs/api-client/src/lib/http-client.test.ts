@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiClientError, HttpClient } from './http-client';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
+import {
+  ApiClientError,
+  HttpClient,
+  isEmailNotVerifiedError,
+} from './http-client';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -178,5 +184,52 @@ describe('HttpClient', () => {
       await expect(client.get('/test')).rejects.toMatchObject({ status: 503 });
       expect(tokenProvider.clearTokens).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('isEmailNotVerifiedError', () => {
+  it('recognizes the verified-email gate the API answers with', () => {
+    expect(
+      isEmailNotVerifiedError(
+        new ApiClientError('Verify your email', 403, EMAIL_NOT_VERIFIED_CODE)
+      )
+    ).toBe(true);
+  });
+
+  it('rejects another 403 so an ordinary permission denial is not mistaken for it', () => {
+    expect(
+      isEmailNotVerifiedError(
+        new ApiClientError('Forbidden', 403, 'NOTE_ACCESS_DENIED')
+      )
+    ).toBe(false);
+  });
+
+  it('rejects the code at a status no gate ever answers with', () => {
+    expect(
+      isEmailNotVerifiedError(
+        new ApiClientError('Unauthorized', 401, EMAIL_NOT_VERIFIED_CODE)
+      )
+    ).toBe(false);
+  });
+
+  it('rejects a 403 that carries no code at all', () => {
+    expect(isEmailNotVerifiedError(new ApiClientError('Forbidden', 403))).toBe(
+      false
+    );
+  });
+
+  it('rejects a look-alike that is not an ApiClientError', () => {
+    expect(
+      isEmailNotVerifiedError({
+        status: 403,
+        code: EMAIL_NOT_VERIFIED_CODE,
+      })
+    ).toBe(false);
+  });
+
+  it('rejects the values a rejected promise can hand a catch block', () => {
+    expect(isEmailNotVerifiedError(new Error('boom'))).toBe(false);
+    expect(isEmailNotVerifiedError(null)).toBe(false);
+    expect(isEmailNotVerifiedError(undefined)).toBe(false);
   });
 });
