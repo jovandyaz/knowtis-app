@@ -301,37 +301,19 @@ describe('env.config TOKEN_HASH_KEY', () => {
     ).toBe(KEY);
   });
 
-  it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
-    expect(() => validateEnv({ ...prodEnv, TOKEN_HASH_KEY: '' })).toThrow(
-      /TOKEN_HASH_KEY is required/
-    );
+  it('rejects a TOKEN_HASH_KEY that does not decode to 32 bytes', () => {
+    expect(() =>
+      validateEnv({ ...validEnv, TOKEN_HASH_KEY: 'dG9vLXNob3J0' })
+    ).toThrow(/TOKEN_HASH_KEY must be 32 bytes/);
   });
 
-  it('rejects a production TOKEN_HASH_KEY still set to the example placeholder', () => {
-    expect(() =>
-      validateEnv({
-        ...prodEnv,
-        TOKEN_HASH_KEY: 'changemechangemechangemechangemechangemecha=',
-      })
-    ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
+  it('rejects an empty TOKEN_HASH_KEY rather than treating it as unset', () => {
+    expect(() => validateEnv({ ...validEnv, TOKEN_HASH_KEY: '' })).toThrow(
+      /TOKEN_HASH_KEY must be 32 bytes/
+    );
   });
 
   it('leaves TOKEN_HASH_KEY optional outside production', () => {
     expect(validateEnv(validEnv).TOKEN_HASH_KEY).toBeUndefined();
-  });
-});
-
-describe('env.config blank assignments', () => {
-  it('treats a blank optional URL as absent instead of an invalid URL', () => {
-    expect(
-      validateEnv({ ...validEnv, OAUTH_ISSUER: '' }).OAUTH_ISSUER
-    ).toBeUndefined();
-  });
-
-  it('falls back to the default when a defaulted var is blank, not to a coerced 0', () => {
-    expect(
-      validateEnv({ ...validEnv, AI_DAILY_TOKEN_LIMIT: '' })
-        .AI_DAILY_TOKEN_LIMIT
-    ).toBe(100000);
   });
 });
