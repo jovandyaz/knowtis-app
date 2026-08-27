@@ -50,6 +50,10 @@ export class VerifyEmailHandler {
       return err(AuthErrors.verificationTokenExpired());
     }
 
+    // Spares no family: the link proves only mailbox ownership, and the mailbox
+    // owner may not be whoever is signed in — this evicts anyone squatting on
+    // the address. The code path needs no eviction: typing the digits in-app
+    // already proves the caller holds the session.
     return completeEmailVerification(
       {
         userRepository: this.userRepository,
