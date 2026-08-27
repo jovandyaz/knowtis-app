@@ -7,6 +7,7 @@ import {
   Footer,
   Header,
   Layout,
+  VerificationCode,
 } from '../../components';
 import { DEFAULT_LOCALE, type Locale } from '../../i18n/config';
 import { useTranslations } from '../../i18n/use-translations';
@@ -16,30 +17,35 @@ export const AUTH_TRANSLATION_KEY = {
   RESET_PASSWORD: 'resetPassword',
 } as const;
 
-export type AuthTranslationKey =
-  (typeof AUTH_TRANSLATION_KEY)[keyof typeof AUTH_TRANSLATION_KEY];
+type AuthEmailCodeProps =
+  | { translationKey: typeof AUTH_TRANSLATION_KEY.VERIFY_EMAIL; code: string }
+  | {
+      translationKey: typeof AUTH_TRANSLATION_KEY.RESET_PASSWORD;
+      code?: never;
+    };
 
-export interface AuthEmailTemplateProps {
+export type AuthEmailTemplateProps = {
   name: string;
   actionUrl: string;
   locale: Locale;
-  translationKey: AuthTranslationKey;
-}
+} & AuthEmailCodeProps;
 
 export const AuthEmailTemplate = ({
   name,
   actionUrl,
   locale = DEFAULT_LOCALE,
   translationKey,
+  code,
 }: AuthEmailTemplateProps) => {
   const { t } = useTranslations(locale);
   const ns = `auth:${translationKey}`;
+  const hasCode = code !== undefined;
 
   return (
     <Layout
       locale={locale}
       title={t(`${ns}.title`)}
-      preview={t(`${ns}.preview`)}
+      preview={t(`${ns}.preview`, hasCode ? { code } : undefined)}
     >
       <Body className="bg-muted my-auto mx-auto font-sans">
         <Container className="mx-auto p-6 max-w-[600px]">
@@ -55,6 +61,20 @@ export const AuthEmailTemplate = ({
               </BodyText>
 
               <BodyText>{t(`${ns}.instruction`)}</BodyText>
+
+              {hasCode && (
+                <Section className="pt-6 text-center">
+                  <Text className="text-muted-foreground text-sm m-0 mb-2">
+                    {t(`${ns}.codeIntro`)}
+                  </Text>
+
+                  <VerificationCode code={code} />
+
+                  <Text className="text-muted-foreground text-sm m-0 mt-2">
+                    {t(`${ns}.codeExpiry`)}
+                  </Text>
+                </Section>
+              )}
 
               <Section className="py-6 text-center">
                 <Button href={actionUrl}>{t(`${ns}.buttonText`)}</Button>
