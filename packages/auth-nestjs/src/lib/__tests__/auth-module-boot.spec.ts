@@ -13,6 +13,7 @@ import { RefreshTokensHandler } from '../handlers/refresh-tokens.handler';
 import { RegisterUserHandler } from '../handlers/register-user.handler';
 import { ResendVerificationHandler } from '../handlers/resend-verification.handler';
 import { ResetPasswordHandler } from '../handlers/reset-password.handler';
+import { VerifyEmailCodeHandler } from '../handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from '../handlers/verify-email.handler';
 import { TokenHasher } from '../services/token-hasher.service';
 
@@ -57,6 +58,7 @@ describe('AuthNestjsModule bootstrap', () => {
       ForgotPasswordHandler,
       ResetPasswordHandler,
       VerifyEmailHandler,
+      VerifyEmailCodeHandler,
       ResendVerificationHandler,
     ]) {
       expect(moduleRef.get(handler)).toBeInstanceOf(handler);
@@ -65,9 +67,7 @@ describe('AuthNestjsModule bootstrap', () => {
     const hasher = moduleRef.get<TokenHasher>(TOKEN_HASHER);
     expect(hasher).toBeInstanceOf(TokenHasher);
     expect(hasher.hash('x')).toBe(
-      createHmac('sha256', Buffer.from(TEST_KEY, 'base64'))
-        .update('x')
-        .digest('hex')
+      createHmac('sha256', TEST_KEY).update('x').digest('hex')
     );
     await moduleRef.close();
   });
