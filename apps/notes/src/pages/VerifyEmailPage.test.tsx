@@ -150,6 +150,18 @@ describe('VerifyEmailPage', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('explains the sign-out it just caused, next to the way back in', async () => {
+    renderAt(`?token=${TOKEN}`);
+
+    expect(
+      await screen.findByText('verifyEmail.verifiedDesc')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'login.button' })).toHaveAttribute(
+      'href',
+      '/login'
+    );
+  });
+
   it('keeps showing the failure outcome after the URL is scrubbed', async () => {
     verifyState.isSuccess = false;
     verifyState.isError = true;
