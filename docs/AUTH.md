@@ -92,6 +92,8 @@ Every path that can verify an address emits `AuthEventName.EMAIL_VERIFIED`, carr
 
 **Resend:** `POST /auth/resend-verification` (authenticated) — refuses within `VERIFICATION_RESEND_COOLDOWN_MS` (1 min) of the current row, otherwise replaces it and emails a fresh link and code.
 
+Two different refusals share the `429`: the per-code cooldown carries `code: RESEND_COOLDOWN`, the endpoint throttle (3 per 15 minutes) carries no code at all. Neither reaches the browser with a readable `Retry-After` — `@nestjs/throttler` does set the header, but the API does not list it in `exposedHeaders`, and CORS hides every non-safelisted response header from a cross-origin frontend. So the client counts the cooldown down from its own copy of the constant, and answers the throttle by withdrawing the resend rather than naming a wait it cannot know.
+
 ### Password Reset
 
 `POST /auth/forgot-password` (always returns success, prevents email enumeration) → if user exists: generate token → send email → `POST /auth/reset-password` → validate token + expiry → hash new password → update user → **invalidate all sessions**.

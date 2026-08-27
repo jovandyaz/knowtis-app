@@ -77,7 +77,7 @@ auth-react      auth-nestjs + apps/api
 
 **Strategies:** `JwtStrategy` (Bearer token → user lookup), `LocalStrategy` (email/password → credential validation).
 
-**Utility:** `unwrapOrThrow()` — maps `Result` errors to HTTP exceptions.
+**Utility:** `AUTH_ERROR_STATUS_MAP` — HTTP status per auth domain error code; the API passes it to `unwrapOrThrow()` from `apps/api/src/core/http`.
 
 **DI tokens:** `USER_REPOSITORY`, `SESSION_REPOSITORY`, `TOKEN_SERVICE`, `PASSWORD_HASHER`, `TOKEN_HASHER`, `EMAIL_SERVICE`, `EMAIL_VERIFICATION_TOKEN_REPOSITORY`, `PASSWORD_RESET_TOKEN_REPOSITORY`.
 

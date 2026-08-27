@@ -144,6 +144,10 @@ openssl rand -base64 32
 
 Any deploy target must set this variable before its next deploy — a missing key fails Nest's dependency injection at boot, not a validation warning at request time.
 
+**The first deploy that sets `TOKEN_HASH_KEY` is a global forced logout**, not only a later rotation. Every stored hash — `sessions.refreshTokenHash`, password-reset tokens, and email-verification link tokens and codes — was written under a different scheme, so none of them match once the key is in play. The moment this ships, every user is signed out and must log in again, and every outstanding password-reset and email-verification link stops working. Rotating the key later does exactly the same thing.
+
+Plan it like a session wipe: ship it in a low-traffic window, and expect a login spike plus a wave of "my reset link is broken" reports from anyone who requested one in the previous hour.
+
 ### Health Endpoints
 
 | Endpoint               | Purpose                                |
