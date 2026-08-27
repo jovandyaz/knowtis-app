@@ -19,6 +19,12 @@ describe('aiErrorMessageKey', () => {
     );
   });
 
+  it('names the verified-email gate the copilot share hits instead of a generic failure', () => {
+    expect(aiErrorMessageKey('AGENT_EMAIL_NOT_VERIFIED')).toBe(
+      'ai.errors.emailNotVerified'
+    );
+  });
+
   it('falls back to the generic message for an unknown code', () => {
     expect(aiErrorMessageKey('SOMETHING_ELSE')).toBe('ai.errors.generic');
   });

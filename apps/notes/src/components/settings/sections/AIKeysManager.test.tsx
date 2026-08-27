@@ -1,11 +1,28 @@
 import { useProviderKeys, useSetProviderKey } from '@/hooks';
+import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { BYOK_PROVIDERS } from '@knowtis/shared-types';
+import { ApiClientError } from '@knowtis/api-client';
+import { BYOK_PROVIDERS, EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
+import {
+  createAuthApiMock,
+  createAuthWrapper,
+  HARNESS_PROFILE,
+} from '../../../test/auth-harness';
 import { AIKeysManager } from './AIKeysManager';
+
+const wrapper = createAuthWrapper(createAuthApiMock(), {
+  user: HARNESS_PROFILE,
+});
+
+const GATE_ERROR = new ApiClientError(
+  'Verify your email',
+  403,
+  EMAIL_NOT_VERIFIED_CODE
+);
 
 const mutateSetKey = vi.fn();
 const mutateRemoveKey = vi.fn();
@@ -50,10 +67,58 @@ describe('AIKeysManager', () => {
       isError: false,
       variables: undefined,
     } as unknown as ReturnType<typeof useSetProviderKey>);
+    useVerifyEmailStore.setState({ isOpen: false });
+  });
+
+  it('offers verification when the gate refuses the key', async () => {
+    mutateSetKey.mockImplementation((_input, { onError }) => {
+      onError(GATE_ERROR);
+    });
+    render(<AIKeysManager />, { wrapper });
+
+    const inputs = screen.getAllByPlaceholderText(
+      /aiAssistant\.byok\.placeholder/i
+    );
+    await userEvent.type(inputs[0], 'sk-ant-test-key');
+    await userEvent.click(
+      screen.getAllByRole('button', { name: /aiAssistant\.byok\.save/i })[0]
+    );
+
+    expect(useVerifyEmailStore.getState().isOpen).toBe(true);
+  });
+
+  it('does not blame the key when the refusal was about the account', () => {
+    vi.mocked(useSetProviderKey).mockReturnValue({
+      mutate: mutateSetKey,
+      isPending: false,
+      isError: true,
+      error: GATE_ERROR,
+      variables: { provider: 'anthropic', apiKey: 'sk-ant-test-key' },
+    } as unknown as ReturnType<typeof useSetProviderKey>);
+
+    render(<AIKeysManager />, { wrapper });
+
+    expect(
+      screen.queryByText(/aiAssistant\.byok\.invalid/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it('still blames the key for an ordinary rejection', () => {
+    vi.mocked(useSetProviderKey).mockReturnValue({
+      mutate: mutateSetKey,
+      isPending: false,
+      isError: true,
+      error: new ApiClientError('Bad key', 400, 'INVALID_PROVIDER_KEY'),
+      variables: { provider: 'anthropic', apiKey: 'sk-ant-test-key' },
+    } as unknown as ReturnType<typeof useSetProviderKey>);
+
+    render(<AIKeysManager />, { wrapper });
+
+    expect(screen.getByText(/aiAssistant\.byok\.invalid/i)).toBeInTheDocument();
   });
 
   it('renders a row for each of the 3 providers', () => {
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(screen.getByText('Anthropic')).toBeInTheDocument();
     expect(screen.getByText('OpenAI')).toBeInTheDocument();
@@ -61,13 +126,13 @@ describe('AIKeysManager', () => {
   });
 
   it('offers an OpenRouter key slot', () => {
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(screen.getByText('OpenRouter')).toBeInTheDocument();
   });
 
   it('Save buttons are disabled when the input is empty', () => {
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     const saveButtons = screen.getAllByRole('button', {
       name: /aiAssistant\.byok\.save/i,
@@ -77,7 +142,7 @@ describe('AIKeysManager', () => {
   });
 
   it('Save button becomes enabled after typing a key and calls mutate with provider + apiKey', async () => {
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     const inputs = screen.getAllByPlaceholderText(
       /aiAssistant\.byok\.placeholder/i
@@ -102,7 +167,7 @@ describe('AIKeysManager', () => {
       data: [{ provider: 'openai', keyPrefix: 'sk-1234' }],
     } as unknown as ReturnType<typeof useProviderKeys>);
 
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(screen.getByText(/aiAssistant\.byok\.stored/)).toBeInTheDocument();
 
@@ -128,7 +193,7 @@ describe('AIKeysManager', () => {
       ],
     } as unknown as ReturnType<typeof useProviderKeys>);
 
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(screen.getByText(/aiAssistant\.byok\.lastUsed/)).toBeInTheDocument();
   });
@@ -145,7 +210,7 @@ describe('AIKeysManager', () => {
       ],
     } as unknown as ReturnType<typeof useProviderKeys>);
 
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(
       screen.getByText(/aiAssistant\.byok\.neverUsed/)
@@ -153,7 +218,7 @@ describe('AIKeysManager', () => {
   });
 
   it('puts the cursor in the first key field when opened to add a key', () => {
-    render(<AIKeysManager focusFirstField />);
+    render(<AIKeysManager focusFirstField />, { wrapper });
 
     expect(
       screen.getAllByPlaceholderText(/aiAssistant\.byok\.placeholder/i)[0]
@@ -161,7 +226,7 @@ describe('AIKeysManager', () => {
   });
 
   it('leaves focus alone when reached from the settings nav', () => {
-    render(<AIKeysManager />);
+    render(<AIKeysManager />, { wrapper });
 
     expect(
       screen.getAllByPlaceholderText(/aiAssistant\.byok\.placeholder/i)[0]

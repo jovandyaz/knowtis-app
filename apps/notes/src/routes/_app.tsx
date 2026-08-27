@@ -7,6 +7,8 @@ import { SessionExpiredError } from '@/auth';
 import { initAuth } from '@/auth/setup';
 import { AnonymousLimitModal } from '@/components/anonymous/AnonymousLimitModal';
 import { ArtifactGeneratorDialog } from '@/components/artifacts';
+import { VerifyEmailBanner } from '@/components/auth/VerifyEmailBanner';
+import { VerifyEmailDialog } from '@/components/auth/VerifyEmailDialog';
 import { BottomNav } from '@/components/layout/BottomNav';
 import { MobileFabRail } from '@/components/layout/MobileFabRail';
 import { Sidebar } from '@/components/layout/Sidebar';
@@ -113,6 +115,7 @@ function AppLayout() {
     <div className="flex h-screen overflow-hidden bg-(--background)">
       <Sidebar />
       {!isAnonymous && <SettingsModal />}
+      <VerifyEmailDialog />
       <AnonymousLimitModal open={showLimitModal} onClose={closeLimitModal} />
       <BottomNav />
       <MobileFabRail>{aiEnabled && <CopilotMobileFAB />}</MobileFabRail>
@@ -122,6 +125,7 @@ function AppLayout() {
         style={{ paddingLeft: isDesktop ? `${sidebarWidth}px` : undefined }}
       >
         <div className="flex-1 flex flex-col min-w-0 min-h-0">
+          <VerifyEmailBanner />
           <div className="hidden md:flex items-center justify-between h-12 shrink-0 px-3">
             <motion.button
               type="button"

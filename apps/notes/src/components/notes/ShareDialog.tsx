@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsFetching, useQueryClient } from '@tanstack/react-query';
 
 import { sharedNotePath } from '@/config';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { Globe, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -72,6 +73,7 @@ export function ShareDialog({
   const { t } = useTranslation(['notes', 'common']);
   const updateNote = useUpdateNote();
   const queryClient = useQueryClient();
+  const verifyEmailGate = useVerifyEmailGate();
 
   // The detail query only refetches on its own staleness, so sharing state
   // changed from another tab or device can be minutes old when this opens.
@@ -116,7 +118,11 @@ export function ShareDialog({
     void updateNote
       .mutateAsync({ id: noteId, input })
       .then(() => toast.success(t(successKey)))
-      .catch(() => toast.error(t('share.accessChangeError')));
+      .catch((error: unknown) => {
+        if (!verifyEmailGate.handleError(error)) {
+          toast.error(t('share.accessChangeError'));
+        }
+      });
   };
 
   const handleGeneralAccessChange = (next: GeneralAccessLevel) => {

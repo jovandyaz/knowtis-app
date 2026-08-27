@@ -6,7 +6,9 @@ import {
   useProviderKeys,
   useSetProviderKey,
 } from '@/hooks';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 
+import { isEmailNotVerifiedError } from '@knowtis/api-client';
 import { Button, PasswordInput } from '@knowtis/design-system';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
 import { formatRelativeTime } from '@knowtis/shared-util';
@@ -29,6 +31,7 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
   const { data: keys } = useProviderKeys(true);
   const setKey = useSetProviderKey();
   const removeKey = useDeleteProviderKey();
+  const verifyEmailGate = useVerifyEmailGate();
   const [drafts, setDrafts] = useState<Partial<Record<ByokProvider, string>>>(
     {}
   );
@@ -97,6 +100,9 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                       {
                         onSuccess: () =>
                           setDrafts((d) => ({ ...d, [provider]: '' })),
+                        onError: (error: unknown) => {
+                          verifyEmailGate.handleError(error);
+                        },
                       }
                     )
                   }
@@ -114,7 +120,9 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                   </Button>
                 ) : null}
               </div>
-              {setKey.isError && setKey.variables?.provider === provider ? (
+              {setKey.isError &&
+              setKey.variables?.provider === provider &&
+              !isEmailNotVerifiedError(setKey.error) ? (
                 <p className="text-xs text-(--destructive)">
                   {t('aiAssistant.byok.invalid')}
                 </p>

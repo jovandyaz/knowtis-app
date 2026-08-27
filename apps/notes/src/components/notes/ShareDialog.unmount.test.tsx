@@ -10,6 +10,11 @@ import type * as ApiClient from '@knowtis/api-client';
 import { notesApi } from '@knowtis/api-client';
 import { TooltipProvider } from '@knowtis/design-system';
 
+import {
+  createAuthApiMock,
+  createAuthOnlyWrapper,
+  HARNESS_PROFILE,
+} from '../../test/auth-harness';
 import { ShareDialog } from './ShareDialog';
 
 const toastSuccess = vi.fn();
@@ -33,9 +38,15 @@ vi.mock('react-i18next', () => ({
 
 let queryClient: QueryClient;
 
+const AuthOnly = createAuthOnlyWrapper(createAuthApiMock(), {
+  user: HARNESS_PROFILE,
+});
+
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>{children}</TooltipProvider>
+    <AuthOnly>
+      <TooltipProvider>{children}</TooltipProvider>
+    </AuthOnly>
   </QueryClientProvider>
 );
 
@@ -51,9 +62,8 @@ describe('ShareDialog — confirmation outlives the dialog', () => {
     let settle: (() => void) | undefined;
     vi.mocked(notesApi.update).mockReturnValue(
       new Promise((resolve) => {
-        settle = () => resolve({ id: 'n1' } as Awaited<
-          ReturnType<typeof notesApi.update>
-        >);
+        settle = () =>
+          resolve({ id: 'n1' } as Awaited<ReturnType<typeof notesApi.update>>);
       })
     );
 
