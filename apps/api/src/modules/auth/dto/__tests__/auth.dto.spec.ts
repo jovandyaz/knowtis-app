@@ -1,3 +1,4 @@
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth/server';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 
@@ -22,34 +23,36 @@ describe('RegisterDto i18n validation', () => {
 // shape production never sees.
 const PIPE_TRANSFORM_OPTIONS = { enableImplicitConversion: true };
 
+const VALID_CODE = '1'.repeat(VERIFICATION_CODE_LENGTH);
+
 describe('VerifyEmailCodeDto', () => {
-  it('accepts a six-digit code', async () => {
+  it('accepts a code of the configured length', async () => {
     const dto = plainToInstance(
       VerifyEmailCodeDto,
-      { code: '123456' },
+      { code: VALID_CODE },
       PIPE_TRANSFORM_OPTIONS
     );
 
     await expect(validate(dto)).resolves.toEqual([]);
   });
 
-  it('accepts a six-digit JSON number, normalised to a string', async () => {
+  it('accepts a JSON number of the configured length, normalised to a string', async () => {
     const dto = plainToInstance(
       VerifyEmailCodeDto,
-      { code: 123456 },
+      { code: Number(VALID_CODE) },
       PIPE_TRANSFORM_OPTIONS
     );
 
     await expect(validate(dto)).resolves.toEqual([]);
-    expect(dto.code).toBe('123456');
+    expect(dto.code).toBe(VALID_CODE);
   });
 
   it.each([
-    ['five digits', '12345'],
-    ['seven digits', '1234567'],
-    ['letters', 'abcdef'],
-    ['a trailing newline', '123456\n'],
-    ['surrounding whitespace', ' 123456 '],
+    ['one digit short', VALID_CODE.slice(1)],
+    ['one digit long', `${VALID_CODE}1`],
+    ['letters', 'a'.repeat(VERIFICATION_CODE_LENGTH)],
+    ['a trailing newline', `${VALID_CODE}\n`],
+    ['surrounding whitespace', ` ${VALID_CODE} `],
     ['an empty string', ''],
     ['a boolean', true],
     ['null', null],
