@@ -121,6 +121,63 @@ describe('unwrapOrThrow', () => {
     }
   });
 
+  it('should throw HttpException with TOO_MANY_REQUESTS for RESEND_COOLDOWN', () => {
+    const result = err(AuthErrors.resendCooldown());
+
+    expect(() => unwrapOrThrow(result)).toThrow(HttpException);
+    try {
+      unwrapOrThrow(result);
+    } catch (e) {
+      const exception = e as HttpException;
+      expect(exception.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      const response = exception.getResponse() as Record<string, unknown>;
+      expect(response['error']).toBe('RESEND_COOLDOWN');
+    }
+  });
+
+  it('should throw HttpException with TOO_MANY_REQUESTS for TOO_MANY_VERIFICATION_ATTEMPTS', () => {
+    const result = err(AuthErrors.tooManyVerificationAttempts());
+
+    expect(() => unwrapOrThrow(result)).toThrow(HttpException);
+    try {
+      unwrapOrThrow(result);
+    } catch (e) {
+      const exception = e as HttpException;
+      expect(exception.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+      const response = exception.getResponse() as Record<string, unknown>;
+      expect(response['error']).toBe('TOO_MANY_VERIFICATION_ATTEMPTS');
+    }
+  });
+
+  it('should throw HttpException with BAD_REQUEST for INVALID_VERIFICATION_CODE', () => {
+    const result = err(AuthErrors.invalidVerificationCode());
+
+    expect(() => unwrapOrThrow(result)).toThrow(HttpException);
+    try {
+      unwrapOrThrow(result);
+    } catch (e) {
+      const exception = e as HttpException;
+      expect(exception.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      const response = exception.getResponse() as Record<string, unknown>;
+      expect(response['error']).toBe('INVALID_VERIFICATION_CODE');
+    }
+  });
+
+  it('exposes the domain code as `code`, which is what the API client reads', () => {
+    const result = err(AuthErrors.invalidVerificationCode());
+
+    try {
+      unwrapOrThrow(result);
+      expect.unreachable('expected unwrapOrThrow to throw');
+    } catch (e) {
+      const response = (e as HttpException).getResponse() as Record<
+        string,
+        unknown
+      >;
+      expect(response['code']).toBe('INVALID_VERIFICATION_CODE');
+    }
+  });
+
   it('should default to BAD_REQUEST for unknown error codes', () => {
     const result = err({
       code: 'UNKNOWN_ERROR',

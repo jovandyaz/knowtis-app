@@ -5,12 +5,14 @@ export interface EmailService {
   sendPasswordReset(
     email: string,
     token: string,
-    name: string
+    name: string,
+    locale?: string
   ): Promise<Result<void, AuthDomainError>>;
 
   sendEmailVerification(
     email: string,
-    token: string,
-    name: string
+    payload: { token: string; code: string },
+    name: string,
+    locale?: string
   ): Promise<Result<void, AuthDomainError>>;
 }

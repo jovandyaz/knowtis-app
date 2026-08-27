@@ -21,6 +21,9 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AuthErrorCodes.INVALID_VERIFICATION_TOKEN]: HttpStatus.BAD_REQUEST,
   [AuthErrorCodes.VERIFICATION_TOKEN_EXPIRED]: HttpStatus.BAD_REQUEST,
   [AuthErrorCodes.EMAIL_ALREADY_VERIFIED]: HttpStatus.CONFLICT,
+  [AuthErrorCodes.INVALID_VERIFICATION_CODE]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS]: HttpStatus.TOO_MANY_REQUESTS,
+  [AuthErrorCodes.RESEND_COOLDOWN]: HttpStatus.TOO_MANY_REQUESTS,
   [AuthErrorCodes.EMAIL_SEND_FAILED]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
@@ -32,6 +35,7 @@ export function unwrapOrThrow<T>(result: Result<T, AuthDomainError>): T {
       {
         statusCode: status,
         error: result.error.code,
+        code: result.error.code,
         message: result.error.message,
       },
       status
