@@ -312,7 +312,8 @@
       "sanitizeRejected": "El contenido fue rechazado por razones de seguridad.",
       "targetUserNotFound": "Ese usuario no fue encontrado.",
       "noteNotFound": "La nota ya no existe.",
-      "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo."
+      "invalidProposal": "No se pudo procesar esa solicitud. Inténtalo de nuevo.",
+      "emailNotVerified": "Verifica tu correo electrónico antes de compartir esta nota."
     },
     "copilot": {
       "tab": "Copilot",
