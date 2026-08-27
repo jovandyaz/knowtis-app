@@ -80,6 +80,9 @@ export type { ResetPasswordInput } from './lib/handlers/reset-password.handler';
 export { VerifyEmailHandler } from './lib/handlers/verify-email.handler';
 export type { VerifyEmailInput } from './lib/handlers/verify-email.handler';
 
+export { VerifyEmailCodeHandler } from './lib/handlers/verify-email-code.handler';
+export type { VerifyEmailCodeInput } from './lib/handlers/verify-email-code.handler';
+
 export { ResendVerificationHandler } from './lib/handlers/resend-verification.handler';
 export type { ResendVerificationInput } from './lib/handlers/resend-verification.handler';
 

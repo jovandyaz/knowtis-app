@@ -70,9 +70,7 @@ describe('AuthNestjsModule', () => {
     // anything other than options.tokenHashKey still satisfies expect.any.
     const hasher = (hasherProvider as { useValue: TokenHasher }).useValue;
     expect(hasher.hash('x')).toBe(
-      createHmac('sha256', Buffer.from(TEST_KEY, 'base64'))
-        .update('x')
-        .digest('hex')
+      createHmac('sha256', TEST_KEY).update('x').digest('hex')
     );
     expect(dynamicModule.exports).toContain(TOKEN_HASHER);
   });
