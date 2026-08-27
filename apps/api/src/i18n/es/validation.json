@@ -8,6 +8,7 @@
   "MAX": "{property} debe ser como máximo {constraints.0}",
   "IS_STRING": "{property} debe ser una cadena de texto",
   "INVALID_HEX": "Formato de token inválido",
+  "INVALID_CODE": "Formato de código de verificación inválido",
   "INVALID_LENGTH": "Formato de token inválido",
   "IS_IN": "{property} debe ser uno de: {constraints.0}",
   "USER_NOT_FOUND": "Usuario no encontrado"
