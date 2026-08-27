@@ -107,7 +107,9 @@ describe('AuthModule bootstrap', () => {
     const hasher = moduleRef.get<TokenHasher>(TOKEN_HASHER);
     expect(hasher).toBeInstanceOf(TokenHasher);
     expect(hasher.hash('x')).toBe(
-      createHmac('sha256', TEST_KEY).update('x').digest('hex')
+      createHmac('sha256', Buffer.from(TEST_KEY, 'base64'))
+        .update('x')
+        .digest('hex')
     );
 
     await moduleRef.close();
