@@ -13,6 +13,7 @@ import {
   USER_READ_REPOSITORY,
   type UserReadRepository,
 } from '../../users/domain/ports/user-read.repository';
+import { VerifiedIdentityPolicy } from '../../users/verified-identity.policy';
 import { AgentErrors, type AgentDomainError } from '../domain/agent-errors';
 import type { AgentCommitResult } from '../domain/agent-event';
 import {
@@ -50,7 +51,8 @@ export class ApproveMutationHandler {
     private readonly shareHandler: ShareNoteHandler,
     private readonly abilityFactory: AppAbilityFactory,
     @Inject(NOTE_REPOSITORY) private readonly noteRepo: NoteRepository,
-    @Inject(USER_READ_REPOSITORY) private readonly userRepo: UserReadRepository
+    @Inject(USER_READ_REPOSITORY) private readonly userRepo: UserReadRepository,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   async execute(
@@ -167,6 +169,11 @@ export class ApproveMutationHandler {
     m: ShareProposedMutation,
     toolName: string
   ): Promise<Result<ApproveMutationOutput, AgentDomainError>> {
+    // Ahead of the lookups, not only inside ShareNoteHandler: resolving the
+    // target email first would answer whether that account exists.
+    if (!(await this.verifiedIdentity.isVerified(userId))) {
+      return err(AgentErrors.emailNotVerified());
+    }
     const note = await this.noteRepo.findById(m.targetNoteId);
     if (!note) {
       return err(AgentErrors.noteNotFound(m.targetNoteId));
@@ -201,6 +208,9 @@ export class ApproveMutationHandler {
       kind: m.kind,
       code: error.code,
     });
+    if (error.code === NoteErrorCodes.EMAIL_NOT_VERIFIED) {
+      return AgentErrors.emailNotVerified();
+    }
     if (error.code === NoteErrorCodes.PERMISSION_DENIED) {
       return AgentErrors.permissionDenied();
     }
