@@ -208,7 +208,7 @@ will not recognize this site's refusal.
 
 ### Frontend gate handling
 
-- `useVerifyEmailGate()` (`apps/notes/src/hooks/useVerifyEmailGate.ts`) is the single place that decides what a refusal offers: `canVerify` is `false` for an anonymous visitor, `prompt()` opens the verify dialog for an account and toasts `auth:verifyEmail.gateSignUpToast` for a visitor, and `handleError()` recognizes `isEmailNotVerifiedError()` and calls `prompt()`. It returns `true` for either audience — the refusal is answered — and `false` only for a failure that is not this gate's, which the caller then reports itself.
+- `useVerifyEmailGate()` (`apps/notes/src/hooks/useVerifyEmailGate.ts`) is the single place that decides what a refusal offers: `canVerify` is `false` for an anonymous visitor and for a visitor with no session at all, `prompt()` opens the verify dialog for an account and toasts `auth:verifyEmail.gateSignUpToast` for a visitor, and `handleError()` recognizes `isEmailNotVerifiedError()` and calls `prompt()`. It returns `true` for either audience — the refusal is answered — and `false` only for a failure that is not this gate's, which the caller then reports itself.
 - `VerifyEmailBanner` and `VerifyEmailDialog` (`apps/notes/src/components/auth/`) render the persistent nudge and the in-place OTP verification flow described in [AUTH.md](AUTH.md#email-verification).
 
 ---

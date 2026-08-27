@@ -4,11 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
-import {
-  useIsAuthenticated,
-  useResendVerification,
-  useVerifyEmail,
-} from '@jovandyaz/auth-react';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { useResendVerification, useVerifyEmail } from '@jovandyaz/auth-react';
 import {
   AlertCircle,
   ArrowLeft,
@@ -35,7 +32,7 @@ export function VerifyEmailPage() {
   const { token } = useSearch({ from: '/verify-email' });
   const verifyEmail = useVerifyEmail();
   const resendVerification = useResendVerification();
-  const isAuthenticated = useIsAuthenticated();
+  const { canVerify } = useVerifyEmailGate();
   const navigate = useNavigate();
   const hasAttempted = useRef(false);
 
@@ -150,7 +147,7 @@ export function VerifyEmailPage() {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {isAuthenticated && (
+        {canVerify && (
           <Button
             variant="outline"
             className="w-full"

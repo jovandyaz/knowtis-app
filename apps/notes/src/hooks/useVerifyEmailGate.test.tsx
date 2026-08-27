@@ -35,7 +35,7 @@ const GATE_ERROR = new ApiClientError(
   EMAIL_NOT_VERIFIED_CODE
 );
 
-function renderGate(user: AuthUserProfile) {
+function renderGate(user?: AuthUserProfile) {
   const wrapper = createAuthWrapper(createAuthApiMock(), { user });
   return renderHook(() => useVerifyEmailGate(), {
     wrapper: ({ children }: { children: ReactNode }) => wrapper({ children }),
@@ -106,5 +106,17 @@ describe('useVerifyEmailGate', () => {
     });
 
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
+  });
+
+  it('points a visitor with no session at the account they would need', () => {
+    const { result } = renderGate();
+
+    act(() => {
+      result.current.prompt();
+    });
+
+    expect(result.current.canVerify).toBe(false);
+    expect(useVerifyEmailStore.getState().isOpen).toBe(false);
+    expect(toastError).toHaveBeenCalledWith('verifyEmail.gateSignUpToast');
   });
 });

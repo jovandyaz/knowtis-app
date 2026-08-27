@@ -20,21 +20,24 @@ export interface VerifyEmailGate {
 
 /**
  * The single place that decides what a gated refusal offers. An anonymous
- * visitor is refused by the same server gate but has no address to verify, so
- * the only way forward they can take is creating an account.
+ * visitor, and a visitor with no session at all, are refused by the same server
+ * gate but have no address to verify, so the only way forward they can take is
+ * creating an account.
  */
 export function useVerifyEmailGate(): VerifyEmailGate {
   const { t } = useTranslation('auth');
-  const isAnonymous = useAuthUser()?.isAnonymous ?? false;
+  const user = useAuthUser();
   const open = useVerifyEmailStore((s) => s.open);
 
+  const canVerify = !!user && !user.isAnonymous;
+
   const prompt = useCallback(() => {
-    if (isAnonymous) {
+    if (!canVerify) {
       toast.error(t(SIGN_UP_TOAST_KEY));
       return;
     }
     open();
-  }, [isAnonymous, open, t]);
+  }, [canVerify, open, t]);
 
   const handleError = useCallback(
     (error: unknown) => {
@@ -48,7 +51,7 @@ export function useVerifyEmailGate(): VerifyEmailGate {
   );
 
   return useMemo(
-    () => ({ canVerify: !isAnonymous, prompt, handleError }),
-    [isAnonymous, prompt, handleError]
+    () => ({ canVerify, prompt, handleError }),
+    [canVerify, prompt, handleError]
   );
 }

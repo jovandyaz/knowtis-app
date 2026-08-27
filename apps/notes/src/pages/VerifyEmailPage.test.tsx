@@ -17,6 +17,7 @@ const TOKEN = 'secret-token';
 const VERIFY_EMAIL_PATH = '/verify-email';
 
 const verifyMutate = vi.fn();
+let currentUser: { isAnonymous?: boolean } | null = null;
 const verifyState = {
   isPending: false,
   isSuccess: true,
@@ -29,7 +30,7 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@jovandyaz/auth-react', () => ({
-  useIsAuthenticated: () => false,
+  useAuthUser: () => currentUser,
   useResendVerification: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -86,6 +87,7 @@ beforeEach(() => {
   verifyState.isError = false;
   verifyState.error = null;
   verifyMutate.mockImplementation((_token, { onSettled }) => onSettled());
+  currentUser = { isAnonymous: false };
 });
 
 afterEach(() => {
@@ -169,5 +171,49 @@ describe('VerifyEmailPage', () => {
       await screen.findByText('verifyEmail.invalidLink')
     ).toBeInTheDocument();
     expect(verifyMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('the resend offer on a failed verification', () => {
+  const RESEND_BUTTON = 'verifyEmail.resendButton';
+
+  beforeEach(() => {
+    verifyState.isSuccess = false;
+    verifyState.isError = true;
+    verifyState.error = new Error('nope');
+  });
+
+  it('stays away from an anonymous visitor the server always refuses', async () => {
+    currentUser = { isAnonymous: true };
+
+    renderAt(`?token=${TOKEN}`);
+
+    expect(
+      await screen.findByText('verifyEmail.failedTitle')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: RESEND_BUTTON })
+    ).not.toBeInTheDocument();
+  });
+
+  it('stays away from a visitor with no session to resend against', async () => {
+    currentUser = null;
+
+    renderAt(`?token=${TOKEN}`);
+
+    expect(
+      await screen.findByText('verifyEmail.failedTitle')
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: RESEND_BUTTON })
+    ).not.toBeInTheDocument();
+  });
+
+  it('reaches the one audience the server would send to', async () => {
+    renderAt(`?token=${TOKEN}`);
+
+    expect(
+      await screen.findByRole('button', { name: RESEND_BUTTON })
+    ).toBeInTheDocument();
   });
 });
