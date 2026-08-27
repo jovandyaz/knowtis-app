@@ -1,14 +1,8 @@
-import {
-  AuthErrors,
-  AuthEventName,
-  EMAIL_VERIFICATION_SOURCE,
-  EmailVerifiedEvent,
-  UserId,
-} from '@jovandyaz/auth/server';
+import { AuthErrors, EMAIL_VERIFICATION_SOURCE } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { err, ok, type Result } from 'neverthrow';
+import { err, type Result } from 'neverthrow';
 
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
@@ -20,6 +14,7 @@ import type { EmailVerificationTokenRepository } from '../ports/email-verificati
 import type { SessionRepository } from '../ports/session.repository';
 import type { UserRepository } from '../ports/user.repository';
 import { TokenHasher } from '../services/token-hasher.service';
+import { completeEmailVerification } from './shared/complete-email-verification';
 
 export interface VerifyEmailInput {
   readonly token: string;
@@ -55,34 +50,15 @@ export class VerifyEmailHandler {
       return err(AuthErrors.verificationTokenExpired());
     }
 
-    const userIdResult = UserId.fromTrusted(token.userId);
-    const user = await this.userRepository.findById(userIdResult);
-    if (user?.emailVerifiedAt) {
-      await this.verificationTokenRepository.deleteAllByUserId(token.userId);
-      return err(AuthErrors.emailAlreadyVerified());
-    }
-
-    const verifyResult =
-      await this.userRepository.markEmailVerified(userIdResult);
-    if (verifyResult.isErr()) {
-      this.logger.error(
-        `Failed to mark email verified for user ${token.userId}`
-      );
-      return err(verifyResult.error);
-    }
-
-    await this.verificationTokenRepository.deleteAllByUserId(token.userId);
-    await this.sessionRepository.deleteAllByUserId(token.userId);
-
-    this.eventEmitter.emit(
-      AuthEventName.EMAIL_VERIFIED,
-      new EmailVerifiedEvent(
-        token.userId,
-        EMAIL_VERIFICATION_SOURCE.LINK,
-        new Date()
-      )
+    return completeEmailVerification(
+      {
+        userRepository: this.userRepository,
+        verificationTokenRepository: this.verificationTokenRepository,
+        sessionRepository: this.sessionRepository,
+        eventEmitter: this.eventEmitter,
+        logger: this.logger,
+      },
+      { userId: token.userId, source: EMAIL_VERIFICATION_SOURCE.LINK }
     );
-
-    return ok(undefined);
   }
 }
