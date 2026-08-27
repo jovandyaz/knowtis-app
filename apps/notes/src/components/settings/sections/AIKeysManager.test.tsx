@@ -55,6 +55,16 @@ vi.mock('@/hooks', () => ({
   })),
 }));
 
+async function saveFirstKey() {
+  const inputs = screen.getAllByPlaceholderText(
+    /aiAssistant\.byok\.placeholder/i
+  );
+  await userEvent.type(inputs[0], 'sk-ant-test-key');
+  await userEvent.click(
+    screen.getAllByRole('button', { name: /aiAssistant\.byok\.save/i })[0]
+  );
+}
+
 describe('AIKeysManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -76,43 +86,31 @@ describe('AIKeysManager', () => {
     });
     render(<AIKeysManager />, { wrapper });
 
-    const inputs = screen.getAllByPlaceholderText(
-      /aiAssistant\.byok\.placeholder/i
-    );
-    await userEvent.type(inputs[0], 'sk-ant-test-key');
-    await userEvent.click(
-      screen.getAllByRole('button', { name: /aiAssistant\.byok\.save/i })[0]
-    );
+    await saveFirstKey();
 
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
   });
 
-  it('does not blame the key when the refusal was about the account', () => {
-    vi.mocked(useSetProviderKey).mockReturnValue({
-      mutate: mutateSetKey,
-      isPending: false,
-      isError: true,
-      error: GATE_ERROR,
-      variables: { provider: 'anthropic', apiKey: 'sk-ant-test-key' },
-    } as unknown as ReturnType<typeof useSetProviderKey>);
-
+  it('does not blame the key when the refusal was about the account', async () => {
+    mutateSetKey.mockImplementation((_input, { onError }) => {
+      onError(GATE_ERROR);
+    });
     render(<AIKeysManager />, { wrapper });
+
+    await saveFirstKey();
 
     expect(
       screen.queryByText(/aiAssistant\.byok\.invalid/i)
     ).not.toBeInTheDocument();
   });
 
-  it('still blames the key for an ordinary rejection', () => {
-    vi.mocked(useSetProviderKey).mockReturnValue({
-      mutate: mutateSetKey,
-      isPending: false,
-      isError: true,
-      error: new ApiClientError('Bad key', 400, 'INVALID_PROVIDER_KEY'),
-      variables: { provider: 'anthropic', apiKey: 'sk-ant-test-key' },
-    } as unknown as ReturnType<typeof useSetProviderKey>);
-
+  it('still blames the key for an ordinary rejection', async () => {
+    mutateSetKey.mockImplementation((_input, { onError }) => {
+      onError(new ApiClientError('Bad key', 400, 'INVALID_PROVIDER_KEY'));
+    });
     render(<AIKeysManager />, { wrapper });
+
+    await saveFirstKey();
 
     expect(screen.getByText(/aiAssistant\.byok\.invalid/i)).toBeInTheDocument();
   });
