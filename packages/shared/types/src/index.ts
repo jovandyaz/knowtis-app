@@ -1,8 +1,10 @@
-export type {
-  User,
-  UserProfile,
-  CreateUserInput,
-  UpdateUserInput,
+export {
+  AGENT_EMAIL_NOT_VERIFIED_CODE,
+  EMAIL_NOT_VERIFIED_CODE,
+  type User,
+  type UserProfile,
+  type CreateUserInput,
+  type UpdateUserInput,
 } from './lib/user.types';
 
 export {

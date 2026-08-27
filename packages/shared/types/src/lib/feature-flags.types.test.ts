@@ -21,6 +21,14 @@ describe('feature flag catalog', () => {
     }
   });
 
+  it('labels the email verification gate so the backoffice can find it', () => {
+    expect(flagMetaFor(FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE)).toEqual({
+      domain: FLAG_DOMAIN.PRODUCT,
+      group: FLAG_GROUP.ACCESS,
+      label: 'Verified email required',
+    });
+  });
+
   it('falls back to the product fallback group for unknown keys', () => {
     expect(flagMetaFor('some_adhoc_flag')).toEqual({
       domain: FLAG_DOMAIN.PRODUCT,

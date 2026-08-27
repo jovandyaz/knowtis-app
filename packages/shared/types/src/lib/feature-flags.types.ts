@@ -15,6 +15,7 @@ export const FEATURE_FLAG_KEYS = {
   AI_TIER_GATING: 'ai_tier_gating',
   AI_CATALOG_SYNC: 'ai_catalog_sync',
   AI_AUTO_ORGANIZE: 'ai_auto_organize',
+  EMAIL_VERIFICATION_GATE: 'email_verification_gate',
 } as const;
 
 export type FeatureFlagKey =
@@ -144,6 +145,11 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.AI,
     group: FLAG_GROUP.CAPABILITY,
     label: 'Organization suggestions',
+  },
+  email_verification_gate: {
+    domain: FLAG_DOMAIN.PRODUCT,
+    group: FLAG_GROUP.ACCESS,
+    label: 'Verified email required',
   },
 } as const satisfies Record<FeatureFlagKey, FlagMeta>;
 
