@@ -7,6 +7,7 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   MinLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
@@ -143,6 +144,18 @@ export class VerifyEmailDto {
     message: i18nValidationMessage('validation.INVALID_LENGTH'),
   })
   token!: string;
+}
+
+export class VerifyEmailCodeDto {
+  @ApiProperty({
+    description: 'Six-digit verification code received via email',
+    example: '123456',
+  })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @Matches(/^\d{6}$/, {
+    message: i18nValidationMessage('validation.INVALID_CODE'),
+  })
+  code!: string;
 }
 
 export class RefreshTokenDto {
