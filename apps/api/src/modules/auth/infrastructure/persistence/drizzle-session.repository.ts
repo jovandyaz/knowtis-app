@@ -6,7 +6,7 @@ import type {
 import { AuthErrors } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { and, eq, gt, isNotNull, isNull, lt } from 'drizzle-orm';
+import { and, eq, gt, isNotNull, isNull, lt, ne } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
@@ -96,6 +96,15 @@ export class DrizzleSessionRepository implements SessionRepository {
 
   async deleteAllByUserId(userId: string): Promise<void> {
     await this.db.delete(sessions).where(eq(sessions.userId, userId));
+  }
+
+  async deleteAllByUserIdExceptFamily(
+    userId: string,
+    familyId: string
+  ): Promise<void> {
+    await this.db
+      .delete(sessions)
+      .where(and(eq(sessions.userId, userId), ne(sessions.familyId, familyId)));
   }
 
   async deleteRotatedBefore(cutoff: Date): Promise<void> {
