@@ -44,7 +44,10 @@ export interface RequestUser {
   email: string;
   name: string;
   avatarUrl?: string | null;
+  emailVerifiedAt?: Date | null;
+  locale?: string | null;
   isAnonymous?: boolean;
+  familyId?: string;
   role: UserRole;
 }
 

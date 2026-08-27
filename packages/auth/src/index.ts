@@ -18,3 +18,5 @@ export {
 
 export { AuthErrors, AuthErrorCodes } from './lib/errors/auth.errors';
 export type { AuthDomainError } from './lib/errors/auth.errors';
+
+export { VERIFICATION_RESEND_COOLDOWN_MS } from './lib/constants';

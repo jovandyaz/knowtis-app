@@ -1,5 +1,6 @@
 export const AuthEventName = {
   REGISTER: 'auth.register',
+  EMAIL_VERIFIED: 'auth.email.verified',
   LOGIN: 'auth.login',
   LOGIN_FAILED: 'auth.login.failed',
   TOKEN_REFRESH: 'auth.token.refresh',
@@ -15,6 +16,23 @@ export class UserRegisteredEvent {
     public readonly ipAddress: string,
     public readonly userAgent: string,
     public readonly timestamp: Date
+  ) {}
+}
+
+export const EMAIL_VERIFICATION_SOURCE = {
+  CODE: 'code',
+  LINK: 'link',
+  PASSWORD_RESET: 'password_reset',
+} as const;
+
+export type EmailVerificationSource =
+  (typeof EMAIL_VERIFICATION_SOURCE)[keyof typeof EMAIL_VERIFICATION_SOURCE];
+
+export class EmailVerifiedEvent {
+  constructor(
+    public readonly userId: string,
+    public readonly source: EmailVerificationSource,
+    public readonly verifiedAt: Date
   ) {}
 }
 
