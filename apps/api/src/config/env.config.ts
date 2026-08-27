@@ -13,13 +13,9 @@ const envSchemaBase = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
-  TOKEN_HASH_KEY: z
-    .string()
-    .refine(
-      (v) => Buffer.from(v, 'base64').length === 32,
-      'TOKEN_HASH_KEY must be 32 bytes, base64-encoded (openssl rand -base64 32)'
-    )
-    .optional(),
+  // Shape is TokenHasher's to enforce: it owns the key and rejects a malformed
+  // one while AuthModule is still being built, before this schema ever runs.
+  TOKEN_HASH_KEY: z.string().optional(),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   BACKOFFICE_URL: z.url().optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
