@@ -17,6 +17,7 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   PASSWORD_HASHER,
   SESSION_REPOSITORY,
+  TOKEN_HASHER,
   TOKEN_SERVICE,
   USER_REPOSITORY,
 } from '../constants';
@@ -24,6 +25,7 @@ import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
 import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 import { createSessionWithTokens } from './shared/create-session';
 
 export interface ValidateUserInput {
@@ -55,6 +57,7 @@ export class LoginUserHandler {
     @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService,
     @Inject(SESSION_REPOSITORY)
     private readonly sessionRepository: SessionRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -130,6 +133,7 @@ export class LoginUserHandler {
       {
         tokenService: this.tokenService,
         sessionRepository: this.sessionRepository,
+        tokenHasher: this.tokenHasher,
       },
       {
         userId: user.id,
