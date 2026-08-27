@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useCountdown } from '@/hooks/useCountdown';
-import { useRateLimitState } from '@/hooks/useRateLimitState';
 import {
   AuthErrorCodes,
   VERIFICATION_RESEND_COOLDOWN_MS,
@@ -10,6 +8,9 @@ import {
 import { useResendVerification } from '@jovandyaz/auth-react';
 
 import { ApiClientError } from '@knowtis/api-client';
+
+import { useCountdown } from './useCountdown';
+import { useRateLimitState } from './useRateLimitState';
 
 const RATE_LIMIT_KEY = 'verifyEmail.rateLimitToast';
 const RESEND_LOCKED_OUT_KEY = 'verifyEmail.resendLockedOut';

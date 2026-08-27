@@ -75,8 +75,6 @@ export function useVerifyEmailCodeForm({
   });
 
   const errorKey = verifyErrorKey(verifyCode.error);
-  // The server gates the resend purely on elapsed time, so nothing but the
-  // countdown may release it — a spent attempt budget least of all.
   const cooldownHeld = resend.secondsLeft > 0;
 
   // A spent budget does not lift the cooldown: the spent row survives on the
