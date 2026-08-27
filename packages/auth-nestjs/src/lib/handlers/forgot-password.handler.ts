@@ -72,7 +72,8 @@ export class ForgotPasswordHandler {
     const sendResult = await this.emailService.sendPasswordReset(
       user.email,
       plainToken,
-      user.name
+      user.name,
+      user.locale ?? undefined
     );
     if (sendResult.isErr()) {
       this.logger.error('Failed to send password reset email');
