@@ -26,16 +26,16 @@ auth-react      auth-nestjs + apps/api
 
 **Two entry points:**
 
-| Import path              | Environment  | Contents                                        |
-| ------------------------ | ------------ | ----------------------------------------------- |
-| `@jovandyaz/auth`        | Browser-safe | Types, errors, `getPasswordChecks()`            |
-| `@jovandyaz/auth/server` | Server only  | + Value objects, `hashToken`, events, constants |
+| Import path              | Environment  | Contents                                                                |
+| ------------------------ | ------------ | ----------------------------------------------------------------------- |
+| `@jovandyaz/auth`        | Browser-safe | Types, errors, `getPasswordChecks()`, `VERIFICATION_RESEND_COOLDOWN_MS` |
+| `@jovandyaz/auth/server` | Server only  | + Value objects, `hashToken` (HMAC, keyed), events, constants           |
 
-**`@jovandyaz/auth`** (browser-safe): `LoginInput`, `RegisterInput`, `AuthTokens` (readonly), `AuthResponse`, `RequestUser`, `USER_ROLE` / `UserRole`, `PasswordRequirements`, `PasswordCheck`, `getPasswordChecks()`, `PASSWORD_REQUIREMENTS`, `AuthDomainError`, `AuthErrorCodes`, `AuthErrors`.
+**`@jovandyaz/auth`** (browser-safe): `LoginInput`, `RegisterInput`, `AuthTokens` (readonly), `AuthResponse`, `RequestUser`, `USER_ROLE` / `UserRole`, `PasswordRequirements`, `PasswordCheck`, `getPasswordChecks()`, `PASSWORD_REQUIREMENTS`, `AuthDomainError`, `AuthErrorCodes`, `AuthErrors`, `VERIFICATION_RESEND_COOLDOWN_MS` (re-exported browser-safe so the resend countdown can render without a round trip).
 
 > `RequestUser` carries `role: UserRole` (`'user'` | `'admin'`) and optional `isAnonymous?: boolean`. Anonymous sessions are minted at the app level (`AnonymousAuthService` in `apps/api`), not by these packages; see [AUTH.md › Anonymous Users](AUTH.md#anonymous-users).
 
-**`@jovandyaz/auth/server`** (server-only, includes all browser-safe exports plus): Value objects (`Email`, `Password`, `UserId` — all return `Result` via neverthrow), `hashToken()`, `createPasswordHasher()`, `SessionContext`, expiry constants (`SESSION_EXPIRY_MS`, `VERIFICATION_TOKEN_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`, `REFRESH_TOKEN_GRACE_MS`), domain events. All exports come from their original source modules — no re-exports.
+**`@jovandyaz/auth/server`** (server-only, includes all browser-safe exports plus): Value objects (`Email`, `Password`, `UserId` — all return `Result` via neverthrow), `hashToken(token, key)` — HMAC-SHA256, keyed so a stolen hash resists offline brute force on a low-entropy value like the 6-digit code — `createPasswordHasher()`, `SessionContext`, expiry/attempt constants (`SESSION_EXPIRY_MS`, `VERIFICATION_TOKEN_EXPIRY_MS`, `VERIFICATION_CODE_EXPIRY_MS`, `VERIFICATION_CODE_MAX_ATTEMPTS`, `VERIFICATION_RESEND_COOLDOWN_MS`, `RESET_TOKEN_EXPIRY_MS`, `REFRESH_TOKEN_GRACE_MS`), domain events. All exports come from their original source modules — no re-exports.
 
 ---
 
@@ -51,7 +51,7 @@ auth-react      auth-nestjs + apps/api
 - **Token storage:** `createTokenStorage()` — access token in-memory, refresh token managed by backend HttpOnly cookie (not accessible from JS)
 - **Store:** `createAuthStore()` — Zustand with `user`, `isAuthenticated`, `isLoading`. Persisted via `zustand/persist`, triggers silent refresh on rehydration if previously authenticated
 - **Provider:** `<AuthProvider api={adapter} tokenStorage={...} store={...}>`
-- **Query hooks:** `useLogin()`, `useRegister()`, `useLogout()`, `useProfile()`, `useForgotPassword()`, `useResetPassword()`, `useVerifyEmail()`, `useResendVerification()`
+- **Query hooks:** `useLogin()`, `useRegister()`, `useLogout()`, `useProfile()`, `useForgotPassword()`, `useResetPassword()`, `useVerifyEmail()`, `useVerifyEmailCode()`, `useResendVerification()`
 - **Selector hooks:** `useAuth()`, `useAuthUser()`, `useIsAuthenticated()`, `useAuthLoading()`
 - **Utility hooks:** `useRateLimitState()`, `useAuthApi()`, `useTokenStorage()`, `useAuthStore()`
 - **Zod schemas:** `loginSchema`, `registerSchema`, `forgotPasswordSchema`, `resetPasswordSchema` (password rules synced via `getPasswordChecks()`)
@@ -68,8 +68,10 @@ auth-react      auth-nestjs + apps/api
 **Ports** (consumers implement):
 `UserRepository`, `SessionRepository`, `TokenService`, `PasswordHasher`, `EmailService` (optional), `EmailVerificationTokenRepository` (optional), `PasswordResetTokenRepository` (optional).
 
+**Token hashing:** `TokenHasher` (exported as `TOKEN_HASHER`) is built by the module itself from the required `tokenHashKey` `register()` option (32 bytes, base64) — not a consumer-supplied port. It wraps `hashToken()` from `@jovandyaz/auth/server` with that key, and every handler that hashes a token (sessions, resets, email verification link + code) goes through it.
+
 **Handlers** (use cases, all return `Result<T, AuthDomainError>`):
-`LoginUserHandler`, `RegisterUserHandler`, `RefreshTokensHandler`, `LogoutUserHandler`, `ForgotPasswordHandler`, `ResetPasswordHandler`, `VerifyEmailHandler`, `ResendVerificationHandler`.
+`LoginUserHandler`, `RegisterUserHandler`, `RefreshTokensHandler`, `LogoutUserHandler`, `ForgotPasswordHandler`, `ResetPasswordHandler`, `VerifyEmailHandler`, `VerifyEmailCodeHandler`, `ResendVerificationHandler`.
 
 **Guards & Decorators:** `JwtAuthGuard` (global, respects `@Public()`), `LocalAuthGuard`, `@CurrentUser()`.
 
@@ -77,7 +79,7 @@ auth-react      auth-nestjs + apps/api
 
 **Utility:** `unwrapOrThrow()` — maps `Result` errors to HTTP exceptions.
 
-**DI tokens:** `USER_REPOSITORY`, `SESSION_REPOSITORY`, `TOKEN_SERVICE`, `PASSWORD_HASHER`, `EMAIL_SERVICE`, `EMAIL_VERIFICATION_TOKEN_REPOSITORY`, `PASSWORD_RESET_TOKEN_REPOSITORY`.
+**DI tokens:** `USER_REPOSITORY`, `SESSION_REPOSITORY`, `TOKEN_SERVICE`, `PASSWORD_HASHER`, `TOKEN_HASHER`, `EMAIL_SERVICE`, `EMAIL_VERIFICATION_TOKEN_REPOSITORY`, `PASSWORD_RESET_TOKEN_REPOSITORY`.
 
 ---
 
@@ -109,3 +111,4 @@ HttpClient handles 401 → refresh callback → retry (transparent)
 - **Port interfaces in `auth-nestjs`** — implementations live in the consuming app, not the package
 - **`PasswordHasher` differs per package** — `auth` returns `Promise<string>` (utility), `auth-nestjs` returns `Result<string, AuthDomainError>` (DDD). Intentionally different contracts
 - **Optional email providers** — allows deploying without email features
+- **`tokenHashKey` is a required `register()` option, not a port** — every consumer hashes the same way; only the key differs per deployment. The module builds `TokenHasher` from it rather than asking the consumer to supply one

@@ -11,7 +11,7 @@ The permission system is built on a layered package architecture. For package in
 1. [Access Levels](#access-levels)
 2. [Sharing Mechanisms](#sharing-mechanisms)
 3. [Access Validation](#access-validation)
-4. [Verified Email Gate](#verified-email-gate)
+4. [Verified-Identity Gate](#verified-identity-gate)
 5. [WebSocket Collaboration Permissions](#websocket-collaboration-permissions)
 6. [API Endpoints](#api-endpoints)
 7. [Frontend Behavior](#frontend-behavior)
@@ -141,26 +141,75 @@ Notes shared via "Anyone with the link" from other users are **excluded** from t
 
 ---
 
-## Verified Email Gate
+## Verified-Identity Gate
 
-Five actions that widen what an account or a note gives away additionally require a **verified, non-anonymous identity**. `VerifiedIdentityPolicy` (`apps/api/src/modules/users/verified-identity.policy.ts`) decides it behind the `email_verification_gate` feature flag: while the flag is off the policy answers _allow_ for everyone, so the gate ships dark, and a toggle takes effect within the flag cache window (30 s, invalidated on write).
+Separate from the CASL owner/editor/viewer checks above, a second gate can require a **verified, non-anonymous account** before specific actions succeed. It lives in `VerifiedIdentityPolicy` (`apps/api/src/modules/users/verified-identity.policy.ts`) and does not use CASL — it reads `email_verified_at` and `is_anonymous` from `users` fresh on every call, because the copilot's WebSocket handshake only ever captures `userId`/`isAnonymous`, so a cached verified claim would go stale for the life of the socket.
 
-| Site                                              | Where the check sits                                           |
-| ------------------------------------------------- | -------------------------------------------------------------- |
-| Share a note with a user (`ShareNoteHandler`)     | Before any lookup                                              |
-| Widen a note's link (`UpdateNoteHandler`)         | After the ownership check, only when the link's exposure grows |
-| Create an MCP API key (`McpKeysService`)          | First statement of `createKey`                                 |
-| Store a BYOK provider key (`ByokService`)         | Before the provider round-trip that validates the key          |
-| Copilot share approval (`ApproveMutationHandler`) | Before the target email is resolved                            |
+### Feature flag: dark by default
 
-The positions differ on purpose:
+The gate is controlled by the `EMAIL_VERIFICATION_GATE` feature flag (`email_verification_gate`), seeded `false` by migration `0037_seed_email_verification_gate_flag.sql`. `VerifiedIdentityPolicy.isVerified()` returns `true` (allow) without checking the user at all when the flag is off, so the gate is fully inert until it is turned on.
 
-- **Widening a link** is gated after the ownership check because a non-owner is refused for lacking the right at all — the truer answer than telling them to verify — and only when the link's _exposure_ grows. Exposure is ranked `closed < anyone-with-link / viewer < anyone-with-link / editor` (`linkExposureRank`, `notes/domain/value-objects/link-exposure.ts`), so opening a link, granting write to an open link, or both in one update need a verified email, while closing or lowering a link never does: an unverified owner must always be able to revoke a link they already exposed.
-- **Copilot share approval** checks before resolving the target email; resolving first would reveal whether that account exists.
+### What it covers
 
-The refusal is `403 EMAIL_NOT_VERIFIED` over HTTP and `AGENT_EMAIL_NOT_VERIFIED` over the copilot socket, both defined once in `@knowtis/shared-types`.
+Five call sites enforce the gate:
 
-Because the policy also refuses anonymous users, turning the flag on removes link-sharing from every anonymous visitor at once. They are never offered a verify prompt — there is no address to verify.
+| Site                                 | Action                                                                          | Notes                                                                                                                                           |
+| ------------------------------------ | ------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ShareNoteHandler.execute`           | `POST /notes/:id/share` — grant a direct permission                             | Refuses before the note is even looked up                                                                                                       |
+| `UpdateNoteHandler.execute`          | `PATCH /notes/:id` — an **owner** widening general access to "anyone with link" | Narrowing back to `restricted` is exempt: an unverified owner must still be able to revoke a link they already exposed                          |
+| `McpKeysService.create`              | Creating an MCP API key                                                         | —                                                                                                                                               |
+| `ByokService.setKey`                 | Storing a BYOK provider key                                                     | —                                                                                                                                               |
+| `ApproveMutationHandler.commitShare` | The copilot's own share mutation, once a proposal is approved                   | Checked **before** resolving the target user by email, so an unverified caller can't use the copilot to probe whether an address has an account |
+
+### Where each site places the check
+
+The five sites do not all gate at the same point, and the differences are
+deliberate. Two rules are in tension: gating **early** keeps an unverified
+caller from learning whether a note or an account exists, while gating **late**
+lets a caller who lacks the right hear that instead of being told to verify for
+something they could never do.
+
+| Site                                 | Position                                                              | Why there                                                                                                                                                                                                                                                                                          |
+| ------------------------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ApproveMutationHandler.commitShare` | First statement, ahead of the note lookup and the target-email lookup | Enumeration resistance, stated in the code. Resolving `targetEmail` first would answer whether that address has an account                                                                                                                                                                         |
+| `ShareNoteHandler.execute`           | First statement, ahead of the note lookup and the permission check    | Same reason. Sharing is gated unconditionally, so the answer needs no note state — and evaluating it first means an unverified caller cannot use this route to probe whether a note id exists. The cost is that an unverified **non-owner** is told to verify rather than that they lack the right |
+| `UpdateNoteHandler.execute`          | After the note lookup and after `isOwner`                             | Not a free choice: only an _owner widening_ general access is gated, so the condition cannot be evaluated until the note and the caller's role are known. Placing it after `isOwner` also gives a non-owner the truer refusal                                                                      |
+| `McpKeysService.create`              | First statement                                                       | Nothing precedes it to leak                                                                                                                                                                                                                                                                        |
+| `ByokService.setKey`                 | After the "BYOK configured" check, before `validateKey`               | The configuration check is about the server, not the caller. The gate must precede `validateKey`, which sends the submitted key to the provider — an unverified caller must not reach an outbound call                                                                                             |
+
+### What is deliberately not gated
+
+`DELETE /notes/:id/share/:userId` (`RevokeAccessHandler`) is **ungated**, even
+though the design spec's §Gated actions listed it alongside `POST
+/notes/:id/share`. Revoking narrows access, and the same reasoning that exempts
+narrowing general access back to `restricted` applies: an unverified owner must
+still be able to take back access they already granted. Gating it would leave an
+unverified owner unable to undo their own sharing.
+
+`POST /auth/resend-verification` (`AuthAccountController.resendVerification`,
+`apps/api/src/modules/auth/auth-account.controller.ts:143-149`) does not go
+through `VerifiedIdentityPolicy` at all, even though it is the email-verification
+flow itself. It refuses an **anonymous** session outright, unconditional on the
+`EMAIL_VERIFICATION_GATE` flag: an anonymous account's address is the synthetic
+`@anonymous.knowtis.local` one, mailing it bounces, and bounces damage a
+freshly-provisioned sending domain's reputation. The refusal is a plain
+`ForbiddenException` (403) with no structured error code — it is not the
+`EMAIL_NOT_VERIFIED` code from the table above, so a client matching on that code
+will not recognize this site's refusal.
+
+### Error codes
+
+- **`EMAIL_NOT_VERIFIED`** (`EMAIL_NOT_VERIFIED_CODE` from `@knowtis/shared-types`) — HTTP `403` from the four non-copilot sites, reached two different ways. `McpKeysService` and `ByokService` throw a `ForbiddenException` directly, via `VerifiedIdentityPolicy.assertVerified()`. `ShareNoteHandler` and `UpdateNoteHandler` instead return a domain `Result` carrying `NoteErrors.verificationRequired()`, which `NOTE_ERROR_STATUS_MAP` turns into the same `403` at the controller boundary. The wire response is identical either way. `isEmailNotVerifiedError()` in `@knowtis/api-client` recognizes it by status + code so the frontend can offer verification instead of surfacing a dead error.
+- **`AGENT_EMAIL_NOT_VERIFIED`** (`AGENT_EMAIL_NOT_VERIFIED_CODE`, also from `@knowtis/shared-types`) — the copilot's own domain error (`AgentErrors.emailNotVerified()`), delivered over the agent WebSocket rather than as an HTTP response, for the `ApproveMutationHandler.commitShare` site. It lives in `shared-types` so the emitter and the frontend's `CODE_TO_KEY` table cannot drift apart under a rename.
+
+### Anonymous users
+
+`isVerified()` refuses an anonymous account too (`!user.isAnonymous`) — there is no address to verify. The API returns the same `EMAIL_NOT_VERIFIED` code for both audiences, so the client is the only place that can tell them apart. `useVerifyEmailGate()` and `VerifyEmailBanner` both check `isAnonymous` before any prompt: a visitor is never shown the verify dialog or the banner, and is pointed at creating an account instead — the only way forward they can actually take.
+
+### Frontend gate handling
+
+- `useVerifyEmailGate()` (`apps/notes/src/hooks/useVerifyEmailGate.ts`) is the single place that decides what a refusal offers: `canVerify` is `false` for an anonymous visitor, `prompt()` opens the verify dialog for an account and toasts `auth:verifyEmail.gateSignUpToast` for a visitor, and `handleError()` recognizes `isEmailNotVerifiedError()` and calls `prompt()`. It returns `true` for either audience — the refusal is answered — and `false` only for a failure that is not this gate's, which the caller then reports itself.
+- `VerifyEmailBanner` and `VerifyEmailDialog` (`apps/notes/src/components/auth/`) render the persistent nudge and the in-place OTP verification flow described in [AUTH.md](AUTH.md#email-verification).
 
 ---
 
@@ -246,13 +295,13 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 
 ### Error Codes
 
-| Code                    | HTTP Status | Description                                                                                |
-| ----------------------- | ----------- | ------------------------------------------------------------------------------------------ |
-| `NOTE_NOT_FOUND`        | 404         | Note does not exist                                                                        |
-| `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`) |
-| `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                               |
-| `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                   |
-| `EMAIL_NOT_VERIFIED`    | 403         | The action needs a verified email (see [Verified Email Gate](#verified-email-gate))        |
+| Code                    | HTTP Status | Description                                                                                       |
+| ----------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
+| `NOTE_NOT_FOUND`        | 404         | Note does not exist                                                                               |
+| `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`)        |
+| `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                                      |
+| `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                          |
+| `EMAIL_NOT_VERIFIED`    | 403         | Verified-identity gate refused the action — see [Verified-Identity Gate](#verified-identity-gate) |
 
 ---
 
@@ -381,12 +430,13 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Domain Layer
 
-| File                                                                     | Description                                 |
-| ------------------------------------------------------------------------ | ------------------------------------------- |
-| `packages/shared/types/src/lib/note.types.ts`                            | Permission/access constants and types       |
-| `apps/api/src/modules/notes/domain/value-objects/permission-level.vo.ts` | PermissionLevel value object                |
-| `apps/api/src/modules/notes/domain/entities/note.entity.ts`              | NoteEntity, NotePermissionEntity interfaces |
-| `apps/api/src/modules/notes/domain/errors/note.errors.ts`                | Error codes and factory functions           |
+| File                                                                     | Description                                             |
+| ------------------------------------------------------------------------ | ------------------------------------------------------- |
+| `packages/shared/types/src/lib/note.types.ts`                            | Permission/access constants and types                   |
+| `apps/api/src/modules/notes/domain/value-objects/permission-level.vo.ts` | PermissionLevel value object                            |
+| `apps/api/src/modules/notes/domain/entities/note.entity.ts`              | NoteEntity, NotePermissionEntity interfaces             |
+| `apps/api/src/modules/notes/domain/errors/note.errors.ts`                | Error codes and factory functions                       |
+| `apps/api/src/modules/users/verified-identity.policy.ts`                 | Verified-identity gate (`isVerified`, `assertVerified`) |
 
 ### Ports (Interfaces)
 
@@ -437,12 +487,15 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Frontend
 
-| File                                              | Description                                            |
-| ------------------------------------------------- | ------------------------------------------------------ |
-| `apps/notes/src/routes/_app/notes/$noteId.tsx`    | Authenticated note editor route                        |
-| `apps/notes/src/routes/s.$token.tsx`              | Public shared note route                               |
-| `apps/notes/src/pages/NoteEditorPage.tsx`         | Editor with access-based UI                            |
-| `apps/notes/src/pages/SharedNotePage.tsx`         | Shared note view                                       |
-| `apps/notes/src/components/notes/ShareDialog.tsx` | Share dialog (general access, permissions)             |
-| `libs/api-client/src/lib/notes.api.ts`            | API client methods                                     |
-| `libs/data-access/notes/src/notes.hooks.ts`       | React Query hooks (`useNotes`, `useNoteByToken`, etc.) |
+| File                                                   | Description                                            |
+| ------------------------------------------------------ | ------------------------------------------------------ |
+| `apps/notes/src/routes/_app/notes/$noteId.tsx`         | Authenticated note editor route                        |
+| `apps/notes/src/routes/s.$token.tsx`                   | Public shared note route                               |
+| `apps/notes/src/pages/NoteEditorPage.tsx`              | Editor with access-based UI                            |
+| `apps/notes/src/pages/SharedNotePage.tsx`              | Shared note view                                       |
+| `apps/notes/src/components/notes/ShareDialog.tsx`      | Share dialog (general access, permissions)             |
+| `libs/api-client/src/lib/notes.api.ts`                 | API client methods                                     |
+| `libs/data-access/notes/src/notes.hooks.ts`            | React Query hooks (`useNotes`, `useNoteByToken`, etc.) |
+| `apps/notes/src/hooks/useVerifyEmailGate.ts`           | Decides who is offered the verify-email dialog         |
+| `apps/notes/src/components/auth/VerifyEmailBanner.tsx` | Persistent unverified-email nudge                      |
+| `apps/notes/src/components/auth/VerifyEmailDialog.tsx` | In-place OTP verification dialog                       |
