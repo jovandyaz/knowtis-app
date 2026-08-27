@@ -44,18 +44,23 @@ export interface VerifyEmailCodeFormOptions {
   startHeld?: boolean;
 }
 
-export interface VerifyEmailCodeForm {
+/** The resend half on its own, for a screen that has no code to enter. */
+export interface ResendControls {
+  onResend: () => void;
+  isResending: boolean;
+  /** True while the cooldown runs, and for good once the throttle locks out. */
+  resendHeld: boolean;
+  resendLabel: string;
+  resendNotice: ResendNotice | undefined;
+}
+
+export interface VerifyEmailCodeForm extends ResendControls {
   code: string;
   onCodeChange: (code: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   isVerifying: boolean;
   canSubmit: boolean;
   errorMessage: string | undefined;
-  onResend: () => void;
-  isResending: boolean;
-  resendHeld: boolean;
-  resendLabel: string;
-  resendNotice: ResendNotice | undefined;
 }
 
 /** True only for the per-code cooldown, whose window this client can name. */

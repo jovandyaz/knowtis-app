@@ -10,13 +10,13 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-  FormField,
-  LoadingButton,
 } from '@knowtis/design-system';
 
-import { OtpCodeInput } from './OtpCodeInput';
+import { OtpCodeField } from './OtpCodeField';
+import { ResendCodeButton } from './ResendCodeButton';
 import { ResendNoticeAlert } from './ResendNoticeAlert';
 import { useVerifyEmailCodeForm } from './useVerifyEmailCodeForm';
+import { VerifyCodeSubmitButton } from './VerifyCodeSubmitButton';
 
 const CODE_FIELD_ID = 'verification-code';
 
@@ -51,53 +51,18 @@ export function VerifyCodeStep({
 
       <form onSubmit={form.onSubmit} noValidate>
         <CardContent className="space-y-4">
-          <FormField
-            id={CODE_FIELD_ID}
-            label={t('verifyEmail.codeLabel')}
-            error={form.errorMessage}
-          >
-            <OtpCodeInput
-              id={CODE_FIELD_ID}
-              value={form.code}
-              onChange={form.onCodeChange}
-              autoFocus
-              aria-invalid={!!form.errorMessage}
-              aria-describedby={
-                form.errorMessage ? `${CODE_FIELD_ID}-error` : undefined
-              }
-            />
-          </FormField>
-
+          <OtpCodeField id={CODE_FIELD_ID} form={form} />
           <ResendNoticeAlert notice={form.resendNotice} />
         </CardContent>
 
         <CardFooter className="flex flex-col gap-3">
-          <LoadingButton
-            type="submit"
-            className="h-11 w-full sm:h-10"
-            loading={form.isVerifying}
-            loadingText={t('verifyEmail.verifyingCode')}
-            disabled={!form.canSubmit}
-          >
-            {t('verifyEmail.verifyCodeButton')}
-          </LoadingButton>
+          <VerifyCodeSubmitButton form={form} className="w-full" />
 
           <p className="text-center text-sm text-(--muted-foreground)">
             {t('verifyEmail.checkSpam')}
           </p>
 
-          <LoadingButton
-            type="button"
-            variant="outline"
-            className="h-11 w-full sm:h-10"
-            loading={form.isResending}
-            loadingText={t('verifyEmail.sendingButton')}
-            disabled={form.resendHeld}
-            onClick={form.onResend}
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            {form.resendLabel}
-          </LoadingButton>
+          <ResendCodeButton resend={form} className="w-full" />
 
           <Button
             type="button"

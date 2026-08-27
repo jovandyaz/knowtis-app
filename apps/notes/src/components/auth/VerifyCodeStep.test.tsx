@@ -64,6 +64,26 @@ describe('VerifyCodeStep', () => {
     expect(api.verifyEmailCode).toHaveBeenCalledWith(CODE);
   });
 
+  it('points assistive tech at the reason the code was refused', async () => {
+    const api = createAuthApiMock({
+      verifyEmailCode: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError('Invalid code', 400, 'INVALID_VERIFICATION_CODE')
+        ),
+    });
+    renderStep(api);
+
+    await userEvent.type(screen.getByLabelText(CODE_LABEL), CODE);
+    await userEvent.click(screen.getByRole('button', { name: VERIFY_BUTTON }));
+
+    await waitFor(() =>
+      expect(screen.getByLabelText(CODE_LABEL)).toHaveAccessibleDescription(
+        "That code isn't right. Check the email and try again."
+      )
+    );
+  });
+
   it('tells the user how many digits to look for', () => {
     renderStep();
 

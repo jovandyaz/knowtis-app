@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { Mail } from 'lucide-react';
 import { toast } from 'sonner';
 
 import {
@@ -13,13 +12,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  FormField,
-  LoadingButton,
 } from '@knowtis/design-system';
 
-import { OtpCodeInput } from './OtpCodeInput';
+import { OtpCodeField } from './OtpCodeField';
+import { ResendCodeButton } from './ResendCodeButton';
 import { ResendNoticeAlert } from './ResendNoticeAlert';
 import { useVerifyEmailCodeForm } from './useVerifyEmailCodeForm';
+import { VerifyCodeSubmitButton } from './VerifyCodeSubmitButton';
 
 const CODE_FIELD_ID = 'verify-email-dialog-code';
 
@@ -49,48 +48,12 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
       </DialogHeader>
 
       <form onSubmit={form.onSubmit} noValidate className="space-y-4">
-        <FormField
-          id={CODE_FIELD_ID}
-          label={t('verifyEmail.codeLabel')}
-          error={form.errorMessage}
-        >
-          <OtpCodeInput
-            id={CODE_FIELD_ID}
-            value={form.code}
-            onChange={form.onCodeChange}
-            autoFocus
-            aria-invalid={!!form.errorMessage}
-            aria-describedby={
-              form.errorMessage ? `${CODE_FIELD_ID}-error` : undefined
-            }
-          />
-        </FormField>
-
+        <OtpCodeField id={CODE_FIELD_ID} form={form} />
         <ResendNoticeAlert notice={form.resendNotice} />
 
         <DialogFooter>
-          <LoadingButton
-            type="button"
-            variant="outline"
-            className="h-11 sm:h-10"
-            loading={form.isResending}
-            loadingText={t('verifyEmail.sendingButton')}
-            disabled={form.resendHeld}
-            onClick={form.onResend}
-          >
-            <Mail className="mr-2 h-4 w-4" />
-            {form.resendLabel}
-          </LoadingButton>
-
-          <LoadingButton
-            type="submit"
-            className="h-11 sm:h-10"
-            loading={form.isVerifying}
-            loadingText={t('verifyEmail.verifyingCode')}
-            disabled={!form.canSubmit}
-          >
-            {t('verifyEmail.verifyCodeButton')}
-          </LoadingButton>
+          <ResendCodeButton resend={form} />
+          <VerifyCodeSubmitButton form={form} />
         </DialogFooter>
       </form>
     </>
