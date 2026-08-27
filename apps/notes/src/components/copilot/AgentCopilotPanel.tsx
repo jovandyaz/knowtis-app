@@ -5,7 +5,6 @@ import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useAgentStore } from '@/stores/agent.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 
-import type { AgentErrorPayload } from '@knowtis/api-client';
 import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
 import {
@@ -19,15 +18,13 @@ import { AgentProposalCard } from './AgentProposalCard';
 import { CopilotModelPicker } from './CopilotModelPicker';
 import { RetryBanner } from './RetryBanner';
 
-// The agent store holds a failed turn's error for the life of the session, so a
-// component-scoped guard would offer again on every remount of this panel.
-let answeredError: AgentErrorPayload | null = null;
-
 export function AgentCopilotPanel() {
   const { t } = useTranslation('notes');
   const messages = useAgentStore((s) => s.messages);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
+  const answeredError = useAgentStore((s) => s.answeredError);
+  const markErrorAnswered = useAgentStore((s) => s.markErrorAnswered);
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
@@ -47,13 +44,20 @@ export function AgentCopilotPanel() {
 
   // Retrying a share the account is not allowed to make would only fail again,
   // so the one useful answer to this code is the verification dialog itself.
+  // The store outlives this panel, and so must the record of having offered.
   useEffect(() => {
     if (!error || !isVerificationGate || answeredError === error) {
       return;
     }
-    answeredError = error;
+    markErrorAnswered();
     promptVerification();
-  }, [error, isVerificationGate, promptVerification]);
+  }, [
+    error,
+    isVerificationGate,
+    answeredError,
+    markErrorAnswered,
+    promptVerification,
+  ]);
 
   return (
     <div className="flex h-full flex-col min-h-0">

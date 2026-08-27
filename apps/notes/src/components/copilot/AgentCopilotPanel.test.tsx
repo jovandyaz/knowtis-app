@@ -48,7 +48,12 @@ function failWith(code: string) {
 describe('AgentCopilotPanel', () => {
   beforeEach(() => {
     useVerifyEmailStore.setState({ isOpen: false });
-    useAgentStore.setState({ status: 'idle', error: null, messages: [] });
+    useAgentStore.setState({
+      status: 'idle',
+      error: null,
+      answeredError: null,
+      messages: [],
+    });
   });
 
   it('offers verification when the copilot share is refused for an unverified account', () => {
