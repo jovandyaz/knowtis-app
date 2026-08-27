@@ -36,7 +36,7 @@ const GATE_ERROR = new ApiClientError(
 );
 
 function renderGate(user?: AuthUserProfile) {
-  const wrapper = createAuthWrapper(createAuthApiMock(), { user });
+  const wrapper = createAuthWrapper(createAuthApiMock(), user ? { user } : {});
   return renderHook(() => useVerifyEmailGate(), {
     wrapper: ({ children }: { children: ReactNode }) => wrapper({ children }),
   });

@@ -8,13 +8,13 @@ import { applyServerFieldErrors } from '@/auth';
 import { getAnonymousUserId } from '@/auth/anonymous-session';
 import { VerifyCodeStep } from '@/components/auth/VerifyCodeStep';
 import { ROUTES } from '@/config';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
 import type { RegisterFormData } from '@jovandyaz/auth-react';
 import {
   createRegisterSchema,
-  useRateLimitState,
   useRegister,
 } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';

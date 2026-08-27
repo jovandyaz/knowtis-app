@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 import {
   useMutation,
@@ -149,26 +149,6 @@ export function useResendVerification(): UseMutationResult<void, Error, void> {
   return useMutation({
     mutationFn: () => api.resendVerification(),
   });
-}
-
-export function useRateLimitState() {
-  const [rateLimited, setRateLimited] = useState(false);
-
-  const checkRateLimit = (error: unknown): boolean => {
-    if (
-      error instanceof Error &&
-      'status' in error &&
-      (error as Error & { status: number }).status === 429
-    ) {
-      setRateLimited(true);
-      return true;
-    }
-    return false;
-  };
-
-  const resetRateLimit = () => setRateLimited(false);
-
-  return { rateLimited, checkRateLimit, resetRateLimit };
 }
 
 /**

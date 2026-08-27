@@ -2,13 +2,13 @@ import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCountdown } from '@/hooks/useCountdown';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import {
   AuthErrorCodes,
   VERIFICATION_CODE_LENGTH,
   VERIFICATION_RESEND_COOLDOWN_MS,
 } from '@jovandyaz/auth';
 import {
-  useRateLimitState,
   useResendVerification,
   useVerifyEmailCode,
 } from '@jovandyaz/auth-react';

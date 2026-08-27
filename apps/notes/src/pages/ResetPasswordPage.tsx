@@ -6,13 +6,13 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { applyServerFieldErrors } from '@/auth';
 import { ROUTES } from '@/config';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
 import type { ResetPasswordFormData } from '@jovandyaz/auth-react';
 import {
   createResetPasswordSchema,
-  useRateLimitState,
   useResetPassword,
 } from '@jovandyaz/auth-react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';

@@ -37,7 +37,6 @@ export {
   useVerifyEmail,
   useVerifyEmailCode,
   useResendVerification,
-  useRateLimitState,
   useAuth,
   useAuthUser,
   useIsAuthenticated,
