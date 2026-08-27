@@ -18,8 +18,8 @@ export class VerifiedIdentityPolicy {
   /**
    * True when the gate is off (dark) or the user is a verified, non-anonymous account.
    *
-   * Read from the database per call: the copilot's WebSocket handshake captures only
-   * `userId`/`isAnonymous`, so a cached claim goes stale for the life of the socket.
+   * Takes an id rather than a loaded user because `ApproveMutationHandler` reaches
+   * it from the agent socket, whose handshake carries only `userId`/`isAnonymous`.
    */
   async isVerified(userId: string): Promise<boolean> {
     if (
