@@ -21,6 +21,12 @@ const UNVERIFIED: AuthUserProfile = {
   emailVerifiedAt: null,
 };
 
+const OTHER_ACCOUNT: AuthUserProfile = {
+  ...UNVERIFIED,
+  id: 'user-2',
+  email: 'sam@knowtis.app',
+};
+
 beforeAll(async () => {
   await i18n.changeLanguage('en');
 });
@@ -42,16 +48,18 @@ function ProfileProbe() {
   return <span>{data ? PROFILE_RESOLVED : PROFILE_PENDING}</span>;
 }
 
-function renderBanner(getProfile: () => Promise<AuthUserProfile>) {
+function renderBanner(
+  getProfile: () => Promise<AuthUserProfile>,
+  user: AuthUserProfile = UNVERIFIED
+) {
   const api = createAuthApiMock({ getProfile: vi.fn(getProfile) });
-  render(
+  return render(
     <>
       <VerifyEmailBanner />
       <ProfileProbe />
     </>,
-    { wrapper: createAuthWrapper(api, { user: UNVERIFIED }) }
+    { wrapper: createAuthWrapper(api, { user }) }
   );
-  return api;
 }
 
 function resolving(profile: AuthUserProfile) {
@@ -79,6 +87,18 @@ describe('VerifyEmailBanner', () => {
 
     expect(await screen.findByText(PROFILE_RESOLVED)).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('comes back for the next identity signed in on the same tab', async () => {
+    const first = renderBanner(resolving(UNVERIFIED));
+    await screen.findByRole('status');
+    await userEvent.click(screen.getByRole('button', { name: DISMISS }));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    first.unmount();
+
+    renderBanner(resolving(OTHER_ACCOUNT), OTHER_ACCOUNT);
+
+    expect(await screen.findByRole('status')).toBeInTheDocument();
   });
 
   it('never spends a profile fetch on an anonymous visitor', () => {
@@ -115,7 +135,7 @@ describe('VerifyEmailBanner', () => {
   });
 
   it('stays dismissed for the rest of the session', async () => {
-    sessionStorage.setItem(DISMISSED_KEY, 'true');
+    sessionStorage.setItem(DISMISSED_KEY, UNVERIFIED.id);
     renderBanner(resolving(UNVERIFIED));
 
     expect(await screen.findByText(PROFILE_RESOLVED)).toBeInTheDocument();

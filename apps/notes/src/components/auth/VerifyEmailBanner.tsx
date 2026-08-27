@@ -8,19 +8,21 @@ import { MailWarning, X } from 'lucide-react';
 import { Button } from '@knowtis/design-system';
 
 const DISMISSED_KEY = 'verify-email-banner-dismissed';
-const DISMISSED_VALUE = 'true';
 
-function readDismissed(): boolean {
+// `sessionStorage` outlives the logout reload that clears everything else, so a
+// bare "dismissed" flag would hide the banner from the next account to sign in
+// on this tab. Remembering *who* dismissed it keeps the answer per identity.
+function readDismissedUserId(): string | null {
   try {
-    return sessionStorage.getItem(DISMISSED_KEY) === DISMISSED_VALUE;
+    return sessionStorage.getItem(DISMISSED_KEY);
   } catch {
-    return false;
+    return null;
   }
 }
 
-function rememberDismissed(): void {
+function rememberDismissed(userId: string): void {
   try {
-    sessionStorage.setItem(DISMISSED_KEY, DISMISSED_VALUE);
+    sessionStorage.setItem(DISMISSED_KEY, userId);
   } catch {
     return;
   }
@@ -33,20 +35,18 @@ function UnverifiedEmailBanner() {
   const { t } = useTranslation('auth');
   const { data: profile } = useProfile();
   const openVerifyDialog = useVerifyEmailStore((s) => s.open);
-  const [dismissed, setDismissed] = useState(readDismissed);
+  const [dismissedUserId, setDismissedUserId] = useState(readDismissedUserId);
 
   // Tri-state: `undefined` is "no profile has resolved yet", not "unverified".
   // A `!emailVerifiedAt` test here would flash the banner at a verified user
   // on every boot.
-  const unverified = profile?.emailVerifiedAt === null;
-
-  if (!unverified || dismissed) {
+  if (profile?.emailVerifiedAt !== null || dismissedUserId === profile.id) {
     return null;
   }
 
   const handleDismiss = () => {
-    rememberDismissed();
-    setDismissed(true);
+    rememberDismissed(profile.id);
+    setDismissedUserId(profile.id);
   };
 
   return (
