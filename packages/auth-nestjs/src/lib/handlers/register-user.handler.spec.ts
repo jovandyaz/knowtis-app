@@ -11,6 +11,7 @@ import type { SessionRepository } from '../ports/session.repository';
 import type { TokenService } from '../ports/token.service';
 import type { UserEntity, UserRepository } from '../ports/user.repository';
 import { TokenHasher } from '../services/token-hasher.service';
+import { VerificationEmailIssuer } from '../services/verification-email-issuer.service';
 import { RegisterUserHandler } from './register-user.handler';
 
 const USER_ID = '00000000-0000-4000-8000-0000000000a1';
@@ -86,9 +87,8 @@ describe('RegisterUserHandler', () => {
       passwordHasher,
       tokenService,
       sessionRepository,
-      emailService,
-      tokenRepository,
       tokenHasher,
+      new VerificationEmailIssuer(tokenRepository, emailService, tokenHasher),
       { emit: vi.fn() } as unknown as EventEmitter2
     );
   });
