@@ -2866,6 +2866,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('stops continuing to the next step once the turn token budget is spent', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
       fullStream: (async function* () {
@@ -2889,6 +2890,14 @@ describe('AiSdkAgentOrchestrator', () => {
     );
     expect(done?.stopReason).toBe('token_budget');
     expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.token_budget_reached',
+        spentTurnTokens: 5000,
+        maxTurnTokens: 5000,
+      })
+    );
+    warnSpy.mockRestore();
   });
 
   // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.

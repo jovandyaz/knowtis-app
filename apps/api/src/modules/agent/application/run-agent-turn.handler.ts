@@ -608,6 +608,16 @@ export class RunAgentTurnHandler {
     };
 
     let assistantText = '';
+    let persisted = false;
+    const persistTurnOnce = async (
+      sources: readonly AgentSource[]
+    ): Promise<void> => {
+      if (!persistence || persisted) {
+        return;
+      }
+      persisted = true;
+      await this.persistTurn(persistence, assistantText, sources);
+    };
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
@@ -640,17 +650,13 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
-            if (persistence) {
-              await this.persistTurn(persistence, assistantText, []);
-            }
+            await persistTurnOnce([]);
             callbacks.onError(event.error);
             return;
           case 'aborted':
             await this.recordUsageSafe(input.userId, ctx, event.usage);
             ctx.reconciled = true;
-            if (persistence) {
-              await this.persistTurn(persistence, assistantText, []);
-            }
+            await persistTurnOnce([]);
             return;
           case 'done': {
             let costUsd: number;
@@ -677,9 +683,7 @@ export class RunAgentTurnHandler {
             if (isByok) {
               void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
-            if (persistence) {
-              await this.persistTurn(persistence, assistantText, event.sources);
-            }
+            await persistTurnOnce(event.sources);
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -696,10 +700,8 @@ export class RunAgentTurnHandler {
             return;
           }
           case 'proposal':
-            if (persistence) {
-              // Proposal events carry no sources; the post-approval turn re-derives them.
-              await this.persistTurn(persistence, assistantText, []);
-            }
+            // Proposal events carry no sources; the post-approval turn re-derives them.
+            await persistTurnOnce([]);
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
@@ -736,9 +738,7 @@ export class RunAgentTurnHandler {
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
-      if (persistence) {
-        await this.persistTurn(persistence, assistantText, []);
-      }
+      await persistTurnOnce([]);
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(input.userId, ctx, {

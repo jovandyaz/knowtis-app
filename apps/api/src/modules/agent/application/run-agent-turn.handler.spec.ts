@@ -3447,4 +3447,49 @@ describe('RunAgentTurnHandler', () => {
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onProposal).not.toHaveBeenCalled();
   });
+
+  it('persists the turn exactly once when the proposal store write fails after the case-level persist', async () => {
+    const { rateLimit, config } = makeDeps({});
+    const proposal = makeProposal('66666666-6666-6666-6666-666666666666');
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const pendingStore = {
+      save: vi.fn().mockRejectedValue(new Error('redis down')),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'create a note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
+  });
 });
