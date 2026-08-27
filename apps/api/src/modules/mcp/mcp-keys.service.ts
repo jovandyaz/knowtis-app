@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { and, eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
+import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
 import { MCP_SCOPES, type McpScopeCsv } from './mcp-token';
 
 interface KeyParts {
@@ -20,7 +21,8 @@ export class McpKeysService {
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   /**
@@ -37,7 +39,9 @@ export class McpKeysService {
   }
 
   /**
-   * SHA-256 hash of a key (hex encoded).
+   * SHA-256 hash of a key (hex encoded). Deliberately keyless, unlike the shared
+   * TokenHasher: MCP keys carry 32 random bytes, so there is nothing to
+   * precompute, and rekeying would orphan live keys users hold in their clients.
    */
   static hashKey(key: string): string {
     return createHash('sha256').update(key).digest('hex');
@@ -71,6 +75,11 @@ export class McpKeysService {
     name: string,
     scopes: McpScopeCsv = MCP_SCOPES.READ
   ) {
+    await this.verifiedIdentity.assertVerified(
+      userId,
+      'Verify your email address to create API keys'
+    );
+
     const env =
       this.configService.get('NODE_ENV') === 'production' ? 'live' : 'test';
     const { fullKey, prefix, hash } = McpKeysService.generateKeyParts(env);
