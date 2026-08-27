@@ -1,5 +1,4 @@
 import {
-  cloneElement,
   createContext,
   useCallback,
   useContext,
@@ -7,22 +6,20 @@ import {
   useId,
   useRef,
   useState,
-  type ButtonHTMLAttributes,
   type HTMLAttributes,
   type KeyboardEvent,
-  type ReactElement,
   type ReactNode,
 } from 'react';
 import { createPortal } from 'react-dom';
 
 import { X } from 'lucide-react';
 
+import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { cn } from '../utils';
 
 interface DialogContextValue {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  triggerRef: React.RefObject<HTMLButtonElement | null>;
   titleId: string;
   descriptionId: string;
   titlePresent: boolean;
@@ -31,7 +28,52 @@ interface DialogContextValue {
   setDescriptionPresent: (present: boolean) => void;
 }
 
-const openDialogStack: symbol[] = [];
+// Stacked dialogs share one lock: a per-dialog capture reads 'hidden' off the
+// dialog underneath, so closing bottom-first would restore 'hidden' for good.
+let scrollLockCount = 0;
+let overflowBeforeLock = '';
+
+function lockBodyScroll() {
+  if (scrollLockCount === 0) {
+    overflowBeforeLock = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  scrollLockCount += 1;
+}
+
+function releaseBodyScroll() {
+  scrollLockCount -= 1;
+  if (scrollLockCount === 0) {
+    document.body.style.overflow = overflowBeforeLock;
+  }
+}
+
+const DIALOG_ROLE_SELECTOR = '[role="dialog"]';
+
+// A control that disables itself mid-action blurs to <body>, and a re-render can
+// detach or hide it, so what held focus at open time may be unable to take it
+// back — and `.focus()` on such a control silently strands focus on <body>.
+function canTakeFocusBack(element: HTMLElement): boolean {
+  if (!element.isConnected || element.hasAttribute('disabled')) {
+    return false;
+  }
+  return (
+    typeof element.checkVisibility !== 'function' || element.checkVisibility()
+  );
+}
+
+function focusTargetAfterClose(previous: Element | null): HTMLElement | null {
+  if (
+    previous instanceof HTMLElement &&
+    previous !== document.body &&
+    canTakeFocusBack(previous)
+  ) {
+    return previous;
+  }
+  const stillOpen =
+    document.querySelectorAll<HTMLElement>(DIALOG_ROLE_SELECTOR);
+  return stillOpen[stillOpen.length - 1] ?? null;
+}
 
 const DialogContext = createContext<DialogContextValue | null>(null);
 
@@ -53,7 +95,6 @@ function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const [titlePresent, setTitlePresent] = useState(false);
   const [descriptionPresent, setDescriptionPresent] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
   const descriptionId = useId();
 
@@ -75,7 +116,6 @@ function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
       value={{
         open,
         onOpenChange: handleOpenChange,
-        triggerRef,
         titleId,
         descriptionId,
         titlePresent,
@@ -86,49 +126,6 @@ function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
     >
       {children}
     </DialogContext.Provider>
-  );
-}
-
-interface DialogTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
-  children: ReactNode;
-  asChild?: boolean;
-}
-
-function DialogTrigger({
-  children,
-  className,
-  asChild,
-  ...props
-}: DialogTriggerProps) {
-  const { onOpenChange, triggerRef } = useDialogContext();
-
-  if (
-    asChild &&
-    typeof children === 'object' &&
-    children !== null &&
-    'type' in children
-  ) {
-    const child = children as ReactElement<{
-      onClick?: (e: React.MouseEvent) => void;
-    }>;
-    return cloneElement(child, {
-      onClick: (e: React.MouseEvent) => {
-        onOpenChange(true);
-        child.props.onClick?.(e);
-      },
-    });
-  }
-
-  return (
-    <button
-      ref={triggerRef}
-      type="button"
-      onClick={() => onOpenChange(true)}
-      className={cn('cursor-pointer', className)}
-      {...props}
-    >
-      {children}
-    </button>
   );
 }
 
@@ -186,7 +183,6 @@ function DialogContent({
   const {
     open,
     onOpenChange,
-    triggerRef,
     titleId,
     descriptionId,
     titlePresent,
@@ -194,7 +190,8 @@ function DialogContent({
   } = useDialogContext();
   const [contentNode, setContentNode] = useState<HTMLDivElement | null>(null);
   const previousActiveElement = useRef<Element | null>(null);
-  const escapeToken = useRef(Symbol('dialog-escape'));
+
+  useEscapeDismiss(open, () => onOpenChange(false));
 
   const getFocusableElements = useCallback(() => {
     if (!contentNode) {
@@ -232,50 +229,18 @@ function DialogContent({
   );
 
   useEffect(() => {
-    if (!open) {
-      return;
-    }
-    const token = escapeToken.current;
-    openDialogStack.push(token);
-    const handleEscape = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape') {
-        return;
-      }
-      if (openDialogStack[openDialogStack.length - 1] !== token) {
-        return;
-      }
-      e.preventDefault();
-      onOpenChange(false);
-    };
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('keydown', handleEscape);
-      const index = openDialogStack.indexOf(token);
-      if (index !== -1) {
-        openDialogStack.splice(index, 1);
-      }
-    };
-  }, [open, onOpenChange]);
-
-  useEffect(() => {
     if (open) {
       previousActiveElement.current = document.activeElement;
 
-      const originalOverflow = document.body.style.overflow;
-      document.body.style.overflow = 'hidden';
-      const trigger = triggerRef.current;
+      lockBodyScroll();
 
       return () => {
-        document.body.style.overflow = originalOverflow;
-        if (previousActiveElement.current instanceof HTMLElement) {
-          previousActiveElement.current.focus();
-        } else if (trigger) {
-          trigger.focus();
-        }
+        releaseBodyScroll();
+        focusTargetAfterClose(previousActiveElement.current)?.focus();
       };
     }
     return;
-  }, [open, triggerRef]);
+  }, [open]);
 
   // DialogPortal renders null until its own mount effect runs, so the content node
   // does not exist yet on the commit that opens the dialog — hence keying off the node.
@@ -409,7 +374,6 @@ function DialogDescription({
 
 export {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogFooter,

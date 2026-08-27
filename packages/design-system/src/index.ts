@@ -16,7 +16,6 @@ export {
   badgeVariants,
   type BadgeProps,
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogFooter,
@@ -103,6 +102,8 @@ export {
   TabsList,
   TabsTrigger,
 } from './components';
+export { useEscapeDismiss } from './hooks/useEscapeDismiss';
+
 export { THEMES, type Theme } from './constants/theme';
 
 export { cn } from './utils';
