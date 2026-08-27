@@ -1,15 +1,19 @@
 export const auth = {
   verifyEmail: {
+    subject: 'Verifica tu email — Knowtis',
     title: 'Verifica tu email',
-    preview: 'Verifica tu dirección de email para comenzar',
+    preview: 'Tu código de verificación es {{code}}',
     greeting: 'Hola {{name}},',
     instruction:
-      '¡Gracias por registrarte en Knowtis! Por favor verifica tu dirección de email haciendo clic en el botón de abajo.',
+      '¡Gracias por registrarte en Knowtis! Ingresa este código para verificar tu dirección de email.',
+    codeIntro: 'Código de verificación',
+    codeExpiry: 'Este código expira en 15 minutos.',
     buttonText: 'Verificar email',
     disclaimer: 'Si no creaste una cuenta, puedes ignorar este mensaje.',
     expiry: 'Este enlace expira en 24 horas.',
   },
   resetPassword: {
+    subject: 'Restablece tu contraseña — Knowtis',
     title: 'Restablecer contraseña',
     preview: 'Restablece tu contraseña de Knowtis',
     greeting: 'Hola {{name}},',

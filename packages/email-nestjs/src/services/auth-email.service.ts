@@ -2,7 +2,10 @@ import { EmailService } from '@jovandyaz/auth-nestjs';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import {
   DEFAULT_LOCALE,
+  emailSubject,
   renderEmail,
+  SUPPORTED_LOCALES,
+  type Locale,
   type TemplateName,
   type TemplatePropsMap,
 } from '@jovandyaz/email';
@@ -13,10 +16,15 @@ import {
   AUTH_PATH_RESET_PASSWORD,
   AUTH_PATH_VERIFY_EMAIL,
   EMAIL_ERROR_SEND_FAILED,
-  EMAIL_SUBJECT_RESET_PASSWORD,
-  EMAIL_SUBJECT_VERIFY,
 } from '../constants';
 import type { EmailSender } from '../ports/email-sender.port';
+
+function resolveLocale(locale?: string): Locale {
+  return (
+    SUPPORTED_LOCALES.find((supported) => supported === locale) ??
+    DEFAULT_LOCALE
+  );
+}
 
 @Injectable()
 export class AuthEmailService implements EmailService {
@@ -30,38 +38,35 @@ export class AuthEmailService implements EmailService {
 
   async sendEmailVerification(
     email: string,
-    token: string,
-    name: string
+    payload: { token: string; code: string },
+    name: string,
+    locale?: string
   ): Promise<Result<void, AuthDomainError>> {
-    return this.sendAuthEmail('verify-email', email, EMAIL_SUBJECT_VERIFY, {
+    return this.sendAuthEmail('verify-email', email, {
       name,
-      verificationUrl: `${this.frontendUrl}${AUTH_PATH_VERIFY_EMAIL}?token=${token}`,
-      locale: DEFAULT_LOCALE,
+      verificationUrl: `${this.frontendUrl}${AUTH_PATH_VERIFY_EMAIL}?token=${payload.token}`,
+      code: payload.code,
+      locale: resolveLocale(locale),
     });
   }
 
   async sendPasswordReset(
     email: string,
     token: string,
-    name: string
+    name: string,
+    locale?: string
   ): Promise<Result<void, AuthDomainError>> {
-    return this.sendAuthEmail(
-      'reset-password',
-      email,
-      EMAIL_SUBJECT_RESET_PASSWORD,
-      {
-        name,
-        resetUrl: `${this.frontendUrl}${AUTH_PATH_RESET_PASSWORD}?token=${token}`,
-        locale: DEFAULT_LOCALE,
-      }
-    );
+    return this.sendAuthEmail('reset-password', email, {
+      name,
+      resetUrl: `${this.frontendUrl}${AUTH_PATH_RESET_PASSWORD}?token=${token}`,
+      locale: resolveLocale(locale),
+    });
   }
 
   private async sendAuthEmail<T extends TemplateName>(
     template: T,
     email: string,
-    subject: string,
-    props: TemplatePropsMap[T]
+    props: TemplatePropsMap[T] & { locale: Locale }
   ): Promise<Result<void, AuthDomainError>> {
     let html: string;
     try {
@@ -76,7 +81,7 @@ export class AuthEmailService implements EmailService {
 
     const result = await this.sender.send({
       to: email,
-      subject,
+      subject: emailSubject(template, props.locale),
       html,
       from: this.defaults.from,
     });
