@@ -2822,4 +2822,43 @@ describe('AiSdkAgentOrchestrator', () => {
       usage: { inputTokens: 10, outputTokens: 2, model: MODEL },
     });
   });
+
+  it('logs agent.tool.error and counts tool activity in turn health', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'tool-call',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+        };
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+          error: new Error('boom'),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'done anyway' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        toolName: 'getNote',
+        userId: 'u1',
+      })
+    );
+    const healthCall = logSpy.mock.calls
+      .map((c) => c[0] as Record<string, unknown>)
+      .find((c) => c?.event === 'agent.turn.health');
+    expect(healthCall).toMatchObject({ toolCalls: 1, toolErrors: 1 });
+  });
 });

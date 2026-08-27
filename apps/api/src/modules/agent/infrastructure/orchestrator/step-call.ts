@@ -252,6 +252,19 @@ export async function* runStepCall(
             yield { type: 'chunk', text: part.text };
           }
           break;
+        case 'tool-call':
+          health.toolCalls += 1;
+          break;
+        case 'tool-error':
+          health.toolErrors += 1;
+          logger.warn({
+            event: 'agent.tool.error',
+            userId: input.userId,
+            model,
+            toolName: part.toolName,
+            error: String(part.error).slice(0, 300),
+          });
+          break;
         case 'finish':
           health.finishReason = part.finishReason;
           break;

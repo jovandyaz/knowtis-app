@@ -5,6 +5,8 @@ export interface StreamHealth {
   maxGapMs: number;
   parts: number;
   textDeltas: number;
+  toolCalls: number;
+  toolErrors: number;
   finishReason: string | null;
   upstream: string | null;
 }
@@ -15,6 +17,8 @@ export function createHealth(): StreamHealth {
     maxGapMs: 0,
     parts: 0,
     textDeltas: 0,
+    toolCalls: 0,
+    toolErrors: 0,
     finishReason: null,
     upstream: null,
   };
@@ -81,6 +85,8 @@ export function emitTurnHealth(
     maxGapMs: health.maxGapMs,
     parts: health.parts,
     textDeltas: health.textDeltas,
+    toolCalls: health.toolCalls,
+    toolErrors: health.toolErrors,
     finishReason: health.finishReason,
     upstream: health.upstream,
     modelsUsed: [...modelsUsed],
