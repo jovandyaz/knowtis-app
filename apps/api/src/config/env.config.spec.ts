@@ -277,7 +277,6 @@ describe('env.config BACKOFFICE_URL', () => {
     const env = validateEnv({
       ...prodEnv,
       BACKOFFICE_URL: 'https://backoffice.knowtis.app',
-      TOKEN_HASH_KEY: 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=',
     });
     expect(env.BACKOFFICE_URL).toBe('https://backoffice.knowtis.app');
   });
@@ -288,7 +287,6 @@ describe('env.config BACKOFFICE_URL', () => {
 });
 
 describe('env.config TOKEN_HASH_KEY', () => {
-  const KEY = TOKEN_HASH_KEY;
   const prodEnv = {
     ...validEnv,
     NODE_ENV: 'production',
@@ -302,9 +300,7 @@ describe('env.config TOKEN_HASH_KEY', () => {
   });
 
   it('accepts a production boot with a 32-byte base64 TOKEN_HASH_KEY', () => {
-    expect(
-      validateEnv({ ...prodEnv, TOKEN_HASH_KEY: KEY }).TOKEN_HASH_KEY
-    ).toBe(KEY);
+    expect(validateEnv(prodEnv).TOKEN_HASH_KEY).toBe(TOKEN_HASH_KEY);
   });
 
   it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
@@ -322,9 +318,6 @@ describe('env.config TOKEN_HASH_KEY', () => {
     ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
   });
 
-  // AuthModule getOrThrows this key while it is still being constructed, so a
-  // dev boot without it dies there rather than here. Validation has to refuse
-  // the same configuration the module refuses.
   it('rejects a boot without TOKEN_HASH_KEY outside production too', () => {
     const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = validEnv;
 
