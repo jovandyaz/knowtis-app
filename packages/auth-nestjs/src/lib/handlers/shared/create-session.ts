@@ -1,14 +1,17 @@
-import { hashToken, SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth/server';
-import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
 import { randomUUID } from 'node:crypto';
+
+import { SESSION_EXPIRY_MS, UserId } from '@jovandyaz/auth/server';
+import type { AuthDomainError, AuthTokens } from '@jovandyaz/auth/server';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { SessionRepository } from '../../ports/session.repository';
 import type { TokenService } from '../../ports/token.service';
+import { TokenHasher } from '../../services/token-hasher.service';
 
 interface CreateSessionDeps {
   tokenService: TokenService;
   sessionRepository: SessionRepository;
+  tokenHasher: TokenHasher;
 }
 
 interface CreateSessionParams {
@@ -40,7 +43,7 @@ export async function createSessionWithTokens(
   const sessionResult = await deps.sessionRepository.create({
     userId: params.userId,
     familyId,
-    refreshTokenHash: hashToken(tokens.refreshToken),
+    refreshTokenHash: deps.tokenHasher.hash(tokens.refreshToken),
     userAgent: params.userAgent,
     ipAddress: params.ipAddress,
     expiresAt: new Date(Date.now() + SESSION_EXPIRY_MS),

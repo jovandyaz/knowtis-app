@@ -9,7 +9,11 @@ import type {
 } from '../ports/session.repository';
 import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 import { RefreshTokensHandler } from './refresh-tokens.handler';
+
+const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+const tokenHasher = new TokenHasher(TEST_KEY);
 
 function createSession(overrides: Partial<SessionEntity> = {}): SessionEntity {
   return {
@@ -65,6 +69,7 @@ function createHandler(deps: ReturnType<typeof createDeps>) {
     deps.userRepository,
     deps.tokenService,
     deps.sessionRepository,
+    tokenHasher,
     deps.eventEmitter
   );
 }
