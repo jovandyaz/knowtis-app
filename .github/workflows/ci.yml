@@ -47,6 +47,9 @@ jobs:
       # Throwaway values: specs validate env shape only, they never issue real tokens.
       JWT_SECRET: ci-jwt-secret-0000000000000000000000
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret-1111111111111111
+      # Required in every environment, so the db specs that boot ConfigModule
+      # need it here — there is no .env on a runner to supply it. 32 bytes base64.
+      TOKEN_HASH_KEY: Y2ktdGhyb3dhd2F5LXRva2VuLWhhc2gta2V5LTMyYiE=
     outputs:
       api_affected: ${{ steps.check-api.outputs.affected }}
       notes_affected: ${{ steps.check-notes.outputs.affected }}
