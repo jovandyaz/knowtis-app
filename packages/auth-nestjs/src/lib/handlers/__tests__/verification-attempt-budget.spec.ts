@@ -234,6 +234,54 @@ describe('verification attempt budget', () => {
     }
   });
 
+  it('points a spent budget at the moment a resend becomes possible', async () => {
+    await exhaustAttempts();
+    vi.advanceTimersByTime(20_000);
+
+    const error = (
+      await verifyCodeHandler.execute({
+        userId: USER_ID,
+        code: emailed.code,
+        familyId: FAMILY_ID,
+      })
+    )._unsafeUnwrapErr();
+
+    expect(error.code).toBe(AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS);
+    expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 20_000);
+  });
+
+  it('reports no wait once a resend is already possible', async () => {
+    await exhaustAttempts();
+    vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
+
+    const error = (
+      await verifyCodeHandler.execute({
+        userId: USER_ID,
+        code: emailed.code,
+        familyId: FAMILY_ID,
+      })
+    )._unsafeUnwrapErr();
+
+    expect(error.retryAfterMs).toBe(0);
+  });
+
+  it('quotes a wait the resend endpoint actually honours', async () => {
+    await exhaustAttempts();
+    const error = (
+      await verifyCodeHandler.execute({
+        userId: USER_ID,
+        code: emailed.code,
+        familyId: FAMILY_ID,
+      })
+    )._unsafeUnwrapErr();
+
+    vi.advanceTimersByTime(error.retryAfterMs ?? 0);
+
+    expect((await resendHandler.execute({ userId: USER_ID })).isOk()).toBe(
+      true
+    );
+  });
+
   it('leaves the emailed link usable after the code budget is spent', async () => {
     await exhaustAttempts();
 

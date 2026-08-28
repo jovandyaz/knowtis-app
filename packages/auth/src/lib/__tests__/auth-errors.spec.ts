@@ -36,4 +36,27 @@ describe('AuthErrors', () => {
     expect(error.code).toBe(AuthErrorCodes.INTERNAL_ERROR);
     expect(error.message).toBe('something broke');
   });
+
+  it('resendCooldown carries the wait it was given, not a fixed window', () => {
+    expect(AuthErrors.resendCooldown(15_000)).toEqual({
+      code: AuthErrorCodes.RESEND_COOLDOWN,
+      message: expect.any(String),
+      retryAfterMs: 15_000,
+    });
+    expect(AuthErrors.resendCooldown(42_000).retryAfterMs).toBe(42_000);
+  });
+
+  it('tooManyVerificationAttempts carries the wait it was given', () => {
+    expect(AuthErrors.tooManyVerificationAttempts(31_000)).toEqual({
+      code: AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
+      message: expect.any(String),
+      retryAfterMs: 31_000,
+    });
+    expect(AuthErrors.tooManyVerificationAttempts(0).retryAfterMs).toBe(0);
+  });
+
+  it('leaves retryAfterMs off errors that carry no retry hint', () => {
+    expect(AuthErrors.invalidCredentials().retryAfterMs).toBeUndefined();
+    expect(AuthErrors.emailAlreadyVerified().retryAfterMs).toBeUndefined();
+  });
 });

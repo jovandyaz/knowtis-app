@@ -2,7 +2,7 @@ import { AuthErrors } from '@jovandyaz/auth/server';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { err, ok } from 'neverthrow';
 
-import { unwrapOrThrow } from '../result-to-response';
+import { RetryAfterHttpException, unwrapOrThrow } from '../result-to-response';
 
 describe('unwrapOrThrow', () => {
   it('should return the value when result is Ok', () => {
@@ -122,7 +122,7 @@ describe('unwrapOrThrow', () => {
   });
 
   it('should throw HttpException with TOO_MANY_REQUESTS for RESEND_COOLDOWN', () => {
-    const result = err(AuthErrors.resendCooldown());
+    const result = err(AuthErrors.resendCooldown(15_000));
 
     expect(() => unwrapOrThrow(result)).toThrow(HttpException);
     try {
@@ -136,7 +136,7 @@ describe('unwrapOrThrow', () => {
   });
 
   it('should throw HttpException with TOO_MANY_REQUESTS for TOO_MANY_VERIFICATION_ATTEMPTS', () => {
-    const result = err(AuthErrors.tooManyVerificationAttempts());
+    const result = err(AuthErrors.tooManyVerificationAttempts(31_000));
 
     expect(() => unwrapOrThrow(result)).toThrow(HttpException);
     try {
@@ -176,6 +176,53 @@ describe('unwrapOrThrow', () => {
       >;
       expect(response['code']).toBe('INVALID_VERIFICATION_CODE');
     }
+  });
+
+  describe('Retry-After', () => {
+    function retryAfterSecondsOf(retryAfterMs: number): number {
+      try {
+        unwrapOrThrow(err(AuthErrors.resendCooldown(retryAfterMs)));
+      } catch (e) {
+        expect(e).toBeInstanceOf(RetryAfterHttpException);
+        return (e as RetryAfterHttpException).retryAfterSeconds;
+      }
+      throw new Error('expected unwrapOrThrow to throw');
+    }
+
+    it('converts the remaining wait to whole seconds', () => {
+      expect(retryAfterSecondsOf(15_000)).toBe(15);
+      expect(retryAfterSecondsOf(42_000)).toBe(42);
+    });
+
+    it('rounds up so the client never retries a moment too early', () => {
+      expect(retryAfterSecondsOf(15_001)).toBe(16);
+      expect(retryAfterSecondsOf(59_999)).toBe(60);
+    });
+
+    it('never quotes zero seconds, which would read as "retry now"', () => {
+      expect(retryAfterSecondsOf(0)).toBe(1);
+      expect(retryAfterSecondsOf(400)).toBe(1);
+    });
+
+    it('carries the wait on a spent attempt budget too', () => {
+      try {
+        unwrapOrThrow(err(AuthErrors.tooManyVerificationAttempts(31_000)));
+        expect.unreachable('expected unwrapOrThrow to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(RetryAfterHttpException);
+        expect((e as RetryAfterHttpException).retryAfterSeconds).toBe(31);
+      }
+    });
+
+    it('leaves errors without a retry hint as plain HttpExceptions', () => {
+      try {
+        unwrapOrThrow(err(AuthErrors.invalidVerificationCode()));
+        expect.unreachable('expected unwrapOrThrow to throw');
+      } catch (e) {
+        expect(e).toBeInstanceOf(HttpException);
+        expect(e).not.toBeInstanceOf(RetryAfterHttpException);
+      }
+    });
   });
 
   it('should default to BAD_REQUEST for unknown error codes', () => {

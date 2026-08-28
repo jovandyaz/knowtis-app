@@ -62,3 +62,5 @@ export {
   VERIFICATION_RESEND_COOLDOWN_MS,
   RESET_TOKEN_EXPIRY_MS,
 } from './lib/constants';
+
+export { msUntilResendAllowed } from './lib/verification/resend-cooldown';

@@ -87,7 +87,10 @@ export { ResendVerificationHandler } from './lib/handlers/resend-verification.ha
 export type { ResendVerificationInput } from './lib/handlers/resend-verification.handler';
 
 // HTTP utilities
-export { unwrapOrThrow } from './lib/http/result-to-response';
+export {
+  RetryAfterHttpException,
+  unwrapOrThrow,
+} from './lib/http/result-to-response';
 
 // Logging
 export { AuthAuditListener } from './lib/logging/auth-audit.listener';

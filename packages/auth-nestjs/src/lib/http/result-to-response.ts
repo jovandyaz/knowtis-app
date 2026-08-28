@@ -27,19 +27,49 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [AuthErrorCodes.EMAIL_SEND_FAILED]: HttpStatus.INTERNAL_SERVER_ERROR,
 };
 
+const MS_PER_SECOND = 1000;
+/** RFC 9110 §10.2.3 delay-seconds is `1*DIGIT`, and 0 would read as "retry
+ *  now", so a wait shorter than a second still reports as one. */
+const MIN_RETRY_AFTER_SECONDS = 1;
+
+/** Carries the whole-second wait that belongs in this refusal's `Retry-After`
+ *  header. An exception filter is what turns it into the header. */
+export class RetryAfterHttpException extends HttpException {
+  constructor(
+    response: Record<string, unknown>,
+    status: HttpStatus,
+    readonly retryAfterSeconds: number
+  ) {
+    super(response, status);
+  }
+}
+
+function toRetryAfterSeconds(retryAfterMs: number): number {
+  return Math.max(
+    MIN_RETRY_AFTER_SECONDS,
+    Math.ceil(retryAfterMs / MS_PER_SECOND)
+  );
+}
+
 export function unwrapOrThrow<T>(result: Result<T, AuthDomainError>): T {
   if (result.isErr()) {
     const status =
       ERROR_STATUS_MAP[result.error.code] ?? HttpStatus.BAD_REQUEST;
-    throw new HttpException(
-      {
-        statusCode: status,
-        error: result.error.code,
-        code: result.error.code,
-        message: result.error.message,
-      },
-      status
-    );
+    const body = {
+      statusCode: status,
+      error: result.error.code,
+      code: result.error.code,
+      message: result.error.message,
+    };
+    const { retryAfterMs } = result.error;
+    if (retryAfterMs !== undefined) {
+      throw new RetryAfterHttpException(
+        body,
+        status,
+        toRetryAfterSeconds(retryAfterMs)
+      );
+    }
+    throw new HttpException(body, status);
   }
   return result.value;
 }
