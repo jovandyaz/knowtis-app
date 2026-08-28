@@ -215,6 +215,33 @@ describe('VerifyEmailDialog', () => {
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
   });
 
+  it('leaves the countdown to speak alone when the cooldown refuses', async () => {
+    vi.useFakeTimers();
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'Wait',
+            429,
+            AuthErrorCodes.RESEND_COOLDOWN,
+            undefined,
+            SERVER_WAIT_MS
+          )
+        ),
+    });
+    renderDialog(api);
+    openDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+    await flushPromises();
+
+    expect(screen.getByRole('button', { name: 'Resend in 5s' })).toBeDisabled();
+    // A notice here can only contradict the button, which already names the
+    // wait; `ResendNoticeAlert` is the sole `alert` in this subtree.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('holds the resend for the wait the attempt cap named', async () => {
     vi.useFakeTimers();
     const api = createAuthApiMock({

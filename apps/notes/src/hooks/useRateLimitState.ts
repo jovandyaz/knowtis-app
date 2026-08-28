@@ -11,14 +11,18 @@ export interface RateLimitState {
   resetRateLimit: () => void;
 }
 
+/** True when the API itself throttled the call, with no state kept about it. */
+export function isRateLimited(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) && error.status === TOO_MANY_REQUESTS
+  );
+}
+
 export function useRateLimitState(): RateLimitState {
   const [rateLimited, setRateLimited] = useState(false);
 
   const checkRateLimit = useCallback((error: unknown): boolean => {
-    if (
-      !ApiClientError.isApiClientError(error) ||
-      error.status !== TOO_MANY_REQUESTS
-    ) {
+    if (!isRateLimited(error)) {
       return false;
     }
     setRateLimited(true);

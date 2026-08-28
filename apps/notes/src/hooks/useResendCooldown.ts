@@ -10,16 +10,12 @@ import { useResendVerification } from '@jovandyaz/auth-react';
 import { ApiClientError, retryAfterMsOf } from '@knowtis/api-client';
 
 import { useCountdown } from './useCountdown';
-import { useRateLimitState } from './useRateLimitState';
+import { isRateLimited } from './useRateLimitState';
 
-const RATE_LIMIT_KEY = 'verifyEmail.rateLimitToast';
 const RESEND_LOCKED_OUT_KEY = 'verifyEmail.resendLockedOut';
 const RESENT_FAILED_KEY = 'verifyEmail.resentFailed';
 
-type ResendErrorKey =
-  | typeof RATE_LIMIT_KEY
-  | typeof RESEND_LOCKED_OUT_KEY
-  | typeof RESENT_FAILED_KEY;
+type ResendErrorKey = typeof RESEND_LOCKED_OUT_KEY | typeof RESENT_FAILED_KEY;
 
 export interface ResendNotice {
   tone: 'success' | 'error';
@@ -58,16 +54,6 @@ function isResendCooldown(error: unknown): boolean {
   );
 }
 
-function resendErrorKey(
-  lockedOut: boolean,
-  rateLimited: boolean
-): ResendErrorKey {
-  if (lockedOut) {
-    return RESEND_LOCKED_OUT_KEY;
-  }
-  return rateLimited ? RATE_LIMIT_KEY : RESENT_FAILED_KEY;
-}
-
 /**
  * The one resend affordance: the server cooldown it counts down, the endpoint
  * throttle it stops offering against, and what to say about either.
@@ -78,23 +64,23 @@ export function useResendCooldown({
 }: ResendCooldownOptions = {}): ResendCooldown {
   const { t } = useTranslation('auth');
   const resendVerification = useResendVerification();
-  const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
   const { secondsLeft, restart } = useCountdown(
     VERIFICATION_RESEND_COOLDOWN_MS,
     { startHeld }
   );
   const [lockedOut, setLockedOut] = useState(false);
+  const [errorKey, setErrorKey] = useState<ResendErrorKey | undefined>();
 
   const cooldownHeld = secondsLeft > 0;
 
   const resendNotice: ResendNotice | undefined = resendVerification.isSuccess
     ? { tone: 'success', message: t('verifyEmail.resentSuccess') }
-    : resendVerification.isError
-      ? { tone: 'error', message: t(resendErrorKey(lockedOut, rateLimited)) }
+    : errorKey
+      ? { tone: 'error', message: t(errorKey) }
       : undefined;
 
   const onResend = () => {
-    resetRateLimit();
+    setErrorKey(undefined);
     resendVerification.mutate(undefined, {
       onSuccess: () => {
         onSent?.();
@@ -104,15 +90,18 @@ export function useResendCooldown({
       // refusal has to hold the resend or three clicks lock the user out.
       // Its own Retry-After names minutes rather than seconds, so the throttle
       // withdraws the offer instead of rendering a countdown nobody waits out.
+      // The cooldown keeps no notice: the button counts its wait down already.
       onError: (error) => {
-        if (!checkRateLimit(error)) {
-          return;
-        }
         if (isResendCooldown(error)) {
           restart(retryAfterMsOf(error));
-        } else {
-          setLockedOut(true);
+          return;
         }
+        if (isRateLimited(error)) {
+          setLockedOut(true);
+          setErrorKey(RESEND_LOCKED_OUT_KEY);
+          return;
+        }
+        setErrorKey(RESENT_FAILED_KEY);
       },
     });
   };
