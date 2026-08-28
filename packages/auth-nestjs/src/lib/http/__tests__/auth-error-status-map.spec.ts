@@ -30,10 +30,4 @@ describe('AUTH_ERROR_STATUS_MAP', () => {
       [AuthErrorCodes.EMAIL_SEND_FAILED]: HttpStatus.INTERNAL_SERVER_ERROR,
     });
   });
-
-  it('maps every code AuthErrors can produce, so none silently falls back', () => {
-    expect(Object.keys(AUTH_ERROR_STATUS_MAP).sort()).toEqual(
-      Object.values(AuthErrorCodes).sort()
-    );
-  });
 });

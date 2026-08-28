@@ -1,8 +1,9 @@
 import { AuthErrorCodes } from '@jovandyaz/auth/server';
+import type { AuthErrorCode } from '@jovandyaz/auth/server';
 import { HttpStatus } from '@nestjs/common';
 
 /** HTTP status the API answers with for each auth domain error code. */
-export const AUTH_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
+export const AUTH_ERROR_STATUS_MAP: Record<AuthErrorCode, HttpStatus> = {
   [AuthErrorCodes.INVALID_EMAIL]: HttpStatus.BAD_REQUEST,
   [AuthErrorCodes.INVALID_PASSWORD]: HttpStatus.BAD_REQUEST,
   [AuthErrorCodes.INVALID_USER_ID]: HttpStatus.BAD_REQUEST,
