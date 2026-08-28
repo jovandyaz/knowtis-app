@@ -15,4 +15,4 @@ export const EMAIL_ERROR_SEND_FAILED = 'EMAIL_SEND_FAILED' as const;
 
 // Defaults
 export const DEFAULT_FRONTEND_URL = 'http://localhost:4200';
-export const DEFAULT_FROM_ADDRESS = 'Knowtis <noreply@knowtis.com>';
+export const DEFAULT_FROM_ADDRESS = 'Knowtis <noreply@mail.knowtis.app>';

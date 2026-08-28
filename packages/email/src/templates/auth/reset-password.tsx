@@ -9,7 +9,7 @@ interface ResetPasswordProps {
 
 export const ResetPasswordEmail = ({
   name = 'John Doe',
-  resetUrl = 'https://knowtis.com/reset-password?token=preview-token',
+  resetUrl = 'https://knowtis.app/reset-password?token=preview-token',
   locale = DEFAULT_LOCALE,
 }: ResetPasswordProps) => (
   <AuthEmailTemplate
