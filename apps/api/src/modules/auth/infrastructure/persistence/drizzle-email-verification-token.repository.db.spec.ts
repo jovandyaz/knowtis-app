@@ -85,6 +85,29 @@ describe.runIf(DB_AVAILABLE)(
       expect(await repo.findByUserId(DB_USER_ID)).toBeNull();
     });
 
+    it('returns the newest row from findByUserId when multiple rows exist', async () => {
+      await db.insert(emailVerificationTokens).values({
+        userId: DB_USER_ID,
+        tokenHash: 'older-link-hash',
+        expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+        codeHash: 'older-code-hash',
+        codeExpiresAt: new Date('2026-08-26T12:05:00.000Z'),
+        createdAt: new Date('2026-08-26T10:00:00.000Z'),
+      });
+      await db.insert(emailVerificationTokens).values({
+        userId: DB_USER_ID,
+        tokenHash: 'newer-link-hash',
+        expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+        codeHash: 'newer-code-hash',
+        codeExpiresAt: new Date('2026-08-26T12:05:00.000Z'),
+        createdAt: new Date('2026-08-26T11:00:00.000Z'),
+      });
+
+      const found = await repo.findByUserId(DB_USER_ID);
+
+      expect(found?.codeHash).toBe('newer-code-hash');
+    });
+
     it('increments attempts across successive sequential calls and returns the new value', async () => {
       const created = await repo.create({
         userId: DB_USER_ID,
