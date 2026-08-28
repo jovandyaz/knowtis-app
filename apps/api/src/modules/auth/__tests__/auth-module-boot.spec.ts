@@ -10,7 +10,6 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test } from '@nestjs/testing';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { I18nService } from 'nestjs-i18n';
 import { ok } from 'neverthrow';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -18,8 +17,6 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DATABASE_CONNECTION } from '../../../database';
 
 const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
-const THROTTLE_TTL_MS = 60_000;
-const THROTTLE_LIMIT = 60;
 
 /**
  * `packages/auth-nestjs` and `packages/email-nestjs` each resolve their own
@@ -87,11 +84,6 @@ describe('AuthModule bootstrap', () => {
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
         EventEmitterModule.forRoot(),
-        // AppModule registers this globally; without it the verification
-        // endpoints' UserScopedThrottlerGuard cannot resolve and boot fails.
-        ThrottlerModule.forRoot([
-          { ttl: THROTTLE_TTL_MS, limit: THROTTLE_LIMIT },
-        ]),
         StubInfrastructureModule,
         AuthModule,
       ],
