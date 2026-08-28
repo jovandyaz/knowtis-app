@@ -28,8 +28,8 @@ const ERROR_STATUS_MAP: Record<string, HttpStatus> = {
 };
 
 const MS_PER_SECOND = 1000;
-/** RFC 9110 §10.2.3 delay-seconds is `1*DIGIT`, and 0 would read as "retry
- *  now", so a wait shorter than a second still reports as one. */
+// 0 is valid delay-seconds but reads as "retry now", which would send the
+// client straight back into the refusal, so a sub-second wait reports as one.
 const MIN_RETRY_AFTER_SECONDS = 1;
 
 /** Carries the whole-second wait that belongs in this refusal's `Retry-After`
