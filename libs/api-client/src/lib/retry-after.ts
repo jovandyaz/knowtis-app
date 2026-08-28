@@ -1,3 +1,5 @@
+// Deliberately not shared with the API's own constant: `Headers.get` matches
+// case-insensitively, so this is a lookup key, not the wire value the server sends.
 export const RETRY_AFTER_HEADER = 'Retry-After';
 
 const MS_PER_SECOND = 1000;
