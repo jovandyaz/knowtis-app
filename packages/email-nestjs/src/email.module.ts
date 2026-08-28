@@ -14,31 +14,6 @@ import { AuthEmailService } from './services/auth-email.service';
 
 @Module({})
 export class EmailModule {
-  static forRoot(options: EmailModuleOptions): DynamicModule {
-    return {
-      module: EmailModule,
-      global: true,
-      providers: [
-        { provide: EMAIL_MODULE_OPTIONS, useValue: options },
-        {
-          provide: EMAIL_SENDER,
-          useFactory: () => EmailModule.createSender(options),
-        },
-        {
-          provide: AuthEmailService,
-          useFactory: (sender: EmailSender, configService: ConfigService) =>
-            new AuthEmailService(
-              sender,
-              options.defaults,
-              configService.get('FRONTEND_URL', DEFAULT_FRONTEND_URL)
-            ),
-          inject: [EMAIL_SENDER, ConfigService],
-        },
-      ],
-      exports: [EMAIL_SENDER, AuthEmailService],
-    };
-  }
-
   /* eslint-disable @typescript-eslint/no-explicit-any -- NestJS DI requires any[] for useFactory/inject */
   static forRootAsync(options: {
     useFactory: (
@@ -90,6 +65,6 @@ export class EmailModule {
       }
       return new ResendSender(options.resend.apiKey);
     }
-    return new ConsoleSender();
+    return new ConsoleSender(options.environment);
   }
 }

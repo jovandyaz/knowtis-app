@@ -5,7 +5,7 @@ NestJS module for sending emails in Knowtis. Wraps `@jovandyaz/email` templates 
 ## Features
 
 - **Provider-based architecture** - Swap between Resend (production) and Console (development) senders
-- **Global module** - Register once with `forRoot` / `forRootAsync`, inject anywhere
+- **Global module** - Register once with `forRootAsync`, inject anywhere
 - **Ports & Adapters** - `EmailSender` port with `ResendSender` and `ConsoleSender` adapters
 - **Result pattern** - Uses `neverthrow` for typed error handling on send operations
 - **Auth integration** - `AuthEmailService` implements the auth module's `EmailService` port
