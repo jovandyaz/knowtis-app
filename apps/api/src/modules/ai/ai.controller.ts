@@ -56,7 +56,6 @@ import {
 import { AICompleteDto } from './dto/ai.dto';
 import { SetAIConfigDto } from './dto/set-ai-config.dto';
 import { VoiceNoteDto } from './dto/voice-note.dto';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import {
   FallbackChainService,
   type ProviderHealth,
@@ -412,12 +411,7 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(
-    JwtAuthGuard,
-    FeatureFlagGuard,
-    RolesGuard,
-    UserScopedThrottlerGuard
-  )
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
   @Throttle({ default: { limit: 30, ttl: 60000 } })
@@ -461,12 +455,7 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(
-    JwtAuthGuard,
-    FeatureFlagGuard,
-    RolesGuard,
-    UserScopedThrottlerGuard
-  )
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
   @Throttle({ default: { limit: 10, ttl: 60000 } })
@@ -508,12 +497,7 @@ export class AIController {
     status: 403,
     description: 'Forbidden — admin role required',
   })
-  @UseGuards(
-    JwtAuthGuard,
-    FeatureFlagGuard,
-    RolesGuard,
-    UserScopedThrottlerGuard
-  )
+  @UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
   @RequireFeatureFlag('ai_enabled')
   @Roles('admin')
   @Throttle({ default: { limit: 10, ttl: 60000 } })

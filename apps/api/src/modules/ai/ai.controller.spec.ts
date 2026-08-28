@@ -10,7 +10,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { RolesGuard } from '../authorization/roles.guard';
 import { AIController } from './ai.controller';
 import { InvalidAIConfigError } from './application/services/ai-config.service';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 function createContext(role: string | undefined, handler: object) {
   return {
@@ -33,16 +32,6 @@ describe('AIController config role gating', () => {
     const guards: unknown[] = Reflect.getMetadata('__guards__', handler) ?? [];
 
     expect(guards).toContain(RolesGuard);
-  });
-
-  it.each([
-    ['getConfig', AIController.prototype.getConfig],
-    ['setConfig', AIController.prototype.setConfig],
-    ['resetConfig', AIController.prototype.resetConfig],
-  ])('applies user-scoped throttling to %s', (_name, handler) => {
-    const guards: unknown[] = Reflect.getMetadata('__guards__', handler) ?? [];
-
-    expect(guards).toContain(UserScopedThrottlerGuard);
   });
 
   it('rejects a non-admin user reading the AI config', () => {

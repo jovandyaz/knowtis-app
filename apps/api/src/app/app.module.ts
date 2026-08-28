@@ -3,10 +3,8 @@ import * as path from 'path';
 import { EmailModule } from '@jovandyaz/email-nestjs';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import {
   AcceptLanguageResolver,
   HeaderResolver,
@@ -18,6 +16,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv } from '../config';
 import type { EnvConfig } from '../config/env.config';
+import { ThrottlingModule } from '../core/throttling/throttling.module';
 import { DatabaseModule } from '../database';
 import { AdminModule } from '../modules/admin/admin.module';
 import { AgentModule } from '../modules/agent/agent.module';
@@ -44,12 +43,7 @@ import { AppService } from './app.service';
       validate: validateEnv,
       envFilePath: ['apps/api/.env.local', 'apps/api/.env'],
     }),
-    ThrottlerModule.forRoot([
-      {
-        ttl: 60000,
-        limit: 60,
-      },
-    ]),
+    ThrottlingModule,
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
     I18nModule.forRoot({
@@ -90,12 +84,6 @@ import { AppService } from './app.service';
     ObservabilityModule,
   ],
   controllers: [AppController],
-  providers: [
-    AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
-  ],
+  providers: [AppService],
 })
 export class AppModule {}

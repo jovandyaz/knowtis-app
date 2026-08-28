@@ -20,7 +20,6 @@ import { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { ByokService } from './application/services/byok.service';
 import { ProviderParamDto } from './dto/provider-param.dto';
 import { SetProviderKeyDto } from './dto/set-provider-key.dto';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 @UseGuards(JwtAuthGuard, FeatureFlagGuard)
 @RequireFeatureFlag('ai_enabled')
@@ -38,7 +37,6 @@ export class AiKeysController {
   }
 
   @Put(':provider')
-  @UseGuards(UserScopedThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async set(
     @CurrentUser() user: RequestUser,

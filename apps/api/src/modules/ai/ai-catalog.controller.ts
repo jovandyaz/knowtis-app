@@ -38,7 +38,6 @@ import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
 import { UpdateCatalogCopyDto } from './dto/update-catalog-copy.dto';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 
 const AI_DISABLED = 'AI feature is disabled';
 const UNKNOWN_MODEL = 'Unknown model id';
@@ -53,7 +52,7 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 
 @ApiTags('AI')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard, UserScopedThrottlerGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeatureFlag('ai_enabled')
 @Roles('admin')
 @Controller('ai/catalog')
