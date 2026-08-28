@@ -4,7 +4,8 @@ const MS_PER_SECOND = 1000;
 
 export interface Countdown {
   secondsLeft: number;
-  restart: () => void;
+  /** Restarts at `durationMs`, or at the wait the caller names instead. */
+  restart: (durationMs?: number) => void;
 }
 
 export interface CountdownOptions {
@@ -40,10 +41,14 @@ export function useCountdown(
     return () => clearInterval(intervalId);
   }, [deadline]);
 
-  const restart = useCallback(() => {
-    setDeadline(Date.now() + durationMs);
-    setRemainingMs(durationMs);
-  }, [durationMs]);
+  const restart = useCallback(
+    (overrideMs?: number) => {
+      const nextMs = overrideMs ?? durationMs;
+      setDeadline(Date.now() + nextMs);
+      setRemainingMs(nextMs);
+    },
+    [durationMs]
+  );
 
   return { secondsLeft: Math.ceil(remainingMs / MS_PER_SECOND), restart };
 }

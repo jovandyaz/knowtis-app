@@ -8,7 +8,7 @@ import {
 import { AuthErrorCodes, VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth';
 import { useVerifyEmailCode } from '@jovandyaz/auth-react';
 
-import { ApiClientError } from '@knowtis/api-client';
+import { ApiClientError, retryAfterMsOf } from '@knowtis/api-client';
 
 const CODE_INVALID_KEY = 'verifyEmail.codeInvalid';
 const ATTEMPTS_SPENT_KEY = 'verifyEmail.codeTooManyAttempts';
@@ -98,8 +98,15 @@ export function useVerifyEmailCodeForm({
     verifyCode.mutate(code, {
       onSuccess: onVerified,
       onError: (error) => {
-        if (verifyErrorKey(error) === ATTEMPTS_SPENT_KEY) {
-          setAttemptsSpent(true);
+        if (verifyErrorKey(error) !== ATTEMPTS_SPENT_KEY) {
+          return;
+        }
+        setAttemptsSpent(true);
+        // A resend is the only way out of a spent budget, so this refusal
+        // quotes the wait until one is possible rather than its own.
+        const wait = retryAfterMsOf(error);
+        if (wait !== undefined) {
+          resend.hold(wait);
         }
       },
     });

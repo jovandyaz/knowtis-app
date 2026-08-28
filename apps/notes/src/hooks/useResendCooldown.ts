@@ -7,7 +7,7 @@ import {
 } from '@jovandyaz/auth';
 import { useResendVerification } from '@jovandyaz/auth-react';
 
-import { ApiClientError } from '@knowtis/api-client';
+import { ApiClientError, retryAfterMsOf } from '@knowtis/api-client';
 
 import { useCountdown } from './useCountdown';
 import { useRateLimitState } from './useRateLimitState';
@@ -39,6 +39,8 @@ export interface ResendControls {
 export interface ResendCooldown extends ResendControls {
   /** 0 once the cooldown has elapsed, even while the throttle still holds. */
   secondsLeft: number;
+  /** Holds the resend for a wait another call's refusal named. */
+  hold: (ms: number) => void;
 }
 
 export interface ResendCooldownOptions {
@@ -100,15 +102,14 @@ export function useResendCooldown({
       },
       // The 3-per-15-minutes throttle counts refused requests too, so a
       // refusal has to hold the resend or three clicks lock the user out.
-      // Only the cooldown has a window worth counting down: re-arming 60s
-      // against the throttle would just invite the click that spends the
-      // next slot.
+      // Its own Retry-After names minutes rather than seconds, so the throttle
+      // withdraws the offer instead of rendering a countdown nobody waits out.
       onError: (error) => {
         if (!checkRateLimit(error)) {
           return;
         }
         if (isResendCooldown(error)) {
-          restart();
+          restart(retryAfterMsOf(error));
         } else {
           setLockedOut(true);
         }
@@ -125,5 +126,6 @@ export function useResendCooldown({
       : t('verifyEmail.resendButton'),
     resendNotice,
     secondsLeft,
+    hold: restart,
   };
 }

@@ -88,6 +88,20 @@ describe('useCountdown', () => {
     expect(result.current.secondsLeft).toBe(59);
   });
 
+  it('restarts at a wait the caller names instead of the full duration', () => {
+    const { result } = renderHook(() => useCountdown(ONE_MINUTE_MS));
+
+    act(() => {
+      result.current.restart(5_000);
+    });
+    expect(result.current.secondsLeft).toBe(5);
+
+    act(() => {
+      vi.advanceTimersByTime(5_000);
+    });
+    expect(result.current.secondsLeft).toBe(0);
+  });
+
   it('starts free when no cooldown is running yet, and holds once restarted', () => {
     const { result } = renderHook(() =>
       useCountdown(ONE_MINUTE_MS, { startHeld: false })

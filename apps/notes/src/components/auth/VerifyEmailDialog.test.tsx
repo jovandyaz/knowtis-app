@@ -37,6 +37,7 @@ const CODE = '123456';
 const CODE_LABEL = 'Verification code';
 const VERIFY_BUTTON = 'Verify email';
 const RESEND_BUTTON = 'Resend verification email';
+const SERVER_WAIT_MS = 5_000;
 const LINK_NOTICE =
   "We didn't open that link — verifying that way signs you out on every device, including this one. Use the code from the same email to finish here instead.";
 
@@ -182,6 +183,99 @@ describe('VerifyEmailDialog', () => {
     act(() => {
       vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
     });
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
+  });
+
+  it('holds the resend only as long as the server said, not a full window', async () => {
+    vi.useFakeTimers();
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'Wait',
+            429,
+            AuthErrorCodes.RESEND_COOLDOWN,
+            undefined,
+            SERVER_WAIT_MS
+          )
+        ),
+    });
+    renderDialog(api);
+    openDialog();
+
+    fireEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+    await flushPromises();
+
+    expect(screen.getByRole('button', { name: 'Resend in 5s' })).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(SERVER_WAIT_MS);
+    });
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
+  });
+
+  it('holds the resend for the wait the attempt cap named', async () => {
+    vi.useFakeTimers();
+    const api = createAuthApiMock({
+      verifyEmailCode: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'Too many attempts',
+            429,
+            AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
+            undefined,
+            SERVER_WAIT_MS
+          )
+        ),
+    });
+    renderDialog(api);
+    openDialog();
+
+    fireEvent.change(screen.getByLabelText(CODE_LABEL), {
+      target: { value: CODE },
+    });
+    fireEvent.click(screen.getByRole('button', { name: VERIFY_BUTTON }));
+    await flushPromises();
+
+    expect(
+      screen.getByText(
+        'Too many wrong tries. You can request a new code in 5s.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Resend in 5s' })).toBeDisabled();
+
+    act(() => {
+      vi.advanceTimersByTime(SERVER_WAIT_MS);
+    });
+    expect(
+      screen.getByText('Too many wrong tries. Request a new code to continue.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
+  });
+
+  it('leaves the resend free when the attempt cap named no wait', async () => {
+    const api = createAuthApiMock({
+      verifyEmailCode: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'Too many attempts',
+            429,
+            AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS
+          )
+        ),
+    });
+    renderDialog(api);
+    openDialog();
+
+    await userEvent.type(screen.getByLabelText(CODE_LABEL), CODE);
+    await userEvent.click(screen.getByRole('button', { name: VERIFY_BUTTON }));
+
+    await screen.findByText(
+      'Too many wrong tries. Request a new code to continue.'
+    );
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
   });
 
