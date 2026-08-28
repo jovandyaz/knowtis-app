@@ -17,31 +17,30 @@ describe('AuthAuditListener', () => {
     vi.restoreAllMocks();
   });
 
-  it('audits an email verification announced by a handler', async () => {
-    const logSpy = vi
-      .spyOn(Logger.prototype, 'log')
-      .mockImplementation(() => undefined);
-    const moduleRef = await Test.createTestingModule({
-      imports: [EventEmitterModule.forRoot()],
-      providers: [AuthAuditListener],
-    }).compile();
-    await moduleRef.init();
+  it.each(Object.values(EMAIL_VERIFICATION_SOURCE))(
+    'audits an email verification announced by a %s handler',
+    async (source) => {
+      const logSpy = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const moduleRef = await Test.createTestingModule({
+        imports: [EventEmitterModule.forRoot()],
+        providers: [AuthAuditListener],
+      }).compile();
+      await moduleRef.init();
 
-    moduleRef
-      .get(EventEmitter2)
-      .emit(
-        AuthEventName.EMAIL_VERIFIED,
-        new EmailVerifiedEvent(
-          USER_ID,
-          EMAIL_VERIFICATION_SOURCE.CODE,
-          new Date()
-        )
+      moduleRef
+        .get(EventEmitter2)
+        .emit(
+          AuthEventName.EMAIL_VERIFIED,
+          new EmailVerifiedEvent(USER_ID, source, new Date())
+        );
+
+      expect(logSpy).toHaveBeenCalledWith(
+        `Email verified: userId=${USER_ID} source=${source}`
       );
 
-    expect(logSpy).toHaveBeenCalledWith(
-      `Email verified: userId=${USER_ID} source=${EMAIL_VERIFICATION_SOURCE.CODE}`
-    );
-
-    await moduleRef.close();
-  });
+      await moduleRef.close();
+    }
+  );
 });
