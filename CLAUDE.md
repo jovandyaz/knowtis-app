@@ -157,9 +157,9 @@ Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `ch
 
 ### Pull Requests
 
-- **Graphite** manages PR workflow — use stacked PRs for multi-step features instead of one large PR
-- **CodeRabbit** auto-reviews every PR — address its feedback before requesting human review
-- When creating PRs, prefer `gt create` (Graphite CLI) over `gh pr create` for proper stack tracking
+- **Stacked PRs are GitHub-native** (`gh extension install github/gh-stack`) — split multi-step features into a stack of small PRs instead of one large one. Open each PR against the branch below it, then adopt the chain with `gh stack link <bottom> … <top>`; or build it tracked from the start with `gh stack init` / `add` / `submit`. Merge bottom-up — `gh stack merge` lands a stack atomically, and after any merge GitHub rebases and retargets the layers above on its own; never rebase a stacked branch by hand afterwards.
+- **Keep every PR under 100 changed files** — CodeRabbit refuses larger ones and the cap is not configurable.
+- **CodeRabbit reviews every PR, stacked or not, but must be triggered**: comment `@coderabbitai full review`, then confirm inline comments exist — a green check with none is a skipped review. Address its feedback before requesting human review.
 - Feature branches use a Conventional-style prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`, etc.
 
 ### Git Hooks (Lefthook)
