@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 
-import { RETRY_AFTER_HEADER } from '../core/http/retry-after.header';
 import { buildAllowedOrigins, buildCorsOptions } from './cors-origins';
 
 describe('buildAllowedOrigins', () => {
@@ -76,17 +75,17 @@ describe('backoffice origin', () => {
 describe('buildCorsOptions', () => {
   const ORIGINS = ['https://knowtis.app'];
 
+  // Spelled out rather than read from RETRY_AFTER_HEADER: comparing the
+  // implementation against its own constant cannot catch a wrong header name.
   it('exposes Retry-After, which is not CORS-safelisted', () => {
-    expect(buildCorsOptions(ORIGINS).exposedHeaders).toEqual([
-      RETRY_AFTER_HEADER,
-    ]);
+    expect(buildCorsOptions(ORIGINS).exposedHeaders).toEqual(['Retry-After']);
   });
 
   it('keeps the origin allowlist and credentialed requests', () => {
     expect(buildCorsOptions(ORIGINS)).toEqual({
       origin: ORIGINS,
       credentials: true,
-      exposedHeaders: [RETRY_AFTER_HEADER],
+      exposedHeaders: ['Retry-After'],
     });
   });
 
