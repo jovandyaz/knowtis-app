@@ -179,14 +179,19 @@ describe('unwrapOrThrow', () => {
   });
 
   describe('Retry-After', () => {
-    function retryAfterSecondsOf(retryAfterMs: number): number {
+    function refusalFor(retryAfterMs: number): unknown {
       try {
         unwrapOrThrow(err(AuthErrors.resendCooldown(retryAfterMs)));
       } catch (e) {
-        expect(e).toBeInstanceOf(RetryAfterHttpException);
-        return (e as RetryAfterHttpException).retryAfterSeconds;
+        return e;
       }
-      throw new Error('expected unwrapOrThrow to throw');
+      return expect.unreachable('expected unwrapOrThrow to throw');
+    }
+
+    function retryAfterSecondsOf(retryAfterMs: number): number {
+      const refusal = refusalFor(retryAfterMs);
+      expect(refusal).toBeInstanceOf(RetryAfterHttpException);
+      return (refusal as RetryAfterHttpException).retryAfterSeconds;
     }
 
     it('converts the remaining wait to whole seconds', () => {
@@ -212,6 +217,17 @@ describe('unwrapOrThrow', () => {
         expect(e).toBeInstanceOf(RetryAfterHttpException);
         expect((e as RetryAfterHttpException).retryAfterSeconds).toBe(31);
       }
+    });
+
+    it.each([
+      ['not a number', Number.NaN],
+      ['infinite', Number.POSITIVE_INFINITY],
+      ['negative', -1],
+    ])('refuses without a header when the wait is %s', (_label, wait) => {
+      const refusal = refusalFor(wait);
+
+      expect(refusal).toBeInstanceOf(HttpException);
+      expect(refusal).not.toBeInstanceOf(RetryAfterHttpException);
     });
 
     it('leaves errors without a retry hint as plain HttpExceptions', () => {

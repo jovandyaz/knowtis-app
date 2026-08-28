@@ -44,7 +44,13 @@ export class RetryAfterHttpException extends HttpException {
   }
 }
 
-function toRetryAfterSeconds(retryAfterMs: number): number {
+/** Whole seconds for the `Retry-After` header, or null when the hint is not a
+ *  usable wait — `retryAfterMs` is an open contract and NaN would reach the
+ *  wire verbatim. */
+function toRetryAfterSeconds(retryAfterMs: number): number | null {
+  if (!Number.isFinite(retryAfterMs) || retryAfterMs < 0) {
+    return null;
+  }
   return Math.max(
     MIN_RETRY_AFTER_SECONDS,
     Math.ceil(retryAfterMs / MS_PER_SECOND)
@@ -62,12 +68,10 @@ export function unwrapOrThrow<T>(result: Result<T, AuthDomainError>): T {
       message: result.error.message,
     };
     const { retryAfterMs } = result.error;
-    if (retryAfterMs !== undefined) {
-      throw new RetryAfterHttpException(
-        body,
-        status,
-        toRetryAfterSeconds(retryAfterMs)
-      );
+    const retryAfterSeconds =
+      retryAfterMs === undefined ? null : toRetryAfterSeconds(retryAfterMs);
+    if (retryAfterSeconds !== null) {
+      throw new RetryAfterHttpException(body, status, retryAfterSeconds);
     }
     throw new HttpException(body, status);
   }
