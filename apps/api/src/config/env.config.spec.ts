@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { validateEnv } from './env.config';
 
+const TOKEN_HASH_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+
 const baseEnv = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   JWT_SECRET: 'x'.repeat(32),
   JWT_REFRESH_SECRET: 'y'.repeat(32),
+  TOKEN_HASH_KEY,
 };
 
 const validEnv = {
   DATABASE_URL: 'postgres://localhost:5432/knowtis_test',
   JWT_SECRET: 'a'.repeat(40) + '-access-secret-x',
   JWT_REFRESH_SECRET: 'b'.repeat(40) + '-refresh-secret-x',
+  TOKEN_HASH_KEY,
 };
 
 describe('env.config agent vars', () => {
@@ -284,7 +288,7 @@ describe('env.config BACKOFFICE_URL', () => {
 });
 
 describe('env.config TOKEN_HASH_KEY', () => {
-  const KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+  const KEY = TOKEN_HASH_KEY;
   const prodEnv = {
     ...validEnv,
     NODE_ENV: 'production',
@@ -292,7 +296,9 @@ describe('env.config TOKEN_HASH_KEY', () => {
   };
 
   it('rejects a production boot without TOKEN_HASH_KEY', () => {
-    expect(() => validateEnv(prodEnv)).toThrow(/TOKEN_HASH_KEY is required/);
+    const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = prodEnv;
+
+    expect(() => validateEnv(withoutKey)).toThrow(/TOKEN_HASH_KEY is required/);
   });
 
   it('accepts a production boot with a 32-byte base64 TOKEN_HASH_KEY', () => {
@@ -316,8 +322,13 @@ describe('env.config TOKEN_HASH_KEY', () => {
     ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
   });
 
-  it('leaves TOKEN_HASH_KEY optional outside production', () => {
-    expect(validateEnv(validEnv).TOKEN_HASH_KEY).toBeUndefined();
+  // AuthModule getOrThrows this key while it is still being constructed, so a
+  // dev boot without it dies there rather than here. Validation has to refuse
+  // the same configuration the module refuses.
+  it('rejects a boot without TOKEN_HASH_KEY outside production too', () => {
+    const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = validEnv;
+
+    expect(() => validateEnv(withoutKey)).toThrow(/TOKEN_HASH_KEY is required/);
   });
 });
 

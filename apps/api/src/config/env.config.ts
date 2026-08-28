@@ -13,8 +13,9 @@ const envSchemaBase = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
-  // Shape is TokenHasher's to enforce: it owns the key and rejects a malformed
-  // one while AuthModule is still being built, before this schema ever runs.
+  // Optional here only so the refinement below can name what is missing; shape
+  // stays TokenHasher's to enforce, since it rejects a malformed key while
+  // AuthModule is still being built, before this schema ever runs.
   TOKEN_HASH_KEY: z.string().optional(),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   BACKOFFICE_URL: z.url().optional(),
@@ -175,11 +176,14 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
     });
   }
 
-  if (data.NODE_ENV === 'production' && !data.TOKEN_HASH_KEY) {
+  // Required in every environment, not just production: AuthModule reads it with
+  // getOrThrow while the module is still being constructed, so a boot without it
+  // dies there — past this schema, with a message that names no fix.
+  if (!data.TOKEN_HASH_KEY) {
     ctx.addIssue({
       code: 'custom',
       message:
-        'TOKEN_HASH_KEY is required in production — it keys every stored token hash, and without one a 6-digit verification code is recoverable from a stolen hash',
+        'TOKEN_HASH_KEY is required — it keys every stored token hash, and without one a 6-digit verification code is recoverable from a stolen hash. Generate one with: openssl rand -base64 32',
       path: ['TOKEN_HASH_KEY'],
       input: data.TOKEN_HASH_KEY,
     });
