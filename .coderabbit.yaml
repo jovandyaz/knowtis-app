@@ -19,6 +19,7 @@ reviews:
     drafts: false
     base_branches:
       - main
+      - '^(feat|fix|chore|refactor|docs|test|perf|build|ci|style)/.+'
 
   path_instructions:
     - path: apps/api/src/modules/**/domain/**
