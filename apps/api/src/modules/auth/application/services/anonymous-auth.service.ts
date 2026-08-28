@@ -3,7 +3,9 @@ import { randomUUID } from 'crypto';
 import {
   createSessionWithTokens,
   SESSION_REPOSITORY,
+  TOKEN_HASHER,
   TOKEN_SERVICE,
+  TokenHasher,
 } from '@jovandyaz/auth-nestjs';
 import type { SessionRepository, TokenService } from '@jovandyaz/auth-nestjs';
 import {
@@ -51,7 +53,8 @@ export class AnonymousAuthService {
     private readonly configService: ConfigService,
     @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService,
     @Inject(SESSION_REPOSITORY)
-    private readonly sessionRepository: SessionRepository
+    private readonly sessionRepository: SessionRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher
   ) {}
 
   /**
@@ -71,6 +74,7 @@ export class AnonymousAuthService {
       {
         tokenService: this.tokenService,
         sessionRepository: this.sessionRepository,
+        tokenHasher: this.tokenHasher,
       },
       { userId: user.id, email: user.email, isAnonymous: true }
     );

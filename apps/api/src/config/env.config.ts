@@ -13,6 +13,9 @@ const envSchemaBase = z.object({
   JWT_REFRESH_SECRET: z.string().min(32),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(15).default(12),
+  // Shape is TokenHasher's to enforce: it owns the key and rejects a malformed
+  // one while AuthModule is still being built, before this schema ever runs.
+  TOKEN_HASH_KEY: z.string().optional(),
   FRONTEND_URL: z.url().default('http://localhost:4200'),
   BACKOFFICE_URL: z.url().optional(),
   EMAIL_PROVIDER: z.enum(['resend', 'console']).default('console'),
@@ -98,9 +101,28 @@ const PLACEHOLDER_MARKERS = [
   'placeholder',
 ];
 
+/** Secrets `.env.example` ships a placeholder for, with the byte count of the real thing. */
+const PLACEHOLDER_GUARDED_SECRETS = [
+  { key: 'JWT_SECRET', bytes: 48 },
+  { key: 'JWT_REFRESH_SECRET', bytes: 48 },
+  { key: 'TOKEN_HASH_KEY', bytes: 32 },
+] as const;
+
 function isPlaceholderSecret(value: string): boolean {
   const normalized = value.toLowerCase();
   return PLACEHOLDER_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+/**
+ * dotenv materializes a bare `FOO=` as `''`, which no `.optional()` treats as
+ * absent — so an example file that leaves a dormant var empty fails to boot.
+ */
+function withoutBlankValues(
+  config: Record<string, unknown>
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(config).filter(([, value]) => value !== '')
+  );
 }
 
 const envSchema = envSchemaBase.superRefine((data, ctx) => {
@@ -153,14 +175,25 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
     });
   }
 
+  if (data.NODE_ENV === 'production' && !data.TOKEN_HASH_KEY) {
+    ctx.addIssue({
+      code: 'custom',
+      message:
+        'TOKEN_HASH_KEY is required in production — it keys every stored token hash, and without one a 6-digit verification code is recoverable from a stolen hash',
+      path: ['TOKEN_HASH_KEY'],
+      input: data.TOKEN_HASH_KEY,
+    });
+  }
+
   if (data.NODE_ENV === 'production') {
-    for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET'] as const) {
-      if (isPlaceholderSecret(data[key])) {
+    for (const { key, bytes } of PLACEHOLDER_GUARDED_SECRETS) {
+      const value = data[key];
+      if (value && isPlaceholderSecret(value)) {
         ctx.addIssue({
           code: 'custom',
-          message: `${key} looks like a placeholder value — generate a real secret: openssl rand -base64 48`,
+          message: `${key} looks like a placeholder value — generate a real secret: openssl rand -base64 ${bytes}`,
           path: [key],
-          input: data[key],
+          input: value,
         });
       }
     }
@@ -170,7 +203,7 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
 export type EnvConfig = z.infer<typeof envSchemaBase>;
 
 export function validateEnv(config: Record<string, unknown>): EnvConfig {
-  const result = envSchema.safeParse(config);
+  const result = envSchema.safeParse(withoutBlankValues(config));
 
   if (!result.success) {
     const errors = result.error.issues

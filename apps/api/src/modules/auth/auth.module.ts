@@ -44,6 +44,7 @@ const configService = new ConfigService();
           configService.get('OAUTH_JWKS')
         ),
       },
+      tokenHashKey: configService.getOrThrow('TOKEN_HASH_KEY'),
       userRepository: DrizzleUserRepository,
       sessionRepository: DrizzleSessionRepository,
       tokenService: JwtTokenService,
