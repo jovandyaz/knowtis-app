@@ -1,9 +1,12 @@
+import { RetryAfterHttpException } from '@jovandyaz/auth-nestjs';
 import {
   BadRequestException,
+  HttpStatus,
   InternalServerErrorException,
   NotFoundException,
   type ArgumentsHost,
 } from '@nestjs/common';
+import { ThrottlerException } from '@nestjs/throttler';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GlobalExceptionFilter } from './http-exception.filter';
@@ -18,15 +21,17 @@ interface CapturedResponse {
 function createHost() {
   const json = vi.fn();
   const status = vi.fn().mockReturnValue({ json });
+  const setHeader = vi.fn();
   const host = {
     switchToHttp: () => ({
-      getResponse: () => ({ status }),
+      getResponse: () => ({ status, setHeader }),
       getRequest: () => ({ method: 'GET', url: '/api/v1/test' }),
     }),
   } as unknown as ArgumentsHost;
 
   return {
     host,
+    setHeader,
     getStatus: () => status.mock.calls[0][0] as number,
     getBody: () => json.mock.calls[0][0] as CapturedResponse,
   };
@@ -106,5 +111,54 @@ describe('GlobalExceptionFilter', () => {
     );
 
     expect(getBody().errors).toEqual(errors);
+  });
+
+  describe('Retry-After', () => {
+    function retryAfterFor(seconds: number): string | undefined {
+      const { host, setHeader } = createHost();
+
+      filter.catch(
+        new RetryAfterHttpException(
+          { message: 'slow down', error: 'RESEND_COOLDOWN' },
+          HttpStatus.TOO_MANY_REQUESTS,
+          seconds
+        ),
+        host
+      );
+
+      const call = setHeader.mock.calls.find(
+        ([name]) => String(name).toLowerCase() === 'retry-after'
+      );
+      return call?.[1] as string | undefined;
+    }
+
+    it('answers with the wait the exception carries', () => {
+      expect(retryAfterFor(15)).toBe('15');
+      expect(retryAfterFor(42)).toBe('42');
+    });
+
+    it('still writes a response body alongside the header', () => {
+      const { host, setHeader, getBody } = createHost();
+
+      filter.catch(
+        new RetryAfterHttpException(
+          { message: 'slow down', error: 'RESEND_COOLDOWN' },
+          HttpStatus.TOO_MANY_REQUESTS,
+          15
+        ),
+        host
+      );
+
+      expect(setHeader).toHaveBeenCalledTimes(1);
+      expect(getBody()).toMatchObject({ timestamp: expect.any(String) });
+    });
+
+    it('leaves the throttler its own Retry-After on other 429s', () => {
+      const { host, setHeader } = createHost();
+
+      filter.catch(new ThrottlerException(), host);
+
+      expect(setHeader).not.toHaveBeenCalled();
+    });
   });
 });
