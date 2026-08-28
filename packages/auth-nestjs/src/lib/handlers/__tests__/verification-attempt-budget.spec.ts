@@ -275,7 +275,12 @@ describe('verification attempt budget', () => {
       })
     )._unsafeUnwrapErr();
 
-    vi.advanceTimersByTime(error.retryAfterMs ?? 0);
+    const { retryAfterMs } = error;
+    if (retryAfterMs === undefined) {
+      throw new Error('the refusal must quote the wait it expects');
+    }
+    expect(retryAfterMs).toBeGreaterThan(0);
+    vi.advanceTimersByTime(retryAfterMs);
 
     expect((await resendHandler.execute({ userId: USER_ID })).isOk()).toBe(
       true
