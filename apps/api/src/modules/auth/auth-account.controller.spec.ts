@@ -10,9 +10,9 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { err, ok, type Result } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
-import { UserScopedThrottlerGuard } from '../ai/guards/user-scoped-throttler.guard';
 import { AuthAccountController } from './auth-account.controller';
 
+const DEFAULT_THROTTLE_LIMIT = 'THROTTLER:LIMITdefault';
 const USER_ID = '00000000-0000-4000-8000-00000000ac01';
 const FAMILY_ID = '00000000-0000-4000-8000-00000000ac02';
 const CODE = '123456';
@@ -187,16 +187,13 @@ describe('AuthAccountController.resendVerification', () => {
 
 describe('AuthAccountController verification throttles', () => {
   it.each([
-    ['verifyEmailCode', AuthAccountController.prototype.verifyEmailCode],
-    ['resendVerification', AuthAccountController.prototype.resendVerification],
-  ])(
-    'keys the %s cap to the caller, not to a rotatable IP',
-    (_name, handler) => {
-      // `?? []` because `toContain` passes on an undefined subject in this vitest.
-      const guards: unknown[] =
-        Reflect.getMetadata(GUARDS_METADATA, handler) ?? [];
-
-      expect(guards).toContain(UserScopedThrottlerGuard);
-    }
-  );
+    ['verifyEmailCode', 10, AuthAccountController.prototype.verifyEmailCode],
+    [
+      'resendVerification',
+      3,
+      AuthAccountController.prototype.resendVerification,
+    ],
+  ])('caps %s at %d attempts per window', (_name, limit, handler) => {
+    expect(Reflect.getMetadata(DEFAULT_THROTTLE_LIMIT, handler)).toBe(limit);
+  });
 });

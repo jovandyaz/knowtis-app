@@ -28,7 +28,6 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { UserScopedThrottlerGuard } from '../ai/guards/user-scoped-throttler.guard';
 import {
   ForgotPasswordDto,
   ResetPasswordDto,
@@ -110,7 +109,6 @@ export class AuthAccountController {
   })
   @ApiResponse({ status: 429, description: 'Too many verification attempts' })
   @ApiBearerAuth()
-  @UseGuards(UserScopedThrottlerGuard)
   @Throttle({ default: { limit: 10, ttl: 900000 } })
   @Post('verify-email/code')
   @HttpCode(HttpStatus.OK)
@@ -134,7 +132,6 @@ export class AuthAccountController {
   })
   @ApiResponse({ status: 409, description: 'Email already verified' })
   @ApiBearerAuth()
-  @UseGuards(UserScopedThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 900000 } })
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
