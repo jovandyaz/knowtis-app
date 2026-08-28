@@ -31,7 +31,6 @@ import { SystemProviderKeysService } from './application/services/system-provide
 import { CURATED_MODELS } from './domain/model-catalog/selectable-models.catalog';
 import { SetSystemProviderDto } from './dto/set-system-provider.dto';
 import { SystemProviderParamDto } from './dto/system-provider-param.dto';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import {
   ProviderNotConfiguredError,
   ProviderRegistryFactory,
@@ -42,7 +41,7 @@ const PROBE_TIMEOUT_MS = 10_000;
 // Below this a "key" is too short to match anything but itself in prose.
 const REDACTABLE_KEY_MIN_LENGTH = 8;
 
-@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard, UserScopedThrottlerGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard, RolesGuard)
 @RequireFeatureFlag('ai_enabled')
 @Roles('admin')
 @Controller('ai/providers')

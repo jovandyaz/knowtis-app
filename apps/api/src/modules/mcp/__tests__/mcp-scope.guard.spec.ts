@@ -375,3 +375,92 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
     ).resolves.toBe(true);
   });
 });
+
+describe('McpScopeGuard across a JWKS rotation', () => {
+  const RESOURCE_URL = 'https://mcp.knowtis.app/mcp';
+  let rotatedJwks: string;
+  let signWithRotatedKey: (scopes: string) => Promise<string>;
+
+  beforeAll(async () => {
+    const retiring = await generateKeyPair('ES256', { extractable: true });
+    const current = await generateKeyPair('ES256', { extractable: true });
+
+    async function toJwk(key: CryptoKey, kid: string) {
+      const jwk = await exportJWK(key);
+      jwk.alg = 'ES256';
+      jwk.use = 'sig';
+      jwk.kid = kid;
+      return jwk;
+    }
+
+    // The retiring key stays first, so a guard that reads only keys[0] cannot
+    // verify anything signed with the key now in use.
+    rotatedJwks = JSON.stringify({
+      keys: [
+        await toJwk(retiring.privateKey, 'retiring-key'),
+        await toJwk(current.privateKey, 'current-key'),
+      ],
+    });
+
+    signWithRotatedKey = (scopes: string) =>
+      new SignJWT({ source: 'mcp', scopes, aud: RESOURCE_URL })
+        .setProtectedHeader({ alg: 'ES256' })
+        .setSubject('user-1')
+        .setExpirationTime('15m')
+        .sign(current.privateKey);
+  });
+
+  function createGuardOverRotatedJwks(scopeMetadata: string | undefined) {
+    const reflector = {
+      getAllAndOverride: vi.fn().mockReturnValue(scopeMetadata),
+    } as unknown as Reflector;
+    const configService = {
+      getOrThrow: vi.fn().mockReturnValue('unused-hs-secret'),
+      get: vi.fn().mockImplementation((key: string) => {
+        if (key === 'OAUTH_JWKS') {
+          return rotatedJwks;
+        }
+        return key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined;
+      }),
+    } as unknown as ConfigService;
+    return new McpScopeGuard(
+      reflector,
+      new JwtService({
+        signOptions: { algorithm: 'HS256' },
+        verifyOptions: { algorithms: ['HS256'] },
+      }),
+      configService
+    );
+  }
+
+  function contextWithToken(token: string) {
+    return {
+      getType: vi.fn().mockReturnValue('http'),
+      getHandler: vi.fn(),
+      getClass: vi.fn(),
+      switchToHttp: vi.fn().mockReturnValue({
+        getRequest: vi.fn().mockReturnValue({
+          headers: { authorization: `Bearer ${token}` },
+        }),
+      }),
+    };
+  }
+
+  it('enforces scope on a token signed by a later key, instead of waving it through unrecognised', async () => {
+    const guard = createGuardOverRotatedJwks(MCP_SCOPES.WRITE);
+    const token = await signWithRotatedKey('notes:read');
+
+    await expect(
+      guard.canActivate(contextWithToken(token) as never)
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('still admits a token signed by a later key when its scope suffices', async () => {
+    const guard = createGuardOverRotatedJwks(MCP_SCOPES.READ);
+    const token = await signWithRotatedKey('notes:read');
+
+    await expect(
+      guard.canActivate(contextWithToken(token) as never)
+    ).resolves.toBe(true);
+  });
+});

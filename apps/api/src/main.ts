@@ -9,7 +9,7 @@ import { I18nValidationExceptionFilter, I18nValidationPipe } from 'nestjs-i18n';
 
 import { SocketIoAdapter } from './adapters';
 import { AppModule } from './app/app.module';
-import { buildAllowedOrigins } from './config/cors-origins';
+import { buildAllowedOrigins, buildCorsOptions } from './config/cors-origins';
 import { GlobalExceptionFilter, LoggingInterceptor } from './core';
 import { createOauthRateLimit } from './modules/oauth/oauth-rate-limit.middleware';
 import {
@@ -56,10 +56,7 @@ async function bootstrap() {
     frontendUrl,
     configService.get<string>('BACKOFFICE_URL')
   );
-  app.enableCors({
-    origin: allowedOrigins,
-    credentials: true,
-  });
+  app.enableCors(buildCorsOptions(allowedOrigins));
 
   app.useWebSocketAdapter(new SocketIoAdapter(app, allowedOrigins));
 

@@ -16,7 +16,7 @@ import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp-token';
 @Injectable()
 export class McpScopeGuard implements CanActivate {
   private readonly jwtSecret: string;
-  private readonly es256PublicKey: string | undefined;
+  private readonly es256PublicKeys: readonly string[];
   private readonly resourceAudience: string | undefined;
 
   constructor(
@@ -25,9 +25,9 @@ export class McpScopeGuard implements CanActivate {
     configService: ConfigService
   ) {
     this.jwtSecret = configService.getOrThrow('JWT_SECRET');
-    this.es256PublicKey = deriveOauthPublicKeys(
+    this.es256PublicKeys = deriveOauthPublicKeys(
       configService.get('OAUTH_JWKS')
-    )[0];
+    );
     this.resourceAudience = configService.get('MCP_RESOURCE_URL');
   }
 
@@ -82,22 +82,12 @@ export class McpScopeGuard implements CanActivate {
         algorithms: ['HS256'],
       });
     } catch {
-      // Not an HS256 token — try the ES256 OAuth path below.
+      // Swallowed on purpose: this endpoint accepts two signing families, so
+      // failing HS256 only rules the first one out.
     }
 
-    if (!this.es256PublicKey) {
-      return null;
-    }
-
-    let claims: McpTokenClaims & { aud?: string | string[] };
-    try {
-      claims = await this.jwtService.verifyAsync<
-        McpTokenClaims & { aud?: string | string[] }
-      >(token, {
-        publicKey: this.es256PublicKey,
-        algorithms: ['ES256'],
-      });
-    } catch {
+    const claims = await this.verifyEs256(token);
+    if (claims === null) {
       return null;
     }
 
@@ -108,6 +98,28 @@ export class McpScopeGuard implements CanActivate {
       throw new ForbiddenException('MCP token audience mismatch');
     }
     return claims;
+  }
+
+  /**
+   * Tries every configured OAuth key, because a JWKS carries several across a
+   * rotation. Stopping at the first would leave a token signed by any of the
+   * others unrecognised as MCP — and an unrecognised token skips the scope
+   * check entirely while JwtAuthGuard, which holds all the keys, still admits
+   * it.
+   */
+  private async verifyEs256(
+    token: string
+  ): Promise<(McpTokenClaims & { aud?: string | string[] }) | null> {
+    for (const publicKey of this.es256PublicKeys) {
+      try {
+        return await this.jwtService.verifyAsync<
+          McpTokenClaims & { aud?: string | string[] }
+        >(token, { publicKey, algorithms: ['ES256'] });
+      } catch {
+        continue;
+      }
+    }
+    return null;
   }
 
   private hasResourceAudience(aud: string | string[] | undefined): boolean {

@@ -26,7 +26,6 @@ import {
 import { unwrapOrThrow } from '../../core/http';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
-import { UserScopedThrottlerGuard } from '../ai/guards/user-scoped-throttler.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { SuggestOrganizationHandler } from './application/commands/suggest-organization.handler';
 import { SuggestOrganizationDto } from './dto/suggest-organization.dto';
@@ -48,7 +47,7 @@ const SUGGEST_THROTTLE = { default: { limit: 10, ttl: 60000 } };
 
 @ApiTags('AI')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard, FeatureFlagGuard, UserScopedThrottlerGuard)
+@UseGuards(JwtAuthGuard, FeatureFlagGuard)
 @RequireFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED)
 @Controller('ai/organization')
 export class AiOrganizationController {

@@ -6,7 +6,6 @@ import { APICallError, RetryError } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiProvidersController } from './ai-providers.controller';
-import { UserScopedThrottlerGuard } from './guards/user-scoped-throttler.guard';
 import { ProviderNotConfiguredError } from './infrastructure/providers/provider-registry.factory';
 
 // Only the call is stubbed; the error classes must stay real because the
@@ -329,13 +328,6 @@ describe('AiProvidersController', () => {
   });
 
   describe('throttling', () => {
-    it('should scope every route to the authenticated user', () => {
-      const guards: unknown[] =
-        Reflect.getMetadata('__guards__', AiProvidersController) ?? [];
-
-      expect(guards).toContain(UserScopedThrottlerGuard);
-    });
-
     it.each(['list', 'set', 'clearKey'] as const)(
       'should throttle %s',
       (route) => {

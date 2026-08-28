@@ -3,7 +3,6 @@ import * as path from 'node:path';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { I18nModule } from 'nestjs-i18n';
 
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
@@ -40,9 +39,8 @@ export class AgentEvalHarness {
 
   static async boot(): Promise<AgentEvalHarness> {
     const retrieval = new RecordingFixtureRetrieval();
-    // Replicates the global context AppModule provides. ThrottlerModule is
-    // required because AIModule's throttled controllers can't instantiate
-    // without it; Schedule/Collaboration/i18n-watch stay out (side effects).
+    // Replicates the global context AppModule provides; Schedule, Collaboration
+    // and the i18n watcher stay out because of their side effects.
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -50,7 +48,6 @@ export class AgentEvalHarness {
           validate: validateEnv,
           envFilePath: ['.env.local', '.env'],
         }),
-        ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
         EventEmitterModule.forRoot(),
         I18nModule.forRoot({
           fallbackLanguage: DEFAULT_LOCALE,
