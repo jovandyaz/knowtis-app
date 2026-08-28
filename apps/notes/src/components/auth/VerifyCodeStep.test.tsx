@@ -180,7 +180,7 @@ describe('VerifyCodeStep', () => {
     expect(input).toHaveAttribute('aria-invalid', 'false');
   });
 
-  it('names the wait at the attempt cap, and only offers a new code once the cooldown ends', async () => {
+  it('counts its own window down when the attempt cap named no wait', async () => {
     vi.useFakeTimers();
     const api = createAuthApiMock({
       verifyEmailCode: vi
