@@ -364,6 +364,24 @@ describe('VerifyEmailDialog', () => {
     ).toBeEnabled();
   });
 
+  it('says the resend failed when the server broke rather than refused', async () => {
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(new ApiClientError('Boom', 500, 'INTERNAL')),
+    });
+    renderDialog(api);
+    openDialog();
+
+    await userEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+
+    expect(
+      await screen.findByText(
+        'Failed to resend verification email. Please try again.'
+      )
+    ).toBeInTheDocument();
+  });
+
   it('verifies the code, confirms it and closes without leaving the page', async () => {
     const { api } = renderDialog();
     openDialog();
