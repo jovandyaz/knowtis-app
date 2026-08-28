@@ -88,4 +88,22 @@ describe('buildCorsOptions', () => {
       exposedHeaders: ['Retry-After'],
     });
   });
+
+  it('keeps an empty allowlist empty instead of widening it', () => {
+    expect(buildCorsOptions([])).toEqual({
+      origin: [],
+      credentials: true,
+      exposedHeaders: ['Retry-After'],
+    });
+  });
+
+  it('keeps every allowed origin, in order', () => {
+    const origins = ['https://knowtis.app', 'https://backoffice.knowtis.app'];
+
+    expect(buildCorsOptions(origins)).toEqual({
+      origin: origins,
+      credentials: true,
+      exposedHeaders: ['Retry-After'],
+    });
+  });
 });

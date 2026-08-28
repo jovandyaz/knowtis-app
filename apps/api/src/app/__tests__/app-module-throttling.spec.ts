@@ -36,7 +36,7 @@ describe('AppModule', () => {
   });
 
   it(
-    'rate limits through ThrottlingModule',
+    'imports ThrottlingModule, whose APP_GUARD is what rate limits every route',
     async () => {
       const { AppModule } = await import('../app.module');
 
