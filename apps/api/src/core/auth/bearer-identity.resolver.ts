@@ -40,16 +40,16 @@ function readBearerToken(request: Record<string, unknown>): string | null {
 @Injectable()
 export class BearerIdentityResolver {
   private readonly accessTokenSecret: string;
-  private readonly oauthPublicKey: string | undefined;
+  private readonly oauthPublicKeys: readonly string[];
 
   constructor(
     private readonly jwtService: JwtService,
     configService: ConfigService
   ) {
     this.accessTokenSecret = configService.getOrThrow('JWT_SECRET');
-    this.oauthPublicKey = deriveOauthPublicKeys(
+    this.oauthPublicKeys = deriveOauthPublicKeys(
       configService.get('OAUTH_JWKS')
-    )[0];
+    );
   }
 
   async resolve(
@@ -68,20 +68,31 @@ export class BearerIdentityResolver {
     return { userId, isAnonymous: claims?.isAnonymous === true };
   }
 
-  /** HS256 covers session and MCP-exchange tokens, ES256 the OAuth ones. */
+  /**
+   * HS256 covers session and MCP-exchange tokens, ES256 the OAuth ones. Every
+   * configured OAuth key is tried: a JWKS carries several across a rotation,
+   * and stopping at the first would read a token signed by any of the others
+   * as anonymous — handing it the shared IP bucket this guard exists to avoid.
+   */
   private async verify(token: string): Promise<IdentityClaims | null> {
     const sessionClaims = await this.verifyWith(token, {
       secret: this.accessTokenSecret,
       algorithms: ['HS256'],
     });
-    if (sessionClaims !== null || this.oauthPublicKey === undefined) {
+    if (sessionClaims !== null) {
       return sessionClaims;
     }
 
-    return this.verifyWith(token, {
-      publicKey: this.oauthPublicKey,
-      algorithms: ['ES256'],
-    });
+    for (const publicKey of this.oauthPublicKeys) {
+      const oauthClaims = await this.verifyWith(token, {
+        publicKey,
+        algorithms: ['ES256'],
+      });
+      if (oauthClaims !== null) {
+        return oauthClaims;
+      }
+    }
+    return null;
   }
 
   private async verifyWith(
