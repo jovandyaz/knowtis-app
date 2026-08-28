@@ -273,11 +273,65 @@ describe('env.config BACKOFFICE_URL', () => {
     const env = validateEnv({
       ...prodEnv,
       BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+      TOKEN_HASH_KEY: 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=',
     });
     expect(env.BACKOFFICE_URL).toBe('https://backoffice.knowtis.app');
   });
 
   it('leaves BACKOFFICE_URL optional outside production', () => {
     expect(validateEnv(validEnv).BACKOFFICE_URL).toBeUndefined();
+  });
+});
+
+describe('env.config TOKEN_HASH_KEY', () => {
+  const KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+  const prodEnv = {
+    ...validEnv,
+    NODE_ENV: 'production',
+    BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+  };
+
+  it('rejects a production boot without TOKEN_HASH_KEY', () => {
+    expect(() => validateEnv(prodEnv)).toThrow(/TOKEN_HASH_KEY is required/);
+  });
+
+  it('accepts a production boot with a 32-byte base64 TOKEN_HASH_KEY', () => {
+    expect(
+      validateEnv({ ...prodEnv, TOKEN_HASH_KEY: KEY }).TOKEN_HASH_KEY
+    ).toBe(KEY);
+  });
+
+  it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
+    expect(() => validateEnv({ ...prodEnv, TOKEN_HASH_KEY: '' })).toThrow(
+      /TOKEN_HASH_KEY is required/
+    );
+  });
+
+  it('rejects a production TOKEN_HASH_KEY still set to the example placeholder', () => {
+    expect(() =>
+      validateEnv({
+        ...prodEnv,
+        TOKEN_HASH_KEY: 'changemechangemechangemechangemechangemecha=',
+      })
+    ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
+  });
+
+  it('leaves TOKEN_HASH_KEY optional outside production', () => {
+    expect(validateEnv(validEnv).TOKEN_HASH_KEY).toBeUndefined();
+  });
+});
+
+describe('env.config blank assignments', () => {
+  it('treats a blank optional URL as absent instead of an invalid URL', () => {
+    expect(
+      validateEnv({ ...validEnv, OAUTH_ISSUER: '' }).OAUTH_ISSUER
+    ).toBeUndefined();
+  });
+
+  it('falls back to the default when a defaulted var is blank, not to a coerced 0', () => {
+    expect(
+      validateEnv({ ...validEnv, AI_DAILY_TOKEN_LIMIT: '' })
+        .AI_DAILY_TOKEN_LIMIT
+    ).toBe(100000);
   });
 });
