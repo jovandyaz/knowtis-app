@@ -35,6 +35,10 @@ describe('AppModule', () => {
     }
   });
 
+  // Wiring only, and deliberately: booting AppModule needs a live database, so
+  // the 200-then-429 boundary, the per-user buckets and the default budget are
+  // pinned against a real request path in core/throttling/throttling.module.spec.ts.
+  // What that spec cannot show is that the real app composes the module at all.
   it(
     'imports ThrottlingModule, whose APP_GUARD is what rate limits every route',
     async () => {

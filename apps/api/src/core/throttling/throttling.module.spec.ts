@@ -12,6 +12,9 @@ const ACCESS_TOKEN_SECRET = 'a'.repeat(32) + '-access-secret';
 const USER_A = '00000000-0000-4000-8000-0000000000a1';
 const USER_B = '00000000-0000-4000-8000-0000000000b2';
 const TTL_MS = 60_000;
+// Spelled out rather than imported from throttling.module.ts: a budget read
+// from the value under test would keep passing wherever that value drifted to.
+const DEFAULT_REQUESTS_PER_WINDOW = 60;
 
 const configService = new ConfigService({ JWT_SECRET: ACCESS_TOKEN_SECRET });
 
@@ -20,6 +23,11 @@ class ProbeController {
   @Throttle({ default: { limit: 1, ttl: TTL_MS } })
   @Get()
   get() {
+    return { ok: true };
+  }
+
+  @Get('unthrottled')
+  unthrottled() {
     return { ok: true };
   }
 }
@@ -52,11 +60,15 @@ describe('ThrottlingModule', () => {
     return jwtService.signAsync({ sub }, { secret, algorithm: 'HS256' });
   }
 
-  async function probe(token?: string): Promise<number> {
-    const response = await fetch(`${baseUrl}/probe`, {
+  async function probeAt(path: string, token?: string): Promise<number> {
+    const response = await fetch(`${baseUrl}${path}`, {
       headers: token === undefined ? {} : { authorization: `Bearer ${token}` },
     });
     return response.status;
+  }
+
+  async function probe(token?: string): Promise<number> {
+    return probeAt('/probe', token);
   }
 
   beforeAll(async () => {
@@ -107,5 +119,15 @@ describe('ThrottlingModule', () => {
     expect(await probe()).toBe(200);
 
     expect(await probe(visitorToken)).toBe(429);
+  });
+
+  it('gives a route that sets no budget of its own the module default, and 429s the request past it', async () => {
+    const statuses: number[] = [];
+    for (let index = 0; index < DEFAULT_REQUESTS_PER_WINDOW; index += 1) {
+      statuses.push(await probeAt('/probe/unthrottled', tokenA));
+    }
+
+    expect(new Set(statuses)).toEqual(new Set([200]));
+    expect(await probeAt('/probe/unthrottled', tokenA)).toBe(429);
   });
 });
