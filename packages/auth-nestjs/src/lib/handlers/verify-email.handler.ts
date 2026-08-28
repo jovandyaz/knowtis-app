@@ -1,14 +1,16 @@
-import { AuthErrors, hashToken, UserId } from '@jovandyaz/auth/server';
+import { AuthErrors, UserId } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+  TOKEN_HASHER,
   USER_REPOSITORY,
 } from '../constants';
 import type { EmailVerificationTokenRepository } from '../ports/email-verification-token.repository';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 
 export interface VerifyEmailInput {
   readonly token: string;
@@ -21,13 +23,14 @@ export class VerifyEmailHandler {
   constructor(
     @Inject(EMAIL_VERIFICATION_TOKEN_REPOSITORY)
     private readonly verificationTokenRepository: EmailVerificationTokenRepository,
-    @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository
+    @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher
   ) {}
 
   async execute(
     input: VerifyEmailInput
   ): Promise<Result<void, AuthDomainError>> {
-    const tokenHash = hashToken(input.token);
+    const tokenHash = this.tokenHasher.hash(input.token);
 
     const token =
       await this.verificationTokenRepository.findByTokenHash(tokenHash);

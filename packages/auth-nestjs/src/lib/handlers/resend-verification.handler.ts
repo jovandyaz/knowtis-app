@@ -10,11 +10,13 @@ import { err, ok, type Result } from 'neverthrow';
 import {
   EMAIL_SERVICE,
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+  TOKEN_HASHER,
   USER_REPOSITORY,
 } from '../constants';
 import type { EmailVerificationTokenRepository } from '../ports/email-verification-token.repository';
 import type { EmailService } from '../ports/email.service';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 import { generateSecureToken } from './shared/generate-secure-token';
 
 export interface ResendVerificationInput {
@@ -29,7 +31,8 @@ export class ResendVerificationHandler {
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(EMAIL_SERVICE) private readonly emailService: EmailService,
     @Inject(EMAIL_VERIFICATION_TOKEN_REPOSITORY)
-    private readonly verificationTokenRepository: EmailVerificationTokenRepository
+    private readonly verificationTokenRepository: EmailVerificationTokenRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher
   ) {}
 
   async execute(
@@ -48,7 +51,7 @@ export class ResendVerificationHandler {
 
     await this.verificationTokenRepository.deleteAllByUserId(user.id);
 
-    const { plainToken, tokenHash } = generateSecureToken();
+    const { plainToken, tokenHash } = generateSecureToken(this.tokenHasher);
 
     const createResult = await this.verificationTokenRepository.create({
       userId: user.id,

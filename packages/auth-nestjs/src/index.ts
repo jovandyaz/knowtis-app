@@ -16,6 +16,7 @@ export {
   SESSION_REPOSITORY,
   TOKEN_SERVICE,
   PASSWORD_HASHER,
+  TOKEN_HASHER,
   EMAIL_SERVICE,
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
   PASSWORD_RESET_TOKEN_REPOSITORY,
@@ -24,6 +25,8 @@ export {
   JWT_AUDIENCE_ACCESS,
   JWT_AUDIENCE_REFRESH,
 } from './lib/constants';
+
+export { TokenHasher } from './lib/services/token-hasher.service';
 
 // Port interfaces
 export type {

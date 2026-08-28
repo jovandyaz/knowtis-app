@@ -7,7 +7,11 @@ import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { SessionRepository } from '../ports/session.repository';
 import type { TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 import { LoginUserHandler } from './login-user.handler';
+
+const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+const tokenHasher = new TokenHasher(TEST_KEY);
 
 describe('LoginUserHandler.validateCredentials', () => {
   let userRepository: UserRepository;
@@ -27,6 +31,7 @@ describe('LoginUserHandler.validateCredentials', () => {
       passwordHasher,
       {} as TokenService,
       {} as SessionRepository,
+      tokenHasher,
       new EventEmitter2()
     );
   });
@@ -82,6 +87,7 @@ describe('LoginUserHandler.validateCredentials', () => {
       failingHasher,
       {} as TokenService,
       {} as SessionRepository,
+      tokenHasher,
       new EventEmitter2()
     );
 
