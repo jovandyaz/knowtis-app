@@ -1,7 +1,7 @@
 import {
   AuthErrors,
+  msUntilResendAllowed,
   UserId,
-  VERIFICATION_RESEND_COOLDOWN_MS,
 } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
@@ -47,12 +47,11 @@ export class ResendVerificationHandler {
     const existing = await this.verificationTokenRepository.findByUserId(
       user.id
     );
-    if (
-      existing &&
-      Date.now() - existing.createdAt.getTime() <
-        VERIFICATION_RESEND_COOLDOWN_MS
-    ) {
-      return err(AuthErrors.resendCooldown());
+    if (existing) {
+      const retryAfterMs = msUntilResendAllowed(existing.createdAt);
+      if (retryAfterMs > 0) {
+        return err(AuthErrors.resendCooldown(retryAfterMs));
+      }
     }
 
     await this.verificationTokenRepository.deleteAllByUserId(user.id);

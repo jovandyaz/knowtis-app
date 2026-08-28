@@ -162,6 +162,33 @@ describe('ResendVerificationHandler', () => {
       expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
     });
 
+    it('reports the wait that is actually left, not the whole cooldown', async () => {
+      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
+        makeTokenRow({ createdAt: new Date() })
+      );
+      vi.advanceTimersByTime(45_000);
+
+      const error = (
+        await handler.execute({ userId: USER_ID })
+      )._unsafeUnwrapErr();
+
+      expect(error.code).toBe(AuthErrorCodes.RESEND_COOLDOWN);
+      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 45_000);
+    });
+
+    it('reports a longer wait when less of the cooldown has been spent', async () => {
+      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
+        makeTokenRow({ createdAt: new Date() })
+      );
+      vi.advanceTimersByTime(5_000);
+
+      const error = (
+        await handler.execute({ userId: USER_ID })
+      )._unsafeUnwrapErr();
+
+      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 5_000);
+    });
+
     it('allows the resend once the cooldown has elapsed', async () => {
       vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
         makeTokenRow({ createdAt: new Date() })

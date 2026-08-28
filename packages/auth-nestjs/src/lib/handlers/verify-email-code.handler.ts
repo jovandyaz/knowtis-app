@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'node:crypto';
 import {
   AuthErrors,
   EMAIL_VERIFICATION_SOURCE,
+  msUntilResendAllowed,
   VERIFICATION_CODE_MAX_ATTEMPTS,
 } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
@@ -63,7 +64,13 @@ export class VerifyEmailCodeHandler {
     if (attempts > VERIFICATION_CODE_MAX_ATTEMPTS) {
       // The spent row must survive: it is what the resend cooldown keys off,
       // and it carries the emailed link the legitimate user still holds.
-      return err(AuthErrors.tooManyVerificationAttempts());
+      // Requesting a new code is the only way out, so the retry hint points at
+      // the moment that resend becomes possible.
+      return err(
+        AuthErrors.tooManyVerificationAttempts(
+          msUntilResendAllowed(verification.createdAt)
+        )
+      );
     }
 
     if (verification.codeExpiresAt < new Date()) {

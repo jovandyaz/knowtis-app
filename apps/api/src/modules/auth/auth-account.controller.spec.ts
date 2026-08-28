@@ -1,4 +1,8 @@
-import { IS_PUBLIC_KEY, JwtAuthGuard } from '@jovandyaz/auth-nestjs';
+import {
+  IS_PUBLIC_KEY,
+  JwtAuthGuard,
+  RetryAfterHttpException,
+} from '@jovandyaz/auth-nestjs';
 import { AuthErrorCodes, AuthErrors, USER_ROLE } from '@jovandyaz/auth/server';
 import type { AuthDomainError, RequestUser } from '@jovandyaz/auth/server';
 import { ForbiddenException, HttpStatus } from '@nestjs/common';
@@ -97,7 +101,7 @@ describe('AuthAccountController.verifyEmailCode', () => {
 
   it('answers 429 once the attempt budget is spent', async () => {
     const { controller } = createController(
-      err(AuthErrors.tooManyVerificationAttempts())
+      err(AuthErrors.tooManyVerificationAttempts(31_000))
     );
 
     const thrown = await controller
@@ -109,6 +113,19 @@ describe('AuthAccountController.verifyEmailCode', () => {
       error: AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
       code: AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
     });
+  });
+
+  it('hands the spent-budget 429 a Retry-After the filter can write', async () => {
+    const { controller } = createController(
+      err(AuthErrors.tooManyVerificationAttempts(31_000))
+    );
+
+    const thrown = await controller
+      .verifyEmailCode(makeCaller(), { code: CODE })
+      .catch((error: unknown) => error);
+
+    expect(thrown).toBeInstanceOf(RetryAfterHttpException);
+    expect((thrown as RetryAfterHttpException).retryAfterSeconds).toBe(31);
   });
 
   it('is guarded by the controller-wide JWT guard', () => {
