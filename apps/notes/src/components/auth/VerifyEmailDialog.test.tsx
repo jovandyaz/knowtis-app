@@ -292,7 +292,6 @@ describe('VerifyEmailDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
     await flushPromises();
 
-    // No countdown: the throttle window is the server's, and it is not 60s.
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeDisabled();
     expect(
       screen.queryByRole('button', { name: 'Resend in 60s' })
