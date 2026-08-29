@@ -5,7 +5,9 @@ import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { useAuthUser, useProfile } from '@jovandyaz/auth-react';
 import { MailWarning, X } from 'lucide-react';
 
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { Button } from '@knowtis/design-system';
+import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 const DISMISSED_KEY = 'verify-email-banner-dismissed';
 
@@ -35,6 +37,9 @@ function UnverifiedEmailBanner() {
   const { t } = useTranslation('auth');
   const { data: profile } = useProfile();
   const openVerifyDialog = useVerifyEmailStore((s) => s.open);
+  const gateEnforced = useFeatureFlag(
+    FEATURE_FLAG_KEYS.EMAIL_VERIFICATION_GATE
+  );
   const [dismissedUserId, setDismissedUserId] = useState(readDismissedUserId);
 
   // Tri-state: `undefined` is "no profile has resolved yet", not "unverified".
@@ -57,7 +62,11 @@ function UnverifiedEmailBanner() {
       <div className="flex items-start gap-2">
         <MailWarning className="mt-0.5 h-4 w-4 shrink-0 text-(--primary)" />
         <p className="text-sm text-(--foreground)">
-          {t('verifyEmail.bannerText')}
+          {t(
+            gateEnforced
+              ? 'verifyEmail.bannerTextGated'
+              : 'verifyEmail.bannerText'
+          )}
         </p>
       </div>
 

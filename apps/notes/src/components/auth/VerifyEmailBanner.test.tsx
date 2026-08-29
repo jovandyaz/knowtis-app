@@ -12,6 +12,15 @@ const DISMISSED_KEY = 'verify-email-banner-dismissed';
 
 const CTA = 'Verify now';
 const DISMISS = 'Dismiss';
+const NUDGE = "Your email address hasn't been verified yet.";
+const GATED_NUDGE =
+  'Verify your email to share notes by link and create API keys.';
+
+let gateEnforced = false;
+
+vi.mock('@knowtis/data-access-feature-flags', () => ({
+  useFeatureFlag: () => gateEnforced,
+}));
 
 const UNVERIFIED: AuthUserProfile = {
   id: 'user-1',
@@ -33,6 +42,7 @@ beforeAll(async () => {
 
 beforeEach(() => {
   sessionStorage.clear();
+  gateEnforced = false;
   useVerifyEmailStore.setState({ isOpen: false });
 });
 
@@ -70,7 +80,16 @@ describe('VerifyEmailBanner', () => {
   it('asks an unverified account to verify', async () => {
     renderBanner(resolving(UNVERIFIED));
 
-    expect(await screen.findByRole('status')).toBeInTheDocument();
+    expect(await screen.findByRole('status')).toHaveTextContent(NUDGE);
+  });
+
+  it('names what verification unlocks once the gate is enforced', async () => {
+    gateEnforced = true;
+
+    renderBanner(resolving(UNVERIFIED));
+
+    expect(await screen.findByRole('status')).toHaveTextContent(GATED_NUDGE);
+    expect(screen.queryByText(NUDGE)).not.toBeInTheDocument();
   });
 
   it('says nothing until a profile has actually resolved', async () => {
