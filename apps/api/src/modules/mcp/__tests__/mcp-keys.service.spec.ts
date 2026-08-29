@@ -1,13 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { HttpStatus } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 
-import { McpKeysService } from '../mcp-keys.service';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../test-support/verified-identity';
+import { MCP_KEY_PREFIX_LENGTH, McpKeysService } from '../mcp-keys.service';
+import { MCP_SCOPES } from '../mcp-token';
 
 describe('McpKeysService', () => {
   describe('generateKeyParts', () => {
     it('should generate key with knowtis_mcp prefix', () => {
       const { fullKey, prefix, hash } = McpKeysService.generateKeyParts('test');
       expect(fullKey).toMatch(/^knowtis_mcp_test_/);
-      expect(prefix).toBe(fullKey.slice(0, 24));
+      expect(prefix).toBe(fullKey.slice(0, MCP_KEY_PREFIX_LENGTH));
       expect(hash).toHaveLength(64); // SHA-256 hex
     });
 
@@ -36,5 +45,57 @@ describe('McpKeysService', () => {
       const { hash } = McpKeysService.generateKeyParts('test');
       expect(McpKeysService.verifyKey('wrong-key', hash)).toBe(false);
     });
+  });
+});
+
+describe('McpKeysService.create', () => {
+  function makeService(state: IdentityState) {
+    const returning = vi.fn().mockResolvedValue([{ id: 'key-1' }]);
+    const values = vi.fn().mockReturnValue({ returning });
+    const insert = vi.fn().mockReturnValue({ values });
+    const db = { insert };
+    const configService = { get: vi.fn().mockReturnValue('test') };
+    const service = new McpKeysService(
+      db as never,
+      configService as never,
+      policyFor(state)
+    );
+    return { service, insert, values };
+  }
+
+  const persistedRecordFor = (key: string) => ({
+    userId: 'user-1',
+    name: 'laptop',
+    scopes: MCP_SCOPES.READ,
+    keyPrefix: key.slice(0, MCP_KEY_PREFIX_LENGTH),
+    keyHash: McpKeysService.hashKey(key),
+  });
+
+  it('mints a key for an unverified user while the gate flag is off', async () => {
+    const { service, values } = makeService(IDENTITY_STATE.GATE_OFF);
+
+    const { key, record } = await service.create('user-1', 'laptop');
+
+    expect(record).toEqual({ id: 'key-1' });
+    expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
+  });
+
+  it('refuses an unverified user with EMAIL_NOT_VERIFIED and writes nothing', async () => {
+    const { service, insert } = makeService(IDENTITY_STATE.UNVERIFIED);
+
+    await expect(service.create('user-1', 'laptop')).rejects.toMatchObject({
+      status: HttpStatus.FORBIDDEN,
+      response: { code: EMAIL_NOT_VERIFIED_CODE },
+    });
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it('mints a key for a verified user', async () => {
+    const { service, values } = makeService(IDENTITY_STATE.VERIFIED);
+
+    const { key } = await service.create('user-1', 'laptop');
+
+    expect(key).toMatch(/^knowtis_mcp_test_/);
+    expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
   });
 });

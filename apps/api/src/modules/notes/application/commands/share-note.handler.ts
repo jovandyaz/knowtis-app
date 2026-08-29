@@ -4,6 +4,7 @@ import { err, type Result } from 'neverthrow';
 
 import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
 
+import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
   NOTE_REPOSITORY,
   NoteErrors,
@@ -22,12 +23,17 @@ export interface ShareNoteInput {
 @Injectable()
 export class ShareNoteHandler {
   constructor(
-    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository
+    @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   async execute(
     input: ShareNoteInput
   ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
+    if (!(await this.verifiedIdentity.isVerified(input.userId))) {
+      return err(NoteErrors.verificationRequired());
+    }
+
     const targetUserIdResult = UserId.create(input.targetUserId);
     if (targetUserIdResult.isErr()) {
       return err(targetUserIdResult.error as NoteDomainError);

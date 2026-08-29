@@ -30,7 +30,8 @@ export const AuthErrorCodes = {
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
 
-type AuthErrorCode = (typeof AuthErrorCodes)[keyof typeof AuthErrorCodes];
+export type AuthErrorCode =
+  (typeof AuthErrorCodes)[keyof typeof AuthErrorCodes];
 
 function createAuthError(
   code: AuthErrorCode,

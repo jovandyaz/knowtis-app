@@ -18,6 +18,7 @@ import {
 
 import type { EnvConfig } from '../../../../config/env.config';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
+import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   USER_PROVIDER_KEYS_REPOSITORY,
@@ -44,7 +45,8 @@ export class ByokService {
     private readonly repo: UserProviderKeysRepository,
     private readonly flags: FeatureFlagsService,
     private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly registry: ProviderRegistryFactory
+    private readonly registry: ProviderRegistryFactory,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -105,6 +107,10 @@ export class ByokService {
     if (!this.masterKey) {
       throw new ServiceUnavailableException('BYOK is not configured');
     }
+    await this.verifiedIdentity.assertVerified(
+      userId,
+      'Verify your email address to store a provider key'
+    );
     try {
       await this.validateKey(provider, apiKey);
     } catch (error) {

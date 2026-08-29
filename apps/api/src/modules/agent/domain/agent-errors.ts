@@ -1,3 +1,5 @@
+import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
 export interface AgentDomainError {
   readonly code: string;
   readonly message: string;
@@ -20,6 +22,11 @@ export const AgentErrors = {
     make('AGENT_PROPOSAL_EXPIRED', 'This proposal expired; ask again'),
   permissionDenied: () =>
     make('AGENT_PERMISSION_DENIED', 'You cannot perform this action'),
+  emailNotVerified: () =>
+    make(
+      AGENT_EMAIL_NOT_VERIFIED_CODE,
+      'Verify your email address before sharing this note'
+    ),
   commitFailed: (code: string, message: string) =>
     make(
       'AGENT_COMMIT_FAILED',

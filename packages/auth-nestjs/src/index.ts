@@ -86,11 +86,8 @@ export type { VerifyEmailCodeInput } from './lib/handlers/verify-email-code.hand
 export { ResendVerificationHandler } from './lib/handlers/resend-verification.handler';
 export type { ResendVerificationInput } from './lib/handlers/resend-verification.handler';
 
-// HTTP utilities
-export {
-  RetryAfterHttpException,
-  unwrapOrThrow,
-} from './lib/http/result-to-response';
+// HTTP
+export { AUTH_ERROR_STATUS_MAP } from './lib/http/auth-error-status-map';
 
 // Logging
 export { AuthAuditListener } from './lib/logging/auth-audit.listener';

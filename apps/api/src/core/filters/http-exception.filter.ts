@@ -1,4 +1,3 @@
-import { RetryAfterHttpException } from '@jovandyaz/auth-nestjs';
 import {
   Catch,
   HttpException,
@@ -9,6 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 
+import { RetryAfterHttpException } from '../http/retry-after.exception';
 import { RETRY_AFTER_HEADER } from '../http/retry-after.header';
 
 interface FieldError {

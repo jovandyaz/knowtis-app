@@ -45,7 +45,7 @@ import {
 } from '@knowtis/shared-types';
 import { pickDefined } from '@knowtis/shared-util';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import {
   ApiAuthErrors,
   ApiBadRequest,

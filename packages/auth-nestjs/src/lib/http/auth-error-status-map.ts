@@ -1,0 +1,28 @@
+import { AuthErrorCodes } from '@jovandyaz/auth/server';
+import type { AuthErrorCode } from '@jovandyaz/auth/server';
+import { HttpStatus } from '@nestjs/common';
+
+/** HTTP status the API answers with for each auth domain error code. */
+export const AUTH_ERROR_STATUS_MAP: Record<AuthErrorCode, HttpStatus> = {
+  [AuthErrorCodes.INVALID_EMAIL]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.INVALID_PASSWORD]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.INVALID_USER_ID]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.WEAK_PASSWORD]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.EMAIL_ALREADY_EXISTS]: HttpStatus.CONFLICT,
+  [AuthErrorCodes.USER_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [AuthErrorCodes.INTERNAL_ERROR]: HttpStatus.INTERNAL_SERVER_ERROR,
+  [AuthErrorCodes.INVALID_CREDENTIALS]: HttpStatus.UNAUTHORIZED,
+  [AuthErrorCodes.INVALID_REFRESH_TOKEN]: HttpStatus.UNAUTHORIZED,
+  [AuthErrorCodes.TOKEN_REUSE_DETECTED]: HttpStatus.UNAUTHORIZED,
+  [AuthErrorCodes.SESSION_NOT_FOUND]: HttpStatus.UNAUTHORIZED,
+  [AuthErrorCodes.SESSION_EXPIRED]: HttpStatus.UNAUTHORIZED,
+  [AuthErrorCodes.INVALID_RESET_TOKEN]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.RESET_TOKEN_EXPIRED]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.INVALID_VERIFICATION_TOKEN]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.VERIFICATION_TOKEN_EXPIRED]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.EMAIL_ALREADY_VERIFIED]: HttpStatus.CONFLICT,
+  [AuthErrorCodes.INVALID_VERIFICATION_CODE]: HttpStatus.BAD_REQUEST,
+  [AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS]: HttpStatus.TOO_MANY_REQUESTS,
+  [AuthErrorCodes.RESEND_COOLDOWN]: HttpStatus.TOO_MANY_REQUESTS,
+  [AuthErrorCodes.EMAIL_SEND_FAILED]: HttpStatus.INTERNAL_SERVER_ERROR,
+};

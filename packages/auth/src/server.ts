@@ -17,7 +17,7 @@ export {
 
 // Errors (browser-safe, also available from @jovandyaz/auth)
 export { AuthErrors, AuthErrorCodes } from './lib/errors/auth.errors';
-export type { AuthDomainError } from './lib/errors/auth.errors';
+export type { AuthDomainError, AuthErrorCode } from './lib/errors/auth.errors';
 
 // Server-only exports below (node:crypto, bcryptjs)
 

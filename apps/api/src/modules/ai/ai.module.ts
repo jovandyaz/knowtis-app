@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { MODEL_CATALOG } from '@knowtis/ai-gateway';
 
 import { AdminAuditModule } from '../admin/audit/admin-audit.module';
+import { UsersModule } from '../users/users.module';
 import { AiCatalogController } from './ai-catalog.controller';
 import { AiKeysController } from './ai-keys.controller';
 import { AiModelsController } from './ai-models.controller';
@@ -82,6 +83,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
 @Module({
   imports: [
     AdminAuditModule,
+    UsersModule,
     CacheModule.register(),
     JwtModule.registerAsync({
       inject: [ConfigService],

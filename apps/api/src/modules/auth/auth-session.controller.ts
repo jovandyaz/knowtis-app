@@ -1,4 +1,5 @@
 import {
+  AUTH_ERROR_STATUS_MAP,
   CurrentUser,
   JwtAuthGuard,
   LocalAuthGuard,
@@ -7,7 +8,6 @@ import {
   Public,
   RefreshTokensHandler,
   RegisterUserHandler,
-  unwrapOrThrow,
 } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import {
@@ -30,6 +30,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
 import {
   AnonymousSessionDto,
@@ -131,7 +132,7 @@ export class AuthSessionController {
       { userAgent, ipAddress }
     );
 
-    const data = unwrapOrThrow(result);
+    const data = unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
 
     const { anonymousUserId, anonymousToken } = dto;
 
@@ -167,7 +168,7 @@ export class AuthSessionController {
       userAgent,
       ipAddress,
     });
-    const data = unwrapOrThrow(result);
+    const data = unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
 
     if (dto.anonymousUserId && dto.anonymousToken) {
       try {
@@ -212,7 +213,7 @@ export class AuthSessionController {
     clearLegacyHostOnlyCookie(res, cookieConfig);
 
     const result = await this.refreshHandler.execute(refreshToken);
-    const data = unwrapOrThrow(result);
+    const data = unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
 
     setRefreshTokenCookie(res, data.refreshToken, cookieConfig);
 
@@ -235,7 +236,7 @@ export class AuthSessionController {
 
     if (refreshToken) {
       const result = await this.logoutHandler.execute(refreshToken);
-      unwrapOrThrow(result);
+      unwrapOrThrow(result, AUTH_ERROR_STATUS_MAP);
     }
 
     clearLegacyHostOnlyCookie(res, cookieConfig);

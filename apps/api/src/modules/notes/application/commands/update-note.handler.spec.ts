@@ -3,8 +3,17 @@ import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
-import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
+import {
+  EMAIL_NOT_VERIFIED_CODE,
+  GENERAL_ACCESS,
+  PERMISSION,
+} from '@knowtis/shared-types';
 
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../../test-support/verified-identity';
 import {
   NoteEntity,
   NoteErrorCodes,
@@ -92,7 +101,8 @@ describe('UpdateNoteHandler', () => {
     handler = new UpdateNoteHandler(
       mockRepository,
       mockTagRepository,
-      mockEventEmitter
+      mockEventEmitter,
+      policyFor(IDENTITY_STATE.VERIFIED)
     );
   });
 
@@ -691,5 +701,206 @@ describe('UpdateNoteHandler', () => {
     });
 
     expect(result.isOk()).toBe(true);
+  });
+
+  describe('verified email gate on public-link access', () => {
+    const publicNote: NoteEntity = {
+      ...mockNote,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      shareToken: 'existing-token-abc123',
+    };
+
+    const updateAs = (
+      state: IdentityState,
+      note: NoteEntity,
+      input: Partial<Parameters<UpdateNoteHandler['execute']>[0]>
+    ) => {
+      vi.spyOn(mockRepository, 'findById').mockResolvedValue(note);
+      vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(note));
+      const gated = new UpdateNoteHandler(
+        mockRepository,
+        mockTagRepository,
+        mockEventEmitter,
+        policyFor(state)
+      );
+      return gated.execute({ noteId, userId: OWNER_ID, ...input });
+    };
+
+    it('rejects an unverified owner widening a restricted note to anyone_with_link', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('rejects an anonymous owner opening the link', async () => {
+      const result = await updateAs(IDENTITY_STATE.ANONYMOUS, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unverified owner re-widening a note whose token survived a revoke', async () => {
+      const revokedNote: NoteEntity = {
+        ...mockNote,
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+        shareToken: 'existing-token-abc123',
+      };
+
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, revokedNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('lets an unverified owner revoke a link they already exposed', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, publicNote, {
+        generalAccess: GENERAL_ACCESS.RESTRICTED,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalledWith(
+        noteId,
+        expect.objectContaining({ generalAccess: GENERAL_ACCESS.RESTRICTED })
+      );
+    });
+
+    it('lets an unverified owner re-affirm anyone_with_link on an already public note', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, publicNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.VIEWER,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('rejects an unverified owner raising an already public link from viewer to editor', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, publicNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unverified owner opening the link and granting editor in one update', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('lets an unverified owner lower a public link from editor to viewer', async () => {
+      const writableNote: NoteEntity = {
+        ...publicNote,
+        generalAccessPermission: PERMISSION.EDITOR,
+      };
+
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, writableNote, {
+        generalAccessPermission: PERMISSION.VIEWER,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalledWith(
+        noteId,
+        expect.objectContaining({ generalAccessPermission: PERMISSION.VIEWER })
+      );
+    });
+
+    it('lets an unverified owner pick editor for a link that stays closed', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('lets a verified owner raise a public link from viewer to editor', async () => {
+      const result = await updateAs(IDENTITY_STATE.VERIFIED, publicNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('lets an unverified owner edit a restricted note that stays restricted', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        title: 'Still private',
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('tells an unverified editor they lack permission, not that they must verify', async () => {
+      vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+      vi.spyOn(mockRepository, 'hasAccess').mockResolvedValue(true);
+      const gated = new UpdateNoteHandler(
+        mockRepository,
+        mockTagRepository,
+        mockEventEmitter,
+        policyFor(IDENTITY_STATE.UNVERIFIED)
+      );
+
+      const result = await gated.execute({
+        noteId,
+        userId: EDITOR_ID,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
+        expect(result.error.message).toContain('Only owner');
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('lets a verified owner widen to anyone_with_link', async () => {
+      const result = await updateAs(IDENTITY_STATE.VERIFIED, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('lets an unverified owner widen while the gate flag is off', async () => {
+      const result = await updateAs(IDENTITY_STATE.GATE_OFF, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
   });
 });

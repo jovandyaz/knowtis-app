@@ -122,7 +122,7 @@ Orchestrate use cases with single responsibility:
 ## Security
 
 - **Helmet**: Security headers (CSP disabled in dev)
-- **ThrottlerModule**: 60 requests/60s per IP
+- **ThrottlerModule**: 60 requests/60s, spent per registered user (per IP for anonymous and unauthenticated callers)
 - **JWT**: Access (15m) + Refresh (7d) tokens
 
 ## API Documentation

@@ -1,7 +1,13 @@
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
+import {
+  IDENTITY_STATE,
+  policyFor,
+  type IdentityState,
+} from '../../../test-support/verified-identity';
 import { AppAbilityFactory } from '../../authorization/ability.factory';
+import { NoteErrors } from '../../notes/domain/errors/note.errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 
@@ -72,6 +78,7 @@ function deps(over: Record<string, unknown> = {}) {
     abilityFactory: new AppAbilityFactory(),
     noteRepo: { findById: vi.fn() },
     userRepo: { findByEmail: vi.fn() },
+    identity: IDENTITY_STATE.VERIFIED as IdentityState,
     ...over,
   };
 }
@@ -84,7 +91,8 @@ function make(d: ReturnType<typeof deps>) {
     d.shareHandler as never,
     d.abilityFactory as never,
     d.noteRepo as never,
-    d.userRepo as never
+    d.userRepo as never,
+    policyFor(d.identity)
   );
 }
 
@@ -318,6 +326,98 @@ describe('ApproveMutationHandler', () => {
     expect(r.isErr()).toBe(true);
     if (r.isErr()) {
       expect(r.error.code).toBe('AGENT_COMMIT_FAILED');
+    }
+  });
+
+  it('gates an unverified sharer before it can probe whether an address exists', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: { findById: vi.fn() },
+      userRepo: { findByEmail: vi.fn().mockResolvedValue(null) },
+      shareHandler: { execute: vi.fn() },
+      identity: IDENTITY_STATE.UNVERIFIED,
+    });
+
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_EMAIL_NOT_VERIFIED');
+    }
+    expect(d.userRepo.findByEmail).not.toHaveBeenCalled();
+    expect(d.noteRepo.findById).not.toHaveBeenCalled();
+    expect(d.shareHandler.execute).not.toHaveBeenCalled();
+  });
+
+  it('lets an unverified sharer through while the gate flag is off', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Shared',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      userRepo: { findByEmail: vi.fn().mockResolvedValue({ id: 'target' }) },
+      shareHandler: { execute: vi.fn().mockResolvedValue(ok({})) },
+      identity: IDENTITY_STATE.GATE_OFF,
+    });
+
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+
+    expect(r.isOk()).toBe(true);
+    expect(d.shareHandler.execute).toHaveBeenCalled();
+  });
+
+  it('surfaces an unverified sharer as AGENT_EMAIL_NOT_VERIFIED', async () => {
+    const d = deps({
+      store: {
+        take: vi.fn().mockResolvedValue({
+          userId: 'u1',
+          toolName: 'proposeShareNote',
+          mutation: shareProposal(),
+        }),
+        save: vi.fn(),
+      },
+      noteRepo: {
+        findById: vi.fn().mockResolvedValue({
+          id: 'note-1',
+          title: 'Shared',
+          ownerId: 'u1',
+          generalAccess: 'restricted',
+          updatedAt: new Date('2024-03-01'),
+        }),
+      },
+      userRepo: {
+        findByEmail: vi.fn().mockResolvedValue({ id: 'target' }),
+      },
+      shareHandler: {
+        execute: vi
+          .fn()
+          .mockResolvedValue(err(NoteErrors.verificationRequired())),
+      },
+    });
+    const r = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
+    expect(r.isErr()).toBe(true);
+    if (r.isErr()) {
+      expect(r.error.code).toBe('AGENT_EMAIL_NOT_VERIFIED');
     }
   });
 

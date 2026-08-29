@@ -25,7 +25,7 @@ import {
 
 import { SUBJECTS } from '@knowtis/authorization';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest, ApiNotFound } from '../../core/swagger';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';

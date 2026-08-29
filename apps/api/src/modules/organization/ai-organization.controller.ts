@@ -23,7 +23,7 @@ import {
   type OrganizationSuggestion,
 } from '@knowtis/shared-types';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { AIErrorCodes } from '../ai/domain/errors/ai.errors';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';

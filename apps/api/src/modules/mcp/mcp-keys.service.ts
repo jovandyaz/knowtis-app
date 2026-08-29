@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { and, eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
+import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
 import { MCP_SCOPES, type McpScopeCsv } from './mcp-token';
 
 interface KeyParts {
@@ -13,6 +14,8 @@ interface KeyParts {
   hash: string;
 }
 
+export const MCP_KEY_PREFIX_LENGTH = 24;
+
 @Injectable()
 export class McpKeysService {
   private readonly logger = new Logger(McpKeysService.name);
@@ -20,7 +23,8 @@ export class McpKeysService {
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly verifiedIdentity: VerifiedIdentityPolicy
   ) {}
 
   /**
@@ -30,14 +34,16 @@ export class McpKeysService {
   static generateKeyParts(env: string): KeyParts {
     const random = randomBytes(32).toString('base64url');
     const fullKey = `knowtis_mcp_${env}_${random}`;
-    const prefix = fullKey.slice(0, 24);
+    const prefix = fullKey.slice(0, MCP_KEY_PREFIX_LENGTH);
     const hash = McpKeysService.hashKey(fullKey);
 
     return { fullKey, prefix, hash };
   }
 
   /**
-   * SHA-256 hash of a key (hex encoded).
+   * SHA-256 hash of a key (hex encoded). Deliberately keyless, unlike the shared
+   * TokenHasher: MCP keys carry 32 random bytes, so there is nothing to
+   * precompute, and rekeying would orphan live keys users hold in their clients.
    */
   static hashKey(key: string): string {
     return createHash('sha256').update(key).digest('hex');
@@ -71,6 +77,11 @@ export class McpKeysService {
     name: string,
     scopes: McpScopeCsv = MCP_SCOPES.READ
   ) {
+    await this.verifiedIdentity.assertVerified(
+      userId,
+      'Verify your email address to create API keys'
+    );
+
     const env =
       this.configService.get('NODE_ENV') === 'production' ? 'live' : 'test';
     const { fullKey, prefix, hash } = McpKeysService.generateKeyParts(env);

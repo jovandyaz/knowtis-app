@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { UsersModule } from '../users/users.module';
 import {
   CreateNoteHandler,
   DeleteNoteHandler,
@@ -34,6 +35,7 @@ import { NotesController } from './notes.controller';
 import { TagsController } from './tags.controller';
 
 @Module({
+  imports: [UsersModule],
   controllers: [NotesController, TagsController],
   providers: [
     {
