@@ -45,7 +45,9 @@ export function ProfileSection() {
   const onSubmit = (data: ProfileFormData) => {
     updateProfile.mutate(data, {
       onSuccess: (response) => {
-        setUser(response.user);
+        // The response type is a strict subset of the stored profile, so a
+        // wholesale replace would drop the fields it never carries.
+        setUser({ ...user, ...response.user });
         toast.success(t('profile.updatedToast'));
         reset(data);
       },

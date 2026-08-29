@@ -59,10 +59,13 @@ interface AgentState {
   messages: AgentChatMessage[];
   status: AgentStatus;
   error: AgentErrorPayload | null;
+  /** The failure the UI has already answered with an offer, if any. */
+  answeredError: AgentErrorPayload | null;
   pendingProposal: PendingProposal | null;
   /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
   thinkingText: string;
   _streamHandle: AgentStreamHandle | null;
+  markErrorAnswered: () => void;
   sendMessage: (text: string, noteId?: string) => void;
   newConversation: () => void;
   cancel: () => void;
@@ -250,9 +253,14 @@ export const useAgentStore = create<AgentState>((set, get) => {
     messages: [],
     status: 'idle',
     error: null,
+    answeredError: null,
     pendingProposal: null,
     thinkingText: '',
     _streamHandle: null,
+
+    // Keyed on the failure itself, so a later one is answered again without
+    // any of the store's error transitions having to remember to clear this.
+    markErrorAnswered: () => set({ answeredError: get().error }),
 
     sendMessage: (text, noteId) => {
       const trimmed = text.trim();

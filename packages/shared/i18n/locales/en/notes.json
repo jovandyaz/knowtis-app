@@ -312,7 +312,8 @@
       "sanitizeRejected": "The content was rejected for safety reasons.",
       "targetUserNotFound": "That user wasn't found.",
       "noteNotFound": "The note no longer exists.",
-      "invalidProposal": "That request couldn't be processed. Please try again."
+      "invalidProposal": "That request couldn't be processed. Please try again.",
+      "emailNotVerified": "Verify your email address before sharing this note."
     },
     "copilot": {
       "tab": "Copilot",

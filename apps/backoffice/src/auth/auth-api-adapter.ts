@@ -71,6 +71,9 @@ export function createBackofficeAuthApi({
     verifyEmail(_token: string): Promise<void> {
       return notSupported('verifyEmail');
     },
+    verifyEmailCode(_code: string): Promise<void> {
+      return notSupported('verifyEmailCode');
+    },
     resendVerification(): Promise<void> {
       return notSupported('resendVerification');
     },

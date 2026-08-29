@@ -1,9 +1,11 @@
 import { lazy, Suspense } from 'react';
 
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute } from '@tanstack/react-router';
 
-import { authStore } from '@/auth';
-import { ROUTES } from '@/config';
+import {
+  guardVerifyEmailRoute,
+  parseVerifyEmailSearch,
+} from '@/auth/verify-email-guard';
 
 import { LoadingState } from '@knowtis/design-system';
 
@@ -13,23 +15,9 @@ const VerifyEmailPage = lazy(() =>
   }))
 );
 
-interface VerifyEmailSearch {
-  token?: string;
-}
-
 export const Route = createFileRoute('/verify-email')({
-  validateSearch: (search: Record<string, unknown>): VerifyEmailSearch => {
-    if (typeof search.token === 'string') {
-      return { token: search.token };
-    }
-    return {};
-  },
-  beforeLoad: () => {
-    const { isAuthenticated, user } = authStore.getState();
-    if (isAuthenticated && !user?.isAnonymous) {
-      throw redirect({ to: ROUTES.ROOT });
-    }
-  },
+  validateSearch: parseVerifyEmailSearch,
+  beforeLoad: guardVerifyEmailRoute,
   component: VerifyEmailPageWrapper,
 });
 

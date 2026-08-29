@@ -6,6 +6,7 @@ import {
   useProviderKeys,
   useSetProviderKey,
 } from '@/hooks';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 
 import { Button, PasswordInput } from '@knowtis/design-system';
 import { BYOK_PROVIDERS, type ByokProvider } from '@knowtis/shared-types';
@@ -29,9 +30,14 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
   const { data: keys } = useProviderKeys(true);
   const setKey = useSetProviderKey();
   const removeKey = useDeleteProviderKey();
+  const verifyEmailGate = useVerifyEmailGate();
   const [drafts, setDrafts] = useState<Partial<Record<ByokProvider, string>>>(
     {}
   );
+  // The gate owns the verdict on its own refusal; this only remembers the
+  // failures it left to us, so a gated account is never told its key is bad.
+  const [rejectedKeyProvider, setRejectedKeyProvider] =
+    useState<ByokProvider | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -91,15 +97,21 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                     (setKey.isPending &&
                       setKey.variables?.provider === provider)
                   }
-                  onClick={() =>
+                  onClick={() => {
+                    setRejectedKeyProvider(null);
                     setKey.mutate(
                       { provider, apiKey: draft.trim() },
                       {
                         onSuccess: () =>
                           setDrafts((d) => ({ ...d, [provider]: '' })),
+                        onError: (error: unknown) => {
+                          if (!verifyEmailGate.handleError(error)) {
+                            setRejectedKeyProvider(provider);
+                          }
+                        },
                       }
-                    )
-                  }
+                    );
+                  }}
                 >
                   {setKey.isPending && setKey.variables?.provider === provider
                     ? t('aiAssistant.byok.saving')
@@ -114,7 +126,7 @@ export function AIKeysManager({ focusFirstField = false }: AIKeysManagerProps) {
                   </Button>
                 ) : null}
               </div>
-              {setKey.isError && setKey.variables?.provider === provider ? (
+              {rejectedKeyProvider === provider ? (
                 <p className="text-xs text-(--destructive)">
                   {t('aiAssistant.byok.invalid')}
                 </p>

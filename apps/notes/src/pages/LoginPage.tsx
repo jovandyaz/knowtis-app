@@ -6,14 +6,11 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { applyServerFieldErrors, resolvePostLoginRedirect } from '@/auth';
 import { ROUTES } from '@/config';
 import { useAutofillDetect } from '@/hooks/useAutofillDetect';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { LoginFormData } from '@jovandyaz/auth-react';
-import {
-  createLoginSchema,
-  useLogin,
-  useRateLimitState,
-} from '@jovandyaz/auth-react';
+import { createLoginSchema, useLogin } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';

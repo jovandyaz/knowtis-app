@@ -1,6 +1,8 @@
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 import { DEFAULT_LOCALE, logger } from '@knowtis/shared-util';
 
 import { DEFAULT_API_CONFIG, type ApiClientConfig } from './config';
+import { parseRetryAfterMs, RETRY_AFTER_HEADER } from './retry-after';
 
 type RequestMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -19,23 +21,56 @@ export class ApiClientError extends Error {
   readonly status: number;
   readonly code: string | undefined;
   readonly errors: FieldError[] | undefined;
+  /**
+   * How long the server asked the caller to wait before retrying, in ms, or
+   * undefined when it gave no usable guidance. Set from `Retry-After`, so it
+   * is not specific to any one endpoint or status.
+   */
+  readonly retryAfterMs: number | undefined;
 
   constructor(
     message: string,
     status: number,
     code?: string,
-    errors?: FieldError[]
+    errors?: FieldError[],
+    retryAfterMs?: number
   ) {
     super(message);
     this.name = 'ApiClientError';
     this.status = status;
     this.code = code;
     this.errors = errors;
+    this.retryAfterMs = retryAfterMs;
   }
 
   static isApiClientError(error: unknown): error is ApiClientError {
     return error instanceof ApiClientError;
   }
+}
+
+/**
+ * The wait the server named on this failure, in ms, or undefined when it named
+ * none or the failure did not come from the API. Callers fall back to their own
+ * window rather than retrying immediately.
+ */
+export function retryAfterMsOf(error: unknown): number | undefined {
+  return ApiClientError.isApiClientError(error)
+    ? error.retryAfterMs
+    : undefined;
+}
+
+const EMAIL_NOT_VERIFIED_STATUS = 403;
+
+/**
+ * True when the API refused an action because the account's email is still
+ * unverified, so the caller can offer verification instead of a dead error.
+ */
+export function isEmailNotVerifiedError(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.status === EMAIL_NOT_VERIFIED_STATUS &&
+    error.code === EMAIL_NOT_VERIFIED_CODE
+  );
 }
 
 /**
@@ -182,7 +217,8 @@ export class HttpClient implements IHttpClient {
           message,
           response.status,
           errorData.code,
-          fieldErrors
+          fieldErrors,
+          parseRetryAfterMs(response.headers.get(RETRY_AFTER_HEADER))
         );
       }
 

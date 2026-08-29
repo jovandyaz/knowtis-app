@@ -6,6 +6,8 @@ import type { Editor } from '@tiptap/react';
 import tippy from 'tippy.js';
 import type { Instance as TippyInstance } from 'tippy.js';
 
+import { useEscapeDismiss } from '@knowtis/design-system';
+
 import { AIStreamingPreview } from './AIStreamingPreview';
 
 interface AIResultPanelProps {
@@ -105,21 +107,7 @@ export function AIResultPanel({ editor }: AIResultPanelProps) {
     };
   }, [isActive, editor, selectionRange, portalTarget]);
 
-  useEffect(() => {
-    if (!isActive) {
-      return;
-    }
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        handleDiscard();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [isActive, handleDiscard]);
+  useEscapeDismiss(isActive, handleDiscard);
 
   if (!portalTarget || !isActive) {
     return null;

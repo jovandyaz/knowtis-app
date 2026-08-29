@@ -109,18 +109,19 @@ restartPolicyMaxRetries = 3
 
 ### Environment Variables
 
-| Variable                 | Required | Description                              |
-| ------------------------ | -------- | ---------------------------------------- |
-| `DATABASE_URL`           | Yes      | PostgreSQL connection string             |
-| `REDIS_URL`              | No       | Redis connection (caching, sessions)     |
-| `JWT_SECRET`             | Yes      | Access token signing key (min 32 chars)  |
-| `JWT_REFRESH_SECRET`     | Yes      | Refresh token signing key (min 32 chars) |
-| `JWT_EXPIRES_IN`         | No       | Access token TTL (default: `15m`)        |
-| `JWT_REFRESH_EXPIRES_IN` | No       | Refresh token TTL (default: `7d`)        |
-| `FRONTEND_URL`           | Yes      | Notes frontend URL for CORS              |
-| `BACKOFFICE_URL`         | No       | Backoffice URL for CORS                  |
-| `NODE_ENV`               | No       | Set by railway.toml (`production`)       |
-| `PORT`                   | No       | Set by railway.toml (`3333`)             |
+| Variable                 | Required | Description                                                                                                                                                                                                                   |
+| ------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`           | Yes      | PostgreSQL connection string                                                                                                                                                                                                  |
+| `REDIS_URL`              | No       | Redis connection (caching, sessions)                                                                                                                                                                                          |
+| `JWT_SECRET`             | Yes      | Access token signing key (min 32 chars)                                                                                                                                                                                       |
+| `JWT_REFRESH_SECRET`     | Yes      | Refresh token signing key (min 32 chars)                                                                                                                                                                                      |
+| `TOKEN_HASH_KEY`         | Yes      | HMAC key for every stored token hash (sessions, resets, email verification link + code). 32 bytes, base64. `AuthModule` reads it with `getOrThrow` at construction — **the API will not boot without it**, in any environment |
+| `JWT_EXPIRES_IN`         | No       | Access token TTL (default: `15m`)                                                                                                                                                                                             |
+| `JWT_REFRESH_EXPIRES_IN` | No       | Refresh token TTL (default: `7d`)                                                                                                                                                                                             |
+| `FRONTEND_URL`           | Yes      | Notes frontend URL for CORS                                                                                                                                                                                                   |
+| `BACKOFFICE_URL`         | No       | Backoffice URL for CORS                                                                                                                                                                                                       |
+| `NODE_ENV`               | No       | Set by railway.toml (`production`)                                                                                                                                                                                            |
+| `PORT`                   | No       | Set by railway.toml (`3333`)                                                                                                                                                                                                  |
 
 Use Railway reference variables for internal networking (free, faster):
 
@@ -134,6 +135,18 @@ Generate JWT secrets with:
 ```bash
 openssl rand -hex 32
 ```
+
+Generate `TOKEN_HASH_KEY` with (different format — must decode to exactly 32 bytes):
+
+```bash
+openssl rand -base64 32
+```
+
+Any deploy target must set this variable before its next deploy — a missing key fails Nest's dependency injection at boot, not a validation warning at request time.
+
+**The first deploy that sets `TOKEN_HASH_KEY` is a global forced logout**, not only a later rotation. Every stored hash — `sessions.refreshTokenHash`, password-reset tokens, and email-verification link tokens and codes — was written under a different scheme, so none of them match once the key is in play. The moment this ships, every user is signed out and must log in again, and every outstanding password-reset and email-verification link stops working. Rotating the key later does exactly the same thing.
+
+Plan it like a session wipe: ship it in a low-traffic window, and expect a login spike plus a wave of "my reset link is broken" reports from anyone who requested one in the previous hour.
 
 ### Health Endpoints
 
@@ -171,13 +184,14 @@ VITE_COLLABORATION_MODE=websocket
 
 ## Troubleshooting
 
-| Problem                  | Check                                                                    |
-| ------------------------ | ------------------------------------------------------------------------ |
-| Build fails              | Build logs in Railway, verify `pnpm-lock.yaml` committed                 |
-| CORS errors              | `FRONTEND_URL` matches Vercel URL exactly (`https://`, no trailing `/`)  |
-| WebSocket not connecting | `REDIS_URL` configured, frontend `VITE_WS_URL` correct                   |
-| Database connection      | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                  |
-| Deploy not triggering    | Check `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` variable in GitHub |
+| Problem                  | Check                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Build fails              | Build logs in Railway, verify `pnpm-lock.yaml` committed                                                                                                           |
+| CORS errors              | `FRONTEND_URL` matches Vercel URL exactly (`https://`, no trailing `/`)                                                                                            |
+| WebSocket not connecting | `REDIS_URL` configured, frontend `VITE_WS_URL` correct                                                                                                             |
+| Database connection      | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                                                            |
+| Deploy not triggering    | Check `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` variable in GitHub                                                                                           |
+| API crashes on boot      | `TOKEN_HASH_KEY` set to a 32-byte base64 value — `AuthModule` calls `getOrThrow` on it, so a missing or malformed key fails DI before the server can serve traffic |
 
 ---
 
@@ -186,6 +200,9 @@ VITE_COLLABORATION_MODE=websocket
 ```bash
 # Generate JWT secrets
 openssl rand -hex 32
+
+# Generate TOKEN_HASH_KEY (must decode to exactly 32 bytes)
+openssl rand -base64 32
 
 # Test health
 curl https://your-api.railway.app/api/v1/health/ping

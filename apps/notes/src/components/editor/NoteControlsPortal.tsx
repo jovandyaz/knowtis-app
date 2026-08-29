@@ -94,6 +94,7 @@ export function NoteControlsPortal({
               <Button
                 variant="ghost"
                 size="icon"
+                aria-label={t('editor.share')}
                 className="h-8 w-8 text-(--muted-foreground) hover:text-(--foreground)"
                 onClick={() => onShareDialogOpenChange(true)}
               >

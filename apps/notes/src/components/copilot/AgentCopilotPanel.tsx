@@ -1,9 +1,16 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useAgentStore } from '@/stores/agent.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 
-import { aiErrorMessageKey } from '../editor/ai/ai-error-messages';
+import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
+import {
+  aiErrorMessageKey,
+  GENERIC_AI_ERROR_KEY,
+} from '../editor/ai/ai-error-messages';
 import { AgentComposer } from './AgentComposer';
 import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
@@ -16,6 +23,8 @@ export function AgentCopilotPanel() {
   const messages = useAgentStore((s) => s.messages);
   const status = useAgentStore((s) => s.status);
   const error = useAgentStore((s) => s.error);
+  const answeredError = useAgentStore((s) => s.answeredError);
+  const markErrorAnswered = useAgentStore((s) => s.markErrorAnswered);
   const sendMessage = useAgentStore((s) => s.sendMessage);
   const cancel = useAgentStore((s) => s.cancel);
   const retryLast = useAgentStore((s) => s.retryLast);
@@ -24,6 +33,31 @@ export function AgentCopilotPanel() {
   const approveProposal = useAgentStore((s) => s.approveProposal);
   const rejectProposal = useAgentStore((s) => s.rejectProposal);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
+  const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
+
+  const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
+  // Naming verification to a visitor with no address is advice they cannot take.
+  const errorMessageKey =
+    isVerificationGate && !canVerify
+      ? GENERIC_AI_ERROR_KEY
+      : aiErrorMessageKey(error?.code ?? '');
+
+  // Retrying a share the account is not allowed to make would only fail again,
+  // so the one useful answer to this code is the verification dialog itself.
+  // The store outlives this panel, and so must the record of having offered.
+  useEffect(() => {
+    if (!error || !isVerificationGate || answeredError === error) {
+      return;
+    }
+    markErrorAnswered();
+    promptVerification();
+  }, [
+    error,
+    isVerificationGate,
+    answeredError,
+    markErrorAnswered,
+    promptVerification,
+  ]);
 
   return (
     <div className="flex h-full flex-col min-h-0">
@@ -46,10 +80,7 @@ export function AgentCopilotPanel() {
       )}
 
       {status === 'error' && (
-        <RetryBanner
-          message={t(aiErrorMessageKey(error?.code ?? ''))}
-          onRetry={retryLast}
-        />
+        <RetryBanner message={t(errorMessageKey)} onRetry={retryLast} />
       )}
       {status === 'timeout' && (
         <RetryBanner message={t('ai.errors.timeout')} onRetry={retryLast} />

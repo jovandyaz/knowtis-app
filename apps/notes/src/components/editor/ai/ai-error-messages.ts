@@ -1,3 +1,5 @@
+import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+
 type AIErrorMessageKey =
   | 'ai.errors.generic'
   | 'ai.errors.rateLimited'
@@ -17,9 +19,10 @@ type AIErrorMessageKey =
   | 'ai.errors.sanitizeRejected'
   | 'ai.errors.targetUserNotFound'
   | 'ai.errors.noteNotFound'
-  | 'ai.errors.invalidProposal';
+  | 'ai.errors.invalidProposal'
+  | 'ai.errors.emailNotVerified';
 
-const GENERIC_KEY: AIErrorMessageKey = 'ai.errors.generic';
+export const GENERIC_AI_ERROR_KEY: AIErrorMessageKey = 'ai.errors.generic';
 
 const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AI_RATE_LIMIT_EXCEEDED: 'ai.errors.rateLimited',
@@ -43,9 +46,10 @@ const CODE_TO_KEY: Record<string, AIErrorMessageKey> = {
   AGENT_TARGET_USER_NOT_FOUND: 'ai.errors.targetUserNotFound',
   AGENT_NOTE_NOT_FOUND: 'ai.errors.noteNotFound',
   AGENT_INVALID_PROPOSAL: 'ai.errors.invalidProposal',
+  [AGENT_EMAIL_NOT_VERIFIED_CODE]: 'ai.errors.emailNotVerified',
 };
 
 /** Maps a server/client AI error code to an i18n key, falling back to the generic message. */
 export function aiErrorMessageKey(code: string): AIErrorMessageKey {
-  return CODE_TO_KEY[code] ?? GENERIC_KEY;
+  return CODE_TO_KEY[code] ?? GENERIC_AI_ERROR_KEY;
 }

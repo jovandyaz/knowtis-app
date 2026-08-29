@@ -10,15 +10,16 @@ JWT-based auth with refresh token rotation, email verification, and password res
 | Database | PostgreSQL 16, Drizzle ORM                              |
 | Frontend | React 19, TanStack Query, Zustand, react-hook-form, Zod |
 
-| Token               | TTL        | Source                                  |
-| ------------------- | ---------- | --------------------------------------- |
-| Access token (JWT)  | 15 minutes | env `JWT_EXPIRES_IN`                    |
-| Refresh token (JWT) | 7 days     | env `JWT_REFRESH_EXPIRES_IN`            |
-| Email verification  | 24 hours   | constant (`@jovandyaz/auth`, hardcoded) |
-| Password reset      | 1 hour     | constant (`@jovandyaz/auth`, hardcoded) |
-| Session             | 7 days     | constant (`@jovandyaz/auth`, hardcoded) |
+| Token                     | TTL        | Source                                  |
+| ------------------------- | ---------- | --------------------------------------- |
+| Access token (JWT)        | 15 minutes | env `JWT_EXPIRES_IN`                    |
+| Refresh token (JWT)       | 7 days     | env `JWT_REFRESH_EXPIRES_IN`            |
+| Email verification (link) | 24 hours   | constant (`@jovandyaz/auth`, hardcoded) |
+| Email verification (code) | 15 minutes | constant (`@jovandyaz/auth`, hardcoded) |
+| Password reset            | 1 hour     | constant (`@jovandyaz/auth`, hardcoded) |
+| Session                   | 7 days     | constant (`@jovandyaz/auth`, hardcoded) |
 
-> Only the JWT TTLs are env-configurable. The verification/reset/session windows are constants in [`packages/auth/src/lib/constants.ts`](../packages/auth/src/lib/constants.ts) (`VERIFICATION_TOKEN_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`, `SESSION_EXPIRY_MS`).
+> Only the JWT TTLs are env-configurable. The verification/reset/session windows are constants in [`packages/auth/src/lib/constants.ts`](../packages/auth/src/lib/constants.ts) (`VERIFICATION_TOKEN_EXPIRY_MS`, `VERIFICATION_CODE_EXPIRY_MS`, `RESET_TOKEN_EXPIRY_MS`, `SESSION_EXPIRY_MS`) — alongside the code's attempt cap (`VERIFICATION_CODE_MAX_ATTEMPTS`, 5) and resend cooldown (`VERIFICATION_RESEND_COOLDOWN_MS`, 60 seconds).
 
 ---
 
@@ -81,13 +82,25 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 ### Email Verification
 
-`Register` → verification email (async) → user clicks link → `POST /auth/verify-email` → hash token → validate expiry → mark email verified → delete all verification tokens.
+Registering emails both a link and a 6-digit code, stored as one row hashed with the server-side `TOKEN_HASH_KEY`.
 
-**Resend:** `POST /auth/resend-verification` (authenticated) — deletes existing tokens, generates new one.
+**Link (public):** `POST /auth/verify-email` → hash token → validate expiry (24h) → mark email verified → delete the verification rows → revoke every session.
+
+**Code (authenticated):** `POST /auth/verify-email/code` → count the attempt → compare in constant time → validate expiry (15 min) → mark email verified → delete the verification rows → revoke every session **except the caller's own family**. Capped at `VERIFICATION_CODE_MAX_ATTEMPTS` (5) guesses; the spent row is kept so the cap cannot be reset by resending.
+
+Every path that can verify an address emits `AuthEventName.EMAIL_VERIFIED`, carrying the `source` that did it — `code`, `link` or `password_reset` — so the funnel can tell which one moved the rate.
+
+**Resend:** `POST /auth/resend-verification` (authenticated) — refuses within `VERIFICATION_RESEND_COOLDOWN_MS` (1 min) of the current row, otherwise replaces it and emails a fresh link and code.
+
+Three refusals share the `429`: the per-code cooldown (`code: RESEND_COOLDOWN`), the attempt cap (`code: TOO_MANY_VERIFICATION_ATTEMPTS`) and the endpoint throttle — 10 per 15 minutes on the code check, 3 on the resend — which is the only one carrying no code at all. All three answer with `Retry-After` in RFC 9110 delta-seconds, never an HTTP-date. The two auth refusals round up and floor at `1`, and quote the wait actually left rather than the fixed window — a cooldown refused 55s into its minute says `5`. The attempt cap quotes the wait until a _resend_ becomes possible, since a new code is the only way out of a spent budget. The value is not duplicated into the body: the header is authoritative, and `buildCorsOptions` lists it in `exposedHeaders` because CORS otherwise hides every non-safelisted response header from a cross-origin frontend.
+
+`HttpClient` parses it into `ApiClientError.retryAfterMs` on every failed response, not only these three. Only the delta-seconds form is honoured: resolving an HTTP-date needs the client clock, and a clock running behind would hold an action back far longer than the server asked. Missing, unusable or already-elapsed reads as no guidance, never `NaN`. `useResendCooldown` counts down whatever the cooldown refusal named and falls back to `VERIFICATION_RESEND_COOLDOWN_MS` when it named nothing, and shows no notice beside it — the button already names the wait, so anything else would contradict it; the attempt cap holds the resend for the wait it quoted; the throttle still withdraws the resend rather than counting down, because its wait is minutes rather than seconds. No single test spans server exposure and browser read — jsdom's fetch has no CORS layer — so `cors-origins.spec.ts` pins the exposure and `retry-after.test.ts` pins the parse.
 
 ### Password Reset
 
 `POST /auth/forgot-password` (always returns success, prevents email enumeration) → if user exists: generate token → send email → `POST /auth/reset-password` → validate token + expiry → hash new password → update user → **invalidate all sessions**.
+
+A completed reset also marks an unverified email as verified — reading the reset link proves inbox ownership — and emits `EMAIL_VERIFIED` with `source: 'password_reset'`.
 
 ### Anonymous Users
 
@@ -95,7 +108,7 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 **Migration to a real account:** `login` and `register` accept optional `anonymousUserId` + `anonymousToken`. After authenticating, the anonymous token is verified as an identity proof (`verifyMigrationProof` — signature + claims + DB match, expiry ignored) and the anonymous user's data (notes, AI usage) is migrated via `DrizzleAnonymousDataMigrationRepository`. Migration failures are logged but never block login/registration.
 
-**Cleanup:** `CleanupAnonymousTask` (`@Cron`, daily 03:00) prunes stale anonymous users.
+**Cleanup:** `AuthCleanupTask` (`@Cron`, daily 03:00) prunes stale anonymous users and expired email verification rows.
 
 ---
 
@@ -110,26 +123,27 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 ## Security
 
 - **Passwords:** bcrypt (10 rounds). Min 8 chars, uppercase, number, special char. Rules shared between frontend and backend via `getPasswordChecks()` from `@jovandyaz/auth`.
-- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, `SameSite=Lax`, `path=/api/v1/auth`, Secure in production) and as **SHA-256 hashes** in the database (never plaintext). `Lax` is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests. Email/reset tokens also stored as hashes. All generated with `crypto.randomBytes(32)`.
+- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, `SameSite=Lax`, `path=/api/v1/auth`, Secure in production) and as **HMAC-SHA256 hashes**, keyed by `TOKEN_HASH_KEY`, in the database (never plaintext). `Lax` is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests. Email/reset tokens (link and 6-digit code alike) are hashed the same keyed way — the HMAC key is what stops a stolen hash from being brute-forced offline, which matters for the code's low entropy. Link tokens are generated with `crypto.randomBytes(32)`; the code with `crypto.randomInt(0, 1_000_000)`.
 - **Refresh token rotation:** Each refresh rotates the token within its family. Reuse past the grace window → the **token family** is revoked (not all user sessions). See [Token Refresh](#token-refresh).
-- **Rate limiting:** All endpoints via `@nestjs/throttler` (per-IP). Exceeding → `429`.
+- **Rate limiting:** All endpoints via `@nestjs/throttler`, through one app-wide guard that spends each budget per registered user and falls back to the IP for anonymous and unauthenticated callers. Exceeding → `429`.
 - **Email enumeration:** `forgot-password` always returns success regardless of email existence.
 - **Session management:** Password reset invalidates all sessions. Logout invalidates specific session. Metadata (user agent, IP) stored for audit.
 - **Email service:** Delivery runs through `@jovandyaz/email-nestjs` and is selected by `EMAIL_PROVIDER`. **Resend** is the production provider (`ResendSender`, requires `RESEND_API_KEY`); the `console` provider (`ConsoleSender`) only logs emails and is for local development.
 
 ### Environment variables
 
-| Variable                 | Required | Default                         | Description                                            |
-| ------------------------ | -------- | ------------------------------- | ------------------------------------------------------ |
-| `JWT_SECRET`             | Yes      | —                               | Access token signing key                               |
-| `JWT_REFRESH_SECRET`     | Yes      | —                               | Refresh token signing key                              |
-| `JWT_EXPIRES_IN`         | No       | `15m`                           | Access token TTL                                       |
-| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                            | Refresh token TTL                                      |
-| `FRONTEND_URL`           | No       | `http://localhost:4200`         | Base URL for email links                               |
-| `EMAIL_PROVIDER`         | No       | `console`                       | Email sender: `resend` (prod) \| `console` (dev)       |
-| `RESEND_API_KEY`         | Cond.    | —                               | Resend API key (required when `EMAIL_PROVIDER=resend`) |
-| `EMAIL_FROM`             | No       | `Knowtis <noreply@knowtis.com>` | Default sender address                                 |
-| `NODE_ENV`               | No       | `development`                   | Controls email service warnings                        |
+| Variable                 | Required | Default                              | Description                                                                                                                                                                                                              |
+| ------------------------ | -------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `JWT_SECRET`             | Yes      | —                                    | Access token signing key                                                                                                                                                                                                 |
+| `JWT_REFRESH_SECRET`     | Yes      | —                                    | Refresh token signing key                                                                                                                                                                                                |
+| `TOKEN_HASH_KEY`         | Yes      | —                                    | HMAC key for every stored token hash (sessions, resets, email verification link + code). 32 bytes, base64 (`openssl rand -base64 32`). Read via `getOrThrow` at module construction, so the API will not boot without it |
+| `JWT_EXPIRES_IN`         | No       | `15m`                                | Access token TTL                                                                                                                                                                                                         |
+| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                                 | Refresh token TTL                                                                                                                                                                                                        |
+| `FRONTEND_URL`           | No       | `http://localhost:4200`              | Base URL for email links                                                                                                                                                                                                 |
+| `EMAIL_PROVIDER`         | No       | `console`                            | Email sender: `resend` (prod) \| `console` (dev)                                                                                                                                                                         |
+| `RESEND_API_KEY`         | Cond.    | —                                    | Resend API key (required when `EMAIL_PROVIDER=resend`)                                                                                                                                                                   |
+| `EMAIL_FROM`             | No       | `Knowtis <noreply@mail.knowtis.app>` | Default sender address                                                                                                                                                                                                   |
+| `NODE_ENV`               | No       | `development`                        | Outside `production`, `EMAIL_PROVIDER=console` logs the rendered message body — the only way to read a verification code or reset link locally                                                                           |
 
 ---
 
@@ -139,7 +153,8 @@ Four tables: `users`, `sessions`, `email_verification_tokens`, `password_reset_t
 
 - **`users`** — `id` (uuid PK), `email` (unique), `name`, `avatar_url`, `provider` (default `'local'`), `provider_id`, `password_hash`, `locale`, `is_anonymous` (default `false`), `role` (`user_role` enum: `'user'` | `'admin'`, default `'user'`), `email_verified_at`, timestamps
 - **`sessions`** — `id` (uuid PK), `user_id` (FK), `family_id` (uuid, groups rotated tokens), `refresh_token_hash`, `rotated_at`, `user_agent`, `ip_address`, `expires_at`, `created_at`
-- **`email_verification_tokens`** / **`password_reset_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at`, `created_at`
+- **`email_verification_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at` (link, 24h), `code_hash`, `code_expires_at` (code, 15min), `attempts` (int, default `0`, capped at `VERIFICATION_CODE_MAX_ATTEMPTS`), `created_at`
+- **`password_reset_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at`, `created_at`
 
 All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_hash`.
 

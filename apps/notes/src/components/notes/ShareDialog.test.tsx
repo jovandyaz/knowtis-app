@@ -6,14 +6,22 @@ import {
   useQuery,
 } from '@tanstack/react-query';
 
+import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
 import type * as DataAccessNotes from '@knowtis/data-access-notes';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
 import { TooltipProvider } from '@knowtis/design-system';
+import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
 
+import {
+  createAuthApiMock,
+  createAuthOnlyWrapper,
+  HARNESS_PROFILE,
+} from '../../test/auth-harness';
 import { ShareDialog } from './ShareDialog';
 
 const updateMutateAsync = vi.fn<(vars: unknown) => Promise<unknown>>();
@@ -36,9 +44,27 @@ vi.mock('react-i18next', () => ({
 
 let queryClient: QueryClient;
 
+const AuthOnly = createAuthOnlyWrapper(createAuthApiMock(), {
+  user: HARNESS_PROFILE,
+});
+
+const AnonymousAuthOnly = createAuthOnlyWrapper(createAuthApiMock(), {
+  user: { ...HARNESS_PROFILE, isAnonymous: true },
+});
+
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>{children}</TooltipProvider>
+    <AuthOnly>
+      <TooltipProvider>{children}</TooltipProvider>
+    </AuthOnly>
+  </QueryClientProvider>
+);
+
+const anonymousWrapper = ({ children }: { children: ReactNode }) => (
+  <QueryClientProvider client={queryClient}>
+    <AnonymousAuthOnly>
+      <TooltipProvider>{children}</TooltipProvider>
+    </AnonymousAuthOnly>
   </QueryClientProvider>
 );
 
@@ -50,7 +76,10 @@ function DetailObserver() {
   return null;
 }
 
-function renderDialog(overrides: Partial<Parameters<typeof ShareDialog>[0]>) {
+function renderDialog(
+  overrides: Partial<Parameters<typeof ShareDialog>[0]>,
+  renderWrapper = wrapper
+) {
   return render(
     <ShareDialog
       open
@@ -64,7 +93,7 @@ function renderDialog(overrides: Partial<Parameters<typeof ShareDialog>[0]>) {
       accessLevel="owner"
       {...overrides}
     />,
-    { wrapper }
+    { wrapper: renderWrapper }
   );
 }
 
@@ -76,6 +105,7 @@ describe('ShareDialog', () => {
     vi.clearAllMocks();
     updateMutateAsync.mockResolvedValue({});
     queryClient = new QueryClient();
+    useVerifyEmailStore.setState({ isOpen: false });
   });
 
   it('announces a first share as a created link', async () => {
@@ -106,6 +136,35 @@ describe('ShareDialog', () => {
     await waitFor(() =>
       expect(toastSuccess).toHaveBeenCalledWith('share.linkPausedToast')
     );
+  });
+
+  it('offers verification rather than a dead error when the gate refuses the share', async () => {
+    updateMutateAsync.mockRejectedValue(
+      new ApiClientError('Verify your email', 403, EMAIL_NOT_VERIFIED_CODE)
+    );
+    renderDialog({ shareToken: null });
+
+    await clickOption('share.anyoneWithLink');
+
+    await waitFor(() =>
+      expect(useVerifyEmailStore.getState().isOpen).toBe(true)
+    );
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('sends an anonymous visitor to sign up rather than to a retry that cannot work', async () => {
+    updateMutateAsync.mockRejectedValue(
+      new ApiClientError('Verify your email', 403, EMAIL_NOT_VERIFIED_CODE)
+    );
+    renderDialog({ shareToken: null }, anonymousWrapper);
+
+    await clickOption('share.anyoneWithLink');
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('verifyEmail.gateSignUpToast')
+    );
+    expect(toastError).not.toHaveBeenCalledWith('share.accessChangeError');
+    expect(useVerifyEmailStore.getState().isOpen).toBe(false);
   });
 
   it('reports a failed access change instead of staying silent', async () => {

@@ -1,21 +1,16 @@
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Link, useSearch } from '@tanstack/react-router';
+import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 
+import { ResendCodeButton } from '@/components/auth/ResendCodeButton';
+import { ResendNoticeAlert } from '@/components/auth/ResendNoticeAlert';
 import { ROUTES } from '@/config';
-import {
-  useIsAuthenticated,
-  useResendVerification,
-  useVerifyEmail,
-} from '@jovandyaz/auth-react';
-import {
-  AlertCircle,
-  ArrowLeft,
-  CheckCircle,
-  Loader2,
-  Mail,
-} from 'lucide-react';
+import { isRateLimited } from '@/hooks/useRateLimitState';
+import { useResendCooldown } from '@/hooks/useResendCooldown';
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
+import { useVerifyEmail } from '@jovandyaz/auth-react';
+import { AlertCircle, ArrowLeft, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
@@ -34,8 +29,10 @@ export function VerifyEmailPage() {
   const { t } = useTranslation('auth');
   const { token } = useSearch({ from: '/verify-email' });
   const verifyEmail = useVerifyEmail();
-  const resendVerification = useResendVerification();
-  const isAuthenticated = useIsAuthenticated();
+  // No code was just sent from this screen, so the first send is one click away.
+  const resend = useResendCooldown({ startHeld: false });
+  const { canVerify } = useVerifyEmailGate();
+  const navigate = useNavigate();
   const hasAttempted = useRef(false);
 
   useEffect(() => {
@@ -45,12 +42,21 @@ export function VerifyEmailPage() {
         onSuccess: () => {
           toast.success(t('verifyEmail.verifiedToast'));
         },
+        // The token must not survive in history or in a referrer header.
+        onSettled: () => {
+          void navigate({
+            to: ROUTES.VERIFY_EMAIL,
+            search: {},
+            replace: true,
+          });
+        },
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  if (!token) {
+  // Scrubbing the token empties `token`, so only a bare visit is a bad link.
+  if (!token && !hasAttempted.current) {
     return (
       <AuthPageLayout>
         <CardHeader className="space-y-1 text-center">
@@ -139,65 +145,12 @@ export function VerifyEmailPage() {
         </CardDescription>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        {isAuthenticated && (
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() =>
-              resendVerification.mutate(undefined, {
-                onSuccess: () => {
-                  toast.success(t('verifyEmail.emailSentToast'));
-                },
-                onError: (error) => {
-                  if (
-                    ApiClientError.isApiClientError(error) &&
-                    error.status === 429
-                  ) {
-                    toast.error(t('verifyEmail.rateLimitToast'));
-                  }
-                },
-              })
-            }
-            disabled={resendVerification.isPending}
-          >
-            {resendVerification.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('verifyEmail.sendingButton')}
-              </>
-            ) : (
-              <>
-                <Mail className="mr-2 h-4 w-4" />
-                {t('verifyEmail.resendButton')}
-              </>
-            )}
-          </Button>
-        )}
-
-        {resendVerification.isSuccess && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
-          >
-            {t('verifyEmail.resentSuccessCheckInbox')}
-          </div>
-        )}
-
-        {resendVerification.isError && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="rounded-md bg-(--destructive)/10 p-3 text-center text-sm text-(--destructive)"
-          >
-            {ApiClientError.isApiClientError(resendVerification.error) &&
-            resendVerification.error.status === 429
-              ? t('verifyEmail.rateLimitToast')
-              : t('verifyEmail.resentFailed')}
-          </div>
-        )}
-      </CardContent>
+      {canVerify && (
+        <CardContent className="space-y-4">
+          <ResendCodeButton resend={resend} className="w-full" />
+          <ResendNoticeAlert notice={resend.resendNotice} />
+        </CardContent>
+      )}
 
       <CardFooter>
         <Link
@@ -218,7 +171,8 @@ function getVerifyErrorMessage(
 ):
   | 'verifyEmail.genericError'
   | 'verifyEmail.invalidOrExpired'
-  | 'verifyEmail.alreadyVerified' {
+  | 'verifyEmail.alreadyVerified'
+  | 'verifyEmail.codeThrottled' {
   if (!error) {
     return 'verifyEmail.genericError';
   }
@@ -230,6 +184,9 @@ function getVerifyErrorMessage(
     if (error.status === 409) {
       return 'verifyEmail.alreadyVerified';
     }
+  }
+  if (isRateLimited(error)) {
+    return 'verifyEmail.codeThrottled';
   }
 
   return 'verifyEmail.genericError';

@@ -12,7 +12,6 @@ export { Textarea, type TextareaProps } from './Textarea';
 export { Badge, badgeVariants, type BadgeProps } from './Badge';
 export {
   Dialog,
-  DialogTrigger,
   DialogContent,
   DialogHeader,
   DialogFooter,

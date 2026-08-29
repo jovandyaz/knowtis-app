@@ -2,27 +2,22 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 
 import { applyServerFieldErrors } from '@/auth';
 import { getAnonymousUserId } from '@/auth/anonymous-session';
+import { VerifyCodeStep } from '@/components/auth/VerifyCodeStep';
 import { ROUTES } from '@/config';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { getPasswordChecks } from '@jovandyaz/auth';
 import type { RegisterFormData } from '@jovandyaz/auth-react';
-import {
-  createRegisterSchema,
-  useRateLimitState,
-  useRegister,
-  useResendVerification,
-} from '@jovandyaz/auth-react';
-import { ArrowLeft, CheckCircle, Loader2, Mail } from 'lucide-react';
+import { createRegisterSchema, useRegister } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
 import { ApiClientError } from '@knowtis/api-client';
 import {
-  Button,
   CardContent,
   CardDescription,
   CardFooter,
@@ -42,7 +37,7 @@ import { AuthPageLayout } from './AuthPageLayout';
 export function RegisterPage() {
   const { t } = useTranslation('auth');
   const registerMutation = useRegister();
-  const resendVerification = useResendVerification();
+  const navigate = useNavigate();
   const { rateLimited, checkRateLimit, resetRateLimit } = useRateLimitState();
   const [registeredEmail, setRegisteredEmail] = useState('');
   const registerSchema = useTranslatedSchema(createRegisterSchema);
@@ -103,90 +98,31 @@ export function RegisterPage() {
     );
   };
 
+  const enterApp = () => {
+    navigate({ to: ROUTES.DASHBOARD });
+  };
+
   if (registeredEmail) {
     return (
       <AuthPageLayout>
-        <CardHeader className="space-y-1 text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-(--primary)/10">
-            <CheckCircle className="h-6 w-6 text-(--primary)" />
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">
-            {t('verifyEmail.checkEmail')}
-          </CardTitle>
-          <CardDescription>
-            {t('verifyEmail.sentVerificationTo')}{' '}
-            <span className="font-medium text-(--foreground)">
-              {registeredEmail}
-            </span>
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-4">
-          <p className="text-center text-sm text-(--muted-foreground)">
-            {t('verifyEmail.checkSpam')}
-          </p>
-
-          {resendVerification.isSuccess && (
-            <div
-              role="alert"
-              aria-live="polite"
-              className="rounded-md bg-(--primary)/10 p-3 text-center text-sm text-(--primary)"
-            >
-              {t('verifyEmail.resentSuccess')}
-            </div>
-          )}
-
-          {resendVerification.isError && (
-            <div
-              role="alert"
-              aria-live="polite"
-              className="rounded-md bg-(--destructive)/10 p-3 text-center text-sm text-(--destructive)"
-            >
-              {ApiClientError.isApiClientError(resendVerification.error) &&
-              resendVerification.error.status === 429
-                ? t('verifyEmail.rateLimitToast')
-                : t('verifyEmail.resentFailed')}
-            </div>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => resendVerification.mutate()}
-            disabled={resendVerification.isPending}
-          >
-            {resendVerification.isPending ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {t('verifyEmail.sendingButton')}
-              </>
-            ) : (
-              <>
-                <Mail className="mr-2 h-4 w-4" />
-                {t('verifyEmail.resendButton')}
-              </>
-            )}
-          </Button>
-        </CardContent>
-
-        <CardFooter>
-          <Link
-            to={ROUTES.LOGIN}
-            search={{ redirect: undefined }}
-            className="flex w-full items-center justify-center gap-2 text-sm font-medium text-(--muted-foreground) hover:text-(--foreground)"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            {t('verifyEmail.backToLogin')}
-          </Link>
-        </CardFooter>
+        <VerifyCodeStep
+          email={registeredEmail}
+          onVerified={() => {
+            toast.success(t('verifyEmail.verifiedToast'));
+            enterApp();
+          }}
+          onSkip={enterApp}
+        />
       </AuthPageLayout>
     );
   }
 
+  const registerError = ApiClientError.isApiClientError(registerMutation.error)
+    ? registerMutation.error
+    : null;
+  const emailAlreadyRegistered = registerError?.status === 409;
   const hasFieldErrors =
-    ApiClientError.isApiClientError(registerMutation.error) &&
-    (registerMutation.error.status === 409 ||
-      !!registerMutation.error.errors?.length);
+    emailAlreadyRegistered || !!registerError?.errors?.length;
 
   return (
     <AuthPageLayout>
@@ -246,6 +182,14 @@ export function RegisterPage() {
               aria-describedby={errors.email ? 'email-error' : undefined}
               {...register('email')}
             />
+            {emailAlreadyRegistered && (
+              <Link
+                to={ROUTES.FORGOT_PASSWORD}
+                className="block text-sm font-medium text-(--foreground) hover:underline"
+              >
+                {t('verifyEmail.emailTakenReclaim')}
+              </Link>
+            )}
           </FormField>
 
           <FormField

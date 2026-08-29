@@ -5,13 +5,13 @@ import { useTranslation } from 'react-i18next';
 import { Link } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
+import { useRateLimitState } from '@/hooks/useRateLimitState';
 import { useTranslatedSchema } from '@/hooks/useTranslatedSchema';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { ForgotPasswordFormData } from '@jovandyaz/auth-react';
 import {
   createForgotPasswordSchema,
   useForgotPassword,
-  useRateLimitState,
 } from '@jovandyaz/auth-react';
 import { ArrowLeft, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';

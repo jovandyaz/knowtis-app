@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 
+import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Copy, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -61,6 +62,7 @@ interface CreateKeyDialogProps {
 export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
   const { t } = useTranslation('common');
   const createKey = useCreateMcpKey();
+  const verifyEmailGate = useVerifyEmailGate();
   const [revealedKey, setRevealedKey] = useState<string | null>(null);
 
   const {
@@ -93,7 +95,9 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
         toast.success(t('integrations.keyCreated'));
       },
       onError: (error: Error) => {
-        toast.error(error.message);
+        if (!verifyEmailGate.handleError(error)) {
+          toast.error(error.message);
+        }
       },
     });
   };
