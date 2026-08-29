@@ -3239,6 +3239,47 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('persists the user message and partial text when the orchestrator ends without a terminal event', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'partial' },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.userMessage).toEqual({ content: 'hola' });
+    expect(appended.assistantMessage).toEqual({
+      content: 'partial',
+      sources: [],
+    });
+  });
+
   it('reconciles the reservation and completes once when a resume turn stops on a committed event', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([

@@ -734,6 +734,7 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
+      await persistTurnOnce([]);
       callbacks.onError(
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
