@@ -96,6 +96,16 @@ Three refusals share the `429`: the per-code cooldown (`code: RESEND_COOLDOWN`),
 
 `HttpClient` parses it into `ApiClientError.retryAfterMs` on every failed response, not only these three. Only the delta-seconds form is honoured: resolving an HTTP-date needs the client clock, and a clock running behind would hold an action back far longer than the server asked. Missing, unusable or already-elapsed reads as no guidance, never `NaN`. `useResendCooldown` counts down whatever the cooldown refusal named and falls back to `VERIFICATION_RESEND_COOLDOWN_MS` when it named nothing, and shows no notice beside it — the button already names the wait, so anything else would contradict it; the attempt cap holds the resend for the wait it quoted; the throttle still withdraws the resend rather than counting down, because its wait is minutes rather than seconds. No single test spans server exposure and browser read — jsdom's fetch has no CORS layer — so `cors-origins.spec.ts` pins the exposure and `retry-after.test.ts` pins the parse.
 
+On the client, `verifyErrorKey` in `useVerifyEmailCodeForm` gives each refusal its own copy: a wrong code, a spent attempt budget (quoting the resend wait), and — because the endpoint throttle carries no `code` — any bare `429` reads as `verifyEmail.codeThrottled` rather than a generic failure. A resend answered `409 EMAIL_ALREADY_VERIFIED` says so and withdraws the button.
+
+### Verifying from the app
+
+- **Registration** ends on `VerifyCodeStep`: the code field, the resend held for the cooldown that just started, and _Skip for now_. Verification is never forced at sign-up; the account is nudged and, once the gate is on, refused at the point of need.
+- **`VerifyEmailBanner`** sits in the app shell for every signed-in, non-anonymous account whose profile reports `emailVerifiedAt: null`, whatever the state of `email_verification_gate` — nudging precedes enforcing, so accounts verify before the flag flips (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)). Once the flag is on the copy names what verification unlocks. Dismissal is remembered per identity in `sessionStorage`.
+- **`VerifyEmailDialog`** is mounted once in `_app` and driven by `verify-email.store`. The banner, every gated refusal (`useVerifyEmailGate().handleError`) and the copilot's `AGENT_EMAIL_NOT_VERIFIED` open it in place, so the user never leaves what they were doing. Its resend starts unheld because no code was just sent. A successful code returns the mutation only after the profile has been refetched, so the banner is gone by the time the dialog closes.
+- **The link while signed in.** Redeeming the link revokes every session of its owner, including the one clicking it, so `guardVerifyEmailRoute` (the `/verify-email` `beforeLoad`) redirects a signed-in account to the dashboard and opens the dialog with an explanation instead of redeeming. It lands on `ROUTES.DASHBOARD`, not `/`, because the app root creates a fresh note whose editor would take the focus the dialog needs. An account that is already verified is sent to the dashboard with no dialog. A session that turns out dead during `_app` load closes any pending dialog before redirecting to login, so the intent never greets the next account on that tab.
+- **`VerifyEmailPage`** serves signed-out and anonymous visitors: it redeems the token, scrubs it from the URL with a `replace` navigation, maps `400/404` to "invalid or expired", `409` to "already verified" and a bare `429` to the throttled copy, and offers a resend only to a signed-in, non-anonymous visitor.
+
 ### Password Reset
 
 `POST /auth/forgot-password` (always returns success, prevents email enumeration) → if user exists: generate token → send email → `POST /auth/reset-password` → validate token + expiry → hash new password → update user → **invalidate all sessions**.
@@ -176,13 +186,13 @@ Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 
 
 > Package details in [AUTH-PACKAGES.md](AUTH-PACKAGES.md).
 
-| Page                 | Route                       |
-| -------------------- | --------------------------- |
-| `LoginPage`          | `/login`                    |
-| `RegisterPage`       | `/register`                 |
-| `ForgotPasswordPage` | `/forgot-password`          |
-| `ResetPasswordPage`  | `/reset-password?token=...` |
-| `VerifyEmailPage`    | `/verify-email?token=...`   |
+| Page                 | Route                                                                                                                                                                                        |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `LoginPage`          | `/login`                                                                                                                                                                                     |
+| `RegisterPage`       | `/register`                                                                                                                                                                                  |
+| `ForgotPasswordPage` | `/forgot-password`                                                                                                                                                                           |
+| `ResetPasswordPage`  | `/reset-password?token=...`                                                                                                                                                                  |
+| `VerifyEmailPage`    | `/verify-email?token=...` — signed-out visitors only; a signed-in account is redirected to the dashboard and offered the code dialog (see [Verifying from the app](#verifying-from-the-app)) |
 
 ---
 
@@ -190,10 +200,11 @@ Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 
 
 Auth operations emit events via NestJS `EventEmitter2`, logged by `AuthAuditListener`.
 
-| Event                                                             | Emitted by                            |
-| ----------------------------------------------------------------- | ------------------------------------- |
-| `auth.register`                                                   | RegisterUserHandler                   |
-| `auth.login` / `auth.login.failed`                                | LoginUserHandler                      |
-| `auth.token.refresh`                                              | RefreshTokensHandler                  |
-| `auth.logout`                                                     | LogoutUserHandler                     |
-| `auth.password.reset.requested` / `auth.password.reset.completed` | ForgotPassword / ResetPasswordHandler |
+| Event                                                                  | Emitted by                                           |
+| ---------------------------------------------------------------------- | ---------------------------------------------------- |
+| `auth.register`                                                        | RegisterUserHandler                                  |
+| `auth.login` / `auth.login.failed`                                     | LoginUserHandler                                     |
+| `auth.token.refresh`                                                   | RefreshTokensHandler                                 |
+| `auth.logout`                                                          | LogoutUserHandler                                    |
+| `auth.password.reset.requested` / `auth.password.reset.completed`      | ForgotPassword / ResetPasswordHandler                |
+| `auth.email.verified` (`source`: `code` \| `link` \| `password_reset`) | VerifyEmailCode / VerifyEmail / ResetPasswordHandler |
