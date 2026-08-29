@@ -18,7 +18,7 @@ import {
 } from './verify-email-guard';
 
 const TOKEN = 'link-token';
-const APP_ROOT = 'app root';
+const DASHBOARD = 'dashboard';
 const VERIFY_PAGE = 'verify page';
 
 const authState: {
@@ -32,10 +32,10 @@ vi.mock('./setup', () => ({
 
 function renderAt(search: string) {
   const rootRoute = createRootRoute({ component: () => <Outlet /> });
-  const appRoute = createRoute({
+  const dashboardRoute = createRoute({
     getParentRoute: () => rootRoute,
-    path: ROUTES.ROOT,
-    component: () => <p>{APP_ROOT}</p>,
+    path: ROUTES.DASHBOARD,
+    component: () => <p>{DASHBOARD}</p>,
   });
   const verifyRoute = createRoute({
     getParentRoute: () => rootRoute,
@@ -46,7 +46,7 @@ function renderAt(search: string) {
   });
 
   const router = createRouter({
-    routeTree: rootRoute.addChildren([appRoute, verifyRoute]),
+    routeTree: rootRoute.addChildren([dashboardRoute, verifyRoute]),
     history: createMemoryHistory({
       initialEntries: [`${ROUTES.VERIFY_EMAIL}${search}`],
     }),
@@ -63,24 +63,26 @@ beforeEach(() => {
 });
 
 describe('the verification link a signed-in user clicks', () => {
-  it('offers the code dialog instead of dropping the intent', async () => {
-    renderAt(`?token=${TOKEN}`);
+  it('offers the code dialog on the dashboard instead of dropping the intent', async () => {
+    const router = renderAt(`?token=${TOKEN}`);
 
-    expect(await screen.findByText(APP_ROOT)).toBeInTheDocument();
+    expect(await screen.findByText(DASHBOARD)).toBeInTheDocument();
+    // The app root would open a fresh note under the dialog; see the guard.
+    expect(router.state.location.pathname).toBe(ROUTES.DASHBOARD);
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
   });
 
   it('says the dialog stands in for the link, so it can explain itself', async () => {
     renderAt(`?token=${TOKEN}`);
 
-    expect(await screen.findByText(APP_ROOT)).toBeInTheDocument();
+    expect(await screen.findByText(DASHBOARD)).toBeInTheDocument();
     expect(useVerifyEmailStore.getState().source).toBe('emailLink');
   });
 
   it('leaves the token nowhere in history for a Back press to find', async () => {
     const router = renderAt(`?token=${TOKEN}`);
 
-    expect(await screen.findByText(APP_ROOT)).toBeInTheDocument();
+    expect(await screen.findByText(DASHBOARD)).toBeInTheDocument();
 
     // The landed location alone cannot see this: answering the link from the
     // route component instead would also read clean here, having pushed the
@@ -95,7 +97,7 @@ describe('the verification link a signed-in user clicks', () => {
   it('raises nothing when the visit carried no token to redeem', async () => {
     renderAt('');
 
-    expect(await screen.findByText(APP_ROOT)).toBeInTheDocument();
+    expect(await screen.findByText(DASHBOARD)).toBeInTheDocument();
     expect(useVerifyEmailStore.getState().isOpen).toBe(false);
   });
 });

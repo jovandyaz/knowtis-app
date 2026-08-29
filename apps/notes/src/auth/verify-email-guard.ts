@@ -40,5 +40,7 @@ export function guardVerifyEmailRoute({
     useVerifyEmailStore.getState().open('emailLink');
   }
 
-  throw redirect({ to: ROUTES.ROOT });
+  // The app root opens a fresh note whose editor would take the focus this
+  // dialog needs, so the dashboard is where the code gets typed.
+  throw redirect({ to: ROUTES.DASHBOARD });
 }
