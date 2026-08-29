@@ -147,16 +147,6 @@ describe('VerifyEmailCodeHandler', () => {
     expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 
-  it('revokes every session when the caller has no session family', async () => {
-    const result = await handler.execute({ userId: USER_ID, code: VALID_CODE });
-
-    expect(result.isOk()).toBe(true);
-    expect(sessionRepository.deleteAllByUserId).toHaveBeenCalledWith(USER_ID);
-    expect(
-      sessionRepository.deleteAllByUserIdExceptFamily
-    ).not.toHaveBeenCalled();
-  });
-
   it('looks the row up by user id, never by the submitted code', async () => {
     await handler.execute({
       userId: USER_ID,

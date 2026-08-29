@@ -75,6 +75,16 @@ describe('AuthAccountController.verifyEmailCode', () => {
     });
   });
 
+  it('refuses a caller whose token carries no session family, before the handler runs', async () => {
+    const { controller, verifyEmailCodeHandler } = createController();
+    const { familyId: _omitted, ...sessionless } = makeCaller();
+
+    await expect(
+      controller.verifyEmailCode(sessionless, { code: CODE })
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(verifyEmailCodeHandler.execute).not.toHaveBeenCalled();
+  });
+
   it('confirms the verification to the caller', async () => {
     const { controller } = createController();
 

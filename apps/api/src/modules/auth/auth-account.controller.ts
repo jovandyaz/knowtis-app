@@ -116,6 +116,15 @@ export class AuthAccountController {
     @CurrentUser() user: RequestUser,
     @Body() dto: VerifyEmailCodeDto
   ) {
+    // Typing the code proves ownership only together with a live session; an
+    // externally-scoped token (MCP, OAuth) carries no session family, so it has
+    // nothing to prove here and no family for the handler to spare.
+    if (!user.familyId) {
+      throw new ForbiddenException(
+        'Email verification by code requires a signed-in session'
+      );
+    }
+
     const result = await this.verifyEmailCodeHandler.execute({
       userId: user.id,
       code: dto.code,

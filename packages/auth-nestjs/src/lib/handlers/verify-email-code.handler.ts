@@ -26,7 +26,8 @@ import { completeEmailVerification } from './shared/complete-email-verification'
 export interface VerifyEmailCodeInput {
   readonly userId: string;
   readonly code: string;
-  readonly familyId?: string | undefined;
+  /** The caller's own session family — the one verifying must not log out. */
+  readonly familyId: string;
 }
 
 @Injectable()
