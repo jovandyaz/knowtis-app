@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { isRateLimited } from '@/hooks/useRateLimitState';
 import {
   useResendCooldown,
   type ResendControls,
@@ -13,11 +14,13 @@ import { ApiClientError, retryAfterMsOf } from '@knowtis/api-client';
 const CODE_INVALID_KEY = 'verifyEmail.codeInvalid';
 const ATTEMPTS_SPENT_KEY = 'verifyEmail.codeTooManyAttempts';
 const ATTEMPTS_SPENT_WAIT_KEY = 'verifyEmail.codeTooManyAttemptsWait';
+const CODE_THROTTLED_KEY = 'verifyEmail.codeThrottled';
 const GENERIC_ERROR_KEY = 'verifyEmail.genericError';
 
 type VerifyErrorKey =
   | typeof CODE_INVALID_KEY
   | typeof ATTEMPTS_SPENT_KEY
+  | typeof CODE_THROTTLED_KEY
   | typeof GENERIC_ERROR_KEY;
 
 export interface VerifyEmailCodeFormOptions {
@@ -47,6 +50,9 @@ function verifyErrorKey(error: Error | null): VerifyErrorKey | undefined {
     if (error.code === AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS) {
       return ATTEMPTS_SPENT_KEY;
     }
+  }
+  if (isRateLimited(error)) {
+    return CODE_THROTTLED_KEY;
   }
 
   return GENERIC_ERROR_KEY;

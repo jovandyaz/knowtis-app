@@ -12,6 +12,8 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
+
 import { VerifyEmailPage } from './VerifyEmailPage';
 
 const TOKEN = 'secret-token';
@@ -111,6 +113,7 @@ describe('VerifyEmailPage', () => {
     await waitFor(() =>
       expect(router.state.location.searchStr).not.toContain(TOKEN)
     );
+    expect(router.state.location.pathname).toBe(VERIFY_EMAIL_PATH);
     expect(window.location.search).not.toContain(TOKEN);
   });
 
@@ -120,6 +123,7 @@ describe('VerifyEmailPage', () => {
     await waitFor(() =>
       expect(router.state.location.searchStr).not.toContain(TOKEN)
     );
+    expect(router.state.location.pathname).toBe(VERIFY_EMAIL_PATH);
   });
 
   it('replaces the token entry instead of stacking a clean one on top of it', async () => {
@@ -132,10 +136,7 @@ describe('VerifyEmailPage', () => {
     // The location alone cannot see this: a pushed scrub also reads clean, and
     // leaves the token one Back away with `hasAttempted` still hiding the leak.
     expect(router.history.length).toBe(1);
-
-    router.history.back();
-
-    expect(router.history.location.href).not.toContain(TOKEN);
+    expect(router.state.location.pathname).toBe(VERIFY_EMAIL_PATH);
   });
 
   it('keeps showing the success outcome after the URL is scrubbed', async () => {
@@ -176,6 +177,18 @@ describe('VerifyEmailPage', () => {
     expect(
       screen.queryByText('verifyEmail.invalidLink')
     ).not.toBeInTheDocument();
+  });
+
+  it('names the wait when the link endpoint throttles the attempt', async () => {
+    verifyState.isSuccess = false;
+    verifyState.isError = true;
+    verifyState.error = new ApiClientError('Too many requests', 429);
+
+    renderAt(`?token=${TOKEN}`);
+
+    expect(
+      await screen.findByText('verifyEmail.codeThrottled')
+    ).toBeInTheDocument();
   });
 
   it('still calls a bare visit an invalid link', async () => {

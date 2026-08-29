@@ -418,6 +418,48 @@ describe('VerifyEmailDialog', () => {
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
   });
 
+  it('names the wait instead of a generic failure when the code endpoint throttles', async () => {
+    const api = createAuthApiMock({
+      verifyEmailCode: vi
+        .fn()
+        .mockRejectedValue(new ApiClientError('Too many requests', 429)),
+    });
+    renderDialog(api);
+    openDialog();
+
+    await userEvent.type(screen.getByLabelText(CODE_LABEL), CODE);
+    await userEvent.click(screen.getByRole('button', { name: VERIFY_BUTTON }));
+
+    expect(
+      await screen.findByText(
+        'Too many attempts. Wait a few minutes before trying again.'
+      )
+    ).toBeInTheDocument();
+  });
+
+  it('says the address is already verified and withdraws the resend', async () => {
+    const api = createAuthApiMock({
+      resendVerification: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiClientError(
+            'Already verified',
+            409,
+            AuthErrorCodes.EMAIL_ALREADY_VERIFIED
+          )
+        ),
+    });
+    renderDialog(api);
+    openDialog();
+
+    await userEvent.click(screen.getByRole('button', { name: RESEND_BUTTON }));
+
+    expect(
+      await screen.findByText('This email has already been verified.')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeDisabled();
+  });
+
   it('forgets a half-typed code between openings', async () => {
     renderDialog();
     openDialog();

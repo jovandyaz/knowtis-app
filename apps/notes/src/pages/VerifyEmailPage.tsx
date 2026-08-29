@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router';
 import { ResendCodeButton } from '@/components/auth/ResendCodeButton';
 import { ResendNoticeAlert } from '@/components/auth/ResendNoticeAlert';
 import { ROUTES } from '@/config';
+import { isRateLimited } from '@/hooks/useRateLimitState';
 import { useResendCooldown } from '@/hooks/useResendCooldown';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useVerifyEmail } from '@jovandyaz/auth-react';
@@ -170,7 +171,8 @@ function getVerifyErrorMessage(
 ):
   | 'verifyEmail.genericError'
   | 'verifyEmail.invalidOrExpired'
-  | 'verifyEmail.alreadyVerified' {
+  | 'verifyEmail.alreadyVerified'
+  | 'verifyEmail.codeThrottled' {
   if (!error) {
     return 'verifyEmail.genericError';
   }
@@ -182,6 +184,9 @@ function getVerifyErrorMessage(
     if (error.status === 409) {
       return 'verifyEmail.alreadyVerified';
     }
+  }
+  if (isRateLimited(error)) {
+    return 'verifyEmail.codeThrottled';
   }
 
   return 'verifyEmail.genericError';

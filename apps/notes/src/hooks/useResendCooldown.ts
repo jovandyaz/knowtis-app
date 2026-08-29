@@ -14,8 +14,12 @@ import { isRateLimited } from './useRateLimitState';
 
 const RESEND_LOCKED_OUT_KEY = 'verifyEmail.resendLockedOut';
 const RESENT_FAILED_KEY = 'verifyEmail.resentFailed';
+const ALREADY_VERIFIED_KEY = 'verifyEmail.alreadyVerified';
 
-type ResendErrorKey = typeof RESEND_LOCKED_OUT_KEY | typeof RESENT_FAILED_KEY;
+type ResendErrorKey =
+  | typeof RESEND_LOCKED_OUT_KEY
+  | typeof RESENT_FAILED_KEY
+  | typeof ALREADY_VERIFIED_KEY;
 
 export interface ResendNotice {
   tone: 'success' | 'error';
@@ -51,6 +55,13 @@ function isResendCooldown(error: unknown): boolean {
   return (
     ApiClientError.isApiClientError(error) &&
     error.code === AuthErrorCodes.RESEND_COOLDOWN
+  );
+}
+
+function isAlreadyVerified(error: unknown): boolean {
+  return (
+    ApiClientError.isApiClientError(error) &&
+    error.code === AuthErrorCodes.EMAIL_ALREADY_VERIFIED
   );
 }
 
@@ -94,6 +105,11 @@ export function useResendCooldown({
       onError: (error) => {
         if (isResendCooldown(error)) {
           restart(retryAfterMsOf(error));
+          return;
+        }
+        if (isAlreadyVerified(error)) {
+          setLockedOut(true);
+          setErrorKey(ALREADY_VERIFIED_KEY);
           return;
         }
         if (isRateLimited(error)) {
