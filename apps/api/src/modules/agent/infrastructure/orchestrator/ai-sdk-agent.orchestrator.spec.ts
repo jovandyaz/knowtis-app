@@ -2951,6 +2951,35 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
+  it('logs a readable message when a tool throws a non-Error value', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'webFetch',
+          input: { url: 'https://example.test' },
+          error: { status: 503 },
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        toolName: 'webFetch',
+        error: 'non-Error value thrown',
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
   // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.
   it('logs agent.tool.error and counts tool activity in turn health', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
@@ -2983,6 +3012,7 @@ describe('AiSdkAgentOrchestrator', () => {
         event: 'agent.tool.error',
         toolName: 'getNote',
         userId: 'u1',
+        error: 'boom',
       })
     );
     expect(healthLogsFrom(logSpy).at(-1)).toMatchObject({
