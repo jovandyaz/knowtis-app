@@ -2,16 +2,20 @@ import { describe, expect, it } from 'vitest';
 
 import { validateEnv } from './env.config';
 
+const TOKEN_HASH_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+
 const baseEnv = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   JWT_SECRET: 'x'.repeat(32),
   JWT_REFRESH_SECRET: 'y'.repeat(32),
+  TOKEN_HASH_KEY,
 };
 
 const validEnv = {
   DATABASE_URL: 'postgres://localhost:5432/knowtis_test',
   JWT_SECRET: 'a'.repeat(40) + '-access-secret-x',
   JWT_REFRESH_SECRET: 'b'.repeat(40) + '-refresh-secret-x',
+  TOKEN_HASH_KEY,
 };
 
 describe('env.config agent vars', () => {
@@ -279,5 +283,59 @@ describe('env.config BACKOFFICE_URL', () => {
 
   it('leaves BACKOFFICE_URL optional outside production', () => {
     expect(validateEnv(validEnv).BACKOFFICE_URL).toBeUndefined();
+  });
+});
+
+describe('env.config TOKEN_HASH_KEY', () => {
+  const prodEnv = {
+    ...validEnv,
+    NODE_ENV: 'production',
+    BACKOFFICE_URL: 'https://backoffice.knowtis.app',
+  };
+
+  it('rejects a production boot without TOKEN_HASH_KEY', () => {
+    const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = prodEnv;
+
+    expect(() => validateEnv(withoutKey)).toThrow(/TOKEN_HASH_KEY is required/);
+  });
+
+  it('accepts a production boot with a 32-byte base64 TOKEN_HASH_KEY', () => {
+    expect(validateEnv(prodEnv).TOKEN_HASH_KEY).toBe(TOKEN_HASH_KEY);
+  });
+
+  it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
+    expect(() => validateEnv({ ...prodEnv, TOKEN_HASH_KEY: '' })).toThrow(
+      /TOKEN_HASH_KEY is required/
+    );
+  });
+
+  it('rejects a production TOKEN_HASH_KEY still set to the example placeholder', () => {
+    expect(() =>
+      validateEnv({
+        ...prodEnv,
+        TOKEN_HASH_KEY: 'changemechangemechangemechangemechangemecha=',
+      })
+    ).toThrow(/TOKEN_HASH_KEY looks like a placeholder/);
+  });
+
+  it('rejects a boot without TOKEN_HASH_KEY outside production too', () => {
+    const { TOKEN_HASH_KEY: _omitted, ...withoutKey } = validEnv;
+
+    expect(() => validateEnv(withoutKey)).toThrow(/TOKEN_HASH_KEY is required/);
+  });
+});
+
+describe('env.config blank assignments', () => {
+  it('treats a blank optional URL as absent instead of an invalid URL', () => {
+    expect(
+      validateEnv({ ...validEnv, OAUTH_ISSUER: '' }).OAUTH_ISSUER
+    ).toBeUndefined();
+  });
+
+  it('falls back to the default when a defaulted var is blank, not to a coerced 0', () => {
+    expect(
+      validateEnv({ ...validEnv, AI_DAILY_TOKEN_LIMIT: '' })
+        .AI_DAILY_TOKEN_LIMIT
+    ).toBe(100000);
   });
 });

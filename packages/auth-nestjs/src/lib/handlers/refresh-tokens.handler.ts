@@ -1,7 +1,6 @@
 import {
   AuthErrors,
   AuthEventName,
-  hashToken,
   REFRESH_TOKEN_GRACE_MS,
   TokenRefreshedEvent,
   UserId,
@@ -13,6 +12,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import {
   SESSION_REPOSITORY,
+  TOKEN_HASHER,
   TOKEN_SERVICE,
   USER_REPOSITORY,
 } from '../constants';
@@ -22,6 +22,7 @@ import type {
 } from '../ports/session.repository';
 import type { JwtPayload, TokenService } from '../ports/token.service';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 import { createSessionWithTokens } from './shared/create-session';
 
 @Injectable()
@@ -33,6 +34,7 @@ export class RefreshTokensHandler {
     @Inject(TOKEN_SERVICE) private readonly tokenService: TokenService,
     @Inject(SESSION_REPOSITORY)
     private readonly sessionRepository: SessionRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -47,7 +49,7 @@ export class RefreshTokensHandler {
     const payload = verifyResult.value;
     const userId = UserId.fromTrusted(payload.sub);
 
-    const tokenHash = hashToken(refreshToken);
+    const tokenHash = this.tokenHasher.hash(refreshToken);
     const session =
       await this.sessionRepository.findByRefreshTokenHash(tokenHash);
 
@@ -126,6 +128,7 @@ export class RefreshTokensHandler {
       {
         tokenService: this.tokenService,
         sessionRepository: this.sessionRepository,
+        tokenHasher: this.tokenHasher,
       },
       {
         userId: payload.sub,

@@ -37,6 +37,7 @@ jobs:
       # Throwaway values: the harness validates env shape only, never issues real tokens.
       JWT_SECRET: nightly-eval-jwt-secret-0000000000000000
       JWT_REFRESH_SECRET: nightly-eval-jwt-refresh-secret-11111111
+      TOKEN_HASH_KEY: bmlnaHRseS1ldmFsLXRva2VuLWhhc2gta2V5LTMyYiE=
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}

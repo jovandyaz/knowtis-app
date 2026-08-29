@@ -1,7 +1,6 @@
 import {
   AuthErrors,
   AuthEventName,
-  hashToken,
   Password,
   PasswordResetCompletedEvent,
   UserId,
@@ -15,12 +14,14 @@ import {
   PASSWORD_HASHER,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   SESSION_REPOSITORY,
+  TOKEN_HASHER,
   USER_REPOSITORY,
 } from '../constants';
 import type { PasswordHasher } from '../ports/password-hasher.port';
 import type { PasswordResetTokenRepository } from '../ports/password-reset-token.repository';
 import type { SessionRepository } from '../ports/session.repository';
 import type { UserRepository } from '../ports/user.repository';
+import { TokenHasher } from '../services/token-hasher.service';
 
 export interface ResetPasswordInput {
   readonly token: string;
@@ -38,6 +39,7 @@ export class ResetPasswordHandler {
     @Inject(PASSWORD_HASHER) private readonly passwordHasher: PasswordHasher,
     @Inject(SESSION_REPOSITORY)
     private readonly sessionRepository: SessionRepository,
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher,
     private readonly eventEmitter: EventEmitter2
   ) {}
 
@@ -51,7 +53,7 @@ export class ResetPasswordHandler {
     }
 
     // 2. Hash the incoming token and look it up
-    const tokenHash = hashToken(input.token);
+    const tokenHash = this.tokenHasher.hash(input.token);
     const resetToken =
       await this.resetTokenRepository.findByTokenHash(tokenHash);
 
