@@ -24,6 +24,7 @@ import { useAnonymousLimitStore } from '@/stores/anonymous-limit.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useRightDockStore } from '@/stores/right-dock.store';
 import { useSidebarStore } from '@/stores/sidebar.store';
+import { useVerifyEmailStore } from '@/stores/verify-email.store';
 import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { PanelLeft } from 'lucide-react';
 import { motion } from 'motion/react';
@@ -50,6 +51,8 @@ export const Route = createFileRoute('/_app')({
       await initAuth();
     } catch (error) {
       if (error instanceof SessionExpiredError) {
+        // A dead session's link intent must not greet whoever signs in next.
+        useVerifyEmailStore.getState().close();
         throw redirect({
           to: ROUTES.LOGIN,
           search: { redirect: location.href },

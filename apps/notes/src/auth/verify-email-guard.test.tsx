@@ -21,9 +21,11 @@ const TOKEN = 'link-token';
 const DASHBOARD = 'dashboard';
 const VERIFY_PAGE = 'verify page';
 
+const VERIFIED_AT = '2026-08-29T10:00:00.000Z';
+
 const authState: {
   isAuthenticated: boolean;
-  user: { isAnonymous?: boolean } | null;
+  user: { isAnonymous?: boolean; emailVerifiedAt?: string | null } | null;
 } = { isAuthenticated: false, user: null };
 
 vi.mock('./setup', () => ({
@@ -88,10 +90,16 @@ describe('the verification link a signed-in user clicks', () => {
     // route component instead would also read clean here, having pushed the
     // token entry one Back away.
     expect(router.history.length).toBe(1);
+  });
 
-    router.history.back();
+  it('asks nothing of an account that is already verified', async () => {
+    authState.user = { isAnonymous: false, emailVerifiedAt: VERIFIED_AT };
 
-    expect(router.history.location.href).not.toContain(TOKEN);
+    const router = renderAt(`?token=${TOKEN}`);
+
+    expect(await screen.findByText(DASHBOARD)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe(ROUTES.DASHBOARD);
+    expect(useVerifyEmailStore.getState().isOpen).toBe(false);
   });
 
   it('raises nothing when the visit carried no token to redeem', async () => {

@@ -36,7 +36,7 @@ export function guardVerifyEmailRoute({
   // reading this, so the click is answered with the code from the same email
   // instead. Redirecting out of beforeLoad resolves the pending navigation, so
   // the token is never committed as a history entry.
-  if (search.token) {
+  if (search.token && !user?.emailVerifiedAt) {
     useVerifyEmailStore.getState().open('emailLink');
   }
 
