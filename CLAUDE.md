@@ -59,6 +59,7 @@ nx run <project> <target>  # Run specific task
 ```
 apps/
 ├── api/           # NestJS backend (modules: admin, agent, ai, artifacts, auth, authorization, collaboration, feature-flags, health, mcp, notes, observability, users, websocket)
+├── backoffice/    # Admin frontend (Vite, TanStack Router)
 ├── mcp/           # MCP server for AI assistants (Hono, standalone)
 └── notes/         # React frontend (Vite, TanStack Router)
 
@@ -66,7 +67,7 @@ libs/              # App-specific libraries
 ├── api-client/           # HTTP/WebSocket client for frontend
 ├── authorization/        # CASL permission definitions (shared FE/BE)
 └── data-access/          # React Query hooks + Zod schemas per domain
-    ├── artifacts/ ├── feature-flags/ ├── mcp-keys/ ├── notes/ └── users/
+    ├── admin/ ├── artifacts/ ├── feature-flags/ ├── mcp-keys/ ├── notes/ ├── oauth/ └── users/
 
 packages/          # Shared packages (framework-light, reusable)
 ├── ai-gateway/           # Framework-free AI gateway core (injection guard, sanitizer, token estimator)
@@ -88,7 +89,7 @@ Enforced by Nx tags (see Module Boundaries): `type:app → {type:ui, type:data-a
 
 The workspace uses a dual-namespace convention (see `tsconfig.base.json` paths for the full list).
 
-The 17 `@knowtis/*` aliases: `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-admin`, `@knowtis/data-access-artifacts`, `@knowtis/data-access-feature-flags`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/data-access-users`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-i18n`, `@knowtis/shared-types`, `@knowtis/shared-util`.
+The 18 `@knowtis/*` aliases: `@knowtis/ai-gateway`, `@knowtis/api-client`, `@knowtis/authorization`, `@knowtis/crdt`, `@knowtis/data-access-admin`, `@knowtis/data-access-artifacts`, `@knowtis/data-access-feature-flags`, `@knowtis/data-access-mcp-keys`, `@knowtis/data-access-notes`, `@knowtis/data-access-oauth`, `@knowtis/data-access-users`, `@knowtis/design-system`, `@knowtis/editor`, `@knowtis/editor-schema`, `@knowtis/shared-hooks`, `@knowtis/shared-i18n`, `@knowtis/shared-types`, `@knowtis/shared-util`.
 
 The auth/permissions/email packages publish under the `@jovandyaz/*` namespace and are imported that way: `@jovandyaz/auth` (+ `@jovandyaz/auth/server`), `@jovandyaz/auth-react`, `@jovandyaz/auth-nestjs`, `@jovandyaz/permissions-core`, `@jovandyaz/permissions-react`, `@jovandyaz/permissions-nestjs`, `@jovandyaz/email`, `@jovandyaz/email-nestjs`. There is no `@knowtis/auth`, `@knowtis/permissions`, or `@knowtis/email`.
 

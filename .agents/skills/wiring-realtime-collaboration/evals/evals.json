@@ -1,0 +1,38 @@
+{
+  "skill": "wiring-realtime-collaboration",
+  "evals": [
+    {
+      "id": "server-read-only",
+      "query": "A user with read-only note access can hide the disabled UI and send Yjs updates directly. Fix the authorization.",
+      "files": [],
+      "expected_behavior": [
+        "Enforces authorization during the server-side Hocuspocus handshake",
+        "Sets connectionConfig.readOnly when CASL denies update",
+        "Does not rely on frontend state or disabled controls for write protection",
+        "Preserves read access for a user who can read but cannot update"
+      ]
+    },
+    {
+      "id": "external-update-broadcast",
+      "query": "REST updated a note while editors were connected. Wire the change into the live Yjs document without leaking a connection.",
+      "files": [],
+      "expected_behavior": [
+        "Routes the event through NoteUpdatedListener and applyExternalUpdate",
+        "Probe-validates the update before merging it with DirectConnection.transact",
+        "Disconnects the direct connection in a finally block",
+        "Does not depend on transaction origins surviving DirectConnection.transact"
+      ]
+    },
+    {
+      "id": "mcp-jwt-rejected",
+      "query": "Let MCP API-key JWTs open collaboration sockets so an MCP client can live-edit notes.",
+      "files": [],
+      "expected_behavior": [
+        "Rejects MCP-issued JWTs at the collaboration handshake",
+        "Explains that an MCP API key must not grant a live editing socket",
+        "Keeps external MCP mutations on the REST/event broadcast path",
+        "Does not weaken server-side authorization"
+      ]
+    }
+  ]
+}

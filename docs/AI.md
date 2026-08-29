@@ -1162,6 +1162,8 @@ Registered users can store their own provider API keys so the copilot runs on **
 
 `secret-cipher.ts` (pure functions) encrypts each key with **AES-256-GCM** under `BYOK_ENCRYPTION_KEY`, persisting `{ ciphertext, iv, auth_tag }` plus a short masked `key_prefix` for display. The decrypted key lives only in memory for the duration of one request — never logged, thrown, sent to telemetry, or returned. `secret-cipher` and `ByokService` both re-assert the 32-byte master-key length defensively.
 
+There is no lossless rotation path because stored rows have no key version and decryption uses only the current master key. If compromise forces rotation, disable `agent_byok`, rotate `BYOK_ENCRYPTION_KEY`, require users to delete and re-enter their provider keys, then re-enable the flag. Preserving existing credentials would require a separately designed dual-key, versioned re-encryption migration; never replace the key silently.
+
 ### Storage
 
 `user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` adds the provider `CHECK`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google'))`. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.

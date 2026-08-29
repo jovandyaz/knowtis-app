@@ -72,6 +72,7 @@
 git clone git@github.com:jovandyaz/knowtis_app.git
 cd knowtis_app
 pnpm setup       # installs deps, scaffolds .env files, starts Docker, pushes the schema
+pnpm setup:agents # installs the project-scoped Claude Code plugins (optional)
 pnpm dev:all     # starts the API + Notes + Backoffice
 ```
 

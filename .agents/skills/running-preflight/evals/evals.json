@@ -1,0 +1,38 @@
+{
+  "skill": "running-preflight",
+  "evals": [
+    {
+      "id": "all-green",
+      "query": "Run the full preflight before I push this branch.",
+      "files": [],
+      "expected_behavior": [
+        "Runs affected discovery, lint, typecheck, tests, production builds, and migration generation drift checks",
+        "Uses pnpm nx and the same test parallelism and run mode as CI",
+        "Reports affected projects and all corresponding deploy jobs",
+        "Ends with SHIP only when every command succeeds"
+      ]
+    },
+    {
+      "id": "migration-drift",
+      "query": "Preflight is green except db:generate created a new untracked migration under apps/api/drizzle. Can this still ship?",
+      "files": [],
+      "expected_behavior": [
+        "Returns NO-SHIP",
+        "Explains that generated SQL and metadata must be reviewed and committed",
+        "Does not suggest drizzle-kit push as a workaround",
+        "Reports the tracked-and-untracked porcelain status gate as failed"
+      ]
+    },
+    {
+      "id": "continue-after-failure",
+      "query": "Run preflight. Lint will probably fail, but I still need the complete picture.",
+      "files": [],
+      "expected_behavior": [
+        "Continues with typecheck, test DB migration, tests, migration drift, and production builds after the lint failure",
+        "Collects each failure without hiding later results",
+        "Ends with NO-SHIP",
+        "Orders remediation as lint, types, test DB migration, tests, migration drift, then build"
+      ]
+    }
+  ]
+}

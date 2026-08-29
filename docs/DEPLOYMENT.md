@@ -105,7 +105,7 @@ restartPolicyMaxRetries = 3
 
 ### Database Migrations (pre-deploy)
 
-`preDeployCommand` runs Drizzle migrations in Railway's release phase — same `DATABASE_URL` and network as the app, before any new instance serves traffic. A non-zero exit **aborts the deploy**, so new code never runs against an un-migrated schema. `migrate.ts` takes a Postgres advisory lock, making it safe under concurrent deploys. This is the **only** migrator; CI does not run migrations. See [MIGRATIONS.md](MIGRATIONS.md).
+`preDeployCommand` runs Drizzle migrations in Railway's release phase — same `DATABASE_URL` and network as the app, before any new instance serves traffic. A non-zero exit **aborts the deploy**, so new code never runs against an un-migrated schema. `migrate.ts` takes a Postgres advisory lock, making it safe under concurrent deploys. This is the only **production** migrator; CI applies the same committed migrations only to its disposable test database. See [MIGRATIONS.md](MIGRATIONS.md).
 
 ### Environment Variables
 

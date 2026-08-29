@@ -49,6 +49,10 @@ re-run every migration from `0000` and fail (e.g. `42710 enum already exists`).
 Run the baseline **once per environment** to record the migrations whose schema
 is already present, then migrations become fully automatic:
 
+Before running it, compare the live schema with the migration range you intend
+to record and abort on any mismatch. `baseline` records journal hashes; it does
+not verify schema equivalence or apply missing DDL.
+
 ```bash
 # DB already at the latest schema → record everything as applied:
 pnpm db:baseline

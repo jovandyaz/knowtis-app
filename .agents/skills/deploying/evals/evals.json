@@ -1,0 +1,38 @@
+{
+  "skill": "deploying",
+  "evals": [
+    {
+      "id": "notes-not-deployed",
+      "query": "The PR merged to main but the notes frontend did not deploy. Diagnose why.",
+      "files": [],
+      "expected_behavior": [
+        "Checks whether notes was in the Nx affected app set",
+        "Checks the deploy-frontend GitHub Actions job instead of expecting Vercel Git integration",
+        "Does not trigger a manual deployment before identifying the gate",
+        "Distinguishes the notes Vercel project from backoffice"
+      ]
+    },
+    {
+      "id": "railway-terminal-failure",
+      "query": "railway up finished its build output, but the API never became live. Treat the deploy as successful and move on.",
+      "files": [],
+      "expected_behavior": [
+        "Does not treat the end of railway up build output as deployment success",
+        "Checks the terminal deployment state through the gated Railway deploy flow",
+        "Inspects pre-deploy migration and healthcheck logs",
+        "Calls out missing TOKEN_HASH_KEY or other startup configuration as possible causes"
+      ]
+    },
+    {
+      "id": "backoffice-cors",
+      "query": "Backoffice deployed successfully but every API request is blocked by CORS.",
+      "files": [],
+      "expected_behavior": [
+        "Checks BACKOFFICE_URL on the Railway API service",
+        "Verifies the exact backoffice origin without a trailing slash",
+        "Keeps FRONTEND_URL and BACKOFFICE_URL as distinct origins",
+        "Checks the deploy-backoffice job and separate Vercel project only if deployment state is relevant"
+      ]
+    }
+  ]
+}

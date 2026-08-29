@@ -12,15 +12,25 @@
       }
     ]
   },
+  "enabledPlugins": {
+    "nx@nx-claude-plugins": true,
+    "domain@knowtis-plugins": true,
+    "db-ops@knowtis-plugins": true,
+    "delivery@knowtis-plugins": true,
+    "standards@knowtis-plugins": true
+  },
   "extraKnownMarketplaces": {
     "nx-claude-plugins": {
       "source": {
         "source": "github",
         "repo": "nrwl/nx-ai-agents-config"
       }
+    },
+    "knowtis-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "jovandyaz/knowtis-plugins"
+      }
     }
-  },
-  "enabledPlugins": {
-    "nx@nx-claude-plugins": true
   }
 }

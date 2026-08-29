@@ -18,6 +18,8 @@ package-lock.json
 # Auto-generated
 **/routeTree.gen.ts
 *.gen.ts
+.agents/skills
+.opencode/agents
 
 # Design system build
 libs/design-system/build
