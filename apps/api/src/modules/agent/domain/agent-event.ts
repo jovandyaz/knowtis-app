@@ -30,6 +30,7 @@ export const AGENT_STOP_REASON = {
   MAX_STEPS: 'max_steps',
   LENGTH: 'length',
   TOKEN_BUDGET: 'token_budget',
+  CONTENT_FILTER: 'content_filter',
 } as const;
 export type AgentStopReason =
   (typeof AGENT_STOP_REASON)[keyof typeof AGENT_STOP_REASON];

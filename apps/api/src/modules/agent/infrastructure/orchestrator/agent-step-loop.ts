@@ -50,6 +50,7 @@ const MAX_STEP_ATTEMPTS = 2;
 
 const FINISH_REASON_LENGTH = 'length';
 const FINISH_REASON_TOOL_CALLS = 'tool-calls';
+const FINISH_REASON_CONTENT_FILTER = 'content-filter';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -407,6 +408,14 @@ export async function* runAgentStepLoop(
             stopReason = AGENT_STOP_REASON.LENGTH;
             logger.warn({
               event: 'agent.turn.output_truncated',
+              userId: input.userId,
+              model: currentModel,
+              maxOutputTokens: params.budgets.maxOutputTokens,
+            });
+          } else if (result.finishReason === FINISH_REASON_CONTENT_FILTER) {
+            stopReason = AGENT_STOP_REASON.CONTENT_FILTER;
+            logger.warn({
+              event: 'agent.turn.content_filtered',
               userId: input.userId,
               model: currentModel,
             });

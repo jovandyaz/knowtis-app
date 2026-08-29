@@ -2868,6 +2868,33 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(done?.stopReason).toBe('length');
   });
 
+  it('marks done with stopReason content_filter and warns when the provider filtered the output', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'no puedo con eso' };
+        yield { type: 'finish', finishReason: 'content-filter' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('content_filter');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.content_filtered',
+        userId: 'u1',
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
   it('stops continuing to the next step once the turn token budget is spent', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockClear();
