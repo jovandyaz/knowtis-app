@@ -11,12 +11,13 @@ The permission system is built on a layered package architecture. For package in
 1. [Access Levels](#access-levels)
 2. [Sharing Mechanisms](#sharing-mechanisms)
 3. [Access Validation](#access-validation)
-4. [WebSocket Collaboration Permissions](#websocket-collaboration-permissions)
-5. [API Endpoints](#api-endpoints)
-6. [Frontend Behavior](#frontend-behavior)
-7. [Access Matrix](#access-matrix)
-8. [Database Schema](#database-schema)
-9. [Key Files Reference](#key-files-reference)
+4. [Verified Email Gate](#verified-email-gate)
+5. [WebSocket Collaboration Permissions](#websocket-collaboration-permissions)
+6. [API Endpoints](#api-endpoints)
+7. [Frontend Behavior](#frontend-behavior)
+8. [Access Matrix](#access-matrix)
+9. [Database Schema](#database-schema)
+10. [Key Files Reference](#key-files-reference)
 
 ---
 
@@ -140,6 +141,29 @@ Notes shared via "Anyone with the link" from other users are **excluded** from t
 
 ---
 
+## Verified Email Gate
+
+Five actions that widen what an account or a note gives away additionally require a **verified, non-anonymous identity**. `VerifiedIdentityPolicy` (`apps/api/src/modules/users/verified-identity.policy.ts`) decides it behind the `email_verification_gate` feature flag: while the flag is off the policy answers _allow_ for everyone, so the gate ships dark, and a toggle takes effect within the flag cache window (30 s, invalidated on write).
+
+| Site                                              | Where the check sits                                           |
+| ------------------------------------------------- | -------------------------------------------------------------- |
+| Share a note with a user (`ShareNoteHandler`)     | Before any lookup                                              |
+| Widen a note's link (`UpdateNoteHandler`)         | After the ownership check, only when the link's exposure grows |
+| Create an MCP API key (`McpKeysService`)          | First statement of `createKey`                                 |
+| Store a BYOK provider key (`ByokService`)         | Before the provider round-trip that validates the key          |
+| Copilot share approval (`ApproveMutationHandler`) | Before the target email is resolved                            |
+
+The positions differ on purpose:
+
+- **Widening a link** is gated after the ownership check because a non-owner is refused for lacking the right at all — the truer answer than telling them to verify — and only when the link's _exposure_ grows. Exposure is ranked `closed < anyone-with-link / viewer < anyone-with-link / editor` (`linkExposureRank`, `notes/domain/value-objects/link-exposure.ts`), so opening a link, granting write to an open link, or both in one update need a verified email, while closing or lowering a link never does: an unverified owner must always be able to revoke a link they already exposed.
+- **Copilot share approval** checks before resolving the target email; resolving first would reveal whether that account exists.
+
+The refusal is `403 EMAIL_NOT_VERIFIED` over HTTP and `AGENT_EMAIL_NOT_VERIFIED` over the copilot socket, both defined once in `@knowtis/shared-types`.
+
+Because the policy also refuses anonymous users, turning the flag on removes link-sharing from every anonymous visitor at once. They are never offered a verify prompt — there is no address to verify.
+
+---
+
 ## WebSocket Collaboration Permissions
 
 Real-time collaboration runs on **Hocuspocus** (the official Yjs WebSocket server) rather than a custom Socket.io gateway. Documents sync as **Yjs (CRDT)** updates, and Hocuspocus binds to the same Node HTTP server as the REST API — only the upgrade path differs (`/collaboration`). Access is enforced once, at the WebSocket handshake, via a Hocuspocus extension.
@@ -228,6 +252,7 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 | `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`) |
 | `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                               |
 | `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                   |
+| `EMAIL_NOT_VERIFIED`    | 403         | The action needs a verified email (see [Verified Email Gate](#verified-email-gate))        |
 
 ---
 
