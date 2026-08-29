@@ -1,3 +1,4 @@
+import { VERIFICATION_CODE_LENGTH } from '@jovandyaz/auth/server';
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsEmail,
@@ -7,9 +8,14 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
   MinLength,
 } from 'class-validator';
 import { i18nValidationMessage } from 'nestjs-i18n';
+
+const VERIFICATION_CODE_PATTERN = new RegExp(
+  `^\\d{${VERIFICATION_CODE_LENGTH}}$`
+);
 
 export class RegisterDto {
   @ApiProperty({
@@ -143,6 +149,18 @@ export class VerifyEmailDto {
     message: i18nValidationMessage('validation.INVALID_LENGTH'),
   })
   token!: string;
+}
+
+export class VerifyEmailCodeDto {
+  @ApiProperty({
+    description: 'Six-digit verification code received via email',
+    example: '123456',
+  })
+  @IsString({ message: i18nValidationMessage('validation.IS_STRING') })
+  @Matches(VERIFICATION_CODE_PATTERN, {
+    message: i18nValidationMessage('validation.INVALID_CODE'),
+  })
+  code!: string;
 }
 
 export class RefreshTokenDto {

@@ -1,16 +1,20 @@
-import { AuthErrors, UserId } from '@jovandyaz/auth/server';
+import { AuthErrors, EMAIL_VERIFICATION_SOURCE } from '@jovandyaz/auth/server';
 import type { AuthDomainError } from '@jovandyaz/auth/server';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { err, ok, type Result } from 'neverthrow';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { err, type Result } from 'neverthrow';
 
 import {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+  SESSION_REPOSITORY,
   TOKEN_HASHER,
   USER_REPOSITORY,
 } from '../constants';
 import type { EmailVerificationTokenRepository } from '../ports/email-verification-token.repository';
+import type { SessionRepository } from '../ports/session.repository';
 import type { UserRepository } from '../ports/user.repository';
 import { TokenHasher } from '../services/token-hasher.service';
+import { completeEmailVerification } from './shared/complete-email-verification';
 
 export interface VerifyEmailInput {
   readonly token: string;
@@ -24,7 +28,10 @@ export class VerifyEmailHandler {
     @Inject(EMAIL_VERIFICATION_TOKEN_REPOSITORY)
     private readonly verificationTokenRepository: EmailVerificationTokenRepository,
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
-    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher
+    @Inject(TOKEN_HASHER) private readonly tokenHasher: TokenHasher,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessionRepository: SessionRepository,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
@@ -38,33 +45,24 @@ export class VerifyEmailHandler {
       return err(AuthErrors.invalidVerificationToken());
     }
 
-    // Check if token has expired
     if (token.expiresAt < new Date()) {
       await this.verificationTokenRepository.deleteAllByUserId(token.userId);
       return err(AuthErrors.verificationTokenExpired());
     }
 
-    // Check if already verified
-    const userIdResult = UserId.fromTrusted(token.userId);
-    const user = await this.userRepository.findById(userIdResult);
-    if (user?.emailVerifiedAt) {
-      await this.verificationTokenRepository.deleteAllByUserId(token.userId);
-      return err(AuthErrors.emailAlreadyVerified());
-    }
-
-    // Mark user's email as verified
-    const verifyResult =
-      await this.userRepository.markEmailVerified(userIdResult);
-    if (verifyResult.isErr()) {
-      this.logger.error(
-        `Failed to mark email verified for user ${token.userId}`
-      );
-      return err(verifyResult.error);
-    }
-
-    // Delete all verification tokens for this user
-    await this.verificationTokenRepository.deleteAllByUserId(token.userId);
-
-    return ok(undefined);
+    // Spares no family: the link proves only mailbox ownership, and the mailbox
+    // owner may not be whoever is signed in — this evicts anyone squatting on
+    // the address. The code path needs no eviction: typing the digits in-app
+    // already proves the caller holds the session.
+    return completeEmailVerification(
+      {
+        userRepository: this.userRepository,
+        verificationTokenRepository: this.verificationTokenRepository,
+        sessionRepository: this.sessionRepository,
+        eventEmitter: this.eventEmitter,
+        logger: this.logger,
+      },
+      { userId: token.userId, source: EMAIL_VERIFICATION_SOURCE.LINK }
+    );
   }
 }

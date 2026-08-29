@@ -37,6 +37,8 @@ export { hashToken } from './lib/tokens/hash-token';
 export {
   AuthEventName,
   UserRegisteredEvent,
+  EMAIL_VERIFICATION_SOURCE,
+  EmailVerifiedEvent,
   UserLoggedInEvent,
   LoginFailedEvent,
   TokenRefreshedEvent,
@@ -44,6 +46,7 @@ export {
   PasswordResetRequestedEvent,
   PasswordResetCompletedEvent,
 } from './lib/events/auth.events';
+export type { EmailVerificationSource } from './lib/events/auth.events';
 
 // Session types
 export type { SessionContext } from './lib/session/session.types';
@@ -53,5 +56,11 @@ export {
   SESSION_EXPIRY_MS,
   REFRESH_TOKEN_GRACE_MS,
   VERIFICATION_TOKEN_EXPIRY_MS,
+  VERIFICATION_CODE_LENGTH,
+  VERIFICATION_CODE_EXPIRY_MS,
+  VERIFICATION_CODE_MAX_ATTEMPTS,
+  VERIFICATION_RESEND_COOLDOWN_MS,
   RESET_TOKEN_EXPIRY_MS,
 } from './lib/constants';
+
+export { msUntilResendAllowed } from './lib/verification/resend-cooldown';

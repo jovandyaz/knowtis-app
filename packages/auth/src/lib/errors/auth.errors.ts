@@ -1,6 +1,9 @@
 export interface AuthDomainError {
   readonly code: string;
   readonly message: string;
+  /** How long the caller must wait before retrying. Set only on refusals that
+   *  are temporary, and surfaced over HTTP as a `Retry-After` header. */
+  readonly retryAfterMs?: number;
 }
 
 export const AuthErrorCodes = {
@@ -20,6 +23,9 @@ export const AuthErrorCodes = {
   INVALID_VERIFICATION_TOKEN: 'INVALID_VERIFICATION_TOKEN',
   VERIFICATION_TOKEN_EXPIRED: 'VERIFICATION_TOKEN_EXPIRED',
   EMAIL_ALREADY_VERIFIED: 'EMAIL_ALREADY_VERIFIED',
+  INVALID_VERIFICATION_CODE: 'INVALID_VERIFICATION_CODE',
+  TOO_MANY_VERIFICATION_ATTEMPTS: 'TOO_MANY_VERIFICATION_ATTEMPTS',
+  RESEND_COOLDOWN: 'RESEND_COOLDOWN',
   EMAIL_SEND_FAILED: 'EMAIL_SEND_FAILED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;
@@ -31,6 +37,14 @@ function createAuthError(
   message: string
 ): AuthDomainError {
   return { code, message };
+}
+
+function createRetryableAuthError(
+  code: AuthErrorCode,
+  message: string,
+  retryAfterMs: number
+): AuthDomainError {
+  return { code, message, retryAfterMs };
 }
 
 export const AuthErrors = {
@@ -118,6 +132,26 @@ export const AuthErrors = {
     createAuthError(
       AuthErrorCodes.EMAIL_ALREADY_VERIFIED,
       'Email is already verified'
+    ),
+
+  invalidVerificationCode: () =>
+    createAuthError(
+      AuthErrorCodes.INVALID_VERIFICATION_CODE,
+      'Invalid or expired verification code'
+    ),
+
+  tooManyVerificationAttempts: (retryAfterMs: number) =>
+    createRetryableAuthError(
+      AuthErrorCodes.TOO_MANY_VERIFICATION_ATTEMPTS,
+      'Too many attempts — request a new code',
+      retryAfterMs
+    ),
+
+  resendCooldown: (retryAfterMs: number) =>
+    createRetryableAuthError(
+      AuthErrorCodes.RESEND_COOLDOWN,
+      'Wait before requesting another email',
+      retryAfterMs
     ),
 
   emailSendFailed: () =>

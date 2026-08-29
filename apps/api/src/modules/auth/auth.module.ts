@@ -10,13 +10,14 @@ import { AnonymousAuthService } from './application/services/anonymous-auth.serv
 import { AuthAccountController } from './auth-account.controller';
 import { AuthSessionController } from './auth-session.controller';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
+import { DrizzleAnonymousUserRepository } from './infrastructure/persistence/drizzle-anonymous-user.repository';
 import { DrizzleEmailVerificationTokenRepository } from './infrastructure/persistence/drizzle-email-verification-token.repository';
 import { DrizzlePasswordResetTokenRepository } from './infrastructure/persistence/drizzle-password-reset-token.repository';
 import { DrizzleSessionRepository } from './infrastructure/persistence/drizzle-session.repository';
 import { DrizzleUserRepository } from './infrastructure/persistence/drizzle-user.repository';
 import { BcryptPasswordHasher } from './infrastructure/security/bcrypt-password-hasher';
 import { JwtTokenService } from './infrastructure/security/jwt-token.service';
-import { CleanupAnonymousTask } from './tasks/cleanup-anonymous.task';
+import { AuthCleanupTask } from './tasks/auth-cleanup.task';
 
 const configService = new ConfigService();
 
@@ -59,7 +60,8 @@ const configService = new ConfigService();
   providers: [
     AnonymousAuthService,
     DrizzleAnonymousDataMigrationRepository,
-    CleanupAnonymousTask,
+    DrizzleAnonymousUserRepository,
+    AuthCleanupTask,
   ],
   exports: [AnonymousAuthService],
 })

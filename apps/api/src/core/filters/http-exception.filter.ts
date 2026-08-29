@@ -1,3 +1,4 @@
+import { RetryAfterHttpException } from '@jovandyaz/auth-nestjs';
 import {
   Catch,
   HttpException,
@@ -7,6 +8,8 @@ import {
   type ExceptionFilter,
 } from '@nestjs/common';
 import type { Response } from 'express';
+
+import { RETRY_AFTER_HEADER } from '../http/retry-after.header';
 
 interface FieldError {
   field: string;
@@ -71,6 +74,15 @@ export class GlobalExceptionFilter implements ExceptionFilter {
       error = 'Internal Server Error';
       code = undefined;
       errors = undefined;
+    }
+
+    // The throttler sets its own Retry-After before it throws, so only our
+    // domain refusals write one here.
+    if (exception instanceof RetryAfterHttpException) {
+      response.setHeader(
+        RETRY_AFTER_HEADER,
+        String(exception.retryAfterSeconds)
+      );
     }
 
     const errorResponse: ErrorResponse = {

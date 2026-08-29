@@ -31,8 +31,12 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
-import { AnonymousSessionDto, LoginDto, RegisterDto } from './dto/auth.dto';
-import type { RefreshTokenDto } from './dto/auth.dto';
+import {
+  AnonymousSessionDto,
+  LoginDto,
+  RefreshTokenDto,
+  RegisterDto,
+} from './dto/auth.dto';
 import { DrizzleAnonymousDataMigrationRepository } from './infrastructure/persistence/drizzle-anonymous-data-migration.repository';
 import {
   clearLegacyHostOnlyCookie,

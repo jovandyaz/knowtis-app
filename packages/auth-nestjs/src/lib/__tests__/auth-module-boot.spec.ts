@@ -13,6 +13,7 @@ import { RefreshTokensHandler } from '../handlers/refresh-tokens.handler';
 import { RegisterUserHandler } from '../handlers/register-user.handler';
 import { ResendVerificationHandler } from '../handlers/resend-verification.handler';
 import { ResetPasswordHandler } from '../handlers/reset-password.handler';
+import { VerifyEmailCodeHandler } from '../handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from '../handlers/verify-email.handler';
 import { TokenHasher } from '../services/token-hasher.service';
 
@@ -57,6 +58,7 @@ describe('AuthNestjsModule bootstrap', () => {
       ForgotPasswordHandler,
       ResetPasswordHandler,
       VerifyEmailHandler,
+      VerifyEmailCodeHandler,
       ResendVerificationHandler,
     ]) {
       expect(moduleRef.get(handler)).toBeInstanceOf(handler);

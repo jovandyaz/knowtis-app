@@ -6,12 +6,14 @@ import {
   ResendVerificationHandler,
   ResetPasswordHandler,
   unwrapOrThrow,
+  VerifyEmailCodeHandler,
   VerifyEmailHandler,
 } from '@jovandyaz/auth-nestjs';
 import type { RequestUser } from '@jovandyaz/auth/server';
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -26,9 +28,10 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import type {
+import {
   ForgotPasswordDto,
   ResetPasswordDto,
+  VerifyEmailCodeDto,
   VerifyEmailDto,
 } from './dto/auth.dto';
 
@@ -40,6 +43,7 @@ export class AuthAccountController {
     private readonly forgotPasswordHandler: ForgotPasswordHandler,
     private readonly resetPasswordHandler: ResetPasswordHandler,
     private readonly verifyEmailHandler: VerifyEmailHandler,
+    private readonly verifyEmailCodeHandler: VerifyEmailCodeHandler,
     private readonly resendVerificationHandler: ResendVerificationHandler
   ) {}
 
@@ -97,6 +101,39 @@ export class AuthAccountController {
     return { message: 'Email verified successfully' };
   }
 
+  @ApiOperation({ summary: 'Verify email with a 6-digit code' })
+  @ApiResponse({ status: 200, description: 'Email verified successfully' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid or expired verification code',
+  })
+  @ApiResponse({ status: 429, description: 'Too many verification attempts' })
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 10, ttl: 900000 } })
+  @Post('verify-email/code')
+  @HttpCode(HttpStatus.OK)
+  async verifyEmailCode(
+    @CurrentUser() user: RequestUser,
+    @Body() dto: VerifyEmailCodeDto
+  ) {
+    // Typing the code proves ownership only together with a live session; an
+    // externally-scoped token (MCP, OAuth) carries no session family, so it has
+    // nothing to prove here and no family for the handler to spare.
+    if (!user.familyId) {
+      throw new ForbiddenException(
+        'Email verification by code requires a signed-in session'
+      );
+    }
+
+    const result = await this.verifyEmailCodeHandler.execute({
+      userId: user.id,
+      code: dto.code,
+      familyId: user.familyId,
+    });
+    unwrapOrThrow(result);
+    return { message: 'Email verified successfully' };
+  }
+
   @ApiOperation({ summary: 'Resend email verification' })
   @ApiResponse({
     status: 200,
@@ -108,6 +145,14 @@ export class AuthAccountController {
   @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
   async resendVerification(@CurrentUser() user: RequestUser) {
+    // A visitor's address is a synthetic anonymous.knowtis.local one; mailing it
+    // bounces, and bounces cost the sending domain's reputation.
+    if (user.isAnonymous === true) {
+      throw new ForbiddenException(
+        'Email verification requires a registered account'
+      );
+    }
+
     const result = await this.resendVerificationHandler.execute({
       userId: user.id,
     });
