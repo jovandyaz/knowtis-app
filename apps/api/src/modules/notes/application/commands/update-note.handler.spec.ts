@@ -739,6 +739,19 @@ describe('UpdateNoteHandler', () => {
       expect(mockEventEmitter.emit).not.toHaveBeenCalled();
     });
 
+    it('rejects an anonymous owner opening the link', async () => {
+      const result = await updateAs(IDENTITY_STATE.ANONYMOUS, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+      expect(mockEventEmitter.emit).not.toHaveBeenCalled();
+    });
+
     it('rejects an unverified owner re-widening a note whose token survived a revoke', async () => {
       const revokedNote: NoteEntity = {
         ...mockNote,

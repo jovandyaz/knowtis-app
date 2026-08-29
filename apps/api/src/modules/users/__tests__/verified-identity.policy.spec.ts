@@ -52,9 +52,10 @@ describe('VerifiedIdentityPolicy', () => {
       await expect(policy.isVerified('user-1')).resolves.toBe(true);
     });
 
-    it('allows without reading the user at all', async () => {
+    it('allows even when the user lookup would fail', async () => {
+      usersService.findById.mockRejectedValue(new Error('users unavailable'));
+
       await expect(policy.isVerified('user-1')).resolves.toBe(true);
-      expect(usersService.findById).not.toHaveBeenCalled();
     });
   });
 

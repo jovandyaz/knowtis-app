@@ -334,6 +334,17 @@ describe('ShareNoteHandler', () => {
       expect(noteRepo.upsertPermission).not.toHaveBeenCalled();
     });
 
+    it('rejects an anonymous owner without reading or writing anything', async () => {
+      const result = await shareAs(IDENTITY_STATE.ANONYMOUS);
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(noteRepo.findById).not.toHaveBeenCalled();
+      expect(noteRepo.upsertPermission).not.toHaveBeenCalled();
+    });
+
     it('lets a verified owner share', async () => {
       const result = await shareAs(IDENTITY_STATE.VERIFIED);
 

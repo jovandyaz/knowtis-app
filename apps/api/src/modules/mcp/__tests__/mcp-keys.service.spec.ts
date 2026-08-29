@@ -8,14 +8,15 @@ import {
   policyFor,
   type IdentityState,
 } from '../../../test-support/verified-identity';
-import { McpKeysService } from '../mcp-keys.service';
+import { MCP_KEY_PREFIX_LENGTH, McpKeysService } from '../mcp-keys.service';
+import { MCP_SCOPES } from '../mcp-token';
 
 describe('McpKeysService', () => {
   describe('generateKeyParts', () => {
     it('should generate key with knowtis_mcp prefix', () => {
       const { fullKey, prefix, hash } = McpKeysService.generateKeyParts('test');
       expect(fullKey).toMatch(/^knowtis_mcp_test_/);
-      expect(prefix).toBe(fullKey.slice(0, 24));
+      expect(prefix).toBe(fullKey.slice(0, MCP_KEY_PREFIX_LENGTH));
       expect(hash).toHaveLength(64); // SHA-256 hex
     });
 
@@ -59,16 +60,24 @@ describe('McpKeysService.create', () => {
       configService as never,
       policyFor(state)
     );
-    return { service, insert };
+    return { service, insert, values };
   }
 
-  it('mints a key for an unverified user while the gate flag is off', async () => {
-    const { service, insert } = makeService(IDENTITY_STATE.GATE_OFF);
+  const persistedRecordFor = (key: string) => ({
+    userId: 'user-1',
+    name: 'laptop',
+    scopes: MCP_SCOPES.READ,
+    keyPrefix: key.slice(0, MCP_KEY_PREFIX_LENGTH),
+    keyHash: McpKeysService.hashKey(key),
+  });
 
-    await expect(service.create('user-1', 'laptop')).resolves.toMatchObject({
-      record: { id: 'key-1' },
-    });
-    expect(insert).toHaveBeenCalled();
+  it('mints a key for an unverified user while the gate flag is off', async () => {
+    const { service, values } = makeService(IDENTITY_STATE.GATE_OFF);
+
+    const { key, record } = await service.create('user-1', 'laptop');
+
+    expect(record).toEqual({ id: 'key-1' });
+    expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
   });
 
   it('refuses an unverified user with EMAIL_NOT_VERIFIED and writes nothing', async () => {
@@ -82,11 +91,11 @@ describe('McpKeysService.create', () => {
   });
 
   it('mints a key for a verified user', async () => {
-    const { service, insert } = makeService(IDENTITY_STATE.VERIFIED);
+    const { service, values } = makeService(IDENTITY_STATE.VERIFIED);
 
     const { key } = await service.create('user-1', 'laptop');
 
     expect(key).toMatch(/^knowtis_mcp_test_/);
-    expect(insert).toHaveBeenCalled();
+    expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
   });
 });

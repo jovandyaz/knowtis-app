@@ -6,6 +6,7 @@ import { VerifiedIdentityPolicy } from '../modules/users/verified-identity.polic
 
 export const IDENTITY_STATE = {
   GATE_OFF: 'gate-off',
+  ANONYMOUS: 'anonymous',
   UNVERIFIED: 'unverified',
   VERIFIED: 'verified',
 } as const;
@@ -25,7 +26,7 @@ export function policyFor(state: IdentityState): VerifiedIdentityPolicy {
     findById: vi.fn().mockResolvedValue({
       id: 'user-1',
       email: 'ana@test.com',
-      isAnonymous: false,
+      isAnonymous: state === IDENTITY_STATE.ANONYMOUS,
       emailVerifiedAt:
         state === IDENTITY_STATE.VERIFIED
           ? new Date('2026-08-26T10:00:00.000Z')

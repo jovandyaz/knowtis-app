@@ -14,6 +14,8 @@ interface KeyParts {
   hash: string;
 }
 
+export const MCP_KEY_PREFIX_LENGTH = 24;
+
 @Injectable()
 export class McpKeysService {
   private readonly logger = new Logger(McpKeysService.name);
@@ -32,7 +34,7 @@ export class McpKeysService {
   static generateKeyParts(env: string): KeyParts {
     const random = randomBytes(32).toString('base64url');
     const fullKey = `knowtis_mcp_${env}_${random}`;
-    const prefix = fullKey.slice(0, 24);
+    const prefix = fullKey.slice(0, MCP_KEY_PREFIX_LENGTH);
     const hash = McpKeysService.hashKey(fullKey);
 
     return { fullKey, prefix, hash };
