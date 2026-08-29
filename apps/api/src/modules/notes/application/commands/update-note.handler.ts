@@ -24,6 +24,7 @@ import {
   SupertagAssignment,
   TAG_REPOSITORY,
   TagPath,
+  widensLinkExposure,
   type NoteDomainError,
   type NoteEntity,
   type NoteRepository,
@@ -142,14 +143,19 @@ export class UpdateNoteHandler {
 
     const isOwner = note.ownerId === input.userId;
 
-    // Only an owner widening the link is gated. Narrowing stays free — an
-    // unverified user must be able to revoke a link they already exposed —
-    // and a non-owner is refused below for lacking the right at all, which
-    // is the truer answer than telling them to verify.
+    // Only an owner widening the link is gated — opening it, or letting an open
+    // one write. Narrowing stays free: an unverified user must be able to
+    // revoke a link they already exposed. A non-owner is refused below for
+    // lacking the right at all, which is the truer answer than telling them to
+    // verify.
+    const linkAfterUpdate = {
+      generalAccess: input.generalAccess ?? note.generalAccess,
+      generalAccessPermission:
+        input.generalAccessPermission ?? note.generalAccessPermission,
+    };
     if (
       isOwner &&
-      input.generalAccess === GENERAL_ACCESS.ANYONE_WITH_LINK &&
-      note.generalAccess !== GENERAL_ACCESS.ANYONE_WITH_LINK &&
+      widensLinkExposure(note, linkAfterUpdate) &&
       !(await this.verifiedIdentity.isVerified(input.userId))
     ) {
       return err(NoteErrors.verificationRequired());

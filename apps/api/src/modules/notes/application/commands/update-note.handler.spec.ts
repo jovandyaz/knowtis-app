@@ -779,6 +779,66 @@ describe('UpdateNoteHandler', () => {
       expect(mockRepository.update).toHaveBeenCalled();
     });
 
+    it('rejects an unverified owner raising an already public link from viewer to editor', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, publicNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unverified owner opening the link and granting editor in one update', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
+      }
+      expect(mockRepository.update).not.toHaveBeenCalled();
+    });
+
+    it('lets an unverified owner lower a public link from editor to viewer', async () => {
+      const writableNote: NoteEntity = {
+        ...publicNote,
+        generalAccessPermission: PERMISSION.EDITOR,
+      };
+
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, writableNote, {
+        generalAccessPermission: PERMISSION.VIEWER,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalledWith(
+        noteId,
+        expect.objectContaining({ generalAccessPermission: PERMISSION.VIEWER })
+      );
+    });
+
+    it('lets an unverified owner pick editor for a link that stays closed', async () => {
+      const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
+    it('lets a verified owner raise a public link from viewer to editor', async () => {
+      const result = await updateAs(IDENTITY_STATE.VERIFIED, publicNote, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mockRepository.update).toHaveBeenCalled();
+    });
+
     it('lets an unverified owner edit a restricted note that stays restricted', async () => {
       const result = await updateAs(IDENTITY_STATE.UNVERIFIED, mockNote, {
         title: 'Still private',
