@@ -28,7 +28,7 @@ import {
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import {
   ForgotPasswordDto,
   ResetPasswordDto,

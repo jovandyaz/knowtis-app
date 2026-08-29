@@ -30,7 +30,7 @@ import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { AnonymousAuthService } from './application/services/anonymous-auth.service';
 import {
   AnonymousSessionDto,

@@ -7,7 +7,7 @@ import {
   type IdentityState,
 } from '../../../test-support/verified-identity';
 import { AppAbilityFactory } from '../../authorization/ability.factory';
-import { NoteErrors } from '../../notes/domain';
+import { NoteErrors } from '../../notes/domain/errors/note.errors';
 import { ProposedMutation } from '../domain/proposed-mutation';
 import { ApproveMutationHandler } from './approve-mutation.handler';
 

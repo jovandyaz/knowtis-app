@@ -18,7 +18,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
-import { unwrapOrThrow } from '../../core/http';
+import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { GetNoteHandler } from '../notes/application';
 import { NoteErrorCodes } from '../notes/domain/errors/note.errors';

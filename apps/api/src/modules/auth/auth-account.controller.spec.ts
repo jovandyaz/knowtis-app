@@ -6,7 +6,7 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { err, ok, type Result } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
-import { RetryAfterHttpException } from '../../core/http';
+import { RetryAfterHttpException } from '../../core/http/retry-after.exception';
 import { AuthAccountController } from './auth-account.controller';
 
 const DEFAULT_THROTTLE_LIMIT = 'THROTTLER:LIMITdefault';
