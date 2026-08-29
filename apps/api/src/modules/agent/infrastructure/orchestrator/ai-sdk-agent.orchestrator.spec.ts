@@ -2828,7 +2828,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('marks done with stopReason max_steps when the model still wants tools at the cap', async () => {
-    streamTextMock.mockImplementation(() => ({
+    streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'searching…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
@@ -2850,6 +2850,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('marks done with stopReason length when output was truncated mid-answer', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'respuesta cortada' };
@@ -2866,6 +2867,13 @@ describe('AiSdkAgentOrchestrator', () => {
         (e as { type: string }).type === 'done'
     );
     expect(done?.stopReason).toBe('length');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.output_truncated',
+        maxOutputTokens: 4096,
+      })
+    );
+    warnSpy.mockRestore();
   });
 
   it('marks done with stopReason content_filter and warns when the provider filtered the output', async () => {
@@ -2898,7 +2906,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('stops continuing to the next step once the turn token budget is spent', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockClear();
-    streamTextMock.mockImplementation(() => ({
+    streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'leyendo notas…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
@@ -2980,7 +2988,6 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
-  // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.
   it('logs agent.tool.error and counts tool activity in turn health', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -3019,5 +3026,7 @@ describe('AiSdkAgentOrchestrator', () => {
       toolCalls: 1,
       toolErrors: 1,
     });
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

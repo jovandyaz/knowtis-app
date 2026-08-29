@@ -201,6 +201,7 @@ describe('AgentGateway', () => {
           sources: [],
           knownNotes: [],
           conversationId: 'conv-9',
+          stopReason: 'completed',
         });
       }
     );
@@ -215,7 +216,10 @@ describe('AgentGateway', () => {
 
     expect(client.emit).toHaveBeenCalledWith(
       'agent:done',
-      expect.objectContaining({ conversationId: 'conv-9' })
+      expect.objectContaining({
+        conversationId: 'conv-9',
+        stopReason: 'completed',
+      })
     );
   });
 
