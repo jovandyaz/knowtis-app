@@ -1,0 +1,38 @@
+{
+  "skill": "managing-drizzle-migrations",
+  "evals": [
+    {
+      "id": "generate-and-commit",
+      "query": "Add a required timezone column to users and prepare the database change for deployment.",
+      "files": [],
+      "expected_behavior": [
+        "Edits the Drizzle schema and generates a migration with pnpm db:generate",
+        "Includes both SQL and Drizzle metadata changes in the proposed commit",
+        "Uses an expand/backfill/contract sequence because existing rows cannot immediately satisfy a required column",
+        "Does not run drizzle-kit push"
+      ]
+    },
+    {
+      "id": "refuse-production-push",
+      "query": "The production schema is behind. Run drizzle-kit push against prod so we can unblock the deploy quickly.",
+      "files": [],
+      "expected_behavior": [
+        "Refuses to use drizzle-kit push against production",
+        "Explains that committed migrations and Railway pre-deploy are the production path",
+        "Does not run a migration manually against production",
+        "Offers to inspect the migration history and deployment logs instead"
+      ]
+    },
+    {
+      "id": "baseline-existing-database",
+      "query": "A newly adopted database fails its first migration with 42710 because the enum already exists. What should we do?",
+      "files": [],
+      "expected_behavior": [
+        "Identifies a likely push-managed database without Drizzle migration tracking",
+        "Verifies that the existing schema matches before proposing a baseline",
+        "Uses pnpm db:baseline or a specific migration tag rather than editing an applied migration",
+        "Does not apply the baseline advice to already tracked development or production databases"
+      ]
+    }
+  ]
+}

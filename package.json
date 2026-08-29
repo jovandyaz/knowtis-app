@@ -18,6 +18,8 @@
     "dev:mcp": "nx serve mcp",
     "build:mcp": "nx build mcp",
     "setup": "node tools/setup.mjs",
+    "setup:agents": "node tools/setup-agent-plugins.mjs",
+    "skills:check": "node tools/verify-agent-skills.mjs",
     "catalog:refresh-snapshot": "node tools/refresh-model-catalog.mjs",
     "lint": "nx run-many -t lint",
     "lint:fix": "nx run-many -t lint -- --fix",

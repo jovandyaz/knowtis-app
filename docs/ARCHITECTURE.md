@@ -92,6 +92,7 @@ knowtis/
 │       ├── feature-flags/   # Feature flags hooks & schemas
 │       ├── mcp-keys/        # MCP API keys hooks & schemas
 │       ├── notes/           # Notes hooks & store
+│       ├── oauth/           # OAuth client-registration hooks & schemas
 │       └── users/           # Users hooks & schemas
 │
 └── packages/                # Shared packages (framework-light, reusable)
