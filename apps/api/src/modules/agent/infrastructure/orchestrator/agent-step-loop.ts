@@ -40,6 +40,7 @@ import {
 import {
   accumulateTurnUsage,
   bestEffortUsage,
+  isUsageReported,
   turnUsageEvent,
   type StepUsageAccumulator,
   type TurnUsageAccumulator,
@@ -324,6 +325,13 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.COMPLETED: {
           accumulateTurnUsage(turnUsage, result.usage);
+          if (!isUsageReported(result.usage)) {
+            logger.warn({
+              event: 'agent.turn.usage_unreported',
+              userId: input.userId,
+              model: currentModel,
+            });
+          }
           const captured = params.proposals.captured;
           if (captured) {
             emitTurnHealth(

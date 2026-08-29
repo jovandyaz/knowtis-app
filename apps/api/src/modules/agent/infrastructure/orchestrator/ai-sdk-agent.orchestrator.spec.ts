@@ -2928,6 +2928,29 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
+  it('warns that the turn budget is inert when the provider reports no usage', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'ok' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({}),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.usage_unreported',
+        userId: 'u1',
+        model: MODEL,
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
   // Must stay the LAST test: these spies are never restored, so a later test would inherit their accumulated calls.
   it('logs agent.tool.error and counts tool activity in turn health', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
