@@ -14,13 +14,13 @@
     },
     {
       "id": "migration-drift",
-      "query": "Preflight is green except db:generate changed apps/api/drizzle. Can this still ship?",
+      "query": "Preflight is green except db:generate created a new untracked migration under apps/api/drizzle. Can this still ship?",
       "files": [],
       "expected_behavior": [
         "Returns NO-SHIP",
         "Explains that generated SQL and metadata must be reviewed and committed",
         "Does not suggest drizzle-kit push as a workaround",
-        "Reports the exact migration drift command as failed"
+        "Reports the tracked-and-untracked porcelain status gate as failed"
       ]
     },
     {
@@ -28,10 +28,10 @@
       "query": "Run preflight. Lint will probably fail, but I still need the complete picture.",
       "files": [],
       "expected_behavior": [
-        "Continues with typecheck, tests, migration drift, and production builds after the lint failure",
+        "Continues with typecheck, test DB migration, tests, migration drift, and production builds after the lint failure",
         "Collects each failure without hiding later results",
         "Ends with NO-SHIP",
-        "Orders remediation as lint, types, tests, migrations, then build"
+        "Orders remediation as lint, types, test DB migration, tests, migration drift, then build"
       ]
     }
   ]

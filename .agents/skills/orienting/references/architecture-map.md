@@ -62,5 +62,5 @@ pnpm docker:up      # Postgres + Redis
 pnpm db:generate    # migration from schema changes
 pnpm db:migrate:run # apply migrations
 pnpm nx affected -t lint test build   # simulate CI
-nx run api:eval     # copilot eval harness (opt-in, needs docker + API keys)
+pnpm nx run api:eval # copilot eval harness (opt-in, needs docker + API keys)
 ```

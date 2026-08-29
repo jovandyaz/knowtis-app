@@ -98,9 +98,10 @@ jobs:
       - name: Check for missing DB migrations
         run: |
           npx nx db:generate api
-          if ! git diff --exit-code -- apps/api/drizzle/; then
+          if [ -n "$(git status --porcelain --untracked-files=all -- apps/api/drizzle/)" ]; then
             echo "::error::Schema changes detected without a corresponding migration file."
             echo "::error::Run 'pnpm nx db:generate api' locally and commit the generated files."
+            git status --short --untracked-files=all -- apps/api/drizzle/
             exit 1
           fi
 

@@ -13,11 +13,12 @@ The pipeline (`.github/workflows/ci.yml`) is **Nx-affected**: only impacted proj
 pnpm nx show projects --affected --base=main --head=HEAD
 pnpm nx show projects --affected --type app --base=main --head=HEAD
 pnpm nx affected -t lint typecheck --base=main --head=HEAD
+pnpm nx db:migrate:run api
 pnpm nx affected -t test --parallel=2 --outputStyle=stream --base=main --head=HEAD -- --run
 pnpm nx affected -t build --configuration=production --base=main --head=HEAD
 ```
 
-CI also migrates its test database and runs `pnpm nx db:generate api` to reject schema changes without committed migration artifacts. Details: [references/ci-pipeline.md](references/ci-pipeline.md).
+CI also runs `pnpm nx db:generate api` and rejects tracked or untracked changes under `apps/api/drizzle/`. Details: [references/ci-pipeline.md](references/ci-pipeline.md).
 
 ## Interpreting deploy gating
 

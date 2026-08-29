@@ -11,10 +11,10 @@ Knowtis uses GitHub's `gh-stack` extension for stacked PRs and CodeRabbit for au
 
 1. Branch with a Conventional prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`.
 2. Install the extension once with `gh extension install github/gh-stack` if `gh stack` is unavailable.
-3. Build a tracked stack with `gh stack init`, `gh stack add`, and `gh stack submit`, or adopt existing PRs with `gh stack link <bottom> … <top>`.
+3. Build a tracked stack with `gh stack init <bottom-branch>`, `gh stack add <next-branch>`, and `gh stack submit --auto --open`, or adopt existing PRs with `gh stack link <bottom> … <top>`.
 4. Trigger CodeRabbit with `@coderabbitai full review` and confirm inline comments exist. A green check without comments can mean the review was skipped.
 5. Address review feedback before human review. Keep every PR under 100 changed files.
-6. Merge bottom-up with `gh stack merge`. GitHub rebases and retargets remaining layers; never manually rebase a stacked branch after a merge.
+6. Merge with an explicit target, for example `gh stack merge <pr-number> --yes`. GitHub rebases and retargets remaining layers; never manually rebase a stacked branch after a merge.
 7. Detailed context lives in the PR description; commits stay single-line.
 
 ## Rules of thumb

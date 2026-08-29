@@ -40,6 +40,8 @@ for (const [name, entry] of Object.entries(manifest)) {
   const dir = join(skillsDir, name);
   if (!existsSync(dir)) {
     failures.push(`${name}: missing skill directory`);
+  } else if (!/^[a-f0-9]{40}$/.test(entry.revision ?? '')) {
+    failures.push(`${name}: missing immutable source revision`);
   } else if (integrity(dir) !== entry.integrity) {
     failures.push(`${name}: content differs from the vendored manifest`);
   }

@@ -23,14 +23,15 @@ push to main → affected lint/typecheck/test/build + migration drift check
 2. **Railway `watchPatterns` do nothing for these deploys** — CI invokes `.github/scripts/railway-deploy.sh` with an explicit service ID.
 3. **Production migrations run in Railway's release phase.** CI applies migrations only to its test database and separately checks generated migration drift.
 4. **The Railway script waits for a terminal deployment state.** Plain `railway up` returning is not proof that pre-deploy migrations and health checks passed.
-5. **Healthcheck gate**: Railway waits on `/api/v1/health/ping` for up to 120 seconds. Check startup configuration when a build succeeds but never becomes live.
+5. **Healthcheck gates differ by service**: API uses `/api/v1/health/ping` with 120 seconds; MCP uses `/health` with 60 seconds. Check the matching service configuration when a build succeeds but never becomes live.
 6. **Manual escape hatch**: direct Railway deploys bypass CI and are for explicit emergencies only.
 
 ## Troubleshooting quick table
 
 | Symptom | First check |
 | --- | --- |
-| Build fails | Railway build logs; `pnpm-lock.yaml` committed? |
+| Notes/backoffice build fails | Matching Vercel deployment job and build logs |
+| API/MCP build fails | Railway build logs; `pnpm-lock.yaml` committed? |
 | CORS errors | `FRONTEND_URL` and `BACKOFFICE_URL` exactly match their Vercel origins |
 | WebSocket not connecting | `REDIS_URL` set; frontend `VITE_WS_URL` correct |
 | API does not boot | `TOKEN_HASH_KEY`, JWT secrets, and required URLs are present |

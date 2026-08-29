@@ -7,7 +7,7 @@ Canonical sources: `.github/workflows/ci.yml` and the CI/CD section of `CLAUDE.m
 1. **Affected checks** — lint and typecheck the impacted projects.
 2. **Test database** — apply committed migrations before tests.
 3. **Affected tests** — run with bounded parallelism and streamed output.
-4. **Migration drift** — generate from the schema and fail if `apps/api/drizzle/` changes.
+4. **Migration drift** — generate from the schema and use porcelain status to fail on tracked or untracked changes under `apps/api/drizzle/`.
 5. **Production builds** — build affected projects with the production configuration.
 6. **Conditional deploys** (push to `main` only):
    - `deploy-frontend` — gated on `notes` affected. Vercel CLI: `vercel pull` → `vercel build --prod` → `vercel deploy --prebuilt --prod`.

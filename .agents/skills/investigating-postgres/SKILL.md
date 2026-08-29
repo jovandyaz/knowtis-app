@@ -9,12 +9,13 @@ Answer data questions against Knowtis databases without ever mutating them. The 
 
 ## Contract (non-negotiable)
 
-1. **SELECT/WITH only.** No INSERT, UPDATE, DELETE, TRUNCATE, DDL, or `SET` that changes session behavior. If the user asks for a mutation, refuse and point to the right path (API endpoints for flags, migrations for schema, the app for data).
-2. **Schema first.** Read `apps/api/src/database/schema/` (or the MCP schema tools) before writing SQL — column names come from the source of truth, not from memory.
-3. **Connection comes from the user's environment.** Use the configured Postgres MCP server (`pg-knowtis-local` / `pg-knowtis-prod`) or `psql "$DATABASE_URL"`. Never construct, request, or echo credentials/connection strings.
-4. **LIMIT every row-listing query** (default 50). Aggregate where possible.
-5. **Redact PII by default** in output: user emails, note titles/content, session tokens, provider keys. Show them only on explicit request and never against prod without confirmation.
-6. **Say which database answered** (local vs prod). Treat prod as sensitive: prefer local unless the question is explicitly about production.
+1. **Database-enforced read-only.** MCP connections must use a dedicated read-only role. Run psql investigations inside `BEGIN TRANSACTION READ ONLY` with `ON_ERROR_STOP`; if a production connection cannot prove that boundary, do not query it.
+2. **SELECT/WITH only.** A CTE must end in a read-only SELECT. No INSERT, UPDATE, DELETE, TRUNCATE, DDL, mutating CTE, or session-changing `SET`. Redirect mutations to APIs, migrations, or the application.
+3. **Schema first.** Read `apps/api/src/database/schema/` (or the MCP schema tools) before writing SQL — column names come from the source of truth, not from memory.
+4. **Connection comes from the user's environment.** Use `pg-knowtis-local` / `pg-knowtis-prod` or `psql "$DATABASE_URL"`. Never construct, request, or echo credentials/connection strings.
+5. **LIMIT every row-listing query** (default 50). Aggregate where possible.
+6. **Redact PII by default** in output: user emails, note titles/content, session tokens, provider keys. Show them only on explicit request and never against prod without confirmation.
+7. **Say which database answered** (local vs prod). Treat prod as sensitive: prefer local unless the question is explicitly about production.
 
 ## Workflow
 

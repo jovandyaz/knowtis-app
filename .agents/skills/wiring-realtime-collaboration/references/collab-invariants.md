@@ -35,9 +35,10 @@ Token transport: provider `token` config takes a function so a fresh JWT is read
 
 REST/MCP `update-note` mutations emit `NoteUpdatedEvent` (with `updates.content` + `yjsState`). `NoteUpdatedListener` → `HocuspocusService.applyExternalUpdate(noteId, state)`:
 
-1. Validate incoming state in a probe Y.Doc (`isValidYjsUpdate`).
-2. Short-circuit when no live document is loaded (next reader hydrates from DB).
-3. `DirectConnection` + `transact()` — clear the non-trivial XML fragment, apply new state; fan-out delivers deltas. Always `disconnect()` in `finally`.
+1. Reject empty or zero-length Yjs state before validation; `Y.applyUpdate` treats it as a no-op and clearing first would wipe the live document.
+2. Validate incoming state in a probe Y.Doc (`isValidYjsUpdate`).
+3. Short-circuit when no live document is loaded (next reader hydrates from DB).
+4. `DirectConnection` + `transact()` — clear the non-trivial XML fragment, apply new state; fan-out delivers deltas. Always `disconnect()` in `finally`.
 
 **Gotcha:** `DirectConnection.transact` wraps callbacks in `document.transact({ source: 'local' })`, overriding caller-supplied origin tags — origin-based filtering in the persistence extension is NOT reliable through this path. The resulting redundant persistence write is a no-op overwrite (accepted trade-off).
 

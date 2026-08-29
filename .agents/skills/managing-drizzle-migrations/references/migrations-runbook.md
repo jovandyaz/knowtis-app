@@ -9,7 +9,7 @@ Canonical source: `docs/MIGRATIONS.md` in the knowtis repo (re-sync this file wh
 | `pnpm db:generate` | Diff schema files → new `apps/api/drizzle/NNNN_*.sql` + meta snapshot |
 | `pnpm db:migrate:run` | Programmatic `migrate()` against `$DATABASE_URL` (same code path as deploy) |
 | `pnpm db:migrate` | Raw `drizzle-kit migrate` (works once the DB is tracked) |
-| `pnpm db:baseline [tag]` | One-time bootstrap for a previously push-managed DB — records migrations as applied (idempotent, exact hashes via `readMigrationFiles`) |
+| `pnpm db:baseline [tag]` | After schema-equivalence verification, records matching migrations on a previously push-managed DB (idempotent, exact hashes) |
 | `pnpm db:studio` | Drizzle Studio GUI |
 
 ## Deploy-time application (Railway)
@@ -29,6 +29,7 @@ preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
 - Commit generated `.sql` + `meta/` together with the schema change; CI treats schema-without-migration as a failure.
 - Never edit an applied migration — generate a new one.
 - Never `drizzle-kit push` on shared databases (no history → schema drift).
+- Before baselining, compare the live schema with the migration range to record and abort on mismatch. `baseline` writes journal hashes; it does not verify or apply missing DDL.
 
 ## Zero-downtime pattern
 
