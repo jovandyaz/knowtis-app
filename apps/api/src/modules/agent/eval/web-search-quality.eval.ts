@@ -32,6 +32,7 @@ const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 describe.runIf(GATE)('web search tool quality', () => {
   let orchestrator: AgentOrchestrator;
   let maxSteps: number;
+  let maxTurnTokens: number;
   let moduleClose: () => Promise<void>;
 
   beforeAll(async () => {
@@ -72,6 +73,7 @@ describe.runIf(GATE)('web search tool quality', () => {
       }
     );
     maxSteps = config.get('AI_AGENT_MAX_STEPS');
+    maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');
   }, 120_000);
 
   afterAll(async () => {
@@ -93,6 +95,7 @@ describe.runIf(GATE)('web search tool quality', () => {
       ],
       model,
       maxSteps,
+      maxTurnTokens,
     });
 
     let webSources: readonly WebSource[] = [];

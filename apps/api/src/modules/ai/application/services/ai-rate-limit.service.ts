@@ -394,6 +394,10 @@ export class AIRateLimitService {
     }
   }
 
+  dailyTokenLimit(isAnonymous: boolean): number {
+    return this.effectiveLimits(isAnonymous).tokenLimit;
+  }
+
   private effectiveLimits(isAnonymous: boolean): RateLimits {
     const tokenLimit = this.configService.get('AI_DAILY_TOKEN_LIMIT');
     const costLimit = this.configService.get('AI_DAILY_COST_LIMIT_USD');

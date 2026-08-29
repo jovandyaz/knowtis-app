@@ -578,6 +578,7 @@ export class RunAgentTurnHandler {
     // must escape before any reservation exists, else the held reservation
     // leaks with no client-facing error (the gateway turn slot has no catch).
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    const maxTurnTokens = this.turnTokenBudget(input.isAnonymous ?? false);
     const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
       this.aiConfig.getReasoningEffort(),
       this.aiConfig.getOpenRouterProviderOrder(),
@@ -624,6 +625,7 @@ export class RunAgentTurnHandler {
         messages,
         model,
         maxSteps,
+        maxTurnTokens,
         reasoningEffort,
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -817,6 +819,13 @@ export class RunAgentTurnHandler {
       byokProviders,
       tierGatingOn
     );
+  }
+
+  private turnTokenBudget(isAnonymous: boolean): number {
+    const budget = this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET');
+    return isAnonymous
+      ? Math.min(budget, this.rateLimit.dailyTokenLimit(true))
+      : budget;
   }
 
   private async recordUsageSafe(

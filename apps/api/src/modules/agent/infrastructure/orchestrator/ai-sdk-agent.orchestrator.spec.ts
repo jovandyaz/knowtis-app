@@ -73,7 +73,6 @@ function makeConfig(
     AI_AGENT_MAX_MS: 120000,
     AI_AGENT_STALL_MS: STALL_MS,
     AI_AGENT_MAX_OUTPUT_TOKENS: 4096,
-    AI_AGENT_TURN_TOKEN_BUDGET: 150000,
     AI_MAX_RETRIES: 3,
     AI_COOLDOWN_ALLOWED_FAILS: 3,
     AI_COOLDOWN_SECONDS: 120,
@@ -130,11 +129,14 @@ function collect(iter: AsyncIterable<unknown>) {
   })();
 }
 
+const TURN_TOKEN_BUDGET = 150000;
+
 const baseInput = {
   userId: 'u1',
   messages: [{ role: 'user' as const, content: 'hi' }],
   model: MODEL,
   maxSteps: 4,
+  maxTurnTokens: TURN_TOKEN_BUDGET,
 };
 
 describe('AiSdkAgentOrchestrator', () => {
@@ -575,6 +577,7 @@ describe('AiSdkAgentOrchestrator', () => {
         messages: [{ role: 'user', content: 'resume esa nota' }],
         model: 'anthropic:claude-sonnet-4-20250514',
         maxSteps: 4,
+        maxTurnTokens: TURN_TOKEN_BUDGET,
         knownNotes: [{ id: 'prev-id', title: 'Earlier note' }],
       })
     );
@@ -2876,12 +2879,10 @@ describe('AiSdkAgentOrchestrator', () => {
       totalUsage: Promise.resolve({ inputTokens: 4000, outputTokens: 1000 }),
       response: Promise.resolve({ messages: [] }),
     }));
-    const orchestrator = makeOrchestrator(
-      makeConfig({ AI_AGENT_TURN_TOKEN_BUDGET: 5000 })
-    );
+    const orchestrator = makeOrchestrator();
 
     const events = await collect(
-      orchestrator.run({ ...baseInput, maxSteps: 8 })
+      orchestrator.run({ ...baseInput, maxSteps: 8, maxTurnTokens: 5000 })
     );
 
     const done = events.find(

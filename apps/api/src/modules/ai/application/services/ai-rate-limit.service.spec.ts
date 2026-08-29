@@ -51,6 +51,11 @@ describe('AIRateLimitService', () => {
     expect(anonymous.allowed).toBe(false);
   });
 
+  it('exposes the daily token allowance, scaled down for anonymous users', () => {
+    expect(service.dailyTokenLimit(false)).toBe(100000);
+    expect(service.dailyTokenLimit(true)).toBe(33000);
+  });
+
   it('should deny request when token limit exceeded', async () => {
     vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({
       totalInputTokens: 99000,
