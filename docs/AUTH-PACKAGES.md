@@ -53,7 +53,7 @@ auth-react      auth-nestjs + apps/api
 - **Provider:** `<AuthProvider api={adapter} tokenStorage={...} store={...}>`
 - **Query hooks:** `useLogin()`, `useRegister()`, `useLogout()`, `useProfile()`, `useForgotPassword()`, `useResetPassword()`, `useVerifyEmail()`, `useVerifyEmailCode()`, `useResendVerification()`
 - **Selector hooks:** `useAuth()`, `useAuthUser()`, `useIsAuthenticated()`, `useAuthLoading()`
-- **Utility hooks:** `useRateLimitState()`, `useAuthApi()`, `useTokenStorage()`, `useAuthStore()`
+- **Utility hooks:** `useAuthApi()`, `useTokenStorage()`, `useAuthStore()`
 - **Zod schemas:** `loginSchema`, `registerSchema`, `forgotPasswordSchema`, `resetPasswordSchema` (password rules synced via `getPasswordChecks()`)
 
 ---
