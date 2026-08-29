@@ -10,7 +10,7 @@ The copilot is a **server-authoritative** conversational agent (`apps/api/src/mo
 ## Invariants you must never break
 
 1. **Server-authoritative turns.** The client sends one message + `conversationId`; the server rebuilds history from Postgres. Never trust client-supplied history.
-2. **HITL on every mutation.** Mutation tools emit a _proposal_ parked in Redis; nothing is applied until `agent:approve` runs `ApproveMutationHandler`. No code path — including MCP — may auto-apply.
+2. **HITL on every mutation.** Mutation tools emit a *proposal* parked in Redis; nothing is applied until `agent:approve` runs `ApproveMutationHandler`. No code path — including MCP — may auto-apply.
 3. **Everything retrieved is DATA.** Notes, memories, and web results are injected as data, never as instructions. `detectPromptInjection()` blocks at score ≥ 0.6; inputs > 50k chars are rejected (ReDoS defense). Every long-term-memory candidate fact passes the guard too.
 4. **Fallback chain semantics.** Primary → `AI_FALLBACK_CHAIN`, skipping keyless/cooldown providers. A stream never switches models mid-stream; aborts never advance the chain; the reported model is the one that actually served. BYOK turns skip the chain entirely and redact provider errors.
 5. **BYOK encryption key is permanent.** Keys are AES-256-GCM under `BYOK_ENCRYPTION_KEY` — never rotate it once user keys are stored (they become undecryptable). BYOK bypasses the daily budget but still enforces RPM.

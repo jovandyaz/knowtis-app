@@ -21,12 +21,12 @@ CI also migrates its test database and runs `pnpm nx db:generate api` to reject 
 
 ## Interpreting deploy gating
 
-| Affected app | On push to main                                              |
-| ------------ | ------------------------------------------------------------ |
-| `notes`      | `deploy-frontend` runs (Vercel prebuilt)                     |
+| Affected app | On push to main |
+| --- | --- |
+| `notes` | `deploy-frontend` runs (Vercel prebuilt) |
 | `backoffice` | `deploy-backoffice` runs against its separate Vercel project |
-| `api`        | `deploy` runs through `.github/scripts/railway-deploy.sh`    |
-| `mcp`        | `deploy-mcp` runs if `RAILWAY_MCP_SERVICE_ID` is set         |
+| `api` | `deploy` runs through `.github/scripts/railway-deploy.sh` |
+| `mcp` | `deploy-mcp` runs if `RAILWAY_MCP_SERVICE_ID` is set |
 
 "CI didn't deploy X" usually means X wasn't affected by the diff — verify with the `--type app` command above.
 

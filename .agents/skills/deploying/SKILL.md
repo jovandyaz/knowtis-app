@@ -28,11 +28,11 @@ push to main → affected lint/typecheck/test/build + migration drift check
 
 ## Troubleshooting quick table
 
-| Symptom                          | First check                                                                 |
-| -------------------------------- | --------------------------------------------------------------------------- |
-| Build fails                      | Railway build logs; `pnpm-lock.yaml` committed?                             |
-| CORS errors                      | `FRONTEND_URL` and `BACKOFFICE_URL` exactly match their Vercel origins      |
-| WebSocket not connecting         | `REDIS_URL` set; frontend `VITE_WS_URL` correct                             |
-| API does not boot                | `TOKEN_HASH_KEY`, JWT secrets, and required URLs are present                |
-| Deploy not triggering            | Was the app affected and is the target service/project variable configured? |
-| App boots then 500s on AI routes | `ANTHROPIC_API_KEY` and DB feature flags                                    |
+| Symptom | First check |
+| --- | --- |
+| Build fails | Railway build logs; `pnpm-lock.yaml` committed? |
+| CORS errors | `FRONTEND_URL` and `BACKOFFICE_URL` exactly match their Vercel origins |
+| WebSocket not connecting | `REDIS_URL` set; frontend `VITE_WS_URL` correct |
+| API does not boot | `TOKEN_HASH_KEY`, JWT secrets, and required URLs are present |
+| Deploy not triggering | Was the app affected and is the target service/project variable configured? |
+| App boots then 500s on AI routes | `ANTHROPIC_API_KEY` and DB feature flags |

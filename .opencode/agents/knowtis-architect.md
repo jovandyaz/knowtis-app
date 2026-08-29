@@ -2,7 +2,7 @@
 description: Read-only Knowtis domain expert for architecture questions and design review against the platform's invariants. Use PROACTIVELY when a design or PR touches the copilot, collaboration, auth, or permissions subsystems, or for deep "how does Knowtis do X" questions.
 mode: subagent
 permission:
-  '*': deny
+  "*": deny
   read: allow
   grep: allow
   glob: allow

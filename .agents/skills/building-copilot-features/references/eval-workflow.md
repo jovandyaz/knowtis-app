@@ -15,12 +15,12 @@ Gated on `ANTHROPIC_API_KEY` (and `VOYAGE_API_KEY` / `TAVILY_API_KEY` for retrie
 
 ## Suites
 
-| Suite                     | Asserts                                                                                         |
-| ------------------------- | ----------------------------------------------------------------------------------------------- |
-| `copilot.eval`            | Tool selection/order, grounding, no-hallucination, HITL proposal emission, injection resistance |
-| `memory-recall.eval`      | Long-term memory extraction and recall                                                          |
-| `retrieval-quality.eval`  | Cross-lingual/paraphrase retrieval against real Voyage embeddings                               |
-| `web-search-quality.eval` | Web tool grounding                                                                              |
+| Suite | Asserts |
+| --- | --- |
+| `copilot.eval` | Tool selection/order, grounding, no-hallucination, HITL proposal emission, injection resistance |
+| `memory-recall.eval` | Long-term memory extraction and recall |
+| `retrieval-quality.eval` | Cross-lingual/paraphrase retrieval against real Voyage embeddings |
+| `web-search-quality.eval` | Web tool grounding |
 
 Assertions mix deterministic `javascript` checks (`cases.ts` / `assertions.ts`) with `llm-rubric` graders. Fixtures live in `eval/fixtures/`; the generic runtime bootstrap in `eval/runtime/eval-runtime.ts`.
 

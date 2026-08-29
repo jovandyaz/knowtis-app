@@ -2,7 +2,7 @@
 
 Enforcement lives outside this plugin: a user-level PreToolUse hook (`~/.claude/hooks/comment-policy.cjs`) blocks the write in every repo and inside every subagent, and knowtis also runs the same checks as the `knowtis/minimal-comments` ESLint rule for CI and non-agent edits. This skill carries the policy so it applies when reviewing/writing code in any repo or agent.
 
-These rules are the industry consensus rather than a house invention: the _why-not-what_ principle and the good/bad taxonomy come from Clean Code (Martin, ch. 4); the JSDoc-vs-`//` split, "multi-line comments use `//`", and "no boxes drawn with asterisks" come from the Google TypeScript Style Guide.
+These rules are the industry consensus rather than a house invention: the *why-not-what* principle and the good/bad taxonomy come from Clean Code (Martin, ch. 4); the JSDoc-vs-`//` split, "multi-line comments use `//`", and "no boxes drawn with asterisks" come from the Google TypeScript Style Guide.
 
 ## Default
 
@@ -22,13 +22,13 @@ Write **no comments**. Code explains itself through clear names and structure. W
 - Task/PR/issue references (`// fix for #123`, `// changed per CR feedback`) — that history belongs in the commit message.
 - Author/date stamps — `git blame` is authoritative.
 - Tombstones (`// old logic kept for reference`) — delete dead code; git has the history.
-- `/* */` blocks spanning more than one line — multi-line comments use consecutive `//` lines. `/** JSDoc */` stays reserved for documentation a _user_ of the code reads.
+- `/* */` blocks spanning more than one line — multi-line comments use consecutive `//` lines. `/** JSDoc */` stays reserved for documentation a *user* of the code reads.
 - `//` blocks longer than 6 lines — move the prose to the PR or a design doc.
 
 ## Heuristics
 
 - If deleting the comment wouldn't confuse a competent reader, delete it.
-- If tempted to explain _what_ code does, rename a variable or extract a function instead.
+- If tempted to explain *what* code does, rename a variable or extract a function instead.
 - When reviewing: aggressively remove comments that restate code, reference past tasks, or have rotted out of sync.
 
 ## Examples
