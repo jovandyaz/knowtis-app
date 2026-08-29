@@ -1,57 +1,57 @@
 {
   "investigating-postgres": {
     "source": "db-ops@0.1.2",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-9beffa93198b7c00cf00bd30fb10cd14b2bb40bb246af75a93d62f653c15a8a2"
   },
   "managing-drizzle-migrations": {
     "source": "db-ops@0.1.2",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-45ac556a33895b85a779e1f405a452b8396c1b6bf5979613f8a1f301abb78f83"
   },
   "deploying": {
     "source": "delivery@0.3.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-ea7e469716b6e668c17f82c7e80ecb4225c45776d906087da946a07636a86de0"
   },
   "running-affected-ci": {
     "source": "delivery@0.3.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-dddd469c988dce9e6826525e36ceb3488e8a0c3796ec7d5bb8f5999aae6719b3"
   },
   "running-preflight": {
     "source": "delivery@0.3.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-c8771c20072cd2830c932935cbbbf3f88523f2c0f4324c14226913fe7e0edbaa"
   },
   "stacking-prs": {
     "source": "delivery@0.3.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-a75086c9e7a79911f3c91332d26332acbae15a01694d43522453369876d0119e"
   },
   "building-copilot-features": {
     "source": "domain@0.2.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-aad291eddc613bd72ae54af835f9901a33382477a80f6696f7818b9c628a59c1"
   },
   "orienting": {
     "source": "domain@0.2.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-866c017a48e0da20519bd31bc7b1acc9c03a8b2ff7ab0bfcb66b402f51d70a44"
   },
   "wiring-realtime-collaboration": {
     "source": "domain@0.2.0",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-a02c578dcc3b7f93b4400b6b3170322b9ac1289d3f2b247a760a511e1f97894a"
   },
   "reviewing-code-standards": {
     "source": "standards@0.2.1",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-864886951acad620e0bf4c8e686386b55edba3c27fa119f0507eae962b3c11d5"
   },
   "writing-conventional-commits": {
     "source": "standards@0.2.1",
-    "revision": "cbaac85b60f61658be71b7323154ff3117cc3f6f",
+    "revision": "3dbf7e0628894e632f4306ad211cb0cd29315ec6",
     "integrity": "sha256-602e99f1b0b8d8f7be85c43d60ea90dd15d435613c49d0151e638a6e3cab6449"
   }
 }
