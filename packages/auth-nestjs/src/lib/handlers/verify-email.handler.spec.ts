@@ -164,7 +164,17 @@ describe('VerifyEmailHandler', () => {
     expect(sessionRepository.deleteAllByUserId).not.toHaveBeenCalled();
   });
 
-  it('does not revoke sessions when marking the email verified fails', async () => {
+  it('revokes the sessions before marking the email verified', async () => {
+    await handler.execute({ token: RAW_TOKEN });
+
+    const revokedAt = vi.mocked(sessionRepository.deleteAllByUserId).mock
+      .invocationCallOrder[0];
+    const verifiedAt = vi.mocked(userRepository.markEmailVerified).mock
+      .invocationCallOrder[0];
+    expect(revokedAt).toBeLessThan(verifiedAt);
+  });
+
+  it('still revokes the sessions when marking the email verified fails', async () => {
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     vi.mocked(userRepository.markEmailVerified).mockResolvedValue(
       err(AuthErrors.internalError('User not found'))
@@ -172,7 +182,9 @@ describe('VerifyEmailHandler', () => {
 
     const result = await handler.execute({ token: RAW_TOKEN });
 
+    // Over-revoking is recoverable by signing in again; under-revoking is not,
+    // because the retry answers EMAIL_ALREADY_VERIFIED and never revokes.
     expect(result._unsafeUnwrapErr().code).toBe(AuthErrorCodes.INTERNAL_ERROR);
-    expect(sessionRepository.deleteAllByUserId).not.toHaveBeenCalled();
+    expect(sessionRepository.deleteAllByUserId).toHaveBeenCalledWith(USER_ID);
   });
 });

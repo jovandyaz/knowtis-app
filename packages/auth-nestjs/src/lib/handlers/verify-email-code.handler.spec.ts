@@ -317,7 +317,21 @@ describe('VerifyEmailCodeHandler', () => {
     ).not.toHaveBeenCalled();
   });
 
-  it('propagates a failure to mark the email verified without revoking sessions', async () => {
+  it('revokes the other families before marking the email verified', async () => {
+    await handler.execute({
+      userId: USER_ID,
+      code: VALID_CODE,
+      familyId: FAMILY_ID,
+    });
+
+    const revokedAt = vi.mocked(sessionRepository.deleteAllByUserIdExceptFamily)
+      .mock.invocationCallOrder[0];
+    const verifiedAt = vi.mocked(userRepository.markEmailVerified).mock
+      .invocationCallOrder[0];
+    expect(revokedAt).toBeLessThan(verifiedAt);
+  });
+
+  it('propagates a failure to mark the email verified, sessions already revoked', async () => {
     vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
     vi.mocked(userRepository.markEmailVerified).mockResolvedValue(
       err(AuthErrors.internalError('User not found'))
@@ -329,10 +343,12 @@ describe('VerifyEmailCodeHandler', () => {
       familyId: FAMILY_ID,
     });
 
+    // Over-revoking is recoverable by signing in again; under-revoking is not,
+    // because the retry answers EMAIL_ALREADY_VERIFIED and never revokes.
     expect(result._unsafeUnwrapErr().code).toBe(AuthErrorCodes.INTERNAL_ERROR);
     expect(
       sessionRepository.deleteAllByUserIdExceptFamily
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(USER_ID, FAMILY_ID);
   });
 
   it('never writes the submitted code or its hash to the log', async () => {

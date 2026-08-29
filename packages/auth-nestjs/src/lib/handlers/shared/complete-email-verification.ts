@@ -48,6 +48,20 @@ export async function completeEmailVerification(
     return err(AuthErrors.emailAlreadyVerified());
   }
 
+  // Sessions go before the flag, as they do after a password reset. Marking
+  // first makes the write that follows unreachable on a retry: the second call
+  // stops at the already-verified branch above, so a revocation that failed
+  // once would never be attempted again and the sessions this evicts would
+  // outlive the verification. Revoking too eagerly only costs a sign-in.
+  if (params.keepSessionFamilyId) {
+    await deps.sessionRepository.deleteAllByUserIdExceptFamily(
+      params.userId,
+      params.keepSessionFamilyId
+    );
+  } else {
+    await deps.sessionRepository.deleteAllByUserId(params.userId);
+  }
+
   const verifyResult = await deps.userRepository.markEmailVerified(userId);
   if (verifyResult.isErr()) {
     deps.logger.error(
@@ -57,15 +71,6 @@ export async function completeEmailVerification(
   }
 
   await deps.verificationTokenRepository.deleteAllByUserId(params.userId);
-
-  if (params.keepSessionFamilyId) {
-    await deps.sessionRepository.deleteAllByUserIdExceptFamily(
-      params.userId,
-      params.keepSessionFamilyId
-    );
-  } else {
-    await deps.sessionRepository.deleteAllByUserId(params.userId);
-  }
 
   deps.eventEmitter.emit(
     AuthEventName.EMAIL_VERIFIED,
