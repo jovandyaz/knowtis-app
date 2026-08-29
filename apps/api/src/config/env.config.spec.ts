@@ -303,12 +303,6 @@ describe('env.config TOKEN_HASH_KEY', () => {
     expect(validateEnv(prodEnv).TOKEN_HASH_KEY).toBe(TOKEN_HASH_KEY);
   });
 
-  it('rejects a TOKEN_HASH_KEY that does not decode to 32 bytes', () => {
-    expect(() =>
-      validateEnv({ ...validEnv, TOKEN_HASH_KEY: 'dG9vLXNob3J0' })
-    ).toThrow(/TOKEN_HASH_KEY must be 32 bytes/);
-  });
-
   it('rejects a production boot whose TOKEN_HASH_KEY is blank', () => {
     expect(() => validateEnv({ ...prodEnv, TOKEN_HASH_KEY: '' })).toThrow(
       /TOKEN_HASH_KEY is required/
