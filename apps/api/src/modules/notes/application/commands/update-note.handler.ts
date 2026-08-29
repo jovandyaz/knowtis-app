@@ -17,6 +17,7 @@ import { pickDefined } from '@knowtis/shared-util';
 
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
+  linkExposureAfter,
   NOTE_REPOSITORY,
   NoteContent,
   NoteErrors,
@@ -148,14 +149,9 @@ export class UpdateNoteHandler {
     // revoke a link they already exposed. A non-owner is refused below for
     // lacking the right at all, which is the truer answer than telling them to
     // verify.
-    const linkAfterUpdate = {
-      generalAccess: input.generalAccess ?? note.generalAccess,
-      generalAccessPermission:
-        input.generalAccessPermission ?? note.generalAccessPermission,
-    };
     if (
       isOwner &&
-      widensLinkExposure(note, linkAfterUpdate) &&
+      widensLinkExposure(note, linkExposureAfter(note, input)) &&
       !(await this.verifiedIdentity.isVerified(input.userId))
     ) {
       return err(NoteErrors.verificationRequired());

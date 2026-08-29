@@ -21,6 +21,18 @@ export function linkExposureRank(note: LinkExposureFields): number {
     : LINK_EXPOSURE_RANK.READ;
 }
 
+/** The link as it will stand once `changes` land on `note`; a field left out keeps its value. */
+export function linkExposureAfter(
+  note: LinkExposureFields,
+  changes: Partial<LinkExposureFields>
+): LinkExposureFields {
+  return {
+    generalAccess: changes.generalAccess ?? note.generalAccess,
+    generalAccessPermission:
+      changes.generalAccessPermission ?? note.generalAccessPermission,
+  };
+}
+
 /** True when `after` hands link holders more than `before` did. */
 export function widensLinkExposure(
   before: LinkExposureFields,

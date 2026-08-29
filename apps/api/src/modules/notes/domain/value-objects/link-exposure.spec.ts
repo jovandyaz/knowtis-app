@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { GENERAL_ACCESS, PERMISSION } from '@knowtis/shared-types';
 
-import { linkExposureRank, widensLinkExposure } from './link-exposure';
+import {
+  linkExposureAfter,
+  linkExposureRank,
+  widensLinkExposure,
+} from './link-exposure';
 
 const closed = {
   generalAccess: GENERAL_ACCESS.RESTRICTED,
@@ -54,5 +58,22 @@ describe('widensLinkExposure', () => {
     ['re-affirming an open link', readable, readable],
   ])('is false when %s', (_label, before, after) => {
     expect(widensLinkExposure(before, after)).toBe(false);
+  });
+});
+
+describe('linkExposureAfter', () => {
+  it('keeps the link as it is when nothing about it changes', () => {
+    expect(linkExposureAfter(readable, {})).toEqual(readable);
+  });
+
+  it('replaces only the fields the change names', () => {
+    expect(
+      linkExposureAfter(readable, {
+        generalAccessPermission: PERMISSION.EDITOR,
+      })
+    ).toEqual(writable);
+    expect(
+      linkExposureAfter(writable, { generalAccess: GENERAL_ACCESS.RESTRICTED })
+    ).toEqual(closedButEditor);
   });
 });
