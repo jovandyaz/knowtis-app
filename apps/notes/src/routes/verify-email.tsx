@@ -2,7 +2,10 @@ import { lazy, Suspense } from 'react';
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { guardVerifyEmailRoute, parseVerifyEmailSearch } from '@/auth';
+import {
+  guardVerifyEmailRoute,
+  parseVerifyEmailSearch,
+} from '@/auth/verify-email-guard';
 
 import { LoadingState } from '@knowtis/design-system';
 
