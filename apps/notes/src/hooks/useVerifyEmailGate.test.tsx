@@ -73,6 +73,7 @@ describe('useVerifyEmailGate', () => {
 
     expect(handled).toBe(false);
     expect(useVerifyEmailStore.getState().isOpen).toBe(false);
+    expect(toastError).not.toHaveBeenCalled();
   });
 
   it('never asks an anonymous visitor for a code they cannot receive', () => {

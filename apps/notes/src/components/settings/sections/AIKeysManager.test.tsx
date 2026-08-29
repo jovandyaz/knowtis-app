@@ -42,7 +42,8 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@/hooks', () => ({
+vi.mock('@/hooks', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   useProviderKeys: vi.fn(() => ({ data: [] })),
   useSetProviderKey: vi.fn(() => ({
     mutate: mutateSetKey,

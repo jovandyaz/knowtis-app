@@ -52,7 +52,7 @@ describe('CreateKeyDialog', () => {
 
     await userEvent.type(screen.getByRole('textbox'), 'clave de prueba');
     await userEvent.click(
-      screen.getByRole('button', { name: /integrations.createKey/i })
+      screen.getByRole('button', { name: 'integrations.createKey' })
     );
 
     expect(useVerifyEmailStore.getState().isOpen).toBe(true);
@@ -70,7 +70,7 @@ describe('CreateKeyDialog', () => {
 
     await userEvent.type(screen.getByRole('textbox'), 'clave de prueba');
     await userEvent.click(
-      screen.getByRole('button', { name: /integrations.createKey/i })
+      screen.getByRole('button', { name: 'integrations.createKey' })
     );
 
     expect(toast.error).toHaveBeenCalledWith('verifyEmail.gateSignUpToast');

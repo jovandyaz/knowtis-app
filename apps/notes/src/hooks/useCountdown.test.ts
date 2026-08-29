@@ -34,6 +34,17 @@ describe('useCountdown', () => {
     expect(result.current.secondsLeft).toBe(1);
   });
 
+  it('reads the real time left after a stretch with no ticks', () => {
+    const { result } = renderHook(() => useCountdown(ONE_MINUTE_MS));
+
+    vi.setSystemTime(Date.now() + 30_000);
+    act(() => {
+      vi.advanceTimersByTime(1_000);
+    });
+
+    expect(result.current.secondsLeft).toBe(29);
+  });
+
   it('settles at zero and stays there', () => {
     const { result } = renderHook(() => useCountdown(ONE_MINUTE_MS));
 
