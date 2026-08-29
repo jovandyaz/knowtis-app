@@ -113,16 +113,17 @@ describe('VerifiedIdentityPolicy', () => {
       await expect(policy.isVerified('user-1')).resolves.toBe(true);
     });
 
-    it('reads the user from the database on every call', async () => {
-      usersService.findById.mockResolvedValue(
-        userRow({ isAnonymous: false, emailVerifiedAt: VERIFIED_AT })
-      );
+    it('reflects a verification revoked between two calls', async () => {
+      usersService.findById
+        .mockResolvedValueOnce(
+          userRow({ isAnonymous: false, emailVerifiedAt: VERIFIED_AT })
+        )
+        .mockResolvedValueOnce(
+          userRow({ isAnonymous: false, emailVerifiedAt: null })
+        );
 
-      await policy.isVerified('user-1');
-      await policy.isVerified('user-1');
-
-      expect(usersService.findById).toHaveBeenCalledTimes(2);
-      expect(usersService.findById).toHaveBeenLastCalledWith('user-1');
+      await expect(policy.isVerified('user-1')).resolves.toBe(true);
+      await expect(policy.isVerified('user-1')).resolves.toBe(false);
     });
   });
 

@@ -249,14 +249,29 @@ describe('ByokService', () => {
   });
 
   describe('verified email gate', () => {
+    const expectKeyStoredForU1 = (
+      repo: { upsert: ReturnType<typeof vi.fn> },
+      store: Map<string, unknown>
+    ) => {
+      expect(repo.upsert).toHaveBeenCalledWith(
+        'u1',
+        'anthropic',
+        expect.anything(),
+        'sk-ant-s'
+      );
+      expect(decryptSecret(store.get('secret') as never, masterKey)).toBe(
+        'sk-ant-supersecret-12345'
+      );
+    };
+
     it('stores a key for an unverified user while the gate flag is off', async () => {
-      const { service, repo } = makeService({
+      const { service, repo, store } = makeService({
         identity: IDENTITY_STATE.GATE_OFF,
       });
 
       await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
 
-      expect(repo.upsert).toHaveBeenCalled();
+      expectKeyStoredForU1(repo, store);
     });
 
     it('refuses an unverified user with EMAIL_NOT_VERIFIED and stores nothing', async () => {
@@ -275,13 +290,13 @@ describe('ByokService', () => {
     });
 
     it('stores a key for a verified user', async () => {
-      const { service, repo } = makeService({
+      const { service, repo, store } = makeService({
         identity: IDENTITY_STATE.VERIFIED,
       });
 
       await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
 
-      expect(repo.upsert).toHaveBeenCalled();
+      expectKeyStoredForU1(repo, store);
     });
   });
 });
