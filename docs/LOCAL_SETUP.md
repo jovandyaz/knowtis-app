@@ -75,14 +75,14 @@ pnpm nx run design-system:tokens:build
 Two things trip up first-time local runs:
 
 1. **Settings is a modal, not a route.** There is no `/settings/integrations` URL — open it from the user menu (bottom-left avatar → **Settings**). The modal only renders for a signed-in, **non-anonymous** user.
-2. **Register requires email verification, and local dev sends no email.** After you register, the app shows "Check your email" and gates Settings until the address is verified. Locally there is no mail transport, so verify directly in the DB:
+2. **Register sends a 6-digit code, and local dev prints it instead of mailing it.** After you register, the app shows "Check your email". With `EMAIL_PROVIDER=console` (the `.env.example` default) the API terminal logs the whole message at `DEBUG`, including `Your verification code is 123456` and the `/verify-email?token=…` link — type the code there, or later from the banner's **Verify now**. Settings does not depend on it; only the actions behind the `email_verification_gate` flag do (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)), and that flag is seeded off. If the log is gone, the DB shortcut still works:
 
 ```bash
 docker exec knowtis-postgres psql -U knowtis -d knowtis \
   -c "UPDATE users SET email_verified_at = now() WHERE email = 'you@example.com';"
 ```
 
-Then sign in again — the user menu and Settings become available. (DB user and database are both `knowtis`, per `apps/api/.env`.)
+The banner goes away on the next profile load — sign out and in to see it immediately. (DB user and database are both `knowtis`, per `apps/api/.env`.)
 
 ## Connecting an MCP client locally
 
@@ -133,7 +133,7 @@ See [MCP.md](./MCP.md) for the full protocol details (discovery, PKCE, scopes, e
 | `Docker is not running` on `pnpm setup`              | Daemon down                                                                | Start Docker Desktop, re-run `pnpm setup`.                                                   |
 | `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx run design-system:tokens:build`, then restart. On current `main` this is automatic. |
 | `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                              |
-| Register works but Settings never appears            | Email unverified (no local mail)                                           | Run the `email_verified_at` SQL above, sign in again.                                        |
+| "Your email address hasn't been verified yet" stays  | The code was never typed in (local dev only logs it)                       | Copy the 6-digit code from the API terminal into **Verify now**, or run the SQL above.       |
 | MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                                 |
 | `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                              |
 | Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `lsof -ti:4200 \| xargs kill -9` (swap the port).                                            |

@@ -88,7 +88,7 @@ pnpm dev:api         # Backend only (http://localhost:3333)
 pnpm dev:mcp         # MCP server only (http://localhost:3334)
 ```
 
-> New here? [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) is the full onboarding guide — verified boot sequence, how to reach Settings (email verification), and how to connect an MCP client (Claude Desktop, Cursor, VS Code) to your local notes.
+> New here? [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) is the full onboarding guide — verified boot sequence, how email verification works in local dev (the code is logged, not mailed), and how to connect an MCP client (Claude Desktop, Cursor, VS Code) to your local notes.
 
 ### Access Points
 
