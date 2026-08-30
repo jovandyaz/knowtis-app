@@ -1035,7 +1035,7 @@ Two tables (migration `0010_green_the_professor.sql`):
 
 The `CONVERSATION_REPOSITORY` port (`domain/ports/conversation.repository.ts`) exposes `create`, `findByIdForUser`, `loadMessages`, `appendTurn`, `findExtractable`, `markExtracted`; the Drizzle adapter is in `infrastructure/persistence/drizzle-conversation.repository.ts`.
 
-The handler (`application/run-agent-turn.handler.ts`) loads up to `AI_AGENT_HISTORY_LIMIT` (default 40) prior messages, coalesces consecutive same-role turns (Claude requires strict user/assistant alternation), and **persists on `done`** in a single `appendTurn` transaction: the new user message + the assistant reply + an `updated_at` bump.
+The handler (`application/run-agent-turn.handler.ts`) loads up to `AI_AGENT_HISTORY_LIMIT` (default 40) prior messages, coalesces consecutive same-role turns (Claude requires strict user/assistant alternation), and **persists exactly once per turn, on every exit path** — `done`, `proposal`, `error`, `aborted`, and a loop that ends without a terminal event — in a single `appendTurn` transaction: the new user message, the assistant reply whenever any text was produced (a user-only row when the turn errors or aborts before the first chunk), and an `updated_at` bump. Rejections that happen before the orchestrator runs (injection, rate limit, message too long) are deliberately not persisted; the client keeps the rejected message.
 
 ### HITL resume
 

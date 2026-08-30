@@ -15,7 +15,7 @@
 | Context Management | ⚠️ Parcial                          | Ventana fija 12k, sin compaction, sin chequeo contra ventana real del modelo |
 | Verify             | ⚠️ Parcial                          | HITL + evals nightly fuertes; cero verificación semántica en runtime         |
 
-No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para escrituras, injection guard de 2 capas, catálogo de modelos db-backed, rate limiting multicapa. Los 3 pilares fuertes están por encima de la media de la industria. Las divergencias principales contra el consenso 2025–2026: persistencia del transcript, presupuesto dentro del loop, y evals en CI.
+No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para escrituras, injection guard de 2 capas, catálogo de modelos db-backed, rate limiting multicapa. Los 3 pilares fuertes están por encima de la media de la industria. Las divergencias principales contra el consenso 2025–2026: persistencia del transcript, presupuesto dentro del loop denominado en USD (el cap en tokens llegó en Bolt 1; el consenso lo expresa en costo — #365), y evals en CI.
 
 ---
 
