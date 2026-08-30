@@ -210,7 +210,7 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 
 | Práctica de consenso                                          | Fuente                                  | Knowtis                                                                                                          |
 | ------------------------------------------------------------- | --------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| Doble stop: natural + cap duro                                | Anthropic, OpenAI, Vercel, ADK          | ✅ maxSteps + 300s + stall + TTFT + abort                                                                        |
+| Doble stop: natural + cap duro                                | Anthropic, OpenAI, Vercel, ADK          | ✅ maxSteps + presupuesto de tokens por turno (Bolt 1) + 300s + stall + TTFT + abort                             |
 | Injection contenida arquitectónicamente                       | OWASP LLM01, Willison, arXiv 2506.08837 | ✅ fencing (≈spotlighting), allowlist egress (rompe pata de exfiltración), regex+classifier como capa secundaria |
 | Just-in-time retrieval                                        | Anthropic                               | ✅ contenido por tool, cap 10k, nunca en prompt inicial                                                          |
 | HITL con enforcement fuera del modelo mostrando acción exacta | OWASP LLM06, MCP spec, Claude Code      | ✅ propose→approve con diff, CASL al commit, Redis single-use                                                    |
