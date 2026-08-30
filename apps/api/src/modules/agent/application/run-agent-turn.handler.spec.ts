@@ -1942,7 +1942,7 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(true),
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -2010,7 +2010,7 @@ describe('RunAgentTurnHandler', () => {
       conversations,
       makeMemory(),
       makeEmbed(),
-      makeFlags(true),
+      makeFlags(),
       makeModelPreference(),
       makeByok(),
       makeGuard(),
@@ -3872,13 +3872,9 @@ describe('RunAgentTurnHandler', () => {
       }),
     ];
 
-    function makeReplayHandler(
-      history: ConversationMessageRow[],
-      flagOn: boolean
-    ) {
+    function makeReplayHandler(history: ConversationMessageRow[]) {
       const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
       const conversations = makeConversations(history);
-      const flags = makeFlags(flagOn);
       const handler = new RunAgentTurnHandler(
         orchestrator,
         rateLimit,
@@ -3888,29 +3884,21 @@ describe('RunAgentTurnHandler', () => {
         conversations,
         makeMemory(),
         makeEmbed(),
-        flags,
+        makeFlags(),
         makeModelPreference(),
         makeByok(),
         makeGuard(),
         makeAIConfig()
       );
-      return { conversations, flags, orchestrator, handler };
+      return { conversations, orchestrator, handler };
     }
 
     function runInput(orchestrator: AgentOrchestrator) {
       return vi.mocked(orchestrator.run).mock.calls[0][0];
     }
 
-    function transcriptFlagReads(flags: FeatureFlagsService): number {
-      return vi
-        .mocked(flags.isEnabled)
-        .mock.calls.filter(
-          ([key]) => key === FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
-        ).length;
-    }
-
-    it('replays the previous turn tool activity to the orchestrator when the flag is on', async () => {
-      const { orchestrator, handler } = makeReplayHandler(toolTurn, true);
+    it('replays the previous turn tool activity to the orchestrator', async () => {
+      const { orchestrator, handler } = makeReplayHandler(toolTurn);
 
       await handler.execute(
         {
@@ -3938,42 +3926,16 @@ describe('RunAgentTurnHandler', () => {
       expect(sent[2].parts).toEqual([toolResult]);
     });
 
-    it('replays text only when the flag is off and lets no empty row reach the provider', async () => {
-      const { orchestrator, handler } = makeReplayHandler(toolTurn, false);
-
-      await handler.execute(
-        {
-          userId: USER,
-          conversationId: 'conv-1',
-          message: { content: 'and who wrote it?' },
-        },
-        {
-          onChunk: vi.fn(),
-          onDone: vi.fn(),
-          onError: vi.fn(),
-          onProposal: vi.fn(),
-        }
-      );
-
-      const sent = runInput(orchestrator).messages ?? [];
-      expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
-      expect(sent.every((m) => m.content.length > 0)).toBe(true);
-      expect(sent.some((m) => m.parts)).toBe(false);
-    });
-
-    it('marks a truncated reply as data even when the flag is off', async () => {
-      const { orchestrator, handler } = makeReplayHandler(
-        [
-          historyRow({ role: 'user', content: 'summarize N1', turnId: 't1' }),
-          historyRow({
-            role: 'assistant',
-            content: 'half',
-            stopReason: 'aborted',
-            turnId: 't1',
-          }),
-        ],
-        false
-      );
+    it('marks a truncated reply as data', async () => {
+      const { orchestrator, handler } = makeReplayHandler([
+        historyRow({ role: 'user', content: 'summarize N1', turnId: 't1' }),
+        historyRow({
+          role: 'assistant',
+          content: 'half',
+          stopReason: 'aborted',
+          turnId: 't1',
+        }),
+      ]);
 
       await handler.execute(
         {
@@ -3995,32 +3957,23 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('keeps a source carried by a row that pruning drops from the history', async () => {
-      const { orchestrator, handler } = makeReplayHandler(
-        [
-          historyRow({ role: 'user', content: 'what is in N1?', turnId: 't1' }),
-          historyRow({
-            role: 'assistant',
-            content: '',
-            sources: [{ id: 'n9', title: 'N9' }],
-            parts: [toolCall],
-            turnId: 't1',
-          }),
-          historyRow({
-            role: 'tool',
-            content: '',
-            parts: [toolResult],
-            turnId: 't1',
-          }),
-          historyRow({
-            role: 'assistant',
-            content: 'N1 says hi',
-            sources: [{ id: 'n1', title: 'N1' }],
-            stopReason: 'completed',
-            turnId: 't1',
-          }),
-        ],
-        false
-      );
+      const { orchestrator, handler } = makeReplayHandler([
+        historyRow({ role: 'user', content: 'what is in N1?', turnId: 't1' }),
+        historyRow({
+          role: 'assistant',
+          content: '',
+          sources: [{ id: 'n9', title: 'N9' }],
+          parts: [toolCall],
+          turnId: 't1',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: 'N1 says hi',
+          sources: [{ id: 'n1', title: 'N1' }],
+          stopReason: 'completed',
+          turnId: 't1',
+        }),
+      ]);
 
       await handler.execute(
         {
@@ -4048,11 +4001,8 @@ describe('RunAgentTurnHandler', () => {
       ]);
     });
 
-    it('loads the raw transcript rows and reads the transcript flag once per turn', async () => {
-      const { conversations, flags, handler } = makeReplayHandler(
-        toolTurn,
-        true
-      );
+    it('loads the raw transcript rows for the turn', async () => {
+      const { conversations, handler } = makeReplayHandler(toolTurn);
 
       await handler.execute(
         { userId: USER, conversationId: 'conv-1', message: { content: 'hi' } },
@@ -4065,14 +4015,11 @@ describe('RunAgentTurnHandler', () => {
       );
 
       expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
-      expect(transcriptFlagReads(flags)).toBe(1);
     });
 
-    it('replays tool activity and reads the transcript flag once on the resume path too', async () => {
-      const { conversations, flags, orchestrator, handler } = makeReplayHandler(
-        toolTurn,
-        true
-      );
+    it('replays tool activity on the resume path too', async () => {
+      const { conversations, orchestrator, handler } =
+        makeReplayHandler(toolTurn);
 
       await handler.resumeTurn(
         {
@@ -4084,7 +4031,6 @@ describe('RunAgentTurnHandler', () => {
       );
 
       expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
-      expect(transcriptFlagReads(flags)).toBe(1);
       const sent = runInput(orchestrator).messages ?? [];
       expect(sent.map((m) => m.role)).toEqual([
         'user',
@@ -4096,38 +4042,33 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('never trims the resume history down to a lone orphan tool row', async () => {
-      const { orchestrator, handler } = makeReplayHandler(
-        [
-          historyRow({
-            role: 'user',
-            content: 'create a note about N1',
-            turnId: 't1',
-          }),
-          historyRow({
-            role: 'assistant',
-            content: '',
-            parts: [toolCall],
-            turnId: 't1',
-          }),
-          historyRow({
-            role: 'tool',
-            content: '',
-            parts: [
-              {
-                type: 'tool-result',
-                toolCallId: 'c1',
-                toolName: 'getNote',
-                output: TOOL_OUTPUT_FILLER.repeat(
-                  OVERSIZED_TOOL_OUTPUT_REPEATS
-                ),
-                outputType: 'text',
-              },
-            ],
-            turnId: 't1',
-          }),
-        ],
-        true
-      );
+      const { orchestrator, handler } = makeReplayHandler([
+        historyRow({
+          role: 'user',
+          content: 'create a note about N1',
+          turnId: 't1',
+        }),
+        historyRow({
+          role: 'assistant',
+          content: '',
+          parts: [toolCall],
+          turnId: 't1',
+        }),
+        historyRow({
+          role: 'tool',
+          content: '',
+          parts: [
+            {
+              type: 'tool-result',
+              toolCallId: 'c1',
+              toolName: 'getNote',
+              output: TOOL_OUTPUT_FILLER.repeat(OVERSIZED_TOOL_OUTPUT_REPEATS),
+              outputType: 'text',
+            },
+          ],
+          turnId: 't1',
+        }),
+      ]);
 
       await handler.resumeTurn(
         {
@@ -4184,10 +4125,9 @@ describe('RunAgentTurnHandler', () => {
       stopReason: 'completed',
     } as const;
 
-    function run(events: AgentEvent[], flagOn: boolean) {
+    function run(events: AgentEvent[]) {
       const { rateLimit, config, pendingStore } = makeDeps({});
       const conversations = makeConversations();
-      const flags = makeFlags(flagOn);
       const callbacks = {
         onChunk: vi.fn(),
         onDone: vi.fn(),
@@ -4203,7 +4143,7 @@ describe('RunAgentTurnHandler', () => {
         conversations,
         makeMemory(),
         makeEmbed(),
-        flags,
+        makeFlags(),
         makeModelPreference(),
         makeByok(),
         makeGuard(),
@@ -4211,8 +4151,6 @@ describe('RunAgentTurnHandler', () => {
       );
       return {
         conversations,
-        flags,
-        callbacks,
         execute: () =>
           handler.execute(
             { userId: USER, message: { content: 'what is in N1?' } },
@@ -4221,22 +4159,19 @@ describe('RunAgentTurnHandler', () => {
       };
     }
 
-    const completedRun = (flagOn: boolean) =>
-      run(
-        [
-          { type: 'step', messages: [...stepWithTool] },
-          { type: 'chunk', text: 'N1 says hi' },
-          {
-            type: 'step',
-            messages: [{ role: 'assistant', content: 'N1 says hi' }],
-          },
-          doneEvent,
-        ],
-        flagOn
-      );
+    const completedRun = () =>
+      run([
+        { type: 'step', messages: [...stepWithTool] },
+        { type: 'chunk', text: 'N1 says hi' },
+        {
+          type: 'step',
+          messages: [{ role: 'assistant', content: 'N1 says hi' }],
+        },
+        doneEvent,
+      ]);
 
     it('persists every step message and puts the stop reason on the final assistant row', async () => {
-      const { conversations, execute } = completedRun(true);
+      const { conversations, execute } = completedRun();
 
       await execute();
 
@@ -4259,7 +4194,7 @@ describe('RunAgentTurnHandler', () => {
       const logSpy = vi
         .spyOn(Logger.prototype, 'log')
         .mockImplementation(() => undefined);
-      const { execute } = completedRun(true);
+      const { execute } = completedRun();
 
       await execute();
 
@@ -4276,21 +4211,18 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('appends the interrupted step text as its own partial row on abort', async () => {
-      const { conversations, execute } = run(
-        [
-          { type: 'step', messages: [...stepWithTool] },
-          { type: 'chunk', text: 'N1 sa' },
-          {
-            type: 'aborted',
-            usage: {
-              inputTokens: 1,
-              outputTokens: 1,
-              model: 'anthropic:claude-sonnet-4-20250514',
-            },
+      const { conversations, execute } = run([
+        { type: 'step', messages: [...stepWithTool] },
+        { type: 'chunk', text: 'N1 sa' },
+        {
+          type: 'aborted',
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'anthropic:claude-sonnet-4-20250514',
           },
-        ],
-        true
-      );
+        },
+      ]);
 
       await execute();
 
@@ -4305,10 +4237,10 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('persists the tool rows with no stop reason when the turn ends on a tool result', async () => {
-      const { conversations, execute } = run(
-        [{ type: 'step', messages: [...stepWithTool] }, doneEvent],
-        true
-      );
+      const { conversations, execute } = run([
+        { type: 'step', messages: [...stepWithTool] },
+        doneEvent,
+      ]);
 
       await execute();
 
@@ -4321,31 +4253,28 @@ describe('RunAgentTurnHandler', () => {
     });
 
     it('keeps only the text streamed after the last step as the partial row', async () => {
-      const { conversations, execute } = run(
-        [
-          { type: 'chunk', text: 'Hello' },
-          {
-            type: 'step',
-            messages: [
-              {
-                role: 'assistant',
-                content: 'Hello',
-                parts: [{ type: 'text', text: 'Hello' }],
-              },
-            ],
-          },
-          { type: 'chunk', text: ' wor' },
-          {
-            type: 'aborted',
-            usage: {
-              inputTokens: 1,
-              outputTokens: 1,
-              model: 'anthropic:claude-sonnet-4-20250514',
+      const { conversations, execute } = run([
+        { type: 'chunk', text: 'Hello' },
+        {
+          type: 'step',
+          messages: [
+            {
+              role: 'assistant',
+              content: 'Hello',
+              parts: [{ type: 'text', text: 'Hello' }],
             },
+          ],
+        },
+        { type: 'chunk', text: ' wor' },
+        {
+          type: 'aborted',
+          usage: {
+            inputTokens: 1,
+            outputTokens: 1,
+            model: 'anthropic:claude-sonnet-4-20250514',
           },
-        ],
-        true
-      );
+        },
+      ]);
 
       await execute();
 
@@ -4363,46 +4292,6 @@ describe('RunAgentTurnHandler', () => {
           sources: [],
           stopReason: 'aborted',
         },
-      ]);
-    });
-
-    it('ignores step messages while the flag is off', async () => {
-      const { conversations, execute } = completedRun(false);
-
-      await execute();
-
-      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
-      expect(appended.messages.map((m) => m.role)).toEqual([
-        'user',
-        'assistant',
-      ]);
-      expect(appended.messages[1]).not.toHaveProperty('parts');
-    });
-
-    it('treats a failing flag lookup as off instead of failing the turn', async () => {
-      const warnSpy = vi
-        .spyOn(Logger.prototype, 'warn')
-        .mockImplementation(() => undefined);
-      const { conversations, flags, callbacks, execute } = completedRun(true);
-      vi.mocked(flags.isEnabled).mockImplementation((key) =>
-        key === FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
-          ? Promise.reject(new Error('flag store down'))
-          : Promise.resolve(false)
-      );
-
-      await execute();
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.objectContaining({
-          event: 'agent.transcript_flag.lookup_failed',
-        })
-      );
-      expect(callbacks.onError).not.toHaveBeenCalled();
-      expect(callbacks.onDone).toHaveBeenCalledTimes(1);
-      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
-      expect(appended.messages.map((m) => m.role)).toEqual([
-        'user',
-        'assistant',
       ]);
     });
   });

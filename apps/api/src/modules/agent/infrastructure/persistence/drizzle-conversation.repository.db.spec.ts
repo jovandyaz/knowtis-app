@@ -1,9 +1,18 @@
 import { randomUUID } from 'node:crypto';
 
+import { Logger } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { eq, sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
 import {
@@ -30,6 +39,13 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
   let moduleRef: TestingModule;
   let db: Database;
   let repo: DrizzleConversationRepository;
+
+  const spyOnWarn = () =>
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -294,6 +310,67 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].content).toBe('unknown version content');
     expect(rows[0].parts).toBeNull();
+  });
+
+  it('returns parts: null when the stored payload is not an array of parts', async () => {
+    const warnSpy = spyOnWarn();
+    const { id } = await repo.create({ userId: USER, title: 't' });
+    await db.insert(conversationMessages).values({
+      conversationId: id,
+      turnId: randomUUID(),
+      role: 'assistant',
+      content: 'malformed envelope content',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: 'not-an-array',
+      } as unknown as PersistedParts,
+    });
+
+    const rows = await repo.loadMessages(id, 10);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].content).toBe('malformed envelope content');
+    expect(rows[0].parts).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.transcript.parts_invalid',
+        conversationId: id,
+      })
+    );
+  });
+
+  it('returns parts: null when a tool-result part has no output type', async () => {
+    const warnSpy = spyOnWarn();
+    const { id } = await repo.create({ userId: USER, title: 't' });
+    await db.insert(conversationMessages).values({
+      conversationId: id,
+      turnId: randomUUID(),
+      role: 'tool',
+      content: 'untyped tool result content',
+      parts: {
+        v: AGENT_MESSAGE_PARTS_VERSION,
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'searchNotes',
+            output: { hits: [] },
+          },
+        ],
+      } as unknown as PersistedParts,
+    });
+
+    const rows = await repo.loadMessages(id, 10);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0].content).toBe('untyped tool result content');
+    expect(rows[0].parts).toBeNull();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.transcript.parts_invalid',
+        conversationId: id,
+      })
+    );
   });
 
   it('loads text-only rows when asked, skipping tool rows and empty assistant rows', async () => {

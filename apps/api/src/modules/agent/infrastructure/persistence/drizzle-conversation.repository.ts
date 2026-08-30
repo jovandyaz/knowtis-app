@@ -1,5 +1,6 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, desc, eq, ne, sql } from 'drizzle-orm';
+import { z } from 'zod';
 
 import {
   conversationMessages,
@@ -10,6 +11,8 @@ import {
 } from '../../../../database';
 import {
   AGENT_MESSAGE_PARTS_VERSION,
+  TOOL_OUTPUT_TYPE,
+  type AgentMessagePart,
   type PersistedParts,
 } from '../../domain/agent-message';
 import type {
@@ -20,8 +23,32 @@ import type {
   LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
 
+const agentMessagePartSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({
+    type: z.literal('tool-call'),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    input: z.unknown(),
+  }),
+  z.object({
+    type: z.literal('tool-result'),
+    toolCallId: z.string(),
+    toolName: z.string(),
+    output: z.unknown(),
+    outputType: z.enum(TOOL_OUTPUT_TYPE),
+  }),
+]);
+
+const persistedPartsSchema = z.object({
+  v: z.literal(AGENT_MESSAGE_PARTS_VERSION),
+  parts: z.array(agentMessagePartSchema),
+});
+
 @Injectable()
 export class DrizzleConversationRepository implements ConversationRepository {
+  private readonly logger = new Logger(DrizzleConversationRepository.name);
+
   constructor(
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database
@@ -104,10 +131,27 @@ export class DrizzleConversationRepository implements ConversationRepository {
       role: r.role,
       content: r.content,
       sources: r.sources ?? [],
-      parts: r.parts?.v === AGENT_MESSAGE_PARTS_VERSION ? r.parts.parts : null,
+      parts: this.partsOf(r.parts, conversationId),
       stopReason: r.stopReason ?? null,
       turnId: r.turnId ?? null,
     }));
+  }
+
+  private partsOf(
+    stored: PersistedParts | null,
+    conversationId: string
+  ): readonly AgentMessagePart[] | null {
+    if (stored === null) {
+      return null;
+    }
+    if (!persistedPartsSchema.safeParse(stored).success) {
+      this.logger.warn({
+        event: 'agent.transcript.parts_invalid',
+        conversationId,
+      });
+      return null;
+    }
+    return stored.parts;
   }
 
   async appendTurn(input: AppendTurnInput): Promise<void> {

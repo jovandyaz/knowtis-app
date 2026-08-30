@@ -616,27 +616,24 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                     | Description                                                                                                        |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `ai_enabled`                 | Global AI feature gate                                                                                             |
-| `voice_notes_enabled`        | Voice-to-note feature gate                                                                                         |
-| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                            |
-| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                              |
-| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                              |
-| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                          |
-| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense))                 |
-| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))                        |
-| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching))                 |
-| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                                  |
-| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                               |
-| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))                  |
-| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                                          |
-| `ai_catalog_sync`            | Daily OpenRouter catalog sync and curated-model watch ([Catalog](#open-tier-model-catalog))                        |
-| `agent_transcript_tools`     | Replays persisted tool-call rows in the copilot transcript ([Conversation memory (A6a)](#conversation-memory-a6a)) |
+| Flag Key                     | Description                                                                                        |
+| ---------------------------- | -------------------------------------------------------------------------------------------------- |
+| `ai_enabled`                 | Global AI feature gate                                                                             |
+| `voice_notes_enabled`        | Voice-to-note feature gate                                                                         |
+| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                            |
+| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                              |
+| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                              |
+| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                          |
+| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)) |
+| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))        |
+| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)) |
+| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                  |
+| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))               |
+| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))  |
+| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                          |
+| `ai_catalog_sync`            | Daily OpenRouter catalog sync and curated-model watch ([Catalog](#open-tier-model-catalog))        |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
-
-`agent_transcript_tools` ships **off**. Two open issues block turning it on anywhere: [persisted `parts` have no runtime validation](https://github.com/jovandyaz/knowtis-app/issues/372) and [live evals grade a fallback model instead of the intended one](https://github.com/jovandyaz/knowtis-app/issues/373), so eval signal on this path is not trustworthy yet. `stop_reason` persistence and the partial-reply marker are unaffected by this flag and already run in production — see [Conversation memory (A6a)](#conversation-memory-a6a).
 
 Every flag is described in the static **flag catalog** (`FEATURE_FLAG_CATALOG`, `packages/shared/types/src/lib/feature-flags.types.ts`): a human label, description, `domain` (`ai` | `product`), and `group` (master / capability / guardrail / access / release / ops / permission). The catalog drives the backoffice UI — the **Feature Flags** page shows only `product` flags grouped by type, while every `ai`-domain flag surfaces inside the **AI Config** page's tabs next to the settings it gates. A guard test asserts the catalog and the API's flag keys never drift.
 
@@ -1012,7 +1009,7 @@ The provider sits behind the agnostic `WEB_SEARCH_PORT`. Tavily is the first ada
 
 ## Conversation memory (A6a)
 
-The copilot is **server-authoritative**: the client never sends its own message history. Each turn the gateway accepts a single new user message plus an optional `conversationId`; the server reconstructs the full thread from Postgres, runs the turn, and persists the result. Thread memory itself has no feature flag — it is always active when `ai_enabled` is on. A separate flag, `agent_transcript_tools`, gates only whether `tool` rows are replayed on the next turn (see [Persistence](#persistence) below).
+The copilot is **server-authoritative**: the client never sends its own message history. Each turn the gateway accepts a single new user message plus an optional `conversationId`; the server reconstructs the full thread from Postgres, runs the turn, and persists the result. Thread memory itself has no feature flag — it is always active when `ai_enabled` is on, tool-row replay included (see [Persistence](#persistence) below).
 
 ### Wire payload
 
@@ -1042,15 +1039,17 @@ The handler (`application/run-agent-turn.handler.ts`) loads up to `AI_AGENT_HIST
 
 SDK translation both ways lives in `infrastructure/orchestrator/message-mapper.ts`: `fromResponseMessages` turns one step's SDK `response.messages` into domain `AgentMessage`/`AgentMessagePart` rows (reasoning, file and approval parts are dropped), and `toModelMessages` renders a stored transcript back into SDK messages for the next `streamText` call. `AgentToolResultPart.outputType` preserves the SDK's tool-output discriminator (`text | json | content | error-text | error-json | execution-denied`) so a replay reconstructs the exact original member instead of collapsing everything to text.
 
-**Tool-turn replay is gated by the `agent_transcript_tools` feature flag** (default **off**, domain `ai`, group `release` (shown as **Rollouts** in the backoffice), label "Transcript with tool activity"). `domain/prune-transcript.ts` (`pruneTranscript`) decides what the model sees next turn: with the flag on, the last `AGENT_HISTORY_TOOL_TURNS` (2, hardcoded) tool-using turns are replayed verbatim — their stored `parts`, tool rows included; every older turn — and, with the flag off, every turn — is rendered as plain text (`textOfParts(parts)` when parts exist, otherwise `content`), and tool rows outside the kept window are dropped entirely. Either way, `pruneTranscript` also strips orphaned tool-call/tool-result pairs (a call whose result fell outside the kept window, or vice versa) and drops any turn left with neither text nor tool activity. The flag lookup is fail-closed: a lookup error is logged as `agent.transcript_flag.lookup_failed` and treated as off.
+**Tool-turn replay ships unconditionally** — no feature flag gates it. `domain/prune-transcript.ts` (`pruneTranscript`) decides what the model sees next turn: the last `AGENT_HISTORY_TOOL_TURNS` (2, hardcoded) tool-using turns are replayed verbatim — their stored `parts`, tool rows included; every older turn is rendered as plain text (`textOfParts(parts)` when parts exist, otherwise `content`), and tool rows outside the kept window are dropped entirely. `pruneTranscript` also strips orphaned tool-call/tool-result pairs (a call whose result fell outside the kept window, or vice versa) and drops any turn left with neither text nor tool activity.
 
-**`stop_reason` persistence and partial-reply marking are NOT behind this flag** — both ship unconditionally, whether `agent_transcript_tools` is on or off. Every terminal assistant row stores its `stop_reason`; on replay, `pruneTranscript` appends `\n\n[reply cut off: <reason>]` to any assistant row whose `stop_reason` is `aborted`, `error`, or `length`, so a truncated reply reads to the model as data instead of a clean answer. The flag only ever controls whether `tool` rows are replayed verbatim — turning it off does not stop the partial-reply marker or `stop_reason` persistence; the only way to remove that behavior is a code revert.
+Persisted `parts` are validated on load: the Drizzle adapter parses the stored envelope against a Zod schema, and a row that fails — a bad version, a payload that is not an array of parts, a part with an unknown shape — degrades to `parts: null` and replays as its plain `content` instead of failing the turn, logging `agent.transcript.parts_invalid { conversationId }`.
+
+Every terminal assistant row stores its `stop_reason`; on replay, `pruneTranscript` appends `\n\n[reply cut off: <reason>]` to any assistant row whose `stop_reason` is `aborted`, `error`, or `length`, so a truncated reply reads to the model as data instead of a clean answer.
 
 After `pruneTranscript`, the token budget is applied separately at synth time: `trimHistory` walks the coalesced messages newest-first and keeps adding whole messages until the next one would push the running estimate past `AGENT_HISTORY_TOKEN_BUDGET` (12,000, hardcoded, unchanged by this work), then stops — an oversized message (a tool turn included) is dropped whole rather than truncated.
 
-**Rolling back below the schema migration is not safe once tool rows exist.** Reverting the API to a build older than migration `0036` while `conversation_messages` holds `role = 'tool'` rows feeds those rows to the old row→message mapper, which has no case for them, and the affected conversations fail on every load — turning the flag off does not help, because the rows are already written. Roll back the flag first, and only revert the schema-aware code after confirming no tool rows exist.
+**Rolling back below the schema migration is not safe once tool rows exist.** Reverting the API to a build older than migration `0036` while `conversation_messages` holds `role = 'tool'` rows feeds those rows to the old row→message mapper, which has no case for them, and the affected conversations fail on every load. Only revert the schema-aware code after confirming no tool rows exist.
 
-**Before enabling the flag anywhere**, close [#372](https://github.com/jovandyaz/knowtis-app/issues/372) — persisted `parts` are gated only on the version envelope (`v`), with no runtime validation, so a malformed row would reach the provider mistyped. Independently, [#373](https://github.com/jovandyaz/knowtis-app/issues/373) means every live agent eval currently grades a fallback model (the pinned `claude-sonnet-5` rejects `temperature` with a 400), so eval evidence about this feature is attributed to the wrong model until it is fixed.
+[#373](https://github.com/jovandyaz/knowtis-app/issues/373) means every live agent eval currently grades a fallback model (the pinned `claude-sonnet-5` rejects `temperature` with a 400), so eval evidence about this feature is attributed to the wrong model until it is fixed.
 
 Long-term memory extraction never sees tool activity: it calls `loadMessages(conversationId, limit, { textOnly: true })`, which filters at the SQL level (`role != 'tool' AND content != ''`) before the domain layer runs.
 
