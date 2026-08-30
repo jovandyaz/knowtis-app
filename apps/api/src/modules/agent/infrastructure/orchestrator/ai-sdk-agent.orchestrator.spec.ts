@@ -129,11 +129,14 @@ function collect(iter: AsyncIterable<unknown>) {
   })();
 }
 
+const TURN_TOKEN_BUDGET = 150000;
+
 const baseInput = {
   userId: 'u1',
   messages: [{ role: 'user' as const, content: 'hi' }],
   model: MODEL,
   maxSteps: 4,
+  maxTurnTokens: TURN_TOKEN_BUDGET,
 };
 
 describe('AiSdkAgentOrchestrator', () => {
@@ -574,6 +577,7 @@ describe('AiSdkAgentOrchestrator', () => {
         messages: [{ role: 'user', content: 'resume esa nota' }],
         model: 'anthropic:claude-sonnet-4-20250514',
         maxSteps: 4,
+        maxTurnTokens: TURN_TOKEN_BUDGET,
         knownNotes: [{ id: 'prev-id', title: 'Earlier note' }],
       })
     );
@@ -2821,5 +2825,234 @@ describe('AiSdkAgentOrchestrator', () => {
       type: 'done',
       usage: { inputTokens: 10, outputTokens: 2, model: MODEL },
     });
+  });
+
+  it('marks done with stopReason max_steps when the model still wants tools at the cap', async () => {
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'searching…' };
+        yield { type: 'finish', finishReason: 'tool-calls' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, maxSteps: 1 })
+    );
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('max_steps');
+  });
+
+  it('marks done with stopReason length when output was truncated mid-answer', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'respuesta cortada' };
+        yield { type: 'finish', finishReason: 'length' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('length');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.output_truncated',
+        maxOutputTokens: 4096,
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('marks done with stopReason content_filter and warns when the provider filtered the output', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'no puedo con eso' };
+        yield { type: 'finish', finishReason: 'content-filter' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(orchestrator.run(baseInput));
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('content_filter');
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.content_filtered',
+        userId: 'u1',
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('stops continuing to the next step once the turn token budget is spent', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'leyendo notas…' };
+        yield { type: 'finish', finishReason: 'tool-calls' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 4000, outputTokens: 1000 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, maxSteps: 8, maxTurnTokens: 5000 })
+    );
+
+    const done = events.find(
+      (e): e is { type: 'done'; stopReason: string } =>
+        (e as { type: string }).type === 'done'
+    );
+    expect(done?.stopReason).toBe('token_budget');
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.turn.token_budget_reached',
+        spentTurnTokens: 5000,
+        maxTurnTokens: 5000,
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it.each([
+    { label: 'no usage', usage: {} },
+    { label: 'only inputTokens', usage: { inputTokens: 3 } },
+    { label: 'only outputTokens', usage: { outputTokens: 2 } },
+  ])(
+    'warns that the turn budget is unreliable when the provider reports $label',
+    async ({ usage }) => {
+      const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+      streamTextMock.mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'ok' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve(usage),
+      }));
+      const orchestrator = makeOrchestrator();
+
+      await collect(orchestrator.run(baseInput));
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.usage_incomplete',
+          userId: 'u1',
+          model: MODEL,
+        })
+      );
+      warnSpy.mockRestore();
+    }
+  );
+
+  it('does not warn about usage when both token counters are reported', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'ok' };
+        yield { type: 'finish', finishReason: 'stop' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'agent.turn.usage_incomplete' })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('logs a readable message when a tool throws a non-Error value', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'webFetch',
+          input: { url: 'https://example.test' },
+          error: { status: 503 },
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        toolName: 'webFetch',
+        error: 'non-Error value thrown',
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('logs agent.tool.error and counts tool activity in turn health', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
+    streamTextMock.mockImplementationOnce(() => ({
+      fullStream: (async function* () {
+        yield {
+          type: 'tool-call',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+        };
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'getNote',
+          input: { id: 'n1' },
+          error: new Error('boom'),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'done anyway' };
+      })(),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        toolName: 'getNote',
+        userId: 'u1',
+        error: 'boom',
+      })
+    );
+    expect(healthLogsFrom(logSpy).at(-1)).toMatchObject({
+      toolCalls: 1,
+      toolErrors: 1,
+    });
+    warnSpy.mockRestore();
+    logSpy.mockRestore();
   });
 });

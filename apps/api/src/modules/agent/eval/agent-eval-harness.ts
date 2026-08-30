@@ -34,7 +34,8 @@ export class AgentEvalHarness {
     private readonly moduleRef: TestingModule,
     private readonly orchestrator: AgentOrchestrator,
     private readonly retrieval: RecordingFixtureRetrieval,
-    private readonly maxSteps: number
+    private readonly maxSteps: number,
+    private readonly maxTurnTokens: number
   ) {}
 
   static async boot(): Promise<AgentEvalHarness> {
@@ -82,8 +83,15 @@ export class AgentEvalHarness {
         { strict: false }
       );
       const maxSteps = config.get('AI_AGENT_MAX_STEPS');
+      const maxTurnTokens = config.get('AI_AGENT_TURN_TOKEN_BUDGET');
 
-      return new AgentEvalHarness(moduleRef, orchestrator, retrieval, maxSteps);
+      return new AgentEvalHarness(
+        moduleRef,
+        orchestrator,
+        retrieval,
+        maxSteps,
+        maxTurnTokens
+      );
     } catch (error) {
       await moduleRef.close();
       throw error;
@@ -102,6 +110,7 @@ export class AgentEvalHarness {
       messages,
       model,
       maxSteps: this.maxSteps,
+      maxTurnTokens: this.maxTurnTokens,
     });
     const drained = await drainEvents(events);
     return { ...drained, toolCalls: this.retrieval.getCalls() };

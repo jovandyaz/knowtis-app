@@ -58,6 +58,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
     recordSideCost: vi.fn().mockResolvedValue(undefined),
+    turnTokenBudget: vi.fn().mockReturnValue(150000),
   } as unknown as AIRateLimitService;
   const config = {
     get: vi.fn((k: string) =>
@@ -87,6 +88,7 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]
   );
@@ -226,6 +228,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const conversations = makeConversations();
@@ -585,6 +588,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [{ id: 'n1', title: 'Productividad' }],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -629,6 +633,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -669,6 +674,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [{ id: 'n1', title: 'GTD' }],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const conversations = makeConversations([
@@ -846,6 +852,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1008,6 +1015,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1411,6 +1419,49 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('persists the user message and partial text when the turn errors mid-stream', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'respuesta a medias' },
+      {
+        type: 'error',
+        error: { code: 'AI_PROVIDER_ERROR', message: 'boom' },
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalled();
+    expect(conversations.appendTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userMessage: { content: 'hola' },
+        assistantMessage: expect.objectContaining({
+          content: 'respuesta a medias',
+        }),
+      })
+    );
+  });
+
   it('bills best-effort usage when a stalled turn ends in a timeout error', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -1470,6 +1521,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -1541,6 +1593,120 @@ describe('RunAgentTurnHandler', () => {
     );
 
     expect(rateLimit.recordUsage).not.toHaveBeenCalled();
+  });
+
+  it('persists the user message alone when the turn aborts before any text', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.userMessage).toEqual({ content: 'hola' });
+    expect(appended).not.toHaveProperty('assistantMessage');
+  });
+
+  it('forwards the anonymous turn token budget from the rate limiter to the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    vi.mocked(rateLimit.turnTokenBudget).mockReturnValue(33000);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, isAnonymous: true },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(true);
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurnTokens: 33000 })
+    );
+  });
+
+  it('forwards the registered turn token budget from the rate limiter to the orchestrator', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(false);
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ maxTurnTokens: 150000 })
+    );
   });
 
   it('estimates tokens with the real tokenizer plus a fixed prompt-overhead margin', async () => {
@@ -2083,6 +2249,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const handler = new RunAgentTurnHandler(
@@ -2825,6 +2992,7 @@ describe('RunAgentTurnHandler', () => {
         sources: [],
         knownNotes: [],
         webSources: [],
+        stopReason: 'completed',
       },
     ]);
     const modelPreference = makeModelPreference();
@@ -3141,6 +3309,47 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('persists the user message and partial text when the orchestrator ends without a terminal event', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      { type: 'chunk', text: 'partial' },
+    ]);
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hola' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+    expect(appended.userMessage).toEqual({ content: 'hola' });
+    expect(appended.assistantMessage).toEqual({
+      content: 'partial',
+      sources: [],
+    });
+  });
+
   it('reconciles the reservation and completes once when a resume turn stops on a committed event', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -3348,5 +3557,50 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.releaseReservation).not.toHaveBeenCalled();
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onProposal).not.toHaveBeenCalled();
+  });
+
+  it('persists the turn exactly once when the proposal store write fails after the case-level persist', async () => {
+    const { rateLimit, config } = makeDeps({});
+    const proposal = makeProposal('66666666-6666-6666-6666-666666666666');
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'proposal',
+        proposal,
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const pendingStore = {
+      save: vi.fn().mockRejectedValue(new Error('redis down')),
+      take: vi.fn().mockResolvedValue(null),
+    } as unknown as PendingMutationStore;
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'create a note' } },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledTimes(1);
   });
 });

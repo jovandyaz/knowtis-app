@@ -362,8 +362,7 @@ export class SuggestOrganizationHandler {
       void this.rateLimitService.releaseReservation(
         userId,
         ESTIMATED_TOKENS_PER_NOTE,
-        estimatedCostUsd,
-        params.clientIp
+        estimatedCostUsd
       );
       return { suggestion: empty, failure: NOTE_FAILURE.PROVIDER };
     }

@@ -13,6 +13,7 @@ export interface AgentRunInput {
   readonly messages: readonly AgentMessage[];
   readonly model: string;
   readonly maxSteps: number;
+  readonly maxTurnTokens: number;
   readonly noteId?: string;
   readonly signal?: AbortSignal;
   readonly resume?: AgentResumeContext;

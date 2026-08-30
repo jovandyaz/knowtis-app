@@ -24,10 +24,12 @@ import {
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
-import type {
-  AgentSource,
-  AgentTurnUsage,
-  WebSource,
+import {
+  AGENT_STOP_REASON,
+  type AgentSource,
+  type AgentStopReason,
+  type AgentTurnUsage,
+  type WebSource,
 } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import { coalesceMessages } from '../domain/coalesce-messages';
@@ -78,6 +80,7 @@ export interface RunAgentTurnCallbacks {
     sources: readonly AgentSource[];
     knownNotes: readonly AgentSource[];
     webSources: readonly WebSource[];
+    stopReason: AgentStopReason;
     conversationId?: string;
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
@@ -319,13 +322,19 @@ export class RunAgentTurnHandler {
     assistantText: string,
     sources: readonly AgentSource[]
   ): Promise<void> {
+    const hasAssistantText = assistantText.length > 0;
+    if (persistence.userContent === undefined && !hasAssistantText) {
+      return;
+    }
     try {
       await this.conversations.appendTurn({
         conversationId: persistence.conversationId,
         ...(persistence.userContent !== undefined
           ? { userMessage: { content: persistence.userContent } }
           : {}),
-        assistantMessage: { content: assistantText, sources },
+        ...(hasAssistantText
+          ? { assistantMessage: { content: assistantText, sources } }
+          : {}),
       });
     } catch (error) {
       this.logger.error({
@@ -361,6 +370,7 @@ export class RunAgentTurnHandler {
           sources: [],
           knownNotes: [],
           webSources: [],
+          stopReason: AGENT_STOP_REASON.COMPLETED,
         });
         return 'stop';
       },
@@ -373,6 +383,7 @@ export class RunAgentTurnHandler {
           sources: [],
           knownNotes: [],
           webSources: [],
+          stopReason: AGENT_STOP_REASON.COMPLETED,
         });
         return 'stop';
       },
@@ -567,6 +578,9 @@ export class RunAgentTurnHandler {
     // must escape before any reservation exists, else the held reservation
     // leaks with no client-facing error (the gateway turn slot has no catch).
     const maxSteps = this.configService.get('AI_AGENT_MAX_STEPS');
+    const maxTurnTokens = this.rateLimit.turnTokenBudget(
+      input.isAnonymous ?? false
+    );
     const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
       this.aiConfig.getReasoningEffort(),
       this.aiConfig.getOpenRouterProviderOrder(),
@@ -597,12 +611,23 @@ export class RunAgentTurnHandler {
     };
 
     let assistantText = '';
+    let persisted = false;
+    const persistTurnOnce = async (
+      sources: readonly AgentSource[]
+    ): Promise<void> => {
+      if (!persistence || persisted) {
+        return;
+      }
+      persisted = true;
+      await this.persistTurn(persistence, assistantText, sources);
+    };
     try {
       for await (const event of this.orchestrator.run({
         userId: input.userId,
         messages,
         model,
         maxSteps,
+        maxTurnTokens,
         reasoningEffort,
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -629,11 +654,13 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
+            await persistTurnOnce([]);
             callbacks.onError(event.error);
             return;
           case 'aborted':
             await this.recordUsageSafe(input.userId, ctx, event.usage);
             ctx.reconciled = true;
+            await persistTurnOnce([]);
             return;
           case 'done': {
             let costUsd: number;
@@ -660,9 +687,7 @@ export class RunAgentTurnHandler {
             if (isByok) {
               void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
-            if (persistence) {
-              await this.persistTurn(persistence, assistantText, event.sources);
-            }
+            await persistTurnOnce(event.sources);
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -671,6 +696,7 @@ export class RunAgentTurnHandler {
               sources: event.sources,
               knownNotes: event.knownNotes,
               webSources: event.webSources,
+              stopReason: event.stopReason,
               ...(persistence
                 ? { conversationId: persistence.conversationId }
                 : {}),
@@ -678,10 +704,8 @@ export class RunAgentTurnHandler {
             return;
           }
           case 'proposal':
-            if (persistence) {
-              // Proposal events carry no sources; the post-approval turn re-derives them.
-              await this.persistTurn(persistence, assistantText, []);
-            }
+            // Proposal events carry no sources; the post-approval turn re-derives them.
+            await persistTurnOnce([]);
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
@@ -714,10 +738,12 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
+      await persistTurnOnce([]);
       callbacks.onError(
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
+      await persistTurnOnce([]);
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(input.userId, ctx, {

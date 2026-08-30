@@ -16,7 +16,12 @@ import {
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
-import type { AgentEvent, AgentSource } from '../../domain/agent-event';
+import {
+  AGENT_STOP_REASON,
+  type AgentEvent,
+  type AgentSource,
+  type AgentStopReason,
+} from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { ProposalCollector } from './proposal-collector';
 import {
@@ -35,6 +40,7 @@ import {
 import {
   accumulateTurnUsage,
   bestEffortUsage,
+  hasCompleteUsage,
   turnUsageEvent,
   type StepUsageAccumulator,
   type TurnUsageAccumulator,
@@ -45,6 +51,7 @@ const MAX_STEP_ATTEMPTS = 2;
 
 const FINISH_REASON_LENGTH = 'length';
 const FINISH_REASON_TOOL_CALLS = 'tool-calls';
+const FINISH_REASON_CONTENT_FILTER = 'content-filter';
 
 class AgentStallError extends Error {
   constructor(stallMs: number) {
@@ -132,6 +139,7 @@ export interface AgentStepLoopParams {
     readonly maxOutputTokens: number;
     readonly maxRetries: number;
     readonly maxMs: number;
+    readonly maxTurnTokens: number;
   };
   readonly sources: Map<string, AgentSource>;
   readonly knownNotes: Map<string, AgentSource>;
@@ -317,6 +325,15 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.COMPLETED: {
           accumulateTurnUsage(turnUsage, result.usage);
+          if (!hasCompleteUsage(result.usage)) {
+            logger.warn({
+              event: 'agent.turn.usage_incomplete',
+              userId: input.userId,
+              model: currentModel,
+              inputTokens: result.usage.inputTokens,
+              outputTokens: result.usage.outputTokens,
+            });
+          }
           const captured = params.proposals.captured;
           if (captured) {
             emitTurnHealth(
@@ -335,9 +352,16 @@ export async function* runAgentStepLoop(
             };
             return;
           }
+          const spentTurnTokens =
+            turnUsage.inputTokens + turnUsage.outputTokens;
+          const withinTokenBudget =
+            spentTurnTokens < params.budgets.maxTurnTokens;
+          const wantsMoreTools =
+            result.finishReason === FINISH_REASON_TOOL_CALLS;
           const willContinue =
-            result.finishReason === FINISH_REASON_TOOL_CALLS &&
-            completedSteps + 1 < input.maxSteps;
+            wantsMoreTools &&
+            completedSteps + 1 < input.maxSteps &&
+            withinTokenBudget;
           if (willContinue) {
             emitTurnHealth(
               logger,
@@ -372,6 +396,40 @@ export async function* runAgentStepLoop(
             );
             return;
           }
+          let stopReason: AgentStopReason = AGENT_STOP_REASON.COMPLETED;
+          if (wantsMoreTools && !withinTokenBudget) {
+            stopReason = AGENT_STOP_REASON.TOKEN_BUDGET;
+            logger.warn({
+              event: 'agent.turn.token_budget_reached',
+              userId: input.userId,
+              model: currentModel,
+              spentTurnTokens,
+              maxTurnTokens: params.budgets.maxTurnTokens,
+            });
+          } else if (wantsMoreTools) {
+            stopReason = AGENT_STOP_REASON.MAX_STEPS;
+            logger.warn({
+              event: 'agent.turn.max_steps_reached',
+              userId: input.userId,
+              model: currentModel,
+              maxSteps: input.maxSteps,
+            });
+          } else if (result.finishReason === FINISH_REASON_LENGTH) {
+            stopReason = AGENT_STOP_REASON.LENGTH;
+            logger.warn({
+              event: 'agent.turn.output_truncated',
+              userId: input.userId,
+              model: currentModel,
+              maxOutputTokens: params.budgets.maxOutputTokens,
+            });
+          } else if (result.finishReason === FINISH_REASON_CONTENT_FILTER) {
+            stopReason = AGENT_STOP_REASON.CONTENT_FILTER;
+            logger.warn({
+              event: 'agent.turn.content_filtered',
+              userId: input.userId,
+              model: currentModel,
+            });
+          }
           emitTurnHealth(
             logger,
             input.userId,
@@ -389,6 +447,7 @@ export async function* runAgentStepLoop(
             sources: [...params.sources.values()],
             knownNotes: [...params.knownNotes.values()],
             webSources: params.webSources.all,
+            stopReason,
           };
           return;
         }

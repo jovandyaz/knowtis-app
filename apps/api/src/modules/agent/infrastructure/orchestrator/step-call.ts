@@ -37,12 +37,23 @@ import { collectKnownNotes, collectSources } from './turn-collectors';
 import { bestEffortUsage, type StepUsageAccumulator } from './turn-usage';
 
 const AGENT_TEMPERATURE = 0.7;
+const TOOL_ERROR_LOG_MAX_CHARS = 300;
 
 export function errorMessage(error: unknown, redact: boolean): string {
   if (redact) {
     return 'BYOK provider request failed';
   }
   return error instanceof Error ? error.message : 'Agent run failed';
+}
+
+function describeToolError(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'non-Error value thrown';
+  return message.slice(0, TOOL_ERROR_LOG_MAX_CHARS);
 }
 
 export function toError(error: unknown, redact = false) {
@@ -251,6 +262,19 @@ export async function* runStepCall(
             turn.textDeltas += 1;
             yield { type: 'chunk', text: part.text };
           }
+          break;
+        case 'tool-call':
+          health.toolCalls += 1;
+          break;
+        case 'tool-error':
+          health.toolErrors += 1;
+          logger.warn({
+            event: 'agent.tool.error',
+            userId: input.userId,
+            model,
+            toolName: part.toolName,
+            error: describeToolError(part.error),
+          });
           break;
         case 'finish':
           health.finishReason = part.finishReason;

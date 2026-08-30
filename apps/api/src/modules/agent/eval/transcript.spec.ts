@@ -27,6 +27,7 @@ describe('drainEvents', () => {
           sources: [{ id: 'n1', title: 'Note 1' }],
           knownNotes: [],
           webSources: [],
+          stopReason: 'completed',
         },
       ])
     );
@@ -35,6 +36,12 @@ describe('drainEvents', () => {
     expect(t.sources).toEqual([{ id: 'n1', title: 'Note 1' }]);
     expect(t.proposal).toBeNull();
     expect(t.error).toBeNull();
+  });
+
+  it('returns an empty transcript when the stream yields no events', async () => {
+    const t = await drainEvents(scripted([]));
+
+    expect(t).toEqual({ text: '', proposal: null, sources: [], error: null });
   });
 
   it('captures a proposal kind and payload', async () => {

@@ -24,6 +24,10 @@ export function accumulateTurnUsage(
   acc.cacheWriteTokens += usage.inputTokenDetails?.cacheWriteTokens ?? 0;
 }
 
+export function hasCompleteUsage(usage: LanguageModelUsage): boolean {
+  return usage.inputTokens !== undefined && usage.outputTokens !== undefined;
+}
+
 export function turnUsageEvent(
   acc: TurnUsageAccumulator,
   model: string

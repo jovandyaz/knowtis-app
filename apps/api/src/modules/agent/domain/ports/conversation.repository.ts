@@ -16,7 +16,7 @@ export interface CreateConversationInput {
 export interface AppendTurnInput {
   readonly conversationId: string;
   readonly userMessage?: { readonly content: string };
-  readonly assistantMessage: {
+  readonly assistantMessage?: {
     readonly content: string;
     readonly sources: readonly AgentSource[];
   };
@@ -38,7 +38,7 @@ export interface ConversationRepository {
     conversationId: string,
     limit: number
   ): Promise<ConversationMessageRow[]>;
-  /** Single transaction: appends the turn rows and bumps `conversations.updatedAt`. */
+  /** Single transaction: appends the present turn rows and bumps `conversations.updatedAt`. No-op when both messages are absent. */
   appendTurn(input: AppendTurnInput): Promise<void>;
   findExtractable(
     quietSeconds: number,
