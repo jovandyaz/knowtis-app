@@ -51,10 +51,29 @@ describe('AIRateLimitService', () => {
     expect(anonymous.allowed).toBe(false);
   });
 
-  it('exposes the daily token allowance, scaled down for anonymous users', () => {
-    expect(service.dailyTokenLimit(false)).toBe(100000);
-    expect(service.dailyTokenLimit(true)).toBe(33000);
+  it('returns the configured turn token budget for authenticated users', () => {
+    expect(service.turnTokenBudget(false)).toBe(150000);
   });
+
+  it.each([
+    { pct: 0.33, budget: 150000, expected: 33000 },
+    { pct: 1, budget: 150000, expected: 100000 },
+    { pct: 0.5, budget: 150000, expected: 50000 },
+    { pct: 0.5, budget: 20000, expected: 20000 },
+    { pct: 0, budget: 150000, expected: 0 },
+  ])(
+    'clamps the anonymous turn budget to min($budget, daily × $pct) = $expected',
+    ({ pct, budget, expected }) => {
+      const anonymous = new AIRateLimitService(
+        mockUsageRepo,
+        createMockConfig({
+          AI_ANONYMOUS_DAILY_LIMIT_PCT: pct,
+          AI_AGENT_TURN_TOKEN_BUDGET: budget,
+        })
+      );
+      expect(anonymous.turnTokenBudget(true)).toBe(expected);
+    }
+  );
 
   it('should deny request when token limit exceeded', async () => {
     vi.spyOn(mockUsageRepo, 'getDailyUsage').mockResolvedValue({

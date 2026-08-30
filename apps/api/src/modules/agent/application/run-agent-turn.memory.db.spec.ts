@@ -124,6 +124,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   it('reconstructs turn 1 on turn 2 from only conversationId + message', async () => {
     const rateLimit = {
       checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      turnTokenBudget: vi.fn().mockReturnValue(150000),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;
@@ -190,6 +191,7 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
 
     const rateLimit = {
       checkLimit: vi.fn().mockResolvedValue({ allowed: true }),
+      turnTokenBudget: vi.fn().mockReturnValue(150000),
       recordUsage: vi.fn().mockResolvedValue(undefined),
       releaseReservation: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIRateLimitService;

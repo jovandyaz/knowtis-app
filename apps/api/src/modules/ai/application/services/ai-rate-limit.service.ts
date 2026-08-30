@@ -394,8 +394,15 @@ export class AIRateLimitService {
     }
   }
 
-  dailyTokenLimit(isAnonymous: boolean): number {
-    return this.effectiveLimits(isAnonymous).tokenLimit;
+  /**
+   * Per-turn token ceiling for the agent loop: the configured budget, clamped to
+   * the anonymous daily allowance so one anonymous turn can never exceed a day's quota.
+   */
+  turnTokenBudget(isAnonymous: boolean): number {
+    const budget = this.configService.get('AI_AGENT_TURN_TOKEN_BUDGET');
+    return isAnonymous
+      ? Math.min(budget, this.effectiveLimits(true).tokenLimit)
+      : budget;
   }
 
   private effectiveLimits(isAnonymous: boolean): RateLimits {

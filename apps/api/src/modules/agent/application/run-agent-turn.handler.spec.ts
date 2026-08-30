@@ -58,23 +58,21 @@ function makeDeps(over: { allowed?: boolean; events?: AgentEvent[] }) {
     recordUsage: vi.fn().mockResolvedValue(undefined),
     releaseReservation: vi.fn().mockResolvedValue(undefined),
     recordSideCost: vi.fn().mockResolvedValue(undefined),
-    dailyTokenLimit: vi.fn().mockReturnValue(100000),
+    turnTokenBudget: vi.fn().mockReturnValue(150000),
   } as unknown as AIRateLimitService;
   const config = {
     get: vi.fn((k: string) =>
       k === 'AI_AGENT_MAX_STEPS'
         ? 8
-        : k === 'AI_AGENT_TURN_TOKEN_BUDGET'
-          ? 150000
-          : k === 'AI_AGENT_MAX_MS'
-            ? 120000
-            : k === 'AI_AGENT_HISTORY_LIMIT'
-              ? 40
-              : k === 'AI_MEMORY_RETRIEVAL_K'
-                ? 6
-                : k === 'AI_MEMORY_SIMILARITY_MIN'
-                  ? 0.2
-                  : 0
+        : k === 'AI_AGENT_MAX_MS'
+          ? 120000
+          : k === 'AI_AGENT_HISTORY_LIMIT'
+            ? 40
+            : k === 'AI_MEMORY_RETRIEVAL_K'
+              ? 6
+              : k === 'AI_MEMORY_SIMILARITY_MIN'
+                ? 0.2
+                : 0
     ),
   } as unknown as ConfigService<EnvConfig, true>;
   const orchestrator = orchestratorYielding(
@@ -1642,9 +1640,9 @@ describe('RunAgentTurnHandler', () => {
     expect(appended).not.toHaveProperty('assistantMessage');
   });
 
-  it('clamps the turn token budget to the anonymous daily allowance', async () => {
+  it('forwards the anonymous turn token budget from the rate limiter to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    vi.mocked(rateLimit.dailyTokenLimit).mockReturnValue(33000);
+    vi.mocked(rateLimit.turnTokenBudget).mockReturnValue(33000);
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -1671,13 +1669,13 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(rateLimit.dailyTokenLimit).toHaveBeenCalledWith(true);
+    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(true);
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurnTokens: 33000 })
     );
   });
 
-  it('passes the full turn token budget for registered users', async () => {
+  it('forwards the registered turn token budget from the rate limiter to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
       orchestrator,
@@ -1705,7 +1703,7 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(rateLimit.dailyTokenLimit).not.toHaveBeenCalled();
+    expect(rateLimit.turnTokenBudget).toHaveBeenCalledWith(false);
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ maxTurnTokens: 150000 })
     );
