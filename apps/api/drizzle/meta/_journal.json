@@ -267,6 +267,13 @@
       "when": 1787779871059,
       "tag": "0037_seed_email_verification_gate_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788114149130,
+      "tag": "0038_perpetual_the_watchers",
+      "breakpoints": true
     }
   ]
 }

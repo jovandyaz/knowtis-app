@@ -1,10 +1,15 @@
+import type { MessageStopReason } from '@knowtis/shared-types';
+
 import type { AgentSource } from '../agent-event';
-import type { AgentRole } from '../agent-message';
+import type { AgentMessagePart, AgentRole } from '../agent-message';
 
 export interface ConversationMessageRow {
   readonly role: AgentRole;
   readonly content: string;
   readonly sources: readonly AgentSource[];
+  readonly parts: readonly AgentMessagePart[] | null;
+  readonly stopReason: MessageStopReason | null;
+  readonly turnId: string | null;
 }
 
 export interface CreateConversationInput {
@@ -13,13 +18,24 @@ export interface CreateConversationInput {
   readonly title: string;
 }
 
+export interface PersistedTurnMessage {
+  readonly role: AgentRole;
+  readonly content: string;
+  readonly parts?: readonly AgentMessagePart[];
+  readonly sources?: readonly AgentSource[];
+  readonly stopReason?: MessageStopReason;
+}
+
 export interface AppendTurnInput {
   readonly conversationId: string;
-  readonly userMessage?: { readonly content: string };
-  readonly assistantMessage?: {
-    readonly content: string;
-    readonly sources: readonly AgentSource[];
-  };
+  readonly turnId: string;
+  /** In order; an empty list is a no-op. */
+  readonly messages: readonly PersistedTurnMessage[];
+}
+
+export interface LoadMessagesOptions {
+  /** Skip tool rows and assistant rows without text — for readers that only understand text. */
+  readonly textOnly?: boolean;
 }
 
 export interface ConversationRepository {
@@ -33,12 +49,13 @@ export interface ConversationRepository {
     userId: string,
     model: string
   ): Promise<void>;
-  /** Oldest→newest, last `limit` messages. */
+  /** Oldest→newest, last `limit` rows. */
   loadMessages(
     conversationId: string,
-    limit: number
+    limit: number,
+    options?: LoadMessagesOptions
   ): Promise<ConversationMessageRow[]>;
-  /** Single transaction: appends the present turn rows and bumps `conversations.updatedAt`. No-op when both messages are absent. */
+  /** Single transaction: appends every row of the turn and bumps `conversations.updatedAt`. */
   appendTurn(input: AppendTurnInput): Promise<void>;
   findExtractable(
     quietSeconds: number,

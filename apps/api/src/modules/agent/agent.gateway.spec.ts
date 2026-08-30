@@ -3,13 +3,14 @@ import { JwtService } from '@nestjs/jwt';
 import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
+import { AGENT_STOP_REASON } from '@knowtis/shared-types';
+
 import type { EnvConfig } from '../../config/env.config';
 import type { FeatureFlagsService } from '../feature-flags/feature-flags.service';
 import { AgentGateway } from './agent.gateway';
 import type { ApproveMutationHandler } from './application/approve-mutation.handler';
 import type { RejectMutationHandler } from './application/reject-mutation.handler';
 import type { RunAgentTurnHandler } from './application/run-agent-turn.handler';
-import { AGENT_STOP_REASON } from './domain/agent-event';
 
 interface MakeGatewayOptions {
   handler?: Partial<RunAgentTurnHandler>;

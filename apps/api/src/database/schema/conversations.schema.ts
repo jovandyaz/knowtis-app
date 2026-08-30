@@ -1,5 +1,7 @@
+import { sql } from 'drizzle-orm';
 import {
   bigserial,
+  check,
   index,
   jsonb,
   pgEnum,
@@ -10,14 +12,20 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
-import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+import {
+  MESSAGE_STOP_REASON,
+  MODEL_ID_MAX_LENGTH,
+  type MessageStopReason,
+} from '@knowtis/shared-types';
 
+import type { PersistedParts } from '../../modules/agent/domain/agent-message';
 import { notes } from './notes.schema';
 import { users } from './users.schema';
 
 export const conversationRoleEnum = pgEnum('conversation_role', [
   'user',
   'assistant',
+  'tool',
 ]);
 
 export const conversations = pgTable(
@@ -62,6 +70,9 @@ export const conversationMessages = pgTable(
     role: conversationRoleEnum('role').notNull(),
     content: text('content').notNull(),
     sources: jsonb('sources').$type<{ id: string; title: string }[]>(),
+    parts: jsonb('parts').$type<PersistedParts>(),
+    stopReason: text('stop_reason').$type<MessageStopReason>(),
+    turnId: uuid('turn_id'),
     createdAt: timestamp('created_at', { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -70,6 +81,12 @@ export const conversationMessages = pgTable(
     index('conversation_messages_conversation_seq_idx').on(
       table.conversationId,
       table.seq
+    ),
+    check(
+      'conversation_messages_stop_reason_check',
+      sql`${table.stopReason} IS NULL OR ${table.stopReason} IN (${sql.raw(
+        MESSAGE_STOP_REASON.map((reason) => `'${reason}'`).join(', ')
+      )})`
     ),
   ]
 );

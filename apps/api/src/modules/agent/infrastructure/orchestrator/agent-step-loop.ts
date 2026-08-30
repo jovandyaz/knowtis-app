@@ -12,16 +12,12 @@ import {
   providerOf,
   type ProviderCooldown,
 } from '@knowtis/ai-gateway';
+import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
-import {
-  AGENT_STOP_REASON,
-  type AgentEvent,
-  type AgentSource,
-  type AgentStopReason,
-} from '../../domain/agent-event';
+import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { ProposalCollector } from './proposal-collector';
 import {

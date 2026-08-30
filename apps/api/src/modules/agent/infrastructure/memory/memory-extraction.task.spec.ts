@@ -24,9 +24,16 @@ function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   const flags = { isEnabled: vi.fn().mockResolvedValue(true) };
   const conversations = {
     findExtractable: vi.fn().mockResolvedValue([{ id: 'c1', userId: 'u1' }]),
-    loadMessages: vi
-      .fn()
-      .mockResolvedValue([{ role: 'user', content: 'I am vegan' }]),
+    loadMessages: vi.fn().mockResolvedValue([
+      {
+        role: 'user',
+        content: 'I am vegan',
+        sources: [],
+        parts: null,
+        stopReason: null,
+        turnId: null,
+      },
+    ]),
     markExtracted: vi.fn().mockResolvedValue(undefined),
   };
   const memory = {
