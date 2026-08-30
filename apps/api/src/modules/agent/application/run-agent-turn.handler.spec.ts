@@ -43,6 +43,10 @@ const USER = '11111111-1111-1111-1111-111111111111';
 const IP_SUBJECT = 'ip:fec52565aa0cf18f';
 const TURN_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
+const TOOL_OUTPUT_FILLER = 'lorem ipsum dolor sit amet ';
+const OVERSIZED_TOOL_OUTPUT_REPEATS = 4_000;
+const BUDGETED_TOOL_OUTPUT_REPEATS = 1_500;
+
 function orchestratorYielding(events: AgentEvent[]): AgentOrchestrator {
   return {
     run: vi.fn(async function* () {
@@ -1881,6 +1885,166 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
+  it('counts tool parts against the history budget and never keeps a tool row without its call', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const oversizedToolOutput = TOOL_OUTPUT_FILLER.repeat(
+      OVERSIZED_TOOL_OUTPUT_REPEATS
+    );
+    const conversations = makeConversations([
+      historyRow({ role: 'user', content: 'old', turnId: 't1' }),
+      historyRow({
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            output: oversizedToolOutput,
+            outputType: 'text',
+          },
+        ],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'assistant',
+        content: 'old answer',
+        stopReason: 'completed',
+        turnId: 't1',
+      }),
+      historyRow({ role: 'user', content: 'recent', turnId: 't2' }),
+      historyRow({
+        role: 'assistant',
+        content: 'recent answer',
+        stopReason: 'completed',
+        turnId: 't2',
+      }),
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(true),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, conversationId: 'conv-1', message: { content: 'now' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const sent = vi.mocked(orchestrator.run).mock.calls[0][0].messages ?? [];
+    expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+    expect(sent[0]).toEqual({ role: 'user', content: 'recent' });
+  });
+
+  it('counts tool parts in the token estimate the rate limiter reserves', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const toolResult = {
+      type: 'tool-result',
+      toolCallId: 'c1',
+      toolName: 'getNote',
+      output: TOOL_OUTPUT_FILLER.repeat(BUDGETED_TOOL_OUTPUT_REPEATS),
+      outputType: 'text',
+    } as const;
+    const conversations = makeConversations([
+      historyRow({ role: 'user', content: 'what is in n1?', turnId: 't1' }),
+      historyRow({
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'tool',
+        content: '',
+        parts: [toolResult],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'assistant',
+        content: 'n1 says hi',
+        stopReason: 'completed',
+        turnId: 't1',
+      }),
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(true),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        message: { content: 'who wrote it?' },
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const sent = vi.mocked(orchestrator.run).mock.calls[0][0].messages ?? [];
+    expect(sent.map((m) => m.role)).toEqual([
+      'user',
+      'assistant',
+      'tool',
+      'assistant',
+      'user',
+    ]);
+    const estimated = vi.mocked(rateLimit.checkLimit).mock.calls[0][1];
+    expect(estimated).toBeGreaterThan(
+      estimateTokenCount(JSON.stringify([toolResult]))
+    );
+  });
+
   it('passes the configured reasoning effort to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
@@ -3671,76 +3835,311 @@ describe('RunAgentTurnHandler', () => {
     expect(onError).toHaveBeenCalledTimes(1);
   });
 
-  it('replays history text-only so tool and empty rows never reach the model', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const conversations = makeConversations([
-      historyRow({ role: 'user', content: 'find my notes' }),
-      historyRow({ role: 'assistant', content: 'Here they are' }),
-    ]);
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      conversations,
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig()
-    );
+  describe('history replay from the transcript', () => {
+    const toolCall = {
+      type: 'tool-call',
+      toolCallId: 'c1',
+      toolName: 'getNote',
+      input: { id: 'n1' },
+    } as const;
+    const toolResult = {
+      type: 'tool-result',
+      toolCallId: 'c1',
+      toolName: 'getNote',
+      output: { title: 'N1', body: 'hi' },
+      outputType: 'json',
+    } as const;
+    const toolTurn: ConversationMessageRow[] = [
+      historyRow({ role: 'user', content: 'what is in N1?', turnId: 't1' }),
+      historyRow({
+        role: 'assistant',
+        content: '',
+        parts: [toolCall],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'tool',
+        content: '',
+        parts: [toolResult],
+        turnId: 't1',
+      }),
+      historyRow({
+        role: 'assistant',
+        content: 'N1 says hi',
+        sources: [{ id: 'n1', title: 'N1' }],
+        stopReason: 'completed',
+        turnId: 't1',
+      }),
+    ];
 
-    await handler.execute(
-      { userId: USER, conversationId: 'conv-1', message: { content: 'hi' } },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
+    function makeReplayHandler(
+      history: ConversationMessageRow[],
+      flagOn: boolean
+    ) {
+      const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+      const conversations = makeConversations(history);
+      const flags = makeFlags(flagOn);
+      const handler = new RunAgentTurnHandler(
+        orchestrator,
+        rateLimit,
+        config,
+        pendingStore,
+        createTestCatalog(),
+        conversations,
+        makeMemory(),
+        makeEmbed(),
+        flags,
+        makeModelPreference(),
+        makeByok(),
+        makeGuard(),
+        makeAIConfig()
+      );
+      return { conversations, flags, orchestrator, handler };
+    }
 
-    expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40, {
-      textOnly: true,
+    function runInput(orchestrator: AgentOrchestrator) {
+      return vi.mocked(orchestrator.run).mock.calls[0][0];
+    }
+
+    function transcriptFlagReads(flags: FeatureFlagsService): number {
+      return vi
+        .mocked(flags.isEnabled)
+        .mock.calls.filter(
+          ([key]) => key === FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
+        ).length;
+    }
+
+    it('replays the previous turn tool activity to the orchestrator when the flag is on', async () => {
+      const { orchestrator, handler } = makeReplayHandler(toolTurn, true);
+
+      await handler.execute(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          message: { content: 'and who wrote it?' },
+        },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      );
+
+      const sent = runInput(orchestrator).messages ?? [];
+      expect(sent.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'tool',
+        'assistant',
+        'user',
+      ]);
+      expect(sent[1].parts).toEqual([toolCall]);
+      expect(sent[2].parts).toEqual([toolResult]);
     });
-  });
 
-  it('replays history text-only on the resume path too', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const conversations = makeConversations([
-      historyRow({ role: 'user', content: 'rename it' }),
-      historyRow({ role: 'assistant', content: "I'll rename it, confirm?" }),
-    ]);
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      conversations,
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig()
-    );
+    it('replays text only when the flag is off and lets no empty row reach the provider', async () => {
+      const { orchestrator, handler } = makeReplayHandler(toolTurn, false);
 
-    await handler.resumeTurn(
-      {
-        userId: USER,
-        conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
-      },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
-    );
+      await handler.execute(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          message: { content: 'and who wrote it?' },
+        },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      );
 
-    expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40, {
-      textOnly: true,
+      const sent = runInput(orchestrator).messages ?? [];
+      expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+      expect(sent.every((m) => m.content.length > 0)).toBe(true);
+      expect(sent.some((m) => m.parts)).toBe(false);
+    });
+
+    it('marks a truncated reply as data even when the flag is off', async () => {
+      const { orchestrator, handler } = makeReplayHandler(
+        [
+          historyRow({ role: 'user', content: 'summarize N1', turnId: 't1' }),
+          historyRow({
+            role: 'assistant',
+            content: 'half',
+            stopReason: 'aborted',
+            turnId: 't1',
+          }),
+        ],
+        false
+      );
+
+      await handler.execute(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          message: { content: 'go on' },
+        },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      );
+
+      const sent = runInput(orchestrator).messages ?? [];
+      expect(sent.map((m) => m.role)).toEqual(['user', 'assistant', 'user']);
+      expect(sent[1].content).toBe('half\n\n[reply cut off: aborted]');
+    });
+
+    it('keeps a source carried by a row that pruning drops from the history', async () => {
+      const { orchestrator, handler } = makeReplayHandler(
+        [
+          historyRow({ role: 'user', content: 'what is in N1?', turnId: 't1' }),
+          historyRow({
+            role: 'assistant',
+            content: '',
+            sources: [{ id: 'n9', title: 'N9' }],
+            parts: [toolCall],
+            turnId: 't1',
+          }),
+          historyRow({
+            role: 'tool',
+            content: '',
+            parts: [toolResult],
+            turnId: 't1',
+          }),
+          historyRow({
+            role: 'assistant',
+            content: 'N1 says hi',
+            sources: [{ id: 'n1', title: 'N1' }],
+            stopReason: 'completed',
+            turnId: 't1',
+          }),
+        ],
+        false
+      );
+
+      await handler.execute(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          message: { content: 'and who wrote it?' },
+        },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      );
+
+      const input = runInput(orchestrator);
+      expect((input.messages ?? []).map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'user',
+      ]);
+      expect(input.knownNotes).toEqual([
+        { id: 'n9', title: 'N9' },
+        { id: 'n1', title: 'N1' },
+      ]);
+    });
+
+    it('loads the raw transcript rows and reads the transcript flag once per turn', async () => {
+      const { conversations, flags, handler } = makeReplayHandler(
+        toolTurn,
+        true
+      );
+
+      await handler.execute(
+        { userId: USER, conversationId: 'conv-1', message: { content: 'hi' } },
+        {
+          onChunk: vi.fn(),
+          onDone: vi.fn(),
+          onError: vi.fn(),
+          onProposal: vi.fn(),
+        }
+      );
+
+      expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
+      expect(transcriptFlagReads(flags)).toBe(1);
+    });
+
+    it('replays tool activity and reads the transcript flag once on the resume path too', async () => {
+      const { conversations, flags, orchestrator, handler } = makeReplayHandler(
+        toolTurn,
+        true
+      );
+
+      await handler.resumeTurn(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+      );
+
+      expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40);
+      expect(transcriptFlagReads(flags)).toBe(1);
+      const sent = runInput(orchestrator).messages ?? [];
+      expect(sent.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+        'tool',
+        'assistant',
+      ]);
+      expect(sent[2].parts).toEqual([toolResult]);
+    });
+
+    it('never trims the resume history down to a lone orphan tool row', async () => {
+      const { orchestrator, handler } = makeReplayHandler(
+        [
+          historyRow({
+            role: 'user',
+            content: 'create a note about N1',
+            turnId: 't1',
+          }),
+          historyRow({
+            role: 'assistant',
+            content: '',
+            parts: [toolCall],
+            turnId: 't1',
+          }),
+          historyRow({
+            role: 'tool',
+            content: '',
+            parts: [
+              {
+                type: 'tool-result',
+                toolCallId: 'c1',
+                toolName: 'getNote',
+                output: TOOL_OUTPUT_FILLER.repeat(
+                  OVERSIZED_TOOL_OUTPUT_REPEATS
+                ),
+                outputType: 'text',
+              },
+            ],
+            turnId: 't1',
+          }),
+        ],
+        true
+      );
+
+      await handler.resumeTurn(
+        {
+          userId: USER,
+          conversationId: 'conv-1',
+          resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+        },
+        { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+      );
+
+      const sent = runInput(orchestrator).messages ?? [];
+      expect(sent.map((m) => m.role)).toEqual([]);
     });
   });
 
@@ -3767,7 +4166,7 @@ describe('RunAgentTurnHandler', () => {
             toolCallId: 'c1',
             toolName: 'getNote',
             output: { title: 'N1' },
-            isError: false,
+            outputType: 'json',
           },
         ],
       },

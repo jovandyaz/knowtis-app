@@ -6,6 +6,8 @@ const INVALID_TRANSCRIPT: EvalTranscript = {
   proposal: null,
   sources: [],
   error: { code: 'INVALID_EVAL_OUTPUT', message: 'output is not a transcript' },
+  stopReason: null,
+  steps: [],
 };
 
 export function asTranscript(output: unknown): EvalTranscript {

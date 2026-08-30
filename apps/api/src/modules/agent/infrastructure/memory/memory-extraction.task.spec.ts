@@ -3,7 +3,47 @@ import { describe, expect, it, vi } from 'vitest';
 import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { createAdvisoryLockClient } from '../../../../test-support/advisory-lock';
+import type { ConversationMessageRow } from '../../domain/ports/conversation.repository';
 import { MemoryExtractionTask } from './memory-extraction.task';
+
+const TOOL_ONLY_MARKER = 'tool-call-only-marker';
+
+// Mirrors what the text-only SQL returns: no tool rows, but an assistant row
+// carrying tool-call parts beside its text still comes back whole.
+const TEXT_ONLY_ROWS: ConversationMessageRow[] = [
+  {
+    role: 'user',
+    content: 'I am vegan',
+    sources: [],
+    parts: null,
+    stopReason: null,
+    turnId: 't1',
+  },
+  {
+    role: 'assistant',
+    content: 'Checking your notes.',
+    sources: [],
+    parts: [
+      { type: 'text', text: 'Checking your notes.' },
+      {
+        type: 'tool-call',
+        toolCallId: 'c1',
+        toolName: 'searchNotes',
+        input: { query: TOOL_ONLY_MARKER },
+      },
+    ],
+    stopReason: null,
+    turnId: 't1',
+  },
+  {
+    role: 'assistant',
+    content: 'You have three recipe notes.',
+    sources: [],
+    parts: null,
+    stopReason: 'completed',
+    turnId: 't1',
+  },
+];
 
 function make(opts: { voyageKey?: string | undefined; lock?: boolean } = {}) {
   const voyageKey = 'voyageKey' in opts ? opts.voyageKey : 'vk';
@@ -102,6 +142,30 @@ describe('MemoryExtractionTask', () => {
       })
     );
     expect(conversations.markExtracted).toHaveBeenCalledWith('u1', 'c1');
+  });
+
+  it('loads text-only rows for the transcript', async () => {
+    const { task, conversations } = make();
+    await task.reconcile();
+    expect(conversations.loadMessages).toHaveBeenCalledWith('c1', 40, {
+      textOnly: true,
+    });
+  });
+
+  it('hands the extractor the text of the loaded rows and none of their tool parts', async () => {
+    const { task, conversations, structured } = make();
+    conversations.loadMessages.mockResolvedValue(TEXT_ONLY_ROWS);
+
+    await task.reconcile();
+
+    expect(structured.generateStructuredOutput).toHaveBeenCalledTimes(1);
+    const prompt = structured.generateStructuredOutput.mock.calls[0][0];
+    expect(typeof prompt).toBe('string');
+    expect(prompt).toContain(
+      'user: I am vegan\nassistant: Checking your notes.\nassistant: You have three recipe notes.'
+    );
+    expect(prompt).not.toContain('searchNotes');
+    expect(prompt).not.toContain(TOOL_ONLY_MARKER);
   });
 
   it('extracts with the fast model resolved from the AI config', async () => {

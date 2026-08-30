@@ -225,7 +225,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
               toolCallId: 'c1',
               toolName: 'searchNotes',
               output: { hits: [{ id: 'n1', title: 'GTD' }] },
-              isError: false,
+              outputType: 'json',
             },
           ],
         },
@@ -257,7 +257,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     ]);
     expect(rows[2].parts?.[0]).toMatchObject({
       type: 'tool-result',
-      isError: false,
+      outputType: 'json',
     });
     expect(rows.map((r) => r.stopReason)).toEqual([
       null,
@@ -324,7 +324,7 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
               toolCallId: 'c1',
               toolName: 'getNote',
               output: 'body',
-              isError: false,
+              outputType: 'text',
             },
           ],
         },

@@ -17,6 +17,10 @@ export type ResponseMessage = AssistantModelMessage | ToolModelMessage;
 type AssistantPart = Exclude<AssistantModelMessage['content'], string>[number];
 type ToolResultOutput = ToolResultPart['output'];
 type ToolResultJsonValue = Extract<ToolResultOutput, { type: 'json' }>['value'];
+type ToolResultContentValue = Extract<
+  ToolResultOutput,
+  { type: 'content' }
+>['value'];
 
 const EXECUTION_DENIED_FALLBACK = 'execution denied';
 
@@ -47,23 +51,22 @@ function fromAssistant(message: AssistantModelMessage): AgentMessage {
 
 function fromToolOutput(
   output: ToolResultOutput
-): Pick<AgentToolResultPart, 'output' | 'isError'> {
+): Pick<AgentToolResultPart, 'output' | 'outputType'> {
   switch (output.type) {
     case 'text':
     case 'json':
     case 'content':
-      return { output: output.value, isError: false };
     case 'error-text':
     case 'error-json':
-      return { output: output.value, isError: true };
+      return { output: output.value, outputType: output.type };
     case 'execution-denied':
       return {
         output: output.reason ?? EXECUTION_DENIED_FALLBACK,
-        isError: true,
+        outputType: output.type,
       };
     default: {
       const unsupported: never = output;
-      return { output: unsupported, isError: false };
+      return unsupported;
     }
   }
 }
@@ -114,19 +117,32 @@ function toToolResults(parts: readonly AgentMessagePart[]): ToolResultPart[] {
     }));
 }
 
+// A hand-edited row, or one written before outputType existed, would otherwise
+// replay output: undefined and be rejected as invalid provider input.
+function unsupportedOutput(
+  _outputType: never,
+  output: unknown
+): ToolResultOutput {
+  return { type: 'error-text', value: String(output) };
+}
+
 function toToolOutput(part: AgentToolResultPart): ToolResultOutput {
-  if (part.isError) {
-    return {
-      type: 'error-text',
-      value:
-        typeof part.output === 'string'
-          ? part.output
-          : JSON.stringify(part.output),
-    };
+  switch (part.outputType) {
+    case 'text':
+      return { type: 'text', value: String(part.output) };
+    case 'error-text':
+      return { type: 'error-text', value: String(part.output) };
+    case 'json':
+      return { type: 'json', value: part.output as ToolResultJsonValue };
+    case 'error-json':
+      return { type: 'error-json', value: part.output as ToolResultJsonValue };
+    case 'content':
+      return { type: 'content', value: part.output as ToolResultContentValue };
+    case 'execution-denied':
+      return { type: 'execution-denied', reason: String(part.output) };
+    default:
+      return unsupportedOutput(part.outputType, part.output);
   }
-  return typeof part.output === 'string'
-    ? { type: 'text', value: part.output }
-    : { type: 'json', value: part.output as ToolResultJsonValue };
 }
 
 /**

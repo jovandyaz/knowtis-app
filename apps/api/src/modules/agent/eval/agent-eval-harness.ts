@@ -98,13 +98,13 @@ export class AgentEvalHarness {
     }
   }
 
-  async runCase(
-    message: string,
+  /** Runs one turn over a full message history, so a replayed transcript can be fed back to the agent. */
+  async runConversation(
+    messages: readonly AgentMessage[],
     fixtureSet: NoteFixtureSetName,
     model: string
   ): Promise<EvalTranscript> {
     this.retrieval.seed(resolveFixtureSet(fixtureSet));
-    const messages: AgentMessage[] = [{ role: 'user', content: message }];
     const events = this.orchestrator.run({
       userId: EVAL_USER_ID,
       messages,
@@ -114,6 +114,18 @@ export class AgentEvalHarness {
     });
     const drained = await drainEvents(events);
     return { ...drained, toolCalls: this.retrieval.getCalls() };
+  }
+
+  async runCase(
+    message: string,
+    fixtureSet: NoteFixtureSetName,
+    model: string
+  ): Promise<EvalTranscript> {
+    return this.runConversation(
+      [{ role: 'user', content: message }],
+      fixtureSet,
+      model
+    );
   }
 
   async close(): Promise<void> {
