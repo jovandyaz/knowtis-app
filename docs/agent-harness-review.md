@@ -15,7 +15,7 @@
 | Context Management | ⚠️ Parcial                          | Ventana fija 12k, sin compaction, sin chequeo contra ventana real del modelo |
 | Verify             | ⚠️ Parcial                          | HITL + evals nightly fuertes; cero verificación semántica en runtime         |
 
-No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para escrituras, injection guard de 2 capas, catálogo de modelos db-backed, rate limiting multicapa. Los 3 pilares fuertes están por encima de la media de la industria. Las divergencias principales contra el consenso 2025–2026: persistencia del transcript, presupuesto dentro del loop denominado en USD (el cap en tokens llegó en Bolt 1; el consenso lo expresa en costo — #365), y evals en CI.
+No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para escrituras, injection guard de 2 capas, catálogo de modelos db-backed, rate limiting multicapa. Los 3 pilares fuertes están por encima de la media de la industria. Las divergencias principales contra el consenso 2025–2026: persistencia del transcript (resuelta en Bolt 2 / SP1, replay de tools tras flag), presupuesto dentro del loop denominado en USD (el cap en tokens llegó en Bolt 1; el consenso lo expresa en costo — #365), y evals en CI.
 
 ---
 
@@ -44,7 +44,7 @@ No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para e
 
 **Streaming:** WebSocket (Socket.IO), no SSE. Eventos `agent:chunk`, `agent:thinking`, `agent:proposal`, `agent:committed`, `agent:done`, `agent:error`. Tool calls/results NO se streamean al cliente.
 
-**Persistencia:** tablas `conversations` / `conversation_messages` (roles solo `user|assistant`); `persistTurn` escribe el mensaje user y, si lo hay, el assistant, exactamente una vez por turno y en todo camino terminal — `done`, `proposal`, `error`, `aborted` y cierre sin evento terminal (Bolt 1). Lectura con `AI_AGENT_HISTORY_LIMIT` 40 + trim por presupuesto de tokens.
+**Persistencia:** tablas `conversations` / `conversation_messages` (migración `0036`: rol `tool`, `parts` jsonb versionado, `stop_reason`, `turn_id`); `persistTurn` escribe una fila por step completado además del mensaje user y el terminal assistant, exactamente una vez por turno y en todo camino terminal — `done`, `proposal`, `error`, `aborted` y cierre sin evento terminal (Bolt 1). Lectura con `AI_AGENT_HISTORY_LIMIT` 120 (filas, no turnos — un turno con tools escribe 3-5) + `pruneTranscript` (replay verbatim de los últimos `AGENT_HISTORY_TOOL_TURNS`=2 turnos con tools, gateado por el flag `agent_transcript_tools`, default off) + trim por presupuesto de tokens (`AGENT_HISTORY_TOKEN_BUDGET`=12000, sin cambios). `stop_reason` y el marcador `[reply cut off: <reason>]` de respuestas parciales **no** dependen del flag — corren siempre (Bolt 2).
 
 ### 1.2 Tool Registry — ✅ bien integrado
 
@@ -118,7 +118,7 @@ No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para e
 
 ### 1.8 Gaps del audit (priorizados)
 
-1. **Historial multi-step no persiste** — `tool_use`/`tool_result` viven solo en memoria (`agent-step-loop.ts:351`); a DB va solo texto user/assistant. Modelo amnésico de sus tools entre turnos.
+1. **Historial multi-step no persiste** — resuelto en Bolt 2 / SP1 (2026-08-30): `conversation_messages` persiste `parts` (tool_use/tool_result completos) por step, gateado tras `agent_transcript_tools` (default off) para el replay; `stop_reason` y el marcador de respuesta parcial corren sin flag.
 2. **Turno abortado/error pierde el mensaje del usuario** — resuelto en Bolt 1: persist-once en todo camino terminal, incluido el cierre sin evento terminal.
 3. **Tool results sin presupuesto dentro del turno** — overflow lo detecta el provider, no el harness.
 4. **`tool-error` invisible** — resuelto en Bolt 1: `agent.tool.error` + contadores `toolCalls`/`toolErrors` en `agent.turn.health`; `repairToolCall` sigue pendiente.
@@ -222,7 +222,7 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 
 ### 3.2 Divergencias confirmadas por la industria
 
-1. **Persistir transcript completo con tool calls** — consenso unánime; knowtis persiste solo texto plano. La divergencia más seria.
+1. **Persistir transcript completo con tool calls** — resuelto en Bolt 2 / SP1 (2026-08-30): `parts` persiste tool_use/tool_result por step; el replay verbatim sigue tras el flag `agent_transcript_tools` (default off).
 2. **Budget económico dentro del loop** — first-class en 2026 (`maxBudgetUsd`); knowtis solo gatea pre-turno con estimación.
 3. **Agotar max steps debe señalizarse** — SDKs lanzan error explícito; knowtis emite `done` silencioso.
 4. **Presupuesto de contexto dinámico + compaction** — budget fijo 12k desacoplado de `maxInputTokens` que el catálogo ya tiene.
@@ -240,17 +240,17 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 
 ### 3.4 Priorización final
 
-| #   | Acción                                                                                                                                            | Esfuerzo   | Respaldo                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
-| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles)                                                                           | Medio      | Consenso unánime                                         |
-| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                  | Bajo       | Consenso + primitiva disponible                          |
-| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                        | Bajo       | Deriva de #1                                             |
-| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`) | Bajo-medio | Claude SDK, OWASP LLM10                                  |
-| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                             | Medio      | Anthropic context engineering                            |
-| 6   | Suite de regresión como PR gate (paths-filtered) + pass@k                                                                                         | Medio      | Promptfoo/Anthropic                                      |
-| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                         | Trivial    | Audit propio                                             |
-| 8   | Stream de tool events al cliente                                                                                                                  | Bajo       | Vercel UI parts                                          |
-| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                       | Medio      | Consenso plataformas                                     |
-| 10  | Compaction/summarización de historial                                                                                                             | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
+| #   | Acción                                                                                                                                                                  | Esfuerzo   | Respaldo                                                 |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
+| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles) (resuelto en Bolt 2 / SP1 — 2026-08-30; replay tras flag `agent_transcript_tools`, default off) | Medio      | Consenso unánime                                         |
+| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                                        | Bajo       | Consenso + primitiva disponible                          |
+| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                                              | Bajo       | Deriva de #1                                             |
+| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`)                       | Bajo-medio | Claude SDK, OWASP LLM10                                  |
+| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                                                   | Medio      | Anthropic context engineering                            |
+| 6   | Suite de regresión como PR gate (paths-filtered) + pass@k                                                                                                               | Medio      | Promptfoo/Anthropic                                      |
+| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                                               | Trivial    | Audit propio                                             |
+| 8   | Stream de tool events al cliente                                                                                                                                        | Bajo       | Vercel UI parts                                          |
+| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                                             | Medio      | Consenso plataformas                                     |
+| 10  | Compaction/summarización de historial                                                                                                                                   | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
 
 Nota sobre moderación de output: según consenso, opcional para agente interno cuyo output no se publica — knowtis prioriza guardrails de acción (correcto). Sube a obligatorio si las notas generadas se comparten públicamente.

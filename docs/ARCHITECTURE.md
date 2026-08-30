@@ -408,6 +408,8 @@ Each turn runs an **agent-owned step loop** (`agent-step-loop.ts`, driven from `
 
 Owning the loop is what makes **step-boundary failover** possible: a continuation step whose model goes silent fails over mid-turn to the next fallback-chain candidate, replaying the threaded history (pruned of the dead model's reasoning) on the new model without re-executing tools. Stream health telemetry (`agent.turn.health`) is logged per call. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently. Full semantics: [AI.md → Conversation memory (A6a)](./AI.md#conversation-memory-a6a).
 
+The persisted transcript now carries more than final text: each row can hold structured `parts` (a versioned jsonb envelope) alongside plain `content`, a terminal assistant row carries its `stop_reason` whenever the turn ends on assistant text, and a truncated reply (`aborted | error | length`) is always replayed with a `[reply cut off: <reason>]` marker so the model treats its own cutoff as data on the next turn — that much ships unconditionally. Replaying the last two tool-using turns verbatim (tool calls and results included, not just their final text) is gated separately by the `agent_transcript_tools` feature flag (default off); with it off, every turn is still rendered as text-only history — close to the copilot's behavior before this transcript work, but not identical: the partial-reply marker above ships either way, and the row window now counts tool rows (see `docs/AI.md` for the exact boundary).
+
 ### Server-authoritative & human-in-the-loop
 
 The agent is **server-authoritative**: the client sends one new message plus a `conversationId`, never its own history. The server rebuilds the thread from Postgres each turn.
@@ -424,12 +426,12 @@ client  ◀── agent:proposal ───────────────�
 
 ### Memory & retrieval layers
 
-| Layer                      | Description                                                                                                                                |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Thread memory (A6a)**    | Per-conversation history in `conversations` / `conversation_messages`, reconstructed server-side every turn. Always on with `ai_enabled`.  |
-| **Long-term memory (A6b)** | Durable, userId-scoped facts extracted from idle conversations by a cron and recalled per turn via pgvector. Flag `agent_longterm_memory`. |
-| **Hybrid retrieval (A3)**  | The `searchNotes` tool fuses Postgres FTS with a pgvector KNN leg via Reciprocal Rank Fusion. Flag `agent_hybrid_retrieval`.               |
-| **Web search (A4)**        | `webSearch` / `webFetch` tools behind an agnostic provider port (Tavily). Flag `agent_web_search`.                                         |
+| Layer                      | Description                                                                                                                                                                                             |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Thread memory (A6a)**    | Per-conversation history in `conversations` / `conversation_messages`, reconstructed server-side every turn. Always on with `ai_enabled`; tool-turn replay additionally needs `agent_transcript_tools`. |
+| **Long-term memory (A6b)** | Durable, userId-scoped facts extracted from idle conversations by a cron and recalled per turn via pgvector. Flag `agent_longterm_memory`.                                                              |
+| **Hybrid retrieval (A3)**  | The `searchNotes` tool fuses Postgres FTS with a pgvector KNN leg via Reciprocal Rank Fusion. Flag `agent_hybrid_retrieval`.                                                                            |
+| **Web search (A4)**        | `webSearch` / `webFetch` tools behind an agnostic provider port (Tavily). Flag `agent_web_search`.                                                                                                      |
 
 All retrieved content — notes, memories, and web results — is injected into the prompt as **DATA**, passed through the injection guard, and never treated as instructions.
 
