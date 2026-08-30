@@ -2936,25 +2936,51 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
-  it('warns that the turn budget is inert when the provider reports no usage', async () => {
+  it.each([
+    { label: 'no usage', usage: {} },
+    { label: 'only inputTokens', usage: { inputTokens: 3 } },
+    { label: 'only outputTokens', usage: { outputTokens: 2 } },
+  ])(
+    'warns that the turn budget is unreliable when the provider reports $label',
+    async ({ usage }) => {
+      const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+      streamTextMock.mockImplementationOnce(() => ({
+        fullStream: (async function* () {
+          yield { type: 'text-delta', id: 't1', text: 'ok' };
+          yield { type: 'finish', finishReason: 'stop' };
+        })(),
+        totalUsage: Promise.resolve(usage),
+      }));
+      const orchestrator = makeOrchestrator();
+
+      await collect(orchestrator.run(baseInput));
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.turn.usage_incomplete',
+          userId: 'u1',
+          model: MODEL,
+        })
+      );
+      warnSpy.mockRestore();
+    }
+  );
+
+  it('does not warn about usage when both token counters are reported', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
       fullStream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'ok' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({}),
+      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
     }));
     const orchestrator = makeOrchestrator();
 
     await collect(orchestrator.run(baseInput));
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'agent.turn.usage_unreported',
-        userId: 'u1',
-        model: MODEL,
-      })
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'agent.turn.usage_incomplete' })
     );
     warnSpy.mockRestore();
   });
