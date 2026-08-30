@@ -46,7 +46,6 @@ import {
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
-  type PersistedTurnMessage,
 } from '../domain/ports/conversation.repository';
 import {
   MEMORY_REPOSITORY,
@@ -60,6 +59,7 @@ import type {
   MutationKind,
   ProposedMutation,
 } from '../domain/proposed-mutation';
+import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
 
 interface RunAgentTurnInput {
@@ -310,13 +310,13 @@ export class RunAgentTurnHandler {
     conversationId: string
   ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
-    const rows = await this.conversations.loadMessages(conversationId, limit);
-    const history: AgentMessage[] = rows
-      .filter((r) => r.role !== 'tool')
-      .map((r) => ({
-        role: r.role,
-        content: r.content,
-      }));
+    const rows = await this.conversations.loadMessages(conversationId, limit, {
+      textOnly: true,
+    });
+    const history: AgentMessage[] = rows.map((r) => ({
+      role: r.role,
+      content: r.content,
+    }));
     const seen = new Map<string, AgentSource>();
     for (const r of rows) {
       if (r.role !== 'assistant') {
@@ -333,22 +333,18 @@ export class RunAgentTurnHandler {
 
   private async persistTurn(
     persistence: PersistenceContext,
+    turnMessages: readonly AgentMessage[],
     assistantText: string,
     sources: readonly AgentSource[],
     stopReason: MessageStopReason
   ): Promise<void> {
-    const messages: PersistedTurnMessage[] = [];
-    if (persistence.userContent !== undefined) {
-      messages.push({ role: 'user', content: persistence.userContent });
-    }
-    if (assistantText.length > 0) {
-      messages.push({
-        role: 'assistant',
-        content: assistantText,
-        sources,
-        stopReason,
-      });
-    }
+    const messages = buildTurnRows({
+      userContent: persistence.userContent,
+      turnMessages,
+      assistantText,
+      sources,
+      stopReason,
+    });
     if (messages.length === 0) {
       return;
     }
@@ -358,12 +354,34 @@ export class RunAgentTurnHandler {
         turnId: persistence.turnId,
         messages,
       });
+      this.logger.log({
+        event: 'agent.conversation.persisted',
+        conversationId: persistence.conversationId,
+        turnId: persistence.turnId,
+        rows: messages.length,
+        toolRows: messages.filter((m) => m.role === 'tool').length,
+        stopReason,
+      });
     } catch (error) {
       this.logger.error({
         event: 'agent.conversation.persist_failed',
         conversationId: persistence.conversationId,
         error: error instanceof Error ? error.message : 'unknown',
       });
+    }
+  }
+
+  private async transcriptToolsEnabled(): Promise<boolean> {
+    try {
+      return await this.featureFlags.isEnabled(
+        FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
+      );
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.transcript_flag.lookup_failed',
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      return false;
     }
   }
 
@@ -632,6 +650,8 @@ export class RunAgentTurnHandler {
         : {}),
     };
 
+    const transcriptToolsOn = await this.transcriptToolsEnabled();
+    const turnMessages: AgentMessage[] = [];
     let assistantText = '';
     let persisted = false;
     const persistTurnOnce = async (
@@ -642,7 +662,13 @@ export class RunAgentTurnHandler {
         return;
       }
       persisted = true;
-      await this.persistTurn(persistence, assistantText, sources, stopReason);
+      await this.persistTurn(
+        persistence,
+        turnMessages,
+        assistantText,
+        sources,
+        stopReason
+      );
     };
     try {
       for await (const event of this.orchestrator.run({
@@ -731,6 +757,11 @@ export class RunAgentTurnHandler {
             await persistTurnOnce([], AGENT_STOP_REASON.COMPLETED);
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
+            }
+            break;
+          case 'step':
+            if (transcriptToolsOn) {
+              turnMessages.push(...event.messages);
             }
             break;
           case 'committed':

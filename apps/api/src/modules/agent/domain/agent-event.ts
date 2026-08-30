@@ -1,6 +1,7 @@
 import type { AgentStopReason } from '@knowtis/shared-types';
 
 import type { AIDomainError } from '../../ai/domain/errors/ai.errors';
+import type { AgentMessage } from './agent-message';
 import type { ProposedMutation } from './proposed-mutation';
 
 export interface AgentTurnUsage {
@@ -30,6 +31,7 @@ export interface AgentCommitResult {
 export type AgentEvent =
   | { readonly type: 'thinking'; readonly text: string }
   | { readonly type: 'chunk'; readonly text: string }
+  | { readonly type: 'step'; readonly messages: readonly AgentMessage[] }
   | {
       readonly type: 'done';
       readonly usage: AgentTurnUsage;

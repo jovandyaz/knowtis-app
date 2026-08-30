@@ -19,6 +19,7 @@ import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
+import { fromResponseMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {
   errorEvent,
@@ -330,6 +331,8 @@ export async function* runAgentStepLoop(
               outputTokens: result.usage.outputTokens,
             });
           }
+          const { messages: stepMessages } = await result.response;
+          yield { type: 'step', messages: fromResponseMessages(stepMessages) };
           const captured = params.proposals.captured;
           if (captured) {
             emitTurnHealth(
@@ -368,8 +371,7 @@ export async function* runAgentStepLoop(
               result.callStartedAt,
               modelsUsed
             );
-            const { messages } = await result.response;
-            history.push(...messages);
+            history.push(...stepMessages);
             advanceToNextStep = true;
             break stepAttempts;
           }

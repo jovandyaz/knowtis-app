@@ -19,6 +19,7 @@ import type { AgentToolContext } from '../tools/agent-tool';
 import { runAgentStepLoop } from './agent-step-loop';
 import { AgentToolRegistry } from './agent-tool.registry';
 import { composeSystemPrompt, toPromptLiteral } from './compose-system-prompt';
+import { toModelMessages } from './message-mapper';
 import { ProposalCollector } from './proposal-collector';
 import {
   AGENT_TURN_OUTCOME,
@@ -134,9 +135,7 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       if (input.resume) {
         system += RESUME_SYSTEM_NOTE;
       }
-      const priorMessages = input.messages.flatMap((m) =>
-        m.role === 'tool' ? [] : [{ role: m.role, content: m.content }]
-      );
+      const priorMessages = toModelMessages(input.messages);
       initialMessages = input.resume
         ? [
             ...priorMessages,

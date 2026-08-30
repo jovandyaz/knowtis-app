@@ -143,7 +143,7 @@ export const STEP_CALL_KIND = {
   ERRORED: 'errored',
 } as const;
 
-/** Outcome of one streamText attempt; `completed` defers `response` for the loop to await only when it continues. */
+/** Outcome of one streamText attempt; `completed` carries `response` for the loop to await once per completed call. */
 export type StepCallResult =
   | (StepCallHealth & {
       kind: typeof STEP_CALL_KIND.COMPLETED;
