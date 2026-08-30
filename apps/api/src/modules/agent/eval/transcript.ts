@@ -38,6 +38,8 @@ export async function drainEvents(
           payload: event.proposal.payload,
         };
         break;
+      case 'step':
+        break;
       case 'committed':
         break;
       case 'aborted':

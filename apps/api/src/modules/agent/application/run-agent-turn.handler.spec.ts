@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { estimateTokenCount } from '@knowtis/ai-gateway';
-import type { ReasoningEffort } from '@knowtis/shared-types';
+import { FEATURE_FLAG_KEYS, type ReasoningEffort } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import type { AIConfigService } from '../../ai/application/services/ai-config.service';
@@ -2733,7 +2733,9 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(flags.isEnabled).not.toHaveBeenCalled();
+    expect(flags.isEnabled).not.toHaveBeenCalledWith(
+      FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
+    );
     expect(embed.embedQuery).not.toHaveBeenCalled();
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.not.objectContaining({ userMemories: expect.anything() })
@@ -2779,7 +2781,11 @@ describe('RunAgentTurnHandler', () => {
     const memory = makeMemory([{ id: 'm1', content: 'Is vegan', score: 0.9 }]);
     const embed = makeEmbed();
     const flags = makeFlags(true);
-    vi.mocked(flags.isEnabled).mockRejectedValue(new Error('flag store down'));
+    vi.mocked(flags.isEnabled).mockImplementation((key) =>
+      key === FEATURE_FLAG_KEYS.AGENT_LONGTERM_MEMORY
+        ? Promise.reject(new Error('flag store down'))
+        : Promise.resolve(false)
+    );
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -3663,5 +3669,342 @@ describe('RunAgentTurnHandler', () => {
 
     expect(conversations.appendTurn).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('replays history text-only so tool and empty rows never reach the model', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations([
+      historyRow({ role: 'user', content: 'find my notes' }),
+      historyRow({ role: 'assistant', content: 'Here they are' }),
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      { userId: USER, conversationId: 'conv-1', message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40, {
+      textOnly: true,
+    });
+  });
+
+  it('replays history text-only on the resume path too', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations([
+      historyRow({ role: 'user', content: 'rename it' }),
+      historyRow({ role: 'assistant', content: "I'll rename it, confirm?" }),
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.resumeTurn(
+      {
+        userId: USER,
+        conversationId: 'conv-1',
+        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() }
+    );
+
+    expect(conversations.loadMessages).toHaveBeenCalledWith('conv-1', 40, {
+      textOnly: true,
+    });
+  });
+
+  describe('transcript with tool activity', () => {
+    const stepWithTool = [
+      {
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            output: { title: 'N1' },
+            isError: false,
+          },
+        ],
+      },
+    ] as const;
+    const doneEvent = {
+      type: 'done',
+      usage: {
+        inputTokens: 1,
+        outputTokens: 1,
+        model: 'anthropic:claude-sonnet-4-20250514',
+      },
+      sources: [{ id: 'n1', title: 'N1' }],
+      knownNotes: [],
+      webSources: [],
+      stopReason: 'completed',
+    } as const;
+
+    function run(events: AgentEvent[], flagOn: boolean) {
+      const { rateLimit, config, pendingStore } = makeDeps({});
+      const conversations = makeConversations();
+      const flags = makeFlags(flagOn);
+      const callbacks = {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      };
+      const handler = new RunAgentTurnHandler(
+        orchestratorYielding(events),
+        rateLimit,
+        config,
+        pendingStore,
+        createTestCatalog(),
+        conversations,
+        makeMemory(),
+        makeEmbed(),
+        flags,
+        makeModelPreference(),
+        makeByok(),
+        makeGuard(),
+        makeAIConfig()
+      );
+      return {
+        conversations,
+        flags,
+        callbacks,
+        execute: () =>
+          handler.execute(
+            { userId: USER, message: { content: 'what is in N1?' } },
+            callbacks
+          ),
+      };
+    }
+
+    const completedRun = (flagOn: boolean) =>
+      run(
+        [
+          { type: 'step', messages: [...stepWithTool] },
+          { type: 'chunk', text: 'N1 says hi' },
+          {
+            type: 'step',
+            messages: [{ role: 'assistant', content: 'N1 says hi' }],
+          },
+          doneEvent,
+        ],
+        flagOn
+      );
+
+    it('persists every step message and puts the stop reason on the final assistant row', async () => {
+      const { conversations, execute } = completedRun(true);
+
+      await execute();
+
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.turnId).toMatch(TURN_ID_PATTERN);
+      expect(appended.messages).toEqual([
+        { role: 'user', content: 'what is in N1?' },
+        stepWithTool[0],
+        stepWithTool[1],
+        {
+          role: 'assistant',
+          content: 'N1 says hi',
+          sources: [{ id: 'n1', title: 'N1' }],
+          stopReason: 'completed',
+        },
+      ]);
+    });
+
+    it('logs the persisted row counts', async () => {
+      const logSpy = vi
+        .spyOn(Logger.prototype, 'log')
+        .mockImplementation(() => undefined);
+      const { execute } = completedRun(true);
+
+      await execute();
+
+      expect(logSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.conversation.persisted',
+          conversationId: 'conv-1',
+          turnId: expect.stringMatching(TURN_ID_PATTERN),
+          rows: 4,
+          toolRows: 1,
+          stopReason: 'completed',
+        })
+      );
+    });
+
+    it('appends the interrupted step text as its own partial row on abort', async () => {
+      const { conversations, execute } = run(
+        [
+          { type: 'step', messages: [...stepWithTool] },
+          { type: 'chunk', text: 'N1 sa' },
+          {
+            type: 'aborted',
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              model: 'anthropic:claude-sonnet-4-20250514',
+            },
+          },
+        ],
+        true
+      );
+
+      await execute();
+
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.messages.at(-1)).toEqual({
+        role: 'assistant',
+        content: 'N1 sa',
+        sources: [],
+        stopReason: 'aborted',
+      });
+      expect(appended.messages).toHaveLength(4);
+    });
+
+    it('persists the tool rows with no stop reason when the turn ends on a tool result', async () => {
+      const { conversations, execute } = run(
+        [{ type: 'step', messages: [...stepWithTool] }, doneEvent],
+        true
+      );
+
+      await execute();
+
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.messages).toEqual([
+        { role: 'user', content: 'what is in N1?' },
+        stepWithTool[0],
+        stepWithTool[1],
+      ]);
+    });
+
+    it('keeps only the text streamed after the last step as the partial row', async () => {
+      const { conversations, execute } = run(
+        [
+          { type: 'chunk', text: 'Hello' },
+          {
+            type: 'step',
+            messages: [
+              {
+                role: 'assistant',
+                content: 'Hello',
+                parts: [{ type: 'text', text: 'Hello' }],
+              },
+            ],
+          },
+          { type: 'chunk', text: ' wor' },
+          {
+            type: 'aborted',
+            usage: {
+              inputTokens: 1,
+              outputTokens: 1,
+              model: 'anthropic:claude-sonnet-4-20250514',
+            },
+          },
+        ],
+        true
+      );
+
+      await execute();
+
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.messages).toEqual([
+        { role: 'user', content: 'what is in N1?' },
+        {
+          role: 'assistant',
+          content: 'Hello',
+          parts: [{ type: 'text', text: 'Hello' }],
+        },
+        {
+          role: 'assistant',
+          content: ' wor',
+          sources: [],
+          stopReason: 'aborted',
+        },
+      ]);
+    });
+
+    it('ignores step messages while the flag is off', async () => {
+      const { conversations, execute } = completedRun(false);
+
+      await execute();
+
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+      ]);
+      expect(appended.messages[1]).not.toHaveProperty('parts');
+    });
+
+    it('treats a failing flag lookup as off instead of failing the turn', async () => {
+      const warnSpy = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { conversations, flags, callbacks, execute } = completedRun(true);
+      vi.mocked(flags.isEnabled).mockImplementation((key) =>
+        key === FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
+          ? Promise.reject(new Error('flag store down'))
+          : Promise.resolve(false)
+      );
+
+      await execute();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          event: 'agent.transcript_flag.lookup_failed',
+        })
+      );
+      expect(callbacks.onError).not.toHaveBeenCalled();
+      expect(callbacks.onDone).toHaveBeenCalledTimes(1);
+      const appended = vi.mocked(conversations.appendTurn).mock.calls[0][0];
+      expect(appended.messages.map((m) => m.role)).toEqual([
+        'user',
+        'assistant',
+      ]);
+    });
   });
 });
