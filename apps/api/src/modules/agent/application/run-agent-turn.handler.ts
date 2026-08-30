@@ -208,11 +208,8 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
-    const transcriptToolsOn = await this.transcriptToolsEnabled();
-    const { history, knownNotes } = await this.loadConversationContext(
-      conversationId,
-      transcriptToolsOn
-    );
+    const { history, knownNotes } =
+      await this.loadConversationContext(conversationId);
     const messages = coalesceMessages([
       ...history,
       { role: 'user', content: message.content },
@@ -243,8 +240,7 @@ export class RunAgentTurnHandler {
         conversationId,
         turnId: randomUUID(),
         userContent: message.content,
-      },
-      transcriptToolsOn
+      }
     );
   }
 
@@ -313,13 +309,12 @@ export class RunAgentTurnHandler {
   }
 
   private async loadConversationContext(
-    conversationId: string,
-    replayTools: boolean
+    conversationId: string
   ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
     const rows = await this.conversations.loadMessages(conversationId, limit);
     const history = pruneTranscript(rows, {
-      keepToolTurns: replayTools ? AGENT_HISTORY_TOOL_TURNS : 0,
+      keepToolTurns: AGENT_HISTORY_TOOL_TURNS,
     });
     const seen = new Map<string, AgentSource>();
     for (const r of rows) {
@@ -372,20 +367,6 @@ export class RunAgentTurnHandler {
         conversationId: persistence.conversationId,
         error: error instanceof Error ? error.message : 'unknown',
       });
-    }
-  }
-
-  private async transcriptToolsEnabled(): Promise<boolean> {
-    try {
-      return await this.featureFlags.isEnabled(
-        FEATURE_FLAG_KEYS.AGENT_TRANSCRIPT_TOOLS
-      );
-    } catch (error) {
-      this.logger.warn({
-        event: 'agent.transcript_flag.lookup_failed',
-        error: error instanceof Error ? error.message : 'unknown',
-      });
-      return false;
     }
   }
 
@@ -456,10 +437,8 @@ export class RunAgentTurnHandler {
         });
         return;
       }
-      const transcriptToolsOn = await this.transcriptToolsEnabled();
       const { history, knownNotes } = await this.loadConversationContext(
-        input.conversationId,
-        transcriptToolsOn
+        input.conversationId
       );
       // Embed the user's last real message, not the tool-confirmation outcome, for memory retrieval.
       const latestUserContent =
@@ -490,8 +469,7 @@ export class RunAgentTurnHandler {
         callbacks,
         signal,
         this.resumePolicy(input.userId, callbacks),
-        { conversationId: input.conversationId, turnId: randomUUID() },
-        transcriptToolsOn
+        { conversationId: input.conversationId, turnId: randomUUID() }
       );
     }
     callbacks.onError({ code: 'forbidden', message: 'Conversation not found' });
@@ -506,8 +484,7 @@ export class RunAgentTurnHandler {
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
-    persistence: PersistenceContext | undefined,
-    transcriptToolsOn: boolean
+    persistence: PersistenceContext | undefined
   ): Promise<void> {
     if (signal?.aborted) {
       return;
@@ -767,9 +744,7 @@ export class RunAgentTurnHandler {
             }
             break;
           case 'step':
-            if (transcriptToolsOn) {
-              turnMessages.push(...event.messages);
-            }
+            turnMessages.push(...event.messages);
             break;
           case 'committed':
             if (policy.onCommitted(ctx) === 'stop') {

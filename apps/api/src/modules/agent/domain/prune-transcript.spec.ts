@@ -67,7 +67,7 @@ describe('pruneTranscript', () => {
     expect(out[3].parts).toEqual([call('n2')]);
   });
 
-  it('strips everything to text when keepToolTurns is 0 (flag off)', () => {
+  it('strips everything to text when keepToolTurns is 0', () => {
     const out = pruneTranscript(toolTurn('t1', 'n1'), { keepToolTurns: 0 });
     expect(out).toEqual([
       { role: 'user', content: 'q-t1' },
