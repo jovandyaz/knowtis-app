@@ -38,6 +38,12 @@ describe('drainEvents', () => {
     expect(t.error).toBeNull();
   });
 
+  it('returns an empty transcript when the stream yields no events', async () => {
+    const t = await drainEvents(scripted([]));
+
+    expect(t).toEqual({ text: '', proposal: null, sources: [], error: null });
+  });
+
   it('captures a proposal kind and payload', async () => {
     const t = await drainEvents(
       scripted([
