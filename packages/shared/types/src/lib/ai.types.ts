@@ -82,6 +82,25 @@ export type ModelAccess = (typeof MODEL_ACCESS)[number];
 export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
 
+/** Why an agent turn stopped; carried on the `done` event and, persisted, on the last assistant message of a turn. */
+export const AGENT_STOP_REASON = {
+  COMPLETED: 'completed',
+  MAX_STEPS: 'max_steps',
+  LENGTH: 'length',
+  TOKEN_BUDGET: 'token_budget',
+  CONTENT_FILTER: 'content_filter',
+} as const;
+export type AgentStopReason =
+  (typeof AGENT_STOP_REASON)[keyof typeof AGENT_STOP_REASON];
+
+/** Persisted stop reason: every loop stop reason plus the two interrupted outcomes. */
+export const MESSAGE_STOP_REASON = [
+  ...Object.values(AGENT_STOP_REASON),
+  'error',
+  'aborted',
+] as const;
+export type MessageStopReason = (typeof MESSAGE_STOP_REASON)[number];
+
 /** Where an AI config key's served value comes from; `stale` means a row is stored but the runtime ignores it and serves the code default. */
 export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
 export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];

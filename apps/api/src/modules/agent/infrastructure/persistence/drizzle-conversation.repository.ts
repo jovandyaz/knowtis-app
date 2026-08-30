@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 
 import {
   conversationMessages,
@@ -8,12 +8,16 @@ import {
   users,
   type Database,
 } from '../../../../database';
-import type { AgentRole } from '../../domain/agent-message';
+import {
+  AGENT_MESSAGE_PARTS_VERSION,
+  type PersistedParts,
+} from '../../domain/agent-message';
 import type {
   AppendTurnInput,
   ConversationMessageRow,
   ConversationRepository,
   CreateConversationInput,
+  LoadMessagesOptions,
 } from '../../domain/ports/conversation.repository';
 
 @Injectable()
@@ -71,51 +75,59 @@ export class DrizzleConversationRepository implements ConversationRepository {
 
   async loadMessages(
     conversationId: string,
-    limit: number
+    limit: number,
+    options: LoadMessagesOptions = {}
   ): Promise<ConversationMessageRow[]> {
+    const scope = eq(conversationMessages.conversationId, conversationId);
     const rows = await this.db
       .select({
         role: conversationMessages.role,
         content: conversationMessages.content,
         sources: conversationMessages.sources,
+        parts: conversationMessages.parts,
+        stopReason: conversationMessages.stopReason,
+        turnId: conversationMessages.turnId,
       })
       .from(conversationMessages)
-      .where(eq(conversationMessages.conversationId, conversationId))
+      .where(
+        options.textOnly
+          ? and(
+              scope,
+              ne(conversationMessages.role, 'tool'),
+              ne(conversationMessages.content, '')
+            )
+          : scope
+      )
       .orderBy(desc(conversationMessages.seq))
       .limit(limit);
     return rows.reverse().map((r) => ({
       role: r.role,
       content: r.content,
       sources: r.sources ?? [],
+      parts: r.parts?.v === AGENT_MESSAGE_PARTS_VERSION ? r.parts.parts : null,
+      stopReason: r.stopReason ?? null,
+      turnId: r.turnId ?? null,
     }));
   }
 
   async appendTurn(input: AppendTurnInput): Promise<void> {
-    const values: {
-      conversationId: string;
-      role: AgentRole;
-      content: string;
-      sources: { id: string; title: string }[] | null;
-    }[] = [];
-    if (input.userMessage) {
-      values.push({
-        conversationId: input.conversationId,
-        role: 'user',
-        content: input.userMessage.content,
-        sources: null,
-      });
-    }
-    if (input.assistantMessage) {
-      values.push({
-        conversationId: input.conversationId,
-        role: 'assistant',
-        content: input.assistantMessage.content,
-        sources: Array.from(input.assistantMessage.sources),
-      });
-    }
-    if (values.length === 0) {
+    if (input.messages.length === 0) {
       return;
     }
+    const values = input.messages.map((m) => ({
+      conversationId: input.conversationId,
+      turnId: input.turnId,
+      role: m.role,
+      content: m.content,
+      sources: m.sources ? Array.from(m.sources) : null,
+      parts: m.parts
+        ? ({
+            v: AGENT_MESSAGE_PARTS_VERSION,
+            parts: m.parts,
+          } satisfies PersistedParts)
+        : null,
+      stopReason: m.stopReason ?? null,
+    }));
     await this.db.transaction(async (tx) => {
       await tx.insert(conversationMessages).values(values);
       await tx

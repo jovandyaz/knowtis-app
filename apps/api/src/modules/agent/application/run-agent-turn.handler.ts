@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
@@ -9,7 +11,13 @@ import {
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import { FEATURE_FLAG_KEYS, type ByokProvider } from '@knowtis/shared-types';
+import {
+  AGENT_STOP_REASON,
+  FEATURE_FLAG_KEYS,
+  type AgentStopReason,
+  type ByokProvider,
+  type MessageStopReason,
+} from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
@@ -24,12 +32,10 @@ import {
 import { AIModel } from '../../ai/domain/value-objects/ai-model.vo';
 import { TokenUsage } from '../../ai/domain/value-objects/token-usage.vo';
 import { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
-import {
-  AGENT_STOP_REASON,
-  type AgentSource,
-  type AgentStopReason,
-  type AgentTurnUsage,
-  type WebSource,
+import type {
+  AgentSource,
+  AgentTurnUsage,
+  WebSource,
 } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import { coalesceMessages } from '../domain/coalesce-messages';
@@ -40,6 +46,7 @@ import {
 import {
   CONVERSATION_REPOSITORY,
   type ConversationRepository,
+  type PersistedTurnMessage,
 } from '../domain/ports/conversation.repository';
 import {
   MEMORY_REPOSITORY,
@@ -100,6 +107,7 @@ interface TurnLoopContext {
 
 interface PersistenceContext {
   readonly conversationId: string;
+  readonly turnId: string;
   readonly userContent?: string;
 }
 
@@ -226,7 +234,11 @@ export class RunAgentTurnHandler {
       callbacks,
       signal,
       this.executePolicy(input.userId, callbacks, conversationId),
-      { conversationId, userContent: message.content }
+      {
+        conversationId,
+        turnId: randomUUID(),
+        userContent: message.content,
+      }
     );
   }
 
@@ -299,10 +311,12 @@ export class RunAgentTurnHandler {
   ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
     const rows = await this.conversations.loadMessages(conversationId, limit);
-    const history: AgentMessage[] = rows.map((r) => ({
-      role: r.role,
-      content: r.content,
-    }));
+    const history: AgentMessage[] = rows
+      .filter((r) => r.role !== 'tool')
+      .map((r) => ({
+        role: r.role,
+        content: r.content,
+      }));
     const seen = new Map<string, AgentSource>();
     for (const r of rows) {
       if (r.role !== 'assistant') {
@@ -320,21 +334,29 @@ export class RunAgentTurnHandler {
   private async persistTurn(
     persistence: PersistenceContext,
     assistantText: string,
-    sources: readonly AgentSource[]
+    sources: readonly AgentSource[],
+    stopReason: MessageStopReason
   ): Promise<void> {
-    const hasAssistantText = assistantText.length > 0;
-    if (persistence.userContent === undefined && !hasAssistantText) {
+    const messages: PersistedTurnMessage[] = [];
+    if (persistence.userContent !== undefined) {
+      messages.push({ role: 'user', content: persistence.userContent });
+    }
+    if (assistantText.length > 0) {
+      messages.push({
+        role: 'assistant',
+        content: assistantText,
+        sources,
+        stopReason,
+      });
+    }
+    if (messages.length === 0) {
       return;
     }
     try {
       await this.conversations.appendTurn({
         conversationId: persistence.conversationId,
-        ...(persistence.userContent !== undefined
-          ? { userMessage: { content: persistence.userContent } }
-          : {}),
-        ...(hasAssistantText
-          ? { assistantMessage: { content: assistantText, sources } }
-          : {}),
+        turnId: persistence.turnId,
+        messages,
       });
     } catch (error) {
       this.logger.error({
@@ -444,7 +466,7 @@ export class RunAgentTurnHandler {
         callbacks,
         signal,
         this.resumePolicy(input.userId, callbacks),
-        { conversationId: input.conversationId }
+        { conversationId: input.conversationId, turnId: randomUUID() }
       );
     }
     callbacks.onError({ code: 'forbidden', message: 'Conversation not found' });
@@ -613,13 +635,14 @@ export class RunAgentTurnHandler {
     let assistantText = '';
     let persisted = false;
     const persistTurnOnce = async (
-      sources: readonly AgentSource[]
+      sources: readonly AgentSource[],
+      stopReason: MessageStopReason
     ): Promise<void> => {
       if (!persistence || persisted) {
         return;
       }
       persisted = true;
-      await this.persistTurn(persistence, assistantText, sources);
+      await this.persistTurn(persistence, assistantText, sources, stopReason);
     };
     try {
       for await (const event of this.orchestrator.run({
@@ -654,13 +677,13 @@ export class RunAgentTurnHandler {
               event.usage ?? { inputTokens: 0, outputTokens: 0, model }
             );
             ctx.reconciled = true;
-            await persistTurnOnce([]);
+            await persistTurnOnce([], 'error');
             callbacks.onError(event.error);
             return;
           case 'aborted':
             await this.recordUsageSafe(input.userId, ctx, event.usage);
             ctx.reconciled = true;
-            await persistTurnOnce([]);
+            await persistTurnOnce([], 'aborted');
             return;
           case 'done': {
             let costUsd: number;
@@ -687,7 +710,7 @@ export class RunAgentTurnHandler {
             if (isByok) {
               void this.byok.markUsed(input.userId, provider as ByokProvider);
             }
-            await persistTurnOnce(event.sources);
+            await persistTurnOnce(event.sources, event.stopReason);
             callbacks.onDone({
               inputTokens: event.usage.inputTokens,
               outputTokens: event.usage.outputTokens,
@@ -705,7 +728,7 @@ export class RunAgentTurnHandler {
           }
           case 'proposal':
             // Proposal events carry no sources; the post-approval turn re-derives them.
-            await persistTurnOnce([]);
+            await persistTurnOnce([], AGENT_STOP_REASON.COMPLETED);
             if ((await policy.onProposal(event, ctx)) === 'stop') {
               return;
             }
@@ -738,12 +761,12 @@ export class RunAgentTurnHandler {
           model: ctx.model,
         });
       }
-      await persistTurnOnce([]);
+      await persistTurnOnce([], 'error');
       callbacks.onError(
         AIErrors.providerError('Agent turn ended without a terminal event')
       );
     } catch (error) {
-      await persistTurnOnce([]);
+      await persistTurnOnce([], signal?.aborted ? 'aborted' : 'error');
       if (signal?.aborted) {
         if (!ctx.reconciled) {
           await this.recordUsageSafe(input.userId, ctx, {
