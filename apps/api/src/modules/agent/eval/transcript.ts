@@ -1,4 +1,7 @@
+import type { AgentStopReason } from '@knowtis/shared-types';
+
 import type { AgentEvent } from '../domain/agent-event';
+import type { AgentMessage } from '../domain/agent-message';
 import type { MutationKind } from '../domain/proposed-mutation';
 
 export interface EvalTranscript {
@@ -10,6 +13,8 @@ export interface EvalTranscript {
   } | null;
   readonly sources: { readonly id: string; readonly title: string }[];
   readonly error: { readonly code: string; readonly message: string } | null;
+  readonly stopReason: AgentStopReason | null;
+  readonly steps: readonly (readonly AgentMessage[])[];
 }
 
 export type EventTranscript = Omit<EvalTranscript, 'toolCalls'>;
@@ -21,6 +26,8 @@ export async function drainEvents(
   let proposal: EventTranscript['proposal'] = null;
   let sources: EventTranscript['sources'] = [];
   let error: EventTranscript['error'] = null;
+  let stopReason: AgentStopReason | null = null;
+  const steps: (readonly AgentMessage[])[] = [];
 
   for await (const event of events) {
     switch (event.type) {
@@ -31,6 +38,7 @@ export async function drainEvents(
         break;
       case 'done':
         sources = event.sources.map((s) => ({ id: s.id, title: s.title }));
+        stopReason = event.stopReason;
         break;
       case 'proposal':
         proposal = {
@@ -39,6 +47,7 @@ export async function drainEvents(
         };
         break;
       case 'step':
+        steps.push(event.messages);
         break;
       case 'committed':
         break;
@@ -54,5 +63,5 @@ export async function drainEvents(
     }
   }
 
-  return { text, proposal, sources, error };
+  return { text, proposal, sources, error, stopReason, steps };
 }

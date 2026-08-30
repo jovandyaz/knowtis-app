@@ -32,42 +32,44 @@ const assistantWithCall: AssistantModelMessage = {
 const toolOutputCases: ReadonlyArray<{
   readonly name: string;
   readonly output: ToolResultPart['output'];
-  readonly expected: Pick<AgentToolResultPart, 'output' | 'isError'>;
+  readonly expected: Pick<AgentToolResultPart, 'output' | 'outputType'>;
+  readonly replayed?: ToolResultPart['output'];
 }> = [
   {
     name: 'text',
     output: { type: 'text', value: 'plain' },
-    expected: { output: 'plain', isError: false },
+    expected: { output: 'plain', outputType: 'text' },
   },
   {
     name: 'json',
     output: { type: 'json', value: { hits: [] } },
-    expected: { output: { hits: [] }, isError: false },
+    expected: { output: { hits: [] }, outputType: 'json' },
   },
   {
     name: 'content',
     output: { type: 'content', value: [{ type: 'text', text: 'x' }] },
-    expected: { output: [{ type: 'text', text: 'x' }], isError: false },
+    expected: { output: [{ type: 'text', text: 'x' }], outputType: 'content' },
   },
   {
     name: 'error-text',
     output: { type: 'error-text', value: 'boom' },
-    expected: { output: 'boom', isError: true },
+    expected: { output: 'boom', outputType: 'error-text' },
   },
   {
     name: 'error-json',
     output: { type: 'error-json', value: { code: 'E' } },
-    expected: { output: { code: 'E' }, isError: true },
+    expected: { output: { code: 'E' }, outputType: 'error-json' },
   },
   {
     name: 'execution-denied with a reason',
     output: { type: 'execution-denied', reason: 'nope' },
-    expected: { output: 'nope', isError: true },
+    expected: { output: 'nope', outputType: 'execution-denied' },
   },
   {
     name: 'execution-denied without a reason',
     output: { type: 'execution-denied' },
-    expected: { output: 'execution denied', isError: true },
+    expected: { output: 'execution denied', outputType: 'execution-denied' },
+    replayed: { type: 'execution-denied', reason: 'execution denied' },
   },
 ];
 
@@ -96,36 +98,6 @@ describe('fromResponseMessages', () => {
     ).toEqual([{ role: 'assistant', content: 'Done.' }]);
   });
 
-  it.each(toolOutputCases)(
-    'maps tool result output $name',
-    ({ output, expected }) => {
-      const message: ToolModelMessage = {
-        role: 'tool',
-        content: [
-          {
-            type: 'tool-result',
-            toolCallId: 'c1',
-            toolName: 'searchNotes',
-            output,
-          },
-        ],
-      };
-      expect(fromResponseMessages([message])).toEqual([
-        {
-          role: 'tool',
-          content: '',
-          parts: [
-            {
-              type: 'tool-result',
-              toolCallId: 'c1',
-              toolName: 'searchNotes',
-              ...expected,
-            },
-          ],
-        },
-      ]);
-    }
-  );
   it('omits a tool message that carries only approval responses', () => {
     const message: ToolModelMessage = {
       role: 'tool',
@@ -153,6 +125,55 @@ describe('fromResponseMessages', () => {
   });
 });
 
+describe('tool output round-trip', () => {
+  it.each(toolOutputCases)(
+    'preserves the discriminator of $name',
+    ({ output, expected, replayed }) => {
+      const message: ToolModelMessage = {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'searchNotes',
+            output,
+          },
+        ],
+      };
+
+      const persisted = fromResponseMessages([message]);
+
+      expect(persisted).toEqual([
+        {
+          role: 'tool',
+          content: '',
+          parts: [
+            {
+              type: 'tool-result',
+              toolCallId: 'c1',
+              toolName: 'searchNotes',
+              ...expected,
+            },
+          ],
+        },
+      ]);
+      expect(toModelMessages(persisted)).toEqual([
+        {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: 'c1',
+              toolName: 'searchNotes',
+              output: replayed ?? output,
+            },
+          ],
+        },
+      ]);
+    }
+  );
+});
+
 describe('toModelMessages', () => {
   const history: AgentMessage[] = [
     { role: 'user', content: 'hi' },
@@ -178,14 +199,14 @@ describe('toModelMessages', () => {
           toolCallId: 'c1',
           toolName: 'searchNotes',
           output: { hits: [] },
-          isError: false,
+          outputType: 'json',
         },
         {
           type: 'tool-result',
           toolCallId: 'c2',
           toolName: 'webFetch',
           output: 'timeout',
-          isError: true,
+          outputType: 'error-text',
         },
       ],
     },
@@ -228,7 +249,7 @@ describe('toModelMessages', () => {
     ]);
   });
 
-  it('serialises a non-string error output as error-text', () => {
+  it('replays a structured error output as error-json', () => {
     const message: AgentMessage = {
       role: 'tool',
       content: '',
@@ -238,7 +259,7 @@ describe('toModelMessages', () => {
           toolCallId: 'c1',
           toolName: 'searchNotes',
           output: { code: 'E' },
-          isError: true,
+          outputType: 'error-json',
         },
       ],
     };
@@ -250,12 +271,54 @@ describe('toModelMessages', () => {
             type: 'tool-result',
             toolCallId: 'c1',
             toolName: 'searchNotes',
-            output: { type: 'error-text', value: '{"code":"E"}' },
+            output: { type: 'error-json', value: { code: 'E' } },
           },
         ],
       },
     ]);
   });
+
+  it.each([
+    {
+      name: 'an unknown outputType',
+      outputType: 'quantum',
+      output: 'legacy tool output',
+      value: 'legacy tool output',
+    },
+    {
+      name: 'a missing outputType',
+      outputType: undefined,
+      output: { code: 'E' },
+      value: '[object Object]',
+    },
+  ])(
+    'degrades $name to an error-text result',
+    ({ outputType, output, value }) => {
+      const part = {
+        type: 'tool-result',
+        toolCallId: 'c1',
+        toolName: 'searchNotes',
+        output,
+        outputType,
+      } as unknown as AgentToolResultPart;
+
+      expect(
+        toModelMessages([{ role: 'tool', content: '', parts: [part] }])
+      ).toEqual([
+        {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: 'c1',
+              toolName: 'searchNotes',
+              output: { type: 'error-text', value },
+            },
+          ],
+        },
+      ]);
+    }
+  );
 
   it('skips a tool message that holds no tool results', () => {
     expect(toModelMessages([{ role: 'tool', content: '' }])).toEqual([]);

@@ -1,22 +1,28 @@
 import type { AgentMessage } from './agent-message';
 
-/** Merges consecutive same-role messages (content joined with a blank line) so
+/** Merges consecutive same-role text messages (content joined with a blank line) so
  * the sequence strictly alternates user/assistant — required by the Anthropic
  * provider, which rejects consecutive same-role turns. A HITL turn persists two
- * assistant rows (proposal preamble + post-approval text); this collapses them. */
+ * assistant rows (proposal preamble + post-approval text); this collapses them.
+ * Messages carrying tool parts are never merged: an assistant→tool→assistant run
+ * is valid as is, and merging would orphan the tool call from its result. */
 export function coalesceMessages(
   messages: readonly AgentMessage[]
 ): AgentMessage[] {
   const out: AgentMessage[] = [];
   for (const m of messages) {
     const last = out[out.length - 1];
-    if (last && last.role === m.role) {
+    if (last && last.role === m.role && !last.parts && !m.parts) {
       out[out.length - 1] = {
         role: last.role,
         content: `${last.content}\n\n${m.content}`,
       };
     } else {
-      out.push({ role: m.role, content: m.content });
+      out.push(
+        m.parts
+          ? { role: m.role, content: m.content, parts: m.parts }
+          : { role: m.role, content: m.content }
+      );
     }
   }
   return out;

@@ -6,7 +6,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   computeTokenCostUsd,
   detectPromptInjection,
-  estimateTokenCount,
   MODEL_CATALOG,
   providerOf,
   type ModelCatalog,
@@ -39,6 +38,7 @@ import type {
 } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import { coalesceMessages } from '../domain/coalesce-messages';
+import { estimateMessageTokens } from '../domain/message-tokens';
 import {
   AGENT_ORCHESTRATOR,
   type AgentOrchestrator,
@@ -59,6 +59,7 @@ import type {
   MutationKind,
   ProposedMutation,
 } from '../domain/proposed-mutation';
+import { pruneTranscript } from '../domain/prune-transcript';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
 
@@ -123,6 +124,7 @@ interface TurnLoopPolicy {
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
+const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = 50_000;
 
 @Injectable()
@@ -206,8 +208,11 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
-    const { history, knownNotes } =
-      await this.loadConversationContext(conversationId);
+    const transcriptToolsOn = await this.transcriptToolsEnabled();
+    const { history, knownNotes } = await this.loadConversationContext(
+      conversationId,
+      transcriptToolsOn
+    );
     const messages = coalesceMessages([
       ...history,
       { role: 'user', content: message.content },
@@ -238,7 +243,8 @@ export class RunAgentTurnHandler {
         conversationId,
         turnId: randomUUID(),
         userContent: message.content,
-      }
+      },
+      transcriptToolsOn
     );
   }
 
@@ -307,16 +313,14 @@ export class RunAgentTurnHandler {
   }
 
   private async loadConversationContext(
-    conversationId: string
+    conversationId: string,
+    replayTools: boolean
   ): Promise<{ history: AgentMessage[]; knownNotes: AgentSource[] }> {
     const limit = this.configService.get('AI_AGENT_HISTORY_LIMIT');
-    const rows = await this.conversations.loadMessages(conversationId, limit, {
-      textOnly: true,
+    const rows = await this.conversations.loadMessages(conversationId, limit);
+    const history = pruneTranscript(rows, {
+      keepToolTurns: replayTools ? AGENT_HISTORY_TOOL_TURNS : 0,
     });
-    const history: AgentMessage[] = rows.map((r) => ({
-      role: r.role,
-      content: r.content,
-    }));
     const seen = new Map<string, AgentSource>();
     for (const r of rows) {
       if (r.role !== 'assistant') {
@@ -452,8 +456,10 @@ export class RunAgentTurnHandler {
         });
         return;
       }
+      const transcriptToolsOn = await this.transcriptToolsEnabled();
       const { history, knownNotes } = await this.loadConversationContext(
-        input.conversationId
+        input.conversationId,
+        transcriptToolsOn
       );
       // Embed the user's last real message, not the tool-confirmation outcome, for memory retrieval.
       const latestUserContent =
@@ -484,7 +490,8 @@ export class RunAgentTurnHandler {
         callbacks,
         signal,
         this.resumePolicy(input.userId, callbacks),
-        { conversationId: input.conversationId, turnId: randomUUID() }
+        { conversationId: input.conversationId, turnId: randomUUID() },
+        transcriptToolsOn
       );
     }
     callbacks.onError({ code: 'forbidden', message: 'Conversation not found' });
@@ -499,7 +506,8 @@ export class RunAgentTurnHandler {
     >,
     signal: AbortSignal | undefined,
     policy: TurnLoopPolicy,
-    persistence: PersistenceContext | undefined
+    persistence: PersistenceContext | undefined,
+    transcriptToolsOn: boolean
   ): Promise<void> {
     if (signal?.aborted) {
       return;
@@ -650,7 +658,6 @@ export class RunAgentTurnHandler {
         : {}),
     };
 
-    const transcriptToolsOn = await this.transcriptToolsEnabled();
     const turnMessages: AgentMessage[] = [];
     let assistantText = '';
     let persisted = false;
@@ -965,21 +972,26 @@ export class RunAgentTurnHandler {
     const kept: AgentMessage[] = [];
     let usedTokens = 0;
     for (let i = messages.length - 1; i >= 0; i -= 1) {
-      const tokens = estimateTokenCount(messages[i].content);
+      const tokens = estimateMessageTokens(messages[i]);
       if (kept.length > 0 && usedTokens + tokens > AGENT_HISTORY_TOKEN_BUDGET) {
         break;
       }
       kept.unshift(messages[i]);
       usedTokens += tokens;
     }
-    while (kept.length > 1 && kept[0].role !== 'user') {
+    // An empty history is safer than an invalid one, because the provider
+    // refuses a tool_result that has no preceding tool_use.
+    while (kept.length > 0 && kept[0].role !== 'user') {
       kept.shift();
     }
     return kept;
   }
 
   private estimateTokens(messages: readonly AgentMessage[]): number {
-    const text = messages.map((m) => m.content).join('\n');
-    return estimateTokenCount(text) + AGENT_PROMPT_OVERHEAD_TOKENS;
+    const historyTokens = messages.reduce(
+      (total, m) => total + estimateMessageTokens(m),
+      0
+    );
+    return historyTokens + AGENT_PROMPT_OVERHEAD_TOKENS;
   }
 }

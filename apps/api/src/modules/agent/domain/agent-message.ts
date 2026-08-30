@@ -12,12 +12,23 @@ export interface AgentToolCallPart {
   readonly input: unknown;
 }
 
+export const TOOL_OUTPUT_TYPE = [
+  'text',
+  'json',
+  'content',
+  'error-text',
+  'error-json',
+  'execution-denied',
+] as const;
+
+export type ToolOutputType = (typeof TOOL_OUTPUT_TYPE)[number];
+
 export interface AgentToolResultPart {
   readonly type: 'tool-result';
   readonly toolCallId: string;
   readonly toolName: string;
   readonly output: unknown;
-  readonly isError: boolean;
+  readonly outputType: ToolOutputType;
 }
 
 export type AgentMessagePart =

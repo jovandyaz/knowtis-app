@@ -30,6 +30,45 @@ describe('env.config agent vars', () => {
     expect(env.AI_AGENT_MAX_OUTPUT_TOKENS).toBe(8192);
   });
 
+  it('defaults AI_AGENT_HISTORY_LIMIT to 120', () => {
+    const env = validateEnv(baseEnv);
+    expect(env.AI_AGENT_HISTORY_LIMIT).toBe(120);
+  });
+
+  it('accepts AI_AGENT_HISTORY_LIMIT at the min 1 and at the max 400', () => {
+    expect(
+      validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: '1' })
+        .AI_AGENT_HISTORY_LIMIT
+    ).toBe(1);
+    expect(
+      validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: '400' })
+        .AI_AGENT_HISTORY_LIMIT
+    ).toBe(400);
+  });
+
+  it('coerces AI_AGENT_HISTORY_LIMIT from a numeric string', () => {
+    const env = validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: '250' });
+    expect(env.AI_AGENT_HISTORY_LIMIT).toBe(250);
+  });
+
+  it('rejects AI_AGENT_HISTORY_LIMIT of 0 (below min 1)', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: '0' })
+    ).toThrow();
+  });
+
+  it('rejects AI_AGENT_HISTORY_LIMIT of 401 (above max 400)', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: '401' })
+    ).toThrow();
+  });
+
+  it('rejects AI_AGENT_HISTORY_LIMIT of a non-coercible string', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, AI_AGENT_HISTORY_LIMIT: 'abc' })
+    ).toThrow();
+  });
+
   it('defaults AI_AGENT_STALL_MS well below the wall-clock ceiling', () => {
     const env = validateEnv(baseEnv);
     expect(env.AI_AGENT_STALL_MS).toBe(60000);

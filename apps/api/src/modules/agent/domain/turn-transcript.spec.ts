@@ -18,7 +18,7 @@ const result = {
   toolCallId: 'c1',
   toolName: 'getNote',
   output: 'body',
-  isError: false,
+  outputType: 'text' as const,
 };
 const toolStep: readonly AgentMessage[] = [
   { role: 'assistant', content: '', parts: [call] },

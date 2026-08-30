@@ -25,7 +25,7 @@ describe('textOfParts', () => {
           toolCallId: 'c1',
           toolName: 'searchNotes',
           output: { hits: [] },
-          isError: false,
+          outputType: 'json',
         },
       ])
     ).toBe('');

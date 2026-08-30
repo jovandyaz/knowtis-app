@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentEvent } from '../domain/agent-event';
+import type { AgentMessage } from '../domain/agent-message';
 import { drainEvents } from './transcript';
 
 async function* scripted(events: AgentEvent[]): AsyncIterable<AgentEvent> {
@@ -41,7 +42,77 @@ describe('drainEvents', () => {
   it('returns an empty transcript when the stream yields no events', async () => {
     const t = await drainEvents(scripted([]));
 
-    expect(t).toEqual({ text: '', proposal: null, sources: [], error: null });
+    expect(t).toEqual({
+      text: '',
+      proposal: null,
+      sources: [],
+      error: null,
+      stopReason: null,
+      steps: [],
+    });
+  });
+
+  it('captures the stop reason and every step of a done turn in order', async () => {
+    const firstStep: AgentMessage[] = [
+      {
+        role: 'assistant',
+        content: '',
+        parts: [
+          {
+            type: 'tool-call',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            input: { id: 'n1' },
+          },
+        ],
+      },
+    ];
+    const secondStep: AgentMessage[] = [
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            toolName: 'getNote',
+            output: 'body',
+            outputType: 'text',
+          },
+        ],
+      },
+      { role: 'assistant', content: 'done' },
+    ];
+    const t = await drainEvents(
+      scripted([
+        { type: 'step', messages: firstStep },
+        { type: 'chunk', text: 'x' },
+        { type: 'step', messages: secondStep },
+        {
+          type: 'done',
+          usage: USAGE,
+          sources: [],
+          knownNotes: [],
+          webSources: [],
+          stopReason: 'max_steps',
+        },
+      ])
+    );
+
+    expect(t.stopReason).toBe('max_steps');
+    expect(t.steps).toEqual([firstStep, secondStep]);
+  });
+
+  it('leaves the stop reason null when the stream ends without a done event', async () => {
+    const t = await drainEvents(
+      scripted([
+        { type: 'chunk', text: 'partial' },
+        { type: 'aborted', usage: USAGE },
+      ])
+    );
+
+    expect(t.stopReason).toBeNull();
+    expect(t.text).toBe('partial');
   });
 
   it('captures a proposal kind and payload', async () => {

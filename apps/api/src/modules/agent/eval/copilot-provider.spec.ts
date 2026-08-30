@@ -10,6 +10,8 @@ const TRANSCRIPT: EvalTranscript = {
   proposal: null,
   sources: [],
   error: null,
+  stopReason: 'completed',
+  steps: [],
 };
 
 describe('createCopilotProvider', () => {

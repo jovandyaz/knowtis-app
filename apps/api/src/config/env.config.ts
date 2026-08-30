@@ -67,7 +67,7 @@ const envSchemaBase = z.object({
   AI_AGENT_TTFT_MS: z.coerce.number().int().min(1000).default(30000),
   AI_AGENT_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(1).default(8192),
   AI_AGENT_TURN_TOKEN_BUDGET: z.coerce.number().int().min(1000).default(150000),
-  AI_AGENT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(200).default(40),
+  AI_AGENT_HISTORY_LIMIT: z.coerce.number().int().min(1).max(400).default(120),
   AI_MEMORY_QUIET_SECONDS: z.coerce.number().int().min(10).default(180),
   AI_MEMORY_BATCH_SIZE: z.coerce.number().int().min(1).max(200).default(20),
   AI_MEMORY_MAX_PER_USER: z.coerce.number().int().min(1).max(1000).default(100),
