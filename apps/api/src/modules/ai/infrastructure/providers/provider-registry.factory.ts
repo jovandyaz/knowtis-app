@@ -12,6 +12,25 @@ import { AI_PROVIDERS, type AIProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 
+/**
+ * `@openrouter/ai-sdk-provider@3.0.0` omits `specificationVersion` on the
+ * provider object (its models do declare 'v4'), so the AI SDK registry
+ * duck-types it as a legacy provider and double-adapts the already-v4 models —
+ * corrupting usage (inputTokens becomes '[object Object]') and response
+ * messages. Declare the version ourselves until upstream ships it.
+ */
+function asV4Provider(
+  provider: ReturnType<typeof createOpenRouter>
+): ReturnType<typeof createOpenRouter> & { specificationVersion: 'v4' } {
+  return Object.assign(
+    ((modelId: string) => provider(modelId)) as ReturnType<
+      typeof createOpenRouter
+    >,
+    provider,
+    { specificationVersion: 'v4' as const }
+  );
+}
+
 export class ProviderNotConfiguredError extends Error {
   constructor(message: string) {
     super(message);
@@ -276,7 +295,11 @@ export class ProviderRegistryFactory implements OnModuleInit {
       ...(googleKey ? { google: createGoogle({ apiKey: googleKey }) } : {}),
       ...(openaiKey ? { openai: createOpenAI({ apiKey: openaiKey }) } : {}),
       ...(openrouterKey
-        ? { openrouter: createOpenRouter({ apiKey: openrouterKey }) }
+        ? {
+            openrouter: asV4Provider(
+              createOpenRouter({ apiKey: openrouterKey })
+            ),
+          }
         : {}),
     });
   }

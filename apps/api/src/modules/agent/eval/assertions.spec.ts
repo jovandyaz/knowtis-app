@@ -18,6 +18,7 @@ function transcript(partial: Partial<EvalTranscript>): EvalTranscript {
     sources: [],
     error: null,
     stopReason: null,
+    servedModel: null,
     steps: [],
     ...partial,
   };
