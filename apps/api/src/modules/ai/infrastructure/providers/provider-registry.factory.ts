@@ -22,6 +22,7 @@ const shimLogger = new Logger('OpenRouterProviderShim');
  * corrupting usage (inputTokens becomes '[object Object]') and response
  * messages. Declare the version ourselves, but defer to upstream the moment it
  * declares one so a future spec is never mislabelled as v4.
+ * Reported: https://github.com/OpenRouterTeam/ai-sdk-provider/issues/541
  */
 function asV4Provider(provider: ReturnType<typeof createOpenRouter>) {
   if ('specificationVersion' in provider) {
