@@ -227,6 +227,26 @@ describe('AIStructuredOutputSDKProvider', () => {
     );
   });
 
+  it('should redact content when the caller provides no telemetry', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider();
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telemetry: {
+          isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
+          functionId: 'structured-output',
+        },
+      })
+    );
+  });
+
   it('should retry with AI_FALLBACK_MODEL when the primary fails', async () => {
     const { generateText } = vi.mocked(await import('ai'));
     generateText.mockRejectedValueOnce(new Error('primary down'));
