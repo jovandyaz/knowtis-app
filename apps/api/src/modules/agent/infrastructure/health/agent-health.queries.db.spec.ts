@@ -20,6 +20,7 @@ import {
   type PersistedParts,
   type ToolOutputType,
 } from '../../domain/agent-message';
+import type { AgentHealthWindowStats } from './agent-health.evaluator';
 import { AgentHealthQueries } from './agent-health.queries';
 
 const USER = '00000000-0000-4000-8000-000000000181';
@@ -44,6 +45,8 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
   let moduleRef: TestingModule;
   let db: Database;
   let queries: AgentHealthQueries;
+  let since: Date;
+  let baseline: AgentHealthWindowStats;
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -71,7 +74,13 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
       .onConflictDoNothing();
     await db
       .insert(conversations)
-      .values({ id: CONVERSATION, userId: USER, title: 'health window' });
+      .values({ id: CONVERSATION, userId: USER, title: 'health window' })
+      .onConflictDoNothing();
+
+    // The queries aggregate globally, so a shared dev DB with recent agent
+    // activity would break exact counts; assert the delta over this baseline.
+    since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    baseline = await queries.collectWindowStats(since);
 
     const outOfWindow = new Date(Date.now() - 48 * 60 * 60 * 1000);
     await db.insert(conversationMessages).values([
@@ -149,9 +158,13 @@ describe.runIf(DB_AVAILABLE)('AgentHealthQueries', () => {
   });
 
   it('counts tool results, tool errors, stop turns, and anomalous stops inside the window', async () => {
-    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const stats = await queries.collectWindowStats(since);
-    expect(stats).toEqual({
+    expect({
+      toolCalls: stats.toolCalls - baseline.toolCalls,
+      toolErrors: stats.toolErrors - baseline.toolErrors,
+      stopTurns: stats.stopTurns - baseline.stopTurns,
+      anomalousStops: stats.anomalousStops - baseline.anomalousStops,
+    }).toEqual({
       toolCalls: 3,
       toolErrors: 1,
       stopTurns: 3,
