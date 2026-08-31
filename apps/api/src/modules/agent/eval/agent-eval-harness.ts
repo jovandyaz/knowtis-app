@@ -9,6 +9,7 @@ import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
 import { DatabaseModule } from '../../../database';
+import { FallbackChainService } from '../../ai/infrastructure/providers/fallback-chain.service';
 import { AgentModule } from '../agent.module';
 import type { AgentMessage } from '../domain/agent-message';
 import {
@@ -19,7 +20,10 @@ import { PENDING_MUTATION_STORE } from '../domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from '../domain/ports/retrieval.port';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
-import { assertPinnedModelServed } from './pinned-model';
+import {
+  assertPinnedModelAvailable,
+  assertPinnedModelServed,
+} from './pinned-model';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 import { drainEvents, type EvalTranscript } from './transcript';
 
@@ -34,6 +38,7 @@ export class AgentEvalHarness {
   private constructor(
     private readonly moduleRef: TestingModule,
     private readonly orchestrator: AgentOrchestrator,
+    private readonly fallbackChain: FallbackChainService,
     private readonly retrieval: RecordingFixtureRetrieval,
     private readonly maxSteps: number,
     private readonly maxTurnTokens: number
@@ -79,6 +84,9 @@ export class AgentEvalHarness {
           strict: false,
         }
       );
+      const fallbackChain = moduleRef.get(FallbackChainService, {
+        strict: false,
+      });
       const config = moduleRef.get<ConfigService<EnvConfig, true>>(
         ConfigService,
         { strict: false }
@@ -89,6 +97,7 @@ export class AgentEvalHarness {
       return new AgentEvalHarness(
         moduleRef,
         orchestrator,
+        fallbackChain,
         retrieval,
         maxSteps,
         maxTurnTokens
@@ -105,6 +114,7 @@ export class AgentEvalHarness {
     fixtureSet: NoteFixtureSetName,
     model: string
   ): Promise<EvalTranscript> {
+    assertPinnedModelAvailable(this.fallbackChain.candidatesFor(model), model);
     this.retrieval.seed(resolveFixtureSet(fixtureSet));
     const events = this.orchestrator.run({
       userId: EVAL_USER_ID,

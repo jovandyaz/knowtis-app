@@ -313,7 +313,7 @@ export async function* runStepCall(
     if (stalled) {
       return { kind: STEP_CALL_KIND.STALLED, health, callStartedAt };
     }
-    const usage = await result.totalUsage;
+    const usage = await result.usage;
     return {
       kind: STEP_CALL_KIND.COMPLETED,
       finishReason: health.finishReason,

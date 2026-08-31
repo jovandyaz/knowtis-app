@@ -55,7 +55,7 @@ vi.mock('ai', async (importOriginal) => {
             yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
             yield { type: 'text-delta', id: 't1', text: 'Hello' };
           })(),
-          totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+          usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
           response: Promise.resolve({ messages: [] }),
         };
       }
@@ -306,13 +306,13 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
           throw new Error('provider exploded');
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -437,13 +437,13 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
           throw new Error('provider exploded');
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -830,7 +830,7 @@ describe('AiSdkAgentOrchestrator', () => {
           controller.abort();
           throw new DOMException('aborted', 'AbortError');
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       })
     );
     const orchestrator = makeOrchestrator();
@@ -863,7 +863,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'partial' };
           controller.abort();
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       })
     );
     const orchestrator = makeOrchestrator();
@@ -897,7 +897,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'partial' };
           throw new Error('boom');
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       })
     );
     const orchestrator = makeOrchestrator();
@@ -928,7 +928,7 @@ describe('AiSdkAgentOrchestrator', () => {
           await new Promise((resolve) => setTimeout(resolve, 30));
           throw new DOMException('aborted', 'AbortError');
         })(),
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       })
     );
     const orchestrator = makeOrchestrator(makeConfig({ AI_AGENT_MAX_MS: 5 }));
@@ -966,7 +966,7 @@ describe('AiSdkAgentOrchestrator', () => {
           });
         });
       })(),
-      totalUsage: new Promise(() => {}),
+      usage: new Promise(() => {}),
     });
   }
 
@@ -981,7 +981,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -1089,7 +1089,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   // The real SDK ends an aborted stream by enqueuing an abort part and closing,
-  // never by rejecting; totalUsage settles so the after-loop check is the exit.
+  // never by rejecting; usage settles so the after-loop check is the exit.
   function abortsGracefullyAfter(parts: readonly unknown[]) {
     return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
       stream: (async function* () {
@@ -1107,7 +1107,7 @@ describe('AiSdkAgentOrchestrator', () => {
         });
         yield { type: 'abort' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 9, outputTokens: 9 }),
+      usage: Promise.resolve({ inputTokens: 9, outputTokens: 9 }),
       response: Promise.resolve({ messages: [] }),
     });
   }
@@ -1125,7 +1125,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -1210,7 +1210,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'Hello' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -1244,7 +1244,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -1285,7 +1285,7 @@ describe('AiSdkAgentOrchestrator', () => {
         );
         yield { type: 'text-delta', id: 't2', text: ' world' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -1320,7 +1320,7 @@ describe('AiSdkAgentOrchestrator', () => {
           },
         }),
       },
-      totalUsage: new Promise(() => {}),
+      usage: new Promise(() => {}),
     });
   }
 
@@ -1384,7 +1384,7 @@ describe('AiSdkAgentOrchestrator', () => {
         }
         yield { type: 'text-delta', id: 't1', text: 'done thinking' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -1406,7 +1406,7 @@ describe('AiSdkAgentOrchestrator', () => {
           next: () => Promise.reject(new Error('primary down')),
         }),
       },
-      totalUsage: new Promise(() => {}),
+      usage: new Promise(() => {}),
     }));
     const orchestrator = makeOrchestrator();
 
@@ -1457,7 +1457,7 @@ describe('AiSdkAgentOrchestrator', () => {
             },
           }),
         },
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       })
     );
     const orchestrator = makeOrchestrator();
@@ -1484,7 +1484,7 @@ describe('AiSdkAgentOrchestrator', () => {
           },
         }),
       },
-      totalUsage: new Promise(() => {}),
+      usage: new Promise(() => {}),
     }));
     const orchestrator = makeOrchestrator();
 
@@ -1536,7 +1536,7 @@ describe('AiSdkAgentOrchestrator', () => {
           next: () => Promise.reject(new Error('primary down')),
         }),
       },
-      totalUsage: new Promise(() => {}),
+      usage: new Promise(() => {}),
     }));
     const orchestrator = makeOrchestrator(
       makeConfig(),
@@ -1586,7 +1586,7 @@ describe('AiSdkAgentOrchestrator', () => {
       stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     };
   }
@@ -1684,7 +1684,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(typeof opts?.instructions).toBe('string');
   });
 
-  // The no-op handler keeps the SDK's totalUsage rejection from surfacing as an
+  // The no-op handler keeps the SDK's usage rejection from surfacing as an
   // unhandled rejection when the turn fails over before awaiting it.
   function rejectedUsage(message: string) {
     const usage = Promise.reject(new Error(message));
@@ -1709,7 +1709,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'error', error: new Error('late provider hiccup') };
         })(),
-        totalUsage: Promise.resolve({
+        usage: Promise.resolve({
           inputTokens: 100,
           outputTokens: 10,
           inputTokenDetails: { cacheReadTokens: 60, cacheWriteTokens: 20 },
@@ -1744,7 +1744,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'error', error: new Error('upstream refused') };
         })(),
-        totalUsage: rejectedUsage(
+        usage: rejectedUsage(
           'No output generated. Check the stream for errors.'
         ),
       }))
@@ -1752,7 +1752,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator();
@@ -1773,9 +1773,7 @@ describe('AiSdkAgentOrchestrator', () => {
       stream: (async function* () {
         yield { type: 'error', error: new Error('upstream refused') };
       })(),
-      totalUsage: rejectedUsage(
-        'No output generated. Check the stream for errors.'
-      ),
+      usage: rejectedUsage('No output generated. Check the stream for errors.'),
     }));
     const orchestrator = makeOrchestrator(
       makeConfig(),
@@ -1812,7 +1810,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'error', error: 'text part t9 not found' };
           yield { type: 'text-delta', id: 't1', text: ' after' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 7, outputTokens: 4 }),
+        usage: Promise.resolve({ inputTokens: 7, outputTokens: 4 }),
         response: Promise.resolve({ messages: [] }),
       })
     );
@@ -1841,9 +1839,7 @@ describe('AiSdkAgentOrchestrator', () => {
           },
         };
       })(),
-      totalUsage: rejectedUsage(
-        'No output generated. Check the stream for errors.'
-      ),
+      usage: rejectedUsage('No output generated. Check the stream for errors.'),
     }));
     const orchestrator = makeOrchestrator(
       makeConfig(),
@@ -1861,13 +1857,13 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(error.message).toContain('overloaded');
   });
 
-  it('carries cache read/write tokens from totalUsage into the done event', async () => {
+  it('carries cache read/write tokens from usage into the done event', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
       stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
-      totalUsage: Promise.resolve({
+      usage: Promise.resolve({
         inputTokens: 100,
         outputTokens: 10,
         inputTokenDetails: { cacheReadTokens: 60, cacheWriteTokens: 20 },
@@ -1915,7 +1911,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -1970,14 +1966,14 @@ describe('AiSdkAgentOrchestrator', () => {
             next: () => Promise.reject(new Error('primary down')),
           }),
         },
-        totalUsage: new Promise(() => {}),
+        usage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
         stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'Hello' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2027,7 +2023,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2053,7 +2049,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'reasoning-delta', id: 'r2', text: 'still thinking' };
         yield { type: 'finish', finishReason: 'length' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 4096 }),
+      usage: Promise.resolve({ inputTokens: 10, outputTokens: 4096 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2092,7 +2088,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 0 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -2121,7 +2117,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'reasoning-delta', id: 'r1', text: 'deciding' };
         yield { type: 'finish', finishReason: 'length' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 2, outputTokens: 4096 }),
+      usage: Promise.resolve({ inputTokens: 2, outputTokens: 4096 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const registry = makeToolRegistry((ctx) => {
@@ -2153,7 +2149,7 @@ describe('AiSdkAgentOrchestrator', () => {
         };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2180,7 +2176,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2236,7 +2232,7 @@ describe('AiSdkAgentOrchestrator', () => {
         stream: (async function* () {
           yield { type: 'finish', finishReason: 'tool-calls' };
         })(),
-        totalUsage: Promise.resolve(usage),
+        usage: Promise.resolve(usage),
         response: Promise.resolve({ messages: TOOL_CALL_MESSAGES }),
       };
     };
@@ -2253,7 +2249,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -2290,7 +2286,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const logSpy = vi.spyOn(Logger.prototype, 'log');
@@ -2326,7 +2322,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 8 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -2367,7 +2363,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve(usage),
+      usage: Promise.resolve(usage),
       response: Promise.resolve({ messages: [] }),
     });
   }
@@ -2463,7 +2459,7 @@ describe('AiSdkAgentOrchestrator', () => {
               };
               yield { type: 'finish', finishReason: 'tool-calls' };
             })(),
-            totalUsage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
+            usage: Promise.resolve({ inputTokens: 10, outputTokens: 5 }),
             response: Promise.resolve({
               messages: [
                 assistantWithReasoning,
@@ -2512,7 +2508,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
           yield { type: 'finish', finishReason: 'length' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
+        usage: Promise.resolve({ inputTokens: 20, outputTokens: 4096 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const orchestrator = makeOrchestrator(
@@ -2844,7 +2840,7 @@ describe('AiSdkAgentOrchestrator', () => {
       stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const config = makeConfig();
@@ -2875,7 +2871,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
         response: Promise.resolve({ messages: [] }),
       }));
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
@@ -2944,7 +2940,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'searching…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -2967,7 +2963,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'respuesta cortada' };
         yield { type: 'finish', finishReason: 'length' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -2995,7 +2991,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'no puedo con eso' };
         yield { type: 'finish', finishReason: 'content-filter' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -3024,7 +3020,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'leyendo notas…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 4000, outputTokens: 1000 }),
+      usage: Promise.resolve({ inputTokens: 4000, outputTokens: 1000 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -3061,7 +3057,7 @@ describe('AiSdkAgentOrchestrator', () => {
           };
           yield { type: 'finish', finishReason: 'tool-calls' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 5, outputTokens: 1 }),
+        usage: Promise.resolve({ inputTokens: 5, outputTokens: 1 }),
         response: Promise.resolve({
           messages: [
             {
@@ -3094,7 +3090,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'N1 says hi' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve({ inputTokens: 5, outputTokens: 2 }),
+        usage: Promise.resolve({ inputTokens: 5, outputTokens: 2 }),
         response: Promise.resolve({
           messages: [
             {
@@ -3164,7 +3160,7 @@ describe('AiSdkAgentOrchestrator', () => {
           yield { type: 'text-delta', id: 't1', text: 'ok' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
-        totalUsage: Promise.resolve(usage),
+        usage: Promise.resolve(usage),
         response: Promise.resolve({ messages: [] }),
       }));
       const orchestrator = makeOrchestrator();
@@ -3189,7 +3185,7 @@ describe('AiSdkAgentOrchestrator', () => {
         yield { type: 'text-delta', id: 't1', text: 'ok' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -3215,7 +3211,7 @@ describe('AiSdkAgentOrchestrator', () => {
         };
         yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();
@@ -3252,7 +3248,7 @@ describe('AiSdkAgentOrchestrator', () => {
         };
         yield { type: 'text-delta', id: 't1', text: 'done anyway' };
       })(),
-      totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
       response: Promise.resolve({ messages: [] }),
     }));
     const orchestrator = makeOrchestrator();

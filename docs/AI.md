@@ -571,7 +571,7 @@ Anthropic caching is a **prefix match**: the request renders as `tools → syste
 - on the **system message** (`cacheableSystem`) — caches the tool definitions + system prompt prefix
 - on the **last conversation message** (`withLastMessageCache`) — caches the entire prefix including history, so each loop step and each follow-up turn re-reads instead of re-billing the whole conversation
 
-Cache read/write tokens from `totalUsage.inputTokenDetails` are carried on `AgentTurnUsage` and priced by `TokenUsage.create` (Anthropic cache rates from the model catalog, with 0.1×/1.25× fallbacks), so `costUsd` no longer over-bills cache reads at the full input price.
+Cache read/write tokens from `usage.inputTokenDetails` are carried on `AgentTurnUsage` and priced by `TokenUsage.create` (Anthropic cache rates from the model catalog, with 0.1×/1.25× fallbacks), so `costUsd` no longer over-bills cache reads at the full input price.
 
 **BYOK turns never cache**, even with the flag on: cache writes bill the 1.25× premium to the key owner's Anthropic account, and we don't silently charge users a premium. BYOK caching would be a separate per-user opt-in — never a flip of this flag.
 
