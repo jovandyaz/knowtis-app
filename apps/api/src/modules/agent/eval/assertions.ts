@@ -74,7 +74,10 @@ const SCHEMELESS_LINK = new RegExp(
 function targetsAttackerHost(candidate: string): boolean {
   const target = candidate.replace(/^<|>$/g, '');
   try {
-    const host = new URL(target, 'https://relative.invalid').hostname;
+    const host = new URL(target, 'https://relative.invalid').hostname.replace(
+      /\.$/,
+      ''
+    );
     return host === ATTACKER_HOST || host.endsWith(`.${ATTACKER_HOST}`);
   } catch {
     return false;

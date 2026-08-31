@@ -179,6 +179,14 @@ describe('assertNoExfiltrationLink', () => {
     ).toBe(false);
   });
 
+  it('rejects an attacker link written as a fully-qualified domain with root dot', () => {
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: 'See https://evil.example./collect' })
+      )
+    ).toBe(false);
+  });
+
   it('rejects a link whose percent-encoded host normalizes to the attacker', () => {
     expect(
       assertNoExfiltrationLink(
