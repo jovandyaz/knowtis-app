@@ -159,20 +159,20 @@ describe('ModelPreferenceService', () => {
 
   it('effective default accepts a stored model unlocked by a BYOK key', async () => {
     const { svc } = make(
-      'google:gemini-3.5-flash',
+      'google:gemini-3.7-flash',
       [SYSTEM_DEFAULT],
       ['google']
     );
-    expect(await svc.getEffectiveDefault('u1')).toBe('google:gemini-3.5-flash');
+    expect(await svc.getEffectiveDefault('u1')).toBe('google:gemini-3.7-flash');
   });
 
   it('setUserPreferences accepts a model unlocked by a BYOK key', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT], ['google']);
     await svc.setUserPreferences('u1', {
-      preferredModel: 'google:gemini-3.5-flash',
+      preferredModel: 'google:gemini-3.7-flash',
     });
     expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
-      preferredModel: 'google:gemini-3.5-flash',
+      preferredModel: 'google:gemini-3.7-flash',
     });
   });
 
@@ -212,8 +212,8 @@ describe('ModelPreferenceService', () => {
 
   it('effective default swaps both a gated stored model and a gated system default for an accessible model', async () => {
     const { svc } = make(
-      'anthropic:claude-opus-4-8',
-      ['anthropic:claude-opus-4-8'],
+      'anthropic:claude-opus-5',
+      ['anthropic:claude-opus-5'],
       [],
       true
     );
@@ -232,27 +232,25 @@ describe('ModelPreferenceService', () => {
 
   it('effective default keeps the stored model when the caller holds its provider key under gating', async () => {
     const { svc } = make(
-      'anthropic:claude-opus-4-8',
-      ['anthropic:claude-opus-4-8'],
+      'anthropic:claude-opus-5',
+      ['anthropic:claude-opus-5'],
       ['anthropic'],
       true
     );
-    expect(await svc.getEffectiveDefault('u1')).toBe(
-      'anthropic:claude-opus-4-8'
-    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('anthropic:claude-opus-5');
   });
 
   it('isSelectableWith threads tier gating into the selectability check', async () => {
-    const { svc } = make(null, ['anthropic:claude-opus-4-8']);
+    const { svc } = make(null, ['anthropic:claude-opus-5']);
     await expect(
-      svc.isSelectableWith('anthropic:claude-opus-4-8', new Set(), false)
+      svc.isSelectableWith('anthropic:claude-opus-5', new Set(), false)
     ).resolves.toBe(true);
     await expect(
-      svc.isSelectableWith('anthropic:claude-opus-4-8', new Set(), true)
+      svc.isSelectableWith('anthropic:claude-opus-5', new Set(), true)
     ).resolves.toBe(false);
     await expect(
       svc.isSelectableWith(
-        'anthropic:claude-opus-4-8',
+        'anthropic:claude-opus-5',
         new Set(['anthropic']),
         true
       )
@@ -288,17 +286,29 @@ describe('ModelPreferenceService', () => {
   it('effective default prefers a BYOK model of the intent tier over its ai_config key', async () => {
     const { svc } = make(
       null,
-      ['anthropic:claude-opus-4-8', 'openrouter:deep-mock'],
+      ['anthropic:claude-opus-5', 'openrouter:deep-mock'],
       ['anthropic'],
       false,
       OPEN_FALLBACK,
       'powerful',
       INTENT_MODELS,
-      () => 'anthropic:claude-opus-4-8'
+      () => 'anthropic:claude-opus-5'
     );
-    expect(await svc.getEffectiveDefault('u1')).toBe(
-      'anthropic:claude-opus-4-8'
+    expect(await svc.getEffectiveDefault('u1')).toBe('anthropic:claude-opus-5');
+  });
+
+  it('effective default ignores the BYOK tier pick when the user never stored an intent', async () => {
+    const { svc } = make(
+      null,
+      [SYSTEM_DEFAULT],
+      ['anthropic'],
+      false,
+      OPEN_FALLBACK,
+      null,
+      INTENT_MODELS,
+      (tier) => (tier === 'balanced' ? 'anthropic:claude-haiku-4-5' : null)
     );
+    expect(await svc.getEffectiveDefault('u1')).toBe(SYSTEM_DEFAULT);
   });
 
   it('effective default keeps an explicit BYOK stored model above the intent', async () => {
@@ -360,17 +370,15 @@ describe('ModelPreferenceService', () => {
   it('effective default keeps the BYOK model of the intent tier under gating', async () => {
     const { svc, aiConfig } = make(
       null,
-      ['anthropic:claude-opus-4-8'],
+      ['anthropic:claude-opus-5'],
       ['anthropic'],
       true,
       OPEN_FALLBACK,
       'powerful',
       INTENT_MODELS,
-      () => 'anthropic:claude-opus-4-8'
+      () => 'anthropic:claude-opus-5'
     );
-    expect(await svc.getEffectiveDefault('u1')).toBe(
-      'anthropic:claude-opus-4-8'
-    );
+    expect(await svc.getEffectiveDefault('u1')).toBe('anthropic:claude-opus-5');
     expect(aiConfig.getIntentModel).not.toHaveBeenCalled();
   });
 

@@ -65,7 +65,7 @@ const grantedModels = [
 const lockedModel = {
   id: 'x:premium',
   label: 'Premium One',
-  descriptionKey: 'aiModels.gpt56',
+  descriptionKey: 'aiModels.gpt56Sol',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
@@ -77,7 +77,7 @@ const lockedModel = {
 const byokModel = {
   id: 'o:byok',
   label: 'Byok One',
-  descriptionKey: 'aiModels.gpt56',
+  descriptionKey: 'aiModels.gpt56Sol',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,

@@ -156,14 +156,14 @@ describe('FallbackChainService', () => {
 
       expect(candidates).toEqual([
         'anthropic:claude-sonnet-5',
-        'anthropic:claude-haiku-4-5-20251001',
+        'anthropic:claude-haiku-4-5',
       ]);
     });
 
     it('should apply a runtime chain override from the source after the first request', async () => {
       // The anthropic-only override drops openai:gpt-4o-mini from the env seed.
       const { service, chainSource } = buildWithSource(
-        async () => ['anthropic:claude-haiku-4-5-20251001'],
+        async () => ['anthropic:claude-haiku-4-5'],
         { OPENAI_API_KEY: 'test-key' }
       );
 
@@ -216,7 +216,7 @@ describe('FallbackChainService', () => {
         });
         const responses = [
           stale,
-          Promise.resolve(['anthropic:claude-haiku-4-5-20251001']),
+          Promise.resolve(['anthropic:claude-haiku-4-5']),
         ];
         let call = 0;
         const { service } = buildWithSource(
@@ -242,7 +242,7 @@ describe('FallbackChainService', () => {
 
     it('should coalesce rapid calls into a single refresh within the TTL', () => {
       const { service, chainSource } = buildWithSource(
-        async () => ['anthropic:claude-haiku-4-5-20251001'],
+        async () => ['anthropic:claude-haiku-4-5'],
         { OPENAI_API_KEY: 'test-key' }
       );
 

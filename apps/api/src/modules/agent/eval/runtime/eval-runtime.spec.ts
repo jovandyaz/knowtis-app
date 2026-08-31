@@ -13,9 +13,9 @@ describe('resolveEvalModel', () => {
   });
 
   it('returns the env value when set', () => {
-    process.env[KEY] = 'anthropic:claude-haiku-4-5-20251001';
+    process.env[KEY] = 'anthropic:claude-haiku-4-5';
     expect(resolveEvalModel(KEY, 'fallback')).toBe(
-      'anthropic:claude-haiku-4-5-20251001'
+      'anthropic:claude-haiku-4-5'
     );
   });
 

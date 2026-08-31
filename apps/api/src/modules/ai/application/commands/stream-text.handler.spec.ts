@@ -88,12 +88,8 @@ describe('StreamTextHandler', () => {
       getDefaultModel: vi
         .fn()
         .mockResolvedValue('anthropic:claude-sonnet-4-20250514'),
-      getFastModel: vi
-        .fn()
-        .mockResolvedValue('anthropic:claude-haiku-4-5-20251001'),
-      getFallbackModel: vi
-        .fn()
-        .mockResolvedValue('anthropic:claude-haiku-4-5-20251001'),
+      getFastModel: vi.fn().mockResolvedValue('anthropic:claude-haiku-4-5'),
+      getFallbackModel: vi.fn().mockResolvedValue('anthropic:claude-haiku-4-5'),
       setConfig: vi.fn().mockResolvedValue(undefined),
     } as unknown as AIConfigService;
     const promptLoader = new PromptLoaderService(

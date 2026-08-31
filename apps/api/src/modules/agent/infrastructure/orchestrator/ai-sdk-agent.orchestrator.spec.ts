@@ -64,7 +64,7 @@ vi.mock('ai', async (importOriginal) => {
 });
 
 const MODEL = 'anthropic:claude-sonnet-4-20250514';
-const FALLBACK = 'anthropic:claude-haiku-4-5-20251001';
+const FALLBACK = 'anthropic:claude-haiku-4-5';
 const STALL_MS = 60000;
 const TTFT_MS = STALL_MS / 2;
 
@@ -1416,7 +1416,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const retryModel = streamTextMock.mock.calls.at(-1)?.[0].model as {
       modelId: string;
     };
-    expect(retryModel.modelId).toBe('claude-haiku-4-5-20251001');
+    expect(retryModel.modelId).toBe('claude-haiku-4-5');
     expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
     expect(events.at(-1)).toMatchObject({
       type: 'done',
@@ -2404,7 +2404,7 @@ describe('AiSdkAgentOrchestrator', () => {
       'claude-sonnet-4-20250514',
       'claude-sonnet-4-20250514',
       'claude-sonnet-4-20250514',
-      'claude-haiku-4-5-20251001',
+      'claude-haiku-4-5',
     ]);
     // The failover call runs the intact threaded history — the tool call and its
     // result — never a partial and never a re-executed tool step.

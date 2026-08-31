@@ -17,8 +17,8 @@ import { createMockConfig } from '../../testing/create-mock-config';
 import { AIConfigService, InvalidAIConfigError } from './ai-config.service';
 
 const CUSTOM_MODEL = 'anthropic:claude-sonnet-5';
-const CUSTOM_FAST = 'anthropic:claude-haiku-4-5-20251001';
-const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini';
+const CUSTOM_FAST = 'anthropic:claude-haiku-4-5';
+const A_VALID_CHAIN = 'anthropic:claude-haiku-4-5,openai:gpt-4o-mini';
 const ACTOR = 'admin-user-id';
 const PROMOTED_ID = 'openrouter:vendor/promoted-one';
 const UNKNOWN_ID = 'openrouter:vendor/unknown-one';
@@ -331,8 +331,7 @@ describe('AIConfigService', () => {
   });
 
   it('should not call a chain stale over whitespace the parser already ignores', async () => {
-    const chain =
-      'anthropic:claude-sonnet-5, anthropic:claude-haiku-4-5-20251001';
+    const chain = 'anthropic:claude-sonnet-5, anthropic:claude-haiku-4-5';
     mockRepo.getAllRows.mockResolvedValue([
       {
         key: 'ai_fallback_chain',
@@ -623,7 +622,7 @@ describe('AIConfigService', () => {
 
     it('should drop chain models the catalog no longer supports', async () => {
       mockRepo.get.mockResolvedValue(
-        'anthropic:claude-haiku-4-5-20251001,openai:ghost-model'
+        'anthropic:claude-haiku-4-5,openai:ghost-model'
       );
       mockCatalog.isSupported.mockImplementation(
         (id: string) => id !== 'openai:ghost-model'
@@ -631,7 +630,7 @@ describe('AIConfigService', () => {
 
       const chain = await service.getFallbackChain();
 
-      expect(chain).toEqual(['anthropic:claude-haiku-4-5-20251001']);
+      expect(chain).toEqual(['anthropic:claude-haiku-4-5']);
     });
 
     it('should persist a valid chain', async () => {
@@ -657,7 +656,7 @@ describe('AIConfigService', () => {
       await expect(
         service.setConfig(
           'ai_fallback_chain',
-          'anthropic:claude-haiku-4-5-20251001,openai:ghost-model',
+          'anthropic:claude-haiku-4-5,openai:ghost-model',
           ACTOR
         )
       ).rejects.toThrow('openai:ghost-model');
