@@ -49,8 +49,6 @@ export async function drainEvents(
       case 'step':
         steps.push(event.messages);
         break;
-      case 'committed':
-        break;
       case 'aborted':
         break;
       case 'error':

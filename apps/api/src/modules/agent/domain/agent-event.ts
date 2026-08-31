@@ -45,7 +45,6 @@ export type AgentEvent =
       readonly proposal: ProposedMutation;
       readonly usage: AgentTurnUsage;
     }
-  | { readonly type: 'committed'; readonly result: AgentCommitResult }
   | { readonly type: 'aborted'; readonly usage: AgentTurnUsage }
   | {
       readonly type: 'error';

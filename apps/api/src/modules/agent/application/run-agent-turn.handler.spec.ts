@@ -3581,50 +3581,6 @@ describe('RunAgentTurnHandler', () => {
     ]);
   });
 
-  it('reconciles the reservation and completes once when a resume turn stops on a committed event', async () => {
-    const { rateLimit, config, pendingStore } = makeDeps({});
-    const orchestrator = orchestratorYielding([
-      {
-        type: 'committed',
-        result: { noteId: 'n1', title: 'GTD', kind: 'create' },
-      },
-    ]);
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      makeModelPreference(),
-      makeByok(),
-      makeGuard(),
-      makeAIConfig()
-    );
-    const onDone = vi.fn();
-
-    await handler.resumeTurn(
-      {
-        userId: USER,
-        conversationId: 'conv-1',
-        resume: { toolName: 'proposeCreateNote', outcome: 'created' },
-      },
-      { onChunk: vi.fn(), onDone, onError: vi.fn() }
-    );
-
-    expect(rateLimit.releaseReservation).toHaveBeenCalledTimes(1);
-    expect(rateLimit.releaseReservation).toHaveBeenCalledWith(
-      USER,
-      expect.any(Number),
-      expect.any(Number),
-      undefined
-    );
-    expect(onDone).toHaveBeenCalledTimes(1);
-  });
-
   it('reports the error without releasing when a BYOK turn throws a non-abort error', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const throwingOrchestrator: AgentOrchestrator = {

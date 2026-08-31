@@ -10,9 +10,6 @@
       "type": "local",
       "command": ["pnpm", "exec", "nx", "mcp"],
       "enabled": true
-    },
-    "pencil": {
-      "enabled": false
     }
   },
   "tool_output": {

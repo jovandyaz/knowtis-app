@@ -119,7 +119,6 @@ interface TurnLoopPolicy {
     event: { proposal: ProposedMutation; usage: AgentTurnUsage },
     ctx: TurnLoopContext
   ) => Promise<TurnEventOutcome>;
-  readonly onCommitted: (ctx: TurnLoopContext) => TurnEventOutcome;
 }
 
 const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
@@ -186,7 +185,6 @@ export class RunAgentTurnHandler {
         callbacks.onProposal(event.proposal);
         return 'stop';
       },
-      onCommitted: () => 'continue',
     };
   }
 
@@ -392,19 +390,6 @@ export class RunAgentTurnHandler {
           outputTokens: event.usage.outputTokens,
           model: event.usage.model,
           costUsd,
-          sources: [],
-          knownNotes: [],
-          webSources: [],
-          stopReason: AGENT_STOP_REASON.COMPLETED,
-        });
-        return 'stop';
-      },
-      onCommitted: (ctx) => {
-        callbacks.onDone({
-          inputTokens: 0,
-          outputTokens: 0,
-          model: ctx.model,
-          costUsd: 0,
           sources: [],
           knownNotes: [],
           webSources: [],
@@ -745,17 +730,6 @@ export class RunAgentTurnHandler {
             break;
           case 'step':
             turnMessages.push(...event.messages);
-            break;
-          case 'committed':
-            if (policy.onCommitted(ctx) === 'stop') {
-              await this.recordUsageSafe(input.userId, ctx, {
-                inputTokens: 0,
-                outputTokens: 0,
-                model: ctx.model,
-              });
-              ctx.reconciled = true;
-              return;
-            }
             break;
           default: {
             const _exhaustive: never = event;
