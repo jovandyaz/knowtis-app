@@ -1,3 +1,6 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+
 import type {
   ApiProvider,
   Assertion,
@@ -14,6 +17,7 @@ export interface EvalSuiteConfig {
     readonly assert: Assertion[];
   }>;
   readonly defaultTest?: { readonly options?: { readonly provider?: string } };
+  readonly outputPath?: string;
 }
 
 export function createStructuredProvider<TVars, TOut>(
@@ -43,6 +47,48 @@ export function resolveEvalTrials(): number {
   return Number.isInteger(parsed) && parsed >= 1 ? parsed : 1;
 }
 
+export interface EvalOutputTarget {
+  readonly dir: string;
+  readonly nativePath: string;
+  readonly summaryPath: string;
+}
+
+export async function prepareEvalOutput(
+  suiteName: string
+): Promise<EvalOutputTarget | null> {
+  const raw = process.env['AI_EVAL_OUTPUT_DIR'];
+  if (!raw || !raw.trim()) {
+    return null;
+  }
+  const dir = resolve(raw.trim());
+  await mkdir(dir, { recursive: true });
+  return {
+    dir,
+    nativePath: join(dir, `${suiteName}.json`),
+    summaryPath: join(dir, `${suiteName}.summary.json`),
+  };
+}
+
+export async function writeEvalSummary(
+  target: EvalOutputTarget,
+  meta: { suite: string; model: string; trials: number },
+  stats: EvalRunStats
+): Promise<void> {
+  const payload = {
+    suite: meta.suite,
+    model: meta.model,
+    trials: meta.trials,
+    gitSha: process.env['GITHUB_SHA'] ?? null,
+    timestamp: new Date().toISOString(),
+    cases: stats.cases,
+  };
+  await writeFile(
+    target.summaryPath,
+    `${JSON.stringify(payload, null, 2)}\n`,
+    'utf8'
+  );
+}
+
 export function evalGateOpen(): boolean {
   const key = process.env['ANTHROPIC_API_KEY'];
   if (!key || !key.trim()) {
@@ -56,6 +102,7 @@ export function evalGateOpen(): boolean {
 export const EVAL_MIN_PASS_RATE = 2 / 3;
 
 export interface EvalCaseOutcome {
+  readonly key: string;
   readonly label: string;
   readonly passes: number;
   readonly trials: number;
@@ -100,7 +147,10 @@ export function summarizeTrials(
     }
     byCase.set(key, entry);
   }
-  const cases = [...byCase.values()];
+  const cases = [...byCase.entries()].map(([key, entry]) => ({
+    key,
+    ...entry,
+  }));
   const casesBelowThreshold = cases.filter(
     (c) => c.passes < Math.ceil(minPassRate * c.trials)
   );

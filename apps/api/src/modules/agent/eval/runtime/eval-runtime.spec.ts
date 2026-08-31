@@ -1,11 +1,18 @@
+import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createStructuredProvider,
   evalGateOpen,
+  prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
   summarizeTrials,
+  writeEvalSummary,
+  type EvalRunStats,
 } from './eval-runtime';
 
 describe('resolveEvalModel', () => {
@@ -75,8 +82,18 @@ describe('summarizeTrials', () => {
       trial('case-b', true),
     ]);
     expect(cases).toEqual([
-      { label: 'case-a', passes: 2, trials: 3 },
-      { label: 'case-b', passes: 2, trials: 3 },
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 2,
+        trials: 3,
+      },
+      {
+        key: '{"fixtureSet":"recent","message":"case-b"}',
+        label: 'case-b',
+        passes: 2,
+        trials: 3,
+      },
     ]);
   });
 
@@ -95,7 +112,12 @@ describe('summarizeTrials', () => {
       trial('case-a', false),
     ]);
     expect(casesBelowThreshold).toEqual([
-      { label: 'case-a', passes: 1, trials: 3 },
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 1,
+        trials: 3,
+      },
     ]);
   });
 
@@ -179,5 +201,67 @@ describe('evalGateOpen', () => {
     expect(logSpy).toHaveBeenCalledWith(
       'eval skipped: ANTHROPIC_API_KEY not set'
     );
+  });
+});
+
+describe('prepareEvalOutput', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(process.env, 'AI_EVAL_OUTPUT_DIR');
+  });
+
+  it('returns null when AI_EVAL_OUTPUT_DIR is unset or blank', async () => {
+    expect(await prepareEvalOutput('copilot')).toBeNull();
+    process.env['AI_EVAL_OUTPUT_DIR'] = '   ';
+    expect(await prepareEvalOutput('copilot')).toBeNull();
+  });
+
+  it('creates the directory and derives suite-scoped paths', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'eval-out-'));
+    process.env['AI_EVAL_OUTPUT_DIR'] = join(base, 'nested');
+    const target = await prepareEvalOutput('copilot');
+    expect(target?.nativePath).toBe(join(base, 'nested', 'copilot.json'));
+    expect(target?.summaryPath).toBe(
+      join(base, 'nested', 'copilot.summary.json')
+    );
+    await expect(stat(join(base, 'nested'))).resolves.toBeTruthy();
+    await rm(base, { recursive: true, force: true });
+  });
+});
+
+describe('writeEvalSummary', () => {
+  it('writes suite metadata and per-case outcomes as JSON', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'eval-sum-'));
+    const target = {
+      dir: base,
+      nativePath: join(base, 'copilot.json'),
+      summaryPath: join(base, 'copilot.summary.json'),
+    };
+    const stats: EvalRunStats = {
+      successes: 2,
+      failures: 1,
+      errors: 0,
+      cases: [
+        {
+          key: '{"fixtureSet":"recent","message":"m"}',
+          label: 'm',
+          passes: 2,
+          trials: 3,
+        },
+      ],
+      casesBelowThreshold: [],
+    };
+    await writeEvalSummary(
+      target,
+      { suite: 'copilot', model: 'anthropic:claude-sonnet-5', trials: 3 },
+      stats
+    );
+    const parsed = JSON.parse(await readFile(target.summaryPath, 'utf8'));
+    expect(parsed.suite).toBe('copilot');
+    expect(parsed.model).toBe('anthropic:claude-sonnet-5');
+    expect(parsed.trials).toBe(3);
+    expect(parsed.cases).toEqual(stats.cases);
+    expect(typeof parsed.timestamp).toBe('string');
+    expect(parsed).toHaveProperty('gitSha');
+    await rm(base, { recursive: true, force: true });
   });
 });
