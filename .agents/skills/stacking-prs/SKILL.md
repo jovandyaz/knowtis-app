@@ -1,7 +1,7 @@
 ---
 name: stacking-prs
 license: MIT
-description: Manages this repository's GitHub-native stacked PR workflow with the gh-stack extension, CodeRabbit review, and branch conventions. Use when creating PRs, splitting work into a stack, linking existing PRs, merging a stack, or responding to CodeRabbit. Not for commit-message formatting (use writing-conventional-commits).
+description: Manages this repository's GitHub-native stacked PR workflow with the gh-stack extension, CodeRabbit review, and branch conventions. Use when creating PRs, splitting work into a stack, linking existing PRs, merging a stack, or responding to CodeRabbit. Commit messages still follow the repository's Conventional Commit policy.
 ---
 
 # Stacking PRs (GitHub + CodeRabbit)

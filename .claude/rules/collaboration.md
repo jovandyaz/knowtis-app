@@ -2,7 +2,11 @@
 paths:
   - 'apps/api/src/modules/collaboration/**'
   - 'apps/notes/src/**/collaboration/**'
-  - 'apps/notes/src/hooks/useWebSocket*'
+  - 'apps/notes/src/hooks/useCollaborativeEditor*'
+  - 'apps/notes/src/hooks/useActiveCollaborators*'
+  - 'apps/notes/src/hooks/usePresenceBroadcast*'
+  - 'apps/notes/src/components/editor/CollaborativeEditor*'
+  - 'apps/notes/src/pages/SharedNotePage*'
   - 'libs/api-client/src/lib/collaboration*'
 ---
 
@@ -25,7 +29,7 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 - Instantiates `Server` from `@hocuspocus/server` with `stopOnSignals: false` (NestJS owns process lifecycle).
 - Forwards `'upgrade'` events from the NestJS HTTP server when the URL starts with `/collaboration` to Hocuspocus' internal HTTP server (which has the crossws WebSocket adapter wired).
 - Persistence cadence: `debounce: 2000`, `maxDebounce: 10000`, `unloadImmediately: false` (matches the prior gateway).
-- Multi-instance fan-out: when `REDIS_URL` is set, registers `@hocuspocus/extension-redis` so multiple API replicas stay in sync. Without `REDIS_URL`, the server runs single-instance (dev only).
+- Multi-instance fan-out: when `REDIS_URL` is set, registers `@hocuspocus/extension-redis` so multiple API replicas stay in sync. Environment validation defaults an omitted URL to `redis://localhost:6379`; production must set the real URL. Single-instance mode exists only when the service is constructed without one.
 
 ## Authentication (`HocuspocusAuthExtension`)
 
@@ -39,6 +43,7 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
   5. Define the CASL ability via `defineAbilityFor` and gate `read`/`update` on the note subject.
   6. Set `connectionConfig.readOnly = true` when the user can read but not edit.
 - The extension publishes a `HocuspocusAuthContext` (`{ user, noteId }`) that downstream extensions can consume via the `Context` generic.
+- Note/permission repository failures are logged server-side and normalized to `INTERNAL_ERROR`; do not leak database details through the WebSocket close reason. A missing/invalid user remains `INVALID_TOKEN`.
 
 ### Token transport
 
@@ -49,10 +54,12 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 ## Persistence (`HocuspocusPersistenceExtension`)
 
 - `apps/api/src/modules/collaboration/extensions/hocuspocus-persistence.extension.ts`.
-- `onLoadDocument`: hydrates a `Y.Doc` from `note.yjsState` (`Buffer`). Returns `null` when no stored state exists or the stored bytes are malformed (Hocuspocus then uses a fresh doc).
-- `onStoreDocument`: encodes the live `Y.Doc` and persists via `NoteRepository.updateYjsState(id, Buffer)`.
+- `onLoadDocument`: repository errors fail closed with `INTERNAL_ERROR`. A missing note returns `null`. Non-trivial legacy HTML without `yjsState` is converted and hydrated server-side; client seeding in WebSocket mode races provider sync and duplicates content.
+- Known malformed-hydration bug: failed conversion of non-trivial legacy HTML and malformed stored Yjs bytes currently return `null`, allowing a fresh document. These paths must fail closed before a later edit can overwrite persisted content.
+- `onStoreDocument`: derives HTML from the live `Y.Doc` and persists HTML + Yjs state atomically via `updateContentWithYjsState`. If HTML derivation fails, it preserves the edit by falling back to `updateYjsState`.
 - **Trivial-fragment guard**: refuses to overwrite non-trivial DB content with a trivial live `Y.Doc`. Prevents the CRDT layer from clobbering REST/MCP-side updates with empty initial state when a fresh client connects before hydration completes.
-- `NoteRepository.updateYjsState` returns `Result<NoteEntity, NoteDomainError>`; failures are logged but do not throw (Hocuspocus would close the connection otherwise).
+- Known guard bug: a repository lookup error currently logs “failing open” and continues. The guard must skip storage on lookup failure so a transient read error cannot authorize a trivial overwrite.
+- Both persistence methods return `Result`; failures are logged but do not throw from the storage hook.
 
 ## External Update Broadcast (`NoteUpdatedListener` + `HocuspocusService.applyExternalUpdate`)
 
@@ -67,10 +74,10 @@ Hocuspocus binds to the same Node HTTP server as the REST API — only the upgra
 ## Frontend Provider (`useHocuspocusCollaboration`)
 
 - `apps/notes/src/collaboration/useHocuspocusCollaboration.ts` — React hook wrapping `HocuspocusProvider`.
-- Accepts the `Y.Doc` + `Awareness` exposed by `@knowtis/crdt`'s `useYjs(noteId)` so the editor and provider share a single source of truth (no duplicate doc instances).
+- `useCollaborativeEditor` calls parameterless `useYjs()`, then `getYDoc(noteId)` and `getAwareness(noteId)`. Hocuspocus receives those same instances so editor and provider share one source of truth.
 - Handles `onStatus`, `onAuthenticated` (sets `readOnly`), `onAuthenticationFailed`, and `onSynced` callbacks.
-- Returns `{ status, isConnected, isSynced, readOnly }` — consumers use `readOnly` to call `editor.setEditable(false)`.
-- Reconnection backoff is built into the provider; a fresh JWT is fetched on each attempt via `getCollaborationToken`.
+- Returns `{ status, isConnected, isSynced, readOnly }`; the shared-note UI currently exits editing through `onEditDenied` when the server reports read-only scope.
+- Reconnection backoff is built into the provider; credential failures get one judged refresh attempt, terminal denials stop immediately, and `INTERNAL_ERROR` does not spend the refresh attempt.
 
 ## Awareness (Presence)
 

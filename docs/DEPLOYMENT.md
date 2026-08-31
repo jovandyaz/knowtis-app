@@ -33,7 +33,7 @@ Push to main → GitHub Actions CI → lint, typecheck, test, build → deploy �
 
 The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job runs `.github/scripts/railway-deploy.sh` in the Railway CLI container.
 
-That script starts the deploy detached and then polls until the deployment reaches a terminal status: `SUCCESS` and `SKIPPED` (Railway found nothing to ship) pass; `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 15-minute timeout fail the job. Plain `railway up` returns when the **build** log stream closes — before `preDeployCommand` and the healthcheck — so it would report success on a deploy whose migration later failed. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
+That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; the current gate also exits zero on `SKIPPED`, but that state means the new deployment did not become live and must not be described as deployment success. `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 15-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
 
 **Config files:**
 

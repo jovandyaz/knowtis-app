@@ -25,10 +25,13 @@ Token transport: provider `token` config takes a function so a fresh JWT is read
 
 ## Persistence extension (`hocuspocus-persistence.extension.ts`)
 
-- `onLoadDocument`: hydrate Y.Doc from `note.yjsState` (Buffer); return `null` on missing/malformed state (fresh doc).
-- `onStoreDocument`: encode live Y.Doc → `NoteRepository.updateYjsState(id, Buffer)`.
+- `onLoadDocument`: repository errors fail closed with `HANDSHAKE_FAILURE.INTERNAL_ERROR`; returning a blank document would let the next keystroke overwrite persisted content. A missing note returns `null`.
+- When `yjsState` is absent but legacy HTML is non-trivial, convert it with `htmlToYjsState` and hydrate server-side. Client seeding in WebSocket mode races provider sync and duplicates initial content; local-first or collaboration-disabled mode may intentionally seed. Trivial HTML returns a fresh document.
+- **Known malformed-hydration bugs**: failed conversion of non-trivial legacy HTML and malformed stored Yjs bytes are currently logged and return `null`, allowing a fresh document. Non-trivial persisted content with undecodable state must fail closed instead so a later edit cannot overwrite it.
+- `onStoreDocument`: encode the Y.Doc, derive HTML with `yDocToHtml`, and persist both atomically through `updateContentWithYjsState`. If HTML derivation fails, preserve the edit by falling back to `updateYjsState`. Log `Result` errors; do not throw from the storage hook.
 - **Trivial-fragment guard**: never overwrite non-trivial DB content with a trivial live doc (prevents empty-state clobbering when a fresh client connects before hydration).
-- `updateYjsState` returns `Result` — log failures, never throw (throw = Hocuspocus closes the connection).
+- **Known guard bug**: the current lookup error path logs “failing open” and continues to persistence. Changes in this area must make that lookup failure skip storage; a transient read error must not authorize a trivial overwrite.
+- Both persistence methods return `Result` — log failures, never throw (throw = Hocuspocus closes the connection).
 - Cadence `debounce: 2000` / `maxDebounce: 10000` / `unloadImmediately: false`; empty rooms unload automatically with a final store.
 
 ## External update broadcast
@@ -44,6 +47,6 @@ REST/MCP `update-note` mutations emit `NoteUpdatedEvent` (with `updates.content`
 
 ## Frontend
 
-- `useHocuspocusCollaboration` wraps `HocuspocusProvider`; must consume the Y.Doc + Awareness from `@knowtis/crdt`'s `useYjs(noteId)` (single source of truth). Returns `{ status, isConnected, isSynced, readOnly }`; consumers call `editor.setEditable(false)` on readOnly.
+- `useCollaborativeEditor` calls parameterless `useYjs()`, then `getYDoc(noteId)` and `getAwareness(noteId)`. `useHocuspocusCollaboration` must consume those same instances (single source of truth). It returns `{ status, isConnected, isSynced, readOnly }`; current shared-note UI exits editing through `onEditDenied` when the server reports read-only scope.
 - Presence: `useActiveCollaborators(noteId)` reads awareness states; `usePresenceBroadcast(noteId)` maintains the local entry. No manual encode/decode.
 - Cleanup: `provider.destroy()` in effect cleanup; server-side `OnModuleDestroy` detaches the upgrade handler, flushes pending stores, then destroys.

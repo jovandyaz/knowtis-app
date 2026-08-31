@@ -5,8 +5,8 @@
 # Build command for NestJS API in Nx monorepo
 builder = "nixpacks"
 buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm build:api"
-# Note: watchPatterns do NOT apply for CI-driven deploys via `railway up`.
-# Conditional deploys are handled in .github/workflows/ci.yml using nx affected.
+# Nx affected is the first CI gate, but Railway still evaluates watchPatterns
+# against the uploaded snapshot and records SKIPPED when none match.
 watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml", "railway.toml"]
 
 [deploy]

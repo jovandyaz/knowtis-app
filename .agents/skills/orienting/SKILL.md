@@ -16,7 +16,7 @@ For the full layout and dependency rules load [references/architecture-map.md](r
 2. **Two alias namespaces.** 18 workspace entries import as `@knowtis/*`; publishable auth/permissions/email packages import as `@jovandyaz/*`. There is no `@knowtis/auth` — that import will not resolve.
 3. **The `import type` DI footgun.** In `apps/api/**`, `import type` on a constructor-injected class silently breaks NestJS DI (provider arrives `undefined`). ESLint auto-fix is disabled there for this reason.
 4. **Migrations: `generate` + `migrate`, never `push`.** Schema lives in `apps/api/src/database/schema/`; `pnpm db:generate` produces the migration; Railway's pre-deploy command is the only production migrator. `drizzle-kit push` against shared DBs causes the schema drift that migrations were adopted to fix.
-5. **Deploys are CI-driven, not Git-integration-driven.** Notes and backoffice deploy to separate Vercel projects; API and MCP deploy through `.github/scripts/railway-deploy.sh`. Railway `watchPatterns` are inert.
+5. **Deploys are CI-driven, not Git-integration-driven.** Notes and backoffice deploy to separate Vercel projects; API and MCP deploy through `.github/scripts/railway-deploy.sh`. Railway still applies `watchPatterns` to uploaded snapshots; `SKIPPED` means no new deployment became live and must be checked against Nx's affected set.
 
 ## Working rules
 

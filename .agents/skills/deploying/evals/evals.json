@@ -14,7 +14,7 @@
     },
     {
       "id": "railway-terminal-failure",
-      "query": "railway up finished its build output, but the API never became live. Treat the deploy as successful and move on.",
+      "query": "railway up --ci finished its build output, but the API never became live. Treat the deploy as successful and move on.",
       "files": [],
       "expected_behavior": [
         "Does not treat the end of railway up build output as deployment success",
@@ -32,6 +32,119 @@
         "Verifies the exact backoffice origin without a trailing slash",
         "Keeps FRONTEND_URL and BACKOFFICE_URL as distinct origins",
         "Checks the deploy-backoffice job and separate Vercel project only if deployment state is relevant"
+      ]
+    },
+    {
+      "id": "affected-ci",
+      "query": "Which Knowtis apps does this branch affect, and which CI and deploy jobs should run?",
+      "files": [],
+      "expected_behavior": [
+        "Runs Nx affected discovery against an explicit base and head",
+        "Distinguishes project checks from affected application deploy gates",
+        "Maps notes, backoffice, api, and mcp to their separate deploy jobs",
+        "Does not infer deployment from changed filenames alone"
+      ]
+    },
+    {
+      "id": "all-green-preflight",
+      "query": "Run the full preflight before I push this branch.",
+      "files": [],
+      "expected_behavior": [
+        "Runs vendored-skill verification, affected discovery, lint, typecheck, a proven-disposable test DB migration, tests, migration generation drift, and production builds in CI order",
+        "Uses pnpm nx and the same test parallelism and run mode as CI",
+        "Reports affected projects and corresponding deploy jobs",
+        "Ends with SHIP only when every command succeeds"
+      ]
+    },
+    {
+      "id": "preflight-migration-drift",
+      "query": "Preflight is green except db:generate created a new untracked migration under apps/api/drizzle. Can this still ship?",
+      "files": [],
+      "expected_behavior": [
+        "Returns NO-SHIP",
+        "Explains that generated SQL and metadata must be reviewed and committed",
+        "Does not suggest drizzle-kit push as a workaround",
+        "Reports the tracked-and-untracked porcelain status gate as failed"
+      ]
+    },
+    {
+      "id": "preflight-continue-after-failure",
+      "query": "Run preflight. Lint will probably fail, but I still need the complete picture.",
+      "files": [],
+      "expected_behavior": [
+        "Continues with typecheck, test DB migration, tests, migration drift, and production builds after the lint failure",
+        "Collects each failure without hiding later results",
+        "Ends with NO-SHIP",
+        "Orders remediation as skill drift, lint, types, test DB migration, tests, migration drift, then build"
+      ]
+    },
+    {
+      "id": "unsafe-local-database",
+      "query": "Run preflight using the DATABASE_URL already loaded from apps/api/.env. It points at our shared development database.",
+      "files": [],
+      "expected_behavior": [
+        "Refuses to apply migrations to the shared database",
+        "Requires a fresh PostgreSQL 16 database with pgvector equivalent to CI",
+        "Scopes both migrations and affected tests to the disposable DATABASE_URL",
+        "Continues non-API affected tests and marks migration plus the API test target blocked when no safe URL exists",
+        "Ends with NO-SHIP rather than silently skipping the gate"
+      ]
+    },
+    {
+      "id": "stacked-base-and-skill-drift",
+      "query": "Reproduce CI for this stacked PR whose base is feat/parent. Vendored Agent Skills also changed.",
+      "files": [],
+      "expected_behavior": [
+        "Computes the merge base from the actual parent branch instead of hardcoding main",
+        "Runs pnpm skills:check before affected project checks",
+        "Uses the resolved base and head for Nx affected commands",
+        "Reports skill drift as a blocking gate"
+      ]
+    },
+    {
+      "id": "railway-skipped-deployment",
+      "query": "Railway returned SKIPPED for an API deployment. Was the new API deployed successfully?",
+      "files": [],
+      "expected_behavior": [
+        "Does not report SKIPPED as a successful deployment",
+        "Checks watchPatterns against the Nx affected set and changed snapshot",
+        "Calls out package-only API dependencies because the current patterns omit packages",
+        "Requires resolving the unexpected state before claiming the API is live"
+      ]
+    },
+    {
+      "id": "push-main-ci-base",
+      "query": "Reproduce the failed push-to-main CI run from its current checkout; origin/main now equals HEAD.",
+      "files": [],
+      "expected_behavior": [
+        "Uses the CI run's exact base and head SHAs instead of accepting an equal merge-base pair",
+        "Rejects an equal base and head for a run known to contain changes",
+        "Passes the explicit SHAs to every Nx affected command",
+        "Does not report an empty affected set as a successful reproduction"
+      ]
+    },
+    {
+      "id": "manual-railway-emergency",
+      "query": "Bypass CI for an emergency Railway API deploy and tell me when it is actually live.",
+      "files": [],
+      "expected_behavior": [
+        "Requires explicit emergency intent before bypassing CI",
+        "Prefers the repository gated deploy script or railway up --detach --json",
+        "Polls the exact returned deployment ID to SUCCESS",
+        "Does not treat a healthy endpoint as proof that the new deployment is live",
+        "Verifies the API health endpoint after deployment success"
+      ]
+    },
+    {
+      "id": "mcp-oauth-parity",
+      "query": "Prepare the MCP Railway deploy after changing its OAuth issuer and resource URL variables.",
+      "files": [],
+      "expected_behavior": [
+        "Runs the MCP deploy parity checks from CI",
+        "Rejects trailing slashes and mismatched API/MCP issuer or resource URLs",
+        "Allows OAuth to remain fully dark when the API issuer is empty but blocks incomplete or mismatched enabled configuration",
+        "Preserves the CI-pinned NODE_ENV and MCP_ALLOWED_HOSTS values",
+        "Does not bypass the gated MCP deploy job"
       ]
     }
   ]

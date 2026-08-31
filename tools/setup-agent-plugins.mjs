@@ -9,7 +9,6 @@ const plugins = [
   'domain@knowtis-plugins',
   'db-ops@knowtis-plugins',
   'delivery@knowtis-plugins',
-  'standards@knowtis-plugins',
 ];
 
 function run(args, capture = false) {

@@ -33,6 +33,116 @@
         "Keeps external MCP mutations on the REST/event broadcast path",
         "Does not weaken server-side authorization"
       ]
+    },
+    {
+      "id": "duplicated-note-content",
+      "query": "A newly created note sometimes duplicates its initial content after collaboration connects. Patch the first Yjs writer you find.",
+      "files": [],
+      "expected_behavior": [
+        "Enumerates editor initialization, provider sync, server hydration, persistence, and external update writers before patching",
+        "Checks whether both client seeding and server hydration write the same initial content",
+        "Preserves the trivial-fragment guard and single Y.Doc invariant",
+        "Reproduces development-only behavior against a production build before attributing it to CRDT corruption"
+      ]
+    },
+    {
+      "id": "guest-share-link-editing",
+      "query": "A guest can open a shared note but cannot edit it even though link access is editor. Diagnose the collaboration path.",
+      "files": [],
+      "expected_behavior": [
+        "Traces the share token from the shared route into the Hocuspocus provider URL and handshake",
+        "Verifies ANYONE_WITH_LINK and exact share-token matching",
+        "Checks CASL read and update decisions separately",
+        "Keeps write enforcement server-side instead of bypassing readOnly in the client"
+      ]
+    },
+    {
+      "id": "legacy-html-hydration",
+      "query": "A legacy note has non-trivial HTML but no yjsState. Seed it from the browser when collaboration connects.",
+      "files": [],
+      "expected_behavior": [
+        "Rejects client-side seeding because it races provider sync",
+        "Converts non-trivial legacy HTML to Yjs state during server-side hydration",
+        "Returns a fresh document for valid legacy notes only when their HTML is trivial",
+        "Avoids duplicating the initial note content"
+      ]
+    },
+    {
+      "id": "load-error-fails-closed",
+      "query": "The note repository timed out during Hocuspocus hydration. Return null so the user can keep editing a blank document.",
+      "files": [],
+      "expected_behavior": [
+        "Refuses to return a blank document after a repository error",
+        "Logs the repository failure with context",
+        "Throws a normalized INTERNAL_ERROR handshake failure",
+        "Prevents a later keystroke from overwriting persisted content"
+      ]
+    },
+    {
+      "id": "dual-html-yjs-persistence",
+      "query": "Persist a collaborative edit so REST readers and future Yjs clients see the same content.",
+      "files": [],
+      "expected_behavior": [
+        "Derives HTML from the live Y.Doc",
+        "Persists HTML and Yjs state atomically with updateContentWithYjsState",
+        "Falls back to updateYjsState only when HTML derivation fails",
+        "Logs Result errors without throwing from the storage hook"
+      ]
+    },
+    {
+      "id": "zero-length-external-update",
+      "query": "REST emitted an empty yjsState buffer. Clear the live document first and apply it as an external update.",
+      "files": [],
+      "expected_behavior": [
+        "Rejects an empty or zero-length Yjs update before clearing live content",
+        "Explains that Y.applyUpdate treats the input as a no-op",
+        "Preserves the loaded document",
+        "Keeps valid REST/MCP updates on the probe-validate and DirectConnection path"
+      ]
+    },
+    {
+      "id": "token-refresh-policy",
+      "query": "A collaboration token expired. Keep refreshing forever for every authentication failure so the socket eventually reconnects.",
+      "files": [],
+      "expected_behavior": [
+        "Uses a single judged refresh attempt for credential failures and coalesces concurrent attempts",
+        "Treats permission and not-found denials as terminal",
+        "Does not spend the refresh attempt on INTERNAL_ERROR or an unavailable refresh callback",
+        "Destroys the provider and reports session expiry when refresh is exhausted"
+      ]
+    },
+    {
+      "id": "trivial-guard-read-failure",
+      "query": "The trivial-document guard could not load the stored note. Log the error and continue persisting the live trivial Y.Doc.",
+      "files": [],
+      "expected_behavior": [
+        "Identifies the current fail-open path as a content-loss bug",
+        "Skips persistence when the guard lookup fails",
+        "Does not treat an unknown stored state as permission to overwrite",
+        "Adds regression coverage for a read failure followed by a possible write"
+      ]
+    },
+    {
+      "id": "auth-repository-error",
+      "query": "The collaboration note/permission repository threw a database error during authentication. Send its message to the WebSocket client so debugging is easier.",
+      "files": [],
+      "expected_behavior": [
+        "Does not expose repository or database details in the close reason",
+        "Logs the original error server-side",
+        "Normalizes the handshake response to INTERNAL_ERROR",
+        "Does not retry the failure as a credential problem"
+      ]
+    },
+    {
+      "id": "malformed-hydration-fails-closed",
+      "query": "Stored non-trivial note content has malformed Yjs bytes, or its legacy HTML cannot be converted. Return a fresh document so the user can continue editing.",
+      "files": [],
+      "expected_behavior": [
+        "Identifies returning a fresh document as a content-loss risk",
+        "Fails the collaboration handshake closed for malformed Yjs bytes and failed non-trivial legacy HTML conversion",
+        "Logs decoding details server-side without exposing them to the client",
+        "Prevents a later edit from replacing the persisted note with a blank document"
+      ]
     }
   ]
 }
