@@ -147,6 +147,7 @@ export class AiProvidersController {
         prompt: 'ping',
         maxOutputTokens: PROBE_MAX_OUTPUT_TOKENS,
         abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        telemetry: { isEnabled: false },
       });
       return { ok: true, model: model.id };
     } catch (error) {

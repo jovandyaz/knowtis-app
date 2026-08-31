@@ -130,7 +130,7 @@ export class MemoryExtractionTask {
       MemoryReconcileSchema,
       {
         model: await this.aiConfig.getFastModel(),
-        system: MEMORY_RECONCILE_SYSTEM,
+        instructions: MEMORY_RECONCILE_SYSTEM,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
       }
     );

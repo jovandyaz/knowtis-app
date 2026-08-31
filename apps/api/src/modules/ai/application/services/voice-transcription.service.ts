@@ -1,7 +1,7 @@
 import { createOpenAI } from '@ai-sdk/openai';
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { experimental_transcribe as transcribe } from 'ai';
+import { transcribe } from 'ai';
 import { err, ok, type Result } from 'neverthrow';
 
 import type { EnvConfig } from '../../../../config/env.config';

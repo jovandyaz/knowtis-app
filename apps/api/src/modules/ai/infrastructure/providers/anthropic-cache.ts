@@ -10,15 +10,19 @@ interface CacheableSystemMessage {
   readonly providerOptions: typeof EPHEMERAL;
 }
 
-export function cacheableSystem(
+export function cacheableInstructions(
   model: string,
-  system: string
-): { system: string | CacheableSystemMessage } {
+  instructions: string
+): { instructions: string | CacheableSystemMessage } {
   if (providerOf(model) !== 'anthropic') {
-    return { system };
+    return { instructions };
   }
   return {
-    system: { role: 'system', content: system, providerOptions: EPHEMERAL },
+    instructions: {
+      role: 'system',
+      content: instructions,
+      providerOptions: EPHEMERAL,
+    },
   };
 }
 

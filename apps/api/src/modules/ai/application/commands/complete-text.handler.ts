@@ -76,15 +76,12 @@ export class CompleteTextHandler {
         context.userPrompt,
         {
           model: context.model,
-          system: context.systemPrompt,
+          instructions: context.systemPrompt,
           maxRetries: this.configService.get('AI_MAX_RETRIES'),
           timeout: { totalMs: this.configService.get('AI_TIMEOUT_MS') },
           telemetry: {
             functionId: `completion:${context.action}`,
-            metadata: {
-              userId: input.userId,
-              environment: this.configService.get('NODE_ENV'),
-            },
+            userId: input.userId,
           },
         }
       );

@@ -1,4 +1,4 @@
-import { experimental_transcribe } from 'ai';
+import { transcribe } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AIErrorCodes } from '../../../domain/errors/ai.errors';
@@ -6,7 +6,7 @@ import { createMockConfig } from '../../../testing/create-mock-config';
 import { VoiceTranscriptionService } from '../voice-transcription.service';
 
 vi.mock('ai', () => ({
-  experimental_transcribe: vi.fn(),
+  transcribe: vi.fn(),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
@@ -15,7 +15,7 @@ vi.mock('@ai-sdk/openai', () => ({
   })),
 }));
 
-const mockTranscribe = vi.mocked(experimental_transcribe);
+const mockTranscribe = vi.mocked(transcribe);
 
 describe('VoiceTranscriptionService', () => {
   let service: VoiceTranscriptionService;

@@ -90,7 +90,7 @@ export class StreamTextHandler {
         context.userPrompt,
         {
           model: context.model,
-          system: context.systemPrompt,
+          instructions: context.systemPrompt,
           maxRetries: this.configService.get('AI_MAX_RETRIES'),
           timeout: {
             totalMs: this.configService.get('AI_STREAM_MAX_MS'),
@@ -99,10 +99,7 @@ export class StreamTextHandler {
           ...(signal ? { signal } : {}),
           telemetry: {
             functionId: `completion:${context.action}`,
-            metadata: {
-              userId: input.userId,
-              environment: this.configService.get('NODE_ENV'),
-            },
+            userId: input.userId,
           },
         }
       );

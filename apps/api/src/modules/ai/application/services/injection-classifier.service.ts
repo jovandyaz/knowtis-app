@@ -9,6 +9,7 @@ import type { EnvConfig } from '../../../../config/env.config';
 import { TokenUsage } from '../../domain/value-objects/token-usage.vo';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 import { buildRedactedTelemetry } from '../../infrastructure/providers/redacted-telemetry';
+import { withTraceIdentity } from '../../infrastructure/providers/trace-identity';
 import { AIRateLimitService } from './ai-rate-limit.service';
 
 /** Heuristic guard scores at or above this (but below the block threshold) get a second, model-based opinion. */
@@ -74,21 +75,19 @@ export class InjectionClassifierService {
       // Deliberately a single direct SDK call: the fallback chain shares the
       // copilot's cooldown tracker, so classifier timeout bursts would open
       // the breaker for main agent turns.
-      const result = await generateText({
-        model: this.providerRegistry.languageModel(model),
-        system: CLASSIFIER_SYSTEM_PROMPT,
-        prompt: `---BEGIN DATA---\n${fenced}\n---END DATA---`,
-        output: Output.object({ schema: verdictSchema }),
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(CLASSIFIER_TIMEOUT_MS),
-        // recordContent stays false unconditionally: the input is suspected-hostile
-        // and must never reach traces.
-        experimental_telemetry: buildRedactedTelemetry(
-          'injection-classifier',
-          { userId, environment: this.configService.get('NODE_ENV') },
-          false
-        ),
-      });
+      const result = await withTraceIdentity({ userId }, () =>
+        generateText({
+          model: this.providerRegistry.languageModel(model),
+          instructions: CLASSIFIER_SYSTEM_PROMPT,
+          prompt: `---BEGIN DATA---\n${fenced}\n---END DATA---`,
+          output: Output.object({ schema: verdictSchema }),
+          maxRetries: 0,
+          abortSignal: AbortSignal.timeout(CLASSIFIER_TIMEOUT_MS),
+          // recordContent stays false unconditionally: the input is suspected-hostile
+          // and must never reach traces.
+          telemetry: buildRedactedTelemetry('injection-classifier', false),
+        })
+      );
       this.recordCost(userId, model, result.usage);
       return { safe: !result.output.injection };
     } catch (error) {

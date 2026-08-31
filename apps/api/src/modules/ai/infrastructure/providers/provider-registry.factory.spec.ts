@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,9 +36,7 @@ vi.mock('@ai-sdk/anthropic', () => ({
 }));
 
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn(() =>
-    vi.fn().mockReturnValue('mock-google-byok-model')
-  ),
+  createGoogle: vi.fn(() => vi.fn().mockReturnValue('mock-google-byok-model')),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
@@ -401,7 +399,7 @@ describe('ProviderRegistryFactory', () => {
       );
 
       expect(model).toBe('mock-google-byok-model');
-      expect(createGoogleGenerativeAI).toHaveBeenCalledWith({
+      expect(createGoogle).toHaveBeenCalledWith({
         apiKey: 'user-key',
       });
     });

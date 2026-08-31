@@ -14,6 +14,8 @@ export interface EvalTranscript {
   readonly sources: { readonly id: string; readonly title: string }[];
   readonly error: { readonly code: string; readonly message: string } | null;
   readonly stopReason: AgentStopReason | null;
+  /** Model that actually served the turn — differs from the requested one when the fallback chain took over. */
+  readonly servedModel: string | null;
   readonly steps: readonly (readonly AgentMessage[])[];
 }
 
@@ -27,6 +29,7 @@ export async function drainEvents(
   let sources: EventTranscript['sources'] = [];
   let error: EventTranscript['error'] = null;
   let stopReason: AgentStopReason | null = null;
+  let servedModel: string | null = null;
   const steps: (readonly AgentMessage[])[] = [];
 
   for await (const event of events) {
@@ -39,6 +42,7 @@ export async function drainEvents(
       case 'done':
         sources = event.sources.map((s) => ({ id: s.id, title: s.title }));
         stopReason = event.stopReason;
+        servedModel = event.usage.model;
         break;
       case 'proposal':
         proposal = {
@@ -63,5 +67,5 @@ export async function drainEvents(
     }
   }
 
-  return { text, proposal, sources, error, stopReason, steps };
+  return { text, proposal, sources, error, stopReason, servedModel, steps };
 }

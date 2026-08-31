@@ -105,13 +105,13 @@ describe('AISDKProvider', () => {
     await drain(
       provider.streamCompletion('test prompt', {
         model: 'anthropic:claude-sonnet-4-20250514',
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: {
+        instructions: {
           role: 'system',
           content: 'You are a helpful assistant.',
           providerOptions: {
@@ -128,7 +128,7 @@ describe('AISDKProvider', () => {
     const { streamText, generateText } = vi.mocked(await import('ai'));
     const telemetry = {
       functionId: 'completion:summarize',
-      metadata: { userId: 'user-1', environment: 'test' },
+      userId: 'user-1',
     };
 
     await drain(
@@ -143,12 +143,11 @@ describe('AISDKProvider', () => {
     });
 
     const expected = expect.objectContaining({
-      experimental_telemetry: {
+      telemetry: {
         isEnabled: true,
         recordInputs: false,
         recordOutputs: false,
         functionId: 'completion:summarize',
-        metadata: { userId: 'user-1', environment: 'test' },
       },
     });
     expect(streamText).toHaveBeenCalledWith(expected);
@@ -172,13 +171,13 @@ describe('AISDKProvider', () => {
     await drain(
       provider.streamCompletion('test prompt', {
         model: 'openai:gpt-4o',
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
   });
@@ -188,12 +187,12 @@ describe('AISDKProvider', () => {
 
     await provider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
-      system: 'You are a helpful assistant.',
+      instructions: 'You are a helpful assistant.',
     });
 
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: {
+        instructions: {
           role: 'system',
           content: 'You are a helpful assistant.',
           providerOptions: {

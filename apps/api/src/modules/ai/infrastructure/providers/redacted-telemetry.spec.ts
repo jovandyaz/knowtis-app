@@ -4,29 +4,16 @@ import { buildRedactedTelemetry } from './redacted-telemetry';
 
 describe('buildRedactedTelemetry', () => {
   it('redacts input/output when recordContent is false', () => {
-    const result = buildRedactedTelemetry(
-      'agent-turn',
-      { userId: 'u1', environment: 'production' },
-      false
-    );
+    const result = buildRedactedTelemetry('agent-turn', false);
     expect(result.isEnabled).toBe(true);
     expect(result.recordInputs).toBe(false);
     expect(result.recordOutputs).toBe(false);
     expect(result.functionId).toBe('agent-turn');
-    expect(result.metadata).toEqual({
-      userId: 'u1',
-      environment: 'production',
-    });
   });
 
   it('records input/output when recordContent is true', () => {
-    const result = buildRedactedTelemetry('agent-turn', { userId: 'u1' }, true);
+    const result = buildRedactedTelemetry('agent-turn', true);
     expect(result.recordInputs).toBe(true);
     expect(result.recordOutputs).toBe(true);
-  });
-
-  it('omits the metadata key entirely when metadata is undefined', () => {
-    const result = buildRedactedTelemetry('agent-turn', undefined, false);
-    expect(result).not.toHaveProperty('metadata');
   });
 });

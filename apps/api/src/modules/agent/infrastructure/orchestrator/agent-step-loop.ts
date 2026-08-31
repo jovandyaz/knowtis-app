@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import {
   pruneMessages,
   type ModelMessage,
-  type TelemetrySettings,
+  type TelemetryOptions,
   type ToolSet,
 } from 'ai';
 
@@ -17,6 +17,7 @@ import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
 import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { fromResponseMessages } from './message-mapper';
@@ -125,10 +126,11 @@ export interface AgentStepLoopParams {
   readonly stepFailoverCandidates: readonly string[];
   readonly onModelSettled?: ((model: string) => void) | undefined;
   readonly cooldown: ProviderCooldown;
-  readonly system: string;
+  readonly instructions: string;
   readonly cache: boolean;
   readonly tools: ToolSet;
-  readonly telemetry: TelemetrySettings;
+  readonly telemetry: TelemetryOptions;
+  readonly traceIdentity: TraceIdentityAttrs;
   readonly initialMessages: ModelMessage[];
   readonly budgets: {
     readonly stallMs: number;
@@ -196,10 +198,11 @@ export async function* runAgentStepLoop(
         providerRegistry: params.providerRegistry,
         abortSignal: params.abortSignal,
         timeoutSignal: params.timeoutSignal,
-        system: params.system,
+        instructions: params.instructions,
         cache: params.cache,
         tools: params.tools,
         telemetry: params.telemetry,
+        traceIdentity: params.traceIdentity,
         providerOptions,
         history,
         budgets: params.budgets,

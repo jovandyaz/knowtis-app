@@ -1,20 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import { cacheableSystem, withLastMessageCache } from './anthropic-cache';
+import { cacheableInstructions, withLastMessageCache } from './anthropic-cache';
 
 const EPHEMERAL = {
   anthropic: { cacheControl: { type: 'ephemeral' } },
 };
 
-describe('cacheableSystem', () => {
+describe('cacheableInstructions', () => {
   it('wraps the system prompt with anthropic cacheControl for anthropic models', () => {
-    const result = cacheableSystem(
+    const result = cacheableInstructions(
       'anthropic:claude-sonnet-5',
       'You are a helpful assistant.'
     );
 
     expect(result).toEqual({
-      system: {
+      instructions: {
         role: 'system',
         content: 'You are a helpful assistant.',
         providerOptions: EPHEMERAL,
@@ -23,9 +23,9 @@ describe('cacheableSystem', () => {
   });
 
   it('passes the system prompt through as a plain string for non-anthropic models', () => {
-    const result = cacheableSystem('openai:gpt-4o', 'You are helpful.');
+    const result = cacheableInstructions('openai:gpt-4o', 'You are helpful.');
 
-    expect(result).toEqual({ system: 'You are helpful.' });
+    expect(result).toEqual({ instructions: 'You are helpful.' });
   });
 });
 

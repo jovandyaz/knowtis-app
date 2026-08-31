@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -165,7 +165,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
       case 'openai':
         return createOpenAI({ apiKey })(bareId);
       case 'google':
-        return createGoogleGenerativeAI({ apiKey })(bareId);
+        return createGoogle({ apiKey })(bareId);
       case 'openrouter':
         return createOpenRouter({ apiKey })(bareId);
       default:
@@ -273,9 +273,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
       ...(anthropicKey
         ? { anthropic: createAnthropic({ apiKey: anthropicKey }) }
         : {}),
-      ...(googleKey
-        ? { google: createGoogleGenerativeAI({ apiKey: googleKey }) }
-        : {}),
+      ...(googleKey ? { google: createGoogle({ apiKey: googleKey }) } : {}),
       ...(openaiKey ? { openai: createOpenAI({ apiKey: openaiKey }) } : {}),
       ...(openrouterKey
         ? { openrouter: createOpenRouter({ apiKey: openrouterKey }) }
