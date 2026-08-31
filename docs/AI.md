@@ -1105,6 +1105,17 @@ A structured `agent.turn.health` event is logged **per LLM call**, once when the
 
 **Empty-answer guard.** A turn that finishes with `finishReason: 'length'` (truncated at `AI_AGENT_MAX_OUTPUT_TOKENS`) but zero visible text — the whole budget spent on reasoning — yields `AI_EMPTY_COMPLETION` instead of an empty `done`.
 
+### Agent health alerts
+
+A daily cron (06:00 UTC, flag `agent_health_alerts`, default off) computes two rates over the
+last 24h of `conversation_messages`: the tool error rate (tool-result parts with an error
+`outputType`) and the anomalous stop-reason rate (`max_steps`, `token_budget`, `length`,
+`content_filter`, `error`; user aborts excluded). It always logs `agent.health.report`; when a
+rate crosses `AGENT_TOOL_ERROR_ALERT_RATE` (default 0.10) or `AGENT_STOP_ANOMALY_ALERT_RATE`
+(default 0.20) with at least 20 samples, it POSTs an `agent.health.alert` event to
+`AI_ALERT_WEBHOOK_URL`. Thresholds are fixed fractions by design — a moving baseline is a
+follow-up if they prove noisy.
+
 ## Long-term user memory (A6b)
 
 Beyond a single thread, the copilot can remember durable facts about a user across conversations — an in-house, Mem0-style personal memory. Gated by the `agent_longterm_memory` feature flag (default **off**) and `VOYAGE_API_KEY`. All memory is **userId-scoped** and serves **registered users only**.

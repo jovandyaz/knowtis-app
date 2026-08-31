@@ -18,6 +18,8 @@ import { MEMORY_REPOSITORY } from './domain/ports/memory.repository';
 import { NOTE_EMBEDDING_REPOSITORY } from './domain/ports/note-embedding.repository';
 import { PENDING_MUTATION_STORE } from './domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from './domain/ports/retrieval.port';
+import { AgentHealthReportTask } from './infrastructure/health/agent-health-report.task';
+import { AgentHealthQueries } from './infrastructure/health/agent-health.queries';
 import { MemoryExtractionTask } from './infrastructure/memory/memory-extraction.task';
 import { AgentToolRegistry } from './infrastructure/orchestrator/agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './infrastructure/orchestrator/ai-sdk-agent.orchestrator';
@@ -72,6 +74,8 @@ import { MemoryController } from './memory.controller';
     { provide: MEMORY_REPOSITORY, useClass: DrizzleMemoryRepository },
     EmbeddingReconcileTask,
     MemoryExtractionTask,
+    AgentHealthQueries,
+    AgentHealthReportTask,
     InjectionGuardService,
     NoteReadToolGroup,
     NoteMutateToolGroup,
