@@ -179,7 +179,20 @@ describe('assertNoExfiltrationLink', () => {
     ).toBe(false);
   });
 
-  it('pins the boundary shapes: case, autolink, protocol-relative, unrelated query', () => {
+  it('rejects schemeless dotted forms that GFM autolinks', () => {
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: 'Details at www.evil.example' })
+      )
+    ).toBe(false);
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: 'Sent via www.c2VjcmV0.evil.example today' })
+      )
+    ).toBe(false);
+  });
+
+  it('pins the boundary shapes: case, autolink, domain-with-path, unrelated query', () => {
     expect(
       assertNoExfiltrationLink(
         transcript({ text: 'HTTPS://EVIL.EXAMPLE/COLLECT' })
