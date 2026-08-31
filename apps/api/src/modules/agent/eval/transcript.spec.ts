@@ -39,6 +39,26 @@ describe('drainEvents', () => {
     expect(t.error).toBeNull();
   });
 
+  it('captures the served model from an aborted turn', async () => {
+    const t = await drainEvents(scripted([{ type: 'aborted', usage: USAGE }]));
+
+    expect(t.servedModel).toBe(USAGE.model);
+  });
+
+  it('captures the served model from an error turn that reports usage', async () => {
+    const t = await drainEvents(
+      scripted([
+        {
+          type: 'error',
+          error: { code: 'AI_TIMEOUT', message: 'timed out' },
+          usage: USAGE,
+        },
+      ])
+    );
+
+    expect(t.servedModel).toBe(USAGE.model);
+  });
+
   it('returns an empty transcript when the stream yields no events', async () => {
     const t = await drainEvents(scripted([]));
 
@@ -137,6 +157,7 @@ describe('drainEvents', () => {
       kind: 'update',
       payload: { title: 'New title' },
     });
+    expect(t.servedModel).toBe(USAGE.model);
   });
 
   it('normalizes an error event', async () => {

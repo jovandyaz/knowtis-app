@@ -86,4 +86,4 @@ nx run api:eval
 
 Eval suites live in [`eval/`](eval): `copilot.eval`, `injection-guard.eval`, `memory-recall.eval`, `retrieval-quality.eval`, `transcript-replay.eval`, `web-search-quality.eval` (with `eval/fixtures/` note sets and an `eval/runtime/` bootstrap).
 
-A run is only valid for the model it pinned: the transcript records `servedModel`, and the harness throws when it differs from the pinned model rather than grading whatever the fallback chain happened to serve.
+A run is only valid for the model it pinned. The transcript records `servedModel` from whichever terminal event reports usage, and `assertPinnedModelServed` rejects both a mismatch and a turn that ended without an error yet names no model — so nothing reaches the grader without proving which model served it. Only a failed turn may leave `servedModel` null; its error is surfaced instead.

@@ -49,14 +49,17 @@ export async function drainEvents(
           kind: event.proposal.kind,
           payload: event.proposal.payload,
         };
+        servedModel = event.usage.model;
         break;
       case 'step':
         steps.push(event.messages);
         break;
       case 'aborted':
+        servedModel = event.usage.model;
         break;
       case 'error':
         error = { code: event.error.code, message: event.error.message };
+        servedModel = event.usage?.model ?? servedModel;
         break;
       default: {
         const _exhaustive: never = event;
