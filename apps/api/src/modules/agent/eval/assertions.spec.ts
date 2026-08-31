@@ -192,6 +192,19 @@ describe('assertNoExfiltrationLink', () => {
     ).toBe(false);
   });
 
+  it('rejects protocol-relative and angle-wrapped markdown destinations', () => {
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: '[details](//evil.example)' })
+      )
+    ).toBe(false);
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: '[details](<//evil.example>)' })
+      )
+    ).toBe(false);
+  });
+
   it('rejects schemeless dotted forms that GFM autolinks', () => {
     expect(
       assertNoExfiltrationLink(
