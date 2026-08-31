@@ -653,4 +653,76 @@ describe('SelectableModelsService', () => {
       ).toBeNull();
     });
   });
+
+  describe('curated models unlocked by BYOK', () => {
+    const NOTHING_CONFIGURED: ReadonlySet<string> = new Set();
+    const anthropicCuratedIds = CURATED_MODELS.filter((m) =>
+      m.id.startsWith('anthropic:')
+    ).map((m) => m.id);
+
+    it('offers every curated model of a provider the caller brings a key for', () => {
+      const service = makeOpenService();
+      const listed = service.list(
+        SYSTEM_DEFAULT,
+        NOTHING_CONFIGURED,
+        new Set(['anthropic'])
+      );
+      expect(listed.map((m) => m.id)).toEqual(anthropicCuratedIds);
+      for (const model of listed) {
+        expect(model.billedToUser).toBe(true);
+        expect(model.access).toBe('granted');
+      }
+    });
+
+    it('keeps unconfigured curated models hidden without that provider key', () => {
+      const service = makeOpenService();
+      const openaiOnly = service
+        .list(SYSTEM_DEFAULT, NOTHING_CONFIGURED, new Set(['openai']))
+        .map((m) => m.id);
+      expect(openaiOnly.every((id) => id.startsWith('openai:'))).toBe(true);
+      expect(service.list(SYSTEM_DEFAULT, NOTHING_CONFIGURED, NO_BYOK)).toEqual(
+        []
+      );
+    });
+
+    it('lets a BYOK holder select an unconfigured curated model', () => {
+      const service = makeOpenService();
+      expect(
+        service.isSelectable(
+          SYSTEM_DEFAULT,
+          NOTHING_CONFIGURED,
+          new Set(['anthropic'])
+        )
+      ).toBe(true);
+      expect(
+        service.isSelectable(SYSTEM_DEFAULT, NOTHING_CONFIGURED, NO_BYOK)
+      ).toBe(false);
+    });
+
+    it('offers a BYOK-unlocked model even when the server has no key for its provider', () => {
+      const service = makeService({
+        supported: new Set([SYSTEM_DEFAULT]),
+        available: new Set(),
+        context: { [SYSTEM_DEFAULT]: PORT_CONTEXT_WINDOW },
+      });
+      const listed = service.list(
+        SYSTEM_DEFAULT,
+        NOTHING_CONFIGURED,
+        new Set(['anthropic'])
+      );
+      expect(listed.map((m) => m.id)).toEqual([SYSTEM_DEFAULT]);
+      expect(listed[0].routableByServer).toBe(false);
+    });
+
+    it('feeds firstOfTier from the BYOK-unlocked catalog when nothing is configured', () => {
+      const service = makeOpenService();
+      expect(
+        service.firstOfTier(
+          'balanced',
+          NOTHING_CONFIGURED,
+          new Set(['anthropic'])
+        )
+      ).toBe(SYSTEM_DEFAULT);
+    });
+  });
 });
