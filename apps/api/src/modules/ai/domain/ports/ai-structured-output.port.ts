@@ -6,7 +6,7 @@ import type { AITelemetryContext } from './ai-provider.port';
 
 export interface StructuredOutputOptions {
   readonly model: string;
-  readonly system?: string;
+  readonly instructions?: string;
   readonly maxRetries?: number;
   readonly maxOutputTokens?: number;
   readonly temperature?: number;

@@ -1,5 +1,5 @@
 import type { ModelMessage, StepResult, ToolSet } from 'ai';
-import { simulateReadableStream, stepCountIs, streamText, tool } from 'ai';
+import { isStepCount, simulateReadableStream, streamText, tool } from 'ai';
 import { MockLanguageModelV3 } from 'ai/test';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
@@ -106,7 +106,7 @@ function contentParts(message: ModelMessage): ContentPart[] {
 }
 
 describe('step-loop SDK contract', () => {
-  it('runs exactly one model call and executes the tool inside it under stepCountIs(1)', async () => {
+  it('runs exactly one model call and executes the tool inside it under isStepCount(1)', async () => {
     const { tools, execute } = makeTools();
     const model = new MockLanguageModelV3({
       doStream: async () => toolCallStream(),
@@ -115,10 +115,10 @@ describe('step-loop SDK contract', () => {
     const result = streamText({
       model,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: [{ role: 'user', content: USER_PROMPT }],
     });
-    const parts = await drain(result.fullStream);
+    const parts = await drain(result.stream);
 
     expect(model.doStreamCalls).toHaveLength(1);
     expect(execute).toHaveBeenCalledTimes(1);
@@ -146,10 +146,10 @@ describe('step-loop SDK contract', () => {
     const result = streamText({
       model,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: [{ role: 'user', content: USER_PROMPT }],
     });
-    await drain(result.fullStream);
+    await drain(result.stream);
 
     const { messages } = await result.response;
     expect(messages.map((m) => m.role)).toEqual(['assistant', 'tool']);
@@ -191,10 +191,10 @@ describe('step-loop SDK contract', () => {
     const first = streamText({
       model: model1,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: [{ role: 'user', content: USER_PROMPT }],
     });
-    await drain(first.fullStream);
+    await drain(first.stream);
     expect(execute).toHaveBeenCalledTimes(1);
 
     const { messages: firstMessages } = await first.response;
@@ -209,10 +209,10 @@ describe('step-loop SDK contract', () => {
     const second = streamText({
       model: model2,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: history,
     });
-    await drain(second.fullStream);
+    await drain(second.stream);
 
     expect(execute).toHaveBeenCalledTimes(1);
     expect(model2.doStreamCalls).toHaveLength(1);
@@ -244,7 +244,7 @@ describe('step-loop SDK contract', () => {
     expect(await second.text).toBe(ANSWER);
   });
 
-  it('fires onStepFinish once per streamText call with that call usage', async () => {
+  it('fires onStepEnd once per streamText call with that call usage', async () => {
     const { tools } = makeTools();
 
     const firstSteps: StepResult<SpikeTools>[] = [];
@@ -254,13 +254,13 @@ describe('step-loop SDK contract', () => {
     const first = streamText({
       model: model1,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: [{ role: 'user', content: USER_PROMPT }],
-      onStepFinish: (step) => {
+      onStepEnd: (step) => {
         firstSteps.push(step);
       },
     });
-    await drain(first.fullStream);
+    await drain(first.stream);
 
     expect(firstSteps).toHaveLength(1);
     expect(firstSteps[0].usage.inputTokens).toBe(STEP1_INPUT_TOKENS);
@@ -274,13 +274,13 @@ describe('step-loop SDK contract', () => {
     const second = streamText({
       model: model2,
       tools,
-      stopWhen: stepCountIs(1),
+      stopWhen: isStepCount(1),
       messages: [{ role: 'user', content: USER_PROMPT }, ...firstMessages],
-      onStepFinish: (step) => {
+      onStepEnd: (step) => {
         secondSteps.push(step);
       },
     });
-    await drain(second.fullStream);
+    await drain(second.stream);
 
     expect(secondSteps).toHaveLength(1);
     expect(secondSteps[0].usage.inputTokens).toBe(STEP2_INPUT_TOKENS);

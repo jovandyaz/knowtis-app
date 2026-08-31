@@ -7,7 +7,6 @@ import type { AIOrchestrator } from '../../../ai/application/services/ai-orchest
 import type { AIRateLimitService } from '../../../ai/application/services/ai-rate-limit.service';
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
-import { createMockConfig } from '../../../ai/testing/create-mock-config';
 import { createTestCatalog } from '../../../ai/testing/create-test-catalog';
 import { ArtifactErrorCodes } from '../../domain/errors';
 import type {
@@ -84,8 +83,7 @@ describe('GenerateArtifactHandler', () => {
       structuredOutput as unknown as AIStructuredOutputProvider,
       orchestrator as unknown as AIOrchestrator,
       rateLimitService as unknown as AIRateLimitService,
-      createTestCatalog(),
-      createMockConfig()
+      createTestCatalog()
     );
 
     handler = new GenerateArtifactHandler(
@@ -161,7 +159,7 @@ describe('GenerateArtifactHandler', () => {
         expect.any(Object),
         expect.objectContaining({
           model: MOCK_MODEL,
-          system: 'You are a study assistant.',
+          instructions: 'You are a study assistant.',
           maxOutputTokens: expect.any(Number),
           timeoutMs: expect.any(Number),
         })
@@ -198,7 +196,7 @@ describe('GenerateArtifactHandler', () => {
         expect.objectContaining({
           telemetry: {
             functionId: `artifact:${AI_ACTION.GENERATE_FLASHCARDS}`,
-            metadata: { userId: MOCK_USER_ID, environment: 'test' },
+            userId: MOCK_USER_ID,
           },
         })
       );

@@ -1,11 +1,11 @@
 import { Logger } from '@nestjs/common';
 import {
-  stepCountIs,
+  isStepCount,
   streamText,
   type LanguageModelUsage,
   type ModelMessage,
   type StreamTextResult,
-  type TelemetrySettings,
+  type TelemetryOptions,
   type ToolSet,
 } from 'ai';
 
@@ -16,11 +16,15 @@ import {
   type AIDomainError,
 } from '../../../ai/domain/errors/ai.errors';
 import {
-  cacheableSystem,
+  cacheableInstructions,
   withLastMessageCache,
 } from '../../../ai/infrastructure/providers/anthropic-cache';
 import type { OpenrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
+import {
+  withTraceIdentity,
+  type TraceIdentityAttrs,
+} from '../../../ai/infrastructure/providers/trace-identity';
 import type {
   AgentEvent,
   AgentSource,
@@ -115,10 +119,11 @@ export interface StepCallParams {
   readonly providerRegistry: ProviderRegistryFactory;
   readonly abortSignal: AbortSignal;
   readonly timeoutSignal: AbortSignal;
-  readonly system: string;
+  readonly instructions: string;
   readonly cache: boolean;
   readonly tools: ToolSet;
-  readonly telemetry: TelemetrySettings;
+  readonly telemetry: TelemetryOptions;
+  readonly traceIdentity: TraceIdentityAttrs;
   readonly providerOptions: OpenrouterProviderOptions;
   readonly history: ModelMessage[];
   readonly budgets: {
@@ -149,7 +154,7 @@ export type StepCallResult =
       kind: typeof STEP_CALL_KIND.COMPLETED;
       finishReason: string | null;
       usage: LanguageModelUsage;
-      response: StreamTextResult<ToolSet, never>['response'];
+      response: StreamTextResult<ToolSet, never, never>['response'];
     })
   | (StepCallHealth & { kind: typeof STEP_CALL_KIND.STALLED })
   | (StepCallHealth & {
@@ -195,30 +200,32 @@ export async function* runStepCall(
   };
 
   try {
-    result = streamText({
-      model: params.providerRegistry.languageModel(model, input.byokApiKey),
-      ...(params.cache
-        ? cacheableSystem(model, params.system)
-        : { system: params.system }),
-      messages: params.cache
-        ? withLastMessageCache(model, params.history)
-        : params.history,
-      tools: params.tools,
-      stopWhen: stepCountIs(1),
-      maxOutputTokens,
-      maxRetries,
-      temperature: AGENT_TEMPERATURE,
-      ...params.providerOptions,
-      abortSignal: runSignal,
-      onStepFinish: ({ toolResults, usage }) => {
-        turn.progressed = true;
-        collectSources(toolResults, turn.sources);
-        collectKnownNotes(toolResults, turn.knownNotes);
-        turn.stepUsage.inputTokens += usage?.inputTokens ?? 0;
-        turn.stepUsage.outputTokens += usage?.outputTokens ?? 0;
-      },
-      experimental_telemetry: params.telemetry,
-    });
+    result = withTraceIdentity(params.traceIdentity, () =>
+      streamText({
+        model: params.providerRegistry.languageModel(model, input.byokApiKey),
+        ...(params.cache
+          ? cacheableInstructions(model, params.instructions)
+          : { instructions: params.instructions }),
+        messages: params.cache
+          ? withLastMessageCache(model, params.history)
+          : params.history,
+        tools: params.tools,
+        stopWhen: isStepCount(1),
+        maxOutputTokens,
+        maxRetries,
+        temperature: AGENT_TEMPERATURE,
+        ...params.providerOptions,
+        abortSignal: runSignal,
+        onStepEnd: ({ toolResults, usage }) => {
+          turn.progressed = true;
+          collectSources(toolResults, turn.sources);
+          collectKnownNotes(toolResults, turn.knownNotes);
+          turn.stepUsage.inputTokens += usage?.inputTokens ?? 0;
+          turn.stepUsage.outputTokens += usage?.outputTokens ?? 0;
+        },
+        telemetry: params.telemetry,
+      })
+    );
   } catch (error) {
     return {
       kind: STEP_CALL_KIND.ERRORED,
@@ -231,7 +238,7 @@ export async function* runStepCall(
 
   try {
     armStallTimer();
-    for await (const part of result.fullStream) {
+    for await (const part of result.stream) {
       if (STREAM_MARKER_PART_TYPES.has(part.type)) {
         continue;
       }

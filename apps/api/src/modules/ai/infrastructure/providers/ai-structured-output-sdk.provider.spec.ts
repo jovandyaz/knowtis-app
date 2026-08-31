@@ -21,7 +21,7 @@ vi.mock('@ai-sdk/anthropic', () => ({
 }));
 
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn(),
+  createGoogle: vi.fn(),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
@@ -211,18 +211,37 @@ describe('AIStructuredOutputSDKProvider', () => {
       model: 'anthropic:claude-sonnet-4-20250514',
       telemetry: {
         functionId: 'artifact:generate_quiz',
-        metadata: { userId: 'user-1', environment: 'test' },
+        userId: 'user-1',
       },
     });
 
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        experimental_telemetry: {
+        telemetry: {
           isEnabled: true,
           recordInputs: false,
           recordOutputs: false,
           functionId: 'artifact:generate_quiz',
-          metadata: { userId: 'user-1', environment: 'test' },
+        },
+      })
+    );
+  });
+
+  it('should redact content when the caller provides no telemetry', async () => {
+    const { generateText } = vi.mocked(await import('ai'));
+    const provider = createProvider();
+
+    await provider.generateStructuredOutput('prompt', schema, {
+      model: 'anthropic:claude-sonnet-4-20250514',
+    });
+
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telemetry: {
+          isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
+          functionId: 'structured-output',
         },
       })
     );

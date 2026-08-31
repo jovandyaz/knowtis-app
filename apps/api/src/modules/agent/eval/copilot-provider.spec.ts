@@ -11,6 +11,7 @@ const TRANSCRIPT: EvalTranscript = {
   sources: [],
   error: null,
   stopReason: 'completed',
+  servedModel: null,
   steps: [],
 };
 

@@ -23,7 +23,7 @@ vi.mock('@ai-sdk/anthropic', () => ({
 }));
 
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn(),
+  createGoogle: vi.fn(),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
@@ -151,12 +151,11 @@ describe('InjectionClassifierService', () => {
       expect.objectContaining({
         maxRetries: 0,
         abortSignal: expect.any(AbortSignal) as AbortSignal,
-        experimental_telemetry: {
+        telemetry: {
           isEnabled: true,
           recordInputs: false,
           recordOutputs: false,
           functionId: 'injection-classifier',
-          metadata: { userId: 'user-1', environment: 'test' },
         },
       })
     );

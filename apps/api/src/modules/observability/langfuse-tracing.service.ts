@@ -1,4 +1,5 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
+import { LangfuseVercelAiSdkIntegration } from '@langfuse/vercel-ai-sdk';
 import {
   Injectable,
   Logger,
@@ -7,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { registerTelemetry } from 'ai';
 
 import type { EnvConfig } from '../../config/env.config';
 
@@ -39,6 +41,8 @@ export class LangfuseTracingService
       });
       this.sdk = new NodeSDK({ spanProcessors: [this.spanProcessor] });
       this.sdk.start();
+      // AI SDK 7 emits no telemetry at all until an integration is registered.
+      registerTelemetry(new LangfuseVercelAiSdkIntegration());
       this.logger.log('Langfuse tracing enabled');
     } catch (error) {
       this.logger.warn(

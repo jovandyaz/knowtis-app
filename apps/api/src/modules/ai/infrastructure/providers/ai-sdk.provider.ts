@@ -9,10 +9,13 @@ import type {
   CompletionResult,
   StreamCompletionResult,
 } from '../../domain/ports/ai-provider.port';
-import { cacheableSystem } from './anthropic-cache';
+import { cacheableInstructions } from './anthropic-cache';
 import { FallbackChainService } from './fallback-chain.service';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
+import { withTraceIdentity } from './trace-identity';
+
+const DEFAULT_TELEMETRY_FUNCTION_ID = 'ai-completion';
 
 @Injectable()
 export class AISDKProvider implements AICompletionProvider {
@@ -37,22 +40,21 @@ export class AISDKProvider implements AICompletionProvider {
     );
   }
 
-  private buildSystemParam(model: string, system: string | undefined) {
-    if (!system) {
+  private buildInstructionsParam(
+    model: string,
+    instructions: string | undefined
+  ) {
+    if (!instructions) {
       return {};
     }
-    return cacheableSystem(model, system);
+    return cacheableInstructions(model, instructions);
   }
 
   private buildTelemetryParam(telemetry: CompletionOptions['telemetry']) {
-    if (!telemetry) {
-      return {};
-    }
     return {
-      experimental_telemetry: buildRedactedTelemetry(
-        telemetry.functionId,
-        telemetry.metadata,
-        telemetry.recordContent ?? false
+      telemetry: buildRedactedTelemetry(
+        telemetry?.functionId ?? DEFAULT_TELEMETRY_FUNCTION_ID,
+        telemetry?.recordContent ?? false
       ),
     };
   }
@@ -75,16 +77,18 @@ export class AISDKProvider implements AICompletionProvider {
     prompt: string,
     options: CompletionOptions
   ): Promise<CompletionResult> {
-    const result = await generateText({
-      model: this.providerRegistry.languageModel(options.model),
-      ...this.buildSystemParam(options.model, options.system),
-      messages: [{ role: 'user', content: prompt }],
-      maxOutputTokens: options.maxTokens ?? 2048,
-      temperature: options.temperature ?? 0.7,
-      maxRetries: options.maxRetries ?? 3,
-      ...this.buildTimeoutParam(options.timeout),
-      ...this.buildTelemetryParam(options.telemetry),
-    });
+    const result = await withTraceIdentity(options.telemetry, () =>
+      generateText({
+        model: this.providerRegistry.languageModel(options.model),
+        ...this.buildInstructionsParam(options.model, options.instructions),
+        messages: [{ role: 'user', content: prompt }],
+        maxOutputTokens: options.maxTokens ?? 2048,
+        temperature: options.temperature ?? 0.7,
+        maxRetries: options.maxRetries ?? 3,
+        ...this.buildTimeoutParam(options.timeout),
+        ...this.buildTelemetryParam(options.telemetry),
+      })
+    );
 
     return {
       text: result.text,
@@ -110,17 +114,19 @@ export class AISDKProvider implements AICompletionProvider {
 
     let activeModel = options.model;
     const openStream = (model: string) => {
-      const result = streamText({
-        model: this.providerRegistry.languageModel(model),
-        ...this.buildSystemParam(model, options.system),
-        messages: [{ role: 'user', content: prompt }],
-        maxOutputTokens: options.maxTokens ?? 2048,
-        temperature: options.temperature ?? 0.7,
-        maxRetries: options.maxRetries ?? 3,
-        ...(options.signal ? { abortSignal: options.signal } : {}),
-        ...this.buildTimeoutParam(options.timeout),
-        ...this.buildTelemetryParam(options.telemetry),
-      });
+      const result = withTraceIdentity(options.telemetry, () =>
+        streamText({
+          model: this.providerRegistry.languageModel(model),
+          ...this.buildInstructionsParam(model, options.instructions),
+          messages: [{ role: 'user', content: prompt }],
+          maxOutputTokens: options.maxTokens ?? 2048,
+          temperature: options.temperature ?? 0.7,
+          maxRetries: options.maxRetries ?? 3,
+          ...(options.signal ? { abortSignal: options.signal } : {}),
+          ...this.buildTimeoutParam(options.timeout),
+          ...this.buildTelemetryParam(options.telemetry),
+        })
+      );
       activeModel = model;
       return result;
     };

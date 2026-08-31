@@ -1,5 +1,5 @@
 import { createAnthropic } from '@ai-sdk/anthropic';
-import { createGoogleGenerativeAI } from '@ai-sdk/google';
+import { createGoogle } from '@ai-sdk/google';
 import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,9 +36,7 @@ vi.mock('@ai-sdk/anthropic', () => ({
 }));
 
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn(() =>
-    vi.fn().mockReturnValue('mock-google-byok-model')
-  ),
+  createGoogle: vi.fn(() => vi.fn().mockReturnValue('mock-google-byok-model')),
 }));
 
 vi.mock('@ai-sdk/openai', () => ({
@@ -171,6 +169,32 @@ describe('ProviderRegistryFactory', () => {
 
     const registered = createProviderRegistry.mock.calls.at(-1)?.[0] ?? {};
     expect(Object.keys(registered).sort()).toEqual(['anthropic', 'openrouter']);
+  });
+
+  it('should declare v4 on the openrouter provider so the SDK does not re-adapt it', async () => {
+    const { createProviderRegistry } = vi.mocked(await import('ai'));
+    createProviderRegistry.mockClear();
+
+    makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const registered = (createProviderRegistry.mock.calls.at(-1)?.[0] ??
+      {}) as Record<string, { specificationVersion?: string }>;
+    expect(registered['openrouter']?.specificationVersion).toBe('v4');
+  });
+
+  it('should defer to the openrouter provider once it declares its own specification', async () => {
+    const { createProviderRegistry } = vi.mocked(await import('ai'));
+    createProviderRegistry.mockClear();
+    const provider = Object.assign(vi.fn(), { specificationVersion: 'v5' });
+    vi.mocked(createOpenRouter).mockReturnValueOnce(
+      provider as unknown as ReturnType<typeof createOpenRouter>
+    );
+
+    makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const registered = (createProviderRegistry.mock.calls.at(-1)?.[0] ??
+      {}) as Record<string, { specificationVersion?: string }>;
+    expect(registered['openrouter']?.specificationVersion).toBe('v5');
   });
 
   it('should throw when an openrouter model is requested without OPENROUTER_API_KEY', () => {
@@ -401,7 +425,7 @@ describe('ProviderRegistryFactory', () => {
       );
 
       expect(model).toBe('mock-google-byok-model');
-      expect(createGoogleGenerativeAI).toHaveBeenCalledWith({
+      expect(createGoogle).toHaveBeenCalledWith({
         apiKey: 'user-key',
       });
     });

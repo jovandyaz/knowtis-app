@@ -202,7 +202,7 @@ describe('StreamTextHandler', () => {
       expect.objectContaining({
         telemetry: {
           functionId: 'completion:summarize',
-          metadata: { userId: 'user-123', environment: 'test' },
+          userId: 'user-123',
         },
       })
     );

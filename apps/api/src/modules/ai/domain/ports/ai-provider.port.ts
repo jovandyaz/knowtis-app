@@ -1,14 +1,15 @@
 export interface AITelemetryContext {
   /** Span identifier in tracing backends, e.g. 'completion:summarize'. */
   readonly functionId: string;
-  readonly metadata: Record<string, string>;
+  /** Trace-level identity, propagated via @langfuse/tracing propagateAttributes. */
+  readonly userId?: string;
   /** Record prompt/response content in traces. Default: redact. */
   readonly recordContent?: boolean;
 }
 
 export interface CompletionOptions {
   readonly model: string;
-  readonly system?: string;
+  readonly instructions?: string;
   readonly maxTokens?: number;
   readonly temperature?: number;
   readonly maxRetries?: number;

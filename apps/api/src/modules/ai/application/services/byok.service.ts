@@ -166,6 +166,7 @@ export class ByokService {
       model: this.registry.languageModel(probe.id, apiKey),
       prompt: 'ping',
       maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
+      telemetry: { isEnabled: false },
     });
   }
 }

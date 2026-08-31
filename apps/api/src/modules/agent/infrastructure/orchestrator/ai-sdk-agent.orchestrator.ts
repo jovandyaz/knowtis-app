@@ -122,18 +122,18 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
 
     let tools: ToolSet;
     let cache: boolean;
-    let system: string;
+    let instructions: string;
     let initialMessages: ModelMessage[];
     try {
       tools = await this.toolRegistry.resolve(toolContext);
       cache = !input.byokApiKey && (await this.promptCachingEnabled());
-      system = this.buildSystemPrompt(
+      instructions = this.buildSystemPrompt(
         input.noteId,
         input.knownNotes,
         input.userMemories
       );
       if (input.resume) {
-        system += RESUME_SYSTEM_NOTE;
+        instructions += RESUME_SYSTEM_NOTE;
       }
       const priorMessages = toModelMessages(input.messages);
       initialMessages = input.resume
@@ -169,18 +169,17 @@ export class AiSdkAgentOrchestrator implements AgentOrchestrator {
       stepFailoverCandidates: options.stepFailoverCandidates,
       onModelSettled: options.onModelSettled,
       cooldown: this.fallbackChain.cooldown,
-      system,
+      instructions,
       cache,
       tools,
       telemetry: buildRedactedTelemetry(
         'agent-turn',
-        {
-          userId: input.userId,
-          environment: this.configService.get('NODE_ENV'),
-          ...(input.resume ? { tags: ['resume'] } : {}),
-        },
         this.configService.get('NODE_ENV') !== 'production' && !input.byokApiKey
       ),
+      traceIdentity: {
+        userId: input.userId,
+        ...(input.resume ? { tags: ['resume'] as const } : {}),
+      },
       initialMessages,
       budgets: {
         stallMs: this.configService.get('AI_AGENT_STALL_MS'),

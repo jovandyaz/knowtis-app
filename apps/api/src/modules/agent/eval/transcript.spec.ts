@@ -48,6 +48,7 @@ describe('drainEvents', () => {
       sources: [],
       error: null,
       stopReason: null,
+      servedModel: null,
       steps: [],
     });
   });

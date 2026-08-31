@@ -105,13 +105,13 @@ describe('AISDKProvider', () => {
     await drain(
       provider.streamCompletion('test prompt', {
         model: 'anthropic:claude-sonnet-4-20250514',
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: {
+        instructions: {
           role: 'system',
           content: 'You are a helpful assistant.',
           providerOptions: {
@@ -128,7 +128,7 @@ describe('AISDKProvider', () => {
     const { streamText, generateText } = vi.mocked(await import('ai'));
     const telemetry = {
       functionId: 'completion:summarize',
-      metadata: { userId: 'user-1', environment: 'test' },
+      userId: 'user-1',
     };
 
     await drain(
@@ -143,27 +143,34 @@ describe('AISDKProvider', () => {
     });
 
     const expected = expect.objectContaining({
-      experimental_telemetry: {
+      telemetry: {
         isEnabled: true,
         recordInputs: false,
         recordOutputs: false,
         functionId: 'completion:summarize',
-        metadata: { userId: 'user-1', environment: 'test' },
       },
     });
     expect(streamText).toHaveBeenCalledWith(expected);
     expect(generateText).toHaveBeenCalledWith(expected);
   });
 
-  it('should omit telemetry from the SDK call when not provided', async () => {
+  it('should redact content when the caller provides no telemetry', async () => {
     const { generateText } = vi.mocked(await import('ai'));
 
     await provider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
     });
 
-    const lastCall = vi.mocked(generateText).mock.calls.at(-1)?.[0];
-    expect(lastCall).not.toHaveProperty('experimental_telemetry');
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telemetry: {
+          isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
+          functionId: 'ai-completion',
+        },
+      })
+    );
   });
 
   it('should pass plain system string for non-Anthropic models', async () => {
@@ -172,13 +179,13 @@ describe('AISDKProvider', () => {
     await drain(
       provider.streamCompletion('test prompt', {
         model: 'openai:gpt-4o',
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
 
     expect(streamText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: 'You are a helpful assistant.',
+        instructions: 'You are a helpful assistant.',
       })
     );
   });
@@ -188,12 +195,12 @@ describe('AISDKProvider', () => {
 
     await provider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
-      system: 'You are a helpful assistant.',
+      instructions: 'You are a helpful assistant.',
     });
 
     expect(generateText).toHaveBeenCalledWith(
       expect.objectContaining({
-        system: {
+        instructions: {
           role: 'system',
           content: 'You are a helpful assistant.',
           providerOptions: {

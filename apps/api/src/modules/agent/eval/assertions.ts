@@ -7,6 +7,7 @@ const INVALID_TRANSCRIPT: EvalTranscript = {
   sources: [],
   error: { code: 'INVALID_EVAL_OUTPUT', message: 'output is not a transcript' },
   stopReason: null,
+  servedModel: null,
   steps: [],
 };
 

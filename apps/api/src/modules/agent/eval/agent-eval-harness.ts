@@ -113,6 +113,12 @@ export class AgentEvalHarness {
       maxTurnTokens: this.maxTurnTokens,
     });
     const drained = await drainEvents(events);
+    if (drained.servedModel !== null && drained.servedModel !== model) {
+      throw new Error(
+        `Eval turn was served by '${drained.servedModel}' instead of the pinned '${model}': ` +
+          'the fallback chain took over, so this run would grade the wrong model'
+      );
+    }
     return { ...drained, toolCalls: this.retrieval.getCalls() };
   }
 

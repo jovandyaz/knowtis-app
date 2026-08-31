@@ -145,7 +145,7 @@ export class SuggestOrganizationHandler {
       return err(modelResult.error);
     }
     const model = modelResult.value.toPrimitive();
-    const system = this.orchestrator.getSystemPrompt(
+    const instructions = this.orchestrator.getSystemPrompt(
       AI_ACTION.SUGGEST_ORGANIZATION
     );
 
@@ -168,7 +168,7 @@ export class SuggestOrganizationHandler {
             note,
             userId: input.userId,
             model,
-            system,
+            instructions,
             estimatedCostUsd,
             vocabulary,
             known,
@@ -254,14 +254,15 @@ export class SuggestOrganizationHandler {
     note: NoteEntity;
     userId: string;
     model: string;
-    system: string;
+    instructions: string;
     estimatedCostUsd: number;
     vocabulary: string[];
     known: Set<string>;
     requestId: string;
     clientIp?: string;
   }): Promise<NoteOutcome> {
-    const { note, userId, model, system, estimatedCostUsd, requestId } = params;
+    const { note, userId, model, instructions, estimatedCostUsd, requestId } =
+      params;
     const empty: OrganizationSuggestion = {
       noteId: note.id,
       bucket: null,
@@ -322,7 +323,7 @@ export class SuggestOrganizationHandler {
           suggestOrganizationSchema,
           {
             model,
-            system,
+            instructions,
             maxOutputTokens: SUGGEST_MAX_OUTPUT_TOKENS,
             temperature: SUGGEST_TEMPERATURE,
             fallbackScope: SUGGEST_FALLBACK_SCOPE,

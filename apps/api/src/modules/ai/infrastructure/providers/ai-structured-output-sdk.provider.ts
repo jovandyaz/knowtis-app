@@ -18,6 +18,9 @@ import {
 } from './openrouter-options';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
+import { withTraceIdentity } from './trace-identity';
+
+const DEFAULT_TELEMETRY_FUNCTION_ID = 'structured-output';
 
 interface GenerateParams<T> {
   readonly prompt: string;
@@ -77,29 +80,26 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
     providerOrder,
     timeoutSignal,
   }: GenerateParams<T>): Promise<StructuredOutputResult<T>> {
-    const result = await generateText({
-      model: this.providerRegistry.languageModel(options.model),
-      ...(options.system ? { system: options.system } : {}),
-      prompt,
-      output: Output.object({ schema }),
-      maxRetries: options.maxRetries ?? 3,
-      ...pickDefined(options, ['maxOutputTokens', 'temperature']),
-      ...openrouterProviderOptions({
-        model: options.model,
-        providerOrder,
-        requireParameters: true,
-      }),
-      ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
-      ...(options.telemetry
-        ? {
-            experimental_telemetry: buildRedactedTelemetry(
-              options.telemetry.functionId,
-              options.telemetry.metadata,
-              options.telemetry.recordContent ?? false
-            ),
-          }
-        : {}),
-    });
+    const result = await withTraceIdentity(options.telemetry, () =>
+      generateText({
+        model: this.providerRegistry.languageModel(options.model),
+        ...(options.instructions ? { instructions: options.instructions } : {}),
+        prompt,
+        output: Output.object({ schema }),
+        maxRetries: options.maxRetries ?? 3,
+        ...pickDefined(options, ['maxOutputTokens', 'temperature']),
+        ...openrouterProviderOptions({
+          model: options.model,
+          providerOrder,
+          requireParameters: true,
+        }),
+        ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
+        telemetry: buildRedactedTelemetry(
+          options.telemetry?.functionId ?? DEFAULT_TELEMETRY_FUNCTION_ID,
+          options.telemetry?.recordContent ?? false
+        ),
+      })
+    );
 
     return {
       object: result.output as T,

@@ -38,14 +38,11 @@ function makePipeline(overrides: PipelineOverrides = {}) {
   const catalog = {
     getPricing: overrides.getPricing ?? vi.fn().mockReturnValue(undefined),
   };
-  const config = { get: vi.fn().mockReturnValue('test') };
-
   const pipeline = new AIGenerationPipeline(
     structuredOutput as never,
     orchestrator as never,
     rateLimit as never,
-    catalog as never,
-    config as never
+    catalog as never
   );
   return {
     pipeline,

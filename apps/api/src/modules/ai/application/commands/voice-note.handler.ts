@@ -195,7 +195,7 @@ export class VoiceNoteHandler {
           voiceNoteOutputSchema,
           {
             model,
-            system: systemPrompt,
+            instructions: systemPrompt,
             maxRetries: this.configService.get('AI_MAX_RETRIES'),
           }
         );

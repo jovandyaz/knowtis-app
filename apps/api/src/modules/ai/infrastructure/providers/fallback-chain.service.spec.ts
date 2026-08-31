@@ -11,7 +11,7 @@ import { ProviderRegistryFactory } from './provider-registry.factory';
 
 vi.mock('@ai-sdk/anthropic', () => ({ createAnthropic: vi.fn(() => vi.fn()) }));
 vi.mock('@ai-sdk/google', () => ({
-  createGoogleGenerativeAI: vi.fn(() => vi.fn()),
+  createGoogle: vi.fn(() => vi.fn()),
 }));
 vi.mock('@ai-sdk/openai', () => ({ createOpenAI: vi.fn(() => vi.fn()) }));
 

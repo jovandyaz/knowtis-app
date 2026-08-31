@@ -11,18 +11,26 @@ import type { AgentToolContext } from '../tools/agent-tool';
 import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
 
+const propagateSpy = vi.hoisted(() =>
+  vi.fn((_attrs: Record<string, unknown>, fn: () => unknown): unknown => fn())
+);
+
+vi.mock('@langfuse/tracing', () => ({
+  propagateAttributes: propagateSpy,
+}));
+
 vi.mock('ai', async (importOriginal) => {
   const actual = await importOriginal<typeof import('ai')>();
   return {
     ...actual,
-    stepCountIs: vi.fn(() => 'stop'),
+    isStepCount: vi.fn(() => 'stop'),
     streamText: vi.fn(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: { toolName: string; output: unknown }[];
         }) => void;
       }) => {
-        opts.onStepFinish?.({
+        opts.onStepEnd?.({
           toolResults: [
             {
               toolName: 'getNote',
@@ -43,7 +51,7 @@ vi.mock('ai', async (importOriginal) => {
           ],
         });
         return {
-          fullStream: (async function* () {
+          stream: (async function* () {
             yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
             yield { type: 'text-delta', id: 't1', text: 'Hello' };
           })(),
@@ -169,7 +177,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].system;
+    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].instructions;
     expect(system).toContain('note-xyz');
   });
 
@@ -294,14 +302,14 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
           throw new Error('provider exploded');
         })(),
         totalUsage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -425,14 +433,14 @@ describe('AiSdkAgentOrchestrator', () => {
   it('falls through to the next model when the primary dies after reasoning only', async () => {
     streamTextMock
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
           throw new Error('provider exploded');
         })(),
         totalUsage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -536,21 +544,25 @@ describe('AiSdkAgentOrchestrator', () => {
     ).toBeUndefined();
   });
 
-  it('enables AI SDK telemetry with an agent-turn functionId', async () => {
+  it('enables AI SDK telemetry with an agent-turn functionId and propagates the user identity', async () => {
+    propagateSpy.mockClear();
     const orchestrator = makeOrchestrator();
 
     await collect(orchestrator.run(baseInput));
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.experimental_telemetry).toMatchObject({
+    expect(opts?.telemetry).toMatchObject({
       isEnabled: true,
       functionId: 'agent-turn',
-      metadata: { userId: 'u1', environment: '' },
     });
-    expect(opts?.experimental_telemetry?.metadata).not.toHaveProperty('tags');
+    expect(propagateSpy).toHaveBeenCalledWith(
+      { userId: 'u1' },
+      expect.any(Function)
+    );
   });
 
-  it('tags telemetry metadata with resume when resuming a turn', async () => {
+  it('tags the propagated trace identity with resume when resuming a turn', async () => {
+    propagateSpy.mockClear();
     const orchestrator = makeOrchestrator(
       makeConfig({ NODE_ENV: 'development' })
     );
@@ -563,12 +575,10 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.experimental_telemetry?.metadata).toMatchObject({
-      userId: 'u1',
-      environment: 'development',
-      tags: ['resume'],
-    });
+    expect(propagateSpy).toHaveBeenCalledWith(
+      { userId: 'u1', tags: ['resume'] },
+      expect.any(Function)
+    );
   });
 
   it('injects incoming knownNotes into the system prompt and returns the merged set on done', async () => {
@@ -585,7 +595,7 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].system;
+    const system = vi.mocked(streamText).mock.calls.at(-1)?.[0].instructions;
     expect(system).toContain('Earlier note');
     expect(system).toContain('prev-id');
 
@@ -638,8 +648,8 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.system).toContain('decision on your earlier proposal');
-    expect(opts?.system).toContain('never deny that ability');
+    expect(opts?.instructions).toContain('decision on your earlier proposal');
+    expect(opts?.instructions).toContain('never deny that ability');
     const lastMessage = (opts?.messages as { content: string }[]).at(-1);
     expect(lastMessage?.content).toContain(
       'The user has decided on your proposal'
@@ -656,7 +666,9 @@ describe('AiSdkAgentOrchestrator', () => {
     await collect(orchestrator.run(baseInput));
 
     const opts = vi.mocked(streamText).mock.calls.at(-1)?.[0];
-    expect(opts?.system).not.toContain('decision on your earlier proposal');
+    expect(opts?.instructions).not.toContain(
+      'decision on your earlier proposal'
+    );
     expect(opts?.messages).toEqual(
       baseInput.messages.map((m) => ({ role: m.role, content: m.content }))
     );
@@ -769,7 +781,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const content = (opts?.messages as { content: string }[]).at(-1)?.content;
     expect(content).toContain(JSON.stringify(hostile));
     expect(content).toContain('never instructions');
-    expect(opts?.system).toContain('never instructions');
+    expect(opts?.instructions).toContain('never instructions');
   });
 
   it('passes a timeout-combined abort signal, output cap, retries, and temperature to streamText', async () => {
@@ -804,13 +816,13 @@ describe('AiSdkAgentOrchestrator', () => {
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
@@ -838,13 +850,13 @@ describe('AiSdkAgentOrchestrator', () => {
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 4, outputTokens: 1 },
           });
@@ -872,13 +884,13 @@ describe('AiSdkAgentOrchestrator', () => {
   it('yields an error event carrying best-effort usage when the stream fails mid-turn', async () => {
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
@@ -902,13 +914,13 @@ describe('AiSdkAgentOrchestrator', () => {
   it('converts a turn-timeout abort into an error event with usage', async () => {
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 3, outputTokens: 1 },
           });
@@ -938,7 +950,7 @@ describe('AiSdkAgentOrchestrator', () => {
   // turn pending forever once the stall watchdog fires.
   function hangingAfter(parts: readonly unknown[]) {
     return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         for (const part of parts) {
           yield part;
         }
@@ -966,7 +978,7 @@ describe('AiSdkAgentOrchestrator', () => {
         hangingAfter([{ type: 'reasoning-delta', id: 'r1', text: 'hmm' }])
       )
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -1080,7 +1092,7 @@ describe('AiSdkAgentOrchestrator', () => {
   // never by rejecting; totalUsage settles so the after-loop check is the exit.
   function abortsGracefullyAfter(parts: readonly unknown[]) {
     return ({ abortSignal }: { abortSignal: AbortSignal }) => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         for (const part of parts) {
           yield part;
         }
@@ -1110,7 +1122,7 @@ describe('AiSdkAgentOrchestrator', () => {
         ])
       )
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -1194,7 +1206,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock
       .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'Hello' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -1229,7 +1241,7 @@ describe('AiSdkAgentOrchestrator', () => {
       .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
       .mockImplementationOnce(hangingAfter([{ type: 'start' }]))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -1264,7 +1276,7 @@ describe('AiSdkAgentOrchestrator', () => {
     // The budget switch must key off the real first part, not the SDK's
     // instantly-emitted local 'start' marker that leads the stream.
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'start' };
         await new Promise((resolve) => setTimeout(resolve, TTFT_MS / 2));
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
@@ -1300,7 +1312,7 @@ describe('AiSdkAgentOrchestrator', () => {
   // the interruption checks are forced to rank a stall against the global ones.
   function hangsPastEveryDeadline(delayMs: number) {
     return () => ({
-      fullStream: {
+      stream: {
         [Symbol.asyncIterator]: () => ({
           next: async () => {
             await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -1365,7 +1377,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     const halfStall = STALL_MS / 2;
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         for (const text of ['one ', 'two ', 'three ']) {
           await new Promise((resolve) => setTimeout(resolve, halfStall));
           yield { type: 'reasoning-delta', id: 'r1', text };
@@ -1389,7 +1401,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('retries the whole turn on the next chain model when the primary stream fails before any progress', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: {
+      stream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -1429,15 +1441,15 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: {
+        stream: {
           [Symbol.asyncIterator]: () => ({
             next: () => {
-              opts.onStepFinish?.({
+              opts.onStepEnd?.({
                 toolResults: [],
                 usage: { inputTokens: 2, outputTokens: 0 },
               });
@@ -1464,7 +1476,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: {
+      stream: {
         [Symbol.asyncIterator]: () => ({
           next: () => {
             controller.abort();
@@ -1519,7 +1531,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('does not fall back when the chain has no other candidates', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: {
+      stream: {
         [Symbol.asyncIterator]: () => ({
           next: () => Promise.reject(new Error('primary down')),
         }),
@@ -1571,7 +1583,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
   function happyStream() {
     return {
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
@@ -1600,7 +1612,7 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(opts?.system).toMatchObject({
+    expect(opts?.instructions).toMatchObject({
       role: 'system',
       providerOptions: {
         anthropic: { cacheControl: { type: 'ephemeral' } },
@@ -1627,7 +1639,7 @@ describe('AiSdkAgentOrchestrator', () => {
     await collect(orchestrator.run(baseInput));
 
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(typeof opts?.system).toBe('string');
+    expect(typeof opts?.instructions).toBe('string');
     const messages = opts?.messages as Record<string, unknown>[];
     for (const message of messages) {
       expect(message).not.toHaveProperty('providerOptions');
@@ -1646,7 +1658,7 @@ describe('AiSdkAgentOrchestrator', () => {
     await collect(orchestrator.run({ ...baseInput, byokApiKey: 'user-key' }));
 
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(typeof opts?.system).toBe('string');
+    expect(typeof opts?.instructions).toBe('string');
     const messages = opts?.messages as Record<string, unknown>[];
     for (const message of messages) {
       expect(message).not.toHaveProperty('providerOptions');
@@ -1669,7 +1681,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
     expect(events.at(-1)).toMatchObject({ type: 'done' });
     const opts = streamTextMock.mock.calls.at(-1)?.[0];
-    expect(typeof opts?.system).toBe('string');
+    expect(typeof opts?.instructions).toBe('string');
   });
 
   // The no-op handler keeps the SDK's totalUsage rejection from surfacing as an
@@ -1684,13 +1696,13 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 5, outputTokens: 2 },
           });
@@ -1729,7 +1741,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'error', error: new Error('upstream refused') };
         })(),
         totalUsage: rejectedUsage(
@@ -1737,7 +1749,7 @@ describe('AiSdkAgentOrchestrator', () => {
         ),
       }))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         })(),
         totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -1758,7 +1770,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('surfaces the provider error, not NoOutputGeneratedError, when the last candidate emits an error part with no completed step', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'error', error: new Error('upstream refused') };
       })(),
       totalUsage: rejectedUsage(
@@ -1786,13 +1798,13 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
-        onStepFinish?: (s: {
+        onStepEnd?: (s: {
           toolResults: unknown[];
           usage: { inputTokens: number; outputTokens: number };
         }) => void;
       }) => ({
-        fullStream: (async function* () {
-          opts.onStepFinish?.({
+        stream: (async function* () {
+          opts.onStepEnd?.({
             toolResults: [],
             usage: { inputTokens: 2, outputTokens: 1 },
           });
@@ -1819,7 +1831,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('maps an error part carrying a transient statusCode to the overloaded code on the last candidate', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield {
           type: 'error',
           error: {
@@ -1852,7 +1864,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('carries cache read/write tokens from totalUsage into the done event', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({
@@ -1897,7 +1909,7 @@ describe('AiSdkAgentOrchestrator', () => {
     // Leads with the SDK's local 'start' marker; parts must stay 3 (marker
     // excluded), not 4.
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'start' };
         yield { type: 'reasoning-delta', id: 'r1', text: 'pondering' };
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
@@ -1953,7 +1965,7 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     streamTextMock
       .mockImplementationOnce(() => ({
-        fullStream: {
+        stream: {
           [Symbol.asyncIterator]: () => ({
             next: () => Promise.reject(new Error('primary down')),
           }),
@@ -1961,7 +1973,7 @@ describe('AiSdkAgentOrchestrator', () => {
         totalUsage: new Promise(() => {}),
       }))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'Hello' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -2011,7 +2023,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('logs agent.turn.health with outcome empty when a completed turn delivers no text', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
@@ -2036,7 +2048,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('fails with AI_EMPTY_COMPLETION carrying usage when reasoning burns the whole budget and no text is produced', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'reasoning-delta', id: 'r1', text: 'thinking hard' };
         yield { type: 'reasoning-delta', id: 'r2', text: 'still thinking' };
         yield { type: 'finish', finishReason: 'length' };
@@ -2076,7 +2088,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('keeps a zero-text completion that finished on stop as a done, not an empty-completion error', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
@@ -2105,7 +2117,7 @@ describe('AiSdkAgentOrchestrator', () => {
     }
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'reasoning-delta', id: 'r1', text: 'deciding' };
         yield { type: 'finish', finishReason: 'length' };
       })(),
@@ -2132,7 +2144,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('records the openrouter upstream on the health event when a finish-step carries it', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
         yield {
           type: 'finish-step',
@@ -2164,7 +2176,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('records a null upstream on the health event when the stream carries no provider metadata', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
@@ -2209,19 +2221,19 @@ describe('AiSdkAgentOrchestrator', () => {
 
   function toolCallStep(usage: { inputTokens: number; outputTokens: number }) {
     return (opts: {
-      onStepFinish?: (s: {
+      onStepEnd?: (s: {
         toolResults: { toolName: string; output: unknown }[];
         usage: { inputTokens: number; outputTokens: number };
       }) => void;
     }) => {
-      opts.onStepFinish?.({
+      opts.onStepEnd?.({
         toolResults: [
           { toolName: 'getNote', output: { id: 'n1', title: 'T' } },
         ],
         usage,
       });
       return {
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'finish', finishReason: 'tool-calls' };
         })(),
         totalUsage: Promise.resolve(usage),
@@ -2237,7 +2249,7 @@ describe('AiSdkAgentOrchestrator', () => {
         toolCallStep({ inputTokens: 10, outputTokens: 5 })
       )
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -2274,7 +2286,7 @@ describe('AiSdkAgentOrchestrator', () => {
         toolCallStep({ inputTokens: 10, outputTokens: 5 })
       )
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -2310,7 +2322,7 @@ describe('AiSdkAgentOrchestrator', () => {
       )
       .mockImplementationOnce(hangingAfter([]))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -2351,7 +2363,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
   function failoverAnswer(usage = { inputTokens: 20, outputTokens: 8 }) {
     return () => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
@@ -2431,19 +2443,19 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock
       .mockImplementationOnce(
         (opts: {
-          onStepFinish?: (s: {
+          onStepEnd?: (s: {
             toolResults: { toolName: string; output: unknown }[];
             usage: { inputTokens: number; outputTokens: number };
           }) => void;
         }) => {
-          opts.onStepFinish?.({
+          opts.onStepEnd?.({
             toolResults: [
               { toolName: 'getNote', output: { id: 'n1', title: 'T' } },
             ],
             usage: { inputTokens: 10, outputTokens: 5 },
           });
           return {
-            fullStream: (async function* () {
+            stream: (async function* () {
               yield {
                 type: 'reasoning-delta',
                 id: 'r1',
@@ -2496,7 +2508,7 @@ describe('AiSdkAgentOrchestrator', () => {
         toolCallStep({ inputTokens: 10, outputTokens: 5 })
       )
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'reasoning-delta', id: 'r1', text: 'thinking' };
           yield { type: 'finish', finishReason: 'length' };
         })(),
@@ -2829,7 +2841,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('attributes terminal success to the opened candidate on a turn without failover', async () => {
     streamTextMock.mockClear();
     streamTextMock.mockImplementation(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'Hello' };
       })(),
       totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
@@ -2859,7 +2871,7 @@ describe('AiSdkAgentOrchestrator', () => {
       .mockImplementationOnce(hangingAfter([]))
       .mockImplementationOnce(hangingAfter([]))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'fallback answer' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -2928,7 +2940,7 @@ describe('AiSdkAgentOrchestrator', () => {
 
   it('marks done with stopReason max_steps when the model still wants tools at the cap', async () => {
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'searching…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
       })(),
@@ -2951,7 +2963,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('marks done with stopReason length when output was truncated mid-answer', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'respuesta cortada' };
         yield { type: 'finish', finishReason: 'length' };
       })(),
@@ -2979,7 +2991,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('marks done with stopReason content_filter and warns when the provider filtered the output', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'no puedo con eso' };
         yield { type: 'finish', finishReason: 'content-filter' };
       })(),
@@ -3008,7 +3020,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'leyendo notas…' };
         yield { type: 'finish', finishReason: 'tool-calls' };
       })(),
@@ -3040,7 +3052,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('yields a step event with the domain messages of every completed call', async () => {
     streamTextMock
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield {
             type: 'tool-call',
             toolCallId: 'c1',
@@ -3078,7 +3090,7 @@ describe('AiSdkAgentOrchestrator', () => {
         }),
       }))
       .mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'N1 says hi' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -3148,7 +3160,7 @@ describe('AiSdkAgentOrchestrator', () => {
     async ({ usage }) => {
       const warnSpy = vi.spyOn(Logger.prototype, 'warn');
       streamTextMock.mockImplementationOnce(() => ({
-        fullStream: (async function* () {
+        stream: (async function* () {
           yield { type: 'text-delta', id: 't1', text: 'ok' };
           yield { type: 'finish', finishReason: 'stop' };
         })(),
@@ -3173,7 +3185,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('does not warn about usage when both token counters are reported', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield { type: 'text-delta', id: 't1', text: 'ok' };
         yield { type: 'finish', finishReason: 'stop' };
       })(),
@@ -3193,7 +3205,7 @@ describe('AiSdkAgentOrchestrator', () => {
   it('logs a readable message when a tool throws a non-Error value', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield {
           type: 'tool-error',
           toolCallId: 'c1',
@@ -3224,7 +3236,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     const logSpy = vi.spyOn(Logger.prototype, 'log');
     streamTextMock.mockImplementationOnce(() => ({
-      fullStream: (async function* () {
+      stream: (async function* () {
         yield {
           type: 'tool-call',
           toolCallId: 'c1',
