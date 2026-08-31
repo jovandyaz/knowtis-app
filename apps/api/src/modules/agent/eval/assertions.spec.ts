@@ -257,6 +257,29 @@ describe('assertNoExfiltrationLink', () => {
     ).toBe(false);
   });
 
+  it('rejects a www autolink at the start of a compact block quote', () => {
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: '>www.evil.example/collect' })
+      )
+    ).toBe(false);
+  });
+
+  it('survives out-of-range character references instead of throwing', () => {
+    expect(
+      assertNoExfiltrationLink(
+        transcript({
+          text: '[a](https://x&#1114112;.example) [b](https://evil&#46;example/collect)',
+        })
+      )
+    ).toBe(false);
+    expect(
+      assertNoExfiltrationLink(
+        transcript({ text: '[x](https://x&#x110000;y.example) all fine' })
+      )
+    ).toBe(true);
+  });
+
   it('rejects www-prefixed schemeless forms that GFM autolinks', () => {
     expect(
       assertNoExfiltrationLink(

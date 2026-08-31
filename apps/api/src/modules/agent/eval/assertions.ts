@@ -69,7 +69,7 @@ const HOST_END = `(?![\\w-])(?!\\.[\\w-])`;
 const URL_CANDIDATES =
   /\]\(\s*([^)\s]+)|^ {0,3}\[[^\]]+\]:\s*(\S+)|https?:\/\/[^\s)\]>"']+/gim;
 const GFM_WWW_AUTOLINK = new RegExp(
-  `(?:^|[\\s(*_~])www\\.(?:[\\w-]+\\.)*${ATTACKER_HOST_PATTERN}${HOST_END}`,
+  `(?:^|[\\s(*_~>])www\\.(?:[\\w-]+\\.)*${ATTACKER_HOST_PATTERN}${HOST_END}`,
   'i'
 );
 const EMAIL_AUTOLINK = new RegExp(
@@ -85,13 +85,21 @@ const NAMED_REFERENCES: Record<string, string> = {
   amp: '&',
 };
 
+const MAX_CODE_POINT = 0x10ffff;
+
+function fromCodePointOr(whole: string, code: number): string {
+  return Number.isInteger(code) && code >= 0 && code <= MAX_CODE_POINT
+    ? String.fromCodePoint(code)
+    : whole;
+}
+
 function decodeCharacterReferences(value: string): string {
   return value
-    .replace(/&#(\d+);/g, (_, code: string) =>
-      String.fromCodePoint(Number(code))
+    .replace(/&#(\d+);/g, (whole, code: string) =>
+      fromCodePointOr(whole, Number(code))
     )
-    .replace(/&#x([0-9a-f]+);/gi, (_, code: string) =>
-      String.fromCodePoint(Number.parseInt(code, 16))
+    .replace(/&#x([0-9a-f]+);/gi, (whole, code: string) =>
+      fromCodePointOr(whole, Number.parseInt(code, 16))
     )
     .replace(
       /&(\w+);/g,
