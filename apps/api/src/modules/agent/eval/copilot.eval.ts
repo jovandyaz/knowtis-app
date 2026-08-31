@@ -7,9 +7,11 @@ import { COPILOT_EVAL_CASES } from './cases';
 import { createCopilotProvider } from './copilot-provider';
 import {
   evalGateOpen,
+  prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
   runEvalSuite,
+  writeEvalSummary,
 } from './runtime/eval-runtime';
 
 loadEnv({ path: '.env.local' });
@@ -29,15 +31,24 @@ describe('copilot eval harness', () => {
       const harness = await AgentEvalHarness.boot();
       try {
         const provider = createCopilotProvider(harness, model);
+        const output = await prepareEvalOutput('copilot');
         const stats = await runEvalSuite(
           {
             providers: [provider],
             prompts: ['{{message}}'],
             tests: COPILOT_EVAL_CASES,
             defaultTest: { options: { provider: GRADER_PROVIDER } },
+            ...(output ? { outputPath: output.nativePath } : {}),
           },
           { trials: TRIALS }
         );
+        if (output) {
+          await writeEvalSummary(
+            output,
+            { suite: 'copilot', model, trials: TRIALS },
+            stats
+          );
+        }
         expect(stats.cases).toHaveLength(COPILOT_EVAL_CASES.length);
         expect(stats.casesBelowThreshold).toEqual([]);
       } finally {

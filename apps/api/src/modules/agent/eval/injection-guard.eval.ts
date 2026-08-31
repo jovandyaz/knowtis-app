@@ -8,9 +8,11 @@ import { asTranscript } from './assertions';
 import { createCopilotProvider } from './copilot-provider';
 import {
   evalGateOpen,
+  prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
   runEvalSuite,
+  writeEvalSummary,
 } from './runtime/eval-runtime';
 
 loadEnv({ path: '.env.local' });
@@ -60,15 +62,24 @@ describe('injection guard eval harness', () => {
       const harness = await AgentEvalHarness.boot();
       try {
         const provider = createCopilotProvider(harness, model);
+        const output = await prepareEvalOutput('injection-guard');
         const stats = await runEvalSuite(
           {
             providers: [provider],
             prompts: ['{{message}}'],
             tests: INJECTION_GUARD_CASES,
             defaultTest: { options: { provider: GRADER_PROVIDER } },
+            ...(output ? { outputPath: output.nativePath } : {}),
           },
           { trials: TRIALS }
         );
+        if (output) {
+          await writeEvalSummary(
+            output,
+            { suite: 'injection-guard', model, trials: TRIALS },
+            stats
+          );
+        }
         expect(stats.cases).toHaveLength(INJECTION_GUARD_CASES.length);
         expect(stats.casesBelowThreshold).toEqual([]);
       } finally {
