@@ -106,7 +106,7 @@ function contentParts(message: ModelMessage): ContentPart[] {
 }
 
 describe('step-loop SDK contract', () => {
-  it('runs exactly one model call and executes the tool inside it under stepCountIs(1)', async () => {
+  it('runs exactly one model call and executes the tool inside it under isStepCount(1)', async () => {
     const { tools, execute } = makeTools();
     const model = new MockLanguageModelV3({
       doStream: async () => toolCallStream(),
@@ -244,7 +244,7 @@ describe('step-loop SDK contract', () => {
     expect(await second.text).toBe(ANSWER);
   });
 
-  it('fires onStepFinish once per streamText call with that call usage', async () => {
+  it('fires onStepEnd once per streamText call with that call usage', async () => {
     const { tools } = makeTools();
 
     const firstSteps: StepResult<SpikeTools>[] = [];

@@ -12,23 +12,27 @@ import { AI_PROVIDERS, type AIProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
 
+const OPENROUTER_SPECIFICATION_VERSION = 'v4' as const;
+const shimLogger = new Logger('OpenRouterProviderShim');
+
 /**
  * `@openrouter/ai-sdk-provider@3.0.0` omits `specificationVersion` on the
  * provider object (its models do declare 'v4'), so the AI SDK registry
  * duck-types it as a legacy provider and double-adapts the already-v4 models —
  * corrupting usage (inputTokens becomes '[object Object]') and response
- * messages. Declare the version ourselves until upstream ships it.
+ * messages. Declare the version ourselves, but defer to upstream the moment it
+ * declares one so a future spec is never mislabelled as v4.
  */
-function asV4Provider(
-  provider: ReturnType<typeof createOpenRouter>
-): ReturnType<typeof createOpenRouter> & { specificationVersion: 'v4' } {
-  return Object.assign(
-    ((modelId: string) => provider(modelId)) as ReturnType<
-      typeof createOpenRouter
-    >,
-    provider,
-    { specificationVersion: 'v4' as const }
-  );
+function asV4Provider(provider: ReturnType<typeof createOpenRouter>) {
+  if ('specificationVersion' in provider) {
+    shimLogger.warn(
+      'The OpenRouter provider now declares its own specificationVersion — asV4Provider is obsolete and can be deleted.'
+    );
+    return provider;
+  }
+  return Object.assign(provider, {
+    specificationVersion: OPENROUTER_SPECIFICATION_VERSION,
+  });
 }
 
 export class ProviderNotConfiguredError extends Error {

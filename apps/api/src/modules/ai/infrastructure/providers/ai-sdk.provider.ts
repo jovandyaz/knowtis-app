@@ -15,6 +15,8 @@ import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
 import { withTraceIdentity } from './trace-identity';
 
+const DEFAULT_TELEMETRY_FUNCTION_ID = 'ai-completion';
+
 @Injectable()
 export class AISDKProvider implements AICompletionProvider {
   private readonly logger = new Logger(AISDKProvider.name);
@@ -49,13 +51,10 @@ export class AISDKProvider implements AICompletionProvider {
   }
 
   private buildTelemetryParam(telemetry: CompletionOptions['telemetry']) {
-    if (!telemetry) {
-      return {};
-    }
     return {
       telemetry: buildRedactedTelemetry(
-        telemetry.functionId,
-        telemetry.recordContent ?? false
+        telemetry?.functionId ?? DEFAULT_TELEMETRY_FUNCTION_ID,
+        telemetry?.recordContent ?? false
       ),
     };
   }

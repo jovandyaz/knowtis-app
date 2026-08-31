@@ -154,15 +154,23 @@ describe('AISDKProvider', () => {
     expect(generateText).toHaveBeenCalledWith(expected);
   });
 
-  it('should omit telemetry from the SDK call when not provided', async () => {
+  it('should redact content when the caller provides no telemetry', async () => {
     const { generateText } = vi.mocked(await import('ai'));
 
     await provider.generateCompletion('test prompt', {
       model: 'anthropic:claude-sonnet-4-20250514',
     });
 
-    const lastCall = vi.mocked(generateText).mock.calls.at(-1)?.[0];
-    expect(lastCall).not.toHaveProperty('experimental_telemetry');
+    expect(generateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        telemetry: {
+          isEnabled: true,
+          recordInputs: false,
+          recordOutputs: false,
+          functionId: 'ai-completion',
+        },
+      })
+    );
   });
 
   it('should pass plain system string for non-Anthropic models', async () => {

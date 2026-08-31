@@ -171,6 +171,32 @@ describe('ProviderRegistryFactory', () => {
     expect(Object.keys(registered).sort()).toEqual(['anthropic', 'openrouter']);
   });
 
+  it('should declare v4 on the openrouter provider so the SDK does not re-adapt it', async () => {
+    const { createProviderRegistry } = vi.mocked(await import('ai'));
+    createProviderRegistry.mockClear();
+
+    makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const registered = (createProviderRegistry.mock.calls.at(-1)?.[0] ??
+      {}) as Record<string, { specificationVersion?: string }>;
+    expect(registered['openrouter']?.specificationVersion).toBe('v4');
+  });
+
+  it('should defer to the openrouter provider once it declares its own specification', async () => {
+    const { createProviderRegistry } = vi.mocked(await import('ai'));
+    createProviderRegistry.mockClear();
+    const provider = Object.assign(vi.fn(), { specificationVersion: 'v5' });
+    vi.mocked(createOpenRouter).mockReturnValueOnce(
+      provider as unknown as ReturnType<typeof createOpenRouter>
+    );
+
+    makeFactory({ OPENROUTER_API_KEY: 'or-key' });
+
+    const registered = (createProviderRegistry.mock.calls.at(-1)?.[0] ??
+      {}) as Record<string, { specificationVersion?: string }>;
+    expect(registered['openrouter']?.specificationVersion).toBe('v5');
+  });
+
   it('should throw when an openrouter model is requested without OPENROUTER_API_KEY', () => {
     const factory = makeFactory();
 

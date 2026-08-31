@@ -53,7 +53,6 @@
     "@ai-sdk/anthropic": "^4.0.46",
     "@ai-sdk/google": "^4.0.58",
     "@ai-sdk/openai": "^4.0.52",
-    "@ai-sdk/otel": "^1.0.85",
     "@casl/ability": "^6.8.0",
     "@casl/react": "^5.0.1",
     "@hocuspocus/extension-logger": "^4.1.0",

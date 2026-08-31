@@ -20,6 +20,8 @@ import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
 import { withTraceIdentity } from './trace-identity';
 
+const DEFAULT_TELEMETRY_FUNCTION_ID = 'structured-output';
+
 interface GenerateParams<T> {
   readonly prompt: string;
   readonly schema: ZodType<T>;
@@ -92,14 +94,10 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
           requireParameters: true,
         }),
         ...(timeoutSignal ? { abortSignal: timeoutSignal } : {}),
-        ...(options.telemetry
-          ? {
-              telemetry: buildRedactedTelemetry(
-                options.telemetry.functionId,
-                options.telemetry.recordContent ?? false
-              ),
-            }
-          : {}),
+        telemetry: buildRedactedTelemetry(
+          options.telemetry?.functionId ?? DEFAULT_TELEMETRY_FUNCTION_ID,
+          options.telemetry?.recordContent ?? false
+        ),
       })
     );
 

@@ -44,9 +44,6 @@ importers:
       '@ai-sdk/openai':
         specifier: ^4.0.52
         version: 4.0.52(zod@4.1.13)
-      '@ai-sdk/otel':
-        specifier: ^1.0.85
-        version: 1.0.85(zod@4.1.13)
       '@casl/ability':
         specifier: ^6.8.0
         version: 6.8.0

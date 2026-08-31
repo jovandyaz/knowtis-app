@@ -3,7 +3,6 @@ export interface AITelemetryContext {
   readonly functionId: string;
   /** Trace-level identity, propagated via @langfuse/tracing propagateAttributes. */
   readonly userId?: string;
-  readonly tags?: readonly string[];
   /** Record prompt/response content in traces. Default: redact. */
   readonly recordContent?: boolean;
 }

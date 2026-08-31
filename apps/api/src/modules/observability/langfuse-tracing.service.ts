@@ -41,8 +41,7 @@ export class LangfuseTracingService
       });
       this.sdk = new NodeSDK({ spanProcessors: [this.spanProcessor] });
       this.sdk.start();
-      // AI SDK 7 emits no telemetry until an integration is registered; keys
-      // absent -> nothing registered -> AI calls stay untraced, as before.
+      // AI SDK 7 emits no telemetry at all until an integration is registered.
       registerTelemetry(new LangfuseVercelAiSdkIntegration());
       this.logger.log('Langfuse tracing enabled');
     } catch (error) {
