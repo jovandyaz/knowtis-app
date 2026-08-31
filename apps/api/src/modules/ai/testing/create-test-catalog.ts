@@ -11,7 +11,7 @@ const TEST_PRICES = {
     max_input_tokens: 200000,
     max_output_tokens: 64000,
   },
-  'claude-haiku-4-5-20251001': {
+  'claude-haiku-4-5': {
     litellm_provider: 'anthropic',
     mode: 'chat',
     input_cost_per_token: 8e-7,

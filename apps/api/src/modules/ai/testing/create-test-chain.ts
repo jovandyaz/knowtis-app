@@ -13,7 +13,7 @@ import { createMockConfig } from './create-mock-config';
 
 /** Catalog-compatible fallback chain for tests — the openrouter code default has no pricing in createTestCatalog. */
 export const TEST_FALLBACK_CHAIN =
-  'anthropic:claude-haiku-4-5-20251001,openai:gpt-4o-mini,google:gemini-2.0-flash';
+  'anthropic:claude-haiku-4-5,openai:gpt-4o-mini,google:gemini-2.0-flash';
 
 export function createTestChain(
   config: ConfigService<EnvConfig, true> = createMockConfig(),

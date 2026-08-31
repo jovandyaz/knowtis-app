@@ -29,7 +29,7 @@ describe('VoiceTranscriptionService', () => {
   it('should reject a non-openai transcription model at construction', () => {
     const config = createMockConfig({
       OPENAI_API_KEY: 'test-key',
-      AI_TRANSCRIPTION_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+      AI_TRANSCRIPTION_MODEL: 'anthropic:claude-haiku-4-5',
     });
     expect(() => new VoiceTranscriptionService(config)).toThrow(
       /only 'openai:<model>' transcription is available/

@@ -38,15 +38,19 @@ export class SelectableModelsService {
   ) {}
 
   /**
-   * What the product offers: every promoted model, plus the curated ones the
-   * running config still points at. A curated model nobody configured is a
-   * seed for defaults and validation, not something to put in front of users.
+   * What the product offers: every promoted model, the curated ones the running
+   * config points at, and the curated models of each provider the caller brings
+   * a BYOK key for. The rest stay seeds for defaults and validation.
    */
   private catalogUnion(
-    configured: ReadonlySet<string>
+    configured: ReadonlySet<string>,
+    byokProviders: ReadonlySet<string>
   ): readonly OfferedModel[] {
     return [
-      ...CURATED_MODELS.filter((model) => configured.has(model.id)),
+      ...CURATED_MODELS.filter(
+        (model) =>
+          configured.has(model.id) || byokProviders.has(providerOf(model.id))
+      ),
       // Code wins entirely for a duplicate id: a promoted model can never
       // rename, re-tier, re-describe, re-price or resize a curated one —
       // CompositeModelCatalog.find() applies the same exclusion.
@@ -133,7 +137,7 @@ export class SelectableModelsService {
     tierGatingOn = false,
     maxOutputCostPerToken?: number
   ): SelectableModel[] {
-    return this.catalogUnion(configured)
+    return this.catalogUnion(configured, byokProviders)
       .filter((m) => this.invocable(m, byokProviders))
       .map((m) => ({
         id: m.id,
@@ -162,7 +166,9 @@ export class SelectableModelsService {
     tierGatingOn = false,
     maxOutputCostPerToken?: number
   ): boolean {
-    const offered = this.catalogUnion(configured).find((m) => m.id === modelId);
+    const offered = this.catalogUnion(configured, byokProviders).find(
+      (m) => m.id === modelId
+    );
     return (
       !!offered &&
       this.selectable(
@@ -182,7 +188,7 @@ export class SelectableModelsService {
     maxOutputCostPerToken?: number
   ): string | null {
     return (
-      this.catalogUnion(configured).find((m) =>
+      this.catalogUnion(configured, byokProviders).find((m) =>
         this.selectable(m, byokProviders, tierGatingOn, maxOutputCostPerToken)
       )?.id ?? null
     );
@@ -194,7 +200,7 @@ export class SelectableModelsService {
     configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string>
   ): string | null {
-    const match = this.catalogUnion(configured).find(
+    const match = this.catalogUnion(configured, byokProviders).find(
       (m) =>
         m.tier === tier &&
         byokProviders.has(providerOf(m.id)) &&

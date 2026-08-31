@@ -85,7 +85,7 @@ const grantedModels = [
 const lockedModel = {
   id: 'x:premium',
   label: 'Premium One',
-  descriptionKey: 'aiModels.gpt56',
+  descriptionKey: 'aiModels.gpt56Sol',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
@@ -98,7 +98,7 @@ const lockedModel = {
 const byokModel = {
   id: 'o:byok',
   label: 'Byok One',
-  descriptionKey: 'aiModels.gpt56',
+  descriptionKey: 'aiModels.gpt56Sol',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
@@ -357,7 +357,7 @@ describe('CopilotModelPicker', () => {
     ).toHaveTextContent('Promoted from the open catalog');
     expect(
       screen.getByRole('menuitemradio', { name: /Byok One/ })
-    ).toHaveTextContent('aiModels.gpt56');
+    ).toHaveTextContent('aiModels.gpt56Sol');
   });
 
   it('names the account style when the stored model has left the model list', async () => {

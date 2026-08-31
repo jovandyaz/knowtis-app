@@ -27,9 +27,7 @@ const envSchemaBase = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
   OPENROUTER_API_KEY: z.string().optional(),
-  AI_GUARD_CLASSIFIER_MODEL: z
-    .string()
-    .default('anthropic:claude-haiku-4-5-20251001'),
+  AI_GUARD_CLASSIFIER_MODEL: z.string().default('anthropic:claude-haiku-4-5'),
   AI_DAILY_TOKEN_LIMIT: z.coerce.number().default(100000),
   AI_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),
   AI_BYOK_DAILY_COST_LIMIT_USD: z.coerce.number().default(1.0),

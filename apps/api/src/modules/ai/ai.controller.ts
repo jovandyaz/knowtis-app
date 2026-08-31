@@ -168,7 +168,7 @@ const metricsSummarySchema = {
           tokens: 10000,
           costUsd: 0.012,
         },
-        'anthropic:claude-haiku-5': {
+        'anthropic:claude-haiku-4-5': {
           requests: 10,
           tokens: 8600,
           costUsd: 0.0066,

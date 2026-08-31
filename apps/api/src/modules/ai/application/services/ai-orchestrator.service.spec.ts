@@ -24,12 +24,12 @@ function createMockAIConfigService(
     getFastModel: vi
       .fn()
       .mockResolvedValue(
-        overrides?.getFastModel ?? 'anthropic:claude-haiku-4-5-20251001'
+        overrides?.getFastModel ?? 'anthropic:claude-haiku-4-5'
       ),
     getFallbackModel: vi
       .fn()
       .mockResolvedValue(
-        overrides?.getFallbackModel ?? 'anthropic:claude-haiku-4-5-20251001'
+        overrides?.getFallbackModel ?? 'anthropic:claude-haiku-4-5'
       ),
     setConfig: vi.fn().mockResolvedValue(undefined),
   } as unknown as AIConfigService;
@@ -55,7 +55,7 @@ describe('AIOrchestrator', () => {
     const result = await orchestrator.selectModel(AI_ACTION.GHOST_TEXT);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().toPrimitive()).toBe(
-      'anthropic:claude-haiku-4-5-20251001'
+      'anthropic:claude-haiku-4-5'
     );
   });
 

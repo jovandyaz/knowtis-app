@@ -79,7 +79,7 @@ describe('AISDKProvider', () => {
       model: 'anthropic:claude-sonnet-4-20250514',
     });
     expect(result.text).toBe('Fallback text');
-    expect(result.model).toBe('anthropic:claude-haiku-4-5-20251001');
+    expect(result.model).toBe('anthropic:claude-haiku-4-5');
   });
 
   it('should throw when the chain has no other candidates', async () => {

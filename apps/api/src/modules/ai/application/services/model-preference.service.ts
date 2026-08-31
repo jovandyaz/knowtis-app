@@ -124,7 +124,11 @@ export class ModelPreferenceService {
       return preferredModel;
     }
     const intent = preferredIntent ?? DEFAULT_MODEL_INTENT;
-    const byokPick = this.selectable.firstOfTier(intent, offered, providers);
+    // Only an intent the user stored may steer their default onto their own
+    // key; the implicit fallback must never move billing without an opt-in.
+    const byokPick = preferredIntent
+      ? this.selectable.firstOfTier(preferredIntent, offered, providers)
+      : null;
     // Tautological today, but keeps intent picks safe if accessFor ever gates BYOK holders.
     if (
       byokPick &&

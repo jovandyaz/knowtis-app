@@ -30,7 +30,7 @@ vi.mock('@ai-sdk/openai', () => ({
   createOpenAI: vi.fn(),
 }));
 
-const MODEL = 'anthropic:claude-haiku-4-5-20251001';
+const MODEL = 'anthropic:claude-haiku-4-5';
 
 function makeRateLimit(): AIRateLimitService {
   return {

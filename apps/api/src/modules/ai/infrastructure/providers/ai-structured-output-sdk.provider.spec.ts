@@ -259,7 +259,7 @@ describe('AIStructuredOutputSDKProvider', () => {
     expect(result.object).toEqual({ answer: 42 });
     expect(generateText).toHaveBeenCalledTimes(2);
     expect(languageModel).toHaveBeenLastCalledWith(
-      'anthropic:claude-haiku-4-5-20251001'
+      'anthropic:claude-haiku-4-5'
     );
   });
 
@@ -337,7 +337,7 @@ describe('AIStructuredOutputSDKProvider timeout handling', () => {
       timeoutMs: 5_000,
     });
 
-    expect(result.model).toBe('anthropic:claude-haiku-4-5-20251001');
+    expect(result.model).toBe('anthropic:claude-haiku-4-5');
     expect(seenSignals).toHaveLength(2);
     expect(seenSignals[0]).not.toBe(seenSignals[1]);
     expect(seenSignals[1]?.aborted).toBe(false);

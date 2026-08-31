@@ -25,9 +25,9 @@ describe('TokenUsage', () => {
       {
         inputTokens: 1000,
         outputTokens: 500,
-        model: 'anthropic:claude-haiku-4-5-20251001',
+        model: 'anthropic:claude-haiku-4-5',
       },
-      pricingFor('anthropic:claude-haiku-4-5-20251001')
+      pricingFor('anthropic:claude-haiku-4-5')
     );
     expect(usage.costUsd).toBeCloseTo(0.0028, 4);
     expect(usage.totalTokens).toBe(1500);

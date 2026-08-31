@@ -7,7 +7,7 @@ type TypedConfigService = ConfigService<EnvConfig, true>;
 
 const DEFAULT_AI_CONFIG: Record<string, unknown> = {
   NODE_ENV: 'test',
-  AI_GUARD_CLASSIFIER_MODEL: 'anthropic:claude-haiku-4-5-20251001',
+  AI_GUARD_CLASSIFIER_MODEL: 'anthropic:claude-haiku-4-5',
   AI_COOLDOWN_ALLOWED_FAILS: 3,
   AI_COOLDOWN_SECONDS: 120,
   AI_TRANSCRIPTION_MODEL: 'openai:whisper-1',

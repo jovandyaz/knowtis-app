@@ -291,7 +291,7 @@ Cache is bypassed on cancelled requests. TTL is configurable via `AI_CACHE_TTL_S
 
 **Behavior:** Requests scoring ≥ 0.6 are blocked with `PROMPT_INJECTION_DETECTED` error. Content, selection, and suffix fields are all checked. Inputs over 50,000 characters are rejected as a ReDoS defense (the length guard runs on the raw input, before normalization).
 
-**Gray-zone classifier (flag `agent_injection_classifier`, default off):** heuristic scores in `0.3 ≤ score < 0.6` get a second, language-independent opinion from an LLM judge (`AI_GUARD_CLASSIFIER_MODEL`, default `anthropic:claude-haiku-4-5-20251001`) at the copilot's latest-user-message guard and on `webFetch` content. It is a single direct AI SDK call with its own 5s timeout — deliberately outside the fallback chain so classifier failures never open the shared provider breaker — and it **fails open** on any classifier error. An `injection: true` verdict blocks exactly like a heuristic hit; token spend is recorded as the server-billed `injection_classifier` side cost, and telemetry never records the suspected-hostile content.
+**Gray-zone classifier (flag `agent_injection_classifier`, default off):** heuristic scores in `0.3 ≤ score < 0.6` get a second, language-independent opinion from an LLM judge (`AI_GUARD_CLASSIFIER_MODEL`, default `anthropic:claude-haiku-4-5`) at the copilot's latest-user-message guard and on `webFetch` content. It is a single direct AI SDK call with its own 5s timeout — deliberately outside the fallback chain so classifier failures never open the shared provider breaker — and it **fails open** on any classifier error. An `injection: true` verdict blocks exactly like a heuristic hit; token spend is recorded as the server-billed `injection_classifier` side cost, and telemetry never records the suspected-hostile content.
 
 **Retrieved-note body scanning (flag `agent_scan_retrieved_notes`, default off):** every note body returned by the agent's `getNote` is run through `detectPromptInjection` after truncation — keyword and hybrid retrieval both resolve bodies at this single site, so one scan covers both modes. A heuristic hit (score ≥ 0.6), or a gray-zone score the classifier confirms unsafe (only when `agent_injection_classifier` is also on — the classifier flag governs every paid classifier call), replaces the body with the fenced stub `[Note content withheld: it failed the injection safety check]` (title and metadata preserved) and logs `agent.retrieval.content_blocked` with the note id and score. A failing flag lookup degrades to off, so retrieval never breaks on flag-store errors. Note **titles are deliberately not scanned**: they are short, weak carriers, already JSON-escaped and DATA-caveated in the known-notes block, and scanning them would put the guard in every search hit's hot path. Flip checklist: guard corpus green in CI, the copilot eval cases green (the guard-bait Spanish note still answered, the exfiltration note not obeyed), and `agent.retrieval.content_blocked` telemetry quiet while dark.
 
@@ -591,32 +591,32 @@ The **AI Config** page is the single AI-ops surface: a sticky status header (mas
 
 All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_notes_enabled`) are managed via the `feature_flags` DB table, not environment variables. In direct mode the provider API keys below are the **fallback** source — a key stored in `system_provider_keys` via the backoffice wins (see [System Provider Keys](#system-provider-keys-database-overrides-env)).
 
-| Variable                         | Required | Default                               | Description                                                          |
-| -------------------------------- | -------- | ------------------------------------- | -------------------------------------------------------------------- |
-| `AI_GATEWAY_API_KEY`             | No       | —                                     | Vercel AI Gateway key; enables gateway mode when set                 |
-| `ANTHROPIC_API_KEY`              | No       | —                                     | Anthropic API key (validated at runtime)                             |
-| `OPENAI_API_KEY`                 | No       | —                                     | OpenAI API key (chain fallback + Whisper transcription)              |
-| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                                     | Google AI Studio key (chain fallback)                                |
-| `OPENROUTER_API_KEY`             | No       | —                                     | OpenRouter key; unlocks the open-weight tier (`openrouter:*` models) |
-| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5-20251001` | LLM judge for the gray-zone injection classifier                     |
-| `AI_EVAL_MODEL`                  | No       | — (built-in eval default)             | Model driving the copilot eval harness (`api:eval`)                  |
-| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                                   | Failures per minute that start a provider cooldown                   |
-| `AI_COOLDOWN_SECONDS`            | No       | `120`                                 | Provider cooldown duration (seconds)                                 |
-| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`                    | Voice transcription model (only `openai:` supported)                 |
-| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                               | Refresh model pricing from LiteLLM's JSON at boot                    |
-| `AI_ALERT_WEBHOOK_URL`           | No       | —                                     | Webhook for `budget.warning` / `cooldown_start` alerts               |
-| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                              | Per-user daily token cap                                             |
-| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                                 | Per-user daily cost cap (USD)                                        |
-| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                                  | Global daily cap on ALL server-billed spend (USD)                    |
-| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                                | Fraction of daily limits for anonymous users                         |
-| `AI_MAX_RETRIES`                 | No       | `3`                                   | Provider retry count                                                 |
-| `AI_TIMEOUT_MS`                  | No       | `30000`                               | Total request timeout (ms) — REST completions only                   |
-| `AI_STREAM_MAX_MS`               | No       | `180000`                              | Total streaming cap (ms); generous for long generations              |
-| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                               | Per-chunk (stall) timeout for streaming (ms)                         |
-| `AI_CACHE_ENABLED`               | No       | `true`                                | Enable response cache                                                |
-| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                                | Cache TTL (seconds)                                                  |
-| `AI_RPM_LIMIT`                   | No       | `15`                                  | Max requests per minute per user                                     |
-| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                                   | Max simultaneous AI streams per user                                 |
+| Variable                         | Required | Default                      | Description                                                          |
+| -------------------------------- | -------- | ---------------------------- | -------------------------------------------------------------------- |
+| `AI_GATEWAY_API_KEY`             | No       | —                            | Vercel AI Gateway key; enables gateway mode when set                 |
+| `ANTHROPIC_API_KEY`              | No       | —                            | Anthropic API key (validated at runtime)                             |
+| `OPENAI_API_KEY`                 | No       | —                            | OpenAI API key (chain fallback + Whisper transcription)              |
+| `GOOGLE_GENERATIVE_AI_API_KEY`   | No       | —                            | Google AI Studio key (chain fallback)                                |
+| `OPENROUTER_API_KEY`             | No       | —                            | OpenRouter key; unlocks the open-weight tier (`openrouter:*` models) |
+| `AI_GUARD_CLASSIFIER_MODEL`      | No       | `anthropic:claude-haiku-4-5` | LLM judge for the gray-zone injection classifier                     |
+| `AI_EVAL_MODEL`                  | No       | — (built-in eval default)    | Model driving the copilot eval harness (`api:eval`)                  |
+| `AI_COOLDOWN_ALLOWED_FAILS`      | No       | `3`                          | Failures per minute that start a provider cooldown                   |
+| `AI_COOLDOWN_SECONDS`            | No       | `120`                        | Provider cooldown duration (seconds)                                 |
+| `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`           | Voice transcription model (only `openai:` supported)                 |
+| `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                      | Refresh model pricing from LiteLLM's JSON at boot                    |
+| `AI_ALERT_WEBHOOK_URL`           | No       | —                            | Webhook for `budget.warning` / `cooldown_start` alerts               |
+| `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                     | Per-user daily token cap                                             |
+| `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                        | Per-user daily cost cap (USD)                                        |
+| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                         | Global daily cap on ALL server-billed spend (USD)                    |
+| `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                       | Fraction of daily limits for anonymous users                         |
+| `AI_MAX_RETRIES`                 | No       | `3`                          | Provider retry count                                                 |
+| `AI_TIMEOUT_MS`                  | No       | `30000`                      | Total request timeout (ms) — REST completions only                   |
+| `AI_STREAM_MAX_MS`               | No       | `180000`                     | Total streaming cap (ms); generous for long generations              |
+| `AI_STREAM_CHUNK_TIMEOUT_MS`     | No       | `10000`                      | Per-chunk (stall) timeout for streaming (ms)                         |
+| `AI_CACHE_ENABLED`               | No       | `true`                       | Enable response cache                                                |
+| `AI_CACHE_TTL_SECONDS`           | No       | `3600`                       | Cache TTL (seconds)                                                  |
+| `AI_RPM_LIMIT`                   | No       | `15`                         | Max requests per minute per user                                     |
+| `AI_MAX_CONCURRENT_STREAMS`      | No       | `2`                          | Max simultaneous AI streams per user                                 |
 
 ### Feature Flags (DB-backed)
 
@@ -896,7 +896,7 @@ pnpm nx run api:eval
 - **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
-  (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5-20251001` for cheaper local runs).
+  (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
 
 ### How it works
 
