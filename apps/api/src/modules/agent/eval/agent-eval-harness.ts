@@ -19,6 +19,7 @@ import { PENDING_MUTATION_STORE } from '../domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from '../domain/ports/retrieval.port';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
+import { assertPinnedModelServed } from './pinned-model';
 import { RecordingFixtureRetrieval } from './recording-fixture-retrieval';
 import { drainEvents, type EvalTranscript } from './transcript';
 
@@ -113,12 +114,7 @@ export class AgentEvalHarness {
       maxTurnTokens: this.maxTurnTokens,
     });
     const drained = await drainEvents(events);
-    if (drained.servedModel !== null && drained.servedModel !== model) {
-      throw new Error(
-        `Eval turn was served by '${drained.servedModel}' instead of the pinned '${model}': ` +
-          'the fallback chain took over, so this run would grade the wrong model'
-      );
-    }
+    assertPinnedModelServed(drained, model);
     return { ...drained, toolCalls: this.retrieval.getCalls() };
   }
 
