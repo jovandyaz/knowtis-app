@@ -1,5 +1,6 @@
 ---
 name: reviewing-code-standards
+license: MIT
 description: Applies Knowtis engineering standards when writing, reviewing, or refactoring TypeScript/JavaScript code — import discipline, type safety, error handling, testing conventions, and the minimal-comments policy. Use when reviewing a PR or diff, refactoring existing code, writing new TS/TSX modules or tests, or when asked about "convenciones", "estándares", "code review", or code style in a Knowtis codebase. Not for commit-message formatting (use writing-conventional-commits) or architecture questions (use the domain plugin skills).
 ---
 
@@ -9,7 +10,7 @@ Apply these standards to any TypeScript/JavaScript you write or review. Full det
 
 - [references/typescript.md](references/typescript.md) — imports, type safety, enums, error handling
 - [references/testing.md](references/testing.md) — Vitest structure, mocking, assertions, coverage expectations
-- [references/comments-policy.md](references/comments-policy.md) — the minimal-comments rule (also enforced by a repo-local hook in the knowtis repo)
+- [references/comments-policy.md](references/comments-policy.md) — the minimal-comments rule (enforced in Knowtis by ESLint and optionally by a user-level agent hook)
 
 ## Non-negotiables (quick check)
 

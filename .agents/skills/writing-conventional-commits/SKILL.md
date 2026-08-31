@@ -1,5 +1,6 @@
 ---
 name: writing-conventional-commits
+license: MIT
 description: Formats git commits and branch names to Knowtis conventions — single-line Conventional Commits with no body, imperative mood, and Conventional-style branch prefixes. Use when committing, writing a commit message, naming a branch, or when asked about "commit", "mensaje de commit", or "cómo nombro la rama". Not for PR workflow or stacking (use delivery's stacking-prs).
 ---
 

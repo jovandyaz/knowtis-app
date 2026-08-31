@@ -1,5 +1,6 @@
 ---
 name: running-preflight
+license: MIT
 description: Runs the full Knowtis pre-push verification — affected lint, typecheck, test, production build, and migration-drift detection — and reports a SHIP or NO-SHIP verdict. Invoke explicitly before pushing or opening a PR.
 ---
 

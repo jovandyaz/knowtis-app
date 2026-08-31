@@ -1,11 +1,17 @@
 # Testing standards (Vitest)
 
-Canonical source: `.claude/rules/testing.md` in the knowtis repo.
+Canonical sources in the Knowtis repository: `.claude/rules/testing.md` for general conventions and `apps/api/src/test-support/fixture-ids.spec.ts` for database-marker enforcement.
 
 ## Framework
 
 - Runner: **Vitest** (not Jest), configured per project in `vitest.config.ts`. Frontend env `jsdom`, backend `node`.
 - DOM matchers via `@testing-library/jest-dom/vitest` setup file.
+
+## Database-backed API specs
+
+- Name a spec `*.db.spec.ts` when it imports `DB_AVAILABLE` or `DatabaseModule`; the API config runs that suffix sequentially. `DATABASE_CONNECTION` alone is not a marker because unit tests commonly mock that token.
+- Every database fixture UUID is owned by exactly one spec. `fixture-ids.spec.ts` enforces uniqueness.
+- Hoist each Nest `moduleRef` to describe scope and close it with `await moduleRef.close()` in `afterAll`.
 
 ## Structure
 

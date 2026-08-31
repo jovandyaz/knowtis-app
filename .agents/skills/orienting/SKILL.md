@@ -1,5 +1,6 @@
 ---
 name: orienting
+license: MIT
 description: Orients architecture work in this Knowtis monorepo, including ownership, aliases, module boundaries, the two AI modules, and known framework footguns. Use when locating a subsystem, deciding where code belongs, reviewing architecture, or diagnosing a NestJS provider that is unexpectedly undefined. For generic Nx exploration use nx-workspace; for scaffolding use nx-generate. Not for copilot or collaboration internals.
 ---
 
@@ -22,4 +23,4 @@ For the full layout and dependency rules load [references/architecture-map.md](r
 - Everything runs through Nx: `pnpm nx affected -t lint test build`, `nx run <project> <target>`. Always `pnpm`, never npm/yarn.
 - Module boundaries are ESLint-enforced via tags (`type:app → type:ui/data-access → type:util`; scopes `shared|notes|api`). A new lib needs correct tags or imports will be rejected.
 - AI features are gated: `ANTHROPIC_API_KEY` in env AND DB feature flags (`ai_enabled`, `agent_byok`, …) toggled on. A feature "not working" is often just a flag defaulting to off.
-- Repo docs are canonical: `docs/ARCHITECTURE.md`, `docs/AI.md`, `docs/MCP.md`, `docs/AUTH.md`, `docs/PERMISSIONS.md`, `docs/MIGRATIONS.md`, `docs/DEPLOYMENT.md`. The dated design specs under `docs/superpowers/specs/` are rationale/history — never treat them as current behavior.
+- Repo docs are canonical: `docs/ARCHITECTURE.md`, `docs/AI.md`, `docs/MCP.md`, `docs/AUTH.md`, `docs/PERMISSIONS.md`, `docs/MIGRATIONS.md`, `docs/DEPLOYMENT.md`. Verify behavior against those docs and the current code rather than relying on historical design notes.

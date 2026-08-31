@@ -1,5 +1,6 @@
 ---
 name: wiring-realtime-collaboration
+license: MIT
 description: Guards the Knowtis realtime-collaboration invariants when touching Yjs/Hocuspocus code — handshake authentication, server-enforced read-only, CRDT persistence guards, and external-update broadcast. Use when editing anything under the collaboration module or frontend collaboration hooks, debugging WebSocket permission or sync behavior, changing Yjs persistence, or when asked about "colaboración", "tiempo real", CRDT, Hocuspocus, or presence/awareness. Not for REST-level permissions (see docs/PERMISSIONS.md) or copilot streaming (use building-copilot-features).
 ---
 

@@ -1,5 +1,6 @@
 ---
 name: investigating-postgres
+license: MIT
 description: Runs read-only investigations against Knowtis PostgreSQL databases — usage questions, data debugging, schema exploration — under a strict SELECT-only contract with PII redaction. Use when asked to query, count, inspect, or debug data ("cuántas notas", "qué usuarios", "revisa en la base de datos", "query the DB"). Never use for schema changes or data mutations — schema evolution goes through managing-drizzle-migrations, and flag/data changes go through the API.
 ---
 

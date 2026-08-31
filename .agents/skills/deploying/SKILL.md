@@ -1,5 +1,6 @@
 ---
 name: deploying
+license: MIT
 description: Explains and troubleshoots this repository's CI-driven Vercel and Railway deployments, including notes, backoffice, API, MCP, environment variables, health checks, and failure modes. Use when asked to deploy Knowtis, when a deploy fails or hangs, or when configuring its Railway/Vercel environments. Not for predicting affected jobs (use running-affected-ci) or changing the database schema (use managing-drizzle-migrations).
 ---
 

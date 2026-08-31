@@ -1,5 +1,6 @@
 ---
 name: building-copilot-features
+license: MIT
 description: Guides changes to the Knowtis copilot and AI subsystem — the agent module, ai-gateway, HITL proposals, injection guard, fallback chain, BYOK, hybrid retrieval, long-term memory, and the promptfoo eval harness. Use when adding an agent tool group, touching anything under apps/api/src/modules/agent or packages/ai-gateway, changing model selection or provider config, working near BYOK or memory extraction, or when asked about the "copilot", "agente", "AI gateway", or copilot evals. Not for the single-shot ai module UI features or general repo orientation (use orienting).
 ---
 
@@ -23,4 +24,4 @@ The copilot is a **server-authoritative** conversational agent (`apps/api/src/mo
 - **Retrieval changes**: hybrid = Postgres FTS `ts_rank` + pgvector KNN fused with RRF; embedding reconcile cron every 2 min behind advisory lock `778493001` (memory extraction uses `778493002`).
 - **Any behavior change**: add or update a promptfoo eval before merging — see [references/eval-workflow.md](references/eval-workflow.md).
 
-Canonical docs: `docs/AI.md` (the deep source of truth) and `apps/api/src/modules/agent/README.md`. Specs under `docs/superpowers/specs/` explain WHY decisions were made — never cite them as current behavior.
+Canonical docs: `docs/AI.md` (the deep source of truth) and `apps/api/src/modules/agent/README.md`. Verify current behavior against those docs and the implementation.

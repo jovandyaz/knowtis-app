@@ -1,5 +1,6 @@
 ---
 name: running-affected-ci
+license: MIT
 description: Simulates and interprets this repository's Nx-affected CI pipeline, including checks and deploy gating. Use before pushing, when asked which projects are affected, why a deploy job did or did not run, or to reproduce CI locally. Not for monitoring a running pipeline (use monitor-ci), generic Nx task usage (use nx-run-tasks), or deploy mechanics (use deploying).
 ---
 

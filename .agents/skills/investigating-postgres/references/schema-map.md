@@ -1,6 +1,6 @@
 # Schema map
 
-Canonical source: `apps/api/src/database/schema/` in the knowtis repo (16 schema files + `index.ts`). Always read the actual file before querying — this map only says where to look.
+Canonical source: `apps/api/src/database/schema/` in the Knowtis repository. Always read the actual file before querying; this map only says where to look.
 
 | Table (schema file) | Holds |
 | --- | --- |
@@ -18,6 +18,11 @@ Canonical source: `apps/api/src/database/schema/` in the knowtis repo (16 schema
 | `feature-flags.schema.ts` | DB feature flags (`ai_enabled`, `agent_byok`, `agent_web_search`, …) |
 | `artifacts.schema.ts` | Generated artifacts |
 | `mcp-api-keys.schema.ts` | MCP API keys (hashed) |
+| `oauth-payloads.schema.ts` | OAuth/OIDC grants, sessions, interactions, and other provider payloads |
+| `admin-audit-log.schema.ts` | Administrative actions with actor, target, and before/after data |
+| `ai-catalog.schema.ts` | Curated AI model catalog, promotion state, pricing, and catalog alerts |
+| `system-provider-keys.schema.ts` | System AI provider enablement and encrypted credentials |
+| `tags.schema.ts` | User-owned hierarchical tags and note-tag assignments |
 | `email-verification-tokens.schema.ts` / `password-reset-tokens.schema.ts` | Auth flow tokens |
 
 Note permissions/sharing tables are defined alongside notes — check `notes.schema.ts` and `index.ts` exports for the exact permission table names before joining.
