@@ -1,3 +1,12 @@
 {
-  "knowtis-architect.md": "domain@0.2.0"
+  "knowtis-architect.md": {
+    "source": "domain@0.3.0",
+    "revision": "7d356e8b8ed1ea3252f3d79af7348cb27e39732b",
+    "integrity": "sha256-582c6644438153774e7f4bdc1935909a2943c745f267ea1649ace76054119d4b"
+  },
+  "knowtis-plugins-LICENSE": {
+    "source": "domain@0.3.0",
+    "revision": "7d356e8b8ed1ea3252f3d79af7348cb27e39732b",
+    "integrity": "sha256-05ad24c716bba33a19617d35c51ffc1c6c418ccf174ffa437603eefece607e61"
+  }
 }

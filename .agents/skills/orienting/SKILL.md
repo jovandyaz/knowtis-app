@@ -1,5 +1,6 @@
 ---
 name: orienting
+license: MIT
 description: Orients architecture work in this Knowtis monorepo, including ownership, aliases, module boundaries, the two AI modules, and known framework footguns. Use when locating a subsystem, deciding where code belongs, reviewing architecture, or diagnosing a NestJS provider that is unexpectedly undefined. For generic Nx exploration use nx-workspace; for scaffolding use nx-generate. Not for copilot or collaboration internals.
 ---
 
@@ -15,11 +16,11 @@ For the full layout and dependency rules load [references/architecture-map.md](r
 2. **Two alias namespaces.** 18 workspace entries import as `@knowtis/*`; publishable auth/permissions/email packages import as `@jovandyaz/*`. There is no `@knowtis/auth` — that import will not resolve.
 3. **The `import type` DI footgun.** In `apps/api/**`, `import type` on a constructor-injected class silently breaks NestJS DI (provider arrives `undefined`). ESLint auto-fix is disabled there for this reason.
 4. **Migrations: `generate` + `migrate`, never `push`.** Schema lives in `apps/api/src/database/schema/`; `pnpm db:generate` produces the migration; Railway's pre-deploy command is the only production migrator. `drizzle-kit push` against shared DBs causes the schema drift that migrations were adopted to fix.
-5. **Deploys are CI-driven, not Git-integration-driven.** Notes and backoffice deploy to separate Vercel projects; API and MCP deploy through `.github/scripts/railway-deploy.sh`. Railway `watchPatterns` are inert.
+5. **Deploys are CI-driven, not Git-integration-driven.** Notes and backoffice deploy to separate Vercel projects; API and MCP deploy through `.github/scripts/railway-deploy.sh`. Railway still applies `watchPatterns` to uploaded snapshots; `SKIPPED` means no new deployment became live and must be checked against Nx's affected set.
 
 ## Working rules
 
 - Everything runs through Nx: `pnpm nx affected -t lint test build`, `nx run <project> <target>`. Always `pnpm`, never npm/yarn.
 - Module boundaries are ESLint-enforced via tags (`type:app → type:ui/data-access → type:util`; scopes `shared|notes|api`). A new lib needs correct tags or imports will be rejected.
 - AI features are gated: `ANTHROPIC_API_KEY` in env AND DB feature flags (`ai_enabled`, `agent_byok`, …) toggled on. A feature "not working" is often just a flag defaulting to off.
-- Repo docs are canonical: `docs/ARCHITECTURE.md`, `docs/AI.md`, `docs/MCP.md`, `docs/AUTH.md`, `docs/PERMISSIONS.md`, `docs/MIGRATIONS.md`, `docs/DEPLOYMENT.md`. The dated design specs under `docs/superpowers/specs/` are rationale/history — never treat them as current behavior.
+- Repo docs are canonical: `docs/ARCHITECTURE.md`, `docs/AI.md`, `docs/MCP.md`, `docs/AUTH.md`, `docs/PERMISSIONS.md`, `docs/MIGRATIONS.md`, `docs/DEPLOYMENT.md`. Verify behavior against those docs and the current code rather than relying on historical design notes.

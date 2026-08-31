@@ -1,10 +1,9 @@
 #!/bin/sh
 # Deploy to Railway and gate on the DEPLOYMENT, not the build.
 #
-# `railway up` returns when the build log stream closes, which happens before
-# preDeployCommand (migrations) and the healthcheck run — so a failed migration
-# would otherwise leave this job green. Start detached, then poll for a terminal
-# status. Runs under busybox sh in ghcr.io/railwayapp/cli: no bash, no jq.
+# Agent/non-TTY and detached CLI invocations are not terminal deployment
+# evidence. Start detached, capture the exact deployment ID, then poll it to a
+# terminal status. Runs under busybox sh in ghcr.io/railwayapp/cli: no bash, no jq.
 set -eu
 
 service="${1:?usage: railway-deploy.sh <service-id>}"

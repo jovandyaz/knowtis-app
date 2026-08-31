@@ -22,7 +22,7 @@ preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
 - Runs in the release phase: same `DATABASE_URL` and network as the app, before new instances serve traffic.
 - Non-zero exit aborts the deploy.
 - Takes a Postgres advisory lock first — overlapping deploys serialize instead of racing the journal.
-- This is the single source of truth for applying migrations; CI does not migrate.
+- This is the single source of truth for applying migrations to production. CI applies committed migrations only to its disposable test database.
 
 ## Discipline
 

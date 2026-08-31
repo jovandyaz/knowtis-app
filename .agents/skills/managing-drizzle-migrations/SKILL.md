@@ -1,5 +1,6 @@
 ---
 name: managing-drizzle-migrations
+license: MIT
 description: Guides Drizzle schema changes in Knowtis — generate-commit-migrate workflow, the never-push rule, deploy-time application, baselines, and zero-downtime patterns. Use when adding/changing a column, table, index, or enum, when asked "how do I change the schema", "agregar una columna", "migración", or when migration errors appear (42710, tracking table missing). Not for querying data (use investigating-postgres).
 ---
 

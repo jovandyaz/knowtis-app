@@ -51,7 +51,7 @@ packages/    Framework-light, reusable
 | AuthN (JWT, refresh rotation) | `apps/api/src/modules/auth/` + `@jovandyaz/auth*` + `docs/AUTH.md` |
 | AuthZ (CASL, single ability HTTP+WS) | `libs/authorization/` + `docs/PERMISSIONS.md` |
 | DB schema + migrations | `apps/api/src/database/schema/` + `apps/api/drizzle/` + `docs/MIGRATIONS.md` |
-| MCP server (7 tools, API-key→JWT exchange) | `apps/mcp/` + `apps/api/src/modules/mcp/` + `docs/MCP.md` |
+| MCP server (8 tools, OAuth or API-key auth) | `apps/mcp/` + `apps/api/src/modules/mcp/` + `docs/MCP.md` |
 
 ## Essential commands
 
