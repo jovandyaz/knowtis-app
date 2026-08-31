@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { assertPinnedModelServed } from './pinned-model';
+import {
+  assertPinnedModelAvailable,
+  assertPinnedModelServed,
+} from './pinned-model';
 
 const PINNED = 'anthropic:claude-sonnet-5';
 
@@ -39,5 +42,25 @@ describe('assertPinnedModelServed', () => {
         PINNED
       )
     ).not.toThrow();
+  });
+});
+
+describe('assertPinnedModelAvailable', () => {
+  it('accepts a chain that would open the turn with the pinned model', () => {
+    expect(() =>
+      assertPinnedModelAvailable([PINNED, 'openrouter:z-ai/glm-5'], PINNED)
+    ).not.toThrow();
+  });
+
+  it('rejects a chain that would open with another model', () => {
+    expect(() =>
+      assertPinnedModelAvailable(['openrouter:z-ai/glm-5', PINNED], PINNED)
+    ).toThrow(/would open with 'openrouter:z-ai\/glm-5'/);
+  });
+
+  it('rejects an empty chain', () => {
+    expect(() => assertPinnedModelAvailable([], PINNED)).toThrow(
+      /no candidate can serve/
+    );
   });
 });
