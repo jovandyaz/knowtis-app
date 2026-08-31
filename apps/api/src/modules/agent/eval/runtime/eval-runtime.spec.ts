@@ -4,6 +4,8 @@ import {
   createStructuredProvider,
   evalGateOpen,
   resolveEvalModel,
+  resolveEvalTrials,
+  summarizeTrials,
 } from './eval-runtime';
 
 describe('resolveEvalModel', () => {
@@ -30,6 +32,100 @@ describe('resolveEvalModel', () => {
     expect(resolveEvalModel(KEY, 'fallback')).toBe('fallback');
     process.env[KEY] = '   ';
     expect(resolveEvalModel(KEY, 'fallback')).toBe('fallback');
+  });
+});
+
+describe('resolveEvalTrials', () => {
+  afterEach(() => {
+    Reflect.deleteProperty(process.env, 'AI_EVAL_TRIALS');
+  });
+
+  it('defaults to 1 when unset', () => {
+    expect(resolveEvalTrials()).toBe(1);
+  });
+
+  it('parses a positive integer', () => {
+    process.env['AI_EVAL_TRIALS'] = '3';
+    expect(resolveEvalTrials()).toBe(3);
+  });
+
+  it('falls back to 1 on invalid or non-positive values', () => {
+    process.env['AI_EVAL_TRIALS'] = 'abc';
+    expect(resolveEvalTrials()).toBe(1);
+    process.env['AI_EVAL_TRIALS'] = '0';
+    expect(resolveEvalTrials()).toBe(1);
+    process.env['AI_EVAL_TRIALS'] = '-2';
+    expect(resolveEvalTrials()).toBe(1);
+  });
+});
+
+describe('summarizeTrials', () => {
+  const trial = (label: string, success: boolean, fixtureSet = 'recent') => ({
+    success,
+    vars: { message: label, fixtureSet },
+  });
+
+  it('groups repeated trials by case vars and counts passes', () => {
+    const { cases } = summarizeTrials([
+      trial('case-a', true),
+      trial('case-b', false),
+      trial('case-a', true),
+      trial('case-b', true),
+      trial('case-a', false),
+      trial('case-b', true),
+    ]);
+    expect(cases).toEqual([
+      { label: 'case-a', passes: 2, trials: 3 },
+      { label: 'case-b', passes: 2, trials: 3 },
+    ]);
+  });
+
+  it('keeps cases with the same message but different vars apart', () => {
+    const { cases } = summarizeTrials([
+      trial('what does my note say?', true, 'topic'),
+      trial('what does my note say?', false, 'injection'),
+    ]);
+    expect(cases).toHaveLength(2);
+  });
+
+  it('flags a case below the 2/3 threshold', () => {
+    const { casesBelowThreshold } = summarizeTrials([
+      trial('case-a', true),
+      trial('case-a', false),
+      trial('case-a', false),
+    ]);
+    expect(casesBelowThreshold).toEqual([
+      { label: 'case-a', passes: 1, trials: 3 },
+    ]);
+  });
+
+  it('keeps a case at exactly 2/3 above the threshold', () => {
+    const { casesBelowThreshold } = summarizeTrials([
+      trial('case-a', true),
+      trial('case-a', true),
+      trial('case-a', false),
+    ]);
+    expect(casesBelowThreshold).toEqual([]);
+  });
+
+  it('requires the single trial to pass when a case runs once', () => {
+    const passed = summarizeTrials([trial('case-a', true)]);
+    expect(passed.casesBelowThreshold).toEqual([]);
+    const failed = summarizeTrials([trial('case-a', false)]);
+    expect(failed.casesBelowThreshold).toHaveLength(1);
+  });
+
+  it('honors a custom minimum pass rate', () => {
+    const { casesBelowThreshold } = summarizeTrials(
+      [trial('case-a', true), trial('case-a', true), trial('case-a', false)],
+      1
+    );
+    expect(casesBelowThreshold).toHaveLength(1);
+  });
+
+  it('falls back to a placeholder label when vars.message is absent', () => {
+    const { cases } = summarizeTrials([{ success: true }]);
+    expect(cases[0]?.label).toBe('(case)');
   });
 });
 

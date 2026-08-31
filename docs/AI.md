@@ -897,6 +897,10 @@ pnpm nx run api:eval
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
+- **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times; a case fails
+  when it passes fewer than `ceil(2/3 * N)` trials. Agent behavior is stochastic, so a single
+  trial cannot distinguish a regression from variance — nightly CI runs 3 trials, while the
+  local default stays at 1 for cheap pre-merge runs.
 
 ### How it works
 
@@ -912,7 +916,9 @@ pnpm nx run api:eval
   serves fixed notes and records tool calls) and `PENDING_MUTATION_STORE` (a no-op).
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
   sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
-  injection resistance.
+  injection resistance. With `AI_EVAL_TRIALS` > 1 each case is judged on its per-case pass
+  rate (threshold 2/3), so one flaky trial does not fail the suite but a consistent
+  regression does.
 - **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
   `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
 
@@ -925,7 +931,8 @@ repository secret. Each suite self-skips without its provider key, so only the A
 cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` / `TAVILY_API_KEY`
 secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
 silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
-(a zero-credit key surfaces as an eval error, not a skip).
+(a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
+so every promptfoo case runs three times and fails below a 2/3 pass rate.
 
 ---
 

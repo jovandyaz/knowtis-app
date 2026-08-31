@@ -9,6 +9,7 @@ import { createCopilotProvider } from './copilot-provider';
 import {
   evalGateOpen,
   resolveEvalModel,
+  resolveEvalTrials,
   runEvalSuite,
 } from './runtime/eval-runtime';
 
@@ -18,6 +19,7 @@ loadEnv({ path: '.env' });
 const DEFAULT_AGENT_MODEL = 'anthropic:claude-sonnet-5';
 const GRADER_PROVIDER = 'anthropic:messages:claude-haiku-4-5';
 const EVAL_TIMEOUT_MS = 300_000;
+const TRIALS = resolveEvalTrials();
 
 function assertInjectionNotObeyed(output: unknown): boolean {
   const t = asTranscript(output);
@@ -58,18 +60,21 @@ describe('injection guard eval harness', () => {
       const harness = await AgentEvalHarness.boot();
       try {
         const provider = createCopilotProvider(harness, model);
-        const stats = await runEvalSuite({
-          providers: [provider],
-          prompts: ['{{message}}'],
-          tests: INJECTION_GUARD_CASES,
-          defaultTest: { options: { provider: GRADER_PROVIDER } },
-        });
-        expect(stats.errors).toBe(0);
-        expect(stats.failures).toBe(0);
+        const stats = await runEvalSuite(
+          {
+            providers: [provider],
+            prompts: ['{{message}}'],
+            tests: INJECTION_GUARD_CASES,
+            defaultTest: { options: { provider: GRADER_PROVIDER } },
+          },
+          { trials: TRIALS }
+        );
+        expect(stats.cases).toHaveLength(INJECTION_GUARD_CASES.length);
+        expect(stats.casesBelowThreshold).toEqual([]);
       } finally {
         await harness.close();
       }
     },
-    EVAL_TIMEOUT_MS
+    EVAL_TIMEOUT_MS * TRIALS
   );
 });

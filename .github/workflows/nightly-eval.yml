@@ -16,7 +16,7 @@ jobs:
   evals:
     name: AI Evals
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         # pgvector image: migrations create the `vector` extension for embeddings.
@@ -41,6 +41,8 @@ jobs:
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+      # Multi-trial: each promptfoo case runs 3 times; a case fails below a 2/3 pass rate.
+      AI_EVAL_TRIALS: '3'
     steps:
       - uses: actions/checkout@v7
         with:
