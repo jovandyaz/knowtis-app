@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  # actions: read lets the drift step download the previous nightly's artifact.
+  actions: read
 
 concurrency:
   group: nightly-evals
@@ -43,6 +45,7 @@ jobs:
       TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
       # Multi-trial: each promptfoo case runs 3 times; a case fails below a 2/3 pass rate.
       AI_EVAL_TRIALS: '3'
+      AI_EVAL_OUTPUT_DIR: ${{ github.workspace }}/eval-results
     steps:
       - uses: actions/checkout@v7
         with:
@@ -70,3 +73,19 @@ jobs:
 
       - name: Run AI evals
         run: npx nx eval api
+
+      - name: Compare against previous nightly
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .github/scripts/eval-drift.sh
+
+      - name: Upload eval results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eval-results
+          path: eval-results
+          retention-days: 90
+          if-no-files-found: warn

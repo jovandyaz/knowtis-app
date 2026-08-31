@@ -901,6 +901,10 @@ pnpm nx run api:eval
   when it passes fewer than `ceil(2/3 * N)` trials. Agent behavior is stochastic, so a single
   trial cannot distinguish a regression from variance — nightly CI runs 3 trials, while the
   local default stays at 1 for cheap pre-merge runs.
+- **Results:** set `AI_EVAL_OUTPUT_DIR` to persist results — promptfoo's native JSON and a
+  `<suite>.summary.json` (per-case pass rates, model, trials, git SHA) per promptfoo suite,
+  plus Vitest's `vitest.json` for the remaining suites. Unset (the local default), nothing is
+  written.
 
 ### How it works
 
@@ -933,6 +937,10 @@ secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is miss
 silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
 (a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
 so every promptfoo case runs three times and fails below a 2/3 pass rate.
+Each run persists results to the `eval-results` artifact (90-day retention) and a
+non-blocking step compares per-case pass rates against the previous successful nightly,
+writing a drift table to the job summary; it refuses the comparison when the pinned model
+or trial count changed, and never fails the job.
 
 ---
 
