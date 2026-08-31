@@ -20,7 +20,7 @@ import {
 const SONNET_ID = 'anthropic:claude-sonnet-5';
 const SONNET_VENDORED_OUTPUT_COST = 0.00001;
 const GPT_56_TERRA_ID = 'openai:gpt-5.6-terra';
-const GPT_56_TERRA_VENDORED_OUTPUT_COST = 0.000015;
+const GPT_56_TERRA_VENDORED_OUTPUT_COST = 0.000012;
 
 const GLM_ID = 'openrouter:z-ai/glm-5.2';
 const GLM_SLUG = 'z-ai/glm-5.2';
@@ -28,13 +28,13 @@ const GLM_VENDORED_OUTPUT_COST = 0.0000044;
 
 const VENDORED_OUTPUT_COSTS: ReadonlyMap<string, number> = new Map([
   ['anthropic:claude-haiku-4-5', 0.000005],
-  ['openai:gpt-5.6-luna', 0.0000045],
-  ['google:gemini-3.5-flash-lite', 0.0000015],
+  ['openai:gpt-5.6-luna', 0.0000012],
+  ['google:gemini-3.5-flash-lite', 0.0000025],
   [SONNET_ID, SONNET_VENDORED_OUTPUT_COST],
   [GPT_56_TERRA_ID, GPT_56_TERRA_VENDORED_OUTPUT_COST],
-  ['google:gemini-3.7-flash', 0.000009],
+  ['google:gemini-3.7-flash', 0.00000375],
   ['anthropic:claude-opus-5', 0.000025],
-  ['openai:gpt-5.6-sol', 0.00003],
+  ['openai:gpt-5.6-sol', 0.00002],
   ['google:gemini-3.1-pro-preview', 0.000012],
   [GLM_ID, GLM_VENDORED_OUTPUT_COST],
 ]);
@@ -52,13 +52,13 @@ const LIVE_IN_SYNC: Record<
   { output_cost_per_token?: number; deprecation_date?: string }
 > = {
   'claude-haiku-4-5': { output_cost_per_token: 0.000005 },
-  'gpt-5.6-luna': { output_cost_per_token: 0.0000045 },
-  'gemini/gemini-3.5-flash-lite': { output_cost_per_token: 0.0000015 },
+  'gpt-5.6-luna': { output_cost_per_token: 0.0000012 },
+  'gemini/gemini-3.5-flash-lite': { output_cost_per_token: 0.0000025 },
   'claude-sonnet-5': { output_cost_per_token: SONNET_VENDORED_OUTPUT_COST },
   'gpt-5.6-terra': { output_cost_per_token: GPT_56_TERRA_VENDORED_OUTPUT_COST },
-  'gemini/gemini-3.7-flash': { output_cost_per_token: 0.000009 },
+  'gemini/gemini-3.7-flash': { output_cost_per_token: 0.00000375 },
   'claude-opus-5': { output_cost_per_token: 0.000025 },
-  'gpt-5.6-sol': { output_cost_per_token: 0.00003 },
+  'gpt-5.6-sol': { output_cost_per_token: 0.00002 },
   'gemini/gemini-3.1-pro-preview': { output_cost_per_token: 0.000012 },
 };
 

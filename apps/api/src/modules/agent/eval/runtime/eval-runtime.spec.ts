@@ -19,6 +19,13 @@ describe('resolveEvalModel', () => {
     );
   });
 
+  it('trims surrounding whitespace from the env value', () => {
+    process.env[KEY] = '  anthropic:claude-haiku-4-5  ';
+    expect(resolveEvalModel(KEY, 'fallback')).toBe(
+      'anthropic:claude-haiku-4-5'
+    );
+  });
+
   it('falls back when unset or blank', () => {
     expect(resolveEvalModel(KEY, 'fallback')).toBe('fallback');
     process.env[KEY] = '   ';
