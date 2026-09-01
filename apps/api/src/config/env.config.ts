@@ -38,6 +38,8 @@ const envSchemaBase = z.object({
   AI_COOLDOWN_SECONDS: z.coerce.number().int().min(1).default(120),
   AI_TRANSCRIPTION_MODEL: z.string().default('openai:whisper-1'),
   AI_ALERT_WEBHOOK_URL: z.string().url().optional(),
+  AGENT_TOOL_ERROR_ALERT_RATE: z.coerce.number().min(0).max(1).default(0.1),
+  AGENT_STOP_ANOMALY_ALERT_RATE: z.coerce.number().min(0).max(1).default(0.2),
   AI_EVAL_MODEL: z.string().optional(),
   VOYAGE_API_KEY: z.string().optional(),
   AI_EMBEDDING_MODEL: z.string().default('voyage-4'),

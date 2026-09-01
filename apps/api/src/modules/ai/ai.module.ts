@@ -179,6 +179,7 @@ import { TavilyWebSearchAdapter } from './infrastructure/web-search/tavily-web-s
     EMBEDDING_PORT,
     WEB_SEARCH_PORT,
     AI_USAGE_REPOSITORY,
+    WebhookAlertService,
   ],
 })
 export class AIModule {}

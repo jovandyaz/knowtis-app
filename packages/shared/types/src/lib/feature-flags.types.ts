@@ -8,6 +8,7 @@ export const FEATURE_FLAG_KEYS = {
   AGENT_INJECTION_CLASSIFIER: 'agent_injection_classifier',
   AGENT_SCAN_RETRIEVED_NOTES: 'agent_scan_retrieved_notes',
   AGENT_PROMPT_CACHING: 'agent_prompt_caching',
+  AGENT_HEALTH_ALERTS: 'agent_health_alerts',
   AI_COST_RESERVE: 'ai_cost_reserve',
   AI_BYOK_COST_GATE: 'ai_byok_cost_gate',
   AI_GLOBAL_SPEND_BREAKER: 'ai_global_spend_breaker',
@@ -51,6 +52,7 @@ export type FlagGroup = (typeof FLAG_GROUP)[keyof typeof FLAG_GROUP];
 export const REQUIRED_ENV = {
   VOYAGE: 'VOYAGE_API_KEY',
   TAVILY: 'TAVILY_API_KEY',
+  ALERT_WEBHOOK: 'AI_ALERT_WEBHOOK_URL',
 } as const;
 
 export type RequiredEnvVar = (typeof REQUIRED_ENV)[keyof typeof REQUIRED_ENV];
@@ -110,6 +112,12 @@ export const FEATURE_FLAG_CATALOG = {
     domain: FLAG_DOMAIN.AI,
     group: FLAG_GROUP.CAPABILITY,
     label: 'Prompt caching',
+  },
+  agent_health_alerts: {
+    domain: FLAG_DOMAIN.AI,
+    group: FLAG_GROUP.OPS,
+    label: 'Agent health alerts',
+    requiresEnv: REQUIRED_ENV.ALERT_WEBHOOK,
   },
   ai_cost_reserve: {
     domain: FLAG_DOMAIN.AI,

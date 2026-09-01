@@ -897,6 +897,14 @@ pnpm nx run api:eval
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
+- **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times; a case fails
+  when it passes fewer than `ceil(2/3 * N)` trials. Agent behavior is stochastic, so a single
+  trial cannot distinguish a regression from variance — nightly CI runs 3 trials, while the
+  local default stays at 1 for cheap pre-merge runs.
+- **Results:** set `AI_EVAL_OUTPUT_DIR` to persist results — promptfoo's native JSON and a
+  `<suite>.summary.json` (per-case pass rates, model, trials, git SHA) per promptfoo suite,
+  plus Vitest's `vitest.json` for the remaining suites. Unset (the local default), nothing is
+  written.
 
 ### How it works
 
@@ -912,7 +920,9 @@ pnpm nx run api:eval
   serves fixed notes and records tool calls) and `PENDING_MUTATION_STORE` (a no-op).
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
   sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
-  injection resistance.
+  injection resistance. With `AI_EVAL_TRIALS` > 1 each case is judged on its per-case pass
+  rate (threshold 2/3), so one flaky trial does not fail the suite but a consistent
+  regression does.
 - **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
   `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
 
@@ -925,7 +935,12 @@ repository secret. Each suite self-skips without its provider key, so only the A
 cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` / `TAVILY_API_KEY`
 secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
 silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
-(a zero-credit key surfaces as an eval error, not a skip).
+(a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
+so every promptfoo case runs three times and fails below a 2/3 pass rate.
+Each run persists results to the `eval-results` artifact (90-day retention) and a
+non-blocking step compares per-case pass rates against the previous successful nightly,
+writing a drift table to the job summary; it refuses the comparison when the pinned model
+or trial count changed, and never fails the job.
 
 ---
 
@@ -1089,6 +1104,17 @@ Because the stall aborts only the per-call signal, the turn-level signal survive
 A structured `agent.turn.health` event is logged **per LLM call**, once when the call ends — so a multi-step turn emits several: one per step call, plus one for each stalled attempt (the zero-output retry and any step-boundary failover are their own calls and log their own). Fields: `outcome` (`'done'` | `'proposal'` | `'error'` | `'stall'` | `'timeout'` | `'aborted'` | `'empty'` | `'continued'` — `'continued'` marks a call that finished with tool-calls and threads its messages into the next step), `ttfpMs` (time to first stream part, `null` if none arrived), `maxGapMs` (the largest silence between two parts), `parts` (total stream parts seen), `textDeltas` (visible-text chunks), `finishReason`, `upstream` (the OpenRouter upstream slug when routed through OpenRouter, else `null`), `modelsUsed` (the models that served the turn, in order — more than one when a step-boundary failover switched models mid-turn), and `elapsedMs`. `parts` is **per call** and gates that call's same-model zero-output retry, whereas the turn-wide **progressed** signal (any visible text or completed tool step across the turn — not a logged field) gates the outer chain's turn-initial failover. Local stream control markers (`start`, `abort` — enqueued client-side by the SDK, never sent by the model) are excluded from `parts`, `ttfpMs`, and `maxGapMs`: `ttfpMs` measures time to the first **upstream** part, not the SDK's local open/abort markers.
 
 **Empty-answer guard.** A turn that finishes with `finishReason: 'length'` (truncated at `AI_AGENT_MAX_OUTPUT_TOKENS`) but zero visible text — the whole budget spent on reasoning — yields `AI_EMPTY_COMPLETION` instead of an empty `done`.
+
+### Agent health alerts
+
+A daily cron (06:00 UTC, flag `agent_health_alerts`, default off) computes two rates over the
+last 24h of `conversation_messages`: the tool error rate (tool-result parts with an error
+`outputType`) and the anomalous stop-reason rate (`max_steps`, `token_budget`, `length`,
+`content_filter`, `error`; user aborts excluded). It always logs `agent.health.report`; when a
+rate crosses `AGENT_TOOL_ERROR_ALERT_RATE` (default 0.10) or `AGENT_STOP_ANOMALY_ALERT_RATE`
+(default 0.20) with at least 20 samples, it POSTs an `agent.health.alert` event to
+`AI_ALERT_WEBHOOK_URL`. Thresholds are fixed fractions by design — a moving baseline is a
+follow-up if they prove noisy.
 
 ## Long-term user memory (A6b)
 
