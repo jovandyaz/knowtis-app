@@ -58,6 +58,12 @@ const GUARDRAIL_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
     description:
       'Safety and spend protections. Numeric limits are env-configured.',
   },
+  {
+    group: FLAG_GROUP.OPS,
+    title: 'Operations',
+    description:
+      'Operational monitors and alerts. Thresholds are env-configured.',
+  },
 ];
 
 const CAPABILITY_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
