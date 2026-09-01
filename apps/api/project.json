@@ -154,6 +154,13 @@
         "cwd": "apps/api"
       }
     },
+    "eval-judgments": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/modules/agent/eval/calibration/judgment-extract.cli.ts",
+        "cwd": "apps/api"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {

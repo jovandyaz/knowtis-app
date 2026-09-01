@@ -121,7 +121,7 @@ export interface EvalTrialSummary {
 // promptfoo assigns a fresh testIdx to every repeat, so trials of one case are
 // grouped by their vars identity instead (unique per case in every suite; the
 // suites assert cases.length, which catches an accidental vars collision).
-function caseKeyOf(vars: Record<string, unknown> | undefined): string {
+export function caseKeyOf(vars: Record<string, unknown> | undefined): string {
   return JSON.stringify(
     Object.fromEntries(
       Object.entries(vars ?? {}).sort(([a], [b]) => a.localeCompare(b))
