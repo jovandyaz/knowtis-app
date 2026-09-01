@@ -43,8 +43,17 @@ describe('resolveEvalModel', () => {
 });
 
 describe('resolveEvalTrials', () => {
-  afterEach(() => {
+  const saved = process.env['AI_EVAL_TRIALS'];
+
+  beforeEach(() => {
     Reflect.deleteProperty(process.env, 'AI_EVAL_TRIALS');
+  });
+  afterEach(() => {
+    if (saved === undefined) {
+      Reflect.deleteProperty(process.env, 'AI_EVAL_TRIALS');
+    } else {
+      process.env['AI_EVAL_TRIALS'] = saved;
+    }
   });
 
   it('defaults to 1 when unset', () => {
@@ -223,45 +232,73 @@ describe('prepareEvalOutput', () => {
     expect(target?.summaryPath).toBe(
       join(base, 'nested', 'copilot.summary.json')
     );
-    await expect(stat(join(base, 'nested'))).resolves.toBeTruthy();
+    const dirStats = await stat(join(base, 'nested'));
+    expect(dirStats.isDirectory()).toBe(true);
     await rm(base, { recursive: true, force: true });
   });
 });
 
 describe('writeEvalSummary', () => {
-  it('writes suite metadata and per-case outcomes as JSON', async () => {
+  const savedSha = process.env['GITHUB_SHA'];
+
+  afterEach(() => {
+    if (savedSha === undefined) {
+      Reflect.deleteProperty(process.env, 'GITHUB_SHA');
+    } else {
+      process.env['GITHUB_SHA'] = savedSha;
+    }
+  });
+
+  const STATS: EvalRunStats = {
+    successes: 2,
+    failures: 1,
+    errors: 0,
+    cases: [
+      {
+        key: '{"fixtureSet":"recent","message":"m"}',
+        label: 'm',
+        passes: 2,
+        trials: 3,
+      },
+    ],
+    casesBelowThreshold: [],
+  };
+
+  async function writeToTempDir(): Promise<{
+    base: string;
+    parsed: Record<string, unknown>;
+  }> {
     const base = await mkdtemp(join(tmpdir(), 'eval-sum-'));
     const target = {
       dir: base,
       nativePath: join(base, 'copilot.json'),
       summaryPath: join(base, 'copilot.summary.json'),
     };
-    const stats: EvalRunStats = {
-      successes: 2,
-      failures: 1,
-      errors: 0,
-      cases: [
-        {
-          key: '{"fixtureSet":"recent","message":"m"}',
-          label: 'm',
-          passes: 2,
-          trials: 3,
-        },
-      ],
-      casesBelowThreshold: [],
-    };
     await writeEvalSummary(
       target,
       { suite: 'copilot', model: 'anthropic:claude-sonnet-5', trials: 3 },
-      stats
+      STATS
     );
     const parsed = JSON.parse(await readFile(target.summaryPath, 'utf8'));
-    expect(parsed.suite).toBe('copilot');
-    expect(parsed.model).toBe('anthropic:claude-sonnet-5');
-    expect(parsed.trials).toBe(3);
-    expect(parsed.cases).toEqual(stats.cases);
-    expect(typeof parsed.timestamp).toBe('string');
-    expect(parsed).toHaveProperty('gitSha');
+    return { base, parsed };
+  }
+
+  it('writes suite metadata and per-case outcomes as JSON', async () => {
+    Reflect.deleteProperty(process.env, 'GITHUB_SHA');
+    const { base, parsed } = await writeToTempDir();
+    expect(parsed['suite']).toBe('copilot');
+    expect(parsed['model']).toBe('anthropic:claude-sonnet-5');
+    expect(parsed['trials']).toBe(3);
+    expect(parsed['cases']).toEqual(STATS.cases);
+    expect(typeof parsed['timestamp']).toBe('string');
+    expect(parsed['gitSha']).toBeNull();
+    await rm(base, { recursive: true, force: true });
+  });
+
+  it('persists GITHUB_SHA as gitSha when set', async () => {
+    process.env['GITHUB_SHA'] = 'abc1234def';
+    const { base, parsed } = await writeToTempDir();
+    expect(parsed['gitSha']).toBe('abc1234def');
     await rm(base, { recursive: true, force: true });
   });
 });
