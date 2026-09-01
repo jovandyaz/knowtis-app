@@ -30,7 +30,7 @@ export class AgentHealthReportTask {
     private readonly alerts: WebhookAlertService
   ) {}
 
-  @Cron(CronExpression.EVERY_DAY_AT_6AM)
+  @Cron(CronExpression.EVERY_DAY_AT_6AM, { timeZone: 'UTC' })
   async report(): Promise<void> {
     try {
       await this.run();

@@ -1,15 +1,18 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Sql } from 'postgres';
 
+import type { MessageStopReason } from '@knowtis/shared-types';
+
 import { DATABASE_CLIENT } from '../../../../database';
+import type { ToolOutputType } from '../../domain/agent-message';
 import type { AgentHealthWindowStats } from './agent-health.evaluator';
 
-const TOOL_ERROR_OUTPUT_TYPES = [
+const TOOL_ERROR_OUTPUT_TYPES: readonly ToolOutputType[] = [
   'error-text',
   'error-json',
   'execution-denied',
 ];
-const ANOMALOUS_STOP_REASONS = [
+const ANOMALOUS_STOP_REASONS: readonly MessageStopReason[] = [
   'max_steps',
   'token_budget',
   'length',
