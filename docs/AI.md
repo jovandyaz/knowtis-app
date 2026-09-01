@@ -942,6 +942,34 @@ non-blocking step compares per-case pass rates against the previous successful n
 writing a drift table to the job summary; it refuses the comparison when the pinned model
 or trial count changed, and never fails the job.
 
+### Judge calibration
+
+The rubric verdicts come from an LLM judge (the haiku grader behind every `llm-rubric`
+assertion) that must itself be calibrated against human labels (Hamel Husain's
+LLM-as-a-judge methodology: binary judgments plus critiques, ~30 expert labels, measured
+as precision/recall rather than raw agreement). Two measurement-only CLIs close that loop
+— neither gates CI:
+
+1. Produce native results: run `pnpm nx run api:eval` with `AI_EVAL_OUTPUT_DIR=<dir>`
+   exported, or download a nightly `eval-results` artifact.
+2. `pnpm nx run api:eval-judgments -- --dir <dir>` extracts every `llm-rubric` judgment
+   from the native `<suite>.json` files into `<dir>/judgments.jsonl` — one row per
+   case × trial × rubric carrying the judge's verdict (`judgePass`) and critique
+   (`judgeReason`), plus empty `humanPass` / `humanCritique` fields to fill in.
+3. Hand-label ~30 rows (`humanPass`: true/false as ground truth, `humanCritique`: why)
+   and commit the labeled file to
+   `apps/api/src/modules/agent/eval/calibration/labels/<yyyy-mm-dd>.jsonl`. The repo is
+   public and worksheet rows embed transcripts verbatim (`outputText`), so only label
+   runs against the harness's synthetic fixtures — never commit a worksheet extracted
+   from transcripts that touched real user data.
+4. `pnpm nx run api:eval-agreement` reads every committed labels file (or one passed via
+   `-- --labels <path>`) and prints the confusion matrix, precision (when the judge
+   passes, how often the human agrees — low precision means a too-lenient judge, the
+   dangerous direction), recall, and each disagreement with its critique.
+
+Act on low precision by tightening the rubric text in `cases.ts` /
+`injection-guard.eval.ts` and re-running the loop against fresh transcripts.
+
 ---
 
 ## Hybrid Retrieval (A3)
