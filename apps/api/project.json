@@ -161,6 +161,13 @@
         "cwd": "apps/api"
       }
     },
+    "eval-agreement": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "tsx src/modules/agent/eval/calibration/agreement.cli.ts",
+        "cwd": "apps/api"
+      }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
