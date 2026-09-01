@@ -95,7 +95,7 @@ Quick wins: 1, 4, 6, 7. Trabajo real: 2, 3, 5.
 - **Ítem 4 (G6)**: `AI_EVAL_OUTPUT_DIR` persiste JSON nativo de promptfoo + `<suite>.summary.json` por suite promptfoo y `vitest.json` para el resto; artifact `eval-results` (90 días) y tabla de drift vs el último nightly exitoso (rehúsa comparar si cambia modelo o trials). La tabla cubre solo las suites promptfoo; la cobertura completa llega con G7.
 - **Ítem 7 (G8)**: v0 con umbrales fijos (`AGENT_TOOL_ERROR_ALERT_RATE`, `AGENT_STOP_ANOMALY_ALERT_RATE`, n ≥ 20) sobre `conversation_messages` persistido (parts `outputType` de error y `stop_reason`), no sobre el log `agent.turn.health`; drift estadístico con baseline móvil queda como follow-up si el umbral fijo resulta ruidoso.
 
-Follow-ups anotados en el review de la rama: dedup del bloque compartido de los dos `*.eval.ts` promptfoo (junto con G7), retiro del knob `minPassRate` sin caller de producción, y QW6 (ítem 6, calibración del judge) diseñado y aprobado para el siguiente PR.
+Follow-ups anotados en el review de la rama: dedup del bloque compartido de los dos `*.eval.ts` promptfoo (junto con G7) y retiro del knob `minPassRate` sin caller de producción. QW6 (ítem 6, calibración del judge) ya está entregado: `api:eval-judgments` extrae la worksheet de juicios `llm-rubric` del JSON nativo y `api:eval-agreement` reporta matriz de confusión, precision y recall sobre las etiquetas commiteadas en `calibration/labels/` — ambos son solo medición, ninguno gatea CI. G5 queda abierto únicamente por el paso humano: etiquetar ~30 filas sobre transcripts de nightlies.
 
 ## Fuentes
 
