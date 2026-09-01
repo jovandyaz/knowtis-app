@@ -958,7 +958,10 @@ as precision/recall rather than raw agreement). Two measurement-only CLIs close 
    (`judgeReason`), plus empty `humanPass` / `humanCritique` fields to fill in.
 3. Hand-label ~30 rows (`humanPass`: true/false as ground truth, `humanCritique`: why)
    and commit the labeled file to
-   `apps/api/src/modules/agent/eval/calibration/labels/<yyyy-mm-dd>.jsonl`.
+   `apps/api/src/modules/agent/eval/calibration/labels/<yyyy-mm-dd>.jsonl`. The repo is
+   public and worksheet rows embed transcripts verbatim (`outputText`), so only label
+   runs against the harness's synthetic fixtures — never commit a worksheet extracted
+   from transcripts that touched real user data.
 4. `pnpm nx run api:eval-agreement` reads every committed labels file (or one passed via
    `-- --labels <path>`) and prints the confusion matrix, precision (when the judge
    passes, how often the human agrees — low precision means a too-lenient judge, the

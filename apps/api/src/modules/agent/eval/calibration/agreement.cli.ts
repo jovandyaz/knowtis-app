@@ -33,9 +33,7 @@ async function main(): Promise<void> {
   console.log(formatReport(computeAgreement(rows)));
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('[eval-agreement] failed:', error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error('[eval-agreement] failed:', error);
+  process.exitCode = 1;
+});

@@ -36,9 +36,7 @@ async function main(): Promise<void> {
   console.log(`wrote ${rows.length} judgment rows to ${outPath}`);
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-    console.error('[eval-judgments] failed:', error);
-    process.exit(1);
-  });
+main().catch((error) => {
+  console.error('[eval-judgments] failed:', error);
+  process.exitCode = 1;
+});

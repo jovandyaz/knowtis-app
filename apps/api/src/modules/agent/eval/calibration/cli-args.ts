@@ -1,6 +1,11 @@
 export function argValue(name: string): string | undefined {
   const index = process.argv.indexOf(name);
-  return index !== -1 && index + 1 < process.argv.length
-    ? process.argv[index + 1]
-    : undefined;
+  if (index === -1) {
+    return undefined;
+  }
+  const value = process.argv[index + 1];
+  if (value === undefined || value.startsWith('--')) {
+    throw new Error(`${name} requires a value`);
+  }
+  return value;
 }
