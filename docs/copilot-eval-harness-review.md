@@ -16,7 +16,7 @@
 | Grader              | default                   | Explícito: `anthropic:messages:claude-haiku-4-5`                                                                                                      |
 | Dependencias reales | Anthropic + PG/Redis boot | +Voyage real (2 suites), +Tavily real (1 suite), seeds en PG real con cleanup                                                                         |
 
-Detalles de arquitectura: 3 suites usan promptfoo como librería (`runEvalSuite` en `runtime/eval-runtime.ts`), 3 son Vitest puro. `maxConcurrency: 1` hardcoded. Sin repeat, sin thresholds, sin output persistido. 72 unit tests cubren el harness mismo.
+Detalles de arquitectura: 2 suites usan promptfoo como librería (`runEvalSuite` en `runtime/eval-runtime.ts`: copilot, injection-guard), 4 son Vitest puro. `maxConcurrency: 1` hardcoded. Al momento del audit: sin repeat, sin thresholds, sin output persistido (ver Estado al final — G1/G6/G8 cerrados después). 72 unit tests cubren el harness mismo.
 
 ## Fortalezas (por encima de la media)
 
@@ -61,7 +61,7 @@ No hay feedback de usuario (thumbs), ni annotation queue, ni conversión de fall
 
 **G6. Sin baselines ni tracking histórico.** Único registro: log de GitHub Actions. Sin output JSON, sin artefactos, sin comparación entre runs — imposible distinguir regresión gradual de estado histórico, e imposible hacer hill-climbing (capability evals vs regression evals, distinción de Anthropic). Promptfoo emite JSON/JUnit nativamente.
 
-**G7. Arquitectura fragmentada.** 3 suites promptfoo + 3 Vitest puro = dos modelos de assertion/reporting; los resultados vitest-puros no entran al JSON de promptfoo (bloquea G6). La extracción del runtime a `packages/eval-runtime` tenía trigger "2ª suite" — hay 6 y sigue interna (`docs/AI.md` §"extraction target" desactualizado).
+**G7. Arquitectura fragmentada.** 2 suites promptfoo + 4 Vitest puro = dos modelos de assertion/reporting; los resultados vitest-puros no entran al JSON de promptfoo (limita la cobertura del drift de G6 a los casos promptfoo). La extracción del runtime a `packages/eval-runtime` tenía trigger "2ª suite" — hay 6 y sigue interna (`docs/AI.md` §"extraction target" desactualizado).
 
 **G8. Sin evals online / verificación asíncrona.** Consenso baseline: offline + scoring asíncrono sobre traces (groundedness, URLs citadas ⊆ `webSources`). Tensión real: Langfuse redacta contenido por default (decisión de privacidad correcta post-#381), lo que bloquea scoring semántico online. Señales estructurales sin contenido disponibles hoy: alerta de tool error rate (instrumentada, sin alerta), drift de distribución de `stopReason` (subida de `max_steps`/`token_budget` = regresión de eficiencia del loop).
 
@@ -86,6 +86,16 @@ No hay feedback de usuario (thumbs), ni annotation queue, ni conversión de fall
 Quick wins: 1, 4, 6, 7. Trabajo real: 2, 3, 5.
 
 **Observación**: `docs/agent-harness-review.md` ya identificaba G1/G2 (prioridad 6) y G3 (prioridad 9) desde agosto; se ejecutó primero el harness de runtime (Bolt 1/2, SDK v7). Con el runtime sólido, el eval harness es hoy el eslabón más débil del sistema.
+
+## Estado (2026-08-31, rama feat/eval-harness-quick-wins)
+
+Ítems 1, 4 y 7 entregados; semántica as-built donde difiere de lo propuesto arriba:
+
+- **Ítem 1 (G1)**: `AI_EVAL_TRIALS` aplica a _todos_ los casos promptfoo (superset de "casos rubric"); umbral `ceil(2/3 × trials)` por caso. Los asserts `errors === 0` se retiraron a propósito: un error de proveedor en un trial se absorbe por el umbral (tolerancia a flakes), mientras un error sistemático (p. ej. key sin créditos) falla 0/N y sigue poniendo el nightly en rojo.
+- **Ítem 4 (G6)**: `AI_EVAL_OUTPUT_DIR` persiste JSON nativo de promptfoo + `<suite>.summary.json` por suite promptfoo y `vitest.json` para el resto; artifact `eval-results` (90 días) y tabla de drift vs el último nightly exitoso (rehúsa comparar si cambia modelo o trials). La tabla cubre solo las suites promptfoo; la cobertura completa llega con G7.
+- **Ítem 7 (G8)**: v0 con umbrales fijos (`AGENT_TOOL_ERROR_ALERT_RATE`, `AGENT_STOP_ANOMALY_ALERT_RATE`, n ≥ 20) sobre `conversation_messages` persistido (parts `outputType` de error y `stop_reason`), no sobre el log `agent.turn.health`; drift estadístico con baseline móvil queda como follow-up si el umbral fijo resulta ruidoso.
+
+Follow-ups anotados en el review de la rama: dedup del bloque compartido de los dos `*.eval.ts` promptfoo (junto con G7), retiro del knob `minPassRate` sin caller de producción, y QW6 (ítem 6, calibración del judge) diseñado y aprobado para el siguiente PR.
 
 ## Fuentes
 
