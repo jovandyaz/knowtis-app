@@ -158,6 +158,7 @@ export {
   CATALOG_SYNC_SKIP_REASONS,
   type CatalogSyncSkipReason,
   type CatalogSyncResultDto,
+  type AssignableModelDto,
   type PromoteCatalogModelInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';

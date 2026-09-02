@@ -5,6 +5,7 @@ import type { CatalogModelDto } from '@knowtis/shared-types';
 
 import { AiCatalogController } from './ai-catalog.controller';
 import type { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import type { AssignableModelsService } from './application/services/assignable-models.service';
 
 const ACTOR = { id: 'admin-user-id' } as never;
 const MODEL_ID = 'openrouter:vendor/promoted-one';
@@ -31,6 +32,9 @@ describe('AiCatalogController', () => {
   let catalog: {
     [K in keyof AiCatalogAdminService]: ReturnType<typeof vi.fn>;
   };
+  let assignable: {
+    [K in keyof AssignableModelsService]: ReturnType<typeof vi.fn>;
+  };
   let controller: AiCatalogController;
 
   beforeEach(() => {
@@ -52,7 +56,10 @@ describe('AiCatalogController', () => {
         failures: 0,
       }),
     };
-    controller = new AiCatalogController(catalog as never);
+    assignable = {
+      list: vi.fn().mockResolvedValue([]),
+    };
+    controller = new AiCatalogController(catalog as never, assignable as never);
   });
 
   it('serves the catalog overview', async () => {
@@ -60,6 +67,11 @@ describe('AiCatalogController', () => {
       promoted: [],
       alerts: [],
     });
+  });
+
+  it('serves the assignable models straight from the service', async () => {
+    expect(await controller.listAssignable()).toEqual([]);
+    expect(assignable.list).toHaveBeenCalledOnce();
   });
 
   it('applies the house defaults when the query omits them', async () => {
