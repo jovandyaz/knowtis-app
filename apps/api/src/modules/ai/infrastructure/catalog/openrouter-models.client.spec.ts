@@ -167,7 +167,42 @@ describe('OpenRouterModelsHttpClient', () => {
       expirationDate: null,
       intelligenceIndex: 47.6,
       outputModalities: ['text'],
+      reasoning: null,
     });
+  });
+
+  it('should capture declared reasoning efforts, dropping unknown values', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...DEEPSEEK_V32,
+            reasoning: {
+              supported_efforts: ['low', 'high', 'turbo'],
+              default_effort: 'high',
+              mandatory: true,
+            },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({
+      levels: ['low', 'high'],
+      mandatory: true,
+    });
+  });
+
+  it('should yield null reasoning when upstream omits the object', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([DEEPSEEK_V32])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toBeNull();
   });
 
   it('should read pricing strings as numbers', async () => {
