@@ -13,7 +13,7 @@ async function* scripted(events: AgentEvent[]): AsyncIterable<AgentEvent> {
 const USAGE = {
   inputTokens: 10,
   outputTokens: 5,
-  model: 'anthropic:claude-sonnet-4-20250514',
+  model: 'anthropic:claude-sonnet-5',
 };
 
 describe('drainEvents', () => {
