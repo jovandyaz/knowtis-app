@@ -334,13 +334,13 @@ AI models and the fallback chain can be changed at runtime via the `ai_config` d
 | `ai_fast_model`           | `openrouter:minimax/minimax-m2.5`                                                                   | `model`  | Model for ghost-text and the Rápido intent                                                                                                                                                   |
 | `ai_deep_model`           | `openrouter:moonshotai/kimi-k2.5`                                                                   | `model`  | Model for the Profundo intent                                                                                                                                                                |
 | `ai_fallback_chain`       | `openrouter:deepseek/deepseek-v3.2,openrouter:minimax/minimax-m2.5,openrouter:moonshotai/kimi-k2.5` | `chain`  | Cross-provider fallback order (CSV)                                                                                                                                                          |
-| `ai_reasoning_effort`     | `medium`                                                                                            | `choice` | Reasoning budget for OpenRouter models (`low`/`medium`/`high`)                                                                                                                               |
+| `ai_reasoning_effort`     | `medium`                                                                                            | `choice` | Global default reasoning budget (`GLOBAL_REASONING_EFFORTS`: `low`/`medium`/`high`); a per-turn `effort` may override it — see [Reasoning effort](#reasoning-effort)                         |
 | `ai_openrouter_providers` | `fireworks,baseten`                                                                                 | `list`   | Ordered OpenRouter upstream allowlist for `openrouter:*` turns; empty = OpenRouter default routing                                                                                           |
 | `ai_free_tier_ceiling`    | `4.00`                                                                                              | `money`  | Dollars per million output tokens the platform absorbs on the free tier; up to two decimals, capped at the catalog admission price. A row that does not parse falls back to the code default |
 
 A `model` key takes a single server-invocable model id — curated, or promoted from the [open-tier catalog](#open-tier-model-catalog); the `chain` key takes a comma-separated list of catalog-supported model ids and is rejected on write if it contains unknown ids, duplicates, or no server-routable member (see [Cross-Provider Fallback Chain](#cross-provider-fallback-chain)). A `choice` key takes one member of a fixed list. A `list` key takes a comma-separated allowlist of up to 8 lowercase provider slugs with no duplicates; empty is valid and means no preference (see [OpenRouter Upstream Allowlist](#openrouter-upstream-allowlist)). A guard test asserts every code default is a curated id, so a typo fails CI rather than prod.
 
-**Reasoning effort** reaches the provider as `providerOptions.openrouter.reasoning.effort` and is sent **only for `openrouter:*` models** — other providers expose incompatible reasoning controls. The gate reads the per-candidate model, so an OpenRouter primary that fails over to Anthropic does not carry the option across. It is a global default and applies to BYOK turns too, since a BYOK turn still consumes the server's stall and ceiling budgets. Lower effort trades depth for a faster first token and less hidden spend: a reasoning model can burn most of its completion tokens before emitting anything visible.
+**Reasoning effort** reaches the provider as `providerOptions.openrouter.reasoning.effort` and is sent **only for `openrouter:*` models** — other providers expose incompatible reasoning controls. The gate reads the per-candidate model, so an OpenRouter primary that fails over to Anthropic does not carry the option across. `ai_reasoning_effort` is the global default — every turn without an accepted per-turn `effort` runs at it, BYOK turns included, since a BYOK turn still consumes the server's stall and ceiling budgets. The backoffice setting is deliberately capped at `high`: the wider per-model range (`xhigh`, `max`) is reachable only through the per-turn path, where the model's own declaration bounds it (see [Reasoning effort](#reasoning-effort)). Lower effort trades depth for a faster first token and less hidden spend: a reasoning model can burn most of its completion tokens before emitting anything visible.
 
 **REST API** (admin only):
 
@@ -379,14 +379,17 @@ In **direct mode**, each provider's key resolves **DB → env → none**: `Provi
 
 **REST API** (admin only):
 
-| Method | Path                           | Description                                                                                          |
-| ------ | ------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| GET    | `/ai/providers`                | Every provider with its `keySource`, `enabled`, `keyPrefix`, and `storedKeyUnreadable`.              |
-| PUT    | `/ai/providers/:provider`      | Store a key and/or set `enabled`. The key is **probed before it persists** — a bad key is rejected.  |
-| DELETE | `/ai/providers/:provider/key`  | Clear the stored key; if the provider stays enabled, routing falls back to the env var when present. |
-| POST   | `/ai/providers/:provider/test` | Probe whatever key currently routes — answers "is this provider working right now?".                 |
+| Method | Path                           | Description                                                                                             |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/providers`                | Every provider with its `keySource`, `enabled`, `keyPrefix`, and `storedKeyUnreadable`.                 |
+| PUT    | `/ai/providers/:provider`      | Store a key and/or set `enabled`. A key is **stored, then probed**; the verdict rides along as `probe`. |
+| DELETE | `/ai/providers/:provider/key`  | Clear the stored key; if the provider stays enabled, routing falls back to the env var when present.    |
+| POST   | `/ai/providers/:provider/test` | Probe whatever key currently routes — answers "is this provider working right now?".                    |
 
-The probe (both `PUT` and `test`) sends one cheap turn through the provider's curated fast model. `test` resolves **200** with `{ ok: true, model } | { ok: false, reason: 'rejected' | 'unavailable' | 'unconfigured', message }` rather than throwing — the global exception filter (`core/filters/http-exception.filter.ts`) masks 5xx bodies, so a thrown status would replace the diagnosis with "Internal server error". The failure is classified by the AI SDK's own `APICallError.isRetryable`: a non-retryable answer means the provider refused (a bad or underfunded key → `rejected`), a `RetryError` after exhausted retries means an outage (`unavailable`). The routing key is scrubbed out of both the probe error and the logs.
+Both probes send one cheap turn (`prompt: 'ping'`, `maxOutputTokens: 16`, a 10 s `AbortSignal.timeout`) through the provider's curated fast model, and both scrub the key out of the error text and the logs.
+
+- `PUT` returns `SetSystemProviderResult` — `{ providers, probe? }`, where `probe: { valid: boolean, error?: string }` is present only when the request carried an `apiKey`. `SystemProviderKeysService.setKey` encrypts and persists the key **first**, audits `ai_provider.key_set`, then runs `probeProviderKey` (`infrastructure/providers/provider-probe.ts`) against the candidate key. A failed probe is informational, never a veto: the key stays stored so an admin can key a provider that is briefly down, and the **Providers** card surfaces the redacted error. (BYOK `PUT /ai/keys/:provider` shares `probeProviderKey` but keeps its reject-on-failure semantics.)
+- `test` resolves **200** with `{ ok: true, model } | { ok: false, reason: 'rejected' | 'unavailable' | 'unconfigured', message }` rather than throwing — the global exception filter (`core/filters/http-exception.filter.ts`) masks 5xx bodies, so a thrown status would replace the diagnosis with "Internal server error". The failure is classified by the AI SDK's own `APICallError.isRetryable`: a non-retryable answer means the provider refused (a bad or underfunded key → `rejected`), a `RetryError` after exhausted retries means an outage (`unavailable`).
 
 ---
 
@@ -458,7 +461,7 @@ The curated list is hand-maintained, so it goes stale silently: open-weight mode
 
 ### The tables
 
-`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`) and a `status` of `candidate` or `promoted`. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
+`ai_catalog_models` holds one row per model the sync has seen, keyed by the same `provider:vendor/model` id the rest of the system uses. Each row carries upstream metadata (label, description, per-token input and output cost, context window, `intelligence_index`, `last_seen_at`), a `reasoning` jsonb column (migration `0042`) holding `{ levels: ReasoningEffort[], mandatory }` — the sync maps OpenRouter's `reasoning.supported_efforts` (filtered to known `REASONING_EFFORTS`) and `reasoning.mandatory`, `null` when the upstream declares no usable levels — and a `status` of `candidate` or `promoted`. Promotion stamps `promoted_by` and `promoted_at`; retiring a promoted model sets it back to `candidate`, so it rejoins the promotion queue.
 
 `ai_catalog_alerts` records what needs a human: `deprecation`, `price_drift` and `unavailable` (a curated **or promoted** model upstream stopped listing), each with a free-text `detail`. A partial unique index keeps at most one **open** alert per `(model_id, kind)`, so a daily job that keeps seeing the same problem does not produce a daily row.
 
@@ -487,29 +490,46 @@ The backoffice marks those candidates **BYOK only** in the table, so the consequ
 
 Promoted rows join the model list through `CompositeModelCatalog`, backed by `PromotedModelsCache` (60s refresh, plus an immediate refresh on promote and retire so a change is not invisible for a minute). A read that resolves out of order is discarded, so a slow refresh cannot overwrite a newer one.
 
-A promoted model can be set as `ai_default_model` or reached through intent configuration. It does **not** appear in the per-user Advanced picker unless the caller has a BYOK key for its provider — until paid plans exist, promoted models are offered per-user only to callers who bring their own key.
+A promoted model can be set as `ai_default_model` or reached through intent configuration. In the notes menu it surfaces under **Más modelos** — in the open group when its price sits under the free-tier ceiling, otherwise only for a caller with a BYOK key for its provider (see [Copilot Model Selection](#copilot-model-selection)).
 
 Admin surface: the **Model catalog** section of the backoffice AI Config page, over these endpoints (admin JWT; model ids contain `/` and must be percent-encoded in the path).
 
-| Method | Path                             | Purpose                                                                   |
-| ------ | -------------------------------- | ------------------------------------------------------------------------- |
-| GET    | `/ai/catalog`                    | Promoted models and open alerts                                           |
-| GET    | `/ai/catalog/candidates`         | One ranked page of the promotion queue; `search` matches id or label      |
-| POST   | `/ai/catalog/sync`               | Run the pass the daily cron runs; reports what it wrote or why it skipped |
-| POST   | `/ai/catalog/:id/promote`        | Publish a candidate in the chosen tier                                    |
-| POST   | `/ai/catalog/:id/retire`         | Withdraw it from serving; it rejoins the candidates                       |
-| PATCH  | `/ai/catalog/:id`                | Admin-owned label and description; survives syncs while promoted          |
-| POST   | `/ai/catalog/alerts/:id/resolve` | Idempotent; keeps the original resolution time                            |
+| Method | Path                             | Purpose                                                                                               |
+| ------ | -------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/catalog`                    | Promoted models and open alerts                                                                       |
+| GET    | `/ai/catalog/candidates`         | One ranked page of the promotion queue; `search` matches id or label                                  |
+| GET    | `/ai/catalog/assignable`         | Every model an admin may assign to an intent — see [Assignable models](#assignable-models-backoffice) |
+| POST   | `/ai/catalog/sync`               | Run the pass the daily cron runs; reports what it wrote or why it skipped                             |
+| POST   | `/ai/catalog/:id/promote`        | Publish a candidate in the chosen tier                                                                |
+| POST   | `/ai/catalog/:id/retire`         | Withdraw it from serving; it rejoins the candidates                                                   |
+| PATCH  | `/ai/catalog/:id`                | Admin-owned label and description; survives syncs while promoted                                      |
+| POST   | `/ai/catalog/alerts/:id/resolve` | Idempotent; keeps the original resolution time                                                        |
 
 ---
 
 ## Copilot Model Selection
 
-Users pick which model the copilot uses as an account default. The list has **two sources**: a hand-maintained `CURATED_MODELS` list that ships in code (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` / `open` tiers — `open` is the OpenRouter-served open-weight tier: DeepSeek, GLM, Kimi, MiniMax), plus the rows an admin has **promoted** from the [open-tier catalog](#open-tier-model-catalog). `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) intersects that union with the LiteLLM pricing snapshot (context window + cost class) and provider availability (`isModelAvailable` — the provider key is present). A model whose id is missing from both the snapshot and the catalog row, or whose provider key is absent, is silently dropped from the list.
+Users pick which model the copilot uses as an account default. The list has **two sources**: a hand-maintained `CURATED_MODELS` list that ships in code (`selectable-models.catalog.ts`, grouped into `fast` / `balanced` / `powerful` / `open` tiers — `open` is the OpenRouter-served open-weight tier: DeepSeek, GLM, Kimi, MiniMax), plus the rows an admin has **promoted** from the [open-tier catalog](#open-tier-model-catalog). `SelectableModelsService` (`apps/api/src/modules/ai/application/services/selectable-models.service.ts`) offers every promoted row, the curated models the running `ai_config` points at, and the curated models of each provider the caller holds a BYOK key for; it then intersects that union with the LiteLLM pricing snapshot (context window + cost class) and provider availability (`isModelAvailable` — the provider key is present — or the caller's own key). A model whose id is missing from both the snapshot and the catalog row, or that neither key source can invoke, is silently dropped from the list.
 
-Where the two sources disagree, **code wins**: a curated entry keeps its hand-written label, tier and pricing even if a promoted row carries the same id. Curated ids are the stable contract the rest of the system is guard-tested against; promoted rows are data.
+Where the two sources disagree, **code wins**: a curated entry keeps its hand-written label, tier, pricing and reasoning metadata even if a promoted row carries the same id. Curated ids are the stable contract the rest of the system is guard-tested against; promoted rows are data.
 
-Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the **selectable-model** catalog covers a model that is gone (a dropped curated id, or a promoted row since retired), `routableByServer` covers a keyless/disabled/BYOK-only one.
+### `SelectableModel` shape
+
+`GET /ai/models` returns `SelectableModel[]` (`packages/shared/types/src/lib/ai.types.ts`). Beyond `id`, `label`, `descriptionKey` / `description`, `tier`, `contextWindow`, `costClass` (`1..3`) and `isDefault`, each entry carries:
+
+| Field              | Meaning                                                                                                                                                                                                                                                                                                                                           |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `billedToUser`     | The caller has a stored BYOK key for the model's provider, so the turn bills their key.                                                                                                                                                                                                                                                           |
+| `routableByServer` | The server's own keys can invoke it; `false` means only the caller's BYOK key reaches it, so it is inert in any server-global config.                                                                                                                                                                                                             |
+| `access`           | `MODEL_ACCESS`: `granted`, `requires_byok` (priced above the free-tier ceiling and the caller brings no key for its provider — `accessFor` in `model-access.policy.ts`; while the `ai_tier_gating` flag is off every curated model stays `granted`), or `requires_account` (anonymous listing only, below).                                       |
+| `reasoning?`       | `{ levels: ReasoningEffort[], mandatory }` — the effort levels the model accepts and whether it cannot run with reasoning off. Curated models carry hand-authored metadata (the `openrouter:*` curated entries deliberately declare none until verified); promoted rows carry what the sync stored. Absent means the UI offers no effort control. |
+| `servesIntent?`    | `fast` \| `balanced` \| `powerful` when the model is the one `ai_fast_model` / `ai_default_model` / `ai_deep_model` currently resolves to (`AIConfigService.getIntentModels`; the first intent wins if two point at one id). The notes menu names its intent rows after these models.                                                             |
+
+**Anonymous sessions** (`ModelPreferenceService.listModels`) receive **only** the entries that serve an intent: the running default keeps `access: 'granted'`, the other intent rows come back as `requires_account`, and no promoted or BYOK rows are listed. The menu renders the locked rows as an upsell to register rather than hiding them.
+
+### Assignable models (backoffice)
+
+The backoffice never reads `/ai/models` — that list is caller-relative (BYOK, intent, anonymity). `GET /ai/catalog/assignable` (admin, `AssignableModelsService`) returns `AssignableModelDto[]` — `{ id, label, description, tier, provider, routableByServer, needsKey, promoted }`: **every** curated model plus every promoted row, curated winning a duplicate id. A curated model whose provider has no key is not hidden; it comes back with `needsKey: true` (for promoted rows `needsKey` is always `false`, since promotion implies the server-keyed OpenRouter route — `routableByServer` stays the one source of truth for both). `description` is empty for curated rows because their copy is frontend i18n. The AI Config **Models** tab feeds this list to the intent pickers (`ModelsSection`) and the chain editor (`RoutingSection`); a row with `routableByServer: false` renders visible but disabled with a "Needs a provider key — configure it in Providers" hint, so an admin can see what a key would unlock before saving one. Saving or toggling a provider key, promoting, and retiring all invalidate the query. Absence from the list covers a model that is gone (a dropped curated id, or a promoted row since retired); `routableByServer` covers a keyless/disabled one.
 
 ### `SelectableModel` shape
 
@@ -538,15 +558,15 @@ The resolved model enters the [fallback chain](#cross-provider-fallback-chain) a
 
 **REST API** (gated behind the `ai_enabled` flag):
 
-| Method | Path              | Description                                              |
-| ------ | ----------------- | -------------------------------------------------------- |
-| GET    | `/ai/models`      | Curated, available models with tier, cost class, context |
-| GET    | `/ai/preferences` | The caller's `preferred_model` and `preferred_intent`    |
-| PUT    | `/ai/preferences` | Patch the caller's preferences (partial)                 |
+| Method | Path              | Description                                                                                             |
+| ------ | ----------------- | ------------------------------------------------------------------------------------------------------- |
+| GET    | `/ai/models`      | Offered, invocable models with tier, cost class, context, `access`, `reasoning`, `servesIntent` (above) |
+| GET    | `/ai/preferences` | The caller's `preferred_model` and `preferred_intent`                                                   |
+| PUT    | `/ai/preferences` | Patch the caller's preferences (partial); 403 for anonymous sessions                                    |
 
-`PUT /ai/preferences` takes a partial patch: an omitted field stays untouched, an explicit `null` clears it. Picking an intent chip always sends `{ preferredModel: null, preferredIntent }`, so choosing a style abandons any model override in the same write.
+`PUT /ai/preferences` takes a partial patch: an omitted field stays untouched, an explicit `null` clears it. Picking an intent row always sends `{ preferredModel: null, preferredIntent }`, so choosing an intent abandons any model override in the same write.
 
-The agent WebSocket payload still accepts a per-turn override (`{ conversationId?, message, model? }`) — `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation — but no shipped surface sends it: both pickers write the account preference instead, so the cascade serves every turn.
+The agent WebSocket payload accepts a per-turn `model` override (`{ conversationId?, message, model?, effort? }`) — `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation — but no shipped surface sends it: both pickers write the account preference instead, so the cascade serves every turn. `effort` is the one per-turn field the UI does send — see below.
 
 ### Reasoning effort
 
@@ -563,7 +583,9 @@ The agent WebSocket payload still accepts a per-turn override (`{ conversationId
 
 A request the clamp cannot honour (model declares no levels, or a BYOK level the model lacks) falls back to the global default and logs `agent.effort_fallback { model, requested }` at warn; a free request lowered by the ceiling logs `agent.effort_clamped { model, requested, applied }` — never a silent mismatch. The resolved effort travels on `AgentRunInput.reasoningEffort` and reaches the provider through `openrouterProviderOptions`, so **today it is only forwarded on `openrouter:*` models** (see [Dynamic Model Configuration](#dynamic-model-configuration)); `/ai/models` withholds `reasoning` from every other provider's entry so no surface offers a level the turn would not send upstream.
 
-**Frontend.** Both product surfaces render one `ModelSelect` (`@knowtis/design-system`): its leading section lists the three styles (Rápido / Equilibrado / Profundo), and the BYOK-billed models follow flattened under a single **Modelos** heading, each row carrying its own cost band (`$` / `$$` / `$$$`). Picking a style writes `{ preferredModel: null, preferredIntent }`; picking a model writes `{ preferredModel }` — the same account preference from either surface, with no session-scoped override in between. In the composer `CopilotModelPicker` is that control alone, falling back to the style chips (`SegmentedControl`) when the caller has no such model; the `AIAssistantSection` settings tab keeps the chips beside the same dropdown. Anonymous users get no picker. The dropdown renders explicit loading, error (with retry), and empty states; while the list is in flight the composer keeps the chips, except for a caller whose stored model is still unresolved — chips would show no active choice there, so it renders the dropdown loading instead. The backoffice pickers pass no styles and stay grouped per tier, with the cost band on the tier header.
+**Frontend.** The composer's `CopilotModelPicker` renders the design-system `ModelMenu`: three primary rows — one per intent in `MODEL_INTENTS` order, labelled with the **resolved model's name** (`primaryRows`, driven by `servesIntent`) — an **Esfuerzo ›** submenu, a **Más modelos ›** submenu, and for anonymous sessions a footer CTA to register (the intent rows other than the running default render locked — actionable and routed to that CTA, inert only when no CTA backs them, with `lockedHint` naming the reason in the accessible name). Both the composer and the settings picker resolve the active model through the same `resolveSelectedModel(models, prefs)` in `intent-picker-options.ts`, so the trigger and the panel can never disagree; an empty `/ai/models` list labels the trigger `aiAssistant.empty` and offers a retry. Picking an intent writes `{ preferredModel: null, preferredIntent }`; picking a model from **Más modelos** writes `{ preferredModel }`. The submenu lists models with no `servesIntent`: the open group (`access: 'granted'`, not billed to the user) first, then the caller's BYOK-billed models with the "Tu clave" badge; each row carries its cost band (`$` / `$$` / `$$$`). Storage is unchanged — still `preferredIntent` / `preferredModel` on `user_ai_settings`.
+
+The **Esfuerzo** row appears only when the selected model declares `reasoning.levels`: a usable submenu (`Auto` plus the model's own levels) for a caller with a BYOK key, an inert locked row for anonymous sessions, nothing for a keyless registered user (their turns never carry an effort). Its value lives in `agent.store` (`reasoningEffort`, reset to `auto` when the conversation is cleared) and rides each `agent:message` as `effort` — per-conversation, never a stored preference. The stored level is reconciled against the resolved model once the list settles: one the model does not declare, or one no longer billed to the caller, collapses back to `auto` before it can ride a turn. The ladder is ordered by `REASONING_EFFORTS`, not by the upstream declaration, because OpenRouter reports its levels as `[max, high, low]`. Free registered users instead get the **Pensar** pill (`ThinkPill`) beside the composer, hidden when the resolved model declares no levels; when active it sends `effort: 'high'` on the next message only, then resets. The two controls are mutually exclusive by audience. The settings `AIAssistantSection` keeps `IntentModelPicker`: `SegmentedControl` chips (also labelled with the resolved model names) beside a `ModelSelect` of the caller's BYOK-billed models. The backoffice pickers use `ModelSelect` grouped per tier over the [assignable list](#assignable-models-backoffice).
 
 ---
 
@@ -649,22 +671,23 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 
 ### Feature Flags (DB-backed)
 
-| Flag Key                     | Description                                                                                        |
-| ---------------------------- | -------------------------------------------------------------------------------------------------- |
-| `ai_enabled`                 | Global AI feature gate                                                                             |
-| `voice_notes_enabled`        | Voice-to-note feature gate                                                                         |
-| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                            |
-| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                              |
-| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                              |
-| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                          |
-| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense)) |
-| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))        |
-| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching)) |
-| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                  |
-| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))               |
-| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))  |
-| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                          |
-| `ai_catalog_sync`            | Daily OpenRouter catalog sync and curated-model watch ([Catalog](#open-tier-model-catalog))        |
+| Flag Key                     | Description                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `ai_enabled`                 | Global AI feature gate                                                                                    |
+| `voice_notes_enabled`        | Voice-to-note feature gate                                                                                |
+| `agent_hybrid_retrieval`     | FTS + vector hybrid search for the copilot ([A3](#hybrid-retrieval-a3))                                   |
+| `agent_web_search`           | `webSearch` / `webFetch` tools for the copilot ([A4](#web-search-a4))                                     |
+| `agent_byok`                 | Bring-your-own-key copilot billing ([BYOK](#bring-your-own-key-byok))                                     |
+| `agent_longterm_memory`      | Long-term user memory for the copilot ([A6b](#long-term-user-memory-a6b))                                 |
+| `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense))        |
+| `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))               |
+| `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching))        |
+| `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                         |
+| `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                      |
+| `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))         |
+| `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                                 |
+| `ai_tier_gating`             | Price-gates non-open models to BYOK callers (`access`, [Copilot Model Selection](#selectablemodel-shape)) |
+| `ai_catalog_sync`            | Daily OpenRouter catalog sync and curated-model watch ([Catalog](#open-tier-model-catalog))               |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -877,10 +900,11 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 | PUT    | `/ai/config/:key`              | Update a config value — a server-invocable curated or promoted model id, or for `ai_fallback_chain` a comma-separated list with at least one server-routable member (admin only). |
 | DELETE | `/ai/config/:key`              | Reset a config key to its code default; audits `ai_config.reset` (admin only).                                                                                                    |
 | GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env).                                                         |
-| PUT    | `/ai/providers/:provider`      | Store a key (probed first) and/or set `enabled` (admin only).                                                                                                                     |
+| PUT    | `/ai/providers/:provider`      | Store a key (kept even if the probe fails; verdict in `probe`) and/or set `enabled` (admin only).                                                                                 |
 | DELETE | `/ai/providers/:provider/key`  | Clear the stored key (admin only).                                                                                                                                                |
 | POST   | `/ai/providers/:provider/test` | Probe the routing key; resolves 200 with a pass/fail verdict (admin only).                                                                                                        |
-| GET    | `/ai/models`                   | Curated, available copilot models. See [Copilot Model Selection](#copilot-model-selection).                                                                                       |
+| GET    | `/ai/models`                   | Offered copilot models with `access`, `reasoning`, `servesIntent`; anonymous sessions get the intent rows only. See [Copilot Model Selection](#copilot-model-selection).          |
+| GET    | `/ai/catalog/assignable`       | Every curated + promoted model with `routableByServer` / `needsKey` for the backoffice intent pickers (admin only).                                                               |
 | GET    | `/ai/preferences`              | The caller's account-default copilot model and intent.                                                                                                                            |
 | PUT    | `/ai/preferences`              | Patch the caller's model/intent preferences (partial).                                                                                                                            |
 | GET    | `/ai/keys`                     | List stored BYOK keys (masked). See [BYOK](#bring-your-own-key-byok).                                                                                                             |
@@ -1097,8 +1121,11 @@ The copilot is **server-authoritative**: the client never sends its own message 
   "message": { "content": "..." }, // the new user message (1–20 000 chars)
   "noteId": "uuid", // optional — note the user is currently editing
   "model": "provider:id", // optional per-turn override — no shipped surface sends it
+  "effort": "high", // optional REASONING_EFFORTS member; clamped by audience, rejected for anonymous
 }
 ```
+
+`effort` resolution is documented under [Reasoning effort](#reasoning-effort).
 
 The legacy `{ messages[] }` payload (where the client shipped its own history) was removed — the server is the single source of truth for the thread.
 
@@ -1286,7 +1313,7 @@ The key-management endpoint is throttled independently: `PUT /ai/keys/:provider`
 
 ### Model picker signal
 
-`SelectableModelsService.list` sets `SelectableModel.billedToUser = true` for every model whose provider the caller has a stored key for. `ModelSelect` (`@knowtis/design-system`) renders a **"Tu clave" / "Your key"** badge with a key icon on those models — the selection-time signal that the turn bills the user's key (the industry-standard BYOK UX). It is wired in both consumers: `CopilotModelPicker` (chat) and `AIAssistantSection` (settings).
+`SelectableModelsService.list` sets `SelectableModel.billedToUser = true` for every model whose provider the caller has a stored key for. Both `ModelMenu` (the composer's **Más modelos** submenu) and `ModelSelect` (settings) render a **"Tu clave" / "Your key"** badge on those models — the selection-time signal that the turn bills the user's key (the industry-standard BYOK UX). A BYOK key is also what unlocks the per-conversation **Esfuerzo** submenu (see [Reasoning effort](#reasoning-effort)).
 
 ### Frontend
 
