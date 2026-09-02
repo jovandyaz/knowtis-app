@@ -16,6 +16,7 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
 import type { FeatureFlagsService } from '../../feature-flags/feature-flags.service';
@@ -61,6 +62,10 @@ const aiConfigStub = {
   getReasoningEffort: vi.fn().mockResolvedValue('medium'),
   getOpenRouterProviderOrder: vi.fn().mockResolvedValue([]),
 } as unknown as AIConfigService;
+
+const turnEffortStub = {
+  resolve: vi.fn().mockResolvedValue('medium'),
+} as unknown as TurnEffortResolver;
 
 describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
   let moduleRef: TestingModule;
@@ -145,7 +150,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       modelPreferenceStub,
       byokStub,
       guardStub,
-      aiConfigStub
+      aiConfigStub,
+      turnEffortStub
     );
 
     let conversationId: string | undefined;
@@ -212,7 +218,8 @@ describe.runIf(DB_AVAILABLE)('RunAgentTurnHandler durable memory', () => {
       modelPreferenceStub,
       byokStub,
       guardStub,
-      aiConfigStub
+      aiConfigStub,
+      turnEffortStub
     );
 
     const onError = vi.fn();

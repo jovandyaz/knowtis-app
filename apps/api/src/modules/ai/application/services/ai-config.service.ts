@@ -9,6 +9,7 @@ import {
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   GLOBAL_REASONING_EFFORTS,
   isGlobalReasoningEffort,
+  MODEL_INTENTS,
   parseChain,
   TOKENS_PER_MILLION,
   USD_PER_MILLION_FORMAT,
@@ -153,6 +154,31 @@ export class AIConfigService {
     return this.getSupportedModel('ai_fast_model');
   }
 
+  /**
+   * The three intent tiers must resolve to three different models: the picker
+   * renders one row per intent, and a shared id would silently drop a row.
+   */
+  private async assertIntentModelsStayDistinct(
+    key: string,
+    value: string
+  ): Promise<void> {
+    const changed = MODEL_INTENTS.find(
+      (intent) => INTENT_CONFIG_KEYS[intent] === key
+    );
+    if (!changed) {
+      return;
+    }
+    const current = await this.getIntentModels();
+    const clash = MODEL_INTENTS.find(
+      (intent) => intent !== changed && current[intent] === value
+    );
+    if (clash) {
+      throw new InvalidAIConfigError(
+        `Model '${value}' already serves the '${clash}' tier; each tier needs its own model`
+      );
+    }
+  }
+
   async getIntentModel(intent: ModelIntent): Promise<string> {
     return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
   }
@@ -245,6 +271,7 @@ export class AIConfigService {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
     this.validateValue(CONFIG_KEYS[key], value);
+    await this.assertIntentModelsStayDistinct(key, value);
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
     try {

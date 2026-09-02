@@ -196,6 +196,39 @@ describe('OpenRouterModelsHttpClient', () => {
     });
   });
 
+  it('should keep a reasoning model that enumerates no efforts', async () => {
+    // A third of the live catalog (144/421 on 2026-09-02) ships this shape —
+    // among them minimax/minimax-m3, which already serves a promoted tier.
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...DEEPSEEK_V32,
+            reasoning: { mandatory: true, default_enabled: true },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({ levels: [], mandatory: true });
+  });
+
+  it('should default mandatory to false when upstream omits it', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([{ ...DEEPSEEK_V32, reasoning: { supported_efforts: ['low'] } }])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({ levels: ['low'], mandatory: false });
+  });
+
   it('should yield null reasoning when upstream omits the object', async () => {
     fetchMock.mockResolvedValueOnce(okResponse(page([DEEPSEEK_V32])));
 

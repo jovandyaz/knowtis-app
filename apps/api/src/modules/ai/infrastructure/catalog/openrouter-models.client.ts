@@ -83,13 +83,21 @@ function toExpirationDate(raw: string | null | undefined): Date | null {
     : date;
 }
 
+/**
+ * Null only when upstream declares no reasoning at all. A model that reasons
+ * without enumerating efforts (a third of the catalog) keeps an empty `levels`,
+ * so `mandatory` survives and callers simply offer no effort ladder.
+ */
 function toReasoning(
   raw: ParsedUpstreamModel['reasoning']
 ): ModelReasoning | null {
-  const levels = (raw?.supported_efforts ?? []).filter(isReasoningEffort);
-  return levels.length > 0
-    ? { levels, mandatory: raw?.mandatory ?? false }
-    : null;
+  if (!raw) {
+    return null;
+  }
+  return {
+    levels: (raw.supported_efforts ?? []).filter(isReasoningEffort),
+    mandatory: raw.mandatory ?? false,
+  };
 }
 
 function toUpstreamModel(raw: ParsedUpstreamModel): UpstreamModel {

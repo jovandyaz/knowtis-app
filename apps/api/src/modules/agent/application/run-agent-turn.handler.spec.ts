@@ -10,6 +10,7 @@ import type { AIConfigService } from '../../ai/application/services/ai-config.se
 import type { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import type { ByokService } from '../../ai/application/services/byok.service';
 import type { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrorCodes, AIErrors } from '../../ai/domain/errors/ai.errors';
 import type { EmbeddingPort } from '../../ai/domain/ports/embedding.port';
 import { createTestCatalog } from '../../ai/testing/create-test-catalog';
@@ -172,6 +173,12 @@ function makeGuard(safe = true) {
   } as unknown as InjectionGuardService;
 }
 
+function makeTurnEffort(effort: ReasoningEffort = 'medium') {
+  return {
+    resolve: vi.fn().mockResolvedValue(effort),
+  } as unknown as TurnEffortResolver;
+}
+
 function makeAIConfig(
   effort: ReasoningEffort = 'medium',
   providerOrder: readonly string[] = []
@@ -202,7 +209,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const chunks: string[] = [];
     const done = vi.fn();
@@ -258,7 +266,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onThinking = vi.fn();
     const onChunk = vi.fn();
@@ -303,7 +312,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -337,7 +347,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -379,7 +390,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -417,7 +429,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -469,7 +482,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -510,7 +524,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -546,7 +561,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const error = vi.fn();
 
@@ -579,7 +595,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const error = vi.fn();
 
@@ -622,7 +639,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const done = vi.fn();
 
@@ -667,7 +685,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const done = vi.fn();
 
@@ -716,7 +735,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const done = vi.fn();
 
@@ -761,7 +781,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -798,7 +819,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -835,7 +857,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -882,7 +905,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onChunk = vi.fn();
     const onDone = vi.fn();
@@ -913,7 +937,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const controller = new AbortController();
     controller.abort();
@@ -951,7 +976,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -999,7 +1025,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onProposal = vi.fn();
 
@@ -1045,7 +1072,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onDone = vi.fn();
 
@@ -1083,7 +1111,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.resumeTurn(
@@ -1126,7 +1155,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1163,7 +1193,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1211,7 +1242,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onDone = vi.fn();
 
@@ -1263,7 +1295,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1296,7 +1329,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const controller = new AbortController();
     controller.abort();
@@ -1333,7 +1367,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference('custom:unpriced-model'),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1374,7 +1409,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onDone = vi.fn();
     const onError = vi.fn();
@@ -1417,7 +1453,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1457,7 +1494,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1508,7 +1546,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -1556,7 +1595,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onDone = vi.fn();
 
@@ -1598,7 +1638,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -1640,7 +1681,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -1674,7 +1716,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -1708,7 +1751,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -1742,7 +1786,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -1781,7 +1826,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const midMessage = { role: 'user' as const, content: 'sure' };
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
@@ -1828,7 +1874,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const lastMessage = { role: 'user' as const, content: 'summarize it' };
 
@@ -1866,7 +1913,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const hugeContent = 'x '.repeat(13000);
     const hugeMessage = { role: 'user' as const, content: hugeContent };
@@ -1947,7 +1995,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -2015,7 +2064,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -2046,8 +2096,9 @@ describe('RunAgentTurnHandler', () => {
     );
   });
 
-  it('passes the configured reasoning effort to the orchestrator', async () => {
+  it('runs the turn at the effort the resolver returns', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const turnEffort = makeTurnEffort('max');
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
@@ -2061,11 +2112,12 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig('high')
+      makeAIConfig(),
+      turnEffort
     );
 
     await handler.execute(
-      { userId: USER, message: { content: 'hi' } },
+      { userId: USER, message: { content: 'hi' }, effort: 'xhigh' },
       {
         onChunk: vi.fn(),
         onDone: vi.fn(),
@@ -2074,8 +2126,11 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
+    expect(turnEffort.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER, requested: 'xhigh' })
+    );
     expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'high' })
+      expect.objectContaining({ reasoningEffort: 'max' })
     );
   });
 
@@ -2095,7 +2150,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2116,176 +2172,6 @@ describe('RunAgentTurnHandler', () => {
     expect(rateLimit.checkLimit).not.toHaveBeenCalled();
     expect(conversations.create).not.toHaveBeenCalled();
   });
-
-  it('runs a byok turn at the requested declared level', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
-      new Set(['google'])
-    );
-    vi.mocked(modelPreference.reasoningFor).mockResolvedValue({
-      levels: ['low', 'high', 'max'],
-      mandatory: false,
-    });
-    const byok = makeByok();
-    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      modelPreference,
-      byok,
-      makeGuard(),
-      makeAIConfig()
-    );
-
-    await handler.execute(
-      {
-        userId: USER,
-        message: { content: 'hi' },
-        model: 'google:gemini-2.0-flash',
-        effort: 'max',
-      },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(
-      'google:gemini-2.0-flash',
-      USER
-    );
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'max' })
-    );
-  });
-
-  it('clamps a free turn to the model boost level', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const modelPreference = makeModelPreference();
-    vi.mocked(modelPreference.reasoningFor).mockResolvedValue({
-      levels: ['low'],
-      mandatory: false,
-    });
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig('medium')
-    );
-
-    await handler.execute(
-      { userId: USER, message: { content: 'hi' }, effort: 'high' },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'low' })
-    );
-  });
-
-  it('falls back to the global effort and warns on an undeclared level', async () => {
-    const warnSpy = vi
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const modelPreference = makeModelPreference();
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig('medium')
-    );
-
-    await handler.execute(
-      { userId: USER, message: { content: 'hi' }, effort: 'xhigh' },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'medium' })
-    );
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'agent.effort_fallback',
-        model: 'anthropic:claude-sonnet-4-20250514',
-        requested: 'xhigh',
-      })
-    );
-  });
-
-  it('never consults the model declaration when the turn requests no effort', async () => {
-    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
-    const modelPreference = makeModelPreference();
-    const handler = new RunAgentTurnHandler(
-      orchestrator,
-      rateLimit,
-      config,
-      pendingStore,
-      createTestCatalog(),
-      makeConversations(),
-      makeMemory(),
-      makeEmbed(),
-      makeFlags(),
-      modelPreference,
-      makeByok(),
-      makeGuard(),
-      makeAIConfig('medium')
-    );
-
-    await handler.execute(
-      { userId: USER, message: { content: 'hi' } },
-      {
-        onChunk: vi.fn(),
-        onDone: vi.fn(),
-        onError: vi.fn(),
-        onProposal: vi.fn(),
-      }
-    );
-
-    expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'medium' })
-    );
-  });
-
   it('passes the configured openrouter provider order to the orchestrator', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
     const handler = new RunAgentTurnHandler(
@@ -2301,7 +2187,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig('medium', ['fireworks', 'together'])
+      makeAIConfig('medium', ['fireworks', 'together']),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -2336,7 +2223,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig('medium', [])
+      makeAIConfig('medium', []),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -2373,7 +2261,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      aiConfig
+      aiConfig,
+      makeTurnEffort()
     );
 
     await expect(
@@ -2408,7 +2297,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       guard,
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2450,7 +2340,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       guard,
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2483,7 +2374,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2519,7 +2411,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2556,7 +2449,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2594,7 +2488,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(false),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2642,7 +2537,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onDone = vi.fn();
 
@@ -2689,7 +2585,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -2726,7 +2623,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference('not-a-model'),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -2756,7 +2654,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const done = vi.fn();
     await handler.execute(
@@ -2796,7 +2695,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const callbacks = {
       onChunk: vi.fn(),
@@ -2843,7 +2743,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     await handler.execute(
       {
@@ -2882,7 +2783,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const error = vi.fn();
     await handler.execute(
@@ -2928,7 +2830,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onProposal = vi.fn();
 
@@ -2971,7 +2874,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const done = vi.fn();
     const error = vi.fn();
@@ -3005,7 +2909,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3050,7 +2955,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3088,7 +2994,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3133,7 +3040,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3171,7 +3079,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3208,7 +3117,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3249,7 +3159,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3302,7 +3213,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.resumeTurn(
@@ -3341,7 +3253,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3392,7 +3305,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3450,7 +3364,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       byok,
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3499,7 +3414,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       byok,
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3541,7 +3457,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3591,7 +3508,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3639,7 +3557,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3684,7 +3603,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3722,7 +3642,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3763,7 +3684,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
 
     await handler.execute(
@@ -3817,7 +3739,8 @@ describe('RunAgentTurnHandler', () => {
       modelPreference,
       byok,
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3853,7 +3776,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3893,7 +3817,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -3938,7 +3863,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
     const onProposal = vi.fn();
@@ -3986,7 +3912,8 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig()
+      makeAIConfig(),
+      makeTurnEffort()
     );
     const onError = vi.fn();
 
@@ -4052,7 +3979,8 @@ describe('RunAgentTurnHandler', () => {
         makeModelPreference(),
         makeByok(),
         makeGuard(),
-        makeAIConfig()
+        makeAIConfig(),
+        makeTurnEffort()
       );
       return { conversations, orchestrator, handler };
     }
@@ -4311,7 +4239,8 @@ describe('RunAgentTurnHandler', () => {
         makeModelPreference(),
         makeByok(),
         makeGuard(),
-        makeAIConfig()
+        makeAIConfig(),
+        makeTurnEffort()
       );
       return {
         conversations,

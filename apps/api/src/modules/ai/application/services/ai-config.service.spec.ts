@@ -884,6 +884,71 @@ describe('AIConfigService', () => {
         powerful: AI_SETTING_DEFAULTS.ai_deep_model,
       });
     });
+
+    it('falls back only for the intent whose stored model left the catalog', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fast_model' ? PROMOTED_ID : null
+      );
+      mockCatalog.isSupported.mockImplementation(
+        (id: string) => id !== PROMOTED_ID
+      );
+
+      expect(await service.getIntentModels()).toEqual({
+        fast: AI_SETTING_DEFAULTS.ai_fast_model,
+        balanced: AI_SETTING_DEFAULTS.ai_default_model,
+        powerful: AI_SETTING_DEFAULTS.ai_deep_model,
+      });
+    });
+
+    it('keeps a stored intent model the catalog still serves', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fast_model' ? PROMOTED_ID : null
+      );
+
+      const models = await service.getIntentModels();
+
+      expect(models.fast).toBe(PROMOTED_ID);
+      expect(models.balanced).toBe(AI_SETTING_DEFAULTS.ai_default_model);
+      expect(models.powerful).toBe(AI_SETTING_DEFAULTS.ai_deep_model);
+    });
+  });
+
+  describe('intent tiers stay distinct', () => {
+    it('refuses to point a second tier at a model another tier already serves', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_deep_model' ? CUSTOM_MODEL : null
+      );
+
+      await expect(
+        service.setConfig('ai_fast_model', CUSTOM_MODEL, ACTOR)
+      ).rejects.toThrow(/already serves the 'powerful' tier/);
+      expect(mockRepo.set).not.toHaveBeenCalled();
+    });
+
+    it('allows repointing a tier at the model it already serves', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fast_model' ? CUSTOM_MODEL : null
+      );
+
+      await expect(
+        service.setConfig('ai_fast_model', CUSTOM_MODEL, ACTOR)
+      ).resolves.toBeUndefined();
+      expect(mockRepo.set).toHaveBeenCalledWith(
+        'ai_fast_model',
+        CUSTOM_MODEL,
+        undefined
+      );
+    });
+
+    it('leaves non-tier settings unguarded', async () => {
+      mockRepo.get.mockImplementation(async (key: string) =>
+        key === 'ai_fast_model' ? CUSTOM_MODEL : null
+      );
+
+      await expect(
+        service.setConfig('ai_fallback_chain', CUSTOM_MODEL, ACTOR)
+      ).resolves.toBeUndefined();
+    });
   });
 
   describe('models that left the catalog', () => {

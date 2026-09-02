@@ -195,6 +195,40 @@ describe('CatalogSyncTask', () => {
     );
   });
 
+  it('should persist declared reasoning support on the candidate', async () => {
+    const { task, repo } = make({
+      upstream: [
+        upstreamModel('qwen/qwen3.8-max', {
+          reasoning: { levels: ['low', 'high'], mandatory: true },
+        }),
+      ],
+    });
+
+    await task.sync();
+
+    expect(repo.upsertCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reasoning: { levels: ['low', 'high'], mandatory: true },
+      })
+    );
+  });
+
+  it('should persist a reasoning model that enumerates no efforts', async () => {
+    const { task, repo } = make({
+      upstream: [
+        upstreamModel('qwen/qwen3.8-max', {
+          reasoning: { levels: [], mandatory: true },
+        }),
+      ],
+    });
+
+    await task.sync();
+
+    expect(repo.upsertCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoning: { levels: [], mandatory: true } })
+    );
+  });
+
   it('should raise a deprecation alert when OpenRouter dates a curated model', async () => {
     const { task, repo } = make({
       upstream: [

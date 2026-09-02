@@ -24,11 +24,8 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
-import {
-  clampEffort,
-  type EffortAudience,
-} from '../../ai/domain/model-catalog/effort-policy';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -155,7 +152,8 @@ export class RunAgentTurnHandler {
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
     private readonly injectionGuard: InjectionGuardService,
-    private readonly aiConfig: AIConfigService
+    private readonly aiConfig: AIConfigService,
+    private readonly turnEffort: TurnEffortResolver
   ) {}
 
   async execute(
@@ -606,7 +604,12 @@ export class RunAgentTurnHandler {
       input.isAnonymous ?? false
     );
     const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.resolveReasoningEffort(input, model, isByok),
+      this.turnEffort.resolve({
+        userId: input.userId,
+        model,
+        isByok,
+        requested: input.effort,
+      }),
       this.aiConfig.getOpenRouterProviderOrder(),
     ]);
 
@@ -795,33 +798,6 @@ export class RunAgentTurnHandler {
   }
 
   /** A rejected effort request falls back to the global default with a structured warn — never a silent mismatch. */
-  private async resolveReasoningEffort(
-    input: RunAgentTurnInput,
-    model: string,
-    isByok: boolean
-  ): Promise<ReasoningEffort> {
-    if (!input.effort) {
-      return this.aiConfig.getReasoningEffort();
-    }
-    const audience: Exclude<EffortAudience, 'anonymous'> = isByok
-      ? 'byok'
-      : 'free';
-    const declared = await this.modelPreference.reasoningFor(
-      model,
-      input.userId
-    );
-    const clamped = clampEffort(input.effort, declared, audience);
-    if (clamped === null) {
-      this.logger.warn({
-        event: 'agent.effort_fallback',
-        model,
-        requested: input.effort,
-      });
-      return this.aiConfig.getReasoningEffort();
-    }
-    return clamped;
-  }
-
   private async resolveModel(
     input: RunAgentTurnInput,
     conversationId: string | undefined,

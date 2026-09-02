@@ -139,10 +139,18 @@ describe('toCandidateUpsert', () => {
     });
   });
 
-  it('should forward reasoning verbatim', () => {
+  it('should forward the reasoning values', () => {
     const reasoning = { levels: ['low', 'high'], mandatory: true } as const;
 
-    expect(toCandidateUpsert(upstream({ reasoning })).reasoning).toBe(
+    expect(toCandidateUpsert(upstream({ reasoning })).reasoning).toEqual(
+      reasoning
+    );
+  });
+
+  it('should forward a reasoning model that enumerates no efforts', () => {
+    const reasoning = { levels: [], mandatory: true } as const;
+
+    expect(toCandidateUpsert(upstream({ reasoning })).reasoning).toEqual(
       reasoning
     );
   });
