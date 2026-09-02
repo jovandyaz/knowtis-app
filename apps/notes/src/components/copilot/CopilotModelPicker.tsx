@@ -1,37 +1,52 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useNavigate } from '@tanstack/react-router';
+
+import { ROUTES } from '@/config';
 import {
   useAISettings,
   useAvailableModels,
   useProviderKeys,
   useUpdateAISettings,
 } from '@/hooks';
+import { useAgentStore } from '@/stores/agent.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
-import { Button, ModelSelect, SegmentedControl } from '@knowtis/design-system';
+import {
+  Button,
+  ModelMenu,
+  type ModelMenuEffort,
+} from '@knowtis/design-system';
+import { useMediaQuery } from '@knowtis/shared-hooks';
 import {
   DEFAULT_MODEL_INTENT,
   FEATURE_FLAG_KEYS,
   isModelIntent,
-  MODEL_TIERS,
+  isReasoningEffort,
 } from '@knowtis/shared-types';
 
 import {
-  advancedModelOptions,
-  advancedOverride,
-  intentChipOptions,
-  intentSection,
+  effortOptions,
+  moreModelGroups,
+  primaryRows,
+  resolveSelectedModel,
 } from './intent-picker-options';
+
+/** Below this width a side flyout cannot sit beside the menu, so its sections render inline. */
+const FLYOUT_MIN_WIDTH_QUERY = '(min-width: 768px)';
 
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
+  const navigate = useNavigate();
   const user = useAuthUser();
   const showPicker = user != null;
+  const isAnonymous = user?.isAnonymous === true;
   // The key endpoints reject a guest, so BYOK stays registered-only.
   const canUseByok =
-    useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && user?.isAnonymous !== true;
+    useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && !isAnonymous;
   const {
     data: models,
     isPending,
@@ -44,74 +59,136 @@ export function CopilotModelPicker() {
   const { data: keys, isPending: keysPending } = useProviderKeys(
     showPicker && canUseByok
   );
-  const offerBridge =
-    canUseByok && !isPending && !keysPending && keys?.length === 0;
+  const canFlyOut = useMediaQuery(FLYOUT_MIN_WIDTH_QUERY);
+  const effortValue = useAgentStore((s) => s.reasoningEffort);
+  const setReasoningEffort = useAgentStore((s) => s.setReasoningEffort);
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
-  const override = advancedOverride(prefs?.preferredModel, models);
-  const advancedOptions = advancedModelOptions(models);
-  // Until the list resolves, a stored model stays an override and the chips would
-  // render with nothing active — keep that caller on the dropdown instead.
-  const resolvingOverride = isPending && override !== null;
+  const primary = primaryRows(models, t);
+  const groups = moreModelGroups(models, t);
+  const moreRows = groups.flatMap((group) => group.options);
+  const selectedModel = resolveSelectedModel(models, prefs);
+  const override =
+    selectedModel && !selectedModel.servesIntent ? selectedModel.id : null;
+  const isEmpty = models !== undefined && models.length === 0;
+  // Holding a key is not enough: the server only bills the turn to the user
+  // when the key covers the resolved model's provider, so a mismatched key
+  // must not unlock the effort ladder.
+  const hasByok = canUseByok && selectedModel?.billedToUser === true;
+  const effortOpts = effortOptions(selectedModel, t);
+  // The conversation effort outlives a model change. A level the newly
+  // resolved model never declared, or one no longer billed to the user, must
+  // not ride the next turn, so it collapses to auto once the list has resolved.
+  const effortStale =
+    models !== undefined &&
+    effortValue !== 'auto' &&
+    !(hasByok && effortOpts.some((o) => o.id === effortValue));
+  useEffect(() => {
+    if (effortStale) {
+      setReasoningEffort('auto');
+    }
+  }, [effortStale, setReasoningEffort]);
+  const activeEffort = effortStale ? 'auto' : effortValue;
+
+  if (!showPicker) {
+    return null;
+  }
+
+  const offerBridge =
+    canUseByok && !isPending && !keysPending && keys?.length === 0;
+  const triggerLabel = isEmpty
+    ? t('aiAssistant.empty')
+    : (selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never));
+  const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
+  const triggerDetail =
+    hasByok && activeEffort !== 'auto' ? effortLabel : undefined;
+
+  // Only a model that declares reasoning levels earns the row: anonymous gets
+  // an inert locked upsell, a keyless registered user gets no control at all
+  // because their turns never carry an effort.
+  const effort: ModelMenuEffort | undefined =
+    effortOpts.length === 0
+      ? undefined
+      : isAnonymous
+        ? {
+            label: t('aiAssistant.menu.effort'),
+            value: 'auto',
+            options: [],
+            locked: true,
+            onChange: () => undefined,
+          }
+        : hasByok
+          ? {
+              label: t('aiAssistant.menu.effort'),
+              value: activeEffort,
+              options: effortOpts,
+              footnote: t('aiAssistant.menu.effortFootnote'),
+              onChange: (id: string) =>
+                setReasoningEffort(isReasoningEffort(id) ? id : 'auto'),
+            }
+          : undefined;
+
+  // Anonymous: the row serving the running default renders checked and inert;
+  // the settings endpoints reject a guest, so no selection may ever mutate.
+  const anonymousValue = primary.find((row) => !row.locked)?.id ?? null;
+  const menuValue = isAnonymous ? anonymousValue : (override ?? intent);
 
   const select = (id: string) => {
-    const isOfferedModel = advancedOptions.some((m) => m.id === id);
-    if (isOfferedModel || !isModelIntent(id)) {
+    if (isAnonymous) {
+      return;
+    }
+    // A catalog model whose id collides with an intent must stay a model.
+    if (moreRows.some((row) => row.id === id) || !isModelIntent(id)) {
       update({ preferredModel: id });
       return;
     }
     update({ preferredModel: null, preferredIntent: id });
   };
 
-  if (!showPicker) {
-    return null;
-  }
-
-  if (advancedOptions.length === 0 && !isError && !resolvingOverride) {
-    return (
-      <div className="flex min-w-0 flex-wrap items-center gap-1">
-        <SegmentedControl
-          aria-label={t('aiAssistant.intent.label')}
-          options={intentChipOptions(t)}
-          value={override ? null : intent}
-          onValueChange={select}
-        />
-        {offerBridge ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="text-xs text-(--muted-foreground)"
-            title={t('aiAssistant.byok.bridgeHint')}
-            onClick={() => openSettings('aiAssistant', 'aiKeys')}
-          >
-            {t('aiAssistant.byok.bridge')}
-          </Button>
-        ) : null}
-      </div>
-    );
-  }
+  const footerCta = isAnonymous
+    ? {
+        label: t('aiAssistant.menu.registerCta'),
+        onClick: () => {
+          void navigate({ to: ROUTES.REGISTER });
+        },
+      }
+    : undefined;
 
   return (
-    <ModelSelect
-      aria-label={t('aiAssistant.intent.label')}
-      models={advancedOptions}
-      value={override ?? intent}
-      onSelect={select}
-      leadingSection={intentSection(t)}
-      tierOrder={MODEL_TIERS}
-      status={isError ? 'error' : isPending ? 'loading' : 'ready'}
-      onRetry={() => void refetch()}
-      loadingLabel={t('aiAssistant.loading')}
-      errorLabel={t('aiAssistant.loadError')}
-      retryLabel={t('aiAssistant.retry')}
-      triggerClassName="h-8"
-      triggerLabel={t(`aiAssistant.intent.${intent}` as never)}
-      modelsLabel={t('aiAssistant.modelsGroup')}
-      renderDescription={(m) =>
-        m.descriptionKey ? t(m.descriptionKey as never) : (m.description ?? '')
-      }
-      billedBadgeLabel={t('aiAssistant.byok.billedBadge')}
-    />
+    <div className="flex min-w-0 flex-wrap items-center gap-1">
+      <ModelMenu
+        aria-label={t('aiAssistant.menu.triggerLabel')}
+        primary={primary}
+        value={menuValue}
+        onSelect={select}
+        {...(effort && { effort })}
+        {...(groups.length > 0 && {
+          moreModels: { label: t('aiAssistant.menu.moreModels'), groups },
+        })}
+        {...(footerCta && { footerCta })}
+        lockedHint={t('aiAssistant.menu.lockedHint')}
+        inlineSections={!canFlyOut}
+        triggerLabel={triggerLabel}
+        {...(triggerDetail !== undefined && { triggerDetail })}
+        status={isError || isEmpty ? 'error' : isPending ? 'loading' : 'ready'}
+        onRetry={() => void refetch()}
+        loadingLabel={t('aiAssistant.loading')}
+        errorLabel={t(isEmpty ? 'aiAssistant.empty' : 'aiAssistant.loadError')}
+        retryLabel={t('aiAssistant.retry')}
+        triggerClassName="h-8"
+      />
+      {offerBridge ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs text-(--muted-foreground)"
+          title={t('aiAssistant.byok.bridgeHint')}
+          onClick={() => openSettings('aiAssistant', 'aiKeys')}
+        >
+          {t('aiAssistant.byok.bridge')}
+        </Button>
+      ) : null}
+    </div>
   );
 }

@@ -48,6 +48,7 @@ const grantedModels = [
     isDefault: true,
     billedToUser: false,
     access: 'granted',
+    servesIntent: 'balanced',
   },
   {
     id: 'a:fast',
@@ -59,6 +60,7 @@ const grantedModels = [
     isDefault: false,
     billedToUser: false,
     access: 'granted',
+    servesIntent: 'fast',
   },
 ];
 
@@ -72,6 +74,7 @@ const lockedModel = {
   isDefault: false,
   billedToUser: false,
   access: 'requires_byok',
+  servesIntent: 'powerful',
 };
 
 const byokModel = {
@@ -111,15 +114,17 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
+    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
+      'title',
+      'aiAssistant.intent.fastHint'
+    );
     expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
-    ).toBeInTheDocument();
+      screen.getByRole('radio', { name: 'Balanced One' })
+    ).toHaveAttribute('title', 'aiAssistant.intent.balancedHint');
+    expect(screen.getByRole('radio', { name: 'Premium One' })).toHaveAttribute(
+      'title',
+      'aiAssistant.intent.powerfulHint'
+    );
     expect(
       screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
     ).not.toBeInTheDocument();
@@ -151,9 +156,10 @@ describe('AIAssistantSection', () => {
   it('activates the default intent when the account has none stored', () => {
     render(<AIAssistantSection />);
 
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toHaveAttribute('data-state', 'on');
+    expect(screen.getByRole('radio', { name: 'Balanced One' })).toHaveAttribute(
+      'data-state',
+      'on'
+    );
   });
 
   it('deactivates every chip while an advanced account override is in effect', () => {
@@ -190,12 +196,13 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    ).toHaveAttribute('data-state', 'on');
+    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
+      'data-state',
+      'on'
+    );
   });
 
-  it('keeps the chips deselected for a stored preference while the list is unresolved', () => {
+  it('renders no chips while the model list is unresolved', () => {
     modelsData.mockReturnValue(undefined);
     modelsError.mockReturnValue(true);
     prefsData.mockReturnValue({
@@ -204,9 +211,7 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    for (const chip of screen.getAllByRole('radio')) {
-      expect(chip).toHaveAttribute('data-state', 'off');
-    }
+    expect(screen.queryAllByRole('radio')).toHaveLength(0);
   });
 
   it('surfaces a model-list load error behind the advanced trigger', async () => {
@@ -225,15 +230,14 @@ describe('AIAssistantSection', () => {
   });
 
   it('drops any model override when an intent chip is picked', async () => {
+    modelsData.mockReturnValue(withLockedModel);
     prefsData.mockReturnValue({
       preferredModel: 'a:fast',
       preferredIntent: null,
     });
     render(<AIAssistantSection />);
 
-    await userEvent.click(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
-    );
+    await userEvent.click(screen.getByRole('radio', { name: 'Premium One' }));
 
     expect(update).toHaveBeenCalledWith({
       preferredModel: null,
@@ -252,8 +256,12 @@ describe('AIAssistantSection', () => {
     expect(
       screen.getByRole('menuitemradio', { name: /Byok One/ })
     ).toBeInTheDocument();
-    expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
-    expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: /Balanced One/ })
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitemradio', { name: /Premium One/ })
+    ).not.toBeInTheDocument();
   });
 
   it('stores an advanced model as the account override', async () => {
@@ -276,7 +284,7 @@ describe('AIAssistantSection', () => {
     });
     render(<AIAssistantSection />);
 
-    const chip = screen.getByRole('radio', { name: 'aiAssistant.intent.fast' });
+    const chip = screen.getByRole('radio', { name: 'Fast One' });
     expect(chip).toBeEnabled();
     await userEvent.click(chip);
 

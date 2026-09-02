@@ -284,7 +284,11 @@ export function ModelSelect({
           {!isLoading && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent
+        align="start"
+        collisionPadding={8}
+        className="w-72 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
+      >
         {visibleLeadingSection && (
           <OptionGroup
             asActions={rowsAreActions}

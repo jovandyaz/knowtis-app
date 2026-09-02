@@ -1,5 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
+import type { ReasoningEffort } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import type { TokenProvider } from './http-client';
@@ -79,6 +80,17 @@ export interface AgentStreamHandle {
   cancel: () => void;
 }
 
+/** Per-message knobs for `sendMessage`. */
+export interface AgentSendOptions {
+  /**
+   * Reasoning effort for this turn, one of `REASONING_EFFORTS`
+   * (`low | medium | high | xhigh | max`). Omitted, the server runs its
+   * configured default; the server still clamps any value to what the
+   * resolved model declares and the caller's audience may spend.
+   */
+  effort?: ReasoningEffort;
+}
+
 export type AuthRefreshHandler = () => Promise<RefreshOutcome>;
 
 /**
@@ -107,6 +119,7 @@ export class AgentClient {
   private pending: PendingRequest | null = null;
   private awaitingDecision = false;
   private pendingNoteId: string | undefined;
+  private pendingEffort: ReasoningEffort | undefined;
   private conversationId: string | undefined;
   private reconnectAttempts = 0;
   private readonly maxReconnectAttempts = 5;
@@ -148,7 +161,8 @@ export class AgentClient {
   sendMessage(
     content: string,
     callbacks: AgentStreamCallbacks,
-    noteId?: string
+    noteId?: string,
+    options?: AgentSendOptions
   ): AgentStreamHandle {
     if (this.activeCallbacks) {
       this.socket?.emit('agent:cancel');
@@ -157,6 +171,7 @@ export class AgentClient {
 
     this.activeCallbacks = callbacks;
     this.pendingNoteId = noteId;
+    this.pendingEffort = options?.effort;
 
     this.dispatch({ kind: 'message', content }, callbacks);
 
@@ -257,6 +272,7 @@ export class AgentClient {
             : {}),
           message: { content: request.content },
           ...noteId,
+          ...(this.pendingEffort ? { effort: this.pendingEffort } : {}),
         });
         return;
       case 'approve':

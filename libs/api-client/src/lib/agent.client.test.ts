@@ -186,6 +186,43 @@ describe('AgentClient', () => {
     });
   });
 
+  it('includes the effort in agent:message when provided', () => {
+    const client = makeClient();
+    client.sendMessage(
+      'hola',
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      undefined,
+      { effort: 'high' }
+    );
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      message: { content: 'hola' },
+      effort: 'high',
+    });
+  });
+
+  it('does not leak a previous effort into the next send', () => {
+    const client = makeClient();
+    client.sendMessage(
+      'boost',
+      { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() },
+      undefined,
+      { effort: 'high' }
+    );
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+    });
+    emit.mockClear();
+    client.sendMessage('plain', {
+      onChunk: vi.fn(),
+      onDone: vi.fn(),
+      onError: vi.fn(),
+    });
+    expect(emit).toHaveBeenCalledWith('agent:message', {
+      message: { content: 'plain' },
+    });
+  });
+
   it('approve emits while the turn is still open', () => {
     const client = makeClient();
     client.sendMessage('hi', {
