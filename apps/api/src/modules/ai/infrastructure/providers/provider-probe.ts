@@ -14,7 +14,8 @@ const REDACTABLE_KEY_MIN_LENGTH = 8;
 
 // A hung provider must not hold an admin save or a BYOK validation open for
 // the transport's default of minutes; the abort maps to `valid: false`.
-const PROBE_TIMEOUT_MS = 10_000;
+export const PROBE_TIMEOUT_MS = 10_000;
+const PROBE_TIMEOUT_MESSAGE = 'The probe timed out';
 
 /**
  * Why a probe failed. 'rejected' is definitive — the provider answered and
@@ -48,12 +49,19 @@ export async function probeProviderKey(
       error: `No curated model found for provider '${provider}'`,
     };
   }
+  // A plain timer rather than AbortSignal.timeout: the bound is observable
+  // under fake timers, so a test can prove a hung request really settles.
+  const bound = new AbortController();
+  const timer = setTimeout(
+    () => bound.abort(new DOMException(PROBE_TIMEOUT_MESSAGE, 'TimeoutError')),
+    PROBE_TIMEOUT_MS
+  );
   try {
     await generateText({
       model: registry.languageModel(probe.id, apiKey),
       prompt: 'ping',
       maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
-      abortSignal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      abortSignal: bound.signal,
       telemetry: { isEnabled: false },
     });
     return { valid: true };
@@ -63,6 +71,8 @@ export async function probeProviderKey(
       reason: classify(error),
       error: redact(error instanceof Error ? error.message : 'unknown', apiKey),
     };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

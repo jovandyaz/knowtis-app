@@ -2,6 +2,7 @@ import { APICallError, generateText, RetryError } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  PROBE_TIMEOUT_MS,
   probeProviderKey,
   VALIDATION_MAX_OUTPUT_TOKENS,
 } from './provider-probe';
@@ -97,25 +98,37 @@ describe('probeProviderKey', () => {
     }
   );
 
-  it('should bound the probe and map a timeout abort to a result, not a rejection', async () => {
-    vi.mocked(generateText).mockImplementation(({ abortSignal }) => {
-      // A hanging provider: the SDK settles only when the probe's own bound fires.
-      expect(abortSignal).toBeInstanceOf(AbortSignal);
-      return Promise.reject(
-        new DOMException(
-          'The operation was aborted due to timeout',
-          'TimeoutError'
-        )
+  it('should settle a hung request when its own time bound fires, as a timeout result', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.mocked(generateText).mockImplementation(
+        ({ abortSignal }) =>
+          new Promise((_, reject) => {
+            abortSignal?.addEventListener('abort', () =>
+              reject(abortSignal.reason)
+            );
+          }) as never
       );
-    });
+      const pending = probeProviderKey(
+        registry as never,
+        'anthropic',
+        'sk-ant-slow-provider'
+      );
 
-    await expect(
-      probeProviderKey(registry as never, 'anthropic', 'sk-ant-slow-provider')
-    ).resolves.toEqual({
-      valid: false,
-      reason: 'timeout',
-      error: 'The operation was aborted due to timeout',
-    });
+      await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT_MS - 1);
+      await expect(
+        Promise.race([pending, Promise.resolve('still pending')])
+      ).resolves.toBe('still pending');
+
+      await vi.advanceTimersByTimeAsync(1);
+      await expect(pending).resolves.toEqual({
+        valid: false,
+        reason: 'timeout',
+        error: 'The probe timed out',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('should label a non-Error throw as unknown and unavailable', async () => {
