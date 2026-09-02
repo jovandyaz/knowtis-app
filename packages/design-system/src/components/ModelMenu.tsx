@@ -266,7 +266,10 @@ export function ModelMenu({
                   <DropdownMenuItem
                     key={row.id}
                     className={cn(OPTION_ROW_CLASSES, 'pr-7')}
-                    onSelect={() => footerCta?.onClick()}
+                    // Inert without a CTA behind it, so it announces as disabled
+                    // rather than closing the menu and doing nothing.
+                    disabled={!footerCta}
+                    {...(footerCta && { onSelect: footerCta.onClick })}
                     {...(lockedHint && {
                       'aria-label': `${row.label}, ${lockedHint}`,
                     })}

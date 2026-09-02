@@ -153,6 +153,32 @@ describe('ModelMenu', () => {
     expect(onChange).toHaveBeenCalledWith('high');
   });
 
+  it('renders a locked row as inert when no account CTA stands behind it', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <ModelMenu
+        {...baseProps({
+          primary: PRIMARY.map((row) => ({ ...row, locked: true })),
+          value: null,
+          onSelect,
+          lockedHint: 'requiere cuenta',
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button'));
+
+    const locked = screen.getByRole('menuitem', {
+      name: 'Sonnet 5, requiere cuenta',
+    });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+
+    await user.click(locked);
+    expect(onSelect).not.toHaveBeenCalled();
+    // An inert row must not dismiss the menu either.
+    expect(locked).toBeInTheDocument();
+  });
+
   it('effort submenu lists only provided options and reports changes', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
