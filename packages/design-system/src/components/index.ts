@@ -72,6 +72,14 @@ export {
 export { ResizeHandle } from './ResizeHandle';
 export { ResizablePanel } from './ResizablePanel';
 export {
+  ModelMenu,
+  type ModelMenuProps,
+  type ModelMenuPrimaryRow,
+  type ModelMenuModelRow,
+  type ModelMenuEffort,
+  type ModelMenuMoreModels,
+} from './ModelMenu';
+export {
   ModelSelect,
   type ModelSelectProps,
   type ModelSelectOption,
