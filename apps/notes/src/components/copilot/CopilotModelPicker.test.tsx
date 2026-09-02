@@ -1,3 +1,5 @@
+import { ROUTES } from '@/config';
+import { useAgentStore } from '@/stores/agent.store';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,12 +19,16 @@ const prefsData = vi.fn();
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
 const byokFlag = vi.fn<() => boolean>();
 const openSettings = vi.fn();
+const navigate = vi.fn();
 const keysData = vi.fn();
 const keysPending = vi.fn<() => boolean>();
 const keysEnabled = vi.fn<(enabled?: boolean) => void>();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k }),
+}));
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
 }));
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
@@ -34,6 +40,20 @@ vi.mock('@/stores/settings.store', () => ({
   useSettingsStore: (selector: (s: { open: typeof openSettings }) => unknown) =>
     selector({ open: openSettings }),
 }));
+// The real store drags in the agent client; the picker only needs the
+// per-conversation effort field, so a real zustand slice keeps it reactive.
+vi.mock('@/stores/agent.store', async () => {
+  const { create } = await import('zustand');
+  interface EffortSlice {
+    reasoningEffort: string;
+    setReasoningEffort: (effort: string) => void;
+  }
+  const useAgentStore = create<EffortSlice>((set) => ({
+    reasoningEffort: 'auto',
+    setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
+  }));
+  return { useAgentStore };
+});
 vi.mock('@/hooks', () => ({
   useAvailableModels: (enabled?: boolean) => {
     modelsEnabled(enabled);
@@ -55,52 +75,87 @@ vi.mock('@/hooks', () => ({
   },
 }));
 
-const grantedModels = [
-  {
-    id: 'a:bal',
-    label: 'Balanced One',
-    descriptionKey: 'aiModels.sonnet5',
-    tier: 'balanced',
-    contextWindow: 1000000,
-    costClass: 2,
-    isDefault: true,
-    billedToUser: false,
-    routableByServer: true,
-    access: 'granted',
-  },
-  {
-    id: 'a:fast',
-    label: 'Fast One',
-    descriptionKey: 'aiModels.haiku45',
-    tier: 'fast',
-    contextWindow: 200000,
-    costClass: 1,
-    isDefault: false,
-    billedToUser: false,
-    routableByServer: true,
-    access: 'granted',
-  },
-] satisfies SelectableModel[];
+// A single user.click batches press+release inside one act(), and jsdom never
+// flushes the submenu re-render in between, so Radix's select handler misses
+// the click. Splitting the pointer acts restores the selection for sub items.
+async function clickSubmenuItem(
+  user: ReturnType<typeof userEvent.setup>,
+  element: Element
+) {
+  await user.pointer({ target: element, keys: '[MouseLeft>]' });
+  await user.pointer({ target: element, keys: '[/MouseLeft]' });
+}
 
-const lockedModel = {
-  id: 'x:premium',
-  label: 'Premium One',
-  descriptionKey: 'aiModels.gpt56Sol',
+function openMenu(user: ReturnType<typeof userEvent.setup>) {
+  return user.click(
+    screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+  );
+}
+
+const fastModel = {
+  id: 'anthropic:haiku-4.5',
+  label: 'Haiku 4.5',
+  descriptionKey: 'aiModels.haiku45',
+  tier: 'fast',
+  contextWindow: 200000,
+  costClass: 1,
+  isDefault: false,
+  billedToUser: false,
+  routableByServer: true,
+  access: 'granted',
+  servesIntent: 'fast',
+} satisfies SelectableModel;
+
+const balancedModel = {
+  id: 'anthropic:sonnet-5',
+  label: 'Sonnet 5',
+  descriptionKey: 'aiModels.sonnet5',
+  tier: 'balanced',
+  contextWindow: 1000000,
+  costClass: 2,
+  isDefault: true,
+  billedToUser: false,
+  routableByServer: true,
+  access: 'granted',
+  servesIntent: 'balanced',
+  reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
+} satisfies SelectableModel;
+
+const powerfulModel = {
+  id: 'anthropic:opus-5',
+  label: 'Opus 5',
+  descriptionKey: '',
   tier: 'powerful',
   contextWindow: 200000,
   costClass: 3,
   isDefault: false,
   billedToUser: false,
   routableByServer: true,
-  access: 'requires_byok',
+  access: 'granted',
+  servesIntent: 'powerful',
+} satisfies SelectableModel;
+
+const openModel = {
+  id: 'z-ai:glm-5.3',
+  label: 'GLM 5.3',
+  descriptionKey: '',
+  description: 'Open catalog model',
+  tier: 'open',
+  contextWindow: 200000,
+  costClass: 1,
+  isDefault: false,
+  billedToUser: false,
+  routableByServer: true,
+  access: 'granted',
 } satisfies SelectableModel;
 
 const byokModel = {
-  id: 'o:byok',
-  label: 'Byok One',
-  descriptionKey: 'aiModels.gpt56Sol',
+  id: 'openai:gpt-6',
+  label: 'GPT-6',
+  descriptionKey: '',
+  description: 'Frontier on your key',
   tier: 'powerful',
-  contextWindow: 200000,
+  contextWindow: 400000,
   costClass: 3,
   isDefault: false,
   billedToUser: true,
@@ -108,43 +163,25 @@ const byokModel = {
   access: 'granted',
 } satisfies SelectableModel;
 
-const promotedModel = {
-  id: 'o:promoted',
-  label: 'Promoted One',
-  descriptionKey: '',
-  description: 'Promoted from the open catalog',
-  tier: 'powerful',
-  contextWindow: 200000,
-  costClass: 1,
-  isDefault: false,
-  billedToUser: true,
-  routableByServer: true,
-  access: 'granted',
-} satisfies SelectableModel;
+const registeredModels = [
+  fastModel,
+  balancedModel,
+  powerfulModel,
+  openModel,
+  byokModel,
+] satisfies SelectableModel[];
 
-const intentNamedModel = {
-  id: 'fast',
-  label: 'Intent Named One',
-  descriptionKey: '',
-  description: 'Promoted with an id that reads like a style',
-  tier: 'fast',
-  contextWindow: 200000,
-  costClass: 1,
-  isDefault: false,
-  billedToUser: true,
-  routableByServer: true,
-  access: 'granted',
-} satisfies SelectableModel;
-
-const withLockedModel = [...grantedModels, lockedModel];
-const withByokModel = [...grantedModels, lockedModel, byokModel];
-const withPromotedModel = [...withByokModel, promotedModel];
-const withIntentNamedModel = [...withByokModel, intentNamedModel];
+const anonymousModels = [
+  { ...fastModel, access: 'requires_account' },
+  { ...balancedModel, access: 'requires_account' },
+  { ...powerfulModel, access: 'requires_account' },
+] satisfies SelectableModel[];
 
 describe('CopilotModelPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    modelsData.mockReturnValue(grantedModels);
+    useAgentStore.setState({ reasoningEffort: 'auto' });
+    modelsData.mockReturnValue(registeredModels);
     modelsPending.mockReturnValue(false);
     modelsError.mockReturnValue(false);
     prefsData.mockReturnValue({
@@ -157,356 +194,147 @@ describe('CopilotModelPicker', () => {
     keysPending.mockReturnValue(false);
   });
 
-  it('bridges a keyless user to the key form itself, not just its section', async () => {
-    modelsData.mockReturnValue(withLockedModel);
+  it('renders the three intent rows with resolved model names', async () => {
+    const user = userEvent.setup();
+    render(<CopilotModelPicker />);
+    await openMenu(user);
+
+    const rows = screen.getAllByRole('menuitemradio');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Haiku 4.5'),
+      expect.stringContaining('Sonnet 5'),
+      expect.stringContaining('Opus 5'),
+    ]);
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ })
+    ).toHaveTextContent('aiModels.haiku45');
+    expect(
+      screen.getByRole('menuitemradio', { name: /Opus 5/ })
+    ).toHaveTextContent('aiAssistant.intent.powerfulHint');
+    expect(screen.queryByText(/aiAssistant\.intent\.(fast|balanced|powerful)$/))
+      .not.toBeInTheDocument();
+  });
+
+  it('selecting an intent row clears the model override', async () => {
+    const user = userEvent.setup();
+    prefsData.mockReturnValue({
+      preferredModel: 'openai:gpt-6',
+      preferredIntent: null,
+    });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).toHaveTextContent('GPT-6');
+    await openMenu(user);
+    await user.click(screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ }));
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'fast',
+    });
+  });
+
+  it('selecting an advanced model stores it as override', async () => {
+    const user = userEvent.setup();
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+    await user.click(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.moreModels/ })
+    );
+
+    expect(
+      await screen.findByText('aiAssistant.menu.groupOpen')
+    ).toBeInTheDocument();
+    expect(screen.getByText('aiAssistant.menu.groupByok')).toBeInTheDocument();
+    const row = screen.getByRole('menuitemradio', { name: /GPT-6/ });
+    expect(row).toHaveTextContent('aiAssistant.byok.billedBadge');
+
+    await clickSubmenuItem(user, row);
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: 'openai:gpt-6',
+    });
+  });
+
+  it('anonymous: rows are locked and the CTA routes to register', async () => {
+    const user = userEvent.setup();
+    authUser.mockReturnValue({ isAnonymous: true });
+    modelsData.mockReturnValue(anonymousModels);
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+
+    for (const row of screen.getAllByRole('menuitemradio')) {
+      expect(row).toHaveAttribute('aria-disabled', 'true');
+    }
+
+    await user.click(screen.getByRole('menuitemradio', { name: /Sonnet 5/ }));
+    expect(updatePreferences).not.toHaveBeenCalled();
+    expect(navigate).toHaveBeenCalledWith({ to: ROUTES.REGISTER });
+
+    await openMenu(user);
+    await user.click(
+      screen.getByRole('menuitem', { name: 'aiAssistant.menu.registerCta' })
+    );
+    expect(navigate).toHaveBeenCalledTimes(2);
+    expect(keysEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('free user sees no effort control', async () => {
+    const user = userEvent.setup();
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/aiAssistant\.menu\.effort/)
+    ).not.toBeInTheDocument();
+  });
+
+  it('byok user changes effort and the trigger grows the tail', async () => {
+    const user = userEvent.setup();
+    keysData.mockReturnValue([{ provider: 'anthropic', keyPrefix: 'sk-a***' }]);
+    render(<CopilotModelPicker />);
+
+    const trigger = screen.getByRole('button', {
+      name: /aiAssistant\.menu\.triggerLabel/,
+    });
+    expect(trigger).not.toHaveTextContent('aiAssistant.menu.effortHigh');
+
+    await user.click(trigger);
+    await user.click(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+    );
+    await clickSubmenuItem(
+      user,
+      await screen.findByRole('menuitemradio', {
+        name: 'aiAssistant.menu.effortHigh',
+      })
+    );
+
+    expect(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).toHaveTextContent('· aiAssistant.menu.effortHigh');
+    expect(useAgentStore.getState().reasoningEffort).toBe('high');
+  });
+
+  it('keeps the BYOK bridge appended after the trigger for a keyless user', async () => {
+    const user = userEvent.setup();
     render(<CopilotModelPicker />);
 
     const bridge = screen.getByRole('button', {
       name: 'aiAssistant.byok.bridge',
     });
-    expect(bridge).toHaveAccessibleDescription('aiAssistant.byok.bridgeHint');
-
-    await userEvent.click(bridge);
+    await user.click(bridge);
 
     expect(openSettings).toHaveBeenCalledWith('aiAssistant', 'aiKeys');
-  });
-
-  it('offers no bridge while the agent_byok flag is off', () => {
-    byokFlag.mockReturnValue(false);
-    modelsData.mockReturnValue(withLockedModel);
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('offers no bridge once the user already runs on their own key', () => {
-    modelsData.mockReturnValue(withByokModel);
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  // Until the list resolves there is no way to know the caller has no key, and
-  // a bridge that flashes at someone who already has one is worse than late.
-  // "No model billed to you" is not the same as "you hold no key": a stored key
-  // unlocks nothing unless a model of that provider is currently wired in, and
-  // that caller must not be told again to do what they already did.
-  it('offers no bridge to a caller who already stored a key', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    keysData.mockReturnValue([{ provider: 'google', keyPrefix: 'AIza***' }]);
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('offers no bridge until the stored keys resolve', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    keysData.mockReturnValue(undefined);
-    keysPending.mockReturnValue(true);
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('offers no bridge until the model list resolves', () => {
-    modelsData.mockReturnValue(undefined);
-    modelsPending.mockReturnValue(true);
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('offers only the three intent chips to a user without BYOK models', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    render(<CopilotModelPicker />);
-
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.powerful' })
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
-    ).not.toBeInTheDocument();
-  });
-
-  it('activates the default intent when the account has none stored', () => {
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toHaveAttribute('data-state', 'on');
-  });
-
-  it('drops any model override when an intent chip is picked', async () => {
-    render(<CopilotModelPicker />);
-
-    await userEvent.click(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.fast' })
-    );
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: null,
-      preferredIntent: 'fast',
-    });
-  });
-
-  it('offers one control listing styles above the BYOK models', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    render(<CopilotModelPicker />);
-
-    expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
-    await userEvent.click(trigger);
-
-    expect(
-      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('menuitemradio', { name: /Byok One/ })
-    ).toBeInTheDocument();
-    expect(screen.queryByText('Balanced One')).not.toBeInTheDocument();
-    expect(screen.queryByText('Premium One')).not.toBeInTheDocument();
-  });
-
-  it('groups the models under one heading so no tier repeats a style name', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    render(<CopilotModelPicker />);
-
-    await userEvent.click(screen.getByRole('button'));
-
-    expect(screen.getByText('aiAssistant.modelsGroup')).toBeInTheDocument();
-    expect(
-      screen.queryAllByText(/^(fast|balanced|powerful|open)$/i)
-    ).toHaveLength(0);
-  });
-
-  it('returns to the account style when a style row is picked', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    prefsData.mockReturnValue({
-      preferredModel: 'o:byok',
-      preferredIntent: null,
-    });
-    render(<CopilotModelPicker />);
-
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('Byok One');
-    await userEvent.click(trigger);
-    await userEvent.click(
-      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
-    );
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: null,
-      preferredIntent: 'fast',
-    });
-  });
-
-  it('persists a picked model as the account preference', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    render(<CopilotModelPicker />);
-
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
-    await userEvent.click(trigger);
-    await userEvent.click(screen.getByText('Byok One'));
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: 'o:byok',
-    });
-  });
-
-  it('stores a model whose id reads like a style as a model, not an intent', async () => {
-    modelsData.mockReturnValue(withIntentNamedModel);
-    render(<CopilotModelPicker />);
-
-    await userEvent.click(screen.getByRole('button'));
-    await userEvent.click(screen.getByText('Intent Named One'));
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: 'fast',
-    });
-  });
-
-  it('describes a keyless catalog model with its own text instead of a key echo', async () => {
-    modelsData.mockReturnValue(withPromotedModel);
-    render(<CopilotModelPicker />);
-
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
-    await userEvent.click(trigger);
-
-    expect(
-      screen.getByRole('menuitemradio', { name: /Promoted One/ })
-    ).toHaveTextContent('Promoted from the open catalog');
-    expect(
-      screen.getByRole('menuitemradio', { name: /Byok One/ })
-    ).toHaveTextContent('aiModels.gpt56Sol');
-  });
-
-  it('names the account style when the stored model has left the model list', async () => {
-    modelsData.mockReturnValue(withByokModel);
-    prefsData.mockReturnValue({
-      preferredModel: 'google:gemini-3.5-flash',
-      preferredIntent: null,
-    });
-    render(<CopilotModelPicker />);
-
-    const trigger = screen.getByRole('button');
-    expect(trigger).not.toHaveTextContent('—');
-    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
-
-    await userEvent.click(trigger);
-    await userEvent.click(
-      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.fast/ })
-    );
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: null,
-      preferredIntent: 'fast',
-    });
-  });
-
-  it('names the stored advanced preference on the trigger', () => {
-    modelsData.mockReturnValue(withByokModel);
-    prefsData.mockReturnValue({
-      preferredModel: 'o:byok',
-      preferredIntent: 'powerful',
-    });
-    render(<CopilotModelPicker />);
-
-    expect(screen.getByRole('button')).toHaveTextContent('Byok One');
-    expect(screen.queryAllByRole('radio')).toHaveLength(0);
-  });
-
-  it('names the stored intent on the trigger when no model outranks it', () => {
-    modelsData.mockReturnValue(withByokModel);
-    prefsData.mockReturnValue({
-      preferredModel: 'a:bal',
-      preferredIntent: 'powerful',
-    });
-    render(<CopilotModelPicker />);
-
-    expect(screen.getByRole('button')).toHaveTextContent(
-      'aiAssistant.intent.powerful'
-    );
-  });
-
-  it('keeps the styles choosable when the model list fails to load', async () => {
-    modelsData.mockReturnValue(undefined);
-    modelsError.mockReturnValue(true);
-    render(<CopilotModelPicker />);
-
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('aiAssistant.intent.balanced');
-    await userEvent.click(trigger);
-    expect(
-      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.powerful/ })
-    ).toBeInTheDocument();
-
-    await userEvent.click(
-      screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
-    );
-    expect(modelsRefetch).toHaveBeenCalled();
-  });
-
-  it('announces the load instead of chips while a stored model is unresolved', async () => {
-    modelsData.mockReturnValue(undefined);
-    modelsPending.mockReturnValue(true);
-    prefsData.mockReturnValue({
-      preferredModel: 'o:byok',
-      preferredIntent: 'fast',
-    });
-    render(<CopilotModelPicker />);
-
-    expect(screen.queryAllByRole('radio')).toHaveLength(0);
-    const trigger = screen.getByRole('button');
-    expect(trigger).toHaveTextContent('aiAssistant.loading');
-    expect(trigger).toBeEnabled();
-
-    await userEvent.click(trigger);
-    await userEvent.click(
-      screen.getByRole('menuitemradio', { name: /aiAssistant.intent.powerful/ })
-    );
-
-    expect(updatePreferences).toHaveBeenCalledWith({
-      preferredModel: null,
-      preferredIntent: 'powerful',
-    });
-  });
-
-  it('keeps the chips while the list loads for a caller with no stored model', () => {
-    modelsData.mockReturnValue(undefined);
-    modelsPending.mockReturnValue(true);
-    render(<CopilotModelPicker />);
-
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toHaveAttribute('data-state', 'on');
-    expect(screen.queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  it('offers the style chips to an anonymous user', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    authUser.mockReturnValue({ isAnonymous: true });
-    render(<CopilotModelPicker />);
-
-    expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(
-      screen.getByRole('radio', { name: 'aiAssistant.intent.balanced' })
-    ).toHaveAttribute('data-state', 'on');
-  });
-
-  it('queries models and preferences, but never keys, for an anonymous user', () => {
-    authUser.mockReturnValue({ isAnonymous: true });
-    render(<CopilotModelPicker />);
-
-    expect(modelsEnabled).toHaveBeenCalledWith(true);
-    expect(prefsEnabled).toHaveBeenCalledWith(true);
-    expect(keysEnabled).toHaveBeenCalledWith(false);
-  });
-
-  it('never advertises BYOK to an anonymous user', () => {
-    modelsData.mockReturnValue(withLockedModel);
-    authUser.mockReturnValue({ isAnonymous: true });
-    render(<CopilotModelPicker />);
-
-    expect(
-      screen.queryByRole('button', { name: 'aiAssistant.byok.bridge' })
-    ).not.toBeInTheDocument();
-  });
-
-  it('queries models and preferences for a signed-in user', () => {
-    render(<CopilotModelPicker />);
-
-    expect(modelsEnabled).toHaveBeenCalledWith(true);
-    expect(prefsEnabled).toHaveBeenCalledWith(true);
-  });
-
-  it('waits for the session before querying anything', () => {
-    modelsData.mockReturnValue(withByokModel);
-    authUser.mockReturnValue(null);
-    const { container } = render(<CopilotModelPicker />);
-
-    expect(container).toBeEmptyDOMElement();
-    expect(modelsEnabled).toHaveBeenCalledWith(false);
-    expect(prefsEnabled).toHaveBeenCalledWith(false);
   });
 });

@@ -9,8 +9,12 @@ import {
   type WebSource,
 } from '@knowtis/api-client';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
+import type { ReasoningEffort } from '@knowtis/shared-types';
 
 import { createChunkBuffer } from './chunk-buffer';
+
+/** 'auto' leaves the reasoning budget to the server. */
+export type CopilotEffort = 'auto' | ReasoningEffort;
 
 export type AgentStatus =
   | 'idle'
@@ -64,7 +68,10 @@ interface AgentState {
   pendingProposal: PendingProposal | null;
   /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
   thinkingText: string;
+  /** Per-conversation BYOK reasoning effort; never a stored preference. */
+  reasoningEffort: CopilotEffort;
   _streamHandle: AgentStreamHandle | null;
+  setReasoningEffort: (effort: CopilotEffort) => void;
   markErrorAnswered: () => void;
   sendMessage: (text: string, noteId?: string) => void;
   newConversation: () => void;
@@ -256,7 +263,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
     answeredError: null,
     pendingProposal: null,
     thinkingText: '',
+    reasoningEffort: 'auto',
     _streamHandle: null,
+
+    setReasoningEffort: (effort) => set({ reasoningEffort: effort }),
 
     // Keyed on the failure itself, so a later one is answered again without
     // any of the store's error transitions having to remember to clear this.
@@ -313,6 +323,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         error: null,
         pendingProposal: null,
         thinkingText: '',
+        reasoningEffort: 'auto',
         _streamHandle: null,
       });
     },
