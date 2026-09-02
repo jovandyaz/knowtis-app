@@ -1,10 +1,11 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
   FEATURE_FLAG_KEYS,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   type ModelIntent,
+  type SelectableModel,
 } from '@knowtis/shared-types';
 
 import { ModelPreferenceService } from './model-preference.service';
@@ -109,8 +110,46 @@ function make(
     byok as never,
     flags as never
   );
-  return { svc, repo, aiConfig, byok, flags, ceilingsSeen };
+  return { svc, repo, aiConfig, byok, flags, ceilingsSeen, selectableSvc };
 }
+
+const USER = { id: 'u1' };
+const ANON = { id: 'anon-1', isAnonymous: true };
+
+function entry(
+  over: Partial<SelectableModel> & { id: string }
+): SelectableModel {
+  return {
+    label: over.id,
+    descriptionKey: '',
+    tier: 'open',
+    contextWindow: 200000,
+    costClass: 1,
+    isDefault: false,
+    billedToUser: false,
+    routableByServer: true,
+    access: 'granted',
+    ...over,
+  };
+}
+
+const FULL_LISTING: SelectableModel[] = [
+  entry({
+    id: INTENT_MODELS.fast,
+    tier: 'fast',
+    servesIntent: 'fast',
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
+  }),
+  entry({
+    id: SYSTEM_DEFAULT,
+    tier: 'balanced',
+    servesIntent: 'balanced',
+    isDefault: true,
+  }),
+  entry({ id: INTENT_MODELS.powerful, tier: 'powerful', servesIntent: 'powerful' }),
+  entry({ id: 'openrouter:promoted-mock' }),
+  entry({ id: 'google:byok-model', billedToUser: true }),
+];
 
 describe('ModelPreferenceService', () => {
   it('effective default = system default when no preference', async () => {
@@ -126,14 +165,14 @@ describe('ModelPreferenceService', () => {
   it('setUserPreferences rejects an unselectable model', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
     await expect(
-      svc.setUserPreferences('u1', { preferredModel: 'openai:nope' })
+      svc.setUserPreferences(USER, { preferredModel: 'openai:nope' })
     ).rejects.toThrow(BadRequestException);
     expect(repo.patchSettings).not.toHaveBeenCalled();
   });
 
   it('setUserPreferences clears the model without validation', async () => {
     const { svc, repo } = make('x', [SYSTEM_DEFAULT]);
-    await svc.setUserPreferences('u1', { preferredModel: null });
+    await svc.setUserPreferences(USER, { preferredModel: null });
     expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
       preferredModel: null,
     });
@@ -141,21 +180,21 @@ describe('ModelPreferenceService', () => {
 
   it('setUserPreferences skips the write when the patch carries no values', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
-    await svc.setUserPreferences('u1', {});
+    await svc.setUserPreferences(USER, {});
     const dtoShaped: Parameters<typeof svc.setUserPreferences>[1] = {};
     Object.assign(dtoShaped, {
       preferredModel: undefined,
       preferredIntent: undefined,
     });
-    await svc.setUserPreferences('u1', dtoShaped);
+    await svc.setUserPreferences(USER, dtoShaped);
     expect(repo.patchSettings).not.toHaveBeenCalled();
   });
 
   it('listModels includes a BYOK-unlocked provider model', async () => {
     const { svc, byok } = make(null, [SYSTEM_DEFAULT], ['google']);
-    const ids = (await svc.listModels('u1')).map((m) => m.id);
+    const ids = (await svc.listModels(USER)).map((m) => m.id);
     expect(ids.some((id) => id.startsWith('google:'))).toBe(true);
-    expect(byok.enabledProviders).toHaveBeenCalledWith('u1');
+    expect(byok.enabledProviders).toHaveBeenCalledWith('u1', false);
   });
 
   it('effective default accepts a stored model unlocked by a BYOK key', async () => {
@@ -169,7 +208,7 @@ describe('ModelPreferenceService', () => {
 
   it('setUserPreferences accepts a model unlocked by a BYOK key', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT], ['google']);
-    await svc.setUserPreferences('u1', {
+    await svc.setUserPreferences(USER, {
       preferredModel: 'google:gemini-3.7-flash',
     });
     expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
@@ -179,7 +218,7 @@ describe('ModelPreferenceService', () => {
 
   it('setUserPreferences passes an intent-only patch through unvalidated', async () => {
     const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
-    await svc.setUserPreferences('u1', { preferredIntent: 'fast' });
+    await svc.setUserPreferences(USER, { preferredIntent: 'fast' });
     expect(repo.patchSettings).toHaveBeenCalledWith('u1', {
       preferredIntent: 'fast',
     });
@@ -396,6 +435,50 @@ describe('ModelPreferenceService', () => {
     expect(await svc.getEffectiveDefault('u1')).toBe('openrouter:deep-mock');
   });
 
+  describe('anonymous sessions', () => {
+    function makeWithListing() {
+      const made = make(null, [SYSTEM_DEFAULT]);
+      made.selectableSvc.list = () => FULL_LISTING;
+      return made;
+    }
+
+    it('anonymous listing returns only intent entries with requires_account on the locked ones', async () => {
+      const { svc } = makeWithListing();
+      const listing = await svc.listModels(ANON);
+      expect(listing.map((m) => m.id)).toEqual([
+        INTENT_MODELS.fast,
+        SYSTEM_DEFAULT,
+        INTENT_MODELS.powerful,
+      ]);
+      const byId = new Map(listing.map((m) => [m.id, m]));
+      expect(byId.get(SYSTEM_DEFAULT)?.access).toBe('granted');
+      expect(byId.get(INTENT_MODELS.fast)?.access).toBe('requires_account');
+      expect(byId.get(INTENT_MODELS.powerful)?.access).toBe(
+        'requires_account'
+      );
+      expect(byId.get(INTENT_MODELS.fast)?.reasoning).toEqual({
+        levels: ['low', 'medium', 'high'],
+        mandatory: false,
+      });
+      expect(listing.every((m) => !m.billedToUser)).toBe(true);
+    });
+
+    it('anonymous listing never includes promoted or byok-only entries', async () => {
+      const { svc } = makeWithListing();
+      const ids = (await svc.listModels(ANON)).map((m) => m.id);
+      expect(ids).not.toContain('openrouter:promoted-mock');
+      expect(ids).not.toContain('google:byok-model');
+    });
+
+    it('setUserPreferences rejects anonymous users', async () => {
+      const { svc, repo } = make(null, [SYSTEM_DEFAULT]);
+      await expect(
+        svc.setUserPreferences(ANON, { preferredIntent: 'fast' })
+      ).rejects.toThrow(ForbiddenException);
+      expect(repo.patchSettings).not.toHaveBeenCalled();
+    });
+  });
+
   // Without this the ceiling can stop being forwarded and nothing else notices:
   // every downstream call falls back to the code default and still answers.
   describe('forwards the operator ceiling', () => {
@@ -429,7 +512,7 @@ describe('ModelPreferenceService', () => {
     it('passes the resolved ceiling when storing a preference', async () => {
       const { svc, ceilingsSeen } = withCeiling();
 
-      await svc.setUserPreferences('u1', { preferredModel: SYSTEM_DEFAULT });
+      await svc.setUserPreferences(USER, { preferredModel: SYSTEM_DEFAULT });
 
       expect(ceilingsSeen).toContain(CONFIGURED_CEILING);
     });

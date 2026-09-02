@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -46,7 +47,11 @@ export class ModelPreferenceService {
     }
   }
 
-  async listModels(userId: string): Promise<SelectableModel[]> {
+  async listModels(user: {
+    id: string;
+    isAnonymous?: boolean;
+  }): Promise<SelectableModel[]> {
+    const anonymous = user.isAnonymous === true;
     const [
       systemDefault,
       configured,
@@ -57,12 +62,12 @@ export class ModelPreferenceService {
     ] = await Promise.all([
       this.aiConfig.getDefaultModel(),
       this.aiConfig.getConfiguredModelIds(),
-      this.byok.enabledProviders(userId),
+      this.byok.enabledProviders(user.id, anonymous),
       this.tierGatingOn(),
       this.aiConfig.getFreeTierMaxOutputCostPerToken(),
       this.aiConfig.getIntentModels(),
     ]);
-    return this.selectable.list(
+    const models = this.selectable.list(
       systemDefault,
       configured,
       byokProviders,
@@ -70,6 +75,14 @@ export class ModelPreferenceService {
       ceiling,
       intentModels
     );
+    if (!anonymous) {
+      return models;
+    }
+    // Anonymous sessions see the three intent picks only; everything but the
+    // running default renders locked so the menu can upsell an account.
+    return models
+      .filter((m) => m.servesIntent)
+      .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
   }
 
   byokProvidersFor(
@@ -194,16 +207,21 @@ export class ModelPreferenceService {
   }
 
   async setUserPreferences(
-    userId: string,
+    user: { id: string; isAnonymous?: boolean },
     patch: UpdateAiPreferencesInput
   ): Promise<void> {
+    if (user.isAnonymous === true) {
+      throw new ForbiddenException(
+        'AI preferences require a registered account'
+      );
+    }
     if (Object.values(patch).every((value) => value === undefined)) {
       return;
     }
     if (typeof patch.preferredModel === 'string') {
       const [byokProviders, tierGatingOn, offered, ceiling] = await Promise.all(
         [
-          this.byok.enabledProviders(userId),
+          this.byok.enabledProviders(user.id),
           this.tierGatingOn(),
           this.aiConfig.getConfiguredModelIds(),
           this.aiConfig.getFreeTierMaxOutputCostPerToken(),
@@ -223,6 +241,6 @@ export class ModelPreferenceService {
         );
       }
     }
-    await this.settings.patchSettings(userId, patch);
+    await this.settings.patchSettings(user.id, patch);
   }
 }

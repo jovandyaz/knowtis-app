@@ -24,7 +24,7 @@ describe('AiModelsController', () => {
     const { ctrl, pref } = make();
     const list = await ctrl.listModels(user);
     expect(list).toHaveLength(1);
-    expect(pref.listModels).toHaveBeenCalledWith('u1');
+    expect(pref.listModels).toHaveBeenCalledWith(user);
   });
 
   it('GET /ai/preferences returns both stored preferences', async () => {
@@ -44,7 +44,7 @@ describe('AiModelsController', () => {
     const res = await ctrl.updatePreferences(user, {
       preferredModel: 'anthropic:claude-sonnet-5',
     });
-    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(user, {
       preferredModel: 'anthropic:claude-sonnet-5',
     });
     expect(res).toEqual({
@@ -56,7 +56,7 @@ describe('AiModelsController', () => {
   it('PUT /ai/preferences forwards an intent-only patch without touching the model', async () => {
     const { ctrl, pref } = make();
     await ctrl.updatePreferences(user, { preferredIntent: 'fast' });
-    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(user, {
       preferredIntent: 'fast',
     });
   });
@@ -64,7 +64,7 @@ describe('AiModelsController', () => {
   it('PUT /ai/preferences forwards a null model as a clear', async () => {
     const { ctrl, pref } = make();
     await ctrl.updatePreferences(user, { preferredModel: null });
-    expect(pref.setUserPreferences).toHaveBeenCalledWith('u1', {
+    expect(pref.setUserPreferences).toHaveBeenCalledWith(user, {
       preferredModel: null,
     });
   });
