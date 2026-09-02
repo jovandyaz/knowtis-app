@@ -177,6 +177,13 @@ const anonymousModels = [
   { ...powerfulModel, access: 'requires_account' },
 ] satisfies SelectableModel[];
 
+const { reasoning: _unused, ...balancedWithoutReasoning } = balancedModel;
+const anonymousModelsWithoutReasoning = [
+  { ...fastModel, access: 'requires_account' },
+  { ...balancedWithoutReasoning, access: 'requires_account' },
+  { ...powerfulModel, access: 'requires_account' },
+] satisfies SelectableModel[];
+
 describe('CopilotModelPicker', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -272,6 +279,9 @@ describe('CopilotModelPicker', () => {
     for (const row of screen.getAllByRole('menuitemradio')) {
       expect(row).toHaveAttribute('aria-disabled', 'true');
     }
+    expect(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+    ).toHaveAttribute('aria-disabled', 'true');
 
     await user.click(screen.getByRole('menuitemradio', { name: /Sonnet 5/ }));
     expect(updatePreferences).not.toHaveBeenCalled();
@@ -283,6 +293,22 @@ describe('CopilotModelPicker', () => {
     );
     expect(navigate).toHaveBeenCalledTimes(2);
     expect(keysEnabled).toHaveBeenCalledWith(false);
+  });
+
+  it('anonymous: no locked effort row when the default model declares no levels', async () => {
+    const user = userEvent.setup();
+    authUser.mockReturnValue({ isAnonymous: true });
+    modelsData.mockReturnValue(anonymousModelsWithoutReasoning);
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/aiAssistant\.menu\.effort/)
+    ).not.toBeInTheDocument();
   });
 
   it('free user sees no effort control', async () => {

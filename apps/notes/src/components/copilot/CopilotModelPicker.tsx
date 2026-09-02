@@ -84,26 +84,30 @@ export function CopilotModelPicker() {
   const triggerDetail =
     hasByok && effortValue !== 'auto' ? effortLabel : undefined;
 
-  // Anonymous sees an inert locked effort row as upsell; a keyless registered
-  // user gets no effort control at all because their turns never carry one.
-  const effort: ModelMenuEffort | undefined = isAnonymous
-    ? {
-        label: t('aiAssistant.menu.effort'),
-        value: 'auto',
-        options: [],
-        locked: true,
-        onChange: () => undefined,
-      }
-    : hasByok && effortOpts.length > 0
-      ? {
-          label: t('aiAssistant.menu.effort'),
-          value: effortValue,
-          options: effortOpts,
-          footnote: t('aiAssistant.menu.effortFootnote'),
-          onChange: (id: string) =>
-            setReasoningEffort(isReasoningEffort(id) ? id : 'auto'),
-        }
-      : undefined;
+  // Only a model that declares reasoning levels earns the row: anonymous gets
+  // an inert locked upsell, a keyless registered user gets no control at all
+  // because their turns never carry an effort.
+  const effort: ModelMenuEffort | undefined =
+    effortOpts.length === 0
+      ? undefined
+      : isAnonymous
+        ? {
+            label: t('aiAssistant.menu.effort'),
+            value: 'auto',
+            options: [],
+            locked: true,
+            onChange: () => undefined,
+          }
+        : hasByok
+          ? {
+              label: t('aiAssistant.menu.effort'),
+              value: effortValue,
+              options: effortOpts,
+              footnote: t('aiAssistant.menu.effortFootnote'),
+              onChange: (id: string) =>
+                setReasoningEffort(isReasoningEffort(id) ? id : 'auto'),
+            }
+          : undefined;
 
   const select = (id: string) => {
     // A catalog model whose id collides with an intent must stay a model.
