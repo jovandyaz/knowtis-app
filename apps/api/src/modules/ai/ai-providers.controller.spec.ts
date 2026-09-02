@@ -208,9 +208,10 @@ describe('AiProvidersController', () => {
         )
       );
 
-      await expect(controller.test(anthropic)).resolves.toMatchObject({
+      await expect(controller.test(anthropic)).resolves.toEqual({
         ok: false,
         reason: 'unavailable',
+        message: 'anthropic is unavailable right now. Retry shortly.',
       });
     });
 
