@@ -109,7 +109,15 @@ export function CopilotModelPicker() {
             }
           : undefined;
 
+  // Anonymous: the row serving the running default renders checked and inert;
+  // the settings endpoints reject a guest, so no selection may ever mutate.
+  const anonymousValue = primary.find((row) => !row.locked)?.id ?? null;
+  const menuValue = isAnonymous ? anonymousValue : (override ?? intent);
+
   const select = (id: string) => {
+    if (isAnonymous) {
+      return;
+    }
     // A catalog model whose id collides with an intent must stay a model.
     if (moreRows.some((row) => row.id === id) || !isModelIntent(id)) {
       update({ preferredModel: id });
@@ -132,7 +140,7 @@ export function CopilotModelPicker() {
       <ModelMenu
         aria-label={t('aiAssistant.menu.triggerLabel')}
         primary={primary}
-        value={isAnonymous ? null : (override ?? intent)}
+        value={menuValue}
         onSelect={select}
         {...(effort && { effort })}
         {...(groups.length > 0 && {

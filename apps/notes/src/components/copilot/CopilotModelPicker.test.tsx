@@ -171,16 +171,18 @@ const registeredModels = [
   byokModel,
 ] satisfies SelectableModel[];
 
+// Mirrors the real anonymous listing: the running default stays granted, the
+// other intents come back locked.
 const anonymousModels = [
   { ...fastModel, access: 'requires_account' },
-  { ...balancedModel, access: 'requires_account' },
+  { ...balancedModel, access: 'granted', isDefault: true },
   { ...powerfulModel, access: 'requires_account' },
 ] satisfies SelectableModel[];
 
 const { reasoning: _unused, ...balancedWithoutReasoning } = balancedModel;
 const anonymousModelsWithoutReasoning = [
   { ...fastModel, access: 'requires_account' },
-  { ...balancedWithoutReasoning, access: 'requires_account' },
+  { ...balancedWithoutReasoning, access: 'granted', isDefault: true },
   { ...powerfulModel, access: 'requires_account' },
 ] satisfies SelectableModel[];
 
@@ -272,7 +274,7 @@ describe('CopilotModelPicker', () => {
     });
   });
 
-  it('anonymous: rows are locked and the CTA routes to register', async () => {
+  it('anonymous: default row is checked and inert, others lock and route to the CTA', async () => {
     const user = userEvent.setup();
     authUser.mockReturnValue({ isAnonymous: true });
     modelsData.mockReturnValue(anonymousModels);
@@ -280,14 +282,24 @@ describe('CopilotModelPicker', () => {
 
     await openMenu(user);
 
-    for (const row of screen.getAllByRole('menuitemradio')) {
+    const defaultRow = screen.getByRole('menuitemradio', { name: /Sonnet 5/ });
+    expect(defaultRow).toHaveAttribute('aria-checked', 'true');
+    expect(defaultRow).not.toHaveAttribute('aria-disabled');
+    for (const name of [/Haiku 4\.5/, /Opus 5/]) {
+      const row = screen.getByRole('menuitemradio', { name });
       expect(row).toHaveAttribute('aria-disabled', 'true');
+      expect(row).toHaveAttribute('aria-checked', 'false');
     }
     expect(
       screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
     ).toHaveAttribute('aria-disabled', 'true');
 
-    await user.click(screen.getByRole('menuitemradio', { name: /Sonnet 5/ }));
+    await user.click(defaultRow);
+    expect(updatePreferences).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+
+    await openMenu(user);
+    await user.click(screen.getByRole('menuitemradio', { name: /Opus 5/ }));
     expect(updatePreferences).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith({ to: ROUTES.REGISTER });
 
