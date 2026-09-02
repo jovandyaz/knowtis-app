@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import type { ResultFailureReason } from 'promptfoo';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -212,7 +213,7 @@ describe('summarizeTrials', () => {
 });
 
 describe('toTrialResult', () => {
-  const ERROR_REASON = 2;
+  const ERROR_REASON = 2 satisfies ResultFailureReason;
   const vars = { message: 'm', fixtureSet: 'recent' };
 
   it('keeps a passing trial as not errored', () => {
@@ -255,6 +256,47 @@ describe('toTrialResult', () => {
         ERROR_REASON
       ).errored
     ).toBe(true);
+  });
+
+  it('keeps a behavioral failure alongside a grader error as a failure', () => {
+    expect(
+      toTrialResult(
+        {
+          success: false,
+          vars,
+          failureReason: 1,
+          gradingResult: {
+            pass: false,
+            score: 0,
+            reason: 'tool not called; API call error: Overloaded, status 529',
+            componentResults: [
+              { pass: false, score: 0, reason: 'tool not called' },
+              {
+                pass: false,
+                score: 0,
+                reason: 'API call error: Overloaded, status 529',
+                metadata: { graderError: true },
+              },
+            ],
+          },
+        },
+        ERROR_REASON
+      ).errored
+    ).toBe(false);
+  });
+
+  it('keeps an assertion failure without component results as a failure', () => {
+    expect(
+      toTrialResult(
+        {
+          success: false,
+          vars,
+          failureReason: 1,
+          gradingResult: { pass: false, score: 0, reason: 'x' },
+        },
+        ERROR_REASON
+      ).errored
+    ).toBe(false);
   });
 
   it('marks a grader transport error as errored', () => {

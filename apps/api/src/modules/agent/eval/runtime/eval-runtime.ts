@@ -125,15 +125,19 @@ type PromptfooTrial = Pick<
 /**
  * Grader transport errors (e.g. HTTP 529 from the rubric model) reach promptfoo
  * as failed assertions tagged `metadata.graderError`, not as errored trials.
+ * A trial only counts as errored when every failing assertion is one of those;
+ * a real assertion failure in the same trial is still behavioral signal.
  */
 export function toTrialResult(
   result: PromptfooTrial,
   errorReason: number
 ): EvalTrialResult {
-  const grading = result.gradingResult;
-  const graderErrored =
-    grading?.metadata?.graderError === true ||
-    (grading?.componentResults ?? []).some(
+  const failedComponents = (
+    result.gradingResult?.componentResults ?? []
+  ).filter((component) => !component.pass);
+  const onlyGraderErrors =
+    failedComponents.length > 0 &&
+    failedComponents.every(
       (component) => component.metadata?.graderError === true
     );
   return {
@@ -141,7 +145,7 @@ export function toTrialResult(
     vars: result.vars,
     errored:
       !result.success &&
-      (result.failureReason === errorReason || graderErrored),
+      (result.failureReason === errorReason || onlyGraderErrors),
   };
 }
 
@@ -191,7 +195,7 @@ export function summarizeTrials(
     ...entry,
   }));
   // Errored trials carry no behavioral signal, so the pass rate is judged over
-  // the valid ones; a case with none left cannot be verified and fails.
+  // the valid ones — but never let an all-errored case pass as green.
   const casesBelowThreshold = cases.filter((c) => {
     const validTrials = c.trials - c.errors;
     return validTrials === 0 || c.passes < Math.ceil(minPassRate * validTrials);
