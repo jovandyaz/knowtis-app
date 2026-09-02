@@ -3,14 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { ModelSelect, SegmentedControl } from '@knowtis/design-system';
 import {
   MODEL_TIERS,
+  isModelIntent,
   type ModelIntent,
   type SelectableModel,
 } from '@knowtis/shared-types';
 
-import {
-  advancedModelOptions,
-  intentChipOptions,
-} from './intent-picker-options';
+import { advancedModelOptions, primaryRows } from './intent-picker-options';
 
 export interface IntentModelPickerProps {
   models: readonly SelectableModel[] | undefined;
@@ -38,12 +36,18 @@ export function IntentModelPicker({
 }: IntentModelPickerProps) {
   const { t } = useTranslation('common');
   const advancedOptions = advancedModelOptions(models);
+  // primaryRows types ids as opaque strings; the guard restores ModelIntent.
+  const chipOptions = primaryRows(models, t).flatMap((r) =>
+    isModelIntent(r.id)
+      ? [{ value: r.id, label: r.label, title: r.description }]
+      : []
+  );
 
   return (
     <div className="flex min-w-0 flex-wrap items-center gap-2">
       <SegmentedControl
         aria-label={t('aiAssistant.intent.label')}
-        options={intentChipOptions(t)}
+        options={chipOptions}
         value={overrideModel ? null : intent}
         onValueChange={onSelectIntent}
       />

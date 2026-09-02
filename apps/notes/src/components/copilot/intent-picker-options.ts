@@ -8,7 +8,6 @@ import type {
 } from '@knowtis/design-system';
 import {
   MODEL_INTENTS,
-  type ModelIntent,
   type ReasoningEffort,
   type SelectableModel,
 } from '@knowtis/shared-types';
@@ -54,18 +53,6 @@ export function advancedOverride(
   return advancedModelOptions(models).some((m) => m.id === preferredModel)
     ? preferredModel
     : null;
-}
-
-export function intentChipOptions(t: TFunction<'common'>): Array<{
-  value: ModelIntent;
-  label: string;
-  title: string;
-}> {
-  return MODEL_INTENTS.map((value) => ({
-    value,
-    label: t(`aiAssistant.intent.${value}` as never),
-    title: t(`aiAssistant.intent.${value}Hint` as never),
-  }));
 }
 
 /** One row per served intent, in MODEL_INTENTS order, named after the model that serves it. */
