@@ -127,6 +127,36 @@ describe('useAgentStore', () => {
     });
   });
 
+  it('a per-message boost outranks the conversation effort', () => {
+    capture();
+    useAgentStore.getState().setReasoningEffort('medium');
+    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      effort: 'high',
+    });
+  });
+
+  it('a new conversation drops the effort so the next send carries none', () => {
+    capture();
+    useAgentStore.getState().setReasoningEffort('medium');
+    useAgentStore.getState().newConversation();
+    useAgentStore.getState().sendMessage('hola');
+    expect(useAgentStore.getState().reasoningEffort).toBe('auto');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
+      undefined
+    );
+  });
+
+  it('a one-shot boost does not leak into the following plain send', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
+    get().onDone({ usage: { inputTokens: 1, outputTokens: 1 } } as never);
+    useAgentStore.getState().sendMessage('otra');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
+      undefined
+    );
+  });
+
   it('batches chunks into the assistant message', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hola');
