@@ -8,6 +8,7 @@ import type {
 } from '@knowtis/design-system';
 import {
   MODEL_INTENTS,
+  REASONING_EFFORTS,
   type ReasoningEffort,
   type SelectableModel,
 } from '@knowtis/shared-types';
@@ -113,7 +114,10 @@ export function moreModelGroups(
   return groups;
 }
 
-/** Auto plus the model's own levels; empty (no submenu) for non-reasoning models. */
+/**
+ * Auto plus the model's own levels; empty (no submenu) for non-reasoning models.
+ * Upstream lists levels in no fixed order, so the ladder follows REASONING_EFFORTS.
+ */
 export function effortOptions(
   model: SelectableModel | undefined,
   t: TFunction<'common'>
@@ -122,15 +126,18 @@ export function effortOptions(
   if (!levels || levels.length === 0) {
     return [];
   }
+  const declared = new Set(levels);
   return [
     {
       id: 'auto',
       label: t('aiAssistant.menu.effortAuto'),
       description: t('aiAssistant.menu.effortAutoHint'),
     },
-    ...levels.map((level) => ({
-      id: level,
-      label: t(EFFORT_LABEL_KEYS[level] as never),
-    })),
+    ...REASONING_EFFORTS.filter((level) => declared.has(level)).map(
+      (level) => ({
+        id: level,
+        label: t(EFFORT_LABEL_KEYS[level] as never),
+      })
+    ),
   ];
 }
