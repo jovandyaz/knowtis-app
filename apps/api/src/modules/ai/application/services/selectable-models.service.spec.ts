@@ -644,27 +644,24 @@ describe('SelectableModelsService', () => {
       expect(unassigned.every((m) => !('servesIntent' in m))).toBe(true);
     });
 
-    it('serves curated reasoning metadata on the entry', () => {
+    // Effort reaches the provider only through the OpenRouter options, so a
+    // curated Anthropic/OpenAI/Google entry must not advertise a knob that is
+    // never forwarded — the UI would promise a level the turn ignores.
+    it('withholds curated reasoning metadata from non-openrouter entries', () => {
       const service = makeOpenService();
 
       const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED);
 
-      expect(
-        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.reasoning
-      ).toEqual({
-        levels: ['low', 'medium', 'high', 'xhigh', 'max'],
-        mandatory: false,
-      });
-      expect(
-        listed.find((m) => m.id === 'google:gemini-3.7-flash')?.reasoning
-      ).toEqual({ levels: ['low', 'medium', 'high'], mandatory: true });
-      const haiku = listed.find((m) => m.id === 'anthropic:claude-haiku-4-5');
-      expect(haiku).toBeDefined();
-      expect(haiku && 'reasoning' in haiku).toBe(false);
-      const openrouterCurated = listed.find(
-        (m) => m.id === 'openrouter:deepseek/deepseek-v3.2'
-      );
-      expect(openrouterCurated && 'reasoning' in openrouterCurated).toBe(false);
+      for (const id of [
+        'anthropic:claude-sonnet-5',
+        'google:gemini-3.7-flash',
+        'anthropic:claude-haiku-4-5',
+        'openrouter:deepseek/deepseek-v3.2',
+      ]) {
+        const entry = listed.find((m) => m.id === id);
+        expect(entry).toBeDefined();
+        expect(entry && 'reasoning' in entry).toBe(false);
+      }
     });
 
     it('serves promoted reasoning from the catalog snapshot', () => {

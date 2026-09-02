@@ -11,6 +11,8 @@ export interface CuratedModel {
   reasoning?: ModelReasoning;
 }
 
+// Non-openrouter `reasoning` is authored ahead of provider-native forwarding;
+// the listing withholds it until the turn can actually send the level upstream.
 export const CURATED_MODELS: readonly CuratedModel[] = [
   {
     id: 'anthropic:claude-haiku-4-5',
