@@ -237,6 +237,22 @@ export type ProviderTestResult =
       readonly message: string;
     };
 
+/**
+ * Outcome of probing a just-saved system provider key. Informational: the key
+ * is stored either way, since the provider may be briefly down when the admin
+ * saves it.
+ */
+export interface ProviderKeyProbeResult {
+  readonly valid: boolean;
+  readonly error?: string;
+}
+
+export interface SetSystemProviderResult {
+  readonly providers: SystemProviderInfo[];
+  /** Present only when the request carried a candidate key. */
+  readonly probe?: ProviderKeyProbeResult;
+}
+
 export interface ProviderKeyInfo {
   readonly provider: ByokProvider;
   readonly keyPrefix: string;

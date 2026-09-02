@@ -12,7 +12,6 @@ import {
   Param,
   Post,
   Put,
-  UnprocessableEntityException,
   UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
@@ -21,7 +20,9 @@ import { APICallError, generateText } from 'ai';
 import { providerOf } from '@knowtis/ai-gateway';
 import type {
   AIProvider,
+  ProviderKeyProbeResult,
   ProviderTestResult,
+  SetSystemProviderResult,
   SystemProviderInfo,
 } from '@knowtis/shared-types';
 
@@ -59,33 +60,33 @@ export class AiProvidersController {
     return this.systemKeys.list();
   }
 
+  /**
+   * A candidate key is stored and then probed; a failed probe rides along as
+   * `probe` instead of vetoing the save — the admin may be keying a provider
+   * that is briefly down.
+   */
   @Put(':provider')
   @Throttle({ default: { limit: 5, ttl: 60000 } })
   async set(
     @CurrentUser() user: RequestUser,
     @Param() params: SystemProviderParamDto,
     @Body() dto: SetSystemProviderDto
-  ): Promise<SystemProviderInfo[]> {
+  ): Promise<SetSystemProviderResult> {
     if (dto.apiKey === undefined && dto.enabled === undefined) {
       throw new BadRequestException('Provide apiKey, enabled, or both');
     }
+    let probe: ProviderKeyProbeResult | undefined;
     if (dto.apiKey !== undefined) {
-      const probe = await this.probe(params.provider, dto.apiKey);
-      if (!probe.ok) {
-        // 422 for every outcome, with `reason` carrying the distinction: a 503
-        // would be truer for an outage but the global filter masks 5xx bodies,
-        // so the admin would read 'Internal server error' instead of the cause.
-        throw new UnprocessableEntityException({
-          message: probe.message,
-          code: probe.reason,
-        });
-      }
-      await this.systemKeys.setKey(params.provider, dto.apiKey, user.id);
+      probe = await this.systemKeys.setKey(
+        params.provider,
+        dto.apiKey,
+        user.id
+      );
     }
     if (dto.enabled !== undefined) {
       await this.systemKeys.setEnabled(params.provider, dto.enabled, user.id);
     }
-    return this.applied();
+    return { providers: await this.applied(), ...(probe ? { probe } : {}) };
   }
 
   /**
@@ -116,15 +117,8 @@ export class AiProvidersController {
     return this.systemKeys.list();
   }
 
-  /**
-   * Sends one cheap turn through the provider. Omit `apiKey` to probe the key
-   * that currently routes; pass a candidate to vet it before storing, since a
-   * stored key shadows the env one.
-   */
-  private async probe(
-    provider: AIProvider,
-    apiKey?: string
-  ): Promise<ProviderTestResult> {
+  /** Sends one cheap turn through whatever key currently routes for the provider. */
+  private async probe(provider: AIProvider): Promise<ProviderTestResult> {
     const candidates = CURATED_MODELS.filter(
       (m) => providerOf(m.id) === provider
     );
@@ -138,10 +132,10 @@ export class AiProvidersController {
     }
     let secrets: string[] = [];
     try {
-      const languageModel = this.registry.languageModel(model.id, apiKey);
+      const languageModel = this.registry.languageModel(model.id);
       // Snapshot before the await: an admin rotating the key mid-probe would
       // otherwise leave the error quoting a secret no longer here to scrub.
-      secrets = apiKey ? [apiKey] : this.registry.routingSecrets(provider);
+      secrets = this.registry.routingSecrets(provider);
       await generateText({
         model: languageModel,
         prompt: 'ping',

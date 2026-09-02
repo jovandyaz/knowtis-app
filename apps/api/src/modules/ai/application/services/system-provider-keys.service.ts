@@ -5,6 +5,7 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 
 import {
   AI_PROVIDERS,
@@ -24,8 +25,10 @@ import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
+import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
 import {
   PROVIDER_ENV_KEYS,
+  ProviderRegistryFactory,
   type SystemProviderConfig,
   type SystemProviderKeysSource,
 } from '../../infrastructure/providers/provider-registry.factory';
@@ -35,9 +38,9 @@ const MASTER_KEY_BYTES = 32;
 
 /**
  * Owns the server-side provider keys stored in the database. Deliberately does
- * not depend on ProviderRegistryFactory — the registry consumes this service as
- * its key source, so injecting it back would close a DI cycle. Key probing
- * therefore lives with the caller that already holds the registry.
+ * not constructor-inject ProviderRegistryFactory — the registry consumes this
+ * service as its key source, so injecting it back would close a DI cycle. The
+ * probe in `setKey` resolves the registry lazily through ModuleRef instead.
  */
 @Injectable()
 export class SystemProviderKeysService implements SystemProviderKeysSource {
@@ -48,7 +51,8 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     @Inject(SYSTEM_PROVIDER_KEYS_REPOSITORY)
     private readonly repo: SystemProviderKeysRepository,
     private readonly configService: ConfigService<EnvConfig, true>,
-    private readonly adminAuditService: AdminAuditService
+    private readonly adminAuditService: AdminAuditService,
+    private readonly moduleRef: ModuleRef
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -89,11 +93,16 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
     });
   }
 
+  /**
+   * Stores the key, then probes it. The key is kept even when the probe fails —
+   * the admin may be saving a key for a provider that is briefly down — so the
+   * result is informational, never a veto.
+   */
   async setKey(
     provider: AIProvider,
     apiKey: string,
     actorId: string
-  ): Promise<void> {
+  ): Promise<{ valid: boolean; error?: string }> {
     if (!this.masterKey) {
       throw new ServiceUnavailableException(
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
@@ -107,6 +116,11 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       actorId
     );
     await this.audit(actorId, provider, 'ai_provider.key_set', { keyPrefix });
+    return probeProviderKey(
+      this.moduleRef.get(ProviderRegistryFactory),
+      provider,
+      apiKey
+    );
   }
 
   async setEnabled(

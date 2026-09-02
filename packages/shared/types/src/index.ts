@@ -102,6 +102,8 @@ export {
   PROVIDER_PROBE_FAILURES,
   type ProviderProbeFailure,
   type ProviderTestResult,
+  type ProviderKeyProbeResult,
+  type SetSystemProviderResult,
   type SystemProviderInfo,
   type EncryptedSecret,
 } from './lib/ai.types';

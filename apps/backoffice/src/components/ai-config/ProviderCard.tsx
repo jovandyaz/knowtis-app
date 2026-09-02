@@ -44,6 +44,7 @@ export function ProviderCard({ provider }: ProviderCardProps) {
   const label = PROVIDER_LABEL[provider.provider];
   const isBusy =
     setProvider.isPending || clearKey.isPending || testProvider.isPending;
+  const saveProbe = setProvider.data?.probe;
 
   // A probe describes the key that was routing when it ran; once the row moves,
   // the verdict is about a key that is no longer there.
@@ -112,6 +113,23 @@ export function ProviderCard({ provider }: ProviderCardProps) {
         }
         fallbackMessage={`Could not update ${label}.`}
       />
+
+      {saveProbe ? (
+        saveProbe.valid ? (
+          <p role="status" className="text-xs text-(--muted-foreground)">
+            Key saved — {label} answered the probe.
+          </p>
+        ) : (
+          <p
+            role="alert"
+            className="rounded-md bg-(--destructive)/10 p-2 text-xs text-(--destructive)"
+          >
+            Key saved, but the probe failed:{' '}
+            {saveProbe.error ?? 'unknown error'}. It will route once {label}{' '}
+            accepts it.
+          </p>
+        )
+      ) : null}
 
       {testProvider.data?.ok ? (
         <p role="status" className="text-xs text-(--muted-foreground)">

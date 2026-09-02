@@ -157,6 +157,21 @@ export type SystemProvider = z.infer<typeof SystemProviderSchema>;
 
 export const SystemProvidersSchema = z.array(SystemProviderSchema);
 
+/** Informational verdict on a just-saved key — the key is stored either way. */
+export const ProviderKeyProbeSchema = z.object({
+  valid: z.boolean(),
+  error: z.string().optional(),
+});
+export type ProviderKeyProbe = z.infer<typeof ProviderKeyProbeSchema>;
+
+export const SetSystemProviderResultSchema = z.object({
+  providers: SystemProvidersSchema,
+  probe: ProviderKeyProbeSchema.optional(),
+});
+export type SetSystemProviderResult = z.infer<
+  typeof SetSystemProviderResultSchema
+>;
+
 export const ProviderTestResultSchema = z.discriminatedUnion('ok', [
   z.object({ ok: z.literal(true), model: z.string() }),
   z.object({

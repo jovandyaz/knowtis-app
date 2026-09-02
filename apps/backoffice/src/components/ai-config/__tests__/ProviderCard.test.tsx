@@ -14,7 +14,17 @@ const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
     testMutate: vi.fn(),
     testReset: vi.fn(),
     state: {
-      set: { isPending: false, isError: false, error: null as Error | null },
+      set: {
+        isPending: false,
+        isError: false,
+        error: null as Error | null,
+        data: undefined as
+          | {
+              providers: unknown[];
+              probe?: { valid: boolean; error?: string };
+            }
+          | undefined,
+      },
       test: {
         isPending: false,
         isError: false,
@@ -62,7 +72,12 @@ function providerWith(overrides: Partial<SystemProvider> = {}): SystemProvider {
 describe('ProviderCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    state.set = { isPending: false, isError: false, error: null };
+    state.set = {
+      isPending: false,
+      isError: false,
+      error: null,
+      data: undefined,
+    };
     state.test = {
       isPending: false,
       isError: false,
@@ -220,6 +235,40 @@ describe('ProviderCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(
       /credit balance is too low/i
     );
+  });
+
+  it('warns that a saved key failed its probe without unsaying the save', () => {
+    state.set.data = {
+      providers: [],
+      probe: {
+        valid: false,
+        error: 'anthropic refused the probe: invalid x-api-key',
+      },
+    };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(/key saved/i);
+    expect(alert).toHaveTextContent(/invalid x-api-key/i);
+  });
+
+  it('confirms a saved key that answered its probe', () => {
+    state.set.data = { providers: [], probe: { valid: true } };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /key saved — anthropic answered the probe/i
+    );
+  });
+
+  it('renders no save verdict when the mutation only toggled enablement', () => {
+    state.set.data = { providers: [] };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.queryByText(/key saved/i)).not.toBeInTheDocument();
   });
 
   it('surfaces why a key was refused', () => {

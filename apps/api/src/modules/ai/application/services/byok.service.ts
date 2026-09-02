@@ -7,9 +7,7 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { generateText } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
 import {
   FEATURE_FLAG_KEYS,
   type ByokProvider,
@@ -19,7 +17,6 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
-import { CURATED_MODELS } from '../../domain/model-catalog/selectable-models.catalog';
 import {
   USER_PROVIDER_KEYS_REPOSITORY,
   type UserProviderKeysRepository,
@@ -28,12 +25,11 @@ import {
   decryptSecret,
   encryptSecret,
 } from '../../infrastructure/crypto/secret-cipher';
+import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
 import { ProviderRegistryFactory } from '../../infrastructure/providers/provider-registry.factory';
 
 const KEY_PREFIX_LENGTH = 8;
 const MASTER_KEY_BYTES = 32;
-// OpenAI's Responses API rejects max_output_tokens < 16; Anthropic/Google accept it.
-const VALIDATION_MAX_OUTPUT_TOKENS = 16;
 
 @Injectable()
 export class ByokService {
@@ -153,20 +149,9 @@ export class ByokService {
     provider: ByokProvider,
     apiKey: string
   ): Promise<void> {
-    const candidates = CURATED_MODELS.filter(
-      (m) => providerOf(m.id) === provider
-    );
-    const probe = candidates.find((m) => m.tier === 'fast') ?? candidates[0];
-    if (!probe) {
-      throw new UnprocessableEntityException(
-        `No curated model found for provider '${provider}'`
-      );
+    const probe = await probeProviderKey(this.registry, provider, apiKey);
+    if (!probe.valid) {
+      throw new Error(probe.error ?? 'probe failed');
     }
-    await generateText({
-      model: this.registry.languageModel(probe.id, apiKey),
-      prompt: 'ping',
-      maxOutputTokens: VALIDATION_MAX_OUTPUT_TOKENS,
-      telemetry: { isEnabled: false },
-    });
   }
 }

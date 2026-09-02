@@ -32,12 +32,14 @@ import {
   PaginatedCandidatesSchema,
   PaginatedUsersSchema,
   ProviderTestResultSchema,
+  SetSystemProviderResultSchema,
   SystemProvidersSchema,
   type AdminUser,
   type AdminUsersParams,
   type AiCatalogCandidatesParams,
   type AuditParams,
   type MetricsPeriod,
+  type SystemProvider,
 } from './admin.types';
 
 export const adminQueryKeys = {
@@ -228,16 +230,19 @@ export function useSystemProviders() {
   });
 }
 
-/** The response is the applied state for every provider, so it seeds the list cache directly. */
-function useSystemProviderMutation<TInput>(
-  mutationFn: (input: TInput) => Promise<unknown>
+/** The response carries the applied state for every provider, so it seeds the list cache directly. */
+function useSystemProviderMutation<TInput, TResult>(
+  mutationFn: (input: TInput) => Promise<TResult>,
+  providersOf: (result: TResult) => SystemProvider[]
 ) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: TInput) =>
-      SystemProvidersSchema.parse(await mutationFn(input)),
-    onSuccess: (providers) =>
-      queryClient.setQueryData(adminQueryKeys.systemProviders(), providers),
+    mutationFn,
+    onSuccess: (result) =>
+      queryClient.setQueryData(
+        adminQueryKeys.systemProviders(),
+        providersOf(result)
+      ),
     onSettled: () =>
       Promise.all([
         queryClient.invalidateQueries({
@@ -258,17 +263,28 @@ function useSystemProviderMutation<TInput>(
 
 export function useSetSystemProvider() {
   return useSystemProviderMutation(
-    (input: { provider: AIProvider; apiKey?: string; enabled?: boolean }) =>
-      httpClient.put(`/ai/providers/${input.provider}`, {
-        ...(input.apiKey !== undefined && { apiKey: input.apiKey }),
-        ...(input.enabled !== undefined && { enabled: input.enabled }),
-      })
+    async (input: {
+      provider: AIProvider;
+      apiKey?: string;
+      enabled?: boolean;
+    }) =>
+      SetSystemProviderResultSchema.parse(
+        await httpClient.put(`/ai/providers/${input.provider}`, {
+          ...(input.apiKey !== undefined && { apiKey: input.apiKey }),
+          ...(input.enabled !== undefined && { enabled: input.enabled }),
+        })
+      ),
+    (result) => result.providers
   );
 }
 
 export function useClearSystemProviderKey() {
-  return useSystemProviderMutation((provider: AIProvider) =>
-    httpClient.delete(`/ai/providers/${provider}/key`)
+  return useSystemProviderMutation(
+    async (provider: AIProvider) =>
+      SystemProvidersSchema.parse(
+        await httpClient.delete(`/ai/providers/${provider}/key`)
+      ),
+    (providers) => providers
   );
 }
 

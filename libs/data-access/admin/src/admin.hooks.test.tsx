@@ -614,7 +614,7 @@ describe('useSystemProviders', () => {
 
 describe('useSetSystemProvider', () => {
   it('sends only the fields the caller set', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
 
     const { result } = renderHook(() => useSetSystemProvider(), {
       wrapper: Wrapper,
@@ -628,7 +628,7 @@ describe('useSetSystemProvider', () => {
   });
 
   it('marks the assignable listing stale — a key flip changes what can route', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -648,7 +648,7 @@ describe('useSetSystemProvider', () => {
   });
 
   it('seeds the list cache with the applied state the mutation returned', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -665,7 +665,25 @@ describe('useSetSystemProvider', () => {
       apiKey: 'sk-ant-new',
     });
     const cached = client.getQueryData(adminQueryKeys.systemProviders());
-    expect(cached).toEqual(result.current.data);
+    expect(cached).toEqual(result.current.data?.providers);
+  });
+
+  it('hands the probe verdict of a saved key to the caller', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({
+      providers: PROVIDERS,
+      probe: { valid: false, error: 'anthropic refused the probe' },
+    });
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-new' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.probe).toEqual({
+      valid: false,
+      error: 'anthropic refused the probe',
+    });
   });
 });
 
@@ -1301,7 +1319,8 @@ describe('admin mutations and their invalidations', () => {
       name: 'useSetSystemProvider',
       hook: useSetSystemProvider,
       input: { provider: 'anthropic', enabled: true },
-      respond: () => vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS),
+      respond: () =>
+        vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS }),
     },
     {
       name: 'useClearSystemProviderKey',
