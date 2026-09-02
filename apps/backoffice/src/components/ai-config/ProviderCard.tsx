@@ -186,7 +186,12 @@ export function ProviderCard({ provider }: ProviderCardProps) {
             variant="ghost"
             size="sm"
             disabled={isBusy}
-            onClick={() => clearKey.mutate(provider.provider)}
+            onClick={() =>
+              clearKey.mutate(provider.provider, {
+                // "Key saved" would otherwise outlive the key it describes.
+                onSuccess: () => setProvider.reset(),
+              })
+            }
           >
             Clear stored key
           </Button>

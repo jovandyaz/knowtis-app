@@ -7,9 +7,10 @@ import type { SystemProvider } from '@knowtis/data-access-admin';
 
 import { ProviderCard } from '../ProviderCard';
 
-const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
-  () => ({
+const { setMutate, setReset, clearMutate, testMutate, testReset, state } =
+  vi.hoisted(() => ({
     setMutate: vi.fn(),
+    setReset: vi.fn(),
     clearMutate: vi.fn(),
     testMutate: vi.fn(),
     testReset: vi.fn(),
@@ -35,14 +36,17 @@ const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
           | undefined,
       },
     },
-  })
-);
+  }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
-    useSetSystemProvider: () => ({ mutate: setMutate, ...state.set }),
+    useSetSystemProvider: () => ({
+      mutate: setMutate,
+      reset: setReset,
+      ...state.set,
+    }),
     useClearSystemProviderKey: () => ({
       mutate: clearMutate,
       isPending: false,
@@ -254,7 +258,10 @@ describe('ProviderCard', () => {
   it('does not double the period when the provider prose ends in one', () => {
     state.set.data = {
       providers: [],
-      probe: { valid: false, error: 'The operation was aborted due to timeout.' },
+      probe: {
+        valid: false,
+        error: 'The operation was aborted due to timeout.',
+      },
     };
 
     render(<ProviderCard provider={providerWith()} />);
@@ -306,6 +313,23 @@ describe('ProviderCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/cannot be decrypted/i);
   });
 
+  it('drops the "key saved" verdict once the stored key is cleared', async () => {
+    state.set.data = { providers: [], probe: { valid: true } };
+    render(<ProviderCard provider={providerWith({ keySource: 'database' })} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Key saved');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Clear stored key' })
+    );
+
+    expect(clearMutate).toHaveBeenCalledWith(
+      'anthropic',
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+    (clearMutate.mock.calls[0][1] as { onSuccess: () => void }).onSuccess();
+    expect(setReset).toHaveBeenCalledTimes(1);
+  });
+
   it('offers to clear only a key that is actually stored', () => {
     const { rerender } = render(
       <ProviderCard provider={providerWith({ keySource: 'environment' })} />
@@ -336,6 +360,6 @@ describe('ProviderCard', () => {
       screen.getByRole('button', { name: /clear stored key/i })
     );
 
-    expect(clearMutate).toHaveBeenCalledWith('anthropic');
+    expect(clearMutate).toHaveBeenCalledWith('anthropic', expect.anything());
   });
 });
