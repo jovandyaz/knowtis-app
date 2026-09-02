@@ -1,11 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAISettings, useAvailableModels, useProviderKeys } from '@/hooks';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useAgentStore } from '@/stores/agent.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
+import { useAuthUser } from '@jovandyaz/auth-react';
 
-import { AGENT_EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
+import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
+import {
+  AGENT_EMAIL_NOT_VERIFIED_CODE,
+  DEFAULT_MODEL_INTENT,
+  FEATURE_FLAG_KEYS,
+} from '@knowtis/shared-types';
 
 import {
   aiErrorMessageKey,
@@ -17,6 +24,7 @@ import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
 import { CopilotModelPicker } from './CopilotModelPicker';
 import { RetryBanner } from './RetryBanner';
+import { ThinkPill } from './ThinkPill';
 
 export function AgentCopilotPanel() {
   const { t } = useTranslation('notes');
@@ -34,6 +42,44 @@ export function AgentCopilotPanel() {
   const rejectProposal = useAgentStore((s) => s.rejectProposal);
   const activeNoteId = useArtifactSidebarStore((s) => s.activeNoteId);
   const { canVerify, prompt: promptVerification } = useVerifyEmailGate();
+
+  const user = useAuthUser();
+  const isAnonymous = user?.isAnonymous === true;
+  const canUseByok =
+    useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && !isAnonymous;
+  const { data: models } = useAvailableModels(user != null);
+  const { data: prefs } = useAISettings(user != null);
+  const { data: keys } = useProviderKeys(user != null && canUseByok);
+  const hasByok = canUseByok && (keys?.length ?? 0) > 0;
+
+  const preferredModel = prefs?.preferredModel ?? null;
+  const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
+  const resolvedModel = models?.find((m) =>
+    preferredModel !== null
+      ? m.id === preferredModel
+      : m.servesIntent === intent
+  );
+  // Free registered users get the pill; BYOK effort lives in the model menu,
+  // so the two controls are mutually exclusive by audience.
+  const pillHidden =
+    user == null ||
+    isAnonymous ||
+    hasByok ||
+    (resolvedModel?.reasoning?.levels.length ?? 0) === 0;
+
+  const [thinkActive, setThinkActive] = useState(false);
+
+  // 'high' is a fixed sentinel: the server clamps a free turn to the model's
+  // real boost level, so the pill never has to know per-model budgets.
+  const send = (text: string) => {
+    const boost = !pillHidden && thinkActive;
+    sendMessage(
+      text,
+      activeNoteId ?? undefined,
+      boost ? { effort: 'high' } : undefined
+    );
+    setThinkActive(false);
+  };
 
   const isVerificationGate = error?.code === AGENT_EMAIL_NOT_VERIFIED_CODE;
   // Naming verification to a visitor with no address is advice they cannot take.
@@ -63,11 +109,7 @@ export function AgentCopilotPanel() {
     <div className="flex h-full flex-col min-h-0">
       {messages.length === 0 ? (
         <div className="flex-1 min-h-0">
-          <AgentEmptyState
-            onSelectSuggestion={(prompt) =>
-              sendMessage(prompt, activeNoteId ?? undefined)
-            }
-          />
+          <AgentEmptyState onSelectSuggestion={send} />
         </div>
       ) : (
         <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
@@ -97,10 +139,19 @@ export function AgentCopilotPanel() {
       )}
 
       <AgentComposer
-        onSend={(text) => sendMessage(text, activeNoteId ?? undefined)}
+        onSend={send}
         onStop={cancel}
         status={status}
-        modelPicker={<CopilotModelPicker />}
+        modelPicker={
+          <>
+            <CopilotModelPicker />
+            <ThinkPill
+              active={thinkActive}
+              onToggle={() => setThinkActive((v) => !v)}
+              hidden={pillHidden}
+            />
+          </>
+        }
       />
     </div>
   );

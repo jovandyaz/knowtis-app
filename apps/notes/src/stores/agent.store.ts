@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import {
   agentClient,
   type AgentErrorPayload,
+  type AgentSendOptions,
   type AgentSource,
   type AgentStreamHandle,
   type WebSource,
@@ -73,7 +74,11 @@ interface AgentState {
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;
   markErrorAnswered: () => void;
-  sendMessage: (text: string, noteId?: string) => void;
+  sendMessage: (
+    text: string,
+    noteId?: string,
+    options?: AgentSendOptions
+  ) => void;
   newConversation: () => void;
   cancel: () => void;
   retryLast: () => void;
@@ -141,9 +146,17 @@ export const useAgentStore = create<AgentState>((set, get) => {
     });
   };
 
-  const run = (text: string, assistantId: string, noteId?: string) => {
+  const run = (
+    text: string,
+    assistantId: string,
+    noteId?: string,
+    options?: AgentSendOptions
+  ) => {
     activeAssistantId = assistantId;
     const version = streamVersion;
+    const storeEffort = get().reasoningEffort;
+    const effort =
+      options?.effort ?? (storeEffort === 'auto' ? undefined : storeEffort);
     const handle = agentClient.sendMessage(
       text,
       {
@@ -247,7 +260,8 @@ export const useAgentStore = create<AgentState>((set, get) => {
           }));
         },
       },
-      noteId
+      noteId,
+      effort ? { effort } : undefined
     );
     if (get().status !== 'streaming') {
       return;
@@ -272,7 +286,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
     // any of the store's error transitions having to remember to clear this.
     markErrorAnswered: () => set({ answeredError: get().error }),
 
-    sendMessage: (text, noteId) => {
+    sendMessage: (text, noteId, options) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
@@ -306,7 +320,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
         _streamHandle: null,
       });
 
-      run(trimmed, assistantMessage.id, noteId);
+      run(trimmed, assistantMessage.id, noteId, options);
     },
 
     newConversation: () => {

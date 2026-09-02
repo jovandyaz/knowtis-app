@@ -91,6 +91,42 @@ describe('useAgentStore', () => {
     expect(messages[1].content).toBe('');
   });
 
+  it('sends no effort while the conversation effort is auto', () => {
+    capture();
+    useAgentStore.getState().sendMessage('hola');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
+      undefined
+    );
+  });
+
+  it('forwards the per-message boost to the client', () => {
+    capture();
+    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      effort: 'high',
+    });
+  });
+
+  it('byok conversation effort rides every send while not auto', () => {
+    capture();
+    useAgentStore.getState().setReasoningEffort('medium');
+    useAgentStore.getState().sendMessage('hola');
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      effort: 'medium',
+    });
+  });
+
+  it('byok conversation effort also rides a retry', () => {
+    const { get } = capture();
+    useAgentStore.getState().setReasoningEffort('medium');
+    useAgentStore.getState().sendMessage('hola');
+    get().onError({ code: 'X', message: 'boom' });
+    useAgentStore.getState().retryLast();
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      effort: 'medium',
+    });
+  });
+
   it('batches chunks into the assistant message', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hola');

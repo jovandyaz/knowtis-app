@@ -37,6 +37,7 @@ export type {
   AgentThinkingPayload,
   AgentDonePayload,
   AgentErrorPayload,
+  AgentSendOptions,
   AgentStreamHandle,
   AgentProposalPayload,
   AgentCommittedPayload,
