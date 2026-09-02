@@ -114,15 +114,17 @@ describe('AIAssistantSection', () => {
     render(<AIAssistantSection />);
 
     expect(screen.getAllByRole('radio')).toHaveLength(3);
-    expect(
-      screen.getByRole('radio', { name: 'Fast One' })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Fast One' })).toHaveAttribute(
+      'title',
+      'aiAssistant.intent.fastHint'
+    );
     expect(
       screen.getByRole('radio', { name: 'Balanced One' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole('radio', { name: 'Premium One' })
-    ).toBeInTheDocument();
+    ).toHaveAttribute('title', 'aiAssistant.intent.balancedHint');
+    expect(screen.getByRole('radio', { name: 'Premium One' })).toHaveAttribute(
+      'title',
+      'aiAssistant.intent.powerfulHint'
+    );
     expect(
       screen.queryByRole('button', { name: /aiAssistant.advanced.trigger/ })
     ).not.toBeInTheDocument();

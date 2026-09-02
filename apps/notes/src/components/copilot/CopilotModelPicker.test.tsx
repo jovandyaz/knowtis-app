@@ -215,9 +215,13 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
     ).toHaveAttribute('aria-checked', 'true');
+    // The job line carries the intent semantics, never the model's own copy.
+    const haiku = screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ });
+    expect(haiku).toHaveTextContent('aiAssistant.intent.fastHint');
+    expect(haiku).not.toHaveTextContent('aiModels.haiku45');
     expect(
-      screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ })
-    ).toHaveTextContent('aiModels.haiku45');
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toHaveTextContent('aiAssistant.intent.balancedHint');
     expect(
       screen.getByRole('menuitemradio', { name: /Opus 5/ })
     ).toHaveTextContent('aiAssistant.intent.powerfulHint');

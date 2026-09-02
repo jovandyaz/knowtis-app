@@ -55,7 +55,11 @@ export function advancedOverride(
     : null;
 }
 
-/** One row per served intent, in MODEL_INTENTS order, named after the model that serves it. */
+/**
+ * One row per served intent, in MODEL_INTENTS order, named after the model that
+ * serves it. The job line is the intent's hint, not the model's copy: the row
+ * stands for the job, and the backoffice may repoint it at another model.
+ */
 export function primaryRows(
   models: readonly SelectableModel[] | undefined,
   t: TFunction<'common'>
@@ -70,9 +74,7 @@ export function primaryRows(
       {
         id: intent,
         label: model.label,
-        description:
-          modelDescription(model, t) ??
-          t(`aiAssistant.intent.${intent}Hint` as never),
+        description: t(`aiAssistant.intent.${intent}Hint` as never),
         locked: model.access === 'requires_account',
       },
     ];
