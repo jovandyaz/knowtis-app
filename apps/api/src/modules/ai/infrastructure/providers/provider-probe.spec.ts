@@ -51,6 +51,26 @@ describe('probeProviderKey', () => {
     expect(result.error).not.toContain('sk-ant-secret-value');
   });
 
+  it('should bound the probe and map a timeout abort to a result, not a rejection', async () => {
+    vi.mocked(generateText).mockImplementation(({ abortSignal }) => {
+      // A hanging provider: the SDK settles only when the probe's own bound fires.
+      expect(abortSignal).toBeInstanceOf(AbortSignal);
+      return Promise.reject(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError'
+        )
+      );
+    });
+
+    await expect(
+      probeProviderKey(registry as never, 'anthropic', 'sk-ant-slow-provider')
+    ).resolves.toEqual({
+      valid: false,
+      error: 'The operation was aborted due to timeout',
+    });
+  });
+
   it('should label a non-Error throw as unknown', async () => {
     vi.mocked(generateText).mockRejectedValue('boom');
 
