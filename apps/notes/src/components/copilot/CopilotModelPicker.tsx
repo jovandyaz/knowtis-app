@@ -32,6 +32,7 @@ import {
   effortOptions,
   moreModelGroups,
   primaryRows,
+  resolveSelectedModel,
 } from './intent-picker-options';
 
 /** Below this width a side flyout cannot sit beside the menu, so its sections render inline. */
@@ -66,15 +67,10 @@ export function CopilotModelPicker() {
   const primary = primaryRows(models, t);
   const groups = moreModelGroups(models, t);
   const moreRows = groups.flatMap((group) => group.options);
-  const preferredModel = prefs?.preferredModel ?? null;
+  const selectedModel = resolveSelectedModel(models, prefs);
   const override =
-    preferredModel !== null && moreRows.some((row) => row.id === preferredModel)
-      ? preferredModel
-      : null;
-
-  const selectedModel = models?.find((m) =>
-    override !== null ? m.id === override : m.servesIntent === intent
-  );
+    selectedModel && !selectedModel.servesIntent ? selectedModel.id : null;
+  const isEmpty = models !== undefined && models.length === 0;
   // Holding a key is not enough: the server only bills the turn to the user
   // when the key covers the resolved model's provider, so a mismatched key
   // must not unlock the effort ladder.
@@ -100,8 +96,9 @@ export function CopilotModelPicker() {
 
   const offerBridge =
     canUseByok && !isPending && !keysPending && keys?.length === 0;
-  const triggerLabel =
-    selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never);
+  const triggerLabel = isEmpty
+    ? t('aiAssistant.empty')
+    : (selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never));
   const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
   const triggerDetail =
     hasByok && activeEffort !== 'auto' ? effortLabel : undefined;
@@ -173,10 +170,10 @@ export function CopilotModelPicker() {
         inlineSections={!canFlyOut}
         triggerLabel={triggerLabel}
         {...(triggerDetail !== undefined && { triggerDetail })}
-        status={isError ? 'error' : isPending ? 'loading' : 'ready'}
+        status={isError || isEmpty ? 'error' : isPending ? 'loading' : 'ready'}
         onRetry={() => void refetch()}
         loadingLabel={t('aiAssistant.loading')}
-        errorLabel={t('aiAssistant.loadError')}
+        errorLabel={t(isEmpty ? 'aiAssistant.empty' : 'aiAssistant.loadError')}
         retryLabel={t('aiAssistant.retry')}
         triggerClassName="h-8"
       />

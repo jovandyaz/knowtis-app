@@ -102,6 +102,7 @@
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",
+    "empty": "No models available",
     "loading": "Loading models…",
     "retry": "Retry",
     "modelsGroup": "Models",

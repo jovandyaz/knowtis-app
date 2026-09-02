@@ -102,6 +102,7 @@
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "loadError": "No se pudieron cargar los modelos",
+    "empty": "No hay modelos disponibles",
     "loading": "Cargando modelos…",
     "retry": "Reintentar",
     "modelsGroup": "Modelos",

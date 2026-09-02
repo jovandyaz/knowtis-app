@@ -1,6 +1,6 @@
 import { ROUTES } from '@/config';
 import { useAgentStore } from '@/stores/agent.store';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -472,9 +472,40 @@ describe('CopilotModelPicker', () => {
       expect(
         screen.getByRole('menuitemradio', { name: /GPT-6/ })
       ).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+
+      window.innerWidth = 1024;
+      act(() => {
+        window.dispatchEvent(new Event('resize'));
+      });
+      await openMenu(user);
+      expect(
+        screen
+          .getAllByRole('menuitem')
+          .filter((item) => item.hasAttribute('aria-haspopup'))
+      ).toHaveLength(2);
     } finally {
       window.innerWidth = width;
     }
+  });
+
+  it('names the empty state and offers a retry when the list resolves empty', async () => {
+    const user = userEvent.setup();
+    modelsData.mockReturnValue([]);
+    render(<CopilotModelPicker />);
+
+    const trigger = screen.getByRole('button', {
+      name: /aiAssistant\.menu\.triggerLabel/,
+    });
+    expect(trigger).toHaveTextContent('aiAssistant.empty');
+    await user.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getByText('aiAssistant.empty')).toBeInTheDocument();
+    expect(within(menu).queryAllByRole('menuitemradio')).toHaveLength(0);
+    await user.click(
+      screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
+    );
+    expect(modelsRefetch).toHaveBeenCalledTimes(1);
   });
 
   it('shows the loading label on a disabled trigger while models resolve', () => {

@@ -106,6 +106,15 @@ describe('AgentCopilotPanel think pill', () => {
     expect(pill()).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('keeps the pill when the stored model is gone and the intent model reasons', () => {
+    prefsData.mockReturnValue({
+      preferredModel: 'vendor:retired-model',
+      preferredIntent: 'balanced',
+    });
+    render(<AgentCopilotPanel />);
+    expect(pill()).toBeInTheDocument();
+  });
+
   it('hides the pill when the resolved model lacks reasoning', () => {
     modelsData.mockReturnValue([plainModel]);
     render(<AgentCopilotPanel />);

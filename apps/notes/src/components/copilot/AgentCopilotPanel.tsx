@@ -10,7 +10,6 @@ import { useAuthUser } from '@jovandyaz/auth-react';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import {
   AGENT_EMAIL_NOT_VERIFIED_CODE,
-  DEFAULT_MODEL_INTENT,
   FEATURE_FLAG_KEYS,
 } from '@knowtis/shared-types';
 
@@ -23,6 +22,7 @@ import { AgentEmptyState } from './AgentEmptyState';
 import { AgentMessageList } from './AgentMessageList';
 import { AgentProposalCard } from './AgentProposalCard';
 import { CopilotModelPicker } from './CopilotModelPicker';
+import { resolveSelectedModel } from './intent-picker-options';
 import { RetryBanner } from './RetryBanner';
 import { ThinkPill } from './ThinkPill';
 
@@ -49,15 +49,10 @@ export function AgentCopilotPanel() {
     useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && !isAnonymous;
   const { data: models } = useAvailableModels(user != null);
   const { data: prefs } = useAISettings(user != null);
-  const preferredModel = prefs?.preferredModel ?? null;
-  const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
-  const resolvedModel = models?.find((m) =>
-    preferredModel !== null
-      ? m.id === preferredModel
-      : m.servesIntent === intent
-  );
-  // The server bills a turn to the user only when a key covers the resolved
-  // model's provider, which the listing reports per entry as billedToUser.
+  const resolvedModel = resolveSelectedModel(models, prefs);
+  // Holding a key is not enough: the server only bills the turn to the user
+  // when the key covers the resolved model's provider, so a mismatched key
+  // must not swap the pill for the effort ladder.
   const hasByok = canUseByok && resolvedModel?.billedToUser === true;
   // Free registered users get the pill; BYOK effort lives in the model menu,
   // so the two controls are mutually exclusive by audience.

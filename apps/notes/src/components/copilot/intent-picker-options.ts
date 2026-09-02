@@ -7,11 +7,47 @@ import type {
   ModelMenuPrimaryRow,
 } from '@knowtis/design-system';
 import {
+  DEFAULT_MODEL_INTENT,
   MODEL_INTENTS,
   REASONING_EFFORTS,
+  type ModelIntent,
   type ReasoningEffort,
   type SelectableModel,
 } from '@knowtis/shared-types';
+
+export interface ModelPreference {
+  preferredModel?: string | null;
+  preferredIntent?: ModelIntent | null;
+}
+
+/** A catalogue model the caller may pick from "more models": unassigned to an intent and runnable for them. */
+function isMoreModel(model: SelectableModel): boolean {
+  return (
+    !model.servesIntent && (model.billedToUser || model.access === 'granted')
+  );
+}
+
+/**
+ * The model a turn resolves to: the stored override while the list still
+ * offers it, else the model serving the preferred intent. A stale override
+ * falls back rather than resolving to nothing, so every surface agrees.
+ */
+export function resolveSelectedModel(
+  models: readonly SelectableModel[] | undefined,
+  prefs: ModelPreference | undefined
+): SelectableModel | undefined {
+  const list = models ?? [];
+  const preferred = prefs?.preferredModel ?? null;
+  const override =
+    preferred === null
+      ? undefined
+      : list.find((m) => m.id === preferred && isMoreModel(m));
+  if (override) {
+    return override;
+  }
+  const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
+  return list.find((m) => m.servesIntent === intent);
+}
 
 const EFFORT_LABEL_KEYS = {
   low: 'aiAssistant.menu.effortLow',
@@ -87,7 +123,7 @@ export function moreModelGroups(
   models: readonly SelectableModel[] | undefined,
   t: TFunction<'common'>
 ): ModelMenuMoreModels['groups'] {
-  const list = (models ?? []).filter((m) => !m.servesIntent);
+  const list = (models ?? []).filter(isMoreModel);
   const toRow = (model: SelectableModel): ModelMenuModelRow => {
     const description = modelDescription(model, t);
     return {
@@ -100,9 +136,7 @@ export function moreModelGroups(
       }),
     };
   };
-  const open = list
-    .filter((m) => m.access === 'granted' && !m.billedToUser)
-    .map(toRow);
+  const open = list.filter((m) => !m.billedToUser).map(toRow);
   const byok = list.filter((m) => m.billedToUser).map(toRow);
   const groups: Array<{ label: string; options: ModelMenuModelRow[] }> = [];
   if (open.length > 0) {
