@@ -509,6 +509,12 @@ Users pick which model the copilot uses as an account default. The list has **tw
 
 Where the two sources disagree, **code wins**: a curated entry keeps its hand-written label, tier and pricing even if a promoted row carries the same id. Curated ids are the stable contract the rest of the system is guard-tested against; promoted rows are data.
 
+Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the **selectable-model** catalog covers a model that is gone (a dropped curated id, or a promoted row since retired), `routableByServer` covers a keyless/disabled/BYOK-only one.
+
+### `SelectableModel` shape
+
+`GET /ai/models` returns `SelectableModel[]` (`packages/shared/types/src/lib/ai.types.ts`). Beyond `id`, `label`, `descriptionKey` / `description`, `tier`, `contextWindow`, `costClass` (`1..3`) and `isDefault`, each entry carries:
+
 | Field              | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `billedToUser`     | The caller has a stored BYOK key for the model's provider, so the turn bills their key.                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -517,7 +523,7 @@ Where the two sources disagree, **code wins**: a curated entry keeps its hand-wr
 | `reasoning?`       | `{ levels: ReasoningEffort[], mandatory }` — the effort levels the model accepts and whether it cannot run with reasoning off. Emitted only for `openrouter:*` models, the one provider path that forwards the level upstream: curated Anthropic/OpenAI/Google entries carry hand-authored metadata in code but the listing withholds it; the `openrouter:*` curated entries deliberately declare none until verified; promoted rows carry what the sync stored. Absent means the UI offers no effort control. |
 | `servesIntent?`    | `fast` \| `balanced` \| `powerful` when the model is the one `ai_fast_model` / `ai_default_model` / `ai_deep_model` currently resolves to (`AIConfigService.getIntentModels`; the first intent wins if two point at one id). The notes menu names its intent rows after these models.                                                                                                                                                                                                                          |
 
-Each returned model also carries `routableByServer`: `true` when the server's own keys can invoke it, `false` when only the caller's BYOK key reaches it (so it is inert in any server-global config). The backoffice routing editor uses this to flag a chain member a server-global fallback can never route — absence from the **selectable-model** catalog covers a model that is gone (a dropped curated id, or a promoted row since retired), `routableByServer` covers a keyless/disabled/BYOK-only one.
+**Anonymous sessions** (`ModelPreferenceService.listModels`) receive **only** the entries that serve an intent: the running default keeps `access: 'granted'`, the other intent rows come back as `requires_account`, and no promoted or BYOK rows are listed. The menu renders the locked rows as an upsell to register rather than hiding them.
 
 **Resolution cascade** (highest priority first), in `ModelPreferenceService`:
 
@@ -541,6 +547,8 @@ The resolved model enters the [fallback chain](#cross-provider-fallback-chain) a
 `PUT /ai/preferences` takes a partial patch: an omitted field stays untouched, an explicit `null` clears it. Picking an intent chip always sends `{ preferredModel: null, preferredIntent }`, so choosing a style abandons any model override in the same write.
 
 The agent WebSocket payload still accepts a per-turn override (`{ conversationId?, message, model? }`) — `RunAgentTurnHandler` validates it with `isSelectable` and persists it on the conversation — but no shipped surface sends it: both pickers write the account preference instead, so the cascade serves every turn.
+
+### Reasoning effort
 
 `REASONING_EFFORTS` is `low | medium | high | xhigh | max` (`@knowtis/shared-types`). A model declares the subset it accepts in `reasoning.levels`; the backoffice global `ai_reasoning_effort` stays on the narrower `GLOBAL_REASONING_EFFORTS` (`low | medium | high`).
 
