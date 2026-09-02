@@ -173,6 +173,16 @@ const registeredModels = [
 
 // Mirrors the real anonymous listing: the running default stays granted, the
 // other intents come back locked.
+// The balanced default billed to the caller's key, so the effort ladder applies.
+const byokListing = [
+  fastModel,
+  { ...balancedModel, billedToUser: true },
+  powerfulModel,
+  openModel,
+  byokModel,
+] satisfies SelectableModel[];
+const anthropicKey = [{ provider: 'anthropic', keyPrefix: 'sk-a***' }];
+
 const anonymousModels = [
   { ...fastModel, access: 'requires_account' },
   { ...balancedModel, access: 'granted', isDefault: true },
@@ -227,8 +237,9 @@ describe('CopilotModelPicker', () => {
     expect(
       screen.getByRole('menuitemradio', { name: /Opus 5/ })
     ).toHaveTextContent('aiAssistant.intent.powerfulHint');
-    expect(screen.queryByText(/aiAssistant\.intent\.(fast|balanced|powerful)$/))
-      .not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/aiAssistant\.intent\.(fast|balanced|powerful)$/)
+    ).not.toBeInTheDocument();
   });
 
   it('selecting an intent row clears the model override', async () => {
@@ -284,14 +295,14 @@ describe('CopilotModelPicker', () => {
 
     const defaultRow = screen.getByRole('menuitemradio', { name: /Sonnet 5/ });
     expect(defaultRow).toHaveAttribute('aria-checked', 'true');
-    expect(defaultRow).not.toHaveAttribute('aria-disabled');
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(1);
     for (const name of [/Haiku 4\.5/, /Opus 5/]) {
-      const row = screen.getByRole('menuitemradio', { name });
-      expect(row).toHaveAttribute('aria-disabled', 'true');
-      expect(row).toHaveAttribute('aria-checked', 'false');
+      const row = screen.getByRole('menuitem', { name });
+      expect(row).toHaveAccessibleName(/aiAssistant\.menu\.lockedHint/);
+      expect(row).not.toHaveAttribute('aria-disabled');
     }
     expect(
-      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+      screen.getByRole('menuitem', { name: 'aiAssistant.menu.effort' })
     ).toHaveAttribute('aria-disabled', 'true');
 
     await user.click(defaultRow);
@@ -299,7 +310,7 @@ describe('CopilotModelPicker', () => {
     expect(navigate).not.toHaveBeenCalled();
 
     await openMenu(user);
-    await user.click(screen.getByRole('menuitemradio', { name: /Opus 5/ }));
+    await user.click(screen.getByRole('menuitem', { name: /Opus 5/ }));
     expect(updatePreferences).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith({ to: ROUTES.REGISTER });
 
@@ -358,14 +369,8 @@ describe('CopilotModelPicker', () => {
 
   it('byok user changes effort and the trigger grows the tail', async () => {
     const user = userEvent.setup();
-    keysData.mockReturnValue([{ provider: 'anthropic', keyPrefix: 'sk-a***' }]);
-    modelsData.mockReturnValue([
-      fastModel,
-      { ...balancedModel, billedToUser: true },
-      powerfulModel,
-      openModel,
-      byokModel,
-    ]);
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue(byokListing);
     render(<CopilotModelPicker />);
 
     const trigger = screen.getByRole('button', {
@@ -386,8 +391,117 @@ describe('CopilotModelPicker', () => {
 
     expect(
       screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
-    ).toHaveTextContent('· aiAssistant.menu.effortHigh');
+    ).toHaveTextContent('aiAssistant.menu.effortHigh');
     expect(useAgentStore.getState().reasoningEffort).toBe('high');
+  });
+
+  it('byok user selects an effort level with the keyboard alone', async () => {
+    const user = userEvent.setup();
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue(byokListing);
+    render(<CopilotModelPicker />);
+
+    screen
+      .getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+      .focus();
+    await user.keyboard('{Enter}');
+    await screen.findByRole('menuitemradio', { name: /Haiku 4\.5/ });
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+    expect(document.activeElement).toHaveTextContent('aiAssistant.menu.effort');
+    await user.keyboard('{ArrowRight}');
+    await screen.findByRole('menuitemradio', {
+      name: 'aiAssistant.menu.effortHigh',
+    });
+    await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Enter}');
+
+    expect(useAgentStore.getState().reasoningEffort).toBe('high');
+  });
+
+  it('collapses a stored effort the newly resolved model does not declare', () => {
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue([
+      ...byokListing.slice(0, -1),
+      { ...byokModel, reasoning: { levels: ['low'], mandatory: false } },
+    ]);
+    useAgentStore.setState({ reasoningEffort: 'high' });
+    const { rerender } = render(<CopilotModelPicker />);
+    const trigger = () =>
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ });
+    expect(trigger()).toHaveTextContent('aiAssistant.menu.effortHigh');
+    expect(useAgentStore.getState().reasoningEffort).toBe('high');
+
+    prefsData.mockReturnValue({
+      preferredModel: 'openai:gpt-6',
+      preferredIntent: null,
+    });
+    rerender(<CopilotModelPicker />);
+
+    expect(useAgentStore.getState().reasoningEffort).toBe('auto');
+    expect(trigger()).not.toHaveTextContent('aiAssistant.menu.effortHigh');
+  });
+
+  it('keeps a stored effort untouched while the model list is still loading', () => {
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue(undefined);
+    modelsPending.mockReturnValue(true);
+    useAgentStore.setState({ reasoningEffort: 'high' });
+    render(<CopilotModelPicker />);
+
+    expect(useAgentStore.getState().reasoningEffort).toBe('high');
+  });
+
+  it('renders the effort and more-models sections inline below the flyout width', async () => {
+    const user = userEvent.setup();
+    const width = window.innerWidth;
+    window.innerWidth = 390;
+    keysData.mockReturnValue(anthropicKey);
+    modelsData.mockReturnValue(byokListing);
+    try {
+      render(<CopilotModelPicker />);
+      await openMenu(user);
+
+      const flyoutTriggers = screen
+        .queryAllByRole('menuitem')
+        .filter((item) => item.hasAttribute('aria-haspopup'));
+      expect(flyoutTriggers).toHaveLength(0);
+      expect(
+        screen.getByRole('menuitemradio', {
+          name: 'aiAssistant.menu.effortHigh',
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('menuitemradio', { name: /GPT-6/ })
+      ).toBeInTheDocument();
+    } finally {
+      window.innerWidth = width;
+    }
+  });
+
+  it('shows the loading label on a disabled trigger while models resolve', () => {
+    modelsData.mockReturnValue(undefined);
+    modelsPending.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    const trigger = screen.getByRole('button', {
+      name: /aiAssistant\.menu\.triggerLabel/,
+    });
+    expect(trigger).toBeDisabled();
+    expect(trigger).toHaveTextContent('aiAssistant.loading');
+  });
+
+  it('surfaces the load error and retries from the menu', async () => {
+    const user = userEvent.setup();
+    modelsData.mockReturnValue(undefined);
+    modelsError.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+    expect(screen.getByText('aiAssistant.loadError')).toBeInTheDocument();
+    await user.click(
+      screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
+    );
+
+    expect(modelsRefetch).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the BYOK bridge appended after the trigger for a keyless user', async () => {

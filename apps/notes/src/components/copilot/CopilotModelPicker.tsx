@@ -1,4 +1,7 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useNavigate } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
 import {
@@ -10,7 +13,6 @@ import {
 import { useAgentStore } from '@/stores/agent.store';
 import { useSettingsStore } from '@/stores/settings.store';
 import { useAuthUser } from '@jovandyaz/auth-react';
-import { useNavigate } from '@tanstack/react-router';
 
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import {
@@ -18,6 +20,7 @@ import {
   ModelMenu,
   type ModelMenuEffort,
 } from '@knowtis/design-system';
+import { useMediaQuery } from '@knowtis/shared-hooks';
 import {
   DEFAULT_MODEL_INTENT,
   FEATURE_FLAG_KEYS,
@@ -30,6 +33,9 @@ import {
   moreModelGroups,
   primaryRows,
 } from './intent-picker-options';
+
+/** Below this width a side flyout cannot sit beside the menu, so its sections render inline. */
+const FLYOUT_MIN_WIDTH_QUERY = '(min-width: 768px)';
 
 export function CopilotModelPicker() {
   const { t } = useTranslation('common');
@@ -52,15 +58,9 @@ export function CopilotModelPicker() {
   const { data: keys, isPending: keysPending } = useProviderKeys(
     showPicker && canUseByok
   );
+  const canFlyOut = useMediaQuery(FLYOUT_MIN_WIDTH_QUERY);
   const effortValue = useAgentStore((s) => s.reasoningEffort);
   const setReasoningEffort = useAgentStore((s) => s.setReasoningEffort);
-
-  if (!showPicker) {
-    return null;
-  }
-
-  const offerBridge =
-    canUseByok && !isPending && !keysPending && keys?.length === 0;
 
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
   const primary = primaryRows(models, t);
@@ -75,16 +75,36 @@ export function CopilotModelPicker() {
   const selectedModel = models?.find((m) =>
     override !== null ? m.id === override : m.servesIntent === intent
   );
+  // Holding a key is not enough: the server only bills the turn to the user
+  // when the key covers the resolved model's provider, so a mismatched key
+  // must not unlock the effort ladder.
+  const hasByok = canUseByok && selectedModel?.billedToUser === true;
+  const effortOpts = effortOptions(selectedModel, t);
+  // The conversation effort outlives a model change. A level the newly
+  // resolved model never declared, or one no longer billed to the user, must
+  // not ride the next turn, so it collapses to auto once the list has resolved.
+  const effortStale =
+    models !== undefined &&
+    effortValue !== 'auto' &&
+    !(hasByok && effortOpts.some((o) => o.id === effortValue));
+  useEffect(() => {
+    if (effortStale) {
+      setReasoningEffort('auto');
+    }
+  }, [effortStale, setReasoningEffort]);
+  const activeEffort = effortStale ? 'auto' : effortValue;
+
+  if (!showPicker) {
+    return null;
+  }
+
+  const offerBridge =
+    canUseByok && !isPending && !keysPending && keys?.length === 0;
   const triggerLabel =
     selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never);
-  // The server bills a turn to the user only when a key covers the selected
-  // model's provider, which the listing reports per entry as billedToUser.
-  const hasByok = canUseByok && selectedModel?.billedToUser === true;
-
-  const effortOpts = effortOptions(selectedModel, t);
-  const effortLabel = effortOpts.find((o) => o.id === effortValue)?.label;
+  const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
   const triggerDetail =
-    hasByok && effortValue !== 'auto' ? effortLabel : undefined;
+    hasByok && activeEffort !== 'auto' ? effortLabel : undefined;
 
   // Only a model that declares reasoning levels earns the row: anonymous gets
   // an inert locked upsell, a keyless registered user gets no control at all
@@ -103,7 +123,7 @@ export function CopilotModelPicker() {
         : hasByok
           ? {
               label: t('aiAssistant.menu.effort'),
-              value: effortValue,
+              value: activeEffort,
               options: effortOpts,
               footnote: t('aiAssistant.menu.effortFootnote'),
               onChange: (id: string) =>
@@ -149,6 +169,8 @@ export function CopilotModelPicker() {
           moreModels: { label: t('aiAssistant.menu.moreModels'), groups },
         })}
         {...(footerCta && { footerCta })}
+        lockedHint={t('aiAssistant.menu.lockedHint')}
+        inlineSections={!canFlyOut}
         triggerLabel={triggerLabel}
         {...(triggerDetail !== undefined && { triggerDetail })}
         status={isError ? 'error' : isPending ? 'loading' : 'ready'}

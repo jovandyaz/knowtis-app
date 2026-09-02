@@ -118,6 +118,7 @@
       "moreModels": "Más modelos",
       "groupOpen": "Modelos abiertos",
       "groupByok": "Con tu clave",
+      "lockedHint": "requiere cuenta",
       "registerCta": "Crea tu cuenta para elegir modelo y esfuerzo",
       "triggerLabel": "Modelo y esfuerzo"
     },
