@@ -6,7 +6,7 @@ import {
 } from 'react';
 
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
-import { Check } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 
 import { cn } from '../utils';
 import { Switch } from './Switch';
@@ -50,6 +50,46 @@ const DropdownMenuItem = forwardRef<
   />
 ));
 DropdownMenuItem.displayName = 'DropdownMenuItem';
+
+const DropdownMenuSub = DropdownMenuPrimitive.Sub;
+
+const DropdownMenuSubTrigger = forwardRef<
+  ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.SubTrigger
+    ref={ref}
+    className={cn(
+      MENU_ITEM_CLASSES,
+      'justify-between data-[state=open]:bg-(--muted)',
+      className
+    )}
+    {...props}
+  >
+    {children}
+    <ChevronRight className="h-3.5 w-3.5 opacity-60" />
+  </DropdownMenuPrimitive.SubTrigger>
+));
+DropdownMenuSubTrigger.displayName = 'DropdownMenuSubTrigger';
+
+const DropdownMenuSubContent = forwardRef<
+  ElementRef<typeof DropdownMenuPrimitive.SubContent>,
+  ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.SubContent
+      ref={ref}
+      sideOffset={2}
+      className={cn(
+        'z-50 min-w-[8rem] overflow-hidden rounded-md border border-(--border) bg-(--card) p-1 shadow-md',
+        'animate-in fade-in-0 zoom-in-95',
+        className
+      )}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+));
+DropdownMenuSubContent.displayName = 'DropdownMenuSubContent';
 
 const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
@@ -148,6 +188,9 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,

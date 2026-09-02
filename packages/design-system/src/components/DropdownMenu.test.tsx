@@ -5,8 +5,12 @@ import { describe, expect, it } from 'vitest';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from './DropdownMenu';
 
@@ -52,5 +56,27 @@ describe('DropdownMenuRadioItem', () => {
         .getByRole('menuitemradio', { name: 'Areas' })
         .querySelector('[data-state="checked"]')
     ).toHaveClass('absolute');
+  });
+});
+
+describe('DropdownMenuSub', () => {
+  it('opens a submenu from its trigger', async () => {
+    const user = userEvent.setup();
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Open</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Esfuerzo</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              <DropdownMenuItem>Alto</DropdownMenuItem>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    await user.click(screen.getByText('Open'));
+    await user.click(screen.getByText('Esfuerzo'));
+    expect(await screen.findByText('Alto')).toBeInTheDocument();
   });
 });
