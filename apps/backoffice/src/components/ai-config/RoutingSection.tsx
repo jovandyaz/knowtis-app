@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
 import {
+  useAssignableModels,
   useResetAiConfig,
-  useSelectableModels,
   useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
@@ -18,6 +18,7 @@ import {
   parseChain,
 } from '@knowtis/shared-types';
 
+import { toModelSelectOption } from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 
@@ -33,7 +34,7 @@ interface RoutingSectionProps {
 }
 
 export function RoutingSection({ entry }: RoutingSectionProps) {
-  const models = useSelectableModels();
+  const models = useAssignableModels();
   const setConfig = useSetAiConfig();
   const resetConfig = useResetAiConfig();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
@@ -52,9 +53,9 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
   const chain = isForked ? draft.chain : saved;
   const isDirty = isForked && draft.chain.join(CHAIN_SEPARATOR) !== stored;
   const edit = (next: string[]) => setDraft({ base: stored, chain: next });
-  const available = (models.data ?? []).filter(
-    (model) => !chain.includes(model.id)
-  );
+  const available = (models.data ?? [])
+    .filter((model) => !chain.includes(model.id))
+    .map(toModelSelectOption);
   const labelFor = (id: string) =>
     models.data?.find((model) => model.id === id)?.label ?? id;
   // Routing skips members the server cannot invoke — a retired model, a keyless
@@ -168,6 +169,7 @@ export function RoutingSection({ entry }: RoutingSectionProps) {
             models.isLoading ? 'loading' : models.isError ? 'error' : 'ready'
           }
           onRetry={() => void models.refetch()}
+          renderDescription={(m) => m.description ?? ''}
           triggerVariant="outline"
           triggerLabel="Add model"
           disabled={mutating || available.length === 0}

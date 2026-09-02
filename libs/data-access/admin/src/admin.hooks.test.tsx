@@ -13,7 +13,7 @@ import {
   type MockInstance,
 } from 'vitest';
 
-import { aiModelsApi, httpClient } from '@knowtis/api-client';
+import { httpClient } from '@knowtis/api-client';
 
 import {
   adminQueryKeys,
@@ -22,6 +22,7 @@ import {
   useAiCatalogCandidates,
   useAiConfig,
   useAiHealth,
+  useAssignableModels,
   useAuditLog,
   useClearSystemProviderKey,
   useDeleteFeatureFlag,
@@ -30,7 +31,6 @@ import {
   useResetAiConfig,
   useResolveCatalogAlert,
   useRetireCatalogModel,
-  useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,
   useSyncCatalog,
@@ -50,7 +50,6 @@ vi.mock('@knowtis/api-client', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
-  aiModelsApi: { getModels: vi.fn() },
 }));
 
 function Wrapper({ children }: { children: ReactNode }) {
@@ -494,30 +493,69 @@ describe('useResetAiConfig', () => {
   });
 });
 
-describe('useSelectableModels', () => {
-  it('fetches the curated model list', async () => {
-    vi.mocked(aiModelsApi.getModels).mockResolvedValue([
-      {
-        id: 'anthropic:claude-sonnet-5',
-        label: 'Sonnet 5',
-        descriptionKey: 'aiModels.sonnet5',
-        tier: 'balanced',
-        costClass: 2,
-        contextWindow: 1000000,
-        isDefault: true,
-        billedToUser: false,
-        routableByServer: true,
-        access: 'granted',
-      },
-    ]);
+const ASSIGNABLE = [
+  {
+    id: 'anthropic:claude-sonnet-5',
+    label: 'Sonnet 5',
+    description: '',
+    tier: 'balanced',
+    provider: 'anthropic',
+    routableByServer: true,
+    needsKey: false,
+    promoted: false,
+  },
+  {
+    id: 'openrouter:z-ai/glm-5.2',
+    label: 'GLM 5.2',
+    description: 'Open-weight generalist',
+    tier: 'open',
+    provider: 'openrouter',
+    routableByServer: false,
+    needsKey: false,
+    promoted: true,
+  },
+];
 
-    const { result } = renderHook(() => useSelectableModels(), {
+describe('useAssignableModels', () => {
+  it('fetches and validates the assignable listing', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(ASSIGNABLE);
+
+    const { result } = renderHook(() => useAssignableModels(), {
       wrapper: Wrapper,
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(aiModelsApi.getModels).toHaveBeenCalledTimes(1);
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/catalog/assignable');
     expect(result.current.data?.[0].id).toBe('anthropic:claude-sonnet-5');
+    expect(result.current.data?.[1]).toMatchObject({
+      promoted: true,
+      routableByServer: false,
+      needsKey: false,
+    });
+  });
+
+  it('rejects a row whose routability is not a boolean', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      { ...ASSIGNABLE[0], routableByServer: 'yes' },
+    ]);
+
+    const { result } = renderHook(() => useAssignableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it('rejects a row whose tier this bundle does not know', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      { ...ASSIGNABLE[0], tier: 'mystery' },
+    ]);
+
+    const { result } = renderHook(() => useAssignableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
 
@@ -586,6 +624,26 @@ describe('useSetSystemProvider', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(httpClient.put).toHaveBeenCalledWith('/ai/providers/anthropic', {
       enabled: false,
+    });
+  });
+
+  it('marks the assignable listing stale — a key flip changes what can route', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-new' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.assignableModels(),
     });
   });
 
@@ -735,7 +793,7 @@ function expectCatalogDependentsInvalidated(
     queryKey: adminQueryKeys.aiCatalog(),
   });
   expect(invalidateSpy).toHaveBeenCalledWith({
-    queryKey: adminQueryKeys.selectableModels(),
+    queryKey: adminQueryKeys.assignableModels(),
   });
   expect(invalidateSpy).toHaveBeenCalledWith({
     queryKey: adminQueryKeys.auditLists(),
@@ -943,7 +1001,7 @@ describe('usePromoteCatalogModel', () => {
     expect(result.current.data?.promotedAt).toBeInstanceOf(Date);
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
       status: 'promoted',
@@ -1001,7 +1059,7 @@ describe('useRetireCatalogModel', () => {
     expect(result.current.data?.status).toBe('candidate');
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
       status: 'candidate',
@@ -1039,7 +1097,7 @@ describe('useUpdateCatalogCopy', () => {
     expect(result.current.data?.label).toBe('GLM 5.2 Turbo');
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.patch).mockResolvedValue(CATALOG_MODEL);
 
     const { result, invalidateSpy } = renderWithInvalidateSpy(() =>

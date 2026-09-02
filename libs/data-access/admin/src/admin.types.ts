@@ -6,7 +6,6 @@ import {
   AI_PROVIDERS,
   CATALOG_MODEL_STATUSES,
   CATALOG_SYNC_STATUSES,
-  MODEL_ACCESS,
   MODEL_TIERS,
   PROVIDER_KEY_SOURCES,
   PROVIDER_PROBE_FAILURES,
@@ -133,23 +132,18 @@ export type AiConfigEntry = z.infer<typeof AiConfigEntrySchema>;
 
 export const AiConfigSchema = z.array(AiConfigEntrySchema);
 
-export const SelectableModelSchema = z.object({
+export const AssignableModelSchema = z.object({
   id: z.string(),
   label: z.string(),
+  description: z.string(),
   tier: z.enum(MODEL_TIERS),
-  costClass: z.union([z.literal(1), z.literal(2), z.literal(3)]),
-  contextWindow: z.number(),
-  billedToUser: z.boolean(),
-  // Backoffice and API deploy independently; an API that predates this field
-  // must not make every chain member look inert.
-  routableByServer: z.boolean().default(true),
-  // Backoffice and API deploy independently; an API that predates tier gating
-  // must not make every model look locked.
-  access: z.enum(MODEL_ACCESS).default('granted'),
+  provider: z.string(),
+  routableByServer: z.boolean(),
+  needsKey: z.boolean(),
+  promoted: z.boolean(),
 });
-export type SelectableModelOption = z.infer<typeof SelectableModelSchema>;
 
-export const SelectableModelsSchema = z.array(SelectableModelSchema);
+export const AssignableModelsSchema = z.array(AssignableModelSchema);
 
 export const SystemProviderSchema = z.object({
   provider: z.enum(AI_PROVIDERS),

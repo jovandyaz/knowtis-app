@@ -14,14 +14,14 @@ import { AiConfigPage } from '../AiConfigPage';
 
 const {
   useAiConfigMock,
-  useSelectableModelsMock,
+  useAssignableModelsMock,
   useSystemProvidersMock,
   useFeatureFlagsMock,
   useAiCatalogMock,
   setConfigMutate,
 } = vi.hoisted(() => ({
   useAiConfigMock: vi.fn(),
-  useSelectableModelsMock: vi.fn(),
+  useAssignableModelsMock: vi.fn(),
   useSystemProvidersMock: vi.fn(),
   useFeatureFlagsMock: vi.fn(),
   useAiCatalogMock: vi.fn(),
@@ -47,7 +47,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   return {
     ...actual,
     useAiConfig: () => useAiConfigMock(),
-    useSelectableModels: () => useSelectableModelsMock(),
+    useAssignableModels: () => useAssignableModelsMock(),
     useSystemProviders: () => useSystemProvidersMock(),
     useSetAiConfig: vi.fn().mockReturnValue({
       mutate: setConfigMutate,
@@ -85,11 +85,25 @@ vi.mock('@knowtis/data-access-feature-flags', async (importOriginal) => {
 });
 
 const MODELS = [
-  { id: 'anthropic:claude-sonnet-5', label: 'Sonnet 5', tier: 'balanced' },
+  {
+    id: 'anthropic:claude-sonnet-5',
+    label: 'Sonnet 5',
+    description: '',
+    tier: 'balanced',
+    provider: 'anthropic',
+    routableByServer: true,
+    needsKey: false,
+    promoted: false,
+  },
   {
     id: 'anthropic:claude-haiku-4-5-20251001',
     label: 'Haiku 4.5',
+    description: '',
     tier: 'fast',
+    provider: 'anthropic',
+    routableByServer: true,
+    needsKey: false,
+    promoted: false,
   },
 ];
 
@@ -105,7 +119,7 @@ const flagRow = (key: string, enabled: boolean) => ({
 describe('AiConfigPage', () => {
   beforeEach(() => {
     useAiConfigMock.mockReset();
-    useSelectableModelsMock.mockReset();
+    useAssignableModelsMock.mockReset();
     useFeatureFlagsMock.mockReset();
     useAiCatalogMock.mockReset();
     setConfigMutate.mockReset();
@@ -115,7 +129,7 @@ describe('AiConfigPage', () => {
       isError: false,
       refetch: vi.fn(),
     });
-    useSelectableModelsMock.mockReturnValue({
+    useAssignableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
       isError: false,
@@ -340,6 +354,40 @@ describe('AiConfigPage', () => {
       key: 'ai_default_model',
       value: 'anthropic:claude-haiku-4-5-20251001',
     });
+  });
+
+  it('jumps to the Providers tab from the configure-keys link', async () => {
+    useAiConfigMock.mockReturnValue({
+      data: [
+        {
+          key: 'ai_default_model',
+          value: 'anthropic:claude-sonnet-5',
+          kind: 'model',
+          source: 'custom',
+          description: null,
+          updatedAt: null,
+        },
+      ],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderPage();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /configure provider keys/i })
+    );
+
+    expect(screen.getByRole('tab', { name: 'Providers' })).toHaveAttribute(
+      'aria-selected',
+      'true'
+    );
+    expect(
+      within(screen.getByRole('tabpanel')).getByRole('heading', {
+        name: /providers/i,
+      })
+    ).toBeInTheDocument();
   });
 
   it('shows an error state and retries the failed query', async () => {

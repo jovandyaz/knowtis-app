@@ -24,6 +24,7 @@ export interface ModelSelectOption {
   contextWindow?: number;
   costClass?: number;
   billedToUser?: boolean;
+  disabled?: boolean;
 }
 
 export interface ModelSelectSectionOption {
@@ -166,11 +167,13 @@ function OptionGroup({
 function OptionItem({
   id,
   asAction,
+  disabled = false,
   onSelect,
   children,
 }: {
   id: string;
   asAction: boolean;
+  disabled?: boolean;
   onSelect: (id: string) => void;
   children: ReactNode;
 }) {
@@ -178,6 +181,7 @@ function OptionItem({
     return (
       <DropdownMenuItem
         onSelect={() => onSelect(id)}
+        disabled={disabled}
         className={OPTION_ROW_CLASSES}
       >
         {children}
@@ -185,7 +189,11 @@ function OptionItem({
     );
   }
   return (
-    <DropdownMenuRadioItem value={id} className={OPTION_ROW_CLASSES}>
+    <DropdownMenuRadioItem
+      value={id}
+      disabled={disabled}
+      className={OPTION_ROW_CLASSES}
+    >
       {children}
     </DropdownMenuRadioItem>
   );
@@ -353,6 +361,7 @@ export function ModelSelect({
                         key={m.id}
                         id={m.id}
                         asAction={rowsAreActions}
+                        disabled={m.disabled ?? false}
                         onSelect={onSelect}
                       >
                         <OptionRow

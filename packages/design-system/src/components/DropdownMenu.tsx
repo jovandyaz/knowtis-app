@@ -36,6 +36,7 @@ DropdownMenuContent.displayName = 'DropdownMenuContent';
 const MENU_ITEM_CLASSES = [
   'text-sm text-(--foreground) rounded-sm px-2 py-1.5 cursor-pointer outline-none',
   'data-[highlighted]:bg-(--muted) focus:bg-(--muted)',
+  'data-[disabled]:cursor-default data-[disabled]:opacity-50',
   'flex items-center gap-2',
 ];
 

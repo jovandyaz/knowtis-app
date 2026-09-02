@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,13 +8,13 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { ModelsSection } from '../ModelsSection';
 
 const {
-  useSelectableModelsMock,
+  useAssignableModelsMock,
   setConfigMutate,
   setConfigState,
   resetConfigMutate,
   resetConfigState,
 } = vi.hoisted(() => ({
-  useSelectableModelsMock: vi.fn(),
+  useAssignableModelsMock: vi.fn(),
   setConfigMutate: vi.fn(),
   setConfigState: { isPending: false },
   resetConfigMutate: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
-    useSelectableModels: () => useSelectableModelsMock(),
+    useAssignableModels: () => useAssignableModelsMock(),
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
       isPending: setConfigState.isPending,
@@ -45,16 +45,36 @@ const MODELS = [
   {
     id: 'anthropic:sonnet',
     label: 'Sonnet',
+    description: '',
     tier: 'balanced',
+    provider: 'anthropic',
     routableByServer: true,
+    needsKey: false,
+    promoted: false,
   },
   {
     id: 'anthropic:haiku',
     label: 'Haiku',
+    description: '',
     tier: 'fast',
+    provider: 'anthropic',
     routableByServer: true,
+    needsKey: false,
+    promoted: false,
+  },
+  {
+    id: 'openai:gpt',
+    label: 'GPT',
+    description: '',
+    tier: 'fast',
+    provider: 'openai',
+    routableByServer: false,
+    needsKey: true,
+    promoted: false,
   },
 ];
+
+const NEEDS_KEY_HINT = 'Needs a provider key — configure it in Providers';
 
 const RETIRED_MODEL_ID = 'openrouter:vendor/retired-one';
 
@@ -73,8 +93,15 @@ function entryWith(
   };
 }
 
+const onConfigureProviders = vi.fn();
+
 function renderSection(source: AiConfigEntry['source'] = 'custom') {
-  return render(<ModelsSection entries={[entryWith(source)]} />);
+  return render(
+    <ModelsSection
+      entries={[entryWith(source)]}
+      onConfigureProviders={onConfigureProviders}
+    />
+  );
 }
 
 describe('ModelsSection', () => {
@@ -83,7 +110,8 @@ describe('ModelsSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
-    useSelectableModelsMock.mockReturnValue({
+    onConfigureProviders.mockReset();
+    useAssignableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
       isError: false,
@@ -175,6 +203,7 @@ describe('ModelsSection', () => {
           entryWith('custom', 'ai_fast_model'),
           entryWith('custom', 'ai_deep_model'),
         ]}
+        onConfigureProviders={onConfigureProviders}
       />
     );
 
@@ -191,7 +220,10 @@ describe('ModelsSection', () => {
 
   it('keeps the config key reachable without spending a line on it', () => {
     render(
-      <ModelsSection entries={[entryWith('custom', 'ai_default_model')]} />
+      <ModelsSection
+        entries={[entryWith('custom', 'ai_default_model')]}
+        onConfigureProviders={onConfigureProviders}
+      />
     );
 
     expect(screen.getByText('Default model')).toHaveAttribute(
@@ -203,7 +235,10 @@ describe('ModelsSection', () => {
 
   it('shows the model id beside the select, with the full value on hover', () => {
     render(
-      <ModelsSection entries={[entryWith('custom', 'ai_default_model')]} />
+      <ModelsSection
+        entries={[entryWith('custom', 'ai_default_model')]}
+        onConfigureProviders={onConfigureProviders}
+      />
     );
 
     const id = screen.getByTitle('anthropic:sonnet');
@@ -211,11 +246,57 @@ describe('ModelsSection', () => {
     expect(id).toHaveClass('truncate');
   });
 
+  it('lists a needs-key model disabled, still visible for discovery', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+
+    const locked = await screen.findByRole('menuitemradio', { name: /gpt/i });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    expect(within(locked).getByTitle(NEEDS_KEY_HINT)).toBeInTheDocument();
+  });
+
+  it('does not write when the needs-key row is clicked', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+    await userEvent.click(
+      await screen.findByRole('menuitemradio', { name: /gpt/i })
+    );
+
+    expect(setConfigMutate).not.toHaveBeenCalled();
+  });
+
+  it('assigns a routable model to the intent', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+    await userEvent.click(
+      await screen.findByRole('menuitemradio', { name: /haiku/i })
+    );
+
+    expect(setConfigMutate).toHaveBeenCalledWith({
+      key: 'ai_default_model',
+      value: 'anthropic:haiku',
+    });
+  });
+
+  it('links to the Providers tab for key configuration', async () => {
+    renderSection();
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /configure provider keys/i })
+    );
+
+    expect(onConfigureProviders).toHaveBeenCalled();
+  });
+
   it('shows the update date without the time of day', () => {
     const updatedAt = new Date('2026-08-11T11:44:20Z');
     render(
       <ModelsSection
         entries={[{ ...entryWith('custom', 'ai_default_model'), updatedAt }]}
+        onConfigureProviders={onConfigureProviders}
       />
     );
 

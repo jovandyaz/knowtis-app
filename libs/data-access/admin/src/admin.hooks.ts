@@ -4,12 +4,14 @@ import {
   useQuery,
   useQueryClient,
   type QueryClient,
+  type UseQueryResult,
 } from '@tanstack/react-query';
 
-import { aiModelsApi, httpClient } from '@knowtis/api-client';
+import { httpClient } from '@knowtis/api-client';
 import { featureFlagsQueryKeys } from '@knowtis/data-access-feature-flags';
 import type {
   AIProvider,
+  AssignableModelDto,
   ModelTier,
   UpdateCatalogCopyInput,
 } from '@knowtis/shared-types';
@@ -18,6 +20,7 @@ import {
   AdminUserSchema,
   AiConfigSchema,
   AiHealthSchema,
+  AssignableModelsSchema,
   CatalogModelSchema,
   CatalogOverviewSchema,
   CatalogSyncResultSchema,
@@ -29,7 +32,6 @@ import {
   PaginatedCandidatesSchema,
   PaginatedUsersSchema,
   ProviderTestResultSchema,
-  SelectableModelsSchema,
   SystemProvidersSchema,
   type AdminUser,
   type AdminUsersParams,
@@ -52,7 +54,7 @@ export const adminQueryKeys = {
   auditList: (params: AuditParams) =>
     [...adminQueryKeys.auditLists(), params] as const,
   aiConfig: () => [...adminQueryKeys.all, 'ai-config'] as const,
-  selectableModels: () => [...adminQueryKeys.all, 'selectable-models'] as const,
+  assignableModels: () => [...adminQueryKeys.all, 'assignable-models'] as const,
   systemProviders: () => [...adminQueryKeys.all, 'system-providers'] as const,
   aiHealth: () => [...adminQueryKeys.all, 'ai-health'] as const,
   aiCatalog: () => [...adminQueryKeys.all, 'ai-catalog'] as const,
@@ -206,12 +208,14 @@ export function useResetAiConfig() {
   });
 }
 
-export function useSelectableModels() {
+export function useAssignableModels(): UseQueryResult<AssignableModelDto[]> {
   return useQuery({
-    queryKey: adminQueryKeys.selectableModels(),
+    queryKey: adminQueryKeys.assignableModels(),
     queryFn: async () =>
-      SelectableModelsSchema.parse(await aiModelsApi.getModels()),
-    staleTime: 1000 * 60 * 5,
+      AssignableModelsSchema.parse(
+        await httpClient.get('/ai/catalog/assignable')
+      ),
+    staleTime: 1000 * 60,
   });
 }
 
@@ -238,6 +242,12 @@ function useSystemProviderMutation<TInput>(
       Promise.all([
         queryClient.invalidateQueries({
           queryKey: adminQueryKeys.systemProviders(),
+        }),
+        // A key or enable flip changes which assignable rows can route, and the
+        // Models tab remounts within the staleTime window when the admin
+        // returns from Providers — without this it would show dead disabled rows.
+        queryClient.invalidateQueries({
+          queryKey: adminQueryKeys.assignableModels(),
         }),
         queryClient.invalidateQueries({
           queryKey: adminQueryKeys.auditLists(),
@@ -321,15 +331,16 @@ function catalogModelPath(id: string): string {
 }
 
 /**
- * Promoting or retiring changes what the picker offers, so the model list goes
- * stale; the catalog key prefixes every candidates page key, so those do too.
- * Returned so `isPending` covers the refetches, keeping buttons disabled.
+ * Promoting or retiring changes what an admin may assign, so the assignable
+ * list goes stale; the catalog key prefixes every candidates page key, so
+ * those do too. Returned so `isPending` covers the refetches, keeping buttons
+ * disabled.
  */
 function invalidateCatalogDependents(queryClient: QueryClient) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: adminQueryKeys.aiCatalog() }),
     queryClient.invalidateQueries({
-      queryKey: adminQueryKeys.selectableModels(),
+      queryKey: adminQueryKeys.assignableModels(),
     }),
     queryClient.invalidateQueries({ queryKey: adminQueryKeys.auditLists() }),
   ]);

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,13 +8,13 @@ import type { AiConfigEntry } from '@knowtis/data-access-admin';
 import { RoutingSection } from '../RoutingSection';
 
 const {
-  useSelectableModelsMock,
+  useAssignableModelsMock,
   setConfigMutate,
   setConfigState,
   resetConfigMutate,
   resetConfigState,
 } = vi.hoisted(() => ({
-  useSelectableModelsMock: vi.fn(),
+  useAssignableModelsMock: vi.fn(),
   setConfigMutate: vi.fn(),
   setConfigState: { isPending: false },
   resetConfigMutate: vi.fn(),
@@ -25,7 +25,7 @@ vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
-    useSelectableModels: () => useSelectableModelsMock(),
+    useAssignableModels: () => useAssignableModelsMock(),
     useSetAiConfig: () => ({
       mutate: setConfigMutate,
       isPending: setConfigState.isPending,
@@ -45,22 +45,45 @@ const MODELS = [
   {
     id: 'anthropic:sonnet',
     label: 'Sonnet',
+    description: '',
     tier: 'balanced',
+    provider: 'anthropic',
     routableByServer: true,
+    needsKey: false,
+    promoted: false,
   },
   {
     id: 'anthropic:haiku',
     label: 'Haiku',
+    description: '',
     tier: 'fast',
+    provider: 'anthropic',
     routableByServer: true,
+    needsKey: false,
+    promoted: false,
   },
   {
     id: 'google:gemini',
     label: 'Gemini',
+    description: '',
     tier: 'fast',
+    provider: 'google',
     routableByServer: true,
+    needsKey: false,
+    promoted: false,
   },
 ];
+
+const GPT_NEEDS_KEY = {
+  id: 'openai:gpt',
+  label: 'GPT',
+  description: '',
+  tier: 'fast',
+  provider: 'openai',
+  routableByServer: false,
+  needsKey: true,
+  promoted: false,
+};
 
 function entryWith(
   value: string,
@@ -93,7 +116,7 @@ describe('RoutingSection', () => {
     setConfigState.isPending = false;
     resetConfigMutate.mockReset();
     resetConfigState.isPending = false;
-    useSelectableModelsMock.mockReturnValue({
+    useAssignableModelsMock.mockReturnValue({
       data: MODELS,
       isLoading: false,
       isError: false,
@@ -130,16 +153,8 @@ describe('RoutingSection', () => {
   // /ai/models lists a model the caller's own BYOK key unlocks, but a
   // server-global chain can never reach it.
   it('marks a member only a personal BYOK key reaches', () => {
-    useSelectableModelsMock.mockReturnValue({
-      data: [
-        ...MODELS,
-        {
-          id: 'openai:gpt',
-          label: 'GPT',
-          tier: 'fast',
-          routableByServer: false,
-        },
-      ],
+    useAssignableModelsMock.mockReturnValue({
+      data: [...MODELS, GPT_NEEDS_KEY],
       isLoading: false,
       isError: false,
       refetch: vi.fn(),
@@ -153,7 +168,7 @@ describe('RoutingSection', () => {
   });
 
   it('does not accuse the whole chain while the catalog is still loading', () => {
-    useSelectableModelsMock.mockReturnValue({
+    useAssignableModelsMock.mockReturnValue({
       data: undefined,
       isLoading: true,
       isError: false,
@@ -247,6 +262,31 @@ describe('RoutingSection', () => {
     expect(savedValue()).toBe(`${CHAIN},google:gemini`);
   });
 
+  it('offers a needs-key model disabled instead of hiding it', async () => {
+    useAssignableModelsMock.mockReturnValue({
+      data: [...MODELS, GPT_NEEDS_KEY],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+
+    renderChain();
+    await userEvent.click(screen.getByRole('button', { name: /add model/i }));
+
+    const locked = await screen.findByRole('menuitem', { name: /gpt/i });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    expect(
+      within(locked).getByTitle(
+        'Needs a provider key — configure it in Providers'
+      )
+    ).toBeInTheDocument();
+
+    await userEvent.click(locked);
+    expect(
+      screen.queryByRole('button', { name: /save chain/i })
+    ).not.toBeInTheDocument();
+  });
+
   it('offers only models the chain does not already hold', async () => {
     renderChain();
 
@@ -303,7 +343,7 @@ describe('RoutingSection', () => {
   // AIConfigService.validateChain rejects a chain with no invocable member, so
   // offering Save here would only buy the admin a server error.
   it('refuses to save a chain no model can route', async () => {
-    useSelectableModelsMock.mockReturnValue({
+    useAssignableModelsMock.mockReturnValue({
       data: MODELS.map((model) => ({ ...model, routableByServer: false })),
       isLoading: false,
       isError: false,
@@ -323,7 +363,7 @@ describe('RoutingSection', () => {
   });
 
   it('still saves a chain where only some members route', async () => {
-    useSelectableModelsMock.mockReturnValue({
+    useAssignableModelsMock.mockReturnValue({
       data: MODELS.map((model) => ({
         ...model,
         routableByServer: model.id === 'anthropic:sonnet',
