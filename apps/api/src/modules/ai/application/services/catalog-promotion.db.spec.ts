@@ -56,6 +56,7 @@ function candidate(id: string, outputCostPerToken: number): CandidateUpsert {
     maxInputTokens: 262_144,
     maxOutputTokens: 8_192,
     intelligenceIndex: 55.4,
+    reasoning: null,
     upstreamCreatedAt: null,
     upstreamExpirationDate: null,
   };
@@ -262,6 +263,36 @@ describe.runIf(DB_AVAILABLE)('promoting a catalog model end to end', () => {
       tier: 'open',
       promotedAt: null,
     });
+  });
+
+  it('stores candidate reasoning and lets the next sync clear it', async () => {
+    await repo.upsertCandidate({
+      ...candidate(CHEAP_MODEL_ID, BELOW_CEILING_OUTPUT_COST),
+      reasoning: { levels: ['low', 'high'], mandatory: true },
+    });
+
+    const { items } = await repo.listCandidates({
+      page: 1,
+      limit: 25,
+      search: CHEAP_MODEL_ID,
+    });
+    expect(
+      items.find((model) => model.id === CHEAP_MODEL_ID)?.reasoning
+    ).toEqual({ levels: ['low', 'high'], mandatory: true });
+
+    await repo.upsertCandidate({
+      ...candidate(CHEAP_MODEL_ID, BELOW_CEILING_OUTPUT_COST),
+      reasoning: null,
+    });
+
+    const after = await repo.listCandidates({
+      page: 1,
+      limit: 25,
+      search: CHEAP_MODEL_ID,
+    });
+    expect(
+      after.items.find((model) => model.id === CHEAP_MODEL_ID)?.reasoning
+    ).toBeNull();
   });
 
   it('serves edited copy to the picker straight away', async () => {

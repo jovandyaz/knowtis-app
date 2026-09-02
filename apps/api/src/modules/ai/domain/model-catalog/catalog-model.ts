@@ -1,4 +1,8 @@
-import type { CatalogModelStatus, ModelTier } from '@knowtis/shared-types';
+import type {
+  CatalogModelStatus,
+  ModelReasoning,
+  ModelTier,
+} from '@knowtis/shared-types';
 
 /** A model tracked in the AI catalog: discovered upstream as a candidate, promoted by an admin, and back to candidate when retired. */
 export interface CatalogModel {
@@ -12,6 +16,7 @@ export interface CatalogModel {
   readonly maxInputTokens: number;
   readonly maxOutputTokens: number | null;
   readonly intelligenceIndex: number | null;
+  readonly reasoning: ModelReasoning | null;
   readonly upstreamCreatedAt: Date | null;
   readonly upstreamExpirationDate: Date | null;
   readonly lastSeenAt: Date;

@@ -132,6 +132,7 @@ describe('toCandidateUpsert', () => {
       maxInputTokens: 131072,
       maxOutputTokens: 98304,
       intelligenceIndex: 42.3,
+      reasoning: null,
       upstreamCreatedAt: GLM_45_CREATED_AT,
       upstreamExpirationDate: new Date('2026-12-31T00:00:00.000Z'),
     });
