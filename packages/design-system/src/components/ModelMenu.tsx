@@ -229,18 +229,22 @@ export function ModelMenu({
           type="button"
           variant="ghost"
           size="sm"
-          className={cn('gap-1.5', triggerClassName)}
+          className={cn('min-w-0 max-w-full gap-1.5', triggerClassName)}
           disabled={isLoading}
           aria-label={composedAriaLabel}
         >
           {isLoading && (
-            <Loader2 className="h-3.5 w-3.5 animate-spin opacity-60 motion-reduce:animate-none" />
+            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin opacity-60 motion-reduce:animate-none" />
           )}
           <span className="truncate">{triggerText}</span>
           {triggerDetail && (
-            <span className="text-(--muted-foreground)">· {triggerDetail}</span>
+            <span className="shrink-0 whitespace-nowrap text-(--muted-foreground)">
+              · {triggerDetail}
+            </span>
           )}
-          {!isLoading && <ChevronDown className="h-3.5 w-3.5 opacity-60" />}
+          {!isLoading && (
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+          )}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-72">
