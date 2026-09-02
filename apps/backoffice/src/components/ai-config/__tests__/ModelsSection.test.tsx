@@ -72,6 +72,16 @@ const MODELS = [
     needsKey: true,
     promoted: false,
   },
+  {
+    id: 'openrouter:vendor/promoted',
+    label: 'Promoted Vendor',
+    description: 'Promoted from the catalog',
+    tier: 'open',
+    provider: 'openrouter',
+    routableByServer: false,
+    needsKey: false,
+    promoted: true,
+  },
 ];
 
 const NEEDS_KEY_HINT = 'Needs a provider key — configure it in Providers';
@@ -254,6 +264,19 @@ describe('ModelsSection', () => {
     const locked = await screen.findByRole('menuitemradio', { name: /gpt/i });
     expect(locked).toHaveAttribute('aria-disabled', 'true');
     expect(within(locked).getByTitle(NEEDS_KEY_HINT)).toBeInTheDocument();
+  });
+
+  it('lists a promoted model its provider can no longer route as disabled too', async () => {
+    renderSection();
+
+    await userEvent.click(screen.getByRole('button', { name: /sonnet/i }));
+
+    const locked = await screen.findByRole('menuitemradio', {
+      name: /promoted vendor/i,
+    });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    expect(within(locked).getByTitle(NEEDS_KEY_HINT)).toBeInTheDocument();
+    expect(locked).not.toHaveTextContent('Promoted from the catalog');
   });
 
   it('does not write when the needs-key row is clicked', async () => {
