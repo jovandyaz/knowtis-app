@@ -94,6 +94,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
   // Per-send token: late callbacks from a superseded/cancelled stream are ignored.
   let streamVersion = 0;
   let lastNoteId: string | undefined;
+  let lastOptions: AgentSendOptions | undefined;
 
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
@@ -297,6 +298,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       }
       streamVersion++;
       lastNoteId = noteId;
+      lastOptions = options;
       buffer.clearInactivityTimer();
       buffer.discard();
       thinkingBuffer.discard();
@@ -371,7 +373,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
       }
       const text = messages[lastUserIdx].content;
       set({ messages: messages.slice(0, lastUserIdx) });
-      get().sendMessage(text, lastNoteId);
+      get().sendMessage(text, lastNoteId, lastOptions);
     },
 
     approveProposal: () => {

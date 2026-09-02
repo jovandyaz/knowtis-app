@@ -157,6 +157,16 @@ describe('useAgentStore', () => {
     );
   });
 
+  it('a retry after a failed boosted send carries the same boost', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
+    get().onError({ code: 'X', message: 'boom' });
+    useAgentStore.getState().retryLast();
+    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
+      effort: 'high',
+    });
+  });
+
   it('batches chunks into the assistant message', () => {
     const { get } = capture();
     useAgentStore.getState().sendMessage('hola');
