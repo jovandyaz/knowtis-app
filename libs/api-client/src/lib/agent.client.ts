@@ -80,7 +80,14 @@ export interface AgentStreamHandle {
   cancel: () => void;
 }
 
+/** Per-message knobs for `sendMessage`. */
 export interface AgentSendOptions {
+  /**
+   * Reasoning effort for this turn, one of `REASONING_EFFORTS`
+   * (`low | medium | high | xhigh | max`). Omitted, the server runs its
+   * configured default; the server still clamps any value to what the
+   * resolved model declares and the caller's audience may spend.
+   */
   effort?: ReasoningEffort;
 }
 
