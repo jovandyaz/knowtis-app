@@ -247,7 +247,11 @@ export function ModelMenu({
           )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-72">
+      <DropdownMenuContent
+        align="start"
+        collisionPadding={8}
+        className="w-72 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
+      >
         {isError ? (
           <>
             <div className={FOOTNOTE_CLASSES}>
