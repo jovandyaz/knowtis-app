@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
-  REASONING_EFFORTS,
+  GLOBAL_REASONING_EFFORTS,
 } from '@knowtis/shared-types';
 
 import { AI_SETTING_DEFAULTS } from '../../domain/ai-settings';
@@ -945,8 +945,8 @@ describe('AI_SETTING_DEFAULTS', () => {
     }
   });
 
-  it('every reasoning default is a member of the effort union', () => {
-    expect(REASONING_EFFORTS).toContain(
+  it('every reasoning default is a member of the global effort union', () => {
+    expect(GLOBAL_REASONING_EFFORTS).toContain(
       AI_SETTING_DEFAULTS.ai_reasoning_effort
     );
   });

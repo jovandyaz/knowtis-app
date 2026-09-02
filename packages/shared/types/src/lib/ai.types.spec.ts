@@ -1,6 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import { AGENT_STOP_REASON, MESSAGE_STOP_REASON } from './ai.types';
+import {
+  AGENT_STOP_REASON,
+  GLOBAL_REASONING_EFFORTS,
+  isGlobalReasoningEffort,
+  isReasoningEffort,
+  MESSAGE_STOP_REASON,
+  MODEL_ACCESS,
+  REASONING_EFFORTS,
+} from './ai.types';
+
+describe('reasoning efforts', () => {
+  it('includes the per-model levels beyond the global range', () => {
+    expect(REASONING_EFFORTS).toContain('max');
+    expect(REASONING_EFFORTS).toContain('xhigh');
+    expect(isReasoningEffort('max')).toBe(true);
+  });
+
+  it('keeps the global setting narrower than the per-model levels', () => {
+    expect(GLOBAL_REASONING_EFFORTS).toEqual(['low', 'medium', 'high']);
+    expect(isGlobalReasoningEffort('xhigh')).toBe(false);
+    expect(isGlobalReasoningEffort('max')).toBe(false);
+    expect(isGlobalReasoningEffort('medium')).toBe(true);
+  });
+});
+
+describe('model access', () => {
+  it('distinguishes account-gated models from BYOK-gated ones', () => {
+    expect(MODEL_ACCESS).toContain('requires_account');
+  });
+});
 
 describe('stop reasons', () => {
   it('lists every loop stop reason plus the two interrupted outcomes', () => {
