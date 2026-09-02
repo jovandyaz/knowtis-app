@@ -146,4 +146,56 @@ describe('TurnEffortResolver', () => {
       })
     );
   });
+
+  it('warns with the applied level when a free caller is clamped below the request', async () => {
+    const { resolver } = make({
+      levels: ['low', 'medium', 'high', 'xhigh'],
+      mandatory: false,
+    });
+    const warn = vi
+      .spyOn(
+        (resolver as unknown as { logger: { warn: (m: unknown) => void } })
+          .logger,
+        'warn'
+      )
+      .mockImplementation(() => undefined);
+
+    await expect(
+      resolver.resolve({
+        userId: USER,
+        model: MODEL,
+        isByok: false,
+        requested: 'xhigh',
+      })
+    ).resolves.toBe('high');
+    expect(warn).toHaveBeenCalledWith({
+      event: 'agent.effort_clamped',
+      model: MODEL,
+      requested: 'xhigh',
+      applied: 'high',
+    });
+  });
+
+  it('stays quiet when the request is applied unchanged', async () => {
+    const { resolver } = make({
+      levels: ['low', 'medium', 'high'],
+      mandatory: false,
+    });
+    const warn = vi
+      .spyOn(
+        (resolver as unknown as { logger: { warn: (m: unknown) => void } })
+          .logger,
+        'warn'
+      )
+      .mockImplementation(() => undefined);
+
+    await resolver.resolve({
+      userId: USER,
+      model: MODEL,
+      isByok: false,
+      requested: 'high',
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+  });
 });

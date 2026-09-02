@@ -27,7 +27,9 @@ export class TurnEffortResolver {
 
   /**
    * The effort a turn runs at: the caller's request when the model declares it
-   * and the audience may spend it, else the configured global default.
+   * and the audience may spend it, else the configured global default. A
+   * refused or lowered request is logged with a structured warn — never a
+   * silent mismatch.
    */
   async resolve({
     userId,
@@ -50,6 +52,14 @@ export class TurnEffortResolver {
         requested,
       });
       return this.aiConfig.getReasoningEffort();
+    }
+    if (clamped !== requested) {
+      this.logger.warn({
+        event: 'agent.effort_clamped',
+        model,
+        requested,
+        applied: clamped,
+      });
     }
     return clamped;
   }
