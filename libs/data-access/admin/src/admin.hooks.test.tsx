@@ -13,7 +13,7 @@ import {
   type MockInstance,
 } from 'vitest';
 
-import { aiModelsApi, httpClient } from '@knowtis/api-client';
+import { httpClient } from '@knowtis/api-client';
 
 import {
   adminQueryKeys,
@@ -22,6 +22,7 @@ import {
   useAiCatalogCandidates,
   useAiConfig,
   useAiHealth,
+  useAssignableModels,
   useAuditLog,
   useClearSystemProviderKey,
   useDeleteFeatureFlag,
@@ -30,7 +31,6 @@ import {
   useResetAiConfig,
   useResolveCatalogAlert,
   useRetireCatalogModel,
-  useSelectableModels,
   useSetAiConfig,
   useSetSystemProvider,
   useSyncCatalog,
@@ -50,7 +50,6 @@ vi.mock('@knowtis/api-client', () => ({
     put: vi.fn(),
     delete: vi.fn(),
   },
-  aiModelsApi: { getModels: vi.fn() },
 }));
 
 function Wrapper({ children }: { children: ReactNode }) {
@@ -494,30 +493,69 @@ describe('useResetAiConfig', () => {
   });
 });
 
-describe('useSelectableModels', () => {
-  it('fetches the curated model list', async () => {
-    vi.mocked(aiModelsApi.getModels).mockResolvedValue([
-      {
-        id: 'anthropic:claude-sonnet-5',
-        label: 'Sonnet 5',
-        descriptionKey: 'aiModels.sonnet5',
-        tier: 'balanced',
-        costClass: 2,
-        contextWindow: 1000000,
-        isDefault: true,
-        billedToUser: false,
-        routableByServer: true,
-        access: 'granted',
-      },
-    ]);
+const ASSIGNABLE = [
+  {
+    id: 'anthropic:claude-sonnet-5',
+    label: 'Sonnet 5',
+    description: '',
+    tier: 'balanced',
+    provider: 'anthropic',
+    routableByServer: true,
+    needsKey: false,
+    promoted: false,
+  },
+  {
+    id: 'openrouter:z-ai/glm-5.2',
+    label: 'GLM 5.2',
+    description: 'Open-weight generalist',
+    tier: 'open',
+    provider: 'openrouter',
+    routableByServer: false,
+    needsKey: false,
+    promoted: true,
+  },
+];
 
-    const { result } = renderHook(() => useSelectableModels(), {
+describe('useAssignableModels', () => {
+  it('fetches and validates the assignable listing', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue(ASSIGNABLE);
+
+    const { result } = renderHook(() => useAssignableModels(), {
       wrapper: Wrapper,
     });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
-    expect(aiModelsApi.getModels).toHaveBeenCalledTimes(1);
+    expect(httpClient.get).toHaveBeenCalledWith('/ai/catalog/assignable');
     expect(result.current.data?.[0].id).toBe('anthropic:claude-sonnet-5');
+    expect(result.current.data?.[1]).toMatchObject({
+      promoted: true,
+      routableByServer: false,
+      needsKey: false,
+    });
+  });
+
+  it('rejects a row whose routability is not a boolean', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      { ...ASSIGNABLE[0], routableByServer: 'yes' },
+    ]);
+
+    const { result } = renderHook(() => useAssignableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+  });
+
+  it('rejects a row whose tier this bundle does not know', async () => {
+    vi.mocked(httpClient.get).mockResolvedValue([
+      { ...ASSIGNABLE[0], tier: 'mystery' },
+    ]);
+
+    const { result } = renderHook(() => useAssignableModels(), {
+      wrapper: Wrapper,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });
 
@@ -576,7 +614,7 @@ describe('useSystemProviders', () => {
 
 describe('useSetSystemProvider', () => {
   it('sends only the fields the caller set', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
 
     const { result } = renderHook(() => useSetSystemProvider(), {
       wrapper: Wrapper,
@@ -589,8 +627,28 @@ describe('useSetSystemProvider', () => {
     });
   });
 
+  it('marks the assignable listing stale — a key flip changes what can route', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries');
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      ),
+    });
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-new' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: adminQueryKeys.assignableModels(),
+    });
+  });
+
   it('seeds the list cache with the applied state the mutation returned', async () => {
-    vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS);
+    vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS });
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     });
@@ -607,7 +665,25 @@ describe('useSetSystemProvider', () => {
       apiKey: 'sk-ant-new',
     });
     const cached = client.getQueryData(adminQueryKeys.systemProviders());
-    expect(cached).toEqual(result.current.data);
+    expect(cached).toEqual(result.current.data?.providers);
+  });
+
+  it('hands the probe verdict of a saved key to the caller', async () => {
+    vi.mocked(httpClient.put).mockResolvedValue({
+      providers: PROVIDERS,
+      probe: { valid: false, error: 'anthropic refused the probe' },
+    });
+
+    const { result } = renderHook(() => useSetSystemProvider(), {
+      wrapper: Wrapper,
+    });
+    result.current.mutate({ provider: 'anthropic', apiKey: 'sk-ant-new' });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data?.probe).toEqual({
+      valid: false,
+      error: 'anthropic refused the probe',
+    });
   });
 });
 
@@ -735,7 +811,7 @@ function expectCatalogDependentsInvalidated(
     queryKey: adminQueryKeys.aiCatalog(),
   });
   expect(invalidateSpy).toHaveBeenCalledWith({
-    queryKey: adminQueryKeys.selectableModels(),
+    queryKey: adminQueryKeys.assignableModels(),
   });
   expect(invalidateSpy).toHaveBeenCalledWith({
     queryKey: adminQueryKeys.auditLists(),
@@ -943,7 +1019,7 @@ describe('usePromoteCatalogModel', () => {
     expect(result.current.data?.promotedAt).toBeInstanceOf(Date);
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
       status: 'promoted',
@@ -1001,7 +1077,7 @@ describe('useRetireCatalogModel', () => {
     expect(result.current.data?.status).toBe('candidate');
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.post).mockResolvedValue({
       ...CATALOG_MODEL,
       status: 'candidate',
@@ -1039,7 +1115,7 @@ describe('useUpdateCatalogCopy', () => {
     expect(result.current.data?.label).toBe('GLM 5.2 Turbo');
   });
 
-  it('invalidates the catalog, the selectable models and the audit log', async () => {
+  it('invalidates the catalog, the assignable models and the audit log', async () => {
     vi.mocked(httpClient.patch).mockResolvedValue(CATALOG_MODEL);
 
     const { result, invalidateSpy } = renderWithInvalidateSpy(() =>
@@ -1243,7 +1319,8 @@ describe('admin mutations and their invalidations', () => {
       name: 'useSetSystemProvider',
       hook: useSetSystemProvider,
       input: { provider: 'anthropic', enabled: true },
-      respond: () => vi.mocked(httpClient.put).mockResolvedValue(PROVIDERS),
+      respond: () =>
+        vi.mocked(httpClient.put).mockResolvedValue({ providers: PROVIDERS }),
     },
     {
       name: 'useClearSystemProviderKey',

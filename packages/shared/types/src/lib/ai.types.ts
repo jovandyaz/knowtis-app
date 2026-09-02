@@ -237,6 +237,22 @@ export type ProviderTestResult =
       readonly message: string;
     };
 
+/**
+ * Outcome of probing a just-saved system provider key. A definitive refusal
+ * never reaches this shape (the save is rejected instead); `valid: false`
+ * means the provider could not be reached, so the key was stored unverified.
+ */
+export interface ProviderKeyProbeResult {
+  readonly valid: boolean;
+  readonly error?: string;
+}
+
+export interface SetSystemProviderResult {
+  readonly providers: SystemProviderInfo[];
+  /** Present only when the request carried a candidate key. */
+  readonly probe?: ProviderKeyProbeResult;
+}
+
 export interface ProviderKeyInfo {
   readonly provider: ByokProvider;
   readonly keyPrefix: string;

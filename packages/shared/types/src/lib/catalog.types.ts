@@ -86,6 +86,23 @@ export interface CatalogSyncResultDto {
   failures: number;
 }
 
+/**
+ * One row of the backoffice assignable-models listing: every curated model
+ * regardless of key state (unconfigured providers show `needsKey` instead of
+ * disappearing), plus every promoted model. Curated descriptions live in
+ * frontend i18n, so `description` is empty for them.
+ */
+export interface AssignableModelDto {
+  id: string;
+  label: string;
+  description: string;
+  tier: ModelTier;
+  provider: string;
+  routableByServer: boolean;
+  needsKey: boolean;
+  promoted: boolean;
+}
+
 /** Promotion is never implicit about reach: the tier decides which pool the model joins. */
 export interface PromoteCatalogModelInput {
   tier: ModelTier;

@@ -1,9 +1,15 @@
+import { UnprocessableEntityException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AIProvider } from '@knowtis/shared-types';
 
 import { encryptSecret } from '../../infrastructure/crypto/secret-cipher';
+import { probeProviderKey } from '../../infrastructure/providers/provider-probe';
 import { SystemProviderKeysService } from './system-provider-keys.service';
+
+vi.mock('../../infrastructure/providers/provider-probe', () => ({
+  probeProviderKey: vi.fn(),
+}));
 
 const MASTER_KEY = Buffer.alloc(32, 7);
 const MASTER_KEY_B64 = MASTER_KEY.toString('base64');
@@ -36,6 +42,8 @@ describe('SystemProviderKeysService', () => {
   };
   let mockAudit: { record: ReturnType<typeof vi.fn> };
   let env: Record<string, string>;
+  const registry = { languageModel: vi.fn() };
+  const moduleRef = { get: vi.fn().mockReturnValue(registry) };
 
   function build(masterKey: string | null = MASTER_KEY_B64) {
     const configService = {
@@ -46,7 +54,8 @@ describe('SystemProviderKeysService', () => {
     return new SystemProviderKeysService(
       mockRepo as never,
       configService as never,
-      mockAudit as never
+      mockAudit as never,
+      moduleRef as never
     );
   }
 
@@ -59,6 +68,8 @@ describe('SystemProviderKeysService', () => {
       clearKey: vi.fn(),
     };
     mockAudit = { record: vi.fn().mockResolvedValue(undefined) };
+    vi.mocked(probeProviderKey).mockReset().mockResolvedValue({ valid: true });
+    moduleRef.get.mockClear().mockReturnValue(registry);
     service = build();
   });
 
@@ -168,7 +179,7 @@ describe('SystemProviderKeysService', () => {
   });
 
   describe('setKey', () => {
-    it('should store an encrypted key and audit only its prefix', async () => {
+    it('should store an encrypted key and audit only its prefix with the probe verdict', async () => {
       await service.setKey('openrouter', 'sk-or-v1-secret', ACTOR);
 
       const [provider, secret, keyPrefix, actorId] =
@@ -182,7 +193,7 @@ describe('SystemProviderKeysService', () => {
         action: 'ai_provider.key_set',
         targetType: 'ai_provider',
         targetId: 'openrouter',
-        after: { keyPrefix: 'sk-or-v1' },
+        after: { keyPrefix: 'sk-or-v1', probe: 'passed' },
       });
     });
 
@@ -191,7 +202,72 @@ describe('SystemProviderKeysService', () => {
         build(null).setKey('openrouter', 'sk-or-v1-secret', ACTOR)
       ).rejects.toThrow('BYOK_ENCRYPTION_KEY is not configured');
       expect(mockRepo.setKey).not.toHaveBeenCalled();
+      expect(probeProviderKey).not.toHaveBeenCalled();
     });
+
+    it('should probe the candidate key and report that it passed', async () => {
+      await expect(
+        service.setKey('anthropic', 'sk-ant-good-key', ACTOR)
+      ).resolves.toEqual({ valid: true });
+
+      expect(probeProviderKey).toHaveBeenCalledWith(
+        registry,
+        'anthropic',
+        'sk-ant-good-key'
+      );
+    });
+
+    it('should veto a key the provider definitively refused and store nothing', async () => {
+      vi.mocked(probeProviderKey).mockResolvedValue({
+        valid: false,
+        reason: 'rejected',
+        error: 'invalid x-api-key',
+      });
+
+      await expect(
+        service.setKey('anthropic', 'sk-ant-bad-key', ACTOR)
+      ).rejects.toMatchObject({
+        constructor: UnprocessableEntityException,
+        response: {
+          message: 'anthropic refused the probe: invalid x-api-key',
+          code: 'rejected',
+        },
+      });
+
+      expect(mockRepo.setKey).not.toHaveBeenCalled();
+      expect(mockAudit.record).not.toHaveBeenCalled();
+    });
+
+    it.each(['unavailable', 'timeout'] as const)(
+      'should store the key when the probe ends in %s and report the failure',
+      async (reason) => {
+        vi.mocked(probeProviderKey).mockResolvedValue({
+          valid: false,
+          reason,
+          error: 'Failed after 3 attempts',
+        });
+
+        await expect(
+          service.setKey('anthropic', 'sk-ant-maybe-key', ACTOR)
+        ).resolves.toEqual({
+          valid: false,
+          error: 'Failed after 3 attempts',
+        });
+
+        expect(mockRepo.setKey).toHaveBeenCalledWith(
+          'anthropic',
+          expect.anything(),
+          'sk-ant-m',
+          ACTOR
+        );
+        expect(mockAudit.record).toHaveBeenCalledWith(
+          expect.objectContaining({
+            action: 'ai_provider.key_set',
+            after: { keyPrefix: 'sk-ant-m', probe: reason },
+          })
+        );
+      }
+    );
   });
 
   describe('clearKey', () => {

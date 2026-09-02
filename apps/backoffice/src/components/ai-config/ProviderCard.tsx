@@ -44,6 +44,11 @@ export function ProviderCard({ provider }: ProviderCardProps) {
   const label = PROVIDER_LABEL[provider.provider];
   const isBusy =
     setProvider.isPending || clearKey.isPending || testProvider.isPending;
+  const saveProbe = setProvider.data?.probe;
+  const saveProbeError = (saveProbe?.error ?? 'unknown error').replace(
+    /\.+$/,
+    ''
+  );
 
   // A probe describes the key that was routing when it ran; once the row moves,
   // the verdict is about a key that is no longer there.
@@ -113,6 +118,22 @@ export function ProviderCard({ provider }: ProviderCardProps) {
         fallbackMessage={`Could not update ${label}.`}
       />
 
+      {saveProbe ? (
+        saveProbe.valid ? (
+          <p role="status" className="text-xs text-(--muted-foreground)">
+            Key saved — {label} answered the probe.
+          </p>
+        ) : (
+          <p
+            role="alert"
+            className="rounded-md bg-(--destructive)/10 p-2 text-xs text-(--destructive)"
+          >
+            Key saved, but {label} could not be reached to verify it:{' '}
+            {saveProbeError}. Test it again once {label} is back.
+          </p>
+        )
+      ) : null}
+
       {testProvider.data?.ok ? (
         <p role="status" className="text-xs text-(--muted-foreground)">
           {label} answered via {testProvider.data.model}.
@@ -165,7 +186,12 @@ export function ProviderCard({ provider }: ProviderCardProps) {
             variant="ghost"
             size="sm"
             disabled={isBusy}
-            onClick={() => clearKey.mutate(provider.provider)}
+            onClick={() =>
+              clearKey.mutate(provider.provider, {
+                // "Key saved" would otherwise outlive the key it describes.
+                onSuccess: () => setProvider.reset(),
+              })
+            }
           >
             Clear stored key
           </Button>

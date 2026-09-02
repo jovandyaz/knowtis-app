@@ -7,14 +7,25 @@ import type { SystemProvider } from '@knowtis/data-access-admin';
 
 import { ProviderCard } from '../ProviderCard';
 
-const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
-  () => ({
+const { setMutate, setReset, clearMutate, testMutate, testReset, state } =
+  vi.hoisted(() => ({
     setMutate: vi.fn(),
+    setReset: vi.fn(),
     clearMutate: vi.fn(),
     testMutate: vi.fn(),
     testReset: vi.fn(),
     state: {
-      set: { isPending: false, isError: false, error: null as Error | null },
+      set: {
+        isPending: false,
+        isError: false,
+        error: null as Error | null,
+        data: undefined as
+          | {
+              providers: unknown[];
+              probe?: { valid: boolean; error?: string };
+            }
+          | undefined,
+      },
       test: {
         isPending: false,
         isError: false,
@@ -25,14 +36,17 @@ const { setMutate, clearMutate, testMutate, testReset, state } = vi.hoisted(
           | undefined,
       },
     },
-  })
-);
+  }));
 
 vi.mock('@knowtis/data-access-admin', async (importOriginal) => {
   const actual = await importOriginal<typeof DataAccessAdmin>();
   return {
     ...actual,
-    useSetSystemProvider: () => ({ mutate: setMutate, ...state.set }),
+    useSetSystemProvider: () => ({
+      mutate: setMutate,
+      reset: setReset,
+      ...state.set,
+    }),
     useClearSystemProviderKey: () => ({
       mutate: clearMutate,
       isPending: false,
@@ -62,7 +76,12 @@ function providerWith(overrides: Partial<SystemProvider> = {}): SystemProvider {
 describe('ProviderCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    state.set = { isPending: false, isError: false, error: null };
+    state.set = {
+      isPending: false,
+      isError: false,
+      error: null,
+      data: undefined,
+    };
     state.test = {
       isPending: false,
       isError: false,
@@ -222,6 +241,54 @@ describe('ProviderCard', () => {
     );
   });
 
+  it('warns that a saved key could not be verified without unsaying the save', () => {
+    state.set.data = {
+      providers: [],
+      probe: { valid: false, error: 'Failed after 3 attempts' },
+    };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Key saved, but Anthropic could not be reached to verify it: Failed after 3 attempts. Test it again once Anthropic is back.'
+    );
+  });
+
+  it('does not double the period when the provider prose ends in one', () => {
+    state.set.data = {
+      providers: [],
+      probe: {
+        valid: false,
+        error: 'The operation was aborted due to timeout.',
+      },
+    };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('due to timeout. Test it again');
+    expect(alert).not.toHaveTextContent('..');
+  });
+
+  it('confirms a saved key that answered its probe', () => {
+    state.set.data = { providers: [], probe: { valid: true } };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      /key saved — anthropic answered the probe/i
+    );
+  });
+
+  it('renders no save verdict when the mutation only toggled enablement', () => {
+    state.set.data = { providers: [] };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    expect(screen.queryByText(/key saved/i)).not.toBeInTheDocument();
+  });
+
   it('surfaces why a key was refused', () => {
     state.set.isError = true;
     state.set.error = new Error('The anthropic key was rejected.');
@@ -244,6 +311,23 @@ describe('ProviderCard', () => {
     );
 
     expect(screen.getByRole('alert')).toHaveTextContent(/cannot be decrypted/i);
+  });
+
+  it('drops the "key saved" verdict once the stored key is cleared', async () => {
+    state.set.data = { providers: [], probe: { valid: true } };
+    render(<ProviderCard provider={providerWith({ keySource: 'database' })} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Key saved');
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Clear stored key' })
+    );
+
+    expect(clearMutate).toHaveBeenCalledWith(
+      'anthropic',
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+    (clearMutate.mock.calls[0][1] as { onSuccess: () => void }).onSuccess();
+    expect(setReset).toHaveBeenCalledTimes(1);
   });
 
   it('offers to clear only a key that is actually stored', () => {
@@ -276,6 +360,6 @@ describe('ProviderCard', () => {
       screen.getByRole('button', { name: /clear stored key/i })
     );
 
-    expect(clearMutate).toHaveBeenCalledWith('anthropic');
+    expect(clearMutate).toHaveBeenCalledWith('anthropic', expect.anything());
   });
 });

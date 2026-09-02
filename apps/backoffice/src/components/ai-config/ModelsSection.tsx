@@ -1,10 +1,11 @@
 import {
+  useAssignableModels,
   useResetAiConfig,
-  useSelectableModels,
   useSetAiConfig,
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import {
+  Button,
   ModelSelect,
   MutationErrorAlert,
   Table,
@@ -16,6 +17,7 @@ import {
 } from '@knowtis/design-system';
 import { MODEL_TIERS } from '@knowtis/shared-types';
 
+import { toModelSelectOption } from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 
@@ -27,10 +29,14 @@ const KEY_LABELS: Record<string, string> = {
 
 interface ModelsSectionProps {
   entries: AiConfigEntry[];
+  onConfigureProviders: () => void;
 }
 
-export function ModelsSection({ entries }: ModelsSectionProps) {
-  const models = useSelectableModels();
+export function ModelsSection({
+  entries,
+  onConfigureProviders,
+}: ModelsSectionProps) {
+  const models = useAssignableModels();
   const setConfig = useSetAiConfig();
   const resetConfig = useResetAiConfig();
   // Cross-guard: a PUT and a DELETE on the same key must not race.
@@ -41,6 +47,7 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
     : models.isError
       ? 'error'
       : 'ready';
+  const options = (models.data ?? []).map(toModelSelectOption);
 
   return (
     <ConfigSection
@@ -79,11 +86,12 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
               <TableCell>
                 <div className="flex min-w-0 items-center gap-2">
                   <ModelSelect
-                    models={models.data ?? []}
+                    models={options}
                     value={entry.value}
                     tierOrder={MODEL_TIERS}
                     status={modelStatus}
                     onRetry={() => void models.refetch()}
+                    renderDescription={(m) => m.description ?? ''}
                     triggerVariant="outline"
                     disabled={mutating}
                     onSelect={(id) =>
@@ -113,6 +121,14 @@ export function ModelsSection({ entries }: ModelsSectionProps) {
           ))}
         </TableBody>
       </Table>
+      <Button
+        variant="link"
+        size="sm"
+        className="self-start px-0"
+        onClick={onConfigureProviders}
+      >
+        Configure provider keys
+      </Button>
     </ConfigSection>
   );
 }

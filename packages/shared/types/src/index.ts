@@ -102,6 +102,8 @@ export {
   PROVIDER_PROBE_FAILURES,
   type ProviderProbeFailure,
   type ProviderTestResult,
+  type ProviderKeyProbeResult,
+  type SetSystemProviderResult,
   type SystemProviderInfo,
   type EncryptedSecret,
 } from './lib/ai.types';
@@ -158,6 +160,7 @@ export {
   CATALOG_SYNC_SKIP_REASONS,
   type CatalogSyncSkipReason,
   type CatalogSyncResultDto,
+  type AssignableModelDto,
   type PromoteCatalogModelInput,
   type UpdateCatalogCopyInput,
 } from './lib/catalog.types';

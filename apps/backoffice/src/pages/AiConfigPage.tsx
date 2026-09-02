@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 
 import { AiConfigStatusHeader } from '@/components/ai-config/AiConfigStatusHeader';
 import { CatalogSection } from '@/components/ai-config/CatalogSection';
@@ -87,6 +87,8 @@ const CAPABILITY_FLAG_GROUPS: ReadonlyArray<AiFlagGroup> = [
 export function AiConfigPage() {
   const config = useAiConfig();
   const flags = useFeatureFlags();
+  // Controlled so a section can send the admin to Providers (key configuration).
+  const [tab, setTab] = useState<AiConfigTabValue>(TAB.models);
 
   const chain = config.data?.find((entry) => entry.kind === 'chain');
   const ceiling = config.data?.find((entry) => entry.kind === 'money');
@@ -183,7 +185,10 @@ export function AiConfigPage() {
         </p>
       </div>
       <AiConfigStatusHeader defaultModel={defaultModel} />
-      <Tabs defaultValue={TAB.models}>
+      <Tabs
+        value={tab}
+        onValueChange={(value) => setTab(value as AiConfigTabValue)}
+      >
         <TabsList>
           {AI_CONFIG_TABS.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value}>
@@ -194,7 +199,10 @@ export function AiConfigPage() {
         <TabsContent value={TAB.models} className="flex flex-col gap-8 pt-4">
           {renderConfigPanel(
             <>
-              <ModelsSection entries={modelEntries} />
+              <ModelsSection
+                entries={modelEntries}
+                onConfigureProviders={() => setTab(TAB.providers)}
+              />
               <div
                 data-testid="ai-config-settings-grid"
                 className="grid grid-cols-1 gap-8 xl:grid-cols-2"

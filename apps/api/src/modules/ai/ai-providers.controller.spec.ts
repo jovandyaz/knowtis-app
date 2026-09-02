@@ -30,7 +30,7 @@ const anthropic = { provider: 'anthropic' } as never;
 function make() {
   const systemKeys = {
     list: vi.fn().mockResolvedValue([]),
-    setKey: vi.fn().mockResolvedValue(undefined),
+    setKey: vi.fn().mockResolvedValue({ valid: true }),
     setEnabled: vi.fn().mockResolvedValue(undefined),
     clearKey: vi.fn().mockResolvedValue(undefined),
   };
@@ -71,16 +71,20 @@ describe('AiProvidersController', () => {
     expect(systemKeys.setEnabled).not.toHaveBeenCalled();
   });
 
-  it('should store a key that the provider accepts', async () => {
+  it('should store a key and surface the probe verdict', async () => {
     const { controller, systemKeys } = make();
 
-    await controller.set(user, anthropic, { apiKey: 'sk-ant-good' });
+    const result = await controller.set(user, anthropic, {
+      apiKey: 'sk-ant-good',
+    });
 
     expect(systemKeys.setKey).toHaveBeenCalledWith(
       'anthropic',
       'sk-ant-good',
       'admin-1'
     );
+    expect(result.probe).toEqual({ valid: true });
+    expect(result.providers).toEqual([]);
   });
 
   it('should refresh routing before reporting what is applied', async () => {
@@ -94,102 +98,56 @@ describe('AiProvidersController', () => {
     );
   });
 
-  describe('probe', () => {
-    it('should bound the probe with an abort signal', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const { controller } = make();
+  describe('probe on save', () => {
+    it('should keep a key the provider could not vet and report why', async () => {
+      const { controller, systemKeys } = make();
+      systemKeys.setKey.mockResolvedValue({
+        valid: false,
+        error: 'Failed after 3 attempts',
+      });
 
-      await controller.set(user, anthropic, { apiKey: 'sk-ant-good' });
+      const result = await controller.set(user, anthropic, {
+        apiKey: 'sk-ant-doubtful',
+      });
 
-      expect(generateText.mock.calls[0][0].abortSignal).toBeInstanceOf(
-        AbortSignal
+      expect(systemKeys.setKey).toHaveBeenCalledWith(
+        'anthropic',
+        'sk-ant-doubtful',
+        'admin-1'
       );
+      expect(result.probe).toEqual({
+        valid: false,
+        error: 'Failed after 3 attempts',
+      });
     });
 
-    it.each([401, 403])(
-      'should refuse to store a key the provider answers %i to',
-      async (statusCode) => {
-        await probeFailsWith(apiCallError(statusCode));
-        const { controller, systemKeys } = make();
-
-        await expect(
-          controller.set(user, anthropic, { apiKey: 'sk-ant-bad' })
-        ).rejects.toBeInstanceOf(UnprocessableEntityException);
-        expect(systemKeys.setKey).not.toHaveBeenCalled();
-      }
-    );
-
-    // A 503 would be truer but the global filter masks 5xx bodies, so the
-    // reason has to ride a 4xx to reach the admin at all.
-    it('should keep an outage distinguishable from a bad key in the response', async () => {
-      await probeFailsWith(
-        new RetryError({
-          message: 'Failed after 3 attempts',
-          reason: 'maxRetriesExceeded',
-          errors: [apiCallError(503)],
+    it('should propagate a veto without refreshing routing', async () => {
+      const { controller, systemKeys, registry } = make();
+      systemKeys.setKey.mockRejectedValue(
+        new UnprocessableEntityException({
+          message: 'anthropic refused the probe: invalid x-api-key',
+          code: 'rejected',
         })
       );
+
+      await expect(
+        controller.set(user, anthropic, { apiKey: 'sk-ant-bad' })
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(registry.refreshSystemConfigs).not.toHaveBeenCalled();
+    });
+
+    it('should not attach a probe when only enablement changes', async () => {
       const { controller, systemKeys } = make();
 
-      const error = await controller
-        .set(user, anthropic, { apiKey: 'sk-ant-good' })
-        .catch((e) => e);
+      const result = await controller.set(user, anthropic, { enabled: false });
 
-      expect(error).toBeInstanceOf(UnprocessableEntityException);
-      expect(error.getResponse()).toMatchObject({
-        code: 'unavailable',
-        message: expect.stringContaining('unavailable'),
-      });
       expect(systemKeys.setKey).not.toHaveBeenCalled();
-    });
-
-    it.each([
-      ['a timeout', new DOMException('timed out', 'TimeoutError')],
-      [
-        'an unreachable host',
-        Object.assign(new Error('getaddrinfo ENOTFOUND'), {
-          code: 'ENOTFOUND',
-        }),
-      ],
-    ])('should not blame the key for %s', async (_label, error) => {
-      await probeFailsWith(error);
-      const { controller, systemKeys } = make();
-
-      const thrown = await controller
-        .set(user, anthropic, { apiKey: 'sk-ant-good' })
-        .catch((e) => e);
-
-      expect(thrown.getResponse()).toMatchObject({ code: 'unavailable' });
-      expect(systemKeys.setKey).not.toHaveBeenCalled();
-    });
-
-    it('should keep the submitted key out of the error the provider echoes back', async () => {
-      await probeFailsWith(
-        apiCallError(401, 'Incorrect API key provided: sk-ant-secret-value.')
-      );
-      const { controller } = make();
-
-      const thrown = await controller
-        .set(user, anthropic, { apiKey: 'sk-ant-secret-value' })
-        .catch((e) => e);
-
-      const body = JSON.stringify(thrown.getResponse());
-      expect(body).not.toContain('sk-ant-secret-value');
-      expect(body).toContain('[redacted]');
-    });
-
-    it('should not probe when only enablement changes', async () => {
-      const { generateText } = vi.mocked(await import('ai'));
-      const { controller, systemKeys } = make();
-
-      await controller.set(user, anthropic, { enabled: false });
-
-      expect(generateText).not.toHaveBeenCalled();
       expect(systemKeys.setEnabled).toHaveBeenCalledWith(
         'anthropic',
         false,
         'admin-1'
       );
+      expect(result.probe).toBeUndefined();
     });
   });
 
@@ -201,14 +159,84 @@ describe('AiProvidersController', () => {
       const result = await controller.test(anthropic);
 
       expect(registry.languageModel).toHaveBeenCalledWith(
-        expect.stringContaining('anthropic:'),
-        undefined
+        expect.stringContaining('anthropic:')
       );
       expect(generateText).toHaveBeenCalledTimes(1);
       expect(result).toEqual({
         ok: true,
         model: expect.stringContaining('anthropic:'),
       });
+    });
+
+    it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-routing-secret']);
+      await probeFailsWith(
+        apiCallError(401, 'invalid x-api-key: sk-ant-routing-secret')
+      );
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'rejected',
+        message: 'anthropic refused the probe: invalid x-api-key: [redacted]',
+      });
+    });
+
+    it('should report exhausted retries as the provider being unavailable, not the key', async () => {
+      const { controller } = make();
+      await probeFailsWith(
+        new RetryError({
+          message: 'Failed after 3 attempts',
+          reason: 'maxRetriesExceeded',
+          errors: [apiCallError(503)],
+        })
+      );
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unavailable',
+        message: 'anthropic is unavailable right now. Retry shortly.',
+      });
+    });
+
+    it('should report a probe that hit its time bound as unavailable', async () => {
+      const { controller } = make();
+      await probeFailsWith(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError'
+        )
+      );
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unavailable',
+        message: 'anthropic is unavailable right now. Retry shortly.',
+      });
+    });
+
+    it('should report a provider with nothing routing as unconfigured', async () => {
+      const { controller, registry } = make();
+      registry.languageModel.mockImplementation(() => {
+        throw new ProviderNotConfiguredError('anthropic has no key');
+      });
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message: 'anthropic has no key',
+      });
+    });
+
+    it('should bound the probe with an abort signal', async () => {
+      const { generateText } = vi.mocked(await import('ai'));
+      const { controller } = make();
+
+      await controller.test(anthropic);
+
+      expect(generateText.mock.calls[0][0].abortSignal).toBeInstanceOf(
+        AbortSignal
+      );
     });
 
     // A failed probe is the answer the caller asked for. Throwing would hand it

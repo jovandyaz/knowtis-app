@@ -102,6 +102,47 @@ describe('ModelSelect', () => {
     expect(labels).toEqual(['balanced', 'fast']);
   });
 
+  it('renders a disabled option inert but still visible', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[
+          ...models,
+          { id: 'a:locked', label: 'Locked One', tier: 'fast', disabled: true },
+        ]}
+        value="a:fast"
+        onSelect={onSelect}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const locked = screen.getByRole('menuitemradio', { name: /Locked One/ });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(locked);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
+  it('renders a disabled action row inert when rows are actions', async () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelSelect
+        models={[
+          { id: 'a:locked', label: 'Locked One', tier: 'fast', disabled: true },
+        ]}
+        value={null}
+        rowsAreActions
+        onSelect={onSelect}
+        triggerLabel="Add model"
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const locked = screen.getByRole('menuitem', { name: /Locked One/ });
+    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    await userEvent.click(locked);
+    expect(onSelect).not.toHaveBeenCalled();
+  });
+
   it('disables the trigger when disabled is set', () => {
     render(
       <ModelSelect

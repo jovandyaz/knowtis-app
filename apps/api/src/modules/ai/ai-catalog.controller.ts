@@ -24,6 +24,7 @@ import {
 import { Throttle } from '@nestjs/throttler';
 
 import type {
+  AssignableModelDto,
   CatalogModelDto,
   CatalogOverviewDto,
   CatalogSyncResultDto,
@@ -34,6 +35,7 @@ import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
+import { AssignableModelsService } from './application/services/assignable-models.service';
 import { CatalogModelParamDto } from './dto/catalog-model-param.dto';
 import { PaginatedCandidatesQueryDto } from './dto/paginated-candidates-query.dto';
 import { PromoteCatalogModelDto } from './dto/promote-catalog-model.dto';
@@ -57,7 +59,10 @@ const SYNC_THROTTLE = { default: { limit: 3, ttl: 60000 } };
 @Roles('admin')
 @Controller('ai/catalog')
 export class AiCatalogController {
-  constructor(private readonly catalog: AiCatalogAdminService) {}
+  constructor(
+    private readonly catalog: AiCatalogAdminService,
+    private readonly assignable: AssignableModelsService
+  ) {}
 
   @ApiOperation({
     summary: 'List live promoted models and open alerts',
@@ -89,6 +94,19 @@ export class AiCatalogController {
       limit: query.limit ?? DEFAULT_LIMIT,
       search: query.search,
     });
+  }
+
+  @ApiOperation({
+    summary: 'List every model assignable as an intent default',
+    description:
+      'All curated models — those of unconfigured providers carry `needsKey` instead of being hidden — plus every promoted model, each annotated with server routability.',
+  })
+  @ApiResponse({ status: 200, description: 'Assignable models' })
+  @ApiAuthErrors(AI_DISABLED)
+  @Throttle(READ_THROTTLE)
+  @Get('assignable')
+  listAssignable(): Promise<AssignableModelDto[]> {
+    return this.assignable.list();
   }
 
   @ApiOperation({
