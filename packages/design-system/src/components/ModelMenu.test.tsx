@@ -68,7 +68,7 @@ describe('ModelMenu', () => {
     expect(onSelect).toHaveBeenCalledWith('fast');
   });
 
-  it('locked rows are aria-disabled and route to the footer CTA', async () => {
+  it('locked rows stay actionable and route to the footer CTA', async () => {
     const user = userEvent.setup();
     const onSelect = vi.fn();
     const onCta = vi.fn();
@@ -79,13 +79,19 @@ describe('ModelMenu', () => {
           value: null,
           onSelect,
           footerCta: { label: 'Crear cuenta gratis', onClick: onCta },
+          lockedHint: 'requiere cuenta',
         })}
       />
     );
     await user.click(screen.getByRole('button'));
 
-    const locked = screen.getByRole('menuitemradio', { name: /Sonnet 5/ });
-    expect(locked).toHaveAttribute('aria-disabled', 'true');
+    const locked = screen.getByRole('menuitem', {
+      name: 'Sonnet 5, requiere cuenta',
+    });
+    expect(locked).not.toHaveAttribute('aria-disabled');
+    expect(
+      screen.queryByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).not.toBeInTheDocument();
     // The lock glyph replaces the check slot; it is decorative, so structural.
     expect(locked.querySelector('svg')).toBeInTheDocument();
 

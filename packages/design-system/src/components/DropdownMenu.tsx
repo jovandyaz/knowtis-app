@@ -75,11 +75,11 @@ DropdownMenuSubTrigger.displayName = 'DropdownMenuSubTrigger';
 const DropdownMenuSubContent = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.SubContent>,
   ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent>
->(({ className, ...props }, ref) => (
+>(({ className, sideOffset = 2, ...props }, ref) => (
   <DropdownMenuPrimitive.Portal>
     <DropdownMenuPrimitive.SubContent
       ref={ref}
-      sideOffset={2}
+      sideOffset={sideOffset}
       className={cn(
         'z-50 min-w-[8rem] overflow-hidden rounded-md border border-(--border) bg-(--card) p-1 shadow-md',
         'animate-in fade-in-0 zoom-in-95',

@@ -58,12 +58,32 @@ export default meta;
 
 type Story = StoryObj<typeof ModelMenu>;
 
+function labelFor(
+  id: string | null,
+  primary: ModelMenuProps['primary'],
+  moreModels?: ModelMenuProps['moreModels']
+): string {
+  const row =
+    primary.find((r) => r.id === id) ??
+    moreModels?.groups.flatMap((g) => g.options).find((o) => o.id === id);
+  return row?.label ?? '—';
+}
+
 function Controlled(
-  props: Omit<ModelMenuProps, 'value' | 'onSelect'> & { initial: string | null }
+  props: Omit<ModelMenuProps, 'value' | 'onSelect' | 'triggerLabel'> & {
+    initial: string | null;
+  }
 ) {
   const { initial, ...rest } = props;
   const [value, setValue] = useState<string | null>(initial);
-  return <ModelMenu {...rest} value={value} onSelect={setValue} />;
+  return (
+    <ModelMenu
+      {...rest}
+      value={value}
+      onSelect={setValue}
+      triggerLabel={labelFor(value, rest.primary, rest.moreModels)}
+    />
+  );
 }
 
 function ControlledWithEffort() {
@@ -83,7 +103,7 @@ function ControlledWithEffort() {
         onChange: setEffortValue,
       }}
       moreModels={MORE_MODELS}
-      triggerLabel="Sonnet 5"
+      triggerLabel={labelFor(value, PRIMARY, MORE_MODELS)}
       {...(effortValue !== 'auto' && effortLabel
         ? { triggerDetail: effortLabel }
         : {})}
@@ -124,7 +144,6 @@ export const FreeRegistered: Story = {
         label: 'Más modelos',
         groups: [MORE_MODELS.groups[0]],
       }}
-      triggerLabel="Sonnet 5"
       aria-label="Modelo"
     />
   ),

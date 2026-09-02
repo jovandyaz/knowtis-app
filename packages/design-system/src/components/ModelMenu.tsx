@@ -25,7 +25,7 @@ export interface ModelMenuPrimaryRow {
   label: string;
   /** Job line, e.g. "Balance entre calidad y velocidad". */
   description: string;
-  /** Anonymous: lock glyph instead of check slot. */
+  /** Anonymous: lock glyph instead of check slot, and the row acts as the upsell. */
   locked?: boolean;
 }
 
@@ -66,6 +66,8 @@ export interface ModelMenuProps {
   moreModels?: ModelMenuMoreModels;
   /** Anonymous upsell. */
   footerCta?: { label: string; onClick: () => void };
+  /** Accessible suffix for a locked row, e.g. "requiere cuenta". */
+  lockedHint?: string;
   /** Model name. */
   triggerLabel: string;
   /** Effort tail — renders "· {detail}" muted. */
@@ -132,6 +134,7 @@ export function ModelMenu({
   effort,
   moreModels,
   footerCta,
+  lockedHint,
   triggerLabel,
   triggerDetail,
   status = 'ready',
@@ -151,15 +154,6 @@ export function ModelMenu({
   const effortValueLabel = effort?.options.find(
     (o) => o.id === effort.value
   )?.label;
-
-  const handlePrimarySelect = (id: string) => {
-    const row = primary.find((r) => r.id === id);
-    if (row?.locked) {
-      footerCta?.onClick();
-      return;
-    }
-    onSelect(id);
-  };
 
   return (
     <DropdownMenu>
@@ -198,23 +192,39 @@ export function ModelMenu({
           <>
             <DropdownMenuRadioGroup
               {...(value !== null && { value })}
-              onValueChange={handlePrimarySelect}
+              onValueChange={onSelect}
             >
-              {primary.map((row) => (
-                <DropdownMenuRadioItem
-                  key={row.id}
-                  value={row.id}
-                  className={OPTION_ROW_CLASSES}
-                  {...(row.locked && { 'aria-disabled': true })}
-                >
-                  <OptionRow label={row.label} description={row.description} />
-                  {row.locked && (
+              {primary.map((row) =>
+                row.locked ? (
+                  <DropdownMenuItem
+                    key={row.id}
+                    className={OPTION_ROW_CLASSES}
+                    onSelect={() => footerCta?.onClick()}
+                    {...(lockedHint && {
+                      'aria-label': `${row.label}, ${lockedHint}`,
+                    })}
+                  >
+                    <OptionRow
+                      label={row.label}
+                      description={row.description}
+                    />
                     <span className="absolute right-2 top-1/2 -translate-y-1/2">
                       <Lock className={LOCK_GLYPH_CLASSES} />
                     </span>
-                  )}
-                </DropdownMenuRadioItem>
-              ))}
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuRadioItem
+                    key={row.id}
+                    value={row.id}
+                    className={OPTION_ROW_CLASSES}
+                  >
+                    <OptionRow
+                      label={row.label}
+                      description={row.description}
+                    />
+                  </DropdownMenuRadioItem>
+                )
+              )}
             </DropdownMenuRadioGroup>
             {(effort || moreModels) && <DropdownMenuSeparator />}
             {effort &&
