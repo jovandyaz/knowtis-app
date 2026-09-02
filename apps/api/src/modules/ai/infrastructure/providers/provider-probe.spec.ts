@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { APICallError, generateText, RetryError } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
@@ -6,9 +6,23 @@ import {
   VALIDATION_MAX_OUTPUT_TOKENS,
 } from './provider-probe';
 
-vi.mock('ai', () => ({ generateText: vi.fn() }));
+// Only the call is stubbed; the error classes must stay real because the
+// classifier reads the SDK's own retryability verdict off them.
+vi.mock('ai', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('ai')>()),
+  generateText: vi.fn(),
+}));
 
 const registry = { languageModel: vi.fn().mockReturnValue('probe-model') };
+
+function apiCallError(statusCode: number, message = 'nope') {
+  return new APICallError({
+    message,
+    url: 'https://provider.test/v1',
+    requestBodyValues: {},
+    statusCode,
+  });
+}
 
 describe('probeProviderKey', () => {
   beforeEach(() => {
@@ -37,7 +51,7 @@ describe('probeProviderKey', () => {
 
   it('should report a refusal with the candidate key scrubbed from the provider echo', async () => {
     vi.mocked(generateText).mockRejectedValue(
-      new Error('Incorrect API key provided: sk-ant-secret-value.')
+      apiCallError(401, 'Incorrect API key provided: sk-ant-secret-value.')
     );
 
     const result = await probeProviderKey(
@@ -46,10 +60,42 @@ describe('probeProviderKey', () => {
       'sk-ant-secret-value'
     );
 
-    expect(result.valid).toBe(false);
-    expect(result.error).toContain('[redacted]');
-    expect(result.error).not.toContain('sk-ant-secret-value');
+    expect(result).toEqual({
+      valid: false,
+      reason: 'rejected',
+      error: 'Incorrect API key provided: [redacted].',
+    });
   });
+
+  it.each([400, 401, 403, 404])(
+    'should classify HTTP %i as a definitive refusal',
+    async (statusCode) => {
+      vi.mocked(generateText).mockRejectedValue(apiCallError(statusCode));
+
+      await expect(
+        probeProviderKey(registry as never, 'anthropic', 'sk-ant-candidate')
+      ).resolves.toMatchObject({ valid: false, reason: 'rejected' });
+    }
+  );
+
+  // The SDK retries 429/5xx to exhaustion and rethrows a RetryError, which
+  // carries no statusCode — the key may well be fine.
+  it.each([429, 500, 503])(
+    'should classify HTTP %i as unavailable after the SDK exhausts its retries',
+    async (statusCode) => {
+      vi.mocked(generateText).mockRejectedValue(
+        new RetryError({
+          message: 'Failed after 3 attempts',
+          reason: 'maxRetriesExceeded',
+          errors: [apiCallError(statusCode)],
+        })
+      );
+
+      await expect(
+        probeProviderKey(registry as never, 'anthropic', 'sk-ant-candidate')
+      ).resolves.toMatchObject({ valid: false, reason: 'unavailable' });
+    }
+  );
 
   it('should bound the probe and map a timeout abort to a result, not a rejection', async () => {
     vi.mocked(generateText).mockImplementation(({ abortSignal }) => {
@@ -67,15 +113,20 @@ describe('probeProviderKey', () => {
       probeProviderKey(registry as never, 'anthropic', 'sk-ant-slow-provider')
     ).resolves.toEqual({
       valid: false,
+      reason: 'timeout',
       error: 'The operation was aborted due to timeout',
     });
   });
 
-  it('should label a non-Error throw as unknown', async () => {
+  it('should label a non-Error throw as unknown and unavailable', async () => {
     vi.mocked(generateText).mockRejectedValue('boom');
 
     await expect(
       probeProviderKey(registry as never, 'openai', 'sk-openai-key')
-    ).resolves.toEqual({ valid: false, error: 'unknown' });
+    ).resolves.toEqual({
+      valid: false,
+      reason: 'unavailable',
+      error: 'unknown',
+    });
   });
 });

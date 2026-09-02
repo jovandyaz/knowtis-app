@@ -238,9 +238,9 @@ export type ProviderTestResult =
     };
 
 /**
- * Outcome of probing a just-saved system provider key. Informational: the key
- * is stored either way, since the provider may be briefly down when the admin
- * saves it.
+ * Outcome of probing a just-saved system provider key. A definitive refusal
+ * never reaches this shape (the save is rejected instead); `valid: false`
+ * means the provider could not be reached, so the key was stored unverified.
  */
 export interface ProviderKeyProbeResult {
   readonly valid: boolean;

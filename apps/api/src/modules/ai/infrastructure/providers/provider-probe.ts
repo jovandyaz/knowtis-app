@@ -1,4 +1,4 @@
-import { generateText } from 'ai';
+import { APICallError, generateText } from 'ai';
 
 import { providerOf } from '@knowtis/ai-gateway';
 import type { AIProvider } from '@knowtis/shared-types';
@@ -17,16 +17,26 @@ const REDACTABLE_KEY_MIN_LENGTH = 8;
 const PROBE_TIMEOUT_MS = 10_000;
 
 /**
+ * Why a probe failed. 'rejected' is definitive — the provider answered and
+ * refused the key; 'unavailable' and 'timeout' say nothing about the key.
+ */
+export type ProbeFailureReason = 'rejected' | 'unavailable' | 'timeout';
+
+export type ProbeResult =
+  | { valid: true }
+  | { valid: false; error: string; reason: ProbeFailureReason };
+
+/**
  * Sends one cheap turn through the provider with the candidate key. A failure
  * is an answer, not an exception: the result carries the provider's redacted
- * refusal so each caller can store, reject, or surface it as its semantics
- * demand.
+ * refusal and a classification so each caller can store, reject, or surface
+ * it as its semantics demand.
  */
 export async function probeProviderKey(
   registry: ProviderRegistryFactory,
   provider: AIProvider,
   apiKey: string
-): Promise<{ valid: boolean; error?: string }> {
+): Promise<ProbeResult> {
   const candidates = CURATED_MODELS.filter(
     (m) => providerOf(m.id) === provider
   );
@@ -34,6 +44,7 @@ export async function probeProviderKey(
   if (!probe) {
     return {
       valid: false,
+      reason: 'rejected',
       error: `No curated model found for provider '${provider}'`,
     };
   }
@@ -49,9 +60,26 @@ export async function probeProviderKey(
   } catch (error) {
     return {
       valid: false,
+      reason: classify(error),
       error: redact(error instanceof Error ? error.message : 'unknown', apiKey),
     };
   }
+}
+
+function classify(error: unknown): ProbeFailureReason {
+  // The SDK already classifies which statuses deserve a retry and exhausts
+  // them before rethrowing, so a non-retryable APICallError is the only shape
+  // that proves the provider answered and refused.
+  if (APICallError.isInstance(error) && !error.isRetryable) {
+    return 'rejected';
+  }
+  if (
+    error instanceof DOMException &&
+    (error.name === 'TimeoutError' || error.name === 'AbortError')
+  ) {
+    return 'timeout';
+  }
+  return 'unavailable';
 }
 
 /** Providers echo a rejected credential back in their error text; it must not reach a log or a response. */

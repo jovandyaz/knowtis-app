@@ -61,9 +61,10 @@ export class AiProvidersController {
   }
 
   /**
-   * A candidate key is stored and then probed; a failed probe rides along as
-   * `probe` instead of vetoing the save — the admin may be keying a provider
-   * that is briefly down.
+   * A candidate key is probed before it is stored. A definitive refusal
+   * surfaces as 422 and stores nothing; an outage or timeout keeps the key and
+   * rides along as `probe` — the admin may be keying a provider that is
+   * briefly down.
    */
   @Put(':provider')
   @Throttle({ default: { limit: 5, ttl: 60000 } })

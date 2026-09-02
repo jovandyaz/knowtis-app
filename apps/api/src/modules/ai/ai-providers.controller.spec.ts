@@ -1,4 +1,7 @@
-import { BadRequestException } from '@nestjs/common';
+import {
+  BadRequestException,
+  UnprocessableEntityException,
+} from '@nestjs/common';
 import { APICallError, RetryError } from 'ai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -96,11 +99,11 @@ describe('AiProvidersController', () => {
   });
 
   describe('probe on save', () => {
-    it('should keep a key whose probe failed and report why', async () => {
+    it('should keep a key the provider could not vet and report why', async () => {
       const { controller, systemKeys } = make();
       systemKeys.setKey.mockResolvedValue({
         valid: false,
-        error: 'anthropic refused the probe: [redacted]',
+        error: 'Failed after 3 attempts',
       });
 
       const result = await controller.set(user, anthropic, {
@@ -114,8 +117,23 @@ describe('AiProvidersController', () => {
       );
       expect(result.probe).toEqual({
         valid: false,
-        error: 'anthropic refused the probe: [redacted]',
+        error: 'Failed after 3 attempts',
       });
+    });
+
+    it('should propagate a veto without refreshing routing', async () => {
+      const { controller, systemKeys, registry } = make();
+      systemKeys.setKey.mockRejectedValue(
+        new UnprocessableEntityException({
+          message: 'anthropic refused the probe: invalid x-api-key',
+          code: 'rejected',
+        })
+      );
+
+      await expect(
+        controller.set(user, anthropic, { apiKey: 'sk-ant-bad' })
+      ).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(registry.refreshSystemConfigs).not.toHaveBeenCalled();
     });
 
     it('should not attach a probe when only enablement changes', async () => {

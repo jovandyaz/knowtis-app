@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   ServiceUnavailableException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ModuleRef } from '@nestjs/core';
@@ -11,6 +12,7 @@ import {
   AI_PROVIDERS,
   type AIProvider,
   type EncryptedSecret,
+  type ProviderKeyProbeResult,
   type ProviderKeySource,
   type SystemProviderInfo,
 } from '@knowtis/shared-types';
@@ -94,19 +96,39 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
   }
 
   /**
-   * Stores the key, then probes it. The key is kept even when the probe fails —
-   * the admin may be saving a key for a provider that is briefly down — so the
-   * result is informational, never a veto.
+   * Probes the key, then stores it. A definitive refusal vetoes the save — a
+   * stored key shadows the env one, so a bad key must never displace a working
+   * one. An outage or timeout says nothing about the key, so it is kept and the
+   * failure rides along as information.
    */
   async setKey(
     provider: AIProvider,
     apiKey: string,
     actorId: string
-  ): Promise<{ valid: boolean; error?: string }> {
+  ): Promise<ProviderKeyProbeResult> {
     if (!this.masterKey) {
       throw new ServiceUnavailableException(
         'BYOK_ENCRYPTION_KEY is not configured — provider keys cannot be stored'
       );
+    }
+    const probe = await probeProviderKey(
+      this.moduleRef.get(ProviderRegistryFactory),
+      provider,
+      apiKey
+    );
+    if (!probe.valid) {
+      this.logger.warn({
+        event: 'system_provider_key.probe_failed',
+        provider,
+        reason: probe.reason,
+        error: probe.error,
+      });
+      if (probe.reason === 'rejected') {
+        throw new UnprocessableEntityException({
+          message: `${provider} refused the probe: ${probe.error}`,
+          code: probe.reason,
+        });
+      }
     }
     const keyPrefix = apiKey.slice(0, KEY_PREFIX_LENGTH);
     await this.repo.setKey(
@@ -115,12 +137,11 @@ export class SystemProviderKeysService implements SystemProviderKeysSource {
       keyPrefix,
       actorId
     );
-    await this.audit(actorId, provider, 'ai_provider.key_set', { keyPrefix });
-    return probeProviderKey(
-      this.moduleRef.get(ProviderRegistryFactory),
-      provider,
-      apiKey
-    );
+    await this.audit(actorId, provider, 'ai_provider.key_set', {
+      keyPrefix,
+      probe: probe.valid ? 'passed' : probe.reason,
+    });
+    return probe.valid ? { valid: true } : { valid: false, error: probe.error };
   }
 
   async setEnabled(
