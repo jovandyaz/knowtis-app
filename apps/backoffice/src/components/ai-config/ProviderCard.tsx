@@ -45,6 +45,10 @@ export function ProviderCard({ provider }: ProviderCardProps) {
   const isBusy =
     setProvider.isPending || clearKey.isPending || testProvider.isPending;
   const saveProbe = setProvider.data?.probe;
+  const saveProbeError = (saveProbe?.error ?? 'unknown error').replace(
+    /\.+$/,
+    ''
+  );
 
   // A probe describes the key that was routing when it ran; once the row moves,
   // the verdict is about a key that is no longer there.
@@ -124,9 +128,8 @@ export function ProviderCard({ provider }: ProviderCardProps) {
             role="alert"
             className="rounded-md bg-(--destructive)/10 p-2 text-xs text-(--destructive)"
           >
-            Key saved, but the probe failed:{' '}
-            {saveProbe.error ?? 'unknown error'}. It will route once {label}{' '}
-            accepts it.
+            Key saved, but the probe failed: {saveProbeError}. It will route
+            once {label} accepts it.
           </p>
         )
       ) : null}

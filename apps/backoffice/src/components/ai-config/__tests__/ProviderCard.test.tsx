@@ -253,6 +253,19 @@ describe('ProviderCard', () => {
     expect(alert).toHaveTextContent(/invalid x-api-key/i);
   });
 
+  it('does not double the period when the provider prose ends in one', () => {
+    state.set.data = {
+      providers: [],
+      probe: { valid: false, error: 'API key is invalid.' },
+    };
+
+    render(<ProviderCard provider={providerWith()} />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('API key is invalid. It will route');
+    expect(alert).not.toHaveTextContent('..');
+  });
+
   it('confirms a saved key that answered its probe', () => {
     state.set.data = { providers: [], probe: { valid: true } };
 
