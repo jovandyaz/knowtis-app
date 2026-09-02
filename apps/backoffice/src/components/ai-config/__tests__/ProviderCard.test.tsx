@@ -237,32 +237,30 @@ describe('ProviderCard', () => {
     );
   });
 
-  it('warns that a saved key failed its probe without unsaying the save', () => {
+  it('warns that a saved key could not be verified without unsaying the save', () => {
     state.set.data = {
       providers: [],
-      probe: {
-        valid: false,
-        error: 'anthropic refused the probe: invalid x-api-key',
-      },
+      probe: { valid: false, error: 'Failed after 3 attempts' },
     };
 
     render(<ProviderCard provider={providerWith()} />);
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent(/key saved/i);
-    expect(alert).toHaveTextContent(/invalid x-api-key/i);
+    expect(alert).toHaveTextContent(
+      'Key saved, but Anthropic could not be reached to verify it: Failed after 3 attempts. Test it again once Anthropic is back.'
+    );
   });
 
   it('does not double the period when the provider prose ends in one', () => {
     state.set.data = {
       providers: [],
-      probe: { valid: false, error: 'API key is invalid.' },
+      probe: { valid: false, error: 'The operation was aborted due to timeout.' },
     };
 
     render(<ProviderCard provider={providerWith()} />);
 
     const alert = screen.getByRole('alert');
-    expect(alert).toHaveTextContent('API key is invalid. It will route');
+    expect(alert).toHaveTextContent('due to timeout. Test it again');
     expect(alert).not.toHaveTextContent('..');
   });
 

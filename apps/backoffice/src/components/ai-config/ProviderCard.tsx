@@ -128,8 +128,8 @@ export function ProviderCard({ provider }: ProviderCardProps) {
             role="alert"
             className="rounded-md bg-(--destructive)/10 p-2 text-xs text-(--destructive)"
           >
-            Key saved, but the probe failed: {saveProbeError}. It will route
-            once {label} accepts it.
+            Key saved, but {label} could not be reached to verify it:{' '}
+            {saveProbeError}. Test it again once {label} is back.
           </p>
         )
       ) : null}
