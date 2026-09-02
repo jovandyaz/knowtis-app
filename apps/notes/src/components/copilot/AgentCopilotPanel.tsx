@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAISettings, useAvailableModels, useProviderKeys } from '@/hooks';
+import { useAISettings, useAvailableModels } from '@/hooks';
 import { useVerifyEmailGate } from '@/hooks/useVerifyEmailGate';
 import { useAgentStore } from '@/stores/agent.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
@@ -49,9 +49,6 @@ export function AgentCopilotPanel() {
     useFeatureFlag(FEATURE_FLAG_KEYS.AGENT_BYOK) && !isAnonymous;
   const { data: models } = useAvailableModels(user != null);
   const { data: prefs } = useAISettings(user != null);
-  const { data: keys } = useProviderKeys(user != null && canUseByok);
-  const hasByok = canUseByok && (keys?.length ?? 0) > 0;
-
   const preferredModel = prefs?.preferredModel ?? null;
   const intent = prefs?.preferredIntent ?? DEFAULT_MODEL_INTENT;
   const resolvedModel = models?.find((m) =>
@@ -59,6 +56,9 @@ export function AgentCopilotPanel() {
       ? m.id === preferredModel
       : m.servesIntent === intent
   );
+  // The server bills a turn to the user only when a key covers the resolved
+  // model's provider, which the listing reports per entry as billedToUser.
+  const hasByok = canUseByok && resolvedModel?.billedToUser === true;
   // Free registered users get the pill; BYOK effort lives in the model menu,
   // so the two controls are mutually exclusive by audience.
   const pillHidden =

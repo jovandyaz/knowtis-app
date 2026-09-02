@@ -341,9 +341,31 @@ describe('CopilotModelPicker', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('key holder on another provider sees no effort control', async () => {
+    const user = userEvent.setup();
+    keysData.mockReturnValue([{ provider: 'openai', keyPrefix: 'sk-o***' }]);
+    render(<CopilotModelPicker />);
+
+    await openMenu(user);
+
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/aiAssistant\.menu\.effort/)
+    ).not.toBeInTheDocument();
+  });
+
   it('byok user changes effort and the trigger grows the tail', async () => {
     const user = userEvent.setup();
     keysData.mockReturnValue([{ provider: 'anthropic', keyPrefix: 'sk-a***' }]);
+    modelsData.mockReturnValue([
+      fastModel,
+      { ...balancedModel, billedToUser: true },
+      powerfulModel,
+      openModel,
+      byokModel,
+    ]);
     render(<CopilotModelPicker />);
 
     const trigger = screen.getByRole('button', {

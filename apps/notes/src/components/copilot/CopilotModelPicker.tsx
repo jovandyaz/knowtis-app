@@ -59,7 +59,6 @@ export function CopilotModelPicker() {
     return null;
   }
 
-  const hasByok = canUseByok && (keys?.length ?? 0) > 0;
   const offerBridge =
     canUseByok && !isPending && !keysPending && keys?.length === 0;
 
@@ -78,6 +77,9 @@ export function CopilotModelPicker() {
   );
   const triggerLabel =
     selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never);
+  // The server bills a turn to the user only when a key covers the selected
+  // model's provider, which the listing reports per entry as billedToUser.
+  const hasByok = canUseByok && selectedModel?.billedToUser === true;
 
   const effortOpts = effortOptions(selectedModel, t);
   const effortLabel = effortOpts.find((o) => o.id === effortValue)?.label;

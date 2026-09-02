@@ -127,11 +127,20 @@ describe('AgentCopilotPanel think pill', () => {
     expect(pill()).toBeInTheDocument();
   });
 
-  it('hides the pill for byok users', () => {
+  it('hides the pill when the resolved model runs on the user key', () => {
     keysData.mockReturnValue([{ provider: 'anthropic', keyPrefix: 'sk-a***' }]);
+    modelsData.mockReturnValue([{ ...reasoningModel, billedToUser: true }]);
     render(<AgentCopilotPanel />);
 
     expect(pillOrNull()).not.toBeInTheDocument();
+  });
+
+  it('keeps the pill when the key covers another provider than the resolved model', () => {
+    keysData.mockReturnValue([{ provider: 'openai', keyPrefix: 'sk-o***' }]);
+    modelsData.mockReturnValue([reasoningModel]);
+    render(<AgentCopilotPanel />);
+
+    expect(pill()).toBeInTheDocument();
   });
 
   it('hides the pill for anonymous visitors', () => {
