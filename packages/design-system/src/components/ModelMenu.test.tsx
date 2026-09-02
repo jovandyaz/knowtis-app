@@ -20,6 +20,29 @@ const EFFORT_OPTIONS = [
   { id: 'high', label: 'Alto', description: 'Razonamiento extendido' },
 ];
 
+const MORE_MODELS = {
+  label: 'Más modelos',
+  groups: [
+    {
+      label: 'Modelos abiertos',
+      options: [
+        { id: 'openrouter:deepseek/v4', label: 'DeepSeek V4', cost: '$' },
+      ],
+    },
+    {
+      label: 'Con tu clave',
+      options: [
+        {
+          id: 'anthropic:claude-opus-5',
+          label: 'Opus 5',
+          cost: '$$$',
+          billedBadge: 'Tu clave',
+        },
+      ],
+    },
+  ],
+};
+
 // A single user.click batches press+release inside one act(), and jsdom never
 // flushes the submenu re-render in between, so Radix's select handler misses
 // the click. Splitting the pointer acts restores the selection for sub items.
@@ -98,6 +121,36 @@ describe('ModelMenu', () => {
     await user.click(locked);
     expect(onSelect).not.toHaveBeenCalled();
     expect(onCta).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders effort and more-models inline when flyouts cannot fit', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <ModelMenu
+        {...baseProps({
+          inlineSections: true,
+          effort: {
+            label: 'Esfuerzo',
+            value: 'auto',
+            options: EFFORT_OPTIONS,
+            onChange,
+          },
+          moreModels: MORE_MODELS,
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button'));
+
+    // No submenu triggers: every section is reachable in the open menu.
+    expect(
+      screen.queryByRole('menuitem', { expanded: false })
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitemradio', { name: /Alto/ })).toBeVisible();
+    expect(screen.getByText(MORE_MODELS.groups[0].label)).toBeVisible();
+
+    await user.click(screen.getByRole('menuitemradio', { name: /Alto/ }));
+    expect(onChange).toHaveBeenCalledWith('high');
   });
 
   it('effort submenu lists only provided options and reports changes', async () => {

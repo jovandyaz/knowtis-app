@@ -68,6 +68,11 @@ export interface ModelMenuProps {
   footerCta?: { label: string; onClick: () => void };
   /** Accessible suffix for a locked row, e.g. "requiere cuenta". */
   lockedHint?: string;
+  /**
+   * Renders the effort and more-models sections inline instead of as side
+   * flyouts. Required below ~768px, where a flyout cannot fit beside the menu.
+   */
+  inlineSections?: boolean;
   /** Model name. */
   triggerLabel: string;
   /** Effort tail — renders "· {detail}" muted. */
@@ -81,7 +86,8 @@ export interface ModelMenuProps {
   'aria-label'?: string;
 }
 
-const OPTION_ROW_CLASSES = 'flex-col items-start gap-0.5';
+const OPTION_ROW_CLASSES = 'relative flex-col items-start gap-0.5';
+const SECTION_LABEL_CLASSES = 'text-xs uppercase tracking-wide';
 const LOCK_GLYPH_CLASSES = 'h-3.5 w-3.5 text-(--muted-foreground)';
 const FOOTNOTE_CLASSES = 'px-2 py-1.5 text-xs text-(--muted-foreground)';
 const FALLBACK_LABEL = '—';
@@ -135,6 +141,7 @@ export function ModelMenu({
   moreModels,
   footerCta,
   lockedHint,
+  inlineSections = false,
   triggerLabel,
   triggerDetail,
   status = 'ready',
@@ -154,6 +161,66 @@ export function ModelMenu({
   const effortValueLabel = effort?.options.find(
     (o) => o.id === effort.value
   )?.label;
+
+  const effortSection = effort ? (
+    <>
+      <DropdownMenuRadioGroup
+        value={effort.value}
+        onValueChange={effort.onChange}
+      >
+        {effort.options.map((option) => (
+          <DropdownMenuRadioItem
+            key={option.id}
+            value={option.id}
+            className={OPTION_ROW_CLASSES}
+          >
+            <OptionRow label={option.label} description={option.description} />
+          </DropdownMenuRadioItem>
+        ))}
+      </DropdownMenuRadioGroup>
+      {effort.footnote && (
+        <div className={FOOTNOTE_CLASSES}>{effort.footnote}</div>
+      )}
+    </>
+  ) : null;
+  const moreModelsSection = moreModels ? (
+    <>
+      <DropdownMenuRadioGroup
+        {...(value !== null && { value })}
+        onValueChange={onSelect}
+      >
+        {moreModels.groups.map((group, index) => (
+          <Fragment key={group.label}>
+            {index > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuLabel className="text-xs uppercase tracking-wide">
+              {group.label}
+            </DropdownMenuLabel>
+            {group.options.map((model) => (
+              <DropdownMenuRadioItem
+                key={model.id}
+                value={model.id}
+                className={OPTION_ROW_CLASSES}
+              >
+                <OptionRow
+                  label={model.label}
+                  description={model.description}
+                  cost={model.cost}
+                  badge={
+                    model.billedBadge ? (
+                      <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
+                        <KeyRound className="h-2.5 w-2.5" />
+                        {model.billedBadge}
+                      </span>
+                    ) : undefined
+                  }
+                />
+              </DropdownMenuRadioItem>
+            ))}
+          </Fragment>
+        ))}
+      </DropdownMenuRadioGroup>
+    </>
+  ) : null;
 
   return (
     <DropdownMenu>
@@ -198,7 +265,7 @@ export function ModelMenu({
                 row.locked ? (
                   <DropdownMenuItem
                     key={row.id}
-                    className={OPTION_ROW_CLASSES}
+                    className={cn(OPTION_ROW_CLASSES, 'pr-7')}
                     onSelect={() => footerCta?.onClick()}
                     {...(lockedHint && {
                       'aria-label': `${row.label}, ${lockedHint}`,
@@ -236,7 +303,7 @@ export function ModelMenu({
                   <span>{effort.label}</span>
                   <Lock className={LOCK_GLYPH_CLASSES} />
                 </DropdownMenuItem>
-              ) : (
+              ) : !inlineSections ? (
                 <DropdownMenuSub>
                   <DropdownMenuSubTrigger>
                     <span className="flex-1">{effort.label}</span>
@@ -247,72 +314,36 @@ export function ModelMenu({
                     )}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent className="w-64">
-                    <DropdownMenuRadioGroup
-                      value={effort.value}
-                      onValueChange={effort.onChange}
-                    >
-                      {effort.options.map((option) => (
-                        <DropdownMenuRadioItem
-                          key={option.id}
-                          value={option.id}
-                          className={OPTION_ROW_CLASSES}
-                        >
-                          <OptionRow
-                            label={option.label}
-                            description={option.description}
-                          />
-                        </DropdownMenuRadioItem>
-                      ))}
-                    </DropdownMenuRadioGroup>
-                    {effort.footnote && (
-                      <div className={FOOTNOTE_CLASSES}>{effort.footnote}</div>
-                    )}
+                    {effortSection}
                   </DropdownMenuSubContent>
                 </DropdownMenuSub>
+              ) : (
+                <>
+                  <DropdownMenuLabel className={SECTION_LABEL_CLASSES}>
+                    {effort.label}
+                  </DropdownMenuLabel>
+                  {effortSection}
+                </>
               ))}
-            {moreModels && (
-              <DropdownMenuSub>
-                <DropdownMenuSubTrigger>
-                  <span className="flex-1">{moreModels.label}</span>
-                </DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="w-64">
-                  <DropdownMenuRadioGroup
-                    {...(value !== null && { value })}
-                    onValueChange={onSelect}
-                  >
-                    {moreModels.groups.map((group, index) => (
-                      <Fragment key={group.label}>
-                        {index > 0 && <DropdownMenuSeparator />}
-                        <DropdownMenuLabel className="text-xs uppercase tracking-wide">
-                          {group.label}
-                        </DropdownMenuLabel>
-                        {group.options.map((model) => (
-                          <DropdownMenuRadioItem
-                            key={model.id}
-                            value={model.id}
-                            className={OPTION_ROW_CLASSES}
-                          >
-                            <OptionRow
-                              label={model.label}
-                              description={model.description}
-                              cost={model.cost}
-                              badge={
-                                model.billedBadge ? (
-                                  <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
-                                    <KeyRound className="h-2.5 w-2.5" />
-                                    {model.billedBadge}
-                                  </span>
-                                ) : undefined
-                              }
-                            />
-                          </DropdownMenuRadioItem>
-                        ))}
-                      </Fragment>
-                    ))}
-                  </DropdownMenuRadioGroup>
-                </DropdownMenuSubContent>
-              </DropdownMenuSub>
-            )}
+            {moreModels &&
+              (!inlineSections ? (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <span className="flex-1">{moreModels.label}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-64">
+                    {moreModelsSection}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className={SECTION_LABEL_CLASSES}>
+                    {moreModels.label}
+                  </DropdownMenuLabel>
+                  {moreModelsSection}
+                </>
+              ))}
           </>
         )}
         {footerCta && (

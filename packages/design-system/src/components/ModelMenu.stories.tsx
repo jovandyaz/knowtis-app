@@ -25,24 +25,24 @@ const MORE_MODELS = {
   label: 'Más modelos',
   groups: [
     {
-      label: 'Anthropic',
+      label: 'Modelos abiertos',
       options: [
         {
-          id: 'claude-x',
-          label: 'Claude X',
-          description: 'Modelo de frontera',
-          cost: '$$$',
+          id: 'openrouter:deepseek/deepseek-v4-flash-0731',
+          label: 'DeepSeek V4 Flash 0731',
+          description: 'Insignia open-weight a una fracción del costo',
+          cost: '$',
         },
       ],
     },
     {
-      label: 'OpenAI',
+      label: 'Con tu clave',
       options: [
         {
-          id: 'gpt-6',
-          label: 'GPT-6',
-          description: 'Facturado a tu clave',
-          cost: '$$',
+          id: 'anthropic:claude-opus-5',
+          label: 'Opus 5',
+          description: 'El más capaz para razonamiento complejo',
+          cost: '$$$',
           billedBadge: 'Tu clave',
         },
       ],
@@ -86,7 +86,11 @@ function Controlled(
   );
 }
 
-function ControlledWithEffort() {
+function ControlledWithEffort({
+  inlineSections = false,
+}: {
+  inlineSections?: boolean;
+}) {
   const [value, setValue] = useState<string | null>('balanced');
   const [effortValue, setEffortValue] = useState('auto');
   const effortLabel = EFFORT_OPTIONS.find((o) => o.id === effortValue)?.label;
@@ -108,6 +112,7 @@ function ControlledWithEffort() {
         ? { triggerDetail: effortLabel }
         : {})}
       aria-label="Modelo"
+      inlineSections={inlineSections}
     />
   );
 }
@@ -115,9 +120,13 @@ function ControlledWithEffort() {
 export const Anonymous: Story = {
   render: () => (
     <ModelMenu
-      primary={PRIMARY.map((row) => ({ ...row, locked: true }))}
-      value={null}
+      primary={PRIMARY.map((row) => ({
+        ...row,
+        ...(row.id === 'balanced' ? {} : { locked: true }),
+      }))}
+      value="balanced"
       onSelect={() => undefined}
+      lockedHint="requiere cuenta"
       effort={{
         label: 'Esfuerzo',
         value: 'auto',
@@ -151,6 +160,12 @@ export const FreeRegistered: Story = {
 
 export const Byok: Story = {
   render: () => <ControlledWithEffort />,
+};
+
+export const MobileInline: Story = {
+  name: 'Byok (mobile, inline sections)',
+  parameters: { viewport: { defaultViewport: 'mobile1' } },
+  render: () => <ControlledWithEffort inlineSections />,
 };
 
 export const Loading: Story = {
