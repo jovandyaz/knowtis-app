@@ -3,6 +3,7 @@ import {
   check,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   serial,
@@ -22,6 +23,7 @@ import {
   MODEL_TIERS,
   type CatalogAlertKind,
   type CatalogModelStatus,
+  type ModelReasoning,
   type ModelTier,
 } from '@knowtis/shared-types';
 
@@ -69,6 +71,7 @@ export const aiCatalogModels = pgTable(
       scale: 1,
       mode: 'number',
     }),
+    reasoning: jsonb('reasoning').$type<ModelReasoning | null>(),
     upstreamCreatedAt: timestamp('upstream_created_at', { withTimezone: true }),
     upstreamExpirationDate: timestamp('upstream_expiration_date', {
       withTimezone: true,

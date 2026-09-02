@@ -87,6 +87,7 @@ function upstreamModel(
     expirationDate: null,
     intelligenceIndex: null,
     outputModalities: ['text'],
+    reasoning: null,
     ...overrides,
   };
 }

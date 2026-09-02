@@ -19,7 +19,7 @@ export class AiModelsController {
 
   @Get('models')
   listModels(@CurrentUser() user: RequestUser): Promise<SelectableModel[]> {
-    return this.preferences.listModels(user.id);
+    return this.preferences.listModels(user);
   }
 
   @Get('preferences')
@@ -32,7 +32,7 @@ export class AiModelsController {
     @CurrentUser() user: RequestUser,
     @Body() dto: UpdateAiPreferencesDto
   ): Promise<AIPreferences> {
-    await this.preferences.setUserPreferences(user.id, dto);
+    await this.preferences.setUserPreferences(user, dto);
     return this.preferences.getUserPreferences(user.id);
   }
 }

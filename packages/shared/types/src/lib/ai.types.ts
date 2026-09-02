@@ -75,12 +75,42 @@ export function isModelIntent(value: string): value is ModelIntent {
   return (MODEL_INTENTS as readonly string[]).includes(value);
 }
 
-export const MODEL_ACCESS = ['granted', 'requires_byok'] as const;
+export const MODEL_ACCESS = [
+  'granted',
+  'requires_byok',
+  'requires_account',
+] as const;
 export type ModelAccess = (typeof MODEL_ACCESS)[number];
 
 /** How much hidden reasoning budget a reasoning model may spend before emitting visible tokens. */
-export const REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+export const REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const;
 export type ReasoningEffort = (typeof REASONING_EFFORTS)[number];
+
+export function isReasoningEffort(value: string): value is ReasoningEffort {
+  return (REASONING_EFFORTS as readonly string[]).includes(value);
+}
+
+/** Range the backoffice global setting accepts — deliberately narrower than per-model levels. */
+export const GLOBAL_REASONING_EFFORTS = ['low', 'medium', 'high'] as const;
+export type GlobalReasoningEffort = (typeof GLOBAL_REASONING_EFFORTS)[number];
+
+export function isGlobalReasoningEffort(
+  value: string
+): value is GlobalReasoningEffort {
+  return (GLOBAL_REASONING_EFFORTS as readonly string[]).includes(value);
+}
+
+export interface ModelReasoning {
+  levels: readonly ReasoningEffort[];
+  /** True when the model cannot run with reasoning off (e.g. GLM-5.3, Kimi K3). */
+  mandatory: boolean;
+}
 
 /** Why an agent turn stopped; carried on the `done` event and, persisted, on the last assistant message of a turn. */
 export const AGENT_STOP_REASON = {
@@ -134,6 +164,8 @@ export interface SelectableModel {
   routableByServer: boolean;
   /** Whether this caller may run the model: open tier is free for everyone; other tiers need the caller's own provider key while tier gating is on. */
   access: ModelAccess;
+  reasoning?: ModelReasoning;
+  servesIntent?: ModelIntent;
 }
 
 export interface AIPreferences {

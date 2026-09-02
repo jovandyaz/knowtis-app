@@ -51,6 +51,7 @@ function toCatalogModel(row: AiCatalogModelRow): CatalogModel {
     maxInputTokens: row.maxInputTokens,
     maxOutputTokens: row.maxOutputTokens,
     intelligenceIndex: row.intelligenceIndex,
+    reasoning: row.reasoning,
     upstreamCreatedAt: row.upstreamCreatedAt,
     upstreamExpirationDate: row.upstreamExpirationDate,
     lastSeenAt: row.lastSeenAt,
@@ -146,6 +147,7 @@ export class DrizzleAiCatalogRepository implements AiCatalogRepository {
           maxInputTokens: proposed(aiCatalogModels.maxInputTokens),
           maxOutputTokens: proposed(aiCatalogModels.maxOutputTokens),
           intelligenceIndex: proposed(aiCatalogModels.intelligenceIndex),
+          reasoning: proposed(aiCatalogModels.reasoning),
           upstreamCreatedAt: proposed(aiCatalogModels.upstreamCreatedAt),
           upstreamExpirationDate: proposed(
             aiCatalogModels.upstreamExpirationDate

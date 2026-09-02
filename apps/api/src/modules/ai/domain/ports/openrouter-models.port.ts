@@ -1,3 +1,5 @@
+import type { ModelReasoning } from '@knowtis/shared-types';
+
 export const OPENROUTER_MODELS_CLIENT = Symbol('OPENROUTER_MODELS_CLIENT');
 
 /** One model as published by OpenRouter: costs are USD per token and `id` carries no `openrouter:` prefix. */
@@ -14,6 +16,8 @@ export interface UpstreamModel {
   expirationDate: Date | null;
   intelligenceIndex: number | null;
   outputModalities: readonly string[];
+  /** Null when the model declares no recognized reasoning effort levels. */
+  reasoning: ModelReasoning | null;
 }
 
 /** Discard entry for a payload whose `id` itself failed to parse: the model's identity is unknown, so no absence may be concluded while one is present. */

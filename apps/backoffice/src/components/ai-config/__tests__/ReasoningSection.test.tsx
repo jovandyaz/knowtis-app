@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type * as DataAccessAdmin from '@knowtis/data-access-admin';
 import type { AiConfigEntry } from '@knowtis/data-access-admin';
-import { REASONING_EFFORTS } from '@knowtis/shared-types';
+import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ReasoningSection } from '../ReasoningSection';
 
@@ -67,7 +67,7 @@ describe('ReasoningSection', () => {
   it('offers every curated effort as a choice', () => {
     renderSection();
 
-    for (const effort of REASONING_EFFORTS) {
+    for (const effort of GLOBAL_REASONING_EFFORTS) {
       expect(screen.getByRole('button', { name: effort })).toBeInTheDocument();
     }
   });

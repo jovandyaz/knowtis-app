@@ -4,7 +4,7 @@ import {
   type AiConfigEntry,
 } from '@knowtis/data-access-admin';
 import { Button, MutationErrorAlert } from '@knowtis/design-system';
-import { REASONING_EFFORTS } from '@knowtis/shared-types';
+import { GLOBAL_REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
@@ -30,7 +30,7 @@ export function ReasoningSection({ entry }: ReasoningSectionProps) {
         fallbackMessage="Could not update the reasoning effort."
       />
       <div className="flex flex-wrap items-center gap-2">
-        {REASONING_EFFORTS.map((effort) => (
+        {GLOBAL_REASONING_EFFORTS.map((effort) => (
           <Button
             key={effort}
             variant={entry.value === effort ? 'default' : 'outline'}

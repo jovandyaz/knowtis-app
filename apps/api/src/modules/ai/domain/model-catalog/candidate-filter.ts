@@ -66,6 +66,7 @@ export function toCandidateUpsert(model: UpstreamModel): CandidateUpsert {
     maxInputTokens: model.contextLength,
     maxOutputTokens: model.maxCompletionTokens,
     intelligenceIndex: model.intelligenceIndex,
+    reasoning: model.reasoning,
     upstreamCreatedAt: model.createdAt,
     upstreamExpirationDate: model.expirationDate,
   };

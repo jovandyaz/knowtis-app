@@ -607,6 +607,104 @@ describe('SelectableModelsService', () => {
     });
   });
 
+  describe('reasoning and intent assignment', () => {
+    const MINIMAX_M3 = 'openrouter:minimax/minimax-m3';
+    const INTENTS = {
+      fast: MINIMAX_M3,
+      balanced: 'anthropic:claude-sonnet-5',
+      powerful: 'anthropic:claude-opus-5',
+    } as const;
+
+    it('marks the entry serving each configured intent', () => {
+      const service = makeOpenService([
+        createCatalogModel({ id: MINIMAX_M3, tier: 'open' }),
+      ]);
+
+      const listed = service.list(
+        SYSTEM_DEFAULT,
+        ALL_CURATED,
+        NO_BYOK,
+        false,
+        undefined,
+        INTENTS
+      );
+
+      expect(listed.find((m) => m.id === MINIMAX_M3)?.servesIntent).toBe(
+        'fast'
+      );
+      expect(
+        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.servesIntent
+      ).toBe('balanced');
+      expect(
+        listed.find((m) => m.id === 'anthropic:claude-opus-5')?.servesIntent
+      ).toBe('powerful');
+      const unassigned = listed.filter(
+        (m) => !Object.values(INTENTS).includes(m.id as never)
+      );
+      expect(unassigned.every((m) => !('servesIntent' in m))).toBe(true);
+    });
+
+    // Effort reaches the provider only through the OpenRouter options, so a
+    // curated Anthropic/OpenAI/Google entry must not advertise a knob that is
+    // never forwarded — the UI would promise a level the turn ignores.
+    it('withholds curated reasoning metadata from non-openrouter entries', () => {
+      const service = makeOpenService();
+
+      const listed = service.list(SYSTEM_DEFAULT, ALL_CURATED);
+
+      for (const id of [
+        'anthropic:claude-sonnet-5',
+        'google:gemini-3.7-flash',
+        'anthropic:claude-haiku-4-5',
+        'openrouter:deepseek/deepseek-v3.2',
+      ]) {
+        const entry = listed.find((m) => m.id === id);
+        expect(entry).toBeDefined();
+        expect(entry && 'reasoning' in entry).toBe(false);
+      }
+    });
+
+    it('serves promoted reasoning from the catalog snapshot', () => {
+      const service = makeOpenService([
+        createCatalogModel({
+          id: PROMOTED_ID,
+          reasoning: { levels: ['low', 'high', 'max'], mandatory: true },
+        }),
+      ]);
+
+      const promoted = service
+        .list(SYSTEM_DEFAULT, ALL_CURATED)
+        .find((m) => m.id === PROMOTED_ID);
+
+      expect(promoted?.reasoning).toEqual({
+        levels: ['low', 'high', 'max'],
+        mandatory: true,
+      });
+    });
+
+    it('an intent pointing at an unofferable model marks no entry', () => {
+      const service = makeOpenService();
+
+      const listed = service.list(
+        SYSTEM_DEFAULT,
+        ALL_CURATED,
+        NO_BYOK,
+        false,
+        undefined,
+        {
+          fast: 'openrouter:vendor/not-offered',
+          balanced: 'anthropic:claude-sonnet-5',
+          powerful: 'anthropic:claude-opus-5',
+        }
+      );
+
+      expect(listed.some((m) => m.servesIntent === 'fast')).toBe(false);
+      expect(
+        listed.find((m) => m.id === 'anthropic:claude-sonnet-5')?.servesIntent
+      ).toBe('balanced');
+    });
+  });
+
   describe('firstOfTier', () => {
     it('returns the first curated model of the tier the caller has a key for', () => {
       const service = makeOpenService();

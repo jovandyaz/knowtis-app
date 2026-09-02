@@ -7,13 +7,15 @@ import {
   CANDIDATE_MAX_OUTPUT_COST_PER_TOKEN,
   CHAIN_SEPARATOR,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
+  GLOBAL_REASONING_EFFORTS,
+  isGlobalReasoningEffort,
+  MODEL_INTENTS,
   parseChain,
-  REASONING_EFFORTS,
   TOKENS_PER_MILLION,
   USD_PER_MILLION_FORMAT,
   type AIConfigSource,
+  type GlobalReasoningEffort,
   type ModelIntent,
-  type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import { AdminAuditService } from '../../../admin/audit/admin-audit.service';
@@ -85,7 +87,7 @@ const CONFIG_KEYS = {
   ai_reasoning_effort: {
     default: AI_SETTING_DEFAULTS.ai_reasoning_effort,
     kind: 'choice',
-    allowed: REASONING_EFFORTS,
+    allowed: GLOBAL_REASONING_EFFORTS,
   },
   ai_openrouter_providers: {
     default: AI_SETTING_DEFAULTS.ai_openrouter_providers,
@@ -107,10 +109,6 @@ const INTENT_CONFIG_KEYS = {
 
 function isConfigKey(key: string): key is ConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
-}
-
-function isReasoningEffort(value: string): value is ReasoningEffort {
-  return (REASONING_EFFORTS as readonly string[]).includes(value);
 }
 
 /** Rejected input (unknown key or invalid value) — maps to a 400 at the controller. */
@@ -156,8 +154,42 @@ export class AIConfigService {
     return this.getSupportedModel('ai_fast_model');
   }
 
+  /**
+   * The three intent tiers must resolve to three different models: the picker
+   * renders one row per intent, and a shared id would silently drop a row.
+   */
+  private async assertIntentModelsStayDistinct(
+    key: string,
+    value: string
+  ): Promise<void> {
+    const changed = MODEL_INTENTS.find(
+      (intent) => INTENT_CONFIG_KEYS[intent] === key
+    );
+    if (!changed) {
+      return;
+    }
+    const current = await this.getIntentModels();
+    const clash = MODEL_INTENTS.find(
+      (intent) => intent !== changed && current[intent] === value
+    );
+    if (clash) {
+      throw new InvalidAIConfigError(
+        `Model '${value}' already serves the '${clash}' tier; each tier needs its own model`
+      );
+    }
+  }
+
   async getIntentModel(intent: ModelIntent): Promise<string> {
     return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
+  }
+
+  async getIntentModels(): Promise<Readonly<Record<ModelIntent, string>>> {
+    const [fast, balanced, powerful] = await Promise.all([
+      this.getIntentModel('fast'),
+      this.getIntentModel('balanced'),
+      this.getIntentModel('powerful'),
+    ]);
+    return { fast, balanced, powerful };
   }
 
   async getFallbackChain(): Promise<string[]> {
@@ -190,9 +222,9 @@ export class AIConfigService {
     return new Set([fast, balanced, deep, ...chain]);
   }
 
-  async getReasoningEffort(): Promise<ReasoningEffort> {
+  async getReasoningEffort(): Promise<GlobalReasoningEffort> {
     const value = await this.getConfigValue('ai_reasoning_effort');
-    if (isReasoningEffort(value)) {
+    if (isGlobalReasoningEffort(value)) {
       return value;
     }
     this.logger.warn(
@@ -239,6 +271,7 @@ export class AIConfigService {
       throw new InvalidAIConfigError(`Unknown AI config key: '${key}'`);
     }
     this.validateValue(CONFIG_KEYS[key], value);
+    await this.assertIntentModelsStayDistinct(key, value);
     const previous = await this.repository.get(key);
     await this.repository.set(key, value, description);
     try {

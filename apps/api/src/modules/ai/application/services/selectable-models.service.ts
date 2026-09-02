@@ -5,10 +5,11 @@ import {
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
-import type {
-  ModelAccess,
-  ModelIntent,
-  SelectableModel,
+import {
+  MODEL_INTENTS,
+  type ModelAccess,
+  type ModelIntent,
+  type SelectableModel,
 } from '@knowtis/shared-types';
 
 import {
@@ -63,6 +64,7 @@ export class SelectableModelsService {
           descriptionKey: '',
           description: promoted.description,
           tier: promoted.tier,
+          ...(promoted.reasoning ? { reasoning: promoted.reasoning } : {}),
         })),
     ];
   }
@@ -135,28 +137,42 @@ export class SelectableModelsService {
     configured: ReadonlySet<string>,
     byokProviders: ReadonlySet<string> = NO_BYOK,
     tierGatingOn = false,
-    maxOutputCostPerToken?: number
+    maxOutputCostPerToken?: number,
+    intentModels?: Readonly<Record<ModelIntent, string>>
   ): SelectableModel[] {
     return this.catalogUnion(configured, byokProviders)
       .filter((m) => this.invocable(m, byokProviders))
-      .map((m) => ({
-        id: m.id,
-        label: m.label,
-        descriptionKey: m.descriptionKey,
-        ...(m.description ? { description: m.description } : {}),
-        tier: m.tier,
-        contextWindow: this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
-        costClass: this.costClass(m.id),
-        isDefault: m.id === systemDefault,
-        billedToUser: byokProviders.has(providerOf(m.id)),
-        routableByServer: this.registry.isModelAvailable(m.id),
-        access: this.accessFor(
-          m,
-          byokProviders,
-          tierGatingOn,
-          maxOutputCostPerToken
-        ),
-      }));
+      .map((m) => {
+        const servesIntent = intentModels
+          ? MODEL_INTENTS.find((intent) => intentModels[intent] === m.id)
+          : undefined;
+        return {
+          id: m.id,
+          label: m.label,
+          descriptionKey: m.descriptionKey,
+          ...(m.description ? { description: m.description } : {}),
+          tier: m.tier,
+          contextWindow:
+            this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
+          costClass: this.costClass(m.id),
+          isDefault: m.id === systemDefault,
+          billedToUser: byokProviders.has(providerOf(m.id)),
+          routableByServer: this.registry.isModelAvailable(m.id),
+          access: this.accessFor(
+            m,
+            byokProviders,
+            tierGatingOn,
+            maxOutputCostPerToken
+          ),
+          // Effort is only forwarded upstream through the OpenRouter options;
+          // advertising levels for another provider would promise a knob the
+          // turn silently ignores.
+          ...(m.reasoning && providerOf(m.id) === 'openrouter'
+            ? { reasoning: m.reasoning }
+            : {}),
+          ...(servesIntent ? { servesIntent } : {}),
+        };
+      });
   }
 
   isSelectable(

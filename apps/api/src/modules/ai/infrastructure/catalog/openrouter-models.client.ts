@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { z } from 'zod';
 
+import { isReasoningEffort, type ModelReasoning } from '@knowtis/shared-types';
+
 import {
   UNPARSEABLE_MODEL_ID,
   type OpenRouterModelsClient,
@@ -43,6 +45,13 @@ const upstreamModelSchema = z.object({
     .object({ max_completion_tokens: z.number().int().positive().nullish() })
     .nullish(),
   expiration_date: z.string().nullish(),
+  reasoning: z
+    .object({
+      supported_efforts: z.array(z.string()).nullish(),
+      default_effort: z.string().nullish(),
+      mandatory: z.boolean().nullish(),
+    })
+    .nullish(),
   benchmarks: z
     .object({
       artificial_analysis: z
@@ -74,6 +83,23 @@ function toExpirationDate(raw: string | null | undefined): Date | null {
     : date;
 }
 
+/**
+ * Null only when upstream declares no reasoning at all. A model that reasons
+ * without enumerating efforts (a third of the catalog) keeps an empty `levels`,
+ * so `mandatory` survives and callers simply offer no effort ladder.
+ */
+function toReasoning(
+  raw: ParsedUpstreamModel['reasoning']
+): ModelReasoning | null {
+  if (!raw) {
+    return null;
+  }
+  return {
+    levels: (raw.supported_efforts ?? []).filter(isReasoningEffort),
+    mandatory: raw.mandatory ?? false,
+  };
+}
+
 function toUpstreamModel(raw: ParsedUpstreamModel): UpstreamModel {
   return {
     id: raw.id,
@@ -88,6 +114,7 @@ function toUpstreamModel(raw: ParsedUpstreamModel): UpstreamModel {
     intelligenceIndex:
       raw.benchmarks?.artificial_analysis?.intelligence_index ?? null,
     outputModalities: raw.architecture?.output_modalities ?? [],
+    reasoning: toReasoning(raw.reasoning),
   };
 }
 

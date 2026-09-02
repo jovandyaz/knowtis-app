@@ -167,7 +167,75 @@ describe('OpenRouterModelsHttpClient', () => {
       expirationDate: null,
       intelligenceIndex: 47.6,
       outputModalities: ['text'],
+      reasoning: null,
     });
+  });
+
+  it('should capture declared reasoning efforts, dropping unknown values', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...DEEPSEEK_V32,
+            reasoning: {
+              supported_efforts: ['low', 'high', 'turbo'],
+              default_effort: 'high',
+              mandatory: true,
+            },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({
+      levels: ['low', 'high'],
+      mandatory: true,
+    });
+  });
+
+  it('should keep a reasoning model that enumerates no efforts', async () => {
+    // A third of the live catalog (144/421 on 2026-09-02) ships this shape —
+    // among them minimax/minimax-m3, which already serves a promoted tier.
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([
+          {
+            ...DEEPSEEK_V32,
+            reasoning: { mandatory: true, default_enabled: true },
+          },
+        ])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({ levels: [], mandatory: true });
+  });
+
+  it('should default mandatory to false when upstream omits it', async () => {
+    fetchMock.mockResolvedValueOnce(
+      okResponse(
+        page([{ ...DEEPSEEK_V32, reasoning: { supported_efforts: ['low'] } }])
+      )
+    );
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toEqual({ levels: ['low'], mandatory: false });
+  });
+
+  it('should yield null reasoning when upstream omits the object', async () => {
+    fetchMock.mockResolvedValueOnce(okResponse(page([DEEPSEEK_V32])));
+
+    const [model] = (await new OpenRouterModelsHttpClient().fetchModels())
+      .models;
+
+    expect(model.reasoning).toBeNull();
   });
 
   it('should read pricing strings as numbers', async () => {

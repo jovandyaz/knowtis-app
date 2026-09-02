@@ -16,6 +16,7 @@ export function createCatalogModel(
     maxInputTokens: 128_000,
     maxOutputTokens: 8_192,
     intelligenceIndex: null,
+    reasoning: null,
     upstreamCreatedAt: null,
     upstreamExpirationDate: null,
     lastSeenAt: new Date(LAST_SEEN_AT),

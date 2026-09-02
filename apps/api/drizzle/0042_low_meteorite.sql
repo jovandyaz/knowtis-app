@@ -1,0 +1,1 @@
+ALTER TABLE "ai_catalog_models" ADD COLUMN "reasoning" jsonb;

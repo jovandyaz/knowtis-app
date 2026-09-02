@@ -69,6 +69,7 @@ function candidate(
     maxInputTokens: SYNCED_MAX_INPUT_TOKENS,
     maxOutputTokens: SYNCED_MAX_OUTPUT_TOKENS,
     intelligenceIndex: SYNCED_INTELLIGENCE_INDEX,
+    reasoning: null,
     upstreamCreatedAt: UPSTREAM_CREATED_AT,
     upstreamExpirationDate: null,
     ...overrides,

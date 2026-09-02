@@ -16,6 +16,7 @@ import {
   type AgentStopReason,
   type ByokProvider,
   type MessageStopReason,
+  type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
@@ -23,6 +24,7 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
+import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
   EMBEDDING_PORT,
@@ -75,6 +77,7 @@ interface RunAgentTurnInput {
   readonly userMemories?: readonly string[];
   readonly model?: string;
   readonly conversationModel?: string | null;
+  readonly effort?: ReasoningEffort;
 }
 
 export interface RunAgentTurnCallbacks {
@@ -149,7 +152,8 @@ export class RunAgentTurnHandler {
     private readonly modelPreference: ModelPreferenceService,
     private readonly byok: ByokService,
     private readonly injectionGuard: InjectionGuardService,
-    private readonly aiConfig: AIConfigService
+    private readonly aiConfig: AIConfigService,
+    private readonly turnEffort: TurnEffortResolver
   ) {}
 
   async execute(
@@ -162,6 +166,13 @@ export class RunAgentTurnHandler {
         code: 'validation_error',
         message: 'message is required',
       });
+      return;
+    }
+    // Reject before resolveConversation so a rejected turn leaves no row behind.
+    if (input.effort && input.isAnonymous) {
+      callbacks.onError(
+        AIErrors.validationError('effort is not available on anonymous turns')
+      );
       return;
     }
     return this.executeWithMemory(input, callbacks, signal);
@@ -226,6 +237,7 @@ export class RunAgentTurnHandler {
       knownNotes,
       ...(userMemories.length ? { userMemories } : {}),
       ...(input.model ? { model: input.model } : {}),
+      ...(input.effort ? { effort: input.effort } : {}),
       conversationModel: conversation.model,
     };
     return this.runLoop(
@@ -592,7 +604,12 @@ export class RunAgentTurnHandler {
       input.isAnonymous ?? false
     );
     const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.aiConfig.getReasoningEffort(),
+      this.turnEffort.resolve({
+        userId: input.userId,
+        model,
+        isByok,
+        requested: input.effort,
+      }),
       this.aiConfig.getOpenRouterProviderOrder(),
     ]);
 
@@ -780,6 +797,7 @@ export class RunAgentTurnHandler {
     }
   }
 
+  /** A rejected effort request falls back to the global default with a structured warn — never a silent mismatch. */
   private async resolveModel(
     input: RunAgentTurnInput,
     conversationId: string | undefined,
