@@ -168,6 +168,65 @@ describe('AiProvidersController', () => {
       });
     });
 
+    it('should report a refusal with the routing secret scrubbed from the provider echo', async () => {
+      const { controller, registry } = make();
+      registry.routingSecrets.mockReturnValue(['sk-ant-routing-secret']);
+      await probeFailsWith(
+        apiCallError(401, 'invalid x-api-key: sk-ant-routing-secret')
+      );
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'rejected',
+        message: 'anthropic refused the probe: invalid x-api-key: [redacted]',
+      });
+    });
+
+    it('should report exhausted retries as the provider being unavailable, not the key', async () => {
+      const { controller } = make();
+      await probeFailsWith(
+        new RetryError({
+          message: 'Failed after 3 attempts',
+          reason: 'maxRetriesExceeded',
+          errors: [apiCallError(503)],
+        })
+      );
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unavailable',
+        message: 'anthropic is unavailable right now. Retry shortly.',
+      });
+    });
+
+    it('should report a probe that hit its time bound as unavailable', async () => {
+      const { controller } = make();
+      await probeFailsWith(
+        new DOMException(
+          'The operation was aborted due to timeout',
+          'TimeoutError'
+        )
+      );
+
+      await expect(controller.test(anthropic)).resolves.toMatchObject({
+        ok: false,
+        reason: 'unavailable',
+      });
+    });
+
+    it('should report a provider with nothing routing as unconfigured', async () => {
+      const { controller, registry } = make();
+      registry.languageModel.mockImplementation(() => {
+        throw new ProviderNotConfiguredError('anthropic has no key');
+      });
+
+      await expect(controller.test(anthropic)).resolves.toEqual({
+        ok: false,
+        reason: 'unconfigured',
+        message: 'anthropic has no key',
+      });
+    });
+
     it('should bound the probe with an abort signal', async () => {
       const { generateText } = vi.mocked(await import('ai'));
       const { controller } = make();

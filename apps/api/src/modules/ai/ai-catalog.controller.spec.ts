@@ -71,7 +71,13 @@ describe('AiCatalogController', () => {
 
   it('serves the assignable models straight from the service', async () => {
     expect(await controller.listAssignable()).toEqual([]);
-    expect(assignable.list).toHaveBeenCalledOnce();
+  });
+
+  it('surfaces a failing assignable lookup instead of masking it', async () => {
+    const failure = new Error('catalog unavailable');
+    assignable.list.mockRejectedValueOnce(failure);
+
+    await expect(controller.listAssignable()).rejects.toBe(failure);
   });
 
   it('applies the house defaults when the query omits them', async () => {
