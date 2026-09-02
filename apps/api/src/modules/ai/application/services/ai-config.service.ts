@@ -157,6 +157,15 @@ export class AIConfigService {
     return this.getSupportedModel(INTENT_CONFIG_KEYS[intent]);
   }
 
+  async getIntentModels(): Promise<Readonly<Record<ModelIntent, string>>> {
+    const [fast, balanced, powerful] = await Promise.all([
+      this.getIntentModel('fast'),
+      this.getIntentModel('balanced'),
+      this.getIntentModel('powerful'),
+    ]);
+    return { fast, balanced, powerful };
+  }
+
   async getFallbackChain(): Promise<string[]> {
     const entries = parseChain(await this.getConfigValue('ai_fallback_chain'));
     const supported = entries.filter((m) => this.modelCatalog.isSupported(m));

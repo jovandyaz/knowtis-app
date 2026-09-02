@@ -81,6 +81,7 @@ function make(
       .mockImplementation((intent: ModelIntent) =>
         Promise.resolve(intentModels[intent])
       ),
+    getIntentModels: vi.fn().mockResolvedValue(intentModels),
     getConfiguredModelIds: vi
       .fn()
       .mockImplementation(() =>

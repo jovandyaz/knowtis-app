@@ -876,6 +876,16 @@ describe('AIConfigService', () => {
     });
   });
 
+  describe('getIntentModels', () => {
+    it('resolves every intent to its served model in one map', async () => {
+      expect(await service.getIntentModels()).toEqual({
+        fast: AI_SETTING_DEFAULTS.ai_fast_model,
+        balanced: AI_SETTING_DEFAULTS.ai_default_model,
+        powerful: AI_SETTING_DEFAULTS.ai_deep_model,
+      });
+    });
+  });
+
   describe('models that left the catalog', () => {
     it('should fall back to the code default when the stored default model is gone', async () => {
       mockRepo.get.mockResolvedValue(PROMOTED_ID);

@@ -1,4 +1,4 @@
-import type { ModelTier } from '@knowtis/shared-types';
+import type { ModelReasoning, ModelTier } from '@knowtis/shared-types';
 
 /** Namespace every OpenRouter model id carries: this prefix followed by the upstream slug. */
 export const OPENROUTER_ID_PREFIX = 'openrouter:';
@@ -8,6 +8,7 @@ export interface CuratedModel {
   label: string;
   descriptionKey: string;
   tier: ModelTier;
+  reasoning?: ModelReasoning;
 }
 
 export const CURATED_MODELS: readonly CuratedModel[] = [
@@ -22,49 +23,68 @@ export const CURATED_MODELS: readonly CuratedModel[] = [
     label: 'GPT-5.6 Luna',
     descriptionKey: 'aiModels.gpt56Luna',
     tier: 'fast',
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
   },
   {
     id: 'google:gemini-3.5-flash-lite',
     label: 'Gemini 3.5 Flash Lite',
     descriptionKey: 'aiModels.gemini35FlashLite',
     tier: 'fast',
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: true },
   },
   {
     id: 'anthropic:claude-sonnet-5',
     label: 'Sonnet 5',
     descriptionKey: 'aiModels.sonnet5',
     tier: 'balanced',
+    reasoning: {
+      levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      mandatory: false,
+    },
   },
   {
     id: 'openai:gpt-5.6-terra',
     label: 'GPT-5.6 Terra',
     descriptionKey: 'aiModels.gpt56Terra',
     tier: 'balanced',
+    reasoning: { levels: ['low', 'medium', 'high', 'xhigh'], mandatory: false },
   },
   {
     id: 'google:gemini-3.7-flash',
     label: 'Gemini 3.7 Flash',
     descriptionKey: 'aiModels.gemini37Flash',
     tier: 'balanced',
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: true },
   },
   {
     id: 'anthropic:claude-opus-5',
     label: 'Opus 5',
     descriptionKey: 'aiModels.opus5',
     tier: 'powerful',
+    reasoning: {
+      levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      mandatory: false,
+    },
   },
   {
     id: 'openai:gpt-5.6-sol',
     label: 'GPT-5.6 Sol',
     descriptionKey: 'aiModels.gpt56Sol',
     tier: 'powerful',
+    reasoning: {
+      levels: ['low', 'medium', 'high', 'xhigh', 'max'],
+      mandatory: false,
+    },
   },
   {
     id: 'google:gemini-3.1-pro-preview',
     label: 'Gemini 3.1 Pro',
     descriptionKey: 'aiModels.gemini31Pro',
     tier: 'powerful',
+    reasoning: { levels: ['low', 'high'], mandatory: true },
   },
+  // The openrouter-curated entries carry no reasoning until their levels are
+  // verified against provider docs — absent means the UI offers no effort knob.
   {
     id: 'openrouter:deepseek/deepseek-v3.2',
     label: 'DeepSeek V3.2',

@@ -47,20 +47,28 @@ export class ModelPreferenceService {
   }
 
   async listModels(userId: string): Promise<SelectableModel[]> {
-    const [systemDefault, configured, byokProviders, tierGatingOn, ceiling] =
-      await Promise.all([
-        this.aiConfig.getDefaultModel(),
-        this.aiConfig.getConfiguredModelIds(),
-        this.byok.enabledProviders(userId),
-        this.tierGatingOn(),
-        this.aiConfig.getFreeTierMaxOutputCostPerToken(),
-      ]);
+    const [
+      systemDefault,
+      configured,
+      byokProviders,
+      tierGatingOn,
+      ceiling,
+      intentModels,
+    ] = await Promise.all([
+      this.aiConfig.getDefaultModel(),
+      this.aiConfig.getConfiguredModelIds(),
+      this.byok.enabledProviders(userId),
+      this.tierGatingOn(),
+      this.aiConfig.getFreeTierMaxOutputCostPerToken(),
+      this.aiConfig.getIntentModels(),
+    ]);
     return this.selectable.list(
       systemDefault,
       configured,
       byokProviders,
       tierGatingOn,
-      ceiling
+      ceiling,
+      intentModels
     );
   }
 
