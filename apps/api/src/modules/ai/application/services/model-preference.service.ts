@@ -11,6 +11,7 @@ import {
   DEFAULT_MODEL_INTENT,
   FEATURE_FLAG_KEYS,
   type AIPreferences,
+  type ModelReasoning,
   type SelectableModel,
   type UpdateAiPreferencesInput,
 } from '@knowtis/shared-types';
@@ -83,6 +84,15 @@ export class ModelPreferenceService {
     return models
       .filter((m) => m.servesIntent)
       .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
+  }
+
+  /** Declared reasoning of an offered model, read from the same union `listModels` serves; null when unlisted or undeclared. */
+  async reasoningFor(
+    modelId: string,
+    userId: string
+  ): Promise<ModelReasoning | null> {
+    const models = await this.listModels({ id: userId });
+    return models.find((model) => model.id === modelId)?.reasoning ?? null;
   }
 
   byokProvidersFor(

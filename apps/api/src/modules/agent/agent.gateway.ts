@@ -16,7 +16,7 @@ import {
 import type { Server } from 'socket.io';
 import { z } from 'zod';
 
-import { MODEL_ID_MAX_LENGTH } from '@knowtis/shared-types';
+import { MODEL_ID_MAX_LENGTH, REASONING_EFFORTS } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../config/env.config';
 import { AIErrors } from '../ai/domain/errors/ai.errors';
@@ -40,6 +40,7 @@ const agentTurnSchema = z.object({
   message: z.object({ content: z.string().min(1).max(20000) }),
   noteId: z.string().uuid().optional(),
   model: z.string().trim().min(1).max(MODEL_ID_MAX_LENGTH).optional(),
+  effort: z.enum(REASONING_EFFORTS).optional(),
 });
 
 const agentApprovePayloadSchema = z.object({
@@ -168,6 +169,7 @@ export class AgentGateway
           ...(client.data.clientIp ? { clientIp: client.data.clientIp } : {}),
           ...(data.noteId && { noteId: data.noteId }),
           ...(data.model && { model: data.model }),
+          ...(data.effort && { effort: data.effort }),
         },
         { ...this.baseCallbacks(client, controller), onProposal },
         controller.signal

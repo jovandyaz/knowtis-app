@@ -479,6 +479,32 @@ describe('ModelPreferenceService', () => {
     });
   });
 
+  describe('reasoningFor', () => {
+    function makeWithListing() {
+      const made = make(null, [SYSTEM_DEFAULT]);
+      made.selectableSvc.list = () => FULL_LISTING;
+      return made;
+    }
+
+    it('reads the declaration from the same union listModels serves', async () => {
+      const { svc } = makeWithListing();
+      expect(await svc.reasoningFor(INTENT_MODELS.fast, 'u1')).toEqual({
+        levels: ['low', 'medium', 'high'],
+        mandatory: false,
+      });
+    });
+
+    it('returns null for an offered model with no declaration', async () => {
+      const { svc } = makeWithListing();
+      expect(await svc.reasoningFor(SYSTEM_DEFAULT, 'u1')).toBe(null);
+    });
+
+    it('returns null for a model outside the offered union', async () => {
+      const { svc } = makeWithListing();
+      expect(await svc.reasoningFor('openai:not-offered', 'u1')).toBe(null);
+    });
+  });
+
   // Without this the ceiling can stop being forwarded and nothing else notices:
   // every downstream call falls back to the code default and still answers.
   describe('forwards the operator ceiling', () => {

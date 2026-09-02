@@ -175,6 +175,48 @@ describe('AgentGateway', () => {
     );
   });
 
+  it('forwards a valid effort to the turn handler', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+      effort: 'max',
+    });
+
+    expect(execute.mock.calls[0][0]).toMatchObject({ effort: 'max' });
+  });
+
+  it('omits effort from the handler input when the payload carries none', async () => {
+    const execute = vi.fn().mockResolvedValue(undefined);
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(execute.mock.calls[0][0]).not.toHaveProperty('effort');
+  });
+
+  it('rejects an unknown effort level with VALIDATION_ERROR', async () => {
+    const execute = vi.fn();
+    const gateway = makeGateway({ handler: { execute } });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+      effort: 'ultra',
+    });
+
+    expect(client.emit).toHaveBeenCalledWith(
+      'agent:error',
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('rejects message content exceeding 20000 characters with VALIDATION_ERROR', async () => {
     const gateway = makeGateway();
     const client = makeClient('u1');

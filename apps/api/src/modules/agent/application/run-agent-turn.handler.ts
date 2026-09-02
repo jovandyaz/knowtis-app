@@ -16,6 +16,7 @@ import {
   type AgentStopReason,
   type ByokProvider,
   type MessageStopReason,
+  type ReasoningEffort,
 } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
@@ -24,6 +25,10 @@ import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
+import {
+  clampEffort,
+  type EffortAudience,
+} from '../../ai/domain/model-catalog/effort-policy';
 import {
   EMBEDDING_PORT,
   type EmbeddingPort,
@@ -75,6 +80,7 @@ interface RunAgentTurnInput {
   readonly userMemories?: readonly string[];
   readonly model?: string;
   readonly conversationModel?: string | null;
+  readonly effort?: ReasoningEffort;
 }
 
 export interface RunAgentTurnCallbacks {
@@ -164,6 +170,13 @@ export class RunAgentTurnHandler {
       });
       return;
     }
+    // Reject before resolveConversation so a rejected turn leaves no row behind.
+    if (input.effort && input.isAnonymous) {
+      callbacks.onError(
+        AIErrors.validationError('effort is not available on anonymous turns')
+      );
+      return;
+    }
     return this.executeWithMemory(input, callbacks, signal);
   }
 
@@ -226,6 +239,7 @@ export class RunAgentTurnHandler {
       knownNotes,
       ...(userMemories.length ? { userMemories } : {}),
       ...(input.model ? { model: input.model } : {}),
+      ...(input.effort ? { effort: input.effort } : {}),
       conversationModel: conversation.model,
     };
     return this.runLoop(
@@ -592,7 +606,7 @@ export class RunAgentTurnHandler {
       input.isAnonymous ?? false
     );
     const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.aiConfig.getReasoningEffort(),
+      this.resolveReasoningEffort(input, model, isByok),
       this.aiConfig.getOpenRouterProviderOrder(),
     ]);
 
@@ -778,6 +792,34 @@ export class RunAgentTurnHandler {
       }
       callbacks.onError(AIErrors.providerError('Agent turn failed'));
     }
+  }
+
+  /** A rejected effort request falls back to the global default with a structured warn — never a silent mismatch. */
+  private async resolveReasoningEffort(
+    input: RunAgentTurnInput,
+    model: string,
+    isByok: boolean
+  ): Promise<ReasoningEffort> {
+    if (!input.effort) {
+      return this.aiConfig.getReasoningEffort();
+    }
+    const audience: Exclude<EffortAudience, 'anonymous'> = isByok
+      ? 'byok'
+      : 'free';
+    const declared = await this.modelPreference.reasoningFor(
+      model,
+      input.userId
+    );
+    const clamped = clampEffort(input.effort, declared, audience);
+    if (clamped === null) {
+      this.logger.warn({
+        event: 'agent.effort_fallback',
+        model,
+        requested: input.effort,
+      });
+      return this.aiConfig.getReasoningEffort();
+    }
+    return clamped;
   }
 
   private async resolveModel(

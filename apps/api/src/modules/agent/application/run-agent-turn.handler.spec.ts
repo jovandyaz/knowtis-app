@@ -154,6 +154,7 @@ function makeModelPreference(
     isSelectableWith: vi.fn().mockResolvedValue(true),
     byokProvidersFor: vi.fn().mockResolvedValue(new Set()),
     tierGatingOn: vi.fn().mockResolvedValue(false),
+    reasoningFor: vi.fn().mockResolvedValue(null),
   } as unknown as ModelPreferenceService;
 }
 
@@ -2075,6 +2076,213 @@ describe('RunAgentTurnHandler', () => {
 
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({ reasoningEffort: 'high' })
+    );
+  });
+
+  it('rejects an effort request from an anonymous turn', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig()
+    );
+    const onError = vi.fn();
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        isAnonymous: true,
+        effort: 'high',
+      },
+      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+    );
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ code: 'VALIDATION_ERROR' })
+    );
+    expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(rateLimit.checkLimit).not.toHaveBeenCalled();
+    expect(conversations.create).not.toHaveBeenCalled();
+  });
+
+  it('runs a byok turn at the requested declared level', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set(['google'])
+    );
+    vi.mocked(modelPreference.reasoningFor).mockResolvedValue({
+      levels: ['low', 'high', 'max'],
+      mandatory: false,
+    });
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok,
+      makeGuard(),
+      makeAIConfig()
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: 'google:gemini-2.0-flash',
+        effort: 'max',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(
+      'google:gemini-2.0-flash',
+      USER
+    );
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'max' })
+    );
+  });
+
+  it('clamps a free turn to the model boost level', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.reasoningFor).mockResolvedValue({
+      levels: ['low'],
+      mandatory: false,
+    });
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('medium')
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, effort: 'high' },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'low' })
+    );
+  });
+
+  it('falls back to the global effort and warns on an undeclared level', async () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('medium')
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, effort: 'xhigh' },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'medium' })
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.effort_fallback',
+        model: 'anthropic:claude-sonnet-4-20250514',
+        requested: 'xhigh',
+      })
+    );
+  });
+
+  it('never consults the model declaration when the turn requests no effort', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig('medium')
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    expect(modelPreference.reasoningFor).not.toHaveBeenCalled();
+    expect(orchestrator.run).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'medium' })
     );
   });
 
