@@ -4,11 +4,11 @@
 
 JWT-based auth with refresh token rotation, email verification, and password reset. Follows **DDD/Clean Architecture** (Ports & Adapters) with the Result pattern via `neverthrow`.
 
-| Layer    | Technology                                              |
-| -------- | ------------------------------------------------------- |
-| Backend  | NestJS 11, Passport.js, JWT, bcryptjs                   |
-| Database | PostgreSQL 16, Drizzle ORM                              |
-| Frontend | React 19, TanStack Query, Zustand, react-hook-form, Zod |
+| Layer    | Technology                                                                                                   |
+| -------- | ------------------------------------------------------------------------------------------------------------ |
+| Backend  | NestJS 11, Passport.js, JWT (HS256, `iss: knowtis-api`, `aud: knowtis:access` / `knowtis:refresh`), bcryptjs |
+| Database | PostgreSQL 16, Drizzle ORM                                                                                   |
+| Frontend | React 19, TanStack Query, Zustand, react-hook-form, Zod                                                      |
 
 | Token                     | TTL        | Source                                  |
 | ------------------------- | ---------- | --------------------------------------- |
@@ -32,11 +32,16 @@ packages/
 └── auth-nestjs/           # NestJS: handlers, ports, guards, strategies, module
 
 apps/api/src/modules/auth/
-├── dto/                   # Request validation (class-validator)
-└── infrastructure/        # Adapters: Drizzle repos, Bcrypt, JWT, email, logging
+├── auth-session.controller.ts   # anonymous, login, register, refresh, logout
+├── auth-account.controller.ts   # forgot/reset password, verify-email (link + code), resend, me
+├── application/services/        # AnonymousAuthService
+├── dto/                         # Request validation (class-validator)
+├── infrastructure/              # Adapters: Drizzle repos, Bcrypt, JWT
+├── tasks/                       # AuthCleanupTask (cron)
+└── utils/cookie.utils.ts        # Refresh-cookie names, domain, set/clear helpers
 ```
 
-> Package details in [AUTH-PACKAGES.md](AUTH-PACKAGES.md).
+> Package APIs are documented in each package README: [`@jovandyaz/auth`](../packages/auth/README.md), [`@jovandyaz/auth-react`](../packages/auth-react/README.md), [`@jovandyaz/auth-nestjs`](../packages/auth-nestjs/README.md). How the app wires them is in [Packages](#packages) below.
 
 **Dependency flow:**
 
@@ -64,21 +69,23 @@ Handlers depend on **port interfaces** (injected via NestJS DI with `Symbol` tok
 
 ### Register
 
-`POST /auth/register` → validate email/password VOs → check uniqueness → hash password → create user → generate tokens → create session → send verification email (async) → `201 { user, tokens }`
+`POST /auth/register` → validate email/password VOs → check uniqueness → hash password → create user → generate tokens → create session → send verification email (async) → set refresh cookie → `201 { user, tokens: { accessToken } }`
 
 ### Login
 
-`POST /auth/login` → Passport `LocalStrategy` → verify credentials → generate tokens → create session → `200 { user, tokens }`
+`POST /auth/login` → Passport `LocalStrategy` → verify credentials → generate tokens → create session → set refresh cookie → `200 { user, tokens: { accessToken } }`
+
+The wire `tokens` object carries **only `accessToken`** (`AuthSessionController.respondWithTokens`); the refresh token travels in the cookie. The shared `AuthResponse` type in `@jovandyaz/auth` still declares `tokens: AuthTokens` with a `refreshToken` field, so the type is wider than the response — consumers must not rely on `tokens.refreshToken` being present.
 
 ### Token Refresh
 
-`POST /auth/refresh` → read refresh token from HttpOnly cookie (`rid`) → verify + hash → find session → check expiry → mark session rotated → issue new tokens **in the same family** → set new cookie → `200 { accessToken }`
+`POST /auth/refresh` → read refresh token from the HttpOnly cookie, falling back to `refreshToken` in the JSON body (`RefreshTokenDto`) → verify + hash → find session → check expiry → mark session rotated → issue new tokens **in the same family** → set new cookie → `200 { accessToken }`
 
 **Rotation & token-family theft detection:** Refresh tokens are grouped by a `familyId` (issued at login). Each refresh stamps the current session `rotatedAt` and issues a fresh token in the same family. Reusing an already-rotated (or missing) token **past a 30s grace window** (`REFRESH_TOKEN_GRACE_MS`) is treated as theft → only **that family** is revoked (`deleteByFamilyId`), never every session the user owns. The grace window lets concurrent tabs refresh simultaneously without a false-positive theft signal. Legacy tokens carrying no `familyId` (pre-rotation) are simply rejected; rotated sessions are pruned after the grace window.
 
 ### Logout
 
-`POST /auth/logout` → read refresh token from HttpOnly cookie (`rid`) → hash token → delete session → clear cookie → `204`. Best-effort (returns 204 even if cookie/session not found).
+`POST /auth/logout` → read refresh token from the HttpOnly cookie (or `refreshToken` in the JSON body) → hash token → delete session → clear cookie → `204`. Best-effort (returns 204 even if cookie/session not found). Because `JwtStrategy` requires a live session for every session-bound access token, deleting the session also invalidates the still-unexpired access token immediately (see [Security](#security)).
 
 ### Email Verification
 
@@ -86,7 +93,7 @@ Registering emails both a link and a 6-digit code, stored as one row hashed with
 
 **Link (public):** `POST /auth/verify-email` → hash token → validate expiry (24h) → mark email verified → delete the verification rows → revoke every session.
 
-**Code (authenticated):** `POST /auth/verify-email/code` → count the attempt → compare in constant time → validate expiry (15 min) → mark email verified → delete the verification rows → revoke every session **except the caller's own family**. Capped at `VERIFICATION_CODE_MAX_ATTEMPTS` (5) guesses; the spent row is kept so the cap cannot be reset by resending.
+**Code (authenticated):** `POST /auth/verify-email/code` → count the attempt → compare in constant time → validate expiry (15 min) → mark email verified → delete the verification rows → revoke every session **except the caller's own family**. Capped at `VERIFICATION_CODE_MAX_ATTEMPTS` (5) guesses; the spent row is kept so the cap cannot be reset by resending. The controller refuses with `403` any caller whose token carries no `familyId` (MCP-exchanged or OAuth tokens): typing the code proves ownership only together with a live session, and there is no family to spare.
 
 Every path that can verify an address emits `AuthEventName.EMAIL_VERIFIED`, carrying the `source` that did it — `code`, `link` or `password_reset` — so the funnel can tell which one moved the rate.
 
@@ -114,7 +121,9 @@ A completed reset also marks an unverified email as verified — reading the res
 
 ### Anonymous Users
 
-`POST /auth/anonymous` → mint an anonymous user (`is_anonymous = true`) → issue the standard access + refresh token pair (refresh in the `rid` cookie) → `201 { user, accessToken }`. Passing a still-valid anonymous token reuses the same identity instead of minting a new user (`AnonymousAuthService.createAnonymousSession`).
+`POST /auth/anonymous` → mint an anonymous user (`is_anonymous = true`, `provider = 'anonymous'`, synthetic email `anon-<uuid>@anonymous.knowtis.local`) → issue the standard access + refresh token pair (refresh in the cookie) → `201 { user, accessToken }`.
+
+Passing `anonymousToken` in the body reuses the same identity instead of minting a new user, but only for a token whose lifetime (`exp - iat`) exceeds one hour (`MIN_EXCHANGEABLE_TOKEN_LIFETIME_SECONDS` in `AnonymousAuthService.resolveExistingAnonymousUser`). Anonymous access tokens are issued with the standard 15-minute `JWT_EXPIRES_IN`, so a current token never qualifies and the call mints a **new** anonymous user; the branch exists to migrate legacy long-lived anonymous tokens, which is the only case where the notes app sends it (`legacyAccessToken` in `apps/notes/src/auth/anonymous-session.ts`). Day-to-day continuity for an anonymous visitor comes from `POST /auth/refresh` with the cookie.
 
 **Migration to a real account:** `login` and `register` accept optional `anonymousUserId` + `anonymousToken`. After authenticating, the anonymous token is verified as an identity proof (`verifyMigrationProof` — signature + claims + DB match, expiry ignored) and the anonymous user's data (notes, AI usage) is migrated via `DrizzleAnonymousDataMigrationRepository`. Migration failures are logged but never block login/registration.
 
@@ -132,10 +141,11 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 
 ## Security
 
-- **Passwords:** bcrypt (10 rounds). Min 8 chars, uppercase, number, special char. Rules shared between frontend and backend via `getPasswordChecks()` from `@jovandyaz/auth`.
-- **Token storage:** Refresh tokens stored in **HttpOnly cookies** (`rid`, `SameSite=Lax`, `path=/api/v1/auth`, Secure in production) and as **HMAC-SHA256 hashes**, keyed by `TOKEN_HASH_KEY`, in the database (never plaintext). `Lax` is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests. Email/reset tokens (link and 6-digit code alike) are hashed the same keyed way — the HMAC key is what stops a stolen hash from being brute-forced offline, which matters for the code's low entropy. Link tokens are generated with `crypto.randomBytes(32)`; the code with `crypto.randomInt(0, 1_000_000)`.
+- **Passwords:** bcrypt, **12 rounds** by default, overridable with `BCRYPT_ROUNDS` (`BcryptPasswordHasher`). Min 8 chars, uppercase, number, special char. Rules shared between frontend and backend via `getPasswordChecks()` from `@jovandyaz/auth`.
+- **Access tokens are session-bound, not stateless.** `JwtStrategy.validate` (in `@jovandyaz/auth-nestjs`) accepts an HS256 session token only if `iss` is `knowtis-api`, `aud` is `knowtis:access`, the payload carries a `familyId`, **and** `SessionRepository.hasLiveSessionForFamily(familyId)` is true. Logout, password reset and email verification delete sessions, so the matching access tokens stop working immediately rather than at `exp`. The same strategy also verifies **ES256** tokens minted by the MCP authorization server (`additionalPublicKeys`, derived from `OAUTH_JWKS` in `auth.module.ts`); tokens carrying a `source` claim (MCP key exchange, OAuth) have no session and skip that check — `McpScopeGuard` gates them instead (see [MCP.md](MCP.md#auth-flow)).
+- **Refresh cookie:** the refresh token is an **HttpOnly** cookie (`SameSite=Lax`, `path=/api/v1/auth`, `Secure` in production, `maxAge` hardcoded to 7 days in `cookie.utils.ts`) and is stored as an **HMAC-SHA256 hash**, keyed by `TOKEN_HASH_KEY`, in the database (never plaintext). There are **two cookie names**: `rid` for the notes app and `rid_bo` for the backoffice; `resolveRefreshCookieName` picks `rid_bo` only when the request `Origin` matches `BACKOFFICE_URL`, so the two frontends sharing one API origin cannot rotate each other's token. In production the cookie `Domain` is derived from `FRONTEND_URL` (`deriveCookieDomain`, the last two host labels, e.g. `.knowtis.app`); every auth response also clears any legacy host-only cookie of the same name (`clearLegacyHostOnlyCookie`). `Lax` is sufficient because all auth routes are POST-only and Lax never attaches cookies to cross-site POST requests. Email/reset tokens (link and 6-digit code alike) are hashed the same keyed way — the HMAC key is what stops a stolen hash from being brute-forced offline, which matters for the code's low entropy. Link tokens are generated with `crypto.randomBytes(32)`; the code with `crypto.randomInt(0, 1_000_000)`.
 - **Refresh token rotation:** Each refresh rotates the token within its family. Reuse past the grace window → the **token family** is revoked (not all user sessions). See [Token Refresh](#token-refresh).
-- **Rate limiting:** All endpoints via `@nestjs/throttler`, through one app-wide guard that spends each budget per registered user and falls back to the IP for anonymous and unauthenticated callers. Exceeding → `429`.
+- **Rate limiting:** `@nestjs/throttler` through one app-wide guard that spends each budget per registered user and falls back to the IP for anonymous and unauthenticated callers. Exceeding → `429`. Per-route `@Throttle` budgets: `login` 5 / 15 min, `register` 3 / 15 min, `refresh` 10 / min, `anonymous` 3 / min, `forgot-password` 3 / 15 min, `reset-password` 5 / 15 min, `verify-email` 5 / 15 min, `verify-email/code` 10 / 15 min, `resend-verification` 3 / 15 min. `logout` and `me` use the app-wide default.
 - **Email enumeration:** `forgot-password` always returns success regardless of email existence.
 - **Session management:** Password reset invalidates all sessions. Logout invalidates specific session. Metadata (user agent, IP) stored for audit.
 - **Email service:** Delivery runs through `@jovandyaz/email-nestjs` and is selected by `EMAIL_PROVIDER`. **Resend** is the production provider (`ResendSender`, requires `RESEND_API_KEY`); the `console` provider (`ConsoleSender`) only logs emails and is for local development.
@@ -149,7 +159,9 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 | `TOKEN_HASH_KEY`         | Yes      | —                                    | HMAC key for every stored token hash (sessions, resets, email verification link + code). 32 bytes, base64 (`openssl rand -base64 32`). Read via `getOrThrow` at module construction, so the API will not boot without it |
 | `JWT_EXPIRES_IN`         | No       | `15m`                                | Access token TTL                                                                                                                                                                                                         |
 | `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                                 | Refresh token TTL                                                                                                                                                                                                        |
-| `FRONTEND_URL`           | No       | `http://localhost:4200`              | Base URL for email links                                                                                                                                                                                                 |
+| `BCRYPT_ROUNDS`          | No       | `12`                                 | bcrypt cost factor for password hashes                                                                                                                                                                                   |
+| `FRONTEND_URL`           | No       | `http://localhost:4200`              | Base URL for email links; in production also the source of the refresh cookie `Domain`                                                                                                                                   |
+| `BACKOFFICE_URL`         | No       | —                                    | Origin of the backoffice app; requests from it get the `rid_bo` refresh cookie instead of `rid`                                                                                                                          |
 | `EMAIL_PROVIDER`         | No       | `console`                            | Email sender: `resend` (prod) \| `console` (dev)                                                                                                                                                                         |
 | `RESEND_API_KEY`         | Cond.    | —                                    | Resend API key (required when `EMAIL_PROVIDER=resend`)                                                                                                                                                                   |
 | `EMAIL_FROM`             | No       | `Knowtis <noreply@mail.knowtis.app>` | Default sender address                                                                                                                                                                                                   |
@@ -161,12 +173,12 @@ All endpoints prefixed with `/api/v1/auth`. Swagger available at `/api/docs` in 
 
 Four tables: `users`, `sessions`, `email_verification_tokens`, `password_reset_tokens`.
 
-- **`users`** — `id` (uuid PK), `email` (unique), `name`, `avatar_url`, `provider` (default `'local'`), `provider_id`, `password_hash`, `locale`, `is_anonymous` (default `false`), `role` (`user_role` enum: `'user'` | `'admin'`, default `'user'`), `email_verified_at`, timestamps
-- **`sessions`** — `id` (uuid PK), `user_id` (FK), `family_id` (uuid, groups rotated tokens), `refresh_token_hash`, `rotated_at`, `user_agent`, `ip_address`, `expires_at`, `created_at`
+- **`users`** — `id` (uuid PK), `email` (unique), `name`, `avatar_url`, `provider` (default `'local'`; `'anonymous'` for anonymous users), `provider_id`, `password_hash`, `locale`, `is_anonymous` (default `false`), `role` (`user_role` enum: `'user'` | `'admin'`, default `'user'`), `email_verified_at`, timestamps. Indexes: GIN `gin_trgm_ops` on `email` (admin substring search) and a unique `(provider, provider_id)`. Anonymous users get the synthetic email `anon-<uuid>@anonymous.knowtis.local`.
+- **`sessions`** — `id` (uuid PK), `user_id` (FK), `family_id` (uuid, groups rotated tokens), `refresh_token_hash`, `rotated_at`, `user_agent`, `ip_address`, `expires_at`, `created_at`. Indexes: `user_id`, `family_id`, `refresh_token_hash`, `rotated_at`.
 - **`email_verification_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at` (link, 24h), `code_hash`, `code_expires_at` (code, 15min), `attempts` (int, default `0`, capped at `VERIFICATION_CODE_MAX_ATTEMPTS`), `created_at`
 - **`password_reset_tokens`** — `id` (uuid PK), `user_id` (FK), `token_hash`, `expires_at`, `created_at`
 
-All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_hash`.
+All FKs cascade on delete. Token tables are indexed on `user_id` and `token_hash`.
 
 > After schema changes, run `pnpm db:generate && pnpm db:migrate:run` (never `db:push` against shared DBs — see [MIGRATIONS.md](MIGRATIONS.md)).
 
@@ -180,11 +192,11 @@ All FKs cascade on delete. Indexed on `user_id` and `token_hash`/`refresh_token_
 
 `@jovandyaz/auth-react` is decoupled from any HTTP client via the `AuthApiAdapter` interface. The adapter is implemented in `apps/notes/src/auth/auth-api-adapter.ts`.
 
-Token storage: access token **in-memory only**, refresh token in **HttpOnly cookie** (set by the backend, not accessible from JS). On rehydration, the store triggers a silent refresh to check if the cookie is still valid.
+Token storage: access token **in-memory only**, refresh token in **HttpOnly cookie** (set by the backend, not accessible from JS). On rehydration the persisted store only keeps `isLoading` true for a previously authenticated user; the silent refresh that validates the cookie is run by `useSessionManager` (mounted in `AppProviders`), which also refreshes proactively before `exp` and when the tab becomes visible again.
 
 Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 401 → refresh callback (sends cookie via `credentials: 'include'`) → retry request. Wired via `httpClient.setRefreshTokenCallback()` in the adapter.
 
-> Package details in [AUTH-PACKAGES.md](AUTH-PACKAGES.md).
+> Package APIs: [`@jovandyaz/auth-react` README](../packages/auth-react/README.md).
 
 | Page                 | Route                                                                                                                                                                                        |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -193,6 +205,53 @@ Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 
 | `ForgotPasswordPage` | `/forgot-password`                                                                                                                                                                           |
 | `ResetPasswordPage`  | `/reset-password?token=...`                                                                                                                                                                  |
 | `VerifyEmailPage`    | `/verify-email?token=...` — signed-out visitors only; a signed-in account is redirected to the dashboard and offered the code dialog (see [Verifying from the app](#verifying-from-the-app)) |
+
+---
+
+## Packages
+
+Three published packages, each with its own README for the exported API:
+
+| Package                                                       | Role                                                                                                                           |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| [`@jovandyaz/auth`](../packages/auth/README.md)               | Browser-safe types, errors, password rules; `@jovandyaz/auth/server` adds value objects, `hashToken`, events, expiry constants |
+| [`@jovandyaz/auth-react`](../packages/auth-react/README.md)   | Store, hooks, provider, token storage, `useSessionManager`, Zod schema factories; no HTTP of its own                           |
+| [`@jovandyaz/auth-nestjs`](../packages/auth-nestjs/README.md) | `AuthNestjsModule.register()`, handlers, `JwtStrategy`/`LocalStrategy`, guards, decorators, `AUTH_ERROR_STATUS_MAP`            |
+
+### How the app connects them
+
+Backend (`apps/api/src/modules/auth`):
+
+```
+AuthSessionController / AuthAccountController
+  → inject Handlers from @jovandyaz/auth-nestjs
+    → Handlers depend on Ports (USER_REPOSITORY, SESSION_REPOSITORY, TOKEN_SERVICE, PASSWORD_HASHER, ...)
+      ← apps/api/src/modules/auth/infrastructure implements the Ports (Drizzle repos, JwtTokenService, BcryptPasswordHasher)
+```
+
+`AuthModule` calls `AuthNestjsModule.register()` with the Drizzle repositories, `JwtTokenService`, `BcryptPasswordHasher`, `AuthEmailService` from `@jovandyaz/email-nestjs` (`useExistingEmailService: true`), `TOKEN_HASH_KEY`, the JWT secrets/TTLs and `additionalPublicKeys` derived from `OAUTH_JWKS`. Anonymous sessions (`AnonymousAuthService`) and the cleanup cron live in the app, not in the packages.
+
+`JwtAuthGuard` is **not** a global guard. The module provides it and each controller opts in with `@UseGuards(JwtAuthGuard)`, marking open routes `@Public()`. The only `APP_GUARD`s in the API are the throttler (`ThrottlingModule`) and `McpScopeGuard` (`McpModule`).
+
+Frontend (`apps/notes`):
+
+```
+<AuthProvider api={adapter} tokenStorage store>   apps/notes/src/providers/AppProviders.tsx
+  adapter = auth-api-adapter.ts → IHttpClient (@knowtis/api-client) → REST API
+  useSessionManager()            bootstrap refresh, pre-expiry refresh, visibility resume
+  Components → useLogin(), useAuth(), ...
+  HttpClient handles 401 → refresh callback → retry (transparent)
+```
+
+### Design decisions
+
+- **`auth/server` subpath** — server-only exports are explicit; the main entry is always browser-safe.
+- **`AuthApiAdapter` interface** — decouples the React hooks from the HTTP implementation.
+- **In-memory access tokens, HttpOnly refresh cookie** — the token JS can read is short-lived; the long-lived one is never exposed to scripts. Cookie details in [Security](#security).
+- **Port interfaces in `auth-nestjs`** — implementations live in the consuming app, not the package.
+- **Two `PasswordHasher` contracts** — `@jovandyaz/auth/server` returns plain promises (utility); `@jovandyaz/auth-nestjs` returns `Result<_, AuthDomainError>` (use-case boundary). Intentionally different.
+- **Optional email ports** — the module boots without `emailService` / token repositories, so a deployment can run without email features.
+- **`tokenHashKey` is a `register()` option, not a port** — every consumer hashes the same way and only the key differs per deployment; the module builds `TokenHasher` from it and fails at construction if the key is not 32 bytes.
 
 ---
 
