@@ -81,7 +81,7 @@ describe('turnProviderOptions', () => {
     });
   });
 
-  it('forwards effort to openai as reasoningEffort with a summary', () => {
+  it('forwards effort to openai as a reasoningEffort', () => {
     expect(
       turnProviderOptions({
         model: 'openai:gpt-5.6-sol',
@@ -89,7 +89,7 @@ describe('turnProviderOptions', () => {
       })
     ).toEqual({
       providerOptions: {
-        openai: { reasoningEffort: 'xhigh', reasoningSummary: 'auto' },
+        openai: { reasoningEffort: 'xhigh' },
       },
     });
   });
@@ -104,6 +104,36 @@ describe('turnProviderOptions', () => {
       providerOptions: {
         google: {
           thinkingConfig: { thinkingLevel: 'medium', includeThoughts: true },
+        },
+      },
+    });
+  });
+
+  it('forwards the lowest declared google level as a thinking level', () => {
+    expect(
+      turnProviderOptions({
+        model: 'google:gemini-3.1-pro-preview',
+        reasoningEffort: 'low',
+      })
+    ).toEqual({
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'low', includeThoughts: true },
+        },
+      },
+    });
+  });
+
+  it('forwards the highest declared google level as a thinking level', () => {
+    expect(
+      turnProviderOptions({
+        model: 'google:gemini-3.1-pro-preview',
+        reasoningEffort: 'high',
+      })
+    ).toEqual({
+      providerOptions: {
+        google: {
+          thinkingConfig: { thinkingLevel: 'high', includeThoughts: true },
         },
       },
     });

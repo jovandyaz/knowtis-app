@@ -7,9 +7,8 @@ import type { ReasoningEffort } from '@knowtis/shared-types';
 
 const OPENROUTER_ALLOW_FALLBACKS = true;
 
-/** Levels Gemini 3.x accepts on `thinkingConfig.thinkingLevel`; declared ladders for google stay inside it, so this narrows the type rather than branching at runtime. */
+/** Where our effort ladder overlaps Gemini's `thinkingConfig.thinkingLevel`; the declared google ladders stay inside it, so a level above the overlap sends no thinking config rather than a silently clamped one. */
 const GOOGLE_THINKING_LEVELS = [
-  'minimal',
   'low',
   'medium',
   'high',
@@ -20,7 +19,7 @@ type GoogleThinkingLevel = (typeof GOOGLE_THINKING_LEVELS)[number];
 
 function isGoogleThinkingLevel(
   effort: ReasoningEffort
-): effort is ReasoningEffort & GoogleThinkingLevel {
+): effort is GoogleThinkingLevel {
   return (GOOGLE_THINKING_LEVELS as readonly string[]).includes(effort);
 }
 
@@ -76,12 +75,8 @@ function anthropicBlock(effort: ReasoningEffort) {
 }
 
 function openaiBlock(effort: ReasoningEffort) {
-  const openai: Pick<
-    OpenAILanguageModelResponsesOptions,
-    'reasoningEffort' | 'reasoningSummary'
-  > = {
+  const openai: Pick<OpenAILanguageModelResponsesOptions, 'reasoningEffort'> = {
     reasoningEffort: effort,
-    reasoningSummary: 'auto',
   };
   return { providerOptions: { openai } };
 }
