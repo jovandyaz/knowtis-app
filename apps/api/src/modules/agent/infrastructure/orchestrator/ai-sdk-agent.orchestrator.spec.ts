@@ -501,6 +501,39 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
+  it('a byok turn never fails over to a server-billed model', async () => {
+    streamTextMock.mockClear();
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield { type: 'reasoning-delta', id: 'r1', text: 'hmm' };
+        throw new Error('provider exploded');
+      })(),
+      usage: new Promise(() => {}),
+    }));
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(languageModelSpy.mock.calls.map(([model]) => model)).toEqual([
+      MODEL,
+    ]);
+    expect(events.at(-1)).toMatchObject({ type: 'error' });
+  });
+
   it('resolves tools with a full-phase context bound to the userId', async () => {
     const contexts: AgentToolContext[] = [];
     const registry = makeToolRegistry((ctx) => contexts.push(ctx));

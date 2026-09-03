@@ -142,6 +142,30 @@ describe('TurnEffortResolver', () => {
       })
     ).resolves.toBeUndefined();
     expect(modelPreference.reasoningFor).toHaveBeenCalledTimes(1);
+    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(DIRECT_MODEL, {
+      id: USER,
+      isAnonymous: false,
+    });
+  });
+
+  it('reads the declaration as an anonymous caller on an anonymous turn', async () => {
+    const { resolver, modelPreference } = make({
+      levels: ['low', 'medium', 'high'],
+      mandatory: false,
+    });
+
+    await expect(
+      resolver.resolve({
+        userId: USER,
+        model: DIRECT_MODEL,
+        isByok: false,
+        isAnonymous: true,
+      })
+    ).resolves.toBe(GLOBAL_DEFAULT);
+    expect(modelPreference.reasoningFor).toHaveBeenCalledWith(DIRECT_MODEL, {
+      id: USER,
+      isAnonymous: true,
+    });
   });
 
   it('falls back when a free caller has no level at or under the ceiling', async () => {

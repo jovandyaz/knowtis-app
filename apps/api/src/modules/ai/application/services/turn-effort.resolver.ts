@@ -14,6 +14,7 @@ export interface TurnEffortRequest {
   readonly userId: string;
   readonly model: string;
   readonly isByok: boolean;
+  readonly isAnonymous?: boolean | undefined;
   readonly requested?: ReasoningEffort | undefined;
 }
 
@@ -36,15 +37,17 @@ export class TurnEffortResolver {
     userId,
     model,
     isByok,
+    isAnonymous,
     requested,
   }: TurnEffortRequest): Promise<ReasoningEffort | undefined> {
+    const user = { id: userId, isAnonymous: isAnonymous === true };
     if (!requested) {
-      return this.defaultFor(model, userId);
+      return this.defaultFor(model, user);
     }
     const audience: Exclude<EffortAudience, 'anonymous'> = isByok
       ? 'byok'
       : 'free';
-    const declared = await this.modelPreference.reasoningFor(model, userId);
+    const declared = await this.modelPreference.reasoningFor(model, user);
     const clamped = clampEffort(requested, declared, audience);
     if (clamped === null) {
       this.logger.warn({
@@ -52,7 +55,7 @@ export class TurnEffortResolver {
         model,
         requested,
       });
-      return this.defaultFor(model, userId, declared);
+      return this.defaultFor(model, user, declared);
     }
     if (clamped !== requested) {
       this.logger.warn({
@@ -73,7 +76,7 @@ export class TurnEffortResolver {
    */
   private async defaultFor(
     model: string,
-    userId: string,
+    user: { id: string; isAnonymous?: boolean },
     declared?: ModelReasoning | null
   ): Promise<ReasoningEffort | undefined> {
     if (providerOf(model) === OPENROUTER_PROVIDER) {
@@ -82,9 +85,7 @@ export class TurnEffortResolver {
     const [fallback, levels] = await Promise.all([
       this.aiConfig.getReasoningEffort(),
       declared === undefined
-        ? this.modelPreference
-            .reasoningFor(model, userId)
-            .then((r) => r?.levels)
+        ? this.modelPreference.reasoningFor(model, user).then((r) => r?.levels)
         : Promise.resolve(declared?.levels),
     ]);
     return levels?.includes(fallback) ? fallback : undefined;

@@ -2134,6 +2134,7 @@ describe('RunAgentTurnHandler', () => {
       userId: USER,
       model: SERVED_MODEL,
       isByok: false,
+      isAnonymous: undefined,
       requested: 'xhigh',
     });
   });
@@ -2178,6 +2179,7 @@ describe('RunAgentTurnHandler', () => {
       userId: USER,
       model: USER_KEYED_MODEL,
       isByok: false,
+      isAnonymous: undefined,
       requested: 'max',
     });
   });
@@ -2230,7 +2232,49 @@ describe('RunAgentTurnHandler', () => {
       userId: USER,
       model: USER_KEYED_MODEL,
       isByok: true,
+      isAnonymous: undefined,
       requested: 'max',
+    });
+  });
+
+  it("resolves an anonymous turn's effort as an anonymous caller", async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const turnEffort = makeTurnEffort('low');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      turnEffort
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, isAnonymous: true },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
+    await effortFor?.(SERVED_MODEL);
+    expect(turnEffort.resolve).toHaveBeenCalledWith({
+      userId: USER,
+      model: SERVED_MODEL,
+      isByok: false,
+      isAnonymous: true,
+      requested: undefined,
     });
   });
 

@@ -115,6 +115,7 @@ function make(
 
 const USER = { id: 'u1' };
 const ANON = { id: 'anon-1', isAnonymous: true };
+const CURATED_DIRECT_MODEL = 'anthropic:claude-opus-5';
 
 function entry(
   over: Partial<SelectableModel> & { id: string }
@@ -150,6 +151,10 @@ const FULL_LISTING: SelectableModel[] = [
     id: INTENT_MODELS.powerful,
     tier: 'powerful',
     servesIntent: 'powerful',
+  }),
+  entry({
+    id: CURATED_DIRECT_MODEL,
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: false },
   }),
   entry({ id: 'openrouter:promoted-mock' }),
   entry({ id: 'google:byok-model', billedToUser: true }),
@@ -490,7 +495,7 @@ describe('ModelPreferenceService', () => {
 
     it('reads the declaration from the same union listModels serves', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(INTENT_MODELS.fast, 'u1')).toEqual({
+      expect(await svc.reasoningFor(INTENT_MODELS.fast, USER)).toEqual({
         levels: ['low', 'medium', 'high'],
         mandatory: false,
       });
@@ -498,12 +503,31 @@ describe('ModelPreferenceService', () => {
 
     it('returns null for an offered model with no declaration', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor(SYSTEM_DEFAULT, 'u1')).toBe(null);
+      expect(await svc.reasoningFor(SYSTEM_DEFAULT, USER)).toBe(null);
     });
 
     it('returns null for a model outside the offered union', async () => {
       const { svc } = makeWithListing();
-      expect(await svc.reasoningFor('openai:not-offered', 'u1')).toBe(null);
+      expect(await svc.reasoningFor('openai:not-offered', USER)).toBe(null);
+    });
+
+    it('keeps an anonymous lookup off the stored byok providers', async () => {
+      const { svc, byok } = makeWithListing();
+      expect(await svc.reasoningFor(INTENT_MODELS.fast, ANON)).toEqual({
+        levels: ['low', 'medium', 'high'],
+        mandatory: false,
+      });
+      expect(byok.enabledProviders).toHaveBeenCalledWith(ANON.id, true);
+    });
+
+    it('serves the declared ladder of an offered model the anonymous menu hides', async () => {
+      const { svc } = makeWithListing();
+      expect(await svc.reasoningFor(CURATED_DIRECT_MODEL, ANON)).toEqual({
+        levels: ['low', 'medium', 'high'],
+        mandatory: false,
+      });
+      const listed = (await svc.listModels(ANON)).map((m) => m.id);
+      expect(listed).not.toContain(CURATED_DIRECT_MODEL);
     });
   });
 

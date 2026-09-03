@@ -24,7 +24,10 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
-import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
+import {
+  TurnEffortResolver,
+  type TurnEffortRequest,
+} from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
   EMBEDDING_PORT,
@@ -657,7 +660,13 @@ export class RunAgentTurnHandler {
         maxSteps,
         maxTurnTokens,
         effortFor: (candidate: string) =>
-          this.effortForModel(candidate, input.userId, isByok, input.effort),
+          this.effortForModel({
+            userId: input.userId,
+            model: candidate,
+            isByok,
+            isAnonymous: input.isAnonymous,
+            requested: input.effort,
+          }),
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
@@ -798,22 +807,14 @@ export class RunAgentTurnHandler {
    * reasoning option: it must not fail the model the chain is about to try.
    */
   private async effortForModel(
-    model: string,
-    userId: string,
-    isByok: boolean,
-    requested: ReasoningEffort | undefined
+    request: TurnEffortRequest
   ): Promise<ReasoningEffort | undefined> {
     try {
-      return await this.turnEffort.resolve({
-        userId,
-        model,
-        isByok,
-        requested,
-      });
+      return await this.turnEffort.resolve(request);
     } catch (error) {
       this.logger.warn({
         event: 'agent.effort_lookup_failed',
-        model,
+        model: request.model,
         error: error instanceof Error ? error.message : 'unknown',
       });
       return undefined;
