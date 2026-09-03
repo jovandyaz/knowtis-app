@@ -122,7 +122,7 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 
 **Structured output:** `Output.object({ schema })` con Zod en voice-note, artifacts, organización, memory-reconcile.
 
-**Tests:** 128 specs entre agent/ai/ai-gateway. Corpus de inyección: 44 ataques + 35 benignos (`injection-corpus.ts`). Evals promptfoo (`modules/agent/eval/`): injection, copilot, memory recall, retrieval quality, web search quality; grader `claude-haiku-4-5`; assertions estructurales (`assertGrounding` exige orden searchNotes→getNote + sources).
+**Tests:** 128 specs entre agent/ai/ai-gateway. Corpus de inyección: 44 ataques + 35 benignos (`injection-corpus.ts`). Evals (`modules/agent/eval/`, 6 suites): injection guard y copilot corren en promptfoo con grader `claude-haiku-4-5`; memory recall, retrieval quality, web search quality y transcript replay son suites vitest sobre el mismo runtime compartido; assertions estructurales (`assertGrounding` exige orden searchNotes→getNote + sources).
 
 **CI de evals:** solo nightly (`.github/workflows/nightly-eval.yml`, cron 08:00, falla si falta la key). NO corre en PRs.
 
