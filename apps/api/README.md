@@ -155,15 +155,15 @@ AI variables are documented in [docs/AI.md → Environment Variables](../../docs
 - Authentication: `Authorization: Bearer <accessToken>`; refresh token in an HttpOnly cookie (`rid` / `rid_bo`, path `/api/v1/auth`). See [docs/AUTH.md](../../docs/AUTH.md).
 - Rate limit: 60 requests per 60 s window, keyed per registered user (per IP for anonymous callers) — `core/throttling/`.
 - Pagination envelope: `{ items, total, page, limit }`; defaults `page=1`, `limit=25`; ceilings `MAX_PAGE` and `MAX_LIMIT` (100) in `core/pagination/pagination.constants.ts`.
-- Error shape (`core/filters/http-exception.filter.ts`): `{ statusCode, message, error, code?, errors?, timestamp, path }`. 5xx responses have their message redacted to `Internal server error`.
+- Error shape (`core/filters/http-exception.filter.ts`): `{ statusCode, message, error, code?, errors?, timestamp, path }`. 5xx responses have their message redacted to `Internal server error` — except `/api/v1/health*`, whose 503 body is the Terminus result naming the failing indicator (see the health table below).
 
 ### Health
 
-| Endpoint               | Behaviour                                                     |
-| ---------------------- | ------------------------------------------------------------- |
-| `/api/v1/health/ping`  | `{ status: 'ok', timestamp }` — liveness; Railway healthcheck |
-| `/api/v1/health/ready` | Terminus check of database connectivity; 503 when unreachable |
-| `/api/v1/health`       | Terminus memory heap/RSS indicators                           |
+| Endpoint               | Behaviour                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/health/ping`  | `{ status: 'ok', timestamp }` — liveness; Railway healthcheck                                                                                             |
+| `/api/v1/health/ready` | Terminus check of database connectivity; 503 when unreachable                                                                                             |
+| `/api/v1/health`       | Terminus check of database connectivity and RSS against 90% of the container memory limit; a 503 body is the Terminus result naming the failing indicator |
 
 ---
 
