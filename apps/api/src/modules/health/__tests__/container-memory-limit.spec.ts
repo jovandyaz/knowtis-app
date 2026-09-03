@@ -23,4 +23,8 @@ describe('containerMemoryLimitBytes', () => {
   it('falls back to host memory when libuv reports the UINT64_MAX sentinel', () => {
     expect(containerMemoryLimitBytes(probeWith(2 ** 64))).toBe(HOST_RAM);
   });
+
+  it('falls back to host memory when the reported limit exceeds host RAM', () => {
+    expect(containerMemoryLimitBytes(probeWith(HOST_RAM + 1))).toBe(HOST_RAM);
+  });
 });
