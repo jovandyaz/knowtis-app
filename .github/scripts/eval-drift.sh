@@ -62,22 +62,29 @@ for current in "${summaries[@]}"; do
   fi
   note "### ${suite} (${cur_model}, ${cur_trials} trials)"
   note ""
-  note "| Case | Baseline | Current | Status |"
-  note "| --- | --- | --- | --- |"
+  note "| Case | Baseline | Current | Ungraded | Status |"
+  note "| --- | --- | --- | --- | --- |"
   jq -r --slurpfile base "$baseline" '
+    def graded: .trials - (.graderErrors // 0);
+    def rate: if graded == 0 then null else .passes / graded end;
+    def cell: if graded == 0 then "-/0" else "\(.passes)/\(graded)" end;
     ($base[0].cases | map({key: .key, value: .}) | from_entries) as $prev
     | .cases[]
+    | . as $cur
     | ($prev[.key] // null) as $old
     | [
         .label,
-        (if $old == null then "-" else "\($old.passes)/\($old.trials)" end),
-        "\(.passes)/\(.trials)",
+        (if $old == null then "-" else ($old | cell) end),
+        ($cur | cell),
+        "\(.graderErrors // 0)/\(.trials)",
         (if $old == null then "new"
-         elif .passes < $old.passes then "REGRESSED"
-         elif .passes > $old.passes then "improved"
+         elif ($cur | rate) == null then "ungraded"
+         elif ($old | rate) == null then "regraded"
+         elif ($cur | rate) < ($old | rate) then "REGRESSED"
+         elif ($cur | rate) > ($old | rate) then "improved"
          else "=" end)
       ]
-    | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) |"
+    | "| \(.[0]) | \(.[1]) | \(.[2]) | \(.[3]) | \(.[4]) |"
   ' "$current" >>"$SUMMARY_FILE"
   removed="$(jq -r --slurpfile cur "$current" '
     ($cur[0].cases | map(.key)) as $keys

@@ -7,10 +7,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createStructuredProvider,
   evalGateOpen,
+  formatCaseOutcome,
   prepareEvalOutput,
   resolveEvalModel,
   resolveEvalTrials,
   summarizeTrials,
+  toTrialResult,
   writeEvalSummary,
   type EvalRunStats,
 } from './eval-runtime';
@@ -80,6 +82,11 @@ describe('summarizeTrials', () => {
     success,
     vars: { message: label, fixtureSet },
   });
+  const errored = (label: string, fixtureSet = 'recent') => ({
+    success: false,
+    errored: true,
+    vars: { message: label, fixtureSet },
+  });
 
   it('groups repeated trials by case vars and counts passes', () => {
     const { cases } = summarizeTrials([
@@ -95,15 +102,87 @@ describe('summarizeTrials', () => {
         key: '{"fixtureSet":"recent","message":"case-a"}',
         label: 'case-a',
         passes: 2,
+        graderErrors: 0,
         trials: 3,
       },
       {
         key: '{"fixtureSet":"recent","message":"case-b"}',
         label: 'case-b',
         passes: 2,
+        graderErrors: 0,
         trials: 3,
       },
     ]);
+  });
+
+  it('excludes errored trials from the threshold denominator', () => {
+    const { cases, casesBelowThreshold } = summarizeTrials([
+      trial('case-a', true),
+      errored('case-a'),
+      trial('case-a', true),
+    ]);
+    expect(cases).toEqual([
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 2,
+        graderErrors: 1,
+        trials: 3,
+      },
+    ]);
+    expect(casesBelowThreshold).toEqual([]);
+  });
+
+  it('accepts a case whose only valid trial passed', () => {
+    const { casesBelowThreshold } = summarizeTrials([
+      errored('case-a'),
+      trial('case-a', true),
+      errored('case-a'),
+    ]);
+    expect(casesBelowThreshold).toEqual([]);
+  });
+
+  it('fails a case when every trial errored', () => {
+    const { casesBelowThreshold } = summarizeTrials([
+      errored('case-a'),
+      errored('case-a'),
+      errored('case-a'),
+    ]);
+    expect(casesBelowThreshold).toEqual([
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 0,
+        graderErrors: 3,
+        trials: 3,
+      },
+    ]);
+  });
+
+  it('still fails on behavioral failures among the valid trials', () => {
+    const { casesBelowThreshold } = summarizeTrials([
+      trial('case-a', false),
+      errored('case-a'),
+      trial('case-a', false),
+    ]);
+    expect(casesBelowThreshold).toHaveLength(1);
+  });
+
+  it('judges a mid-range denominator on the graded trials only', () => {
+    const passing = summarizeTrials([
+      trial('case-a', true),
+      trial('case-a', true),
+      trial('case-a', false),
+      errored('case-a'),
+    ]);
+    expect(passing.casesBelowThreshold).toEqual([]);
+    const failing = summarizeTrials([
+      trial('case-a', true),
+      trial('case-a', false),
+      trial('case-a', false),
+      errored('case-a'),
+    ]);
+    expect(failing.casesBelowThreshold).toHaveLength(1);
   });
 
   it('keeps cases with the same message but different vars apart', () => {
@@ -125,6 +204,7 @@ describe('summarizeTrials', () => {
         key: '{"fixtureSet":"recent","message":"case-a"}',
         label: 'case-a',
         passes: 1,
+        graderErrors: 0,
         trials: 3,
       },
     ]);
@@ -157,6 +237,180 @@ describe('summarizeTrials', () => {
   it('falls back to a placeholder label when vars.message is absent', () => {
     const { cases } = summarizeTrials([{ success: true }]);
     expect(cases[0]?.label).toBe('(case)');
+  });
+});
+
+describe('toTrialResult', () => {
+  const vars = { message: 'm', fixtureSet: 'recent' };
+
+  it('keeps a passing trial as not errored', () => {
+    expect(toTrialResult({ success: true, vars, gradingResult: null })).toEqual(
+      { success: true, vars, errored: false }
+    );
+  });
+
+  it('keeps an assertion failure as a behavioral failure', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: {
+          pass: false,
+          score: 0,
+          reason: 'tool not called',
+          componentResults: [{ pass: false, score: 0, reason: 'x' }],
+        },
+      }).errored
+    ).toBe(false);
+  });
+
+  it('keeps a provider throw as a behavioral failure', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: null,
+      }).errored
+    ).toBe(false);
+  });
+
+  it('keeps a behavioral failure alongside a grader error as a failure', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: {
+          pass: false,
+          score: 0,
+          reason: 'tool not called; API call error: Overloaded, status 529',
+          componentResults: [
+            { pass: false, score: 0, reason: 'tool not called' },
+            {
+              pass: false,
+              score: 0,
+              reason: 'API call error: Overloaded, status 529',
+              metadata: { graderError: true },
+            },
+          ],
+        },
+      }).errored
+    ).toBe(false);
+  });
+
+  it('keeps an assertion failure without component results as a failure', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: { pass: false, score: 0, reason: 'x' },
+      }).errored
+    ).toBe(false);
+  });
+
+  it('exempts a single-assertion case whose only grader call failed', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: {
+          pass: false,
+          score: 0,
+          reason: 'API call error: Overloaded, status 529',
+          componentResults: [
+            {
+              pass: false,
+              score: 0,
+              reason: 'API call error: Overloaded, status 529',
+              metadata: { graderError: true },
+            },
+          ],
+        },
+      }).errored
+    ).toBe(true);
+  });
+
+  it('stays a behavioral failure when only the aggregate carries the tag', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: {
+          pass: false,
+          score: 0,
+          reason: 'API call error: Overloaded, status 529',
+          metadata: { graderError: true },
+        },
+      }).errored
+    ).toBe(false);
+  });
+
+  it('marks a grader transport error as errored', () => {
+    expect(
+      toTrialResult({
+        success: false,
+        vars,
+        gradingResult: {
+          pass: false,
+          score: 0,
+          reason: 'API call error: Overloaded, status 529',
+          componentResults: [
+            { pass: true, score: 1, reason: 'ok' },
+            {
+              pass: false,
+              score: 0,
+              reason: 'API call error: Overloaded, status 529',
+              metadata: { graderError: true },
+            },
+          ],
+        },
+      }).errored
+    ).toBe(true);
+  });
+});
+
+describe('a pinned-model violation across trials', () => {
+  const vars = { message: 'case-a', fixtureSet: 'recent' };
+
+  it('fails the case when the fallback chain served two of three trials', () => {
+    const providerThrow = { success: false, vars, gradingResult: null };
+    const graded = { success: true, vars, gradingResult: null };
+    const { cases, casesBelowThreshold } = summarizeTrials(
+      [providerThrow, graded, providerThrow].map(toTrialResult)
+    );
+    expect(cases).toEqual([
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 1,
+        graderErrors: 0,
+        trials: 3,
+      },
+    ]);
+    expect(casesBelowThreshold).toHaveLength(1);
+  });
+});
+
+describe('formatCaseOutcome', () => {
+  const outcome = (passes: number, graderErrors: number, trials: number) => ({
+    key: 'k',
+    label: 'case-a',
+    passes,
+    graderErrors,
+    trials,
+  });
+
+  it('shows plain passes over trials when everything was graded', () => {
+    expect(formatCaseOutcome(outcome(2, 0, 3), [])).toBe('PASS 2/3');
+  });
+
+  it('names the graded denominator and the ungraded trials', () => {
+    const below = outcome(1, 2, 3);
+    expect(formatCaseOutcome(below, [])).toBe(
+      'PASS 1/1 graded, 2 of 3 ungraded'
+    );
+    expect(formatCaseOutcome(below, [below])).toBe(
+      'FAIL 1/1 graded, 2 of 3 ungraded'
+    );
   });
 });
 
@@ -252,12 +506,13 @@ describe('writeEvalSummary', () => {
   const STATS: EvalRunStats = {
     successes: 2,
     failures: 1,
-    errors: 0,
+    providerErrors: 0,
     cases: [
       {
         key: '{"fixtureSet":"recent","message":"m"}',
         label: 'm',
         passes: 2,
+        graderErrors: 0,
         trials: 3,
       },
     ],

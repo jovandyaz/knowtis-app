@@ -5,6 +5,7 @@ import type {
   ApiProvider,
   Assertion,
   CallApiContextParams,
+  EvaluateResult,
   ProviderResponse,
 } from 'promptfoo';
 
@@ -105,12 +106,46 @@ export interface EvalCaseOutcome {
   readonly key: string;
   readonly label: string;
   readonly passes: number;
+  readonly graderErrors: number;
   readonly trials: number;
 }
 
 export interface EvalTrialResult {
   readonly success: boolean;
   readonly vars?: Record<string, unknown>;
+  /** The rubric grader could not be reached, so the trial carries no verdict. */
+  readonly errored?: boolean;
+}
+
+type PromptfooTrial = Pick<
+  EvaluateResult,
+  'success' | 'vars' | 'gradingResult'
+>;
+
+/**
+ * Grader transport errors (e.g. HTTP 529 from the rubric model) reach promptfoo
+ * as failed assertions tagged `metadata.graderError`, not as errored trials.
+ * A trial only counts as errored when every failing assertion is one of those;
+ * a real assertion failure in the same trial is still behavioral signal.
+ *
+ * A trial promptfoo reports as errored is not one of these: `callApi` does not
+ * catch, so excusing those would drop the `assertPinnedModelServed` throws that
+ * catch the fallback chain grading the wrong model.
+ */
+export function toTrialResult(result: PromptfooTrial): EvalTrialResult {
+  const failedComponents = (
+    result.gradingResult?.componentResults ?? []
+  ).filter((component) => !component.pass);
+  const onlyGraderErrors =
+    failedComponents.length > 0 &&
+    failedComponents.every(
+      (component) => component.metadata?.graderError === true
+    );
+  return {
+    success: result.success,
+    vars: result.vars,
+    errored: !result.success && onlyGraderErrors,
+  };
 }
 
 export interface EvalTrialSummary {
@@ -135,15 +170,22 @@ export function summarizeTrials(
 ): EvalTrialSummary {
   const byCase = new Map<
     string,
-    { label: string; passes: number; trials: number }
+    { label: string; passes: number; graderErrors: number; trials: number }
   >();
   for (const result of results) {
     const key = caseKeyOf(result.vars);
     const label = (result.vars?.['message'] as string | undefined) ?? '(case)';
-    const entry = byCase.get(key) ?? { label, passes: 0, trials: 0 };
+    const entry = byCase.get(key) ?? {
+      label,
+      passes: 0,
+      graderErrors: 0,
+      trials: 0,
+    };
     entry.trials += 1;
     if (result.success) {
       entry.passes += 1;
+    } else if (result.errored) {
+      entry.graderErrors += 1;
     }
     byCase.set(key, entry);
   }
@@ -151,16 +193,31 @@ export function summarizeTrials(
     key,
     ...entry,
   }));
-  const casesBelowThreshold = cases.filter(
-    (c) => c.passes < Math.ceil(minPassRate * c.trials)
-  );
+  const casesBelowThreshold = cases.filter((c) => {
+    const gradedTrials = c.trials - c.graderErrors;
+    return (
+      gradedTrials === 0 || c.passes < Math.ceil(minPassRate * gradedTrials)
+    );
+  });
   return { cases, casesBelowThreshold };
+}
+
+export function formatCaseOutcome(
+  outcome: EvalCaseOutcome,
+  casesBelowThreshold: readonly EvalCaseOutcome[]
+): string {
+  const status = casesBelowThreshold.includes(outcome) ? 'FAIL' : 'PASS';
+  if (outcome.graderErrors === 0) {
+    return `${status} ${outcome.passes}/${outcome.trials}`;
+  }
+  const gradedTrials = outcome.trials - outcome.graderErrors;
+  return `${status} ${outcome.passes}/${gradedTrials} graded, ${outcome.graderErrors} of ${outcome.trials} ungraded`;
 }
 
 export interface EvalRunStats {
   readonly successes: number;
   readonly failures: number;
-  readonly errors: number;
+  readonly providerErrors: number;
   readonly cases: readonly EvalCaseOutcome[];
   readonly casesBelowThreshold: readonly EvalCaseOutcome[];
 }
@@ -175,7 +232,7 @@ export async function runEvalSuite(
   options: EvalRunOptions = {}
 ): Promise<EvalRunStats> {
   const trials = options.trials ?? 1;
-  const promptfoo = (await import('promptfoo')).default;
+  const { default: promptfoo } = await import('promptfoo');
   const record = await promptfoo.evaluate(
     suite as Parameters<typeof promptfoo.evaluate>[0],
     { maxConcurrency: 1, repeat: trials }
@@ -183,29 +240,26 @@ export async function runEvalSuite(
   const summary = await record.toEvaluateSummary();
 
   const { cases, casesBelowThreshold } = summarizeTrials(
-    summary.results.map((result) => ({
-      success: result.success,
-      vars: result.vars,
-    })),
+    summary.results.map(toTrialResult),
     options.minPassRate
   );
+  const graderErrors = cases.reduce((n, c) => n + c.graderErrors, 0);
 
   /* eslint-disable no-console */
   for (const evalCase of cases) {
-    const status = casesBelowThreshold.includes(evalCase) ? 'FAIL' : 'PASS';
     console.log(
-      `[${status} ${evalCase.passes}/${evalCase.trials}] ${evalCase.label}`
+      `[${formatCaseOutcome(evalCase, casesBelowThreshold)}] ${evalCase.label}`
     );
   }
   console.log(
-    `\nTrials passed: ${summary.stats.successes}  Failed: ${summary.stats.failures}  Errors: ${summary.stats.errors}  Cases below threshold: ${casesBelowThreshold.length}`
+    `\nTrials passed: ${summary.stats.successes}  Failed: ${summary.stats.failures} (${graderErrors} ungraded)  Provider errors: ${summary.stats.errors}  Cases below threshold: ${casesBelowThreshold.length}`
   );
   /* eslint-enable no-console */
 
   return {
     successes: summary.stats.successes,
     failures: summary.stats.failures,
-    errors: summary.stats.errors,
+    providerErrors: summary.stats.errors,
     cases,
     casesBelowThreshold,
   };

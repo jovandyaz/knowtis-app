@@ -951,13 +951,20 @@ pnpm nx run api:eval
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).
 - **Trials:** `AI_EVAL_TRIALS` (default 1) repeats every promptfoo case N times; a case fails
-  when it passes fewer than `ceil(2/3 * N)` trials. Agent behavior is stochastic, so a single
-  trial cannot distinguish a regression from variance — nightly CI runs 3 trials, while the
-  local default stays at 1 for cheap pre-merge runs.
+  when it passes fewer than `ceil(2/3 * G)` of its **graded** trials G. Agent behavior is
+  stochastic, so a single trial cannot distinguish a regression from variance — nightly CI runs
+  3 trials, while the local default stays at 1 for cheap pre-merge runs.
+- **Ungraded trials:** a trial whose every failing assertion is a grader transport error
+  (`metadata.graderError` — e.g. HTTP 529 from the rubric model) carries no verdict, so it
+  leaves the denominator instead of counting as a regression. Two guardrails keep that from
+  turning red into green: a case whose trials were **all** ungraded fails, and a trial the
+  agent provider itself threw on is a behavioral failure, not an ungraded one — the
+  `assertPinnedModelServed` gate throws that way, and excusing it would let a run graded
+  against the fallback chain pass.
 - **Results:** set `AI_EVAL_OUTPUT_DIR` to persist results — promptfoo's native JSON and a
-  `<suite>.summary.json` (per-case pass rates, model, trials, git SHA) per promptfoo suite,
-  plus Vitest's `vitest.json` for the remaining suites. Unset (the local default), nothing is
-  written.
+  `<suite>.summary.json` (per-case `passes`/`graderErrors`/`trials`, model, trials, git SHA)
+  per promptfoo suite, plus Vitest's `vitest.json` for the remaining suites. Unset (the local
+  default), nothing is written.
 
 ### How it works
 
@@ -974,8 +981,8 @@ pnpm nx run api:eval
 - **Assertions:** deterministic `javascript` checks (tool selection/order, proposal shape,
   sources) plus `llm-rubric` graders (Anthropic) for grounding, no-hallucination, HITL, and
   injection resistance. With `AI_EVAL_TRIALS` > 1 each case is judged on its per-case pass
-  rate (threshold 2/3), so one flaky trial does not fail the suite but a consistent
-  regression does.
+  rate over the graded trials (threshold 2/3), so one flaky trial does not fail the suite but a
+  consistent regression does.
 - **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
   `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
 
@@ -989,7 +996,10 @@ cases (injection resistance, copilot behaviors) run unless the `VOYAGE_API_KEY` 
 secrets are also configured. The job fails fast when `ANTHROPIC_API_KEY` is missing, so a
 silently-skipped night can't read as green — and the graded run needs a funded Anthropic account
 (a zero-credit key surfaces as an eval error, not a skip). The workflow sets `AI_EVAL_TRIALS=3`,
-so every promptfoo case runs three times and fails below a 2/3 pass rate.
+so every promptfoo case runs three times and fails below a 2/3 pass rate over its graded
+trials. A grader outage therefore reads as `N of 3 ungraded` per case rather than as a wave of
+behavioral regressions — the failure mode that made the 2026-09-01 nightly report
+`Failed: 13  Errors: 0` while the same code passed 24/24 ninety minutes earlier.
 Each run persists results to the `eval-results` artifact (90-day retention) and a
 non-blocking step compares per-case pass rates against the previous successful nightly,
 writing a drift table to the job summary; it refuses the comparison when the pinned model
