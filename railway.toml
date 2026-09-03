@@ -5,9 +5,9 @@
 # Build command for NestJS API in Nx monorepo
 builder = "nixpacks"
 buildCommand = "NODE_ENV=development pnpm install --frozen-lockfile && pnpm build:api"
-# Nx affected is the first CI gate, but Railway still evaluates watchPatterns
-# against the uploaded snapshot and records SKIPPED when none match.
-watchPatterns = ["apps/api/**", "libs/**", "package.json", "pnpm-lock.yaml", "railway.toml"]
+# No watchPatterns: CI gates `railway up` on Nx affected. Railway checks the
+# patterns against the uploaded snapshot and records SKIPPED when none match,
+# so a change confined to packages/ shipped nothing while CI stayed green.
 
 [deploy]
 # Single source of truth for DB migrations: runs in the release environment

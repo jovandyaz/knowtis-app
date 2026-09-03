@@ -33,7 +33,7 @@ Push to main → CI: skills:check, lint, typecheck, apply migrations, test, drif
 
 The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job runs `.github/scripts/railway-deploy.sh` in the Railway CLI container.
 
-That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; the current gate also exits zero on `SKIPPED`, but that state means the new deployment did not become live and must not be described as deployment success. `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 15-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
+That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; `SKIPPED` fails (the new deployment did not become live; see the `watchPatterns` note under [railway.toml](#railwaytoml)). `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 25-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
 
 **Config files:**
 
@@ -93,7 +93,7 @@ The admin backoffice deploys the same way through the `deploy-backoffice` job, g
 
 [`railway.toml`](../railway.toml) is the API service's config-as-code: nixpacks builder, `pnpm install --frozen-lockfile && pnpm build:api` (with `NODE_ENV=development` so build-time devDependencies install), `node dist/apps/api/main.js` as start command, `/api/v1/health/ping` as healthcheck, `ON_FAILURE` restart with 3 retries, and the pre-deploy migration command below. Read the file rather than a copy here.
 
-`watchPatterns` is evaluated by Railway against the uploaded snapshot even though CI already gated on Nx affected; a snapshot matching none of the patterns records a `SKIPPED` deployment. At the time of writing the patterns cover `apps/api/**`, `libs/**`, `package.json`, `pnpm-lock.yaml`, and `railway.toml` but **not `packages/**`**, although the API depends on several `packages/\*`workspace packages — a change confined to`packages/` can therefore be skipped by Railway. This is being fixed separately; check the file for the current list.
+The API declares no `watchPatterns`: CI already gates `railway up` on Nx affected, and patterns made Railway record `SKIPPED` for snapshots CI had approved (for example a change confined to `packages/`). `.github/scripts/railway-deploy.sh` treats `SKIPPED` as a failure for the same reason.
 
 ### Database Migrations (pre-deploy)
 
@@ -209,15 +209,17 @@ Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows e
 
 ## Troubleshooting
 
-| Problem                  | Check                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| Build fails              | Build logs in Railway, verify `pnpm-lock.yaml` committed                                                                        |
-| CORS errors              | `FRONTEND_URL` / `BACKOFFICE_URL` match the Vercel URLs exactly (`https://`, no trailing `/`)                                   |
-| WebSocket not connecting | Frontend `VITE_WS_URL` correct and `VITE_COLLABORATION_MODE=websocket`; `REDIS_URL` set if more than one API instance runs      |
-| Database connection      | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                         |
-| Deploy not triggering    | Check `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` variable in GitHub; a `SKIPPED` deployment means no `watchPatterns` match |
-| API crashes on boot      | `TOKEN_HASH_KEY` present and valid; `BACKOFFICE_URL` set when `NODE_ENV=production` (see [TOKEN_HASH_KEY](#token_hash_key))     |
-| OAuth tokens rejected    | `deploy-mcp` parity check output: issuer/resource URL drift or trailing slash                                                   |
+| Problem                                          | Check                                                                                                                                                                                                                                                         |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build fails                                      | Build logs in Railway, verify `pnpm-lock.yaml` committed                                                                                                                                                                                                      |
+| CORS errors                                      | `FRONTEND_URL` / `BACKOFFICE_URL` match the Vercel URLs exactly (`https://`, no trailing `/`)                                                                                                                                                                 |
+| WebSocket not connecting                         | Frontend `VITE_WS_URL` correct and `VITE_COLLABORATION_MODE=websocket`; `REDIS_URL` set if more than one API instance runs                                                                                                                                    |
+| Database connection                              | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                                                                                                                                                       |
+| Deploy job red before a deployment id is printed | `railway up` could not start: check the `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` / `RAILWAY_MCP_SERVICE_ID` variables in GitHub                                                                                                                        |
+| Deploy job red on `SKIPPED`                      | A service declares `watchPatterns`; remove them — CI already gates on Nx affected                                                                                                                                                                             |
+| Deploy job red on `still BUILDING after 1500s`   | The build outlasted the poller; check the logs URL in the job output — Railway may have finished it. Raise `RAILWAY_DEPLOY_TIMEOUT_SECONDS` (default 1500 in `railway-deploy.sh`) and the jobs' `timeout-minutes` together if builds legitimately take longer |
+| API crashes on boot                              | `TOKEN_HASH_KEY` present and valid; `BACKOFFICE_URL` set when `NODE_ENV=production` (see [TOKEN_HASH_KEY](#token_hash_key))                                                                                                                                   |
+| OAuth tokens rejected                            | `deploy-mcp` parity check output: issuer/resource URL drift or trailing slash                                                                                                                                                                                 |
 
 ---
 
