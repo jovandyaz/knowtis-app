@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import type { ReasoningEffort } from '@knowtis/shared-types';
+import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
+import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
 import {
   clampEffort,
@@ -13,6 +14,7 @@ export interface TurnEffortRequest {
   readonly userId: string;
   readonly model: string;
   readonly isByok: boolean;
+  readonly isAnonymous?: boolean | undefined;
   readonly requested?: ReasoningEffort | undefined;
 }
 
@@ -27,23 +29,25 @@ export class TurnEffortResolver {
 
   /**
    * The effort a turn runs at: the caller's request when the model declares it
-   * and the audience may spend it, else the configured global default. A
-   * refused or lowered request is logged with a structured warn — never a
-   * silent mismatch.
+   * and the audience may spend it, else the configured global default where the
+   * provider accepts it, else nothing. A refused or lowered request is logged
+   * with a structured warn — never a silent mismatch.
    */
   async resolve({
     userId,
     model,
     isByok,
+    isAnonymous,
     requested,
-  }: TurnEffortRequest): Promise<ReasoningEffort> {
+  }: TurnEffortRequest): Promise<ReasoningEffort | undefined> {
+    const user = { id: userId, isAnonymous: isAnonymous === true };
     if (!requested) {
-      return this.aiConfig.getReasoningEffort();
+      return this.defaultFor(model, user);
     }
     const audience: Exclude<EffortAudience, 'anonymous'> = isByok
       ? 'byok'
       : 'free';
-    const declared = await this.modelPreference.reasoningFor(model, userId);
+    const declared = await this.modelPreference.reasoningFor(model, user);
     const clamped = clampEffort(requested, declared, audience);
     if (clamped === null) {
       this.logger.warn({
@@ -51,7 +55,7 @@ export class TurnEffortResolver {
         model,
         requested,
       });
-      return this.aiConfig.getReasoningEffort();
+      return this.defaultFor(model, user, declared);
     }
     if (clamped !== requested) {
       this.logger.warn({
@@ -62,5 +66,28 @@ export class TurnEffortResolver {
       });
     }
     return clamped;
+  }
+
+  /**
+   * The global default, only where the provider will accept it: always for
+   * OpenRouter, and for a direct provider only when the model declares that
+   * level — an undeclared model gets no reasoning option, so the SDK's own
+   * capability checks are never bypassed.
+   */
+  private async defaultFor(
+    model: string,
+    user: { id: string; isAnonymous?: boolean },
+    declared?: ModelReasoning | null
+  ): Promise<ReasoningEffort | undefined> {
+    if (providerOf(model) === OPENROUTER_PROVIDER) {
+      return this.aiConfig.getReasoningEffort();
+    }
+    const [fallback, levels] = await Promise.all([
+      this.aiConfig.getReasoningEffort(),
+      declared === undefined
+        ? this.modelPreference.reasoningFor(model, user).then((r) => r?.levels)
+        : Promise.resolve(declared?.levels),
+    ]);
+    return levels?.includes(fallback) ? fallback : undefined;
   }
 }

@@ -20,7 +20,8 @@ export interface AgentRunInput {
   readonly knownNotes?: readonly AgentSource[];
   readonly userMemories?: readonly string[];
   readonly byokApiKey?: string;
-  readonly reasoningEffort?: ReasoningEffort;
+  /** Effort for the model about to be served; awaited again on every failover so a rescue model is never handed another model's level. */
+  readonly effortFor?: (model: string) => Promise<ReasoningEffort | undefined>;
   readonly openrouterProviderOrder?: readonly string[];
 }
 

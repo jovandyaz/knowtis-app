@@ -15,9 +15,9 @@ import {
 import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
-import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
+import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { fromResponseMessages } from './message-mapper';
@@ -157,12 +157,15 @@ export async function* runAgentStepLoop(
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
 
+  const optionsFor = async (model: string) =>
+    turnProviderOptions({
+      model,
+      reasoningEffort: await input.effortFor?.(model),
+      providerOrder: input.openrouterProviderOrder,
+    });
+
   let currentModel = params.model;
-  let providerOptions = openrouterProviderOptions({
-    model: currentModel,
-    reasoningEffort: input.reasoningEffort,
-    providerOrder: input.openrouterProviderOrder,
-  });
+  let providerOptions = await optionsFor(currentModel);
   const modelsUsed: string[] = [currentModel];
   const failoverCandidates = [...params.stepFailoverCandidates];
 
@@ -259,11 +262,7 @@ export async function* runAgentStepLoop(
             });
             currentModel = nextModel;
             params.onModelSettled?.(currentModel);
-            providerOptions = openrouterProviderOptions({
-              model: currentModel,
-              reasoningEffort: input.reasoningEffort,
-              providerOrder: input.openrouterProviderOrder,
-            });
+            providerOptions = await optionsFor(currentModel);
             modelsUsed.push(currentModel);
             history = pruneMessages({ messages: history, reasoning: 'all' });
             failedOver = true;

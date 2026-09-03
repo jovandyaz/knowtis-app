@@ -71,24 +71,19 @@ export function CopilotModelPicker() {
   const override =
     selectedModel && !selectedModel.servesIntent ? selectedModel.id : null;
   const isEmpty = models !== undefined && models.length === 0;
-  // Holding a key is not enough: the server only bills the turn to the user
-  // when the key covers the resolved model's provider, so a mismatched key
-  // must not unlock the effort ladder.
-  const hasByok = canUseByok && selectedModel?.billedToUser === true;
+  const billedToUser = selectedModel?.billedToUser === true;
   const effortOpts = effortOptions(selectedModel, t);
-  // The conversation effort outlives a model change. A level the newly
-  // resolved model never declared, or one no longer billed to the user, must
-  // not ride the next turn, so it collapses to auto once the list has resolved.
   const effortStale =
     models !== undefined &&
     effortValue !== 'auto' &&
-    !(hasByok && effortOpts.some((o) => o.id === effortValue));
+    !effortOpts.some((o) => o.id === effortValue);
   useEffect(() => {
     if (effortStale) {
       setReasoningEffort('auto');
     }
   }, [effortStale, setReasoningEffort]);
-  const activeEffort = effortStale ? 'auto' : effortValue;
+  // The anonymous row is pinned to auto, so nothing may advertise a level for a guest.
+  const activeEffort = isAnonymous || effortStale ? 'auto' : effortValue;
 
   if (!showPicker) {
     return null;
@@ -100,12 +95,8 @@ export function CopilotModelPicker() {
     ? t('aiAssistant.empty')
     : (selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never));
   const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
-  const triggerDetail =
-    hasByok && activeEffort !== 'auto' ? effortLabel : undefined;
+  const triggerDetail = activeEffort !== 'auto' ? effortLabel : undefined;
 
-  // Only a model that declares reasoning levels earns the row: anonymous gets
-  // an inert locked upsell, a keyless registered user gets no control at all
-  // because their turns never carry an effort.
   const effort: ModelMenuEffort | undefined =
     effortOpts.length === 0
       ? undefined
@@ -117,16 +108,18 @@ export function CopilotModelPicker() {
             locked: true,
             onChange: () => undefined,
           }
-        : hasByok
-          ? {
-              label: t('aiAssistant.menu.effort'),
-              value: activeEffort,
-              options: effortOpts,
-              footnote: t('aiAssistant.menu.effortFootnote'),
-              onChange: (id: string) =>
-                setReasoningEffort(isReasoningEffort(id) ? id : 'auto'),
-            }
-          : undefined;
+        : {
+            label: t('aiAssistant.menu.effort'),
+            value: activeEffort,
+            options: effortOpts,
+            footnote: t(
+              billedToUser
+                ? 'aiAssistant.menu.effortFootnote'
+                : 'aiAssistant.menu.effortFootnoteFree'
+            ),
+            onChange: (id: string) =>
+              setReasoningEffort(isReasoningEffort(id) ? id : 'auto'),
+          };
 
   // Anonymous: the row serving the running default renders checked and inert;
   // the settings endpoints reject a guest, so no selection may ever mutate.

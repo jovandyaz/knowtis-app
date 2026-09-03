@@ -99,15 +99,7 @@ describe('useAgentStore', () => {
     );
   });
 
-  it('forwards the per-message boost to the client', () => {
-    capture();
-    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
-      effort: 'high',
-    });
-  });
-
-  it('byok conversation effort rides every send while not auto', () => {
+  it('the conversation effort rides every send while not auto', () => {
     capture();
     useAgentStore.getState().setReasoningEffort('medium');
     useAgentStore.getState().sendMessage('hola');
@@ -116,7 +108,7 @@ describe('useAgentStore', () => {
     });
   });
 
-  it('byok conversation effort also rides a retry', () => {
+  it('the conversation effort also rides a retry', () => {
     const { get } = capture();
     useAgentStore.getState().setReasoningEffort('medium');
     useAgentStore.getState().sendMessage('hola');
@@ -124,15 +116,6 @@ describe('useAgentStore', () => {
     useAgentStore.getState().retryLast();
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
       effort: 'medium',
-    });
-  });
-
-  it('a per-message boost outranks the conversation effort', () => {
-    capture();
-    useAgentStore.getState().setReasoningEffort('medium');
-    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
-      effort: 'high',
     });
   });
 
@@ -145,26 +128,6 @@ describe('useAgentStore', () => {
     expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
       undefined
     );
-  });
-
-  it('a one-shot boost does not leak into the following plain send', () => {
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
-    get().onDone({ usage: { inputTokens: 1, outputTokens: 1 } } as never);
-    useAgentStore.getState().sendMessage('otra');
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toBe(
-      undefined
-    );
-  });
-
-  it('a retry after a failed boosted send carries the same boost', () => {
-    const { get } = capture();
-    useAgentStore.getState().sendMessage('hola', undefined, { effort: 'high' });
-    get().onError({ code: 'X', message: 'boom' });
-    useAgentStore.getState().retryLast();
-    expect(vi.mocked(agentClient.sendMessage).mock.calls.at(-1)?.[3]).toEqual({
-      effort: 'high',
-    });
   });
 
   it('batches chunks into the assistant message', () => {

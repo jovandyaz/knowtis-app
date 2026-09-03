@@ -98,7 +98,7 @@
   },
   "aiAssistant": {
     "intentTitle": "Estilo del copilot",
-    "intentDescription": "Elige el modelo de cada turno. Añade tu clave para desbloquear más modelos y el control de esfuerzo.",
+    "intentDescription": "Elige el modelo de cada turno y cuánto razona. Añade tu clave para desbloquear más modelos y todo su rango de esfuerzo.",
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "loadError": "No se pudieron cargar los modelos",
@@ -116,6 +116,7 @@
       "effortXhigh": "Muy alto",
       "effortMax": "Máximo",
       "effortFootnote": "Más esfuerzo usa más tokens de tu clave y tarda más.",
+      "effortFootnoteFree": "Más esfuerzo tarda más en responder.",
       "moreModels": "Más modelos",
       "groupOpen": "Modelos abiertos",
       "groupByok": "Con tu clave",
@@ -123,8 +124,6 @@
       "registerCta": "Crea tu cuenta para elegir modelo y esfuerzo",
       "triggerLabel": "Modelo y esfuerzo"
     },
-    "think": "Pensar",
-    "thinkHint": "Razona más antes de responder",
     "intent": {
       "label": "Estilo del asistente",
       "fast": "Rápido",

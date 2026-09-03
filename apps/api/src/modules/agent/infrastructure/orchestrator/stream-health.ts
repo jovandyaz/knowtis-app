@@ -1,5 +1,7 @@
 import { Logger } from '@nestjs/common';
 
+import { OPENROUTER_PROVIDER } from '@knowtis/ai-gateway';
+
 export interface StreamHealth {
   ttfpMs: number | null;
   maxGapMs: number;
@@ -51,11 +53,11 @@ export function openrouterUpstreamOf(part: unknown): string | null {
   if (
     typeof metadata !== 'object' ||
     metadata === null ||
-    !('openrouter' in metadata)
+    !(OPENROUTER_PROVIDER in metadata)
   ) {
     return null;
   }
-  const openrouter = metadata.openrouter;
+  const openrouter = metadata[OPENROUTER_PROVIDER];
   if (
     typeof openrouter !== 'object' ||
     openrouter === null ||

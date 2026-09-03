@@ -98,7 +98,7 @@
   },
   "aiAssistant": {
     "intentTitle": "Copilot style",
-    "intentDescription": "Choose the model for each turn. Add your key to unlock more models and the effort control.",
+    "intentDescription": "Choose the model for each turn and how hard it reasons. Add your key to unlock more models and their full effort range.",
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",
@@ -116,6 +116,7 @@
       "effortXhigh": "Very high",
       "effortMax": "Max",
       "effortFootnote": "Higher effort uses more of your key's tokens and takes longer.",
+      "effortFootnoteFree": "Higher effort takes longer to answer.",
       "moreModels": "More models",
       "groupOpen": "Open models",
       "groupByok": "With your key",
@@ -123,8 +124,6 @@
       "registerCta": "Create your account to choose model and effort",
       "triggerLabel": "Model and effort"
     },
-    "think": "Think",
-    "thinkHint": "Reasons more before answering",
     "intent": {
       "label": "Assistant style",
       "fast": "Fast",

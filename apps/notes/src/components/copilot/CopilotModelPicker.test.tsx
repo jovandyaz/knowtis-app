@@ -171,8 +171,6 @@ const registeredModels = [
   byokModel,
 ] satisfies SelectableModel[];
 
-// Mirrors the real anonymous listing: the running default stays granted, the
-// other intents come back locked.
 // The balanced default billed to the caller's key, so the effort ladder applies.
 const byokListing = [
   fastModel,
@@ -322,6 +320,17 @@ describe('CopilotModelPicker', () => {
     expect(keysEnabled).toHaveBeenCalledWith(false);
   });
 
+  it('anonymous: the trigger tail never advertises a level the locked row denies', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+    modelsData.mockReturnValue(anonymousModels);
+    useAgentStore.setState({ reasoningEffort: 'low' });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).not.toHaveTextContent('aiAssistant.menu.effortLow');
+  });
+
   it('anonymous: no locked effort row when the default model declares no levels', async () => {
     const user = userEvent.setup();
     authUser.mockReturnValue({ isAnonymous: true });
@@ -338,33 +347,54 @@ describe('CopilotModelPicker', () => {
     ).not.toBeInTheDocument();
   });
 
-  it('free user sees no effort control', async () => {
+  it('free user picks an effort level and the trigger grows the tail', async () => {
     const user = userEvent.setup();
     render(<CopilotModelPicker />);
 
-    await openMenu(user);
+    await user.click(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    );
+    await user.click(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+    );
+    expect(
+      await screen.findByText('aiAssistant.menu.effortFootnoteFree')
+    ).toBeInTheDocument();
+    await clickSubmenuItem(
+      user,
+      await screen.findByRole('menuitemradio', {
+        name: 'aiAssistant.menu.effortLow',
+      })
+    );
 
     expect(
-      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
-    ).toBeInTheDocument();
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).toHaveTextContent('aiAssistant.menu.effortLow');
+    expect(useAgentStore.getState().reasoningEffort).toBe('low');
+
+    await openMenu(user);
+    await user.click(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+    );
     expect(
-      screen.queryByText(/aiAssistant\.menu\.effort/)
-    ).not.toBeInTheDocument();
+      await screen.findByRole('menuitemradio', {
+        name: 'aiAssistant.menu.effortLow',
+      })
+    ).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('key holder on another provider sees no effort control', async () => {
+  it('key holder on another provider still gets the ladder of the resolved model', async () => {
     const user = userEvent.setup();
     keysData.mockReturnValue([{ provider: 'openai', keyPrefix: 'sk-o***' }]);
     render(<CopilotModelPicker />);
 
     await openMenu(user);
 
-    expect(
-      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/aiAssistant\.menu\.effort/)
-    ).not.toBeInTheDocument();
+    const effortRow = screen.getByRole('menuitem', {
+      name: /aiAssistant\.menu\.effort/,
+    });
+    expect(effortRow).toBeInTheDocument();
+    expect(effortRow).not.toHaveAttribute('aria-disabled');
   });
 
   it('byok user changes effort and the trigger grows the tail', async () => {
@@ -382,6 +412,9 @@ describe('CopilotModelPicker', () => {
     await user.click(
       screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
     );
+    expect(
+      screen.getByText('aiAssistant.menu.effortFootnote')
+    ).toBeInTheDocument();
     await clickSubmenuItem(
       user,
       await screen.findByRole('menuitemradio', {

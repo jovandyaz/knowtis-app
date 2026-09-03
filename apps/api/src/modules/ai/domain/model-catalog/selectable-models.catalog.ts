@@ -11,8 +11,6 @@ export interface CuratedModel {
   reasoning?: ModelReasoning;
 }
 
-// Non-openrouter `reasoning` is authored ahead of provider-native forwarding;
-// the listing withholds it until the turn can actually send the level upstream.
 export const CURATED_MODELS: readonly CuratedModel[] = [
   {
     id: 'anthropic:claude-haiku-4-5',
@@ -83,7 +81,7 @@ export const CURATED_MODELS: readonly CuratedModel[] = [
     label: 'Gemini 3.1 Pro',
     descriptionKey: 'aiModels.gemini31Pro',
     tier: 'powerful',
-    reasoning: { levels: ['low', 'high'], mandatory: true },
+    reasoning: { levels: ['low', 'medium', 'high'], mandatory: true },
   },
   // The openrouter-curated entries carry no reasoning until their levels are
   // verified against provider docs — absent means the UI offers no effort knob.

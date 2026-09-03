@@ -11,14 +11,14 @@ import type {
   StructuredOutputResult,
 } from '../../domain/ports/ai-structured-output.port';
 import { FallbackChainService } from './fallback-chain.service';
-import {
-  OPENROUTER_ROUTING_SOURCE,
-  openrouterProviderOptions,
-  type OpenRouterRoutingSource,
-} from './openrouter-options';
 import { ProviderRegistryFactory } from './provider-registry.factory';
 import { buildRedactedTelemetry } from './redacted-telemetry';
 import { withTraceIdentity } from './trace-identity';
+import {
+  OPENROUTER_ROUTING_SOURCE,
+  turnProviderOptions,
+  type OpenRouterRoutingSource,
+} from './turn-provider-options';
 
 const DEFAULT_TELEMETRY_FUNCTION_ID = 'structured-output';
 
@@ -88,7 +88,7 @@ export class AIStructuredOutputSDKProvider implements AIStructuredOutputProvider
         output: Output.object({ schema }),
         maxRetries: options.maxRetries ?? 3,
         ...pickDefined(options, ['maxOutputTokens', 'temperature']),
-        ...openrouterProviderOptions({
+        ...turnProviderOptions({
           model: options.model,
           providerOrder,
           requireParameters: true,

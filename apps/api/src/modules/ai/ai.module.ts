@@ -19,12 +19,12 @@ import { CompleteTextHandler } from './application/commands/complete-text.handle
 import { StreamTextHandler } from './application/commands/stream-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import { AiCatalogAdminService } from './application/services/ai-catalog-admin.service';
-import { AssignableModelsService } from './application/services/assignable-models.service';
 import { AICompletionPipeline } from './application/services/ai-completion-pipeline.service';
 import { AIConfigService } from './application/services/ai-config.service';
 import { AIMetricsService } from './application/services/ai-metrics.service';
 import { AIOrchestrator } from './application/services/ai-orchestrator.service';
 import { AIRateLimitService } from './application/services/ai-rate-limit.service';
+import { AssignableModelsService } from './application/services/assignable-models.service';
 import { ByokService } from './application/services/byok.service';
 import { InjectionClassifierService } from './application/services/injection-classifier.service';
 import { ModelPreferenceService } from './application/services/model-preference.service';
@@ -69,11 +69,11 @@ import {
   FALLBACK_CHAIN_SOURCE,
   FallbackChainService,
 } from './infrastructure/providers/fallback-chain.service';
-import { OPENROUTER_ROUTING_SOURCE } from './infrastructure/providers/openrouter-options';
 import {
   ProviderRegistryFactory,
   SYSTEM_PROVIDER_KEYS_SOURCE,
 } from './infrastructure/providers/provider-registry.factory';
+import { OPENROUTER_ROUTING_SOURCE } from './infrastructure/providers/turn-provider-options';
 import {
   AI_REDIS,
   AIRedisProvider,

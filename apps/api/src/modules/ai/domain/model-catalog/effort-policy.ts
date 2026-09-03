@@ -13,10 +13,18 @@ function rank(effort: ReasoningEffort): number {
   return REASONING_EFFORTS.indexOf(effort);
 }
 
+/** The declared levels a server-billed turn may run at: everything at or below the free ceiling. */
+export function freeLevels(
+  levels: readonly ReasoningEffort[]
+): ReasoningEffort[] {
+  return levels.filter((level) => rank(level) <= rank(FREE_BOOST_CEILING));
+}
+
 /**
  * Returns the effort the turn may run at, or null when the request must fall
- * back to the global default. Anonymous requests are rejected by the caller
- * before this runs.
+ * back to the global default. A server-billed request above the free ceiling is
+ * lowered to the highest declared level within it. Anonymous requests are
+ * rejected by the caller before this runs.
  */
 export function clampEffort(
   requested: ReasoningEffort,
@@ -29,12 +37,14 @@ export function clampEffort(
   if (audience === 'byok') {
     return declared.levels.includes(requested) ? requested : null;
   }
-  // The free pill sends a fixed 'high' sentinel; the model's declaration, not
-  // the request, decides the level so an undeclared 'high' can't sneak through.
-  const eligible = declared.levels.filter(
-    (level) => rank(level) <= rank(FREE_BOOST_CEILING)
-  );
+  const eligible = freeLevels(declared.levels);
   if (eligible.length === 0) {
+    return null;
+  }
+  if (eligible.includes(requested)) {
+    return requested;
+  }
+  if (rank(requested) <= rank(FREE_BOOST_CEILING)) {
     return null;
   }
   return eligible.reduce((best, level) =>

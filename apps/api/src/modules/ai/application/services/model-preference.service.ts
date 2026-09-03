@@ -52,7 +52,21 @@ export class ModelPreferenceService {
     id: string;
     isAnonymous?: boolean;
   }): Promise<SelectableModel[]> {
-    const anonymous = user.isAnonymous === true;
+    const models = await this.offeredModels(user);
+    if (user.isAnonymous !== true) {
+      return models;
+    }
+    // Anonymous sessions see the three intent picks only; everything but the
+    // running default renders locked so the menu can upsell an account.
+    return models
+      .filter((m) => m.servesIntent)
+      .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
+  }
+
+  private async offeredModels(user: {
+    id: string;
+    isAnonymous?: boolean;
+  }): Promise<SelectableModel[]> {
     const [
       systemDefault,
       configured,
@@ -63,12 +77,12 @@ export class ModelPreferenceService {
     ] = await Promise.all([
       this.aiConfig.getDefaultModel(),
       this.aiConfig.getConfiguredModelIds(),
-      this.byok.enabledProviders(user.id, anonymous),
+      this.byok.enabledProviders(user.id, user.isAnonymous === true),
       this.tierGatingOn(),
       this.aiConfig.getFreeTierMaxOutputCostPerToken(),
       this.aiConfig.getIntentModels(),
     ]);
-    const models = this.selectable.list(
+    return this.selectable.list(
       systemDefault,
       configured,
       byokProviders,
@@ -76,22 +90,19 @@ export class ModelPreferenceService {
       ceiling,
       intentModels
     );
-    if (!anonymous) {
-      return models;
-    }
-    // Anonymous sessions see the three intent picks only; everything but the
-    // running default renders locked so the menu can upsell an account.
-    return models
-      .filter((m) => m.servesIntent)
-      .map((m) => (m.isDefault ? m : { ...m, access: 'requires_account' }));
   }
 
-  /** Declared reasoning of an offered model, read from the same union `listModels` serves; null when unlisted or undeclared. */
+  /**
+   * Declared reasoning of a model this user is offered, trimmed to what their
+   * tier may spend. A ladder is a capability statement, so it reads the offered
+   * union itself, never the anonymous menu view: a chain candidate the upsell
+   * menu hides still declares what it can do. Null when unoffered or undeclared.
+   */
   async reasoningFor(
     modelId: string,
-    userId: string
+    user: { id: string; isAnonymous?: boolean }
   ): Promise<ModelReasoning | null> {
-    const models = await this.listModels({ id: userId });
+    const models = await this.offeredModels(user);
     return models.find((model) => model.id === modelId)?.reasoning ?? null;
   }
 

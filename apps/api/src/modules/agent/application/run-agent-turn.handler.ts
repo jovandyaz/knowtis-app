@@ -24,7 +24,10 @@ import { AIConfigService } from '../../ai/application/services/ai-config.service
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
-import { TurnEffortResolver } from '../../ai/application/services/turn-effort.resolver';
+import {
+  TurnEffortResolver,
+  type TurnEffortRequest,
+} from '../../ai/application/services/turn-effort.resolver';
 import { AIErrors } from '../../ai/domain/errors/ai.errors';
 import {
   EMBEDDING_PORT,
@@ -603,15 +606,8 @@ export class RunAgentTurnHandler {
     const maxTurnTokens = this.rateLimit.turnTokenBudget(
       input.isAnonymous ?? false
     );
-    const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.turnEffort.resolve({
-        userId: input.userId,
-        model,
-        isByok,
-        requested: input.effort,
-      }),
-      this.aiConfig.getOpenRouterProviderOrder(),
-    ]);
+    const openrouterProviderOrder =
+      await this.aiConfig.getOpenRouterProviderOrder();
 
     const limit = await this.rateLimit.checkLimit(
       input.userId,
@@ -663,7 +659,14 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         maxTurnTokens,
-        reasoningEffort,
+        effortFor: (candidate: string) =>
+          this.effortForModel({
+            userId: input.userId,
+            model: candidate,
+            isByok,
+            isAnonymous: input.isAnonymous,
+            requested: input.effort,
+          }),
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
@@ -797,7 +800,27 @@ export class RunAgentTurnHandler {
     }
   }
 
-  /** A rejected effort request falls back to the global default with a structured warn — never a silent mismatch. */
+  /**
+   * The effort for one model this turn serves. Every model a turn serves shares
+   * the turn's billing — a BYOK turn never fails over — so the audience is the
+   * turn's, not the candidate provider's. A failed lookup degrades to no
+   * reasoning option: it must not fail the model the chain is about to try.
+   */
+  private async effortForModel(
+    request: TurnEffortRequest
+  ): Promise<ReasoningEffort | undefined> {
+    try {
+      return await this.turnEffort.resolve(request);
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.effort_lookup_failed',
+        model: request.model,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      return undefined;
+    }
+  }
+
   private async resolveModel(
     input: RunAgentTurnInput,
     conversationId: string | undefined,
