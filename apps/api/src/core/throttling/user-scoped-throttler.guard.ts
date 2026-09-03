@@ -42,8 +42,9 @@ export class UserScopedThrottlerGuard extends ThrottlerGuard {
     const identity = await this.bearerIdentityResolver.resolve(req);
     // An anonymous session is mintable on demand, so giving it a private bucket
     // would sell unlimited budget to anyone willing to mint identities. The IP
-    // comes from the edge-set X-Real-IP: under trust proxy, req.ip is the
-    // rightmost X-Forwarded-For entry, which the client controls.
+    // comes from the edge-set X-Real-IP: req.ip is derived from
+    // X-Forwarded-For, which the client controls whenever it is the direct peer
+    // or the trusted hop count is wrong.
     if (identity === null || identity.isAnonymous) {
       return clientIpOf(req as unknown as ClientIpSource);
     }

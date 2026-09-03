@@ -23,8 +23,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     bodyParser: false,
   });
-  // Railway terminates TLS at a proxy; without this, req.ip is the proxy and
-  // per-IP rate limits become global.
+  // Railway terminates TLS at a proxy; without this, req.ip, the fallback
+  // client-ip key when no edge stamps X-Real-IP, is the proxy address.
   app.set('trust proxy', 1);
   app.use(createOauthRateLimit());
   app.use(createOidcMount(app));

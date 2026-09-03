@@ -129,10 +129,10 @@ describe('OAuth rate limit', () => {
     expect(allowed.status).not.toBe(429);
   });
 
-  it('should ignore a client-spoofed X-Forwarded-For prefix and key on the proxy-appended IP', async () => {
+  it('should fall back to the proxy-appended X-Forwarded-For entry when X-Real-IP is absent', async () => {
     const realIp = '203.0.113.77';
-    // One Railway hop: attacker rotates the leading (spoofed) XFF entry, the
-    // proxy always appends the same real IP last, trust proxy:1 keys on it.
+    // No edge header: req.ip under trust proxy 1 is the last XFF entry, the
+    // one a well-behaved proxy appended; rotating the prefix must not matter.
     for (let i = 0; i < DCR_LIMIT; i++) {
       const res = await postReg(harness.base, `10.0.0.${i}, ${realIp}`);
       expect(res.status).not.toBe(429);

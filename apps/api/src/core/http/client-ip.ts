@@ -21,8 +21,11 @@ export function realIpOf(headers: IncomingHttpHeaders): string | undefined {
 
 /**
  * Key for anything bucketed per client IP. Falls back to Express's req.ip
- * (socket address, or X-Forwarded-For under trust proxy) where no edge sits in
- * front of the API, i.e. local development and tests.
+ * (socket address, or X-Forwarded-For under trust proxy) where no edge stamps
+ * X-Real-IP: local development and tests, and production callers on the
+ * private network (the MCP service, Railway's rollout healthcheck). Without an
+ * edge the header is client-controlled, which only matters where there is an
+ * adversary to control it.
  */
 export function clientIpOf(req: ClientIpSource): string {
   return realIpOf(req.headers) ?? req.ip ?? 'unknown';
