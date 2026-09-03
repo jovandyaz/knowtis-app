@@ -157,12 +157,15 @@ export async function* runAgentStepLoop(
   const { stallMs } = params.budgets;
   const byok = Boolean(input.byokApiKey);
 
+  const optionsFor = async (model: string) =>
+    turnProviderOptions({
+      model,
+      reasoningEffort: await input.effortFor?.(model),
+      providerOrder: input.openrouterProviderOrder,
+    });
+
   let currentModel = params.model;
-  let providerOptions = turnProviderOptions({
-    model: currentModel,
-    reasoningEffort: await input.effortFor?.(currentModel),
-    providerOrder: input.openrouterProviderOrder,
-  });
+  let providerOptions = await optionsFor(currentModel);
   const modelsUsed: string[] = [currentModel];
   const failoverCandidates = [...params.stepFailoverCandidates];
 
@@ -259,11 +262,7 @@ export async function* runAgentStepLoop(
             });
             currentModel = nextModel;
             params.onModelSettled?.(currentModel);
-            providerOptions = turnProviderOptions({
-              model: currentModel,
-              reasoningEffort: await input.effortFor?.(currentModel),
-              providerOrder: input.openrouterProviderOrder,
-            });
+            providerOptions = await optionsFor(currentModel);
             modelsUsed.push(currentModel);
             history = pruneMessages({ messages: history, reasoning: 'all' });
             failedOver = true;

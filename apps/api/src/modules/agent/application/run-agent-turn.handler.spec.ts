@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { estimateTokenCount } from '@knowtis/ai-gateway';
+import { estimateTokenCount, providerOf } from '@knowtis/ai-gateway';
 import { FEATURE_FLAG_KEYS, type ReasoningEffort } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../config/env.config';
@@ -42,6 +42,7 @@ function makeProposal(id: string): ProposedMutation {
 
 const USER = '11111111-1111-1111-1111-111111111111';
 const SERVED_MODEL = 'anthropic:claude-haiku-4-5';
+const USER_KEYED_MODEL = 'google:gemini-2.0-flash';
 const IP_SUBJECT = 'ip:fec52565aa0cf18f';
 const TURN_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
@@ -2135,6 +2136,150 @@ describe('RunAgentTurnHandler', () => {
       isByok: false,
       requested: 'xhigh',
     });
+  });
+
+  it('grades a server-billed rescue model as free even when the user keys its provider', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set([providerOf(USER_KEYED_MODEL)])
+    );
+    const turnEffort = makeTurnEffort('high');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      turnEffort
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, effort: 'max' },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
+    await effortFor?.(USER_KEYED_MODEL);
+    expect(turnEffort.resolve).toHaveBeenCalledWith({
+      userId: USER,
+      model: USER_KEYED_MODEL,
+      isByok: false,
+      requested: 'max',
+    });
+  });
+
+  it("grades every model of a byok turn against the user's own key", async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const modelPreference = makeModelPreference();
+    vi.mocked(modelPreference.byokProvidersFor).mockResolvedValue(
+      new Set([providerOf(USER_KEYED_MODEL)])
+    );
+    vi.mocked(modelPreference.isSelectableWith).mockResolvedValue(true);
+    const byok = makeByok();
+    vi.mocked(byok.getApiKey).mockResolvedValue('user-key');
+    const turnEffort = makeTurnEffort('max');
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      modelPreference,
+      byok,
+      makeGuard(),
+      makeAIConfig(),
+      turnEffort
+    );
+
+    await handler.execute(
+      {
+        userId: USER,
+        message: { content: 'hi' },
+        model: USER_KEYED_MODEL,
+        effort: 'max',
+      },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
+    await effortFor?.(USER_KEYED_MODEL);
+    expect(turnEffort.resolve).toHaveBeenCalledWith({
+      userId: USER,
+      model: USER_KEYED_MODEL,
+      isByok: true,
+      requested: 'max',
+    });
+  });
+
+  it('degrades to no reasoning option when the effort lookup fails', async () => {
+    const warnSpy = vi
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const turnEffort = makeTurnEffort();
+    vi.mocked(turnEffort.resolve).mockRejectedValue(
+      new Error('settings store unavailable')
+    );
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      turnEffort
+    );
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+      }
+    );
+
+    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
+    await expect(effortFor?.(SERVED_MODEL)).resolves.toBeUndefined();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.effort_lookup_failed',
+        model: SERVED_MODEL,
+        error: 'settings store unavailable',
+      })
+    );
+    warnSpy.mockRestore();
   });
 
   it('rejects an effort request from an anonymous turn', async () => {

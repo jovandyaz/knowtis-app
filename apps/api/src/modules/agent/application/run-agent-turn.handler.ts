@@ -657,12 +657,7 @@ export class RunAgentTurnHandler {
         maxSteps,
         maxTurnTokens,
         effortFor: (candidate: string) =>
-          this.turnEffort.resolve({
-            userId: input.userId,
-            model: candidate,
-            isByok: byokProviders.has(providerOf(candidate)),
-            requested: input.effort,
-          }),
+          this.effortForModel(candidate, input.userId, isByok, input.effort),
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),
@@ -796,7 +791,35 @@ export class RunAgentTurnHandler {
     }
   }
 
-  /** A rejected effort request falls back to the global default with a structured warn — never a silent mismatch. */
+  /**
+   * The effort for one model this turn serves. Every model a turn serves shares
+   * the turn's billing — a BYOK turn never fails over — so the audience is the
+   * turn's, not the candidate provider's. A failed lookup degrades to no
+   * reasoning option: it must not fail the model the chain is about to try.
+   */
+  private async effortForModel(
+    model: string,
+    userId: string,
+    isByok: boolean,
+    requested: ReasoningEffort | undefined
+  ): Promise<ReasoningEffort | undefined> {
+    try {
+      return await this.turnEffort.resolve({
+        userId,
+        model,
+        isByok,
+        requested,
+      });
+    } catch (error) {
+      this.logger.warn({
+        event: 'agent.effort_lookup_failed',
+        model,
+        error: error instanceof Error ? error.message : 'unknown',
+      });
+      return undefined;
+    }
+  }
+
   private async resolveModel(
     input: RunAgentTurnInput,
     conversationId: string | undefined,

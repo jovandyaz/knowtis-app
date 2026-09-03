@@ -165,9 +165,6 @@ export class SelectableModelsService {
             tierGatingOn,
             maxOutputCostPerToken
           ),
-          // Effort is only forwarded upstream through the OpenRouter options;
-          // advertising levels for another provider would promise a knob the
-          // turn silently ignores.
           ...(m.reasoning && providerOf(m.id) === OPENROUTER_PROVIDER
             ? { reasoning: m.reasoning }
             : {}),
