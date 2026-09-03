@@ -284,7 +284,7 @@ export class AIController {
       }),
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
       ...(user.isAnonymous && { isAnonymous: true }),
-      ...(clientIp ? { clientIp } : {}),
+      clientIp,
     });
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
@@ -346,7 +346,7 @@ export class AIController {
       mode: dto.mode,
       ...(dto.language !== undefined && { language: dto.language }),
       ...(user.isAnonymous && { isAnonymous: true }),
-      ...(clientIp ? { clientIp } : {}),
+      clientIp,
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);

@@ -66,6 +66,17 @@ function postReg(base: string, forwardedFor: string): Promise<Response> {
   return postPath(base, '/oauth/reg', forwardedFor);
 }
 
+function postRegWithHeaders(
+  base: string,
+  headers: Record<string, string>
+): Promise<Response> {
+  return fetch(`${base}/oauth/reg`, {
+    method: 'POST',
+    headers: { ...headers, 'content-type': 'application/json' },
+    body: '{}',
+  });
+}
+
 function getAuthorize(base: string, forwardedFor: string): Promise<Response> {
   return fetch(`${base}/oauth/auth`, {
     headers: { 'x-forwarded-for': forwardedFor },
@@ -128,6 +139,23 @@ describe('OAuth rate limit', () => {
     }
 
     const blocked = await postReg(harness.base, `10.0.0.250, ${realIp}`);
+    expect(blocked.status).toBe(429);
+  });
+
+  it('should key on the edge-set X-Real-IP while X-Forwarded-For rotates', async () => {
+    const edgeIp = '203.0.113.90';
+    for (let i = 0; i < DCR_LIMIT; i++) {
+      const res = await postRegWithHeaders(harness.base, {
+        'x-real-ip': edgeIp,
+        'x-forwarded-for': `10.0.0.${i}`,
+      });
+      expect(res.status).not.toBe(429);
+    }
+
+    const blocked = await postRegWithHeaders(harness.base, {
+      'x-real-ip': edgeIp,
+      'x-forwarded-for': '10.0.0.250',
+    });
     expect(blocked.status).toBe(429);
   });
 
