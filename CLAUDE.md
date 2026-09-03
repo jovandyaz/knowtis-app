@@ -168,7 +168,7 @@ Follow Conventional Commits. Types accepted by the commit-msg hook: `feat`, `fix
 
 - **Stacked PRs are GitHub-native** (`gh extension install github/gh-stack`) — split multi-step features into a stack of small PRs instead of one large one. Open each PR against the branch below it, then adopt the chain with `gh stack link <bottom> … <top>`; or build it tracked from the start with `gh stack init` / `add` / `submit`. Merge bottom-up — `gh stack merge` lands a stack atomically, and after any merge GitHub rebases and retargets the layers above on its own; never rebase a stacked branch by hand afterwards.
 - **Keep every PR under 100 changed files** — CodeRabbit refuses larger ones and the cap is not configurable.
-- **CodeRabbit auto-reviews PRs against `main` and `feat/*`, `fix/*`, `chore/*`, `refactor/*`, `docs/*`, `test/*`, `perf/*`, `build/*`, `ci/*`, `style/*` base branches** (`.coderabbit.yaml`, drafts excluded). If a PR shows a green check with no inline comments, trigger it with `@coderabbitai full review`. Address its feedback before requesting human review.
+- **CodeRabbit reviews every PR, stacked or not, but must be triggered**: `.coderabbit.yaml` enables `auto_review` for `main` and Conventional-prefix base branches, but on this OSS plan CodeRabbit reports "Review skipped: manual review required" and does nothing until someone comments `@coderabbitai full review`. Trigger it, then confirm inline comments exist — a green check with none is a skipped review. Address its feedback before requesting human review.
 - Feature branches use a Conventional-style prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`, etc.
 
 ### Git Hooks (Lefthook)
