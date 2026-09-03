@@ -935,8 +935,8 @@ pnpm docker:up         # Postgres + Redis must be healthy (the full DI graph boo
 pnpm nx run api:eval
 ```
 
-- **Gated:** each suite self-skips when its own provider key is unset, so a run without
-  `ANTHROPIC_API_KEY` skips cleanly (exit 0). It is opt-in and excluded from CI and
+- **Gated:** each suite self-skips when its own provider key is unset, so a run with no
+  provider keys skips cleanly (exit 0). It is opt-in and excluded from CI and
   `nx affected` (paid + non-deterministic).
 - **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.

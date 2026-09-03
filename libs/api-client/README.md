@@ -55,7 +55,7 @@ src/
 │   ├── agent.client.ts           # agentClient (copilot turns)
 │   ├── session-refresh.ts        # refreshSessionTokens + withAuthRefreshLock
 │   ├── refresh-failure.ts        # classifyRefreshFailure
-│   ├── retry-after.ts            # retryAfterMsOf
+│   ├── retry-after.ts            # parseRetryAfterMs + RETRY_AFTER_HEADER
 │   ├── notes.api.ts  users.api.ts  artifacts.api.ts
 │   ├── images.api.ts  mcp-keys.api.ts  oauth.api.ts
 │   ├── organization.api.ts  tags.api.ts
