@@ -1,8 +1,8 @@
 # @knowtis/editor-schema
 
-The shared Tiptap/Yjs editor schema layer. It defines the node schema, semantic extensions, and the CRDT field name that the frontend editor **and** the collaboration server must agree on. ~11 consumers.
+The shared Tiptap/Yjs editor schema layer. It defines the node schema, semantic extensions, and the CRDT field name that the frontend editor **and** the collaboration server must agree on. Consumed by `apps/notes`, `apps/api`, `packages/editor` and `packages/crdt`.
 
-Import via the `@knowtis/editor-schema` alias (`tsconfig.base.json`):
+There is no `package.json`; the package exists only as the `@knowtis/editor-schema` alias in `tsconfig.base.json`:
 
 ```ts
 import {
@@ -14,13 +14,14 @@ import {
 
 ## Key exports
 
-| Export                                          | Purpose                                                                       |
-| ----------------------------------------------- | ----------------------------------------------------------------------------- |
-| `YJS_XML_FRAGMENT_NAME`                         | Name of the shared Yjs XML fragment — load-bearing CRDT invariant (see below) |
-| `MermaidBlockNode`                              | Tiptap node for Mermaid diagram blocks (`MERMAID_BLOCK_NAME`)                 |
-| `MERMAID_VIEW_MODE` / `MermaidViewMode`         | Mermaid block view modes (`code` / `preview` / `split`)                       |
-| `createSemanticExtensions`                      | Factory for the shared set of semantic Tiptap extensions                      |
-| `isTrivialFragment` / `isTrivialProseMirrorDoc` | Guards for detecting empty/placeholder editor content                         |
+| Export                                              | Purpose                                                                       |
+| --------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `YJS_XML_FRAGMENT_NAME`                             | Name of the shared Yjs XML fragment — load-bearing CRDT invariant (see below) |
+| `MermaidBlockNode`, `MERMAID_BLOCK_NAME`            | Tiptap node for Mermaid diagram blocks; `MERMAID_BLOCK_NAME = 'mermaidBlock'` |
+| `MERMAID_VIEW_MODE` / `MermaidViewMode`             | Mermaid block view modes (`code` / `preview` / `split`)                       |
+| `createSemanticExtensions`                          | Factory for the shared set of semantic Tiptap extensions                      |
+| `SemanticExtensionsOptions`, `NodeAttributeClasses` | Options type for the factory and the per-node CSS class map it accepts        |
+| `isTrivialFragment` / `isTrivialProseMirrorDoc`     | Guards for detecting empty/placeholder editor content                         |
 
 ## `YJS_XML_FRAGMENT_NAME` — CRDT invariant
 
