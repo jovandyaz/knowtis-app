@@ -89,8 +89,9 @@ expect "reaches SUCCESS after two polls" 0 "dep-1 succeeded" FAKE_STATUSES=BUILD
 expect "fails on FAILED behind a newer green deployment" 1 "ended as FAILED" FAKE_STATUSES=BUILDING,FAILED
 expect "fails on CRASHED" 1 "ended as CRASHED" FAKE_STATUSES=CRASHED
 expect "fails on REMOVED" 1 "was removed before" FAKE_STATUSES=REMOVED
-expect "passes on SKIPPED" 0 "was skipped by Railway" FAKE_STATUSES=SKIPPED
+expect "fails on SKIPPED" 1 "was SKIPPED by Railway" FAKE_STATUSES=SKIPPED
 expect "times out while still BUILDING" 1 "still BUILDING after 2s" FAKE_STATUSES=BUILDING RAILWAY_DEPLOY_TIMEOUT_SECONDS=2
+expect "names the logs URL on timeout" 1 "check https://railway.app/logs/dep-1 before re-running" FAKE_STATUSES=BUILDING RAILWAY_DEPLOY_TIMEOUT_SECONDS=2
 expect "fails when up reports no deploymentId" 1 "reported no deploymentId" FAKE_STATUSES=SUCCESS FAKE_NO_ID=1
 expect "fails when up itself fails" 1 "railway up failed to start" FAKE_STATUSES=SUCCESS FAKE_UP_FAILS=1
 expect "fails fast when the listing never contains the deployment" 1 "not in the listing" FAKE_STATUSES=SUCCESS FAKE_ABSENT=1

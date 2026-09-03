@@ -140,7 +140,7 @@ CI-driven, not Vercel Git auto-deploy: `vercel.json` sets `"git": { "deploymentE
 
 ### Railway (Backend)
 
-Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status), conditional on `api` (or `mcp`) being affected. Railway still evaluates `watchPatterns` against the uploaded snapshot; a no-match deployment becomes `SKIPPED`, which the script treats as success (`exit 0`). `railway.toml` watches `apps/api/**` and `libs/**` but not `packages/**`, so a change that only touches `packages/` marks `api` affected in Nx yet ends as `SKIPPED` on Railway. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status; `SKIPPED` and a 1500s timeout both fail the job), conditional on `api` (or `mcp`) being affected. Neither service declares `watchPatterns`: CI already gates on Nx affected, and Railway would otherwise record `SKIPPED` for snapshots CI approved. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Testing affected locally
 

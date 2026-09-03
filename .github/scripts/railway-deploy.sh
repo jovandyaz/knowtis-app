@@ -8,7 +8,7 @@ set -eu
 
 service="${1:?usage: railway-deploy.sh <service-id>}"
 poll_interval_seconds="${RAILWAY_POLL_INTERVAL_SECONDS:-10}"
-timeout_seconds="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-900}"
+timeout_seconds="${RAILWAY_DEPLOY_TIMEOUT_SECONDS:-1500}"
 # A successful listing that lacks the deployment means the token is looking at
 # the wrong place (or the deployment was purged) — waiting longer cannot fix it.
 absent_listing_tolerance=3
@@ -71,11 +71,13 @@ while :; do
           echo "Deployment $deployment_id succeeded."
           exit 0
           ;;
-        # Railway skips a deployment whose watch patterns matched nothing. The
-        # CLI treats that as success in CI mode, and so do we: nothing to ship.
+        # Railway records SKIPPED when the service's watch patterns match
+        # nothing in the snapshot. CI only runs this script when Nx marked the
+        # service affected, so a skip is a configuration error, not "nothing to
+        # ship": the commit CI just approved is not what production serves.
         SKIPPED)
-          echo "Deployment $deployment_id was skipped by Railway; nothing to deploy."
-          exit 0
+          echo "::error::Deployment $deployment_id was SKIPPED by Railway although CI marked the service affected. Remove the service's watch patterns (see docs/DEPLOYMENT.md)."
+          exit 1
           ;;
         FAILED | CRASHED)
           echo "::error::Deployment $deployment_id ended as $status."
@@ -107,7 +109,7 @@ while :; do
     if [ "$list_failures" -gt 0 ]; then
       detail=" (deployment list failed $list_failures times)"
     fi
-    echo "::error::Deployment $deployment_id is still ${status:-unreported} after ${timeout_seconds}s${detail}."
+    echo "::error::Deployment $deployment_id is still ${status:-unreported} after ${timeout_seconds}s${detail}. Railway may still finish it; check $(printf '%s\n' "$started" | json_string_value logsUrl) before re-running, and raise RAILWAY_DEPLOY_TIMEOUT_SECONDS if builds legitimately take longer."
     dump_logs "$deployment_id"
     exit 1
   fi
