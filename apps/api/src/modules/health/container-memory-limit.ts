@@ -6,7 +6,7 @@ export const RSS_LIMIT_BYTES = 'HEALTH_RSS_LIMIT_BYTES';
 const RSS_LIMIT_RATIO = 0.9;
 
 export interface MemoryLimitProbe {
-  /** process.constrainedMemory: cgroup limit in bytes, 0 when unconstrained. */
+  /** process.constrainedMemory: cgroup limit in bytes; 0 or UINT64_MAX when unconstrained. */
   constrainedMemory: () => number;
   totalMemory: () => number;
 }
@@ -18,13 +18,15 @@ const systemProbe: MemoryLimitProbe = {
 
 /**
  * Bytes the container may use before it is OOM-killed. Falls back to host RAM
- * when the OS imposes no limit, which is what a developer machine reports.
+ * when the OS imposes no limit, whether libuv reports that as 0 (a developer
+ * machine) or as UINT64_MAX (a cgroup leaf whose memory.max is "max").
  */
 export function containerMemoryLimitBytes(
   probe: MemoryLimitProbe = systemProbe
 ): number {
+  const total = probe.totalMemory();
   const constrained = probe.constrainedMemory();
-  return constrained > 0 ? constrained : probe.totalMemory();
+  return constrained > 0 && constrained < total ? constrained : total;
 }
 
 /**

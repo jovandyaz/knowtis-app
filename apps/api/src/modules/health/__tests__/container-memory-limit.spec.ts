@@ -19,4 +19,8 @@ describe('containerMemoryLimitBytes', () => {
   it('falls back to host memory when Node reports no constraint', () => {
     expect(containerMemoryLimitBytes(probeWith(0))).toBe(HOST_RAM);
   });
+
+  it('falls back to host memory when libuv reports the UINT64_MAX sentinel', () => {
+    expect(containerMemoryLimitBytes(probeWith(2 ** 64))).toBe(HOST_RAM);
+  });
 });

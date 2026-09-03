@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { HealthIndicatorService } from '@nestjs/terminus';
 import { sql } from 'drizzle-orm';
 
@@ -9,6 +9,8 @@ import {
 
 @Injectable()
 export class DbHealthIndicator {
+  private readonly logger = new Logger(DbHealthIndicator.name);
+
   constructor(
     private readonly healthIndicatorService: HealthIndicatorService,
     @Inject(DATABASE_CONNECTION) private readonly db: Database
@@ -21,7 +23,10 @@ export class DbHealthIndicator {
       await this.db.execute(sql`SELECT 1`);
       return indicator.up();
     } catch (error) {
-      return indicator.down({ message: (error as Error).message });
+      this.logger.error(
+        `Database health check failed: ${(error as Error).message}`
+      );
+      return indicator.down({ message: 'Database unreachable' });
     }
   }
 }
