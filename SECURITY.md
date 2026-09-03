@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Knowtis, please report it responsibly through [GitHub's private vulnerability reporting](https://github.com/jovandyaz/knowtis_app/security/advisories/new).
+If you discover a security vulnerability in Knowtis, please report it responsibly through [GitHub's private vulnerability reporting](https://github.com/jovandyaz/knowtis-app/security/advisories/new).
 
 **Please do not open a public issue for security vulnerabilities.**
 
@@ -17,6 +17,8 @@ If you discover a security vulnerability in Knowtis, please report it responsibl
 The following areas are in scope for security reports:
 
 - Authentication and authorization (JWT, session handling)
+- OAuth 2.1 authorization server for MCP clients (`apps/api/src/modules/oauth`)
+- MCP server (`apps/mcp`): API-key and OAuth token handling, tool access to notes
 - Cross-site scripting (XSS)
 - Injection vulnerabilities (SQL, NoSQL, command)
 - Data exposure or leakage
@@ -60,7 +62,9 @@ If a future migration moves the project past these ranges (e.g. adopting TanStac
 
 ### Transitive patch enforcement
 
-The remaining `pnpm.overrides` entries (`ws`, `protobufjs`, `lodash`, `picomatch`, `path-to-regexp`, `seroval`, `rollup`, `multer`, `socket.io-parser`, `uuid`, `postcss`, `qs`, `fast-uri`, `immutable`, `ip-address`, `happy-dom`, `dompurify`, `yaml`, `@protobufjs/utf8`) force patched versions of transitive dependencies whose direct consumers haven't yet released compatible updates. Each entry corresponds to one or more advisories surfaced by `pnpm audit --prod`.
+The remaining security `pnpm.overrides` entries (`@protobufjs/utf8`, `dompurify`, `fast-uri`, `happy-dom`, `immutable`, `ip-address`, `lodash`, `lodash-es`, `multer`, `path-to-regexp`, `picomatch`, `postcss`, `protobufjs`, `qs`, `rollup`, `seroval`, `socket.io-parser`, `uuid`, `ws`, `yaml`) force patched versions of transitive dependencies whose direct consumers haven't yet released compatible updates. Each entry corresponds to one or more advisories surfaced by `pnpm audit --prod`.
+
+The `react` and `react-dom` overrides are plain version pins that keep every workspace package on a single React build; they are not security constraints.
 
 These can be relaxed or removed once the direct consumers ship versions that resolve to the patched floors naturally. Run `pnpm audit --prod` after any override removal to confirm no vulnerabilities resurface.
 

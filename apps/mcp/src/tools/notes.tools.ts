@@ -233,7 +233,8 @@ export function registerNotesTools(
     'delete-note',
     {
       title: 'Delete Note',
-      description: 'Permanently delete a note. This action cannot be undone.',
+      description:
+        'Delete a note. The note is soft-deleted and can be restored from the app.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to delete'),
       },

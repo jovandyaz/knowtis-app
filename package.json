@@ -12,6 +12,7 @@
     "dev:api": "nx serve api",
     "dev:backoffice": "nx serve backoffice",
     "dev:all": "nx run-many -t serve -p notes api backoffice",
+    "dev:stop": "node tools/dev-stop.mjs",
     "build": "nx build notes",
     "build:api": "nx build api",
     "build:backoffice": "nx build backoffice",

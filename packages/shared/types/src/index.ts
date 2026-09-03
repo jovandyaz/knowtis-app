@@ -26,10 +26,8 @@ export {
 } from './lib/note.types';
 
 export {
-  COLLABORATION_EVENTS,
   HANDSHAKE_FAILURE,
   type HandshakeFailureReason,
-  type CollaborationEventType,
   type CollaborationUser,
   type JoinRoomPayload,
   type SyncUpdatePayload,

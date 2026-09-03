@@ -17,17 +17,23 @@ Knowtis is a real-time collaborative notes platform built as an Nx monorepo with
 ## Essential Commands
 
 ```bash
+# Setup (first run)
+pnpm run setup        # .env files, pnpm install, Docker services, migrations ("run" needed: `setup` is a pnpm built-in)
+
 # Development
 pnpm dev              # Start Notes frontend (localhost:4200)
 pnpm dev:api          # Start API backend (localhost:3333)
 pnpm dev:backoffice   # Start Backoffice frontend (localhost:4400)
+pnpm dev:mcp          # Start MCP server (localhost:3334)
 pnpm dev:all          # Start Notes + Backoffice + API simultaneously
+pnpm dev:stop         # Kill stale `nx serve` processes holding the Nx task lock
 
 # Testing
-pnpm test             # Run all tests (watch mode)
+pnpm test             # Run all tests (watch mode in a TTY; single run in CI/hooks)
 pnpm test:run         # Run tests once
-nx test notes         # Test specific project
-nx test api           # Test API project
+pnpm test:coverage    # Run tests with coverage
+pnpm nx test notes    # Test specific project
+pnpm nx test api      # Test API project
 
 # Code Quality
 pnpm lint             # Lint all projects
@@ -39,17 +45,20 @@ pnpm format           # Format with Prettier
 pnpm docker:up        # Start PostgreSQL + Redis
 pnpm db:generate      # Generate a migration from schema changes
 pnpm db:migrate:run   # Apply migrations (source of truth; never db:push shared DBs)
+pnpm db:baseline      # Mark existing migrations as applied on a DB created with db:push
+pnpm db:seed:admin    # Seed an admin user
 pnpm db:studio        # Open Drizzle Studio GUI
 
 # Build
 pnpm build            # Build frontend
 pnpm build:backoffice # Build backoffice
 pnpm build:api        # Build backend
+pnpm build:mcp        # Build MCP server
 
 # Nx
 pnpm graph            # Visualize dependency graph
 pnpm affected:test    # Test only affected projects
-nx run <project> <target>  # Run specific task
+pnpm nx run <project> <target>  # Run specific task
 ```
 
 ## Architecture
@@ -58,12 +67,12 @@ nx run <project> <target>  # Run specific task
 
 ```
 apps/
-├── api/           # NestJS backend (modules: admin, agent, ai, artifacts, auth, authorization, collaboration, feature-flags, health, mcp, notes, observability, users, websocket)
+├── api/           # NestJS backend (modules: admin, agent, ai, artifacts, auth, authorization, collaboration, feature-flags, health, mcp, notes, oauth, observability, organization, search, users, websocket)
 ├── backoffice/    # Admin frontend (Vite, TanStack Router)
 ├── mcp/           # MCP server for AI assistants (Hono, standalone)
 └── notes/         # React frontend (Vite, TanStack Router)
 
-libs/              # App-specific libraries
+libs/              # Frontend libraries (api-client, authorization, data-access/*)
 ├── api-client/           # HTTP/WebSocket client for frontend
 ├── authorization/        # CASL permission definitions (shared FE/BE)
 └── data-access/          # React Query hooks + Zod schemas per domain
@@ -114,17 +123,16 @@ Scope constraints:
 - **scope:shared** - Can be used by any project
 - **scope:notes** - Can only depend on scope:shared or scope:notes
 - **scope:api** - Can only depend on scope:shared or scope:api
+- **scope:backoffice** - Can only depend on scope:shared or scope:backoffice
 
 ## CI/CD Pipeline
 
 ### GitHub Actions (`.github/workflows/ci.yml`)
 
-Pipeline uses **Nx affected** to optimize builds and deploys:
+Pipeline uses **Nx affected** to optimize builds and deploys. `nrwl/nx-set-shas@v5` picks the comparison commits.
 
-1. **Single CI job**: `nx affected -t lint test build` — only impacted projects
-2. **Typecheck**: `nx affected -t typecheck` — covers every project the change can type-impact (affected includes dependents)
-3. **Conditional deploy**: Deploys frontend (Vercel) and API/MCP (Railway) when affected
-4. **SHA detection**: `nrwl/nx-set-shas@v5` auto-detects comparison commits
+1. **`ci` job** (runs against a `pgvector/pgvector:pg16` service): `pnpm skills:check` → `nx affected -t lint` → `nx affected -t typecheck` → `nx db:migrate:run api` → `nx affected -t test --parallel=2 -- --run` → migration drift check (`nx db:generate api` must leave `apps/api/drizzle/` clean) → `nx affected -t build --configuration=production`. It then exports `api_affected`, `notes_affected`, `mcp_affected`, `backoffice_affected`.
+2. **Deploy jobs** (push to `main` only, each gated on its app being affected): `deploy-frontend` (Notes, Vercel), `deploy-backoffice` (Vercel, `--local-config=apps/backoffice/vercel.json`), `deploy` (API, Railway), `deploy-mcp` (Railway; also requires `vars.RAILWAY_MCP_SERVICE_ID` and passes an OAuth env-parity check between the api and mcp services before deploying).
 
 ### Vercel (Frontend)
 
@@ -132,14 +140,14 @@ CI-driven, not Vercel Git auto-deploy: `vercel.json` sets `"git": { "deploymentE
 
 ### Railway (Backend)
 
-Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status), conditional on `api` being affected. Railway still evaluates `watchPatterns` against the uploaded snapshot; a no-match deployment becomes `SKIPPED`, so compare that state with Nx's affected set rather than treating it as deployment success.
+Deploy via `.github/scripts/railway-deploy.sh` in CI (detached `railway up`, then polling the deployment to a terminal status), conditional on `api` (or `mcp`) being affected. Railway still evaluates `watchPatterns` against the uploaded snapshot; a no-match deployment becomes `SKIPPED`, which the script treats as success (`exit 0`). `railway.toml` watches `apps/api/**` and `libs/**` but not `packages/**`, so a change that only touches `packages/` marks `api` affected in Nx yet ends as `SKIPPED` on Railway. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Testing affected locally
 
 ```bash
-npx nx show projects --affected --base=main --head=HEAD        # See affected projects
-npx nx show projects --affected --type app --base=main --head=HEAD  # Apps only
-npx nx affected -t lint test build --base=main --head=HEAD      # Simulate CI
+pnpm nx show projects --affected --base=main --head=HEAD        # See affected projects
+pnpm nx show projects --affected --type app --base=main --head=HEAD  # Apps only
+pnpm nx affected -t lint typecheck test build --base=main --head=HEAD  # Simulate CI
 ```
 
 ## Code Conventions
@@ -154,19 +162,19 @@ npx nx affected -t lint test build --base=main --head=HEAD      # Simulate CI
 
 ### Commit Messages
 
-Follow Conventional Commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
+Follow Conventional Commits. Types accepted by the commit-msg hook: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert` (optional scope, e.g. `feat(auth): ...`).
 
 ### Pull Requests
 
 - **Stacked PRs are GitHub-native** (`gh extension install github/gh-stack`) — split multi-step features into a stack of small PRs instead of one large one. Open each PR against the branch below it, then adopt the chain with `gh stack link <bottom> … <top>`; or build it tracked from the start with `gh stack init` / `add` / `submit`. Merge bottom-up — `gh stack merge` lands a stack atomically, and after any merge GitHub rebases and retargets the layers above on its own; never rebase a stacked branch by hand afterwards.
 - **Keep every PR under 100 changed files** — CodeRabbit refuses larger ones and the cap is not configurable.
-- **CodeRabbit reviews every PR, stacked or not, but must be triggered**: comment `@coderabbitai full review`, then confirm inline comments exist — a green check with none is a skipped review. Address its feedback before requesting human review.
+- **CodeRabbit reviews every PR, stacked or not, but must be triggered**: `.coderabbit.yaml` enables `auto_review` for `main` and Conventional-prefix base branches, but on this OSS plan CodeRabbit reports "Review skipped: manual review required" and does nothing until someone comments `@coderabbitai full review`. Trigger it, then confirm inline comments exist — a green check with none is a skipped review. Address its feedback before requesting human review.
 - Feature branches use a Conventional-style prefix: `feat/<name>`, `fix/<name>`, `docs/<name>`, etc.
 
 ### Git Hooks (Lefthook)
 
-- **pre-commit**: Runs ESLint + Prettier on staged files, TypeScript type checking
-- **pre-push**: Runs affected tests
+- **pre-commit**: ESLint + Prettier on staged `*.ts`/`*.tsx` (Prettier also on staged json/md/yaml), `nx affected -t typecheck --base=origin/main`, and `check-migrations` (when schema files under `apps/api/src/database/schema/` are staged, runs `nx db:generate api` and stages `apps/api/drizzle/`)
+- **pre-push**: `nx affected -t test --base=origin/main`
 - **commit-msg**: Validates Conventional Commits format
 
 ## API Documentation
@@ -178,13 +186,12 @@ List endpoints paginate with the envelope `{ items, total, page, limit }` (defau
 ## Environment Setup
 
 ```bash
-cp apps/api/.env.example apps/api/.env
-cp apps/notes/.env.example apps/notes/.env
-pnpm docker:up
-pnpm db:migrate:run   # Apply migrations to the local DB
+pnpm run setup   # scaffolds apps/{api,notes,mcp}/.env, pnpm install, docker compose up, pnpm db:migrate:run
 ```
 
-> AI features require `ANTHROPIC_API_KEY` in `apps/api/.env` and the `ai_enabled` flag toggled on in the DB. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64) and the `agent_byok` flag. See [docs/AI.md](docs/AI.md).
+`setup` is a pnpm built-in, so the `run` is required. Full walkthrough: [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
+
+> AI features require `OPENROUTER_API_KEY` in `apps/api/.env` (the default models are OpenRouter-hosted; Anthropic/OpenAI/Google keys are optional) and the `ai_enabled` flag toggled on in the DB. Bring-your-own-key (BYOK) additionally needs `BYOK_ENCRYPTION_KEY` (32-byte base64) and the `agent_byok` flag. See [docs/AI.md](docs/AI.md).
 
 <!-- nx configuration start-->
 <!-- Leave the start & end comments to automatically receive updates. -->

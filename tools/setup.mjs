@@ -35,7 +35,9 @@ function ensureNode22() {
 function ensureDocker() {
   const result = spawnSync('docker', ['info'], { stdio: 'ignore' });
   if (result.status !== 0) {
-    fail('Docker is not running. Start Docker Desktop and re-run pnpm setup.');
+    fail(
+      'Docker is not running. Start Docker Desktop and re-run pnpm run setup.'
+    );
   }
 }
 
@@ -75,7 +77,9 @@ function waitForPostgres() {
     if (result.status === 0) return;
     spawnSync('sleep', [String(POSTGRES_POLL_INTERVAL_MS / 1000)]);
   }
-  fail(`Postgres did not become ready within ${POSTGRES_READY_TIMEOUT_MS / 1000}s.`);
+  fail(
+    `Postgres did not become ready within ${POSTGRES_READY_TIMEOUT_MS / 1000}s.`
+  );
 }
 
 ensureNode22();
@@ -93,13 +97,13 @@ run('pnpm', ['docker:up']);
 step('Waiting for Postgres to become ready');
 waitForPostgres();
 
-step('Pushing database schema');
-run('pnpm', ['db:push']);
+step('Applying database migrations');
+run('pnpm', ['db:migrate:run']);
 
 process.stdout.write(`
 ✓ Setup complete. Next:
-    pnpm dev:all       # start API + frontend
+    pnpm dev:all       # start API + Notes + Backoffice
     pnpm db:studio     # browse the database
 
-Edit apps/api/.env to fill in any provider keys (Anthropic, OpenAI, etc.) you plan to use.
+Edit apps/api/.env to fill in any provider keys (OpenRouter, Anthropic, OpenAI, etc.) you plan to use.
 `);

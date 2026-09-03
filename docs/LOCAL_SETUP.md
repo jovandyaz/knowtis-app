@@ -7,11 +7,13 @@ This guide is the ground truth for onboarding. It documents the exact working se
 ## TL;DR
 
 ```bash
-git clone git@github.com:jovandyaz/knowtis_app.git
-cd knowtis_app
-pnpm setup       # Node/Docker checks, scaffolds .env files, installs deps, starts Docker, pushes schema
+git clone git@github.com:jovandyaz/knowtis-app.git
+cd knowtis-app
+pnpm run setup   # Node/Docker checks, scaffolds .env files, installs deps, starts Docker, applies migrations
 pnpm dev:all     # API (:3333) + Notes (:4200) + Backoffice (:4400)
 ```
+
+`setup` alone is a pnpm built-in (`pnpm setup` configures pnpm itself), so the `run` is required.
 
 Open <http://localhost:4200>, register, and you're in. To also run the MCP server locally:
 
@@ -21,48 +23,52 @@ pnpm dev:mcp     # MCP server (:3334)
 
 ## Prerequisites
 
-| Requirement | Version  | Notes                                                                                                                                           |
-| ----------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| Node.js     | **22.x** | `pnpm setup` hard-fails on anything older. `nvm install 22 && nvm use 22`.                                                                      |
-| pnpm        | ≥ 10.x   | Never use `npm`/`yarn` in this repo.                                                                                                            |
-| Docker      | ≥ 20.x   | **Docker Desktop must be running** before `pnpm setup` — the script checks `docker info` and aborts with a clear message if the daemon is down. |
+| Requirement | Version  | Notes                                                                                                                                                  |
+| ----------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Node.js     | **22.x** | `pnpm run setup` rejects older majors (`major < 22`). `nvm install 22 && nvm use 22`.                                                                  |
+| pnpm        | ≥ 10.x   | Never use `npm`/`yarn` in this repo.                                                                                                                   |
+| Docker      | any      | **Docker Desktop must be running** before `pnpm run setup` — the script only checks `docker info` (no version check) and aborts if the daemon is down. |
 
-## What `pnpm setup` does
+## What `pnpm run setup` does
 
 Runs [`tools/setup.mjs`](../tools/setup.mjs) in order, aborting on the first failure:
 
-1. Assert Node ≥ 22.
+1. Assert Node major ≥ 22.
 2. Assert the Docker daemon is up.
 3. Scaffold `.env` from `.env.example` for `apps/api`, `apps/notes`, `apps/mcp` — **idempotent**, never overwrites an existing `.env`.
-4. `pnpm install`.
+4. `pnpm install --prefer-frozen-lockfile`.
 5. `pnpm docker:up` — Postgres (pgvector/pg16) + Redis.
 6. Wait for Postgres to accept connections.
-7. `pnpm db:push` — sync the Drizzle schema into the fresh local DB.
+7. `pnpm db:migrate:run` — apply the Drizzle migrations (schema and seeds) to the local DB.
 
-> `db:push` is fine for a throwaway **local** DB. For any shared/long-lived DB the source of truth is `pnpm db:migrate:run` — never `db:push` a shared database. See [MIGRATIONS.md](./MIGRATIONS.md).
+> If you previously created your local DB with `pnpm db:push`, run `pnpm db:baseline` once before `pnpm db:migrate:run` so the existing migrations are marked as applied. See [MIGRATIONS.md](./MIGRATIONS.md).
 
 ## Services & ports
 
-| Service            | URL                                   | Start command    |
-| ------------------ | ------------------------------------- | ---------------- |
-| Frontend (notes)   | <http://localhost:4200>               | `pnpm dev`       |
-| API                | <http://localhost:3333/api/v1>        | `pnpm dev:api`   |
-| API health         | <http://localhost:3333/api/v1/health> | —                |
-| API docs (Swagger) | <http://localhost:3333/api/docs>      | —                |
-| MCP server         | <http://localhost:3334/mcp>           | `pnpm dev:mcp`   |
-| MCP health         | <http://localhost:3334/health>        | —                |
-| Collaboration WS   | ws://localhost:3333/collaboration     | (with API)       |
-| DB Studio          | —                                     | `pnpm db:studio` |
+| Service            | URL                                   | Start command         |
+| ------------------ | ------------------------------------- | --------------------- |
+| Frontend (notes)   | <http://localhost:4200>               | `pnpm dev`            |
+| Backoffice         | <http://localhost:4400>               | `pnpm dev:backoffice` |
+| API                | <http://localhost:3333/api/v1>        | `pnpm dev:api`        |
+| API health         | <http://localhost:3333/api/v1/health> | —                     |
+| API docs (Swagger) | <http://localhost:3333/api/docs>      | —                     |
+| MCP server         | <http://localhost:3334/mcp>           | `pnpm dev:mcp`        |
+| MCP health         | <http://localhost:3334/health>        | —                     |
+| Collaboration WS   | ws://localhost:3333/collaboration     | (with API)            |
+| DB Studio          | —                                     | `pnpm db:studio`      |
+| Storybook          | <http://localhost:6006>               | `pnpm storybook`      |
+| PostgreSQL         | localhost:5432                        | `pnpm docker:up`      |
+| Redis              | localhost:6379                        | `pnpm docker:up`      |
 
-## Design tokens build to nothing to do
+## Design tokens build automatically
 
-The design system generates its CSS variables (`packages/design-system/build/css/variables.css`) from token JSON via Style Dictionary. That `build/` directory is **git-ignored**, so a fresh clone doesn't have it, and `apps/notes/src/index.css` imports it — a missing file crashes the Vite dev server with:
+The design system generates its CSS variables (`packages/design-system/build/css/variables.css`) from token JSON via Style Dictionary. That `build/` directory is **git-ignored**, so a fresh clone doesn't have it. `apps/notes/src/index.css` (and `apps/backoffice/src/index.css`) import `@knowtis/design-system/styles.css`, which in turn imports `build/css/variables.css` — a missing file crashes the Vite dev server with:
 
 ```
 [plugin:@tailwindcss/vite] Can't resolve '../build/css/variables.css'
 ```
 
-**You don't need to do anything about this.** `notes:serve` and `notes:build` both declare `dependsOn: ["^build"]`, so Nx runs `design-system:build` (which regenerates the tokens) before the app starts, on any of `pnpm dev`, `pnpm dev:all`, or `pnpm build`. The result is cached, so it's a one-time cost.
+**You don't need to do anything about this.** The `serve` targets of `notes` and `backoffice` declare `dependsOn: ["^build"]` (`apps/*/project.json`), and `build` inherits the same from `targetDefaults` in `nx.json`, so Nx runs `design-system:build` (which regenerates the tokens) before the app starts, on any of `pnpm dev`, `pnpm dev:backoffice`, `pnpm dev:all`, or `pnpm build`. The result is cached, so it's a one-time cost.
 
 If you ever want to regenerate tokens by hand (e.g. after editing `packages/design-system/tokens/*.json`):
 
@@ -88,7 +94,7 @@ The banner goes away on the next profile load — sign out and in to see it imme
 
 Nothing AI works out of the box: `ai_enabled` has no seeded row and a missing flag reads **off**, so turn on the ones you need from the backoffice **AI Config** page (or `PUT /api/v1/flags/:key` with an admin JWT).
 
-- **`OPENROUTER_API_KEY`** is the one key worth setting: the shipped code defaults (`AI_SETTING_DEFAULTS`) are all `openrouter:*` models, so without it (or a key stored from the backoffice) no default model can serve a turn.
+- **`OPENROUTER_API_KEY`** is the one key the defaults need: the shipped code defaults (`AI_SETTING_DEFAULTS`) are all `openrouter:*` models, so without it (or a key stored from the backoffice) no default model can serve a turn. `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and `GOOGLE_GENERATIVE_AI_API_KEY` are optional and only matter if you select models from those providers.
 - **`ANTHROPIC_API_KEY`** is required for the Anthropic-gated suites of `pnpm nx run api:eval` — the harness drives `anthropic:claude-sonnet-5` and its `llm-rubric` grader is Anthropic regardless of `AI_EVAL_MODEL`. Each suite self-skips without its provider key, so a run without it exits 0 having done nothing. `VOYAGE_API_KEY` and `TAVILY_API_KEY` light up the retrieval/memory and web-search suites.
 - **`BYOK_ENCRYPTION_KEY`** (32 bytes, base64) is only needed if you turn `agent_byok` on.
 
@@ -100,10 +106,10 @@ The MCP server exposes your notes to AI clients. There are two auth paths.
 
 ### API key (works out of the box locally)
 
-OAuth "click to connect" is **on by default** (the `mcp_oauth` flag seeds `true`). It activates once the OAuth env is set on both services (below); until then, discovery stays dormant and clients fall back to API keys.
+OAuth "click to connect" is **on by default** (migration `0020_enable_mcp_oauth.sql` seeds the `mcp_oauth` flag to `true`, so it holds once `pnpm db:migrate:run` has run). It activates once the OAuth env is set on both services (below); until then, discovery stays dormant and clients fall back to API keys.
 
 1. Sign in (see above), open **Settings → Integrations**.
-2. Expand **Advanced: API keys** → **Create API Key** → pick a permission level (default is read + write) → copy the `knowtis_mcp_...` key.
+2. Expand **Advanced: API keys** → **Create API Key** → pick a permission level (the dialog defaults to read + write; the API's own default when `scopes` is omitted is `notes:read`) → copy the `knowtis_mcp_...` key.
 3. Point your MCP client at `http://localhost:3334/mcp` with `Authorization: Bearer knowtis_mcp_...`.
 
 Sanity check the server:
@@ -140,10 +146,10 @@ See [MCP.md](./MCP.md) for the full protocol details (discovery, PKCE, scopes, e
 
 | Symptom                                              | Cause                                                                      | Fix                                                                                          |
 | ---------------------------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `Docker is not running` on `pnpm setup`              | Daemon down                                                                | Start Docker Desktop, re-run `pnpm setup`.                                                   |
+| `Docker is not running` on `pnpm run setup`          | Daemon down                                                                | Start Docker Desktop, re-run `pnpm run setup`.                                               |
 | `Can't resolve '../build/css/variables.css'` overlay | Tokens not built (very old checkout without the `serve` dependsOn)         | `pnpm nx run design-system:tokens:build`, then restart. On current `main` this is automatic. |
 | `Node 22.x required`                                 | Wrong Node                                                                 | `nvm install 22 && nvm use 22`.                                                              |
 | "Your email address hasn't been verified yet" stays  | The code was never typed in (local dev only logs it)                       | Copy the 6-digit code from the API terminal into **Verify now**, or run the SQL above.       |
 | MCP OAuth discovery returns `404`                    | OAuth env (`MCP_OAUTH_ISSUER`/`MCP_RESOURCE_URL`, API's `OAUTH_*`) not set | Set the OAuth env vars (see above), or use the API-key path.                                 |
 | `role "postgres" does not exist`                     | Wrong psql user                                                            | The local DB user is `knowtis`, not `postgres`.                                              |
-| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `lsof -ti:4200 \| xargs kill -9` (swap the port).                                            |
+| Port already in use (`4200`/`3333`/`3334`)           | Stale dev server                                                           | `pnpm dev:stop` (kills stale `nx serve` processes), or `lsof -ti:4200 \| xargs kill -9`.     |
