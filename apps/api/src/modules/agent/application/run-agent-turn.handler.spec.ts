@@ -41,6 +41,7 @@ function makeProposal(id: string): ProposedMutation {
 }
 
 const USER = '11111111-1111-1111-1111-111111111111';
+const SERVED_MODEL = 'anthropic:claude-haiku-4-5';
 const IP_SUBJECT = 'ip:fec52565aa0cf18f';
 const TURN_ID_PATTERN = /^[0-9a-f-]{36}$/;
 
@@ -2126,12 +2127,14 @@ describe('RunAgentTurnHandler', () => {
       }
     );
 
-    expect(turnEffort.resolve).toHaveBeenCalledWith(
-      expect.objectContaining({ userId: USER, requested: 'xhigh' })
-    );
-    expect(orchestrator.run).toHaveBeenCalledWith(
-      expect.objectContaining({ reasoningEffort: 'max' })
-    );
+    const effortFor = vi.mocked(orchestrator.run).mock.calls[0][0].effortFor;
+    await expect(effortFor?.(SERVED_MODEL)).resolves.toBe('max');
+    expect(turnEffort.resolve).toHaveBeenCalledWith({
+      userId: USER,
+      model: SERVED_MODEL,
+      isByok: false,
+      requested: 'xhigh',
+    });
   });
 
   it('rejects an effort request from an anonymous turn', async () => {

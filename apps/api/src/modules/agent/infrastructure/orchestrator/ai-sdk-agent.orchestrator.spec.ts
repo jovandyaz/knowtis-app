@@ -189,7 +189,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        reasoningEffort: 'low',
+        effortFor: async () => 'low',
       })
     );
 
@@ -204,7 +204,9 @@ describe('AiSdkAgentOrchestrator', () => {
     streamTextMock.mockClear();
     const orchestrator = makeOrchestrator();
 
-    await collect(orchestrator.run({ ...baseInput, reasoningEffort: 'low' }));
+    await collect(
+      orchestrator.run({ ...baseInput, effortFor: async () => 'low' })
+    );
 
     expect(streamTextMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -237,7 +239,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        reasoningEffort: 'low',
+        effortFor: async () => 'low',
         openrouterProviderOrder: ['fireworks', 'together'],
       })
     );
@@ -288,7 +290,7 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        reasoningEffort: 'low',
+        effortFor: async () => 'low',
         openrouterProviderOrder: [],
       })
     );
@@ -344,7 +346,8 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        reasoningEffort: 'high',
+        effortFor: async (model: string) =>
+          model === FALLBACK ? 'low' : 'high',
       })
     );
 
@@ -360,7 +363,7 @@ describe('AiSdkAgentOrchestrator', () => {
         providerOptions: {
           anthropic: {
             thinking: { type: 'adaptive', display: 'summarized' },
-            effort: 'high',
+            effort: 'low',
           },
         },
       })
@@ -2727,7 +2730,8 @@ describe('AiSdkAgentOrchestrator', () => {
       orchestrator.run({
         ...baseInput,
         model: 'openrouter:z-ai/glm-5.2',
-        reasoningEffort: 'high',
+        effortFor: async (model: string) =>
+          model === FALLBACK ? undefined : 'low',
       })
     );
     await vi.advanceTimersByTimeAsync(TTFT_MS);
@@ -2738,20 +2742,41 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(streamTextMock).toHaveBeenNthCalledWith(
       1,
       expect.objectContaining({
-        providerOptions: { openrouter: { reasoning: { effort: 'high' } } },
+        providerOptions: { openrouter: { reasoning: { effort: 'low' } } },
       })
     );
     expect(streamTextMock).toHaveBeenNthCalledWith(
       4,
-      expect.objectContaining({
-        providerOptions: {
-          anthropic: {
-            thinking: { type: 'adaptive', display: 'summarized' },
-            effort: 'high',
-          },
+      expect.not.objectContaining({ providerOptions: expect.anything() })
+    );
+  });
+
+  it('resolves the effort for the rescue model, not the one that failed', async () => {
+    vi.useFakeTimers();
+    streamTextMock.mockClear();
+    stalledContinuationThenAnswer();
+    const orchestrator = makeOrchestrator(
+      makeConfig({ AI_AGENT_TTFT_MS: TTFT_MS }),
+      makeToolRegistry(),
+      makeFlags(),
+      FALLBACK
+    );
+
+    const seen: string[] = [];
+    const consumed = collect(
+      orchestrator.run({
+        ...baseInput,
+        effortFor: async (model: string) => {
+          seen.push(model);
+          return 'low';
         },
       })
     );
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await vi.advanceTimersByTimeAsync(TTFT_MS);
+    await consumed;
+
+    expect(seen).toEqual([MODEL, FALLBACK]);
   });
 
   it('reports AI_TIMEOUT without advancing when a continuation stalls twice on the last candidate', async () => {

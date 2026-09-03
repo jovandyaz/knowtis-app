@@ -128,7 +128,10 @@ describe('TurnEffortResolver', () => {
   });
 
   it('falls back through the same gate after a refused request on a direct provider', async () => {
-    const { resolver } = make({ levels: ['low', 'high'], mandatory: false });
+    const { resolver, modelPreference } = make({
+      levels: ['low', 'high'],
+      mandatory: false,
+    });
 
     await expect(
       resolver.resolve({
@@ -138,6 +141,7 @@ describe('TurnEffortResolver', () => {
         requested: 'xhigh',
       })
     ).resolves.toBeUndefined();
+    expect(modelPreference.reasoningFor).toHaveBeenCalledTimes(1);
   });
 
   it('falls back when a free caller has no level at or under the ceiling', async () => {

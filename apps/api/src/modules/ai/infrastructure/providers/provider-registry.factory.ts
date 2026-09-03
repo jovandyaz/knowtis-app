@@ -7,7 +7,7 @@ import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import { createGateway, createProviderRegistry } from 'ai';
 import type { LanguageModel, ProviderRegistryProvider } from 'ai';
 
-import { providerOf } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import { AI_PROVIDERS, type AIProvider } from '@knowtis/shared-types';
 
 import type { EnvConfig } from '../../../../config/env.config';
@@ -156,7 +156,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
       return this.ephemeralLanguageModel(modelId, byokKey);
     }
     if (this.gateway) {
-      if (providerOf(modelId) === 'openrouter') {
+      if (providerOf(modelId) === OPENROUTER_PROVIDER) {
         throw new ProviderNotConfiguredError(
           `'${modelId}' is not routable in gateway mode — OpenRouter models require direct mode (unset AI_GATEWAY_API_KEY)`
         );
@@ -205,7 +205,7 @@ export class ProviderRegistryFactory implements OnModuleInit {
       return false;
     }
     if (this.gateway) {
-      if (providerOf(modelId) === 'openrouter') {
+      if (providerOf(modelId) === OPENROUTER_PROVIDER) {
         return false;
       }
       this.refreshSystemConfigsIfStale();

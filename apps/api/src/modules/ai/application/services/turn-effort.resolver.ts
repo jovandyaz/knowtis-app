@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import { providerOf } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
 import {
@@ -9,8 +9,6 @@ import {
 } from '../../domain/model-catalog/effort-policy';
 import { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
-
-const OPENROUTER_PROVIDER = 'openrouter';
 
 export interface TurnEffortRequest {
   readonly userId: string;
@@ -78,14 +76,17 @@ export class TurnEffortResolver {
     userId: string,
     declared?: ModelReasoning | null
   ): Promise<ReasoningEffort | undefined> {
-    const fallback = await this.aiConfig.getReasoningEffort();
     if (providerOf(model) === OPENROUTER_PROVIDER) {
-      return fallback;
+      return this.aiConfig.getReasoningEffort();
     }
-    const levels =
+    const [fallback, levels] = await Promise.all([
+      this.aiConfig.getReasoningEffort(),
       declared === undefined
-        ? (await this.modelPreference.reasoningFor(model, userId))?.levels
-        : declared?.levels;
+        ? this.modelPreference
+            .reasoningFor(model, userId)
+            .then((r) => r?.levels)
+        : Promise.resolve(declared?.levels),
+    ]);
     return levels?.includes(fallback) ? fallback : undefined;
   }
 }

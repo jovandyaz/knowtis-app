@@ -603,15 +603,8 @@ export class RunAgentTurnHandler {
     const maxTurnTokens = this.rateLimit.turnTokenBudget(
       input.isAnonymous ?? false
     );
-    const [reasoningEffort, openrouterProviderOrder] = await Promise.all([
-      this.turnEffort.resolve({
-        userId: input.userId,
-        model,
-        isByok,
-        requested: input.effort,
-      }),
-      this.aiConfig.getOpenRouterProviderOrder(),
-    ]);
+    const openrouterProviderOrder =
+      await this.aiConfig.getOpenRouterProviderOrder();
 
     const limit = await this.rateLimit.checkLimit(
       input.userId,
@@ -663,7 +656,13 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         maxTurnTokens,
-        ...(reasoningEffort ? { reasoningEffort } : {}),
+        effortFor: (candidate: string) =>
+          this.turnEffort.resolve({
+            userId: input.userId,
+            model: candidate,
+            isByok: byokProviders.has(providerOf(candidate)),
+            requested: input.effort,
+          }),
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),

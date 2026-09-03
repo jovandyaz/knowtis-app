@@ -160,7 +160,7 @@ export async function* runAgentStepLoop(
   let currentModel = params.model;
   let providerOptions = turnProviderOptions({
     model: currentModel,
-    reasoningEffort: input.reasoningEffort,
+    reasoningEffort: await input.effortFor?.(currentModel),
     providerOrder: input.openrouterProviderOrder,
   });
   const modelsUsed: string[] = [currentModel];
@@ -261,7 +261,7 @@ export async function* runAgentStepLoop(
             params.onModelSettled?.(currentModel);
             providerOptions = turnProviderOptions({
               model: currentModel,
-              reasoningEffort: input.reasoningEffort,
+              reasoningEffort: await input.effortFor?.(currentModel),
               providerOrder: input.openrouterProviderOrder,
             });
             modelsUsed.push(currentModel);

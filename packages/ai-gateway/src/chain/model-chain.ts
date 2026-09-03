@@ -79,6 +79,9 @@ export function isOverloadedError(error: unknown): boolean {
   return false;
 }
 
+/** The aggregator provider: its models fail independently and it tolerates reasoning options it does not need. */
+export const OPENROUTER_PROVIDER = 'openrouter';
+
 export function providerOf(modelId: string): string {
   return modelId.split(':')[0] ?? modelId;
 }
@@ -97,9 +100,8 @@ function familyOf(modelId: string): string {
   return `${provider}/${vendor}`;
 }
 
-// OpenRouter multiplexes each model to independent upstreams — failures are per-model.
 const PER_MODEL_COOLDOWN_PROVIDERS: ReadonlySet<string> = new Set([
-  'openrouter',
+  OPENROUTER_PROVIDER,
 ]);
 
 /**

@@ -19,6 +19,7 @@ export {
   executeWithChain,
   isAbortError,
   isOverloadedError,
+  OPENROUTER_PROVIDER,
   providerOf,
   resolveChainCandidates,
   streamWithChain,

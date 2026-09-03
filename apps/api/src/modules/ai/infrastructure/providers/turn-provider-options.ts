@@ -2,7 +2,7 @@ import type { AnthropicLanguageModelOptions } from '@ai-sdk/anthropic';
 import type { GoogleLanguageModelOptions } from '@ai-sdk/google';
 import type { OpenAILanguageModelResponsesOptions } from '@ai-sdk/openai';
 
-import { providerOf } from '@knowtis/ai-gateway';
+import { OPENROUTER_PROVIDER, providerOf } from '@knowtis/ai-gateway';
 import type { ReasoningEffort } from '@knowtis/shared-types';
 
 const OPENROUTER_ALLOW_FALLBACKS = true;
@@ -98,7 +98,7 @@ function googleBlock(effort: ReasoningEffort) {
  */
 export function turnProviderOptions(input: TurnProviderOptionsInput) {
   const provider = providerOf(input.model);
-  if (provider === 'openrouter') {
+  if (provider === OPENROUTER_PROVIDER) {
     return openrouterBlock(input);
   }
   const effort = input.reasoningEffort;
