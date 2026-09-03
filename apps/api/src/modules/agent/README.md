@@ -4,19 +4,23 @@ Server-authoritative conversational copilot built on the AI Gateway. Runs a tool
 
 It follows the same DDD layering as the rest of `apps/api` (`domain/` → `application/` → `infrastructure/`) and talks to the frontend over a Socket.IO gateway. For end-to-end feature detail (memory A6a/A6b, hybrid retrieval, web search, BYOK, model selection) see [docs/AI.md](../../../../../docs/AI.md) — this README is the module map, not a duplicate of it.
 
+Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn carries an `effort` off `agent:message`, the orchestrator port exposes `effortFor(model)` ([`domain/ports/agent-orchestrator.port.ts`](domain/ports/agent-orchestrator.port.ts)) and the step loop calls it per candidate model ([`infrastructure/orchestrator/agent-step-loop.ts`](infrastructure/orchestrator/agent-step-loop.ts)), so a step-boundary failover re-resolves for whichever model takes over. The audience clamp and the provider mapping live in the `ai` module (`TurnEffortResolver`, `turn-provider-options`) — see [Reasoning effort](../../../../../docs/AI.md#reasoning-effort).
+
 ## WebSocket protocol
 
 `@WebSocketGateway` on the **`/agent`** namespace ([agent.gateway.ts](agent.gateway.ts)).
 
-| Direction       | Event                                             | Meaning                                             |
-| --------------- | ------------------------------------------------- | --------------------------------------------------- |
-| client → server | `agent:message`                                   | New user turn (`{ conversationId?, message }`)      |
-| client → server | `agent:approve` / `agent:reject` / `agent:cancel` | HITL decision on a pending proposal / cancel a turn |
-| server → client | `agent:chunk`                                     | Streamed assistant text                             |
-| server → client | `agent:proposal`                                  | A proposed mutation awaiting approval               |
-| server → client | `agent:committed`                                 | Approved mutation applied                           |
-| server → client | `agent:done`                                      | Turn finished (usage, sources, web sources)         |
-| server → client | `agent:error`                                     | Auth / feature-flag / runtime error                 |
+| Direction       | Event                            | Meaning                                                                                              |
+| --------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| client → server | `agent:message`                  | New user turn (`{ conversationId?, message, noteId?, model?, effort? }`)                             |
+| client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject |
+| client → server | `agent:cancel`                   | Abort the in-flight turn                                                                             |
+| server → client | `agent:chunk`                    | Streamed assistant text                                                                              |
+| server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                              |
+| server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                |
+| server → client | `agent:committed`                | Approved mutation applied                                                                            |
+| server → client | `agent:done`                     | Turn finished (usage, sources, web sources)                                                          |
+| server → client | `agent:error`                    | Auth / feature-flag / runtime error                                                                  |
 
 Also exposes a REST `MemoryController` ([memory.controller.ts](memory.controller.ts)) for listing/deleting long-term memories.
 
@@ -52,6 +56,7 @@ Thin command handlers (one `execute` each):
 | `memory/`       | `memory-extraction.task` — Mem0-style long-term memory extraction cron                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `pending/`      | `redis-pending-mutation.store` — HITL proposals survive across the approve round-trip                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `persistence/`  | Drizzle conversation + memory repositories                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `health/`       | `agent-health-report.task` — daily cron behind flag `agent_health_alerts`, over `agent-health.queries` + `agent-health.evaluator`: tool-error and stop-anomaly rates, logged and webhook-alerted                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | `sanitize/`     | `html-sanitizer` for tool-generated note HTML                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
 ## Tools
@@ -68,10 +73,10 @@ Tools are grouped, not flat. Each group implements `AgentToolGroup` (`readonly n
 
 ```
 agent:message → orchestrator runs tools → mutate tool emits proposal
-  → pendingStore.save(...) (Redis, keyed by conversationId) → agent:proposal
+  → pendingStore.save(...) (Redis, keyed by proposalId) → agent:proposal
   → user decides:
-      agent:approve → ApproveMutationHandler applies it → agent:committed
-      agent:reject  → RejectMutationHandler discards it
+      agent:approve { proposalId } → ApproveMutationHandler applies it → agent:committed
+      agent:reject  { proposalId, reason? } → RejectMutationHandler discards it
 ```
 
 Because proposals live in Redis, approval works even across reconnects and is reconstructed from the server-side conversation, not client state.

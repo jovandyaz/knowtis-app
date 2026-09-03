@@ -41,7 +41,7 @@
 **Knowtis** is an AI-powered collaborative workspace that turns your notes into a knowledge base:
 
 - 🤖 **AI Assistant** - Improve writing, fix spelling, summarize, translate, and expand content with inline AI actions
-- 💬 **AI Copilot** - Conversational assistant that reads and edits your notes with approval (HITL), with per-conversation model selection and bring-your-own-key (BYOK) billing
+- 💬 **AI Copilot** - Conversational assistant that reads and edits your notes with approval (HITL), with account-default model selection (by model or by intent), per-turn reasoning effort, and bring-your-own-key (BYOK) billing
 - 🧠 **Study Tools** - Auto-generate flashcards, quizzes, summaries, and mind maps from your notes
 - 🃏 **Spaced Repetition** - SM2 algorithm for optimal flashcard review scheduling
 - 📝 **Rich Text Editing** - Tiptap/ProseMirror with slash commands, ghost text suggestions, and AI blocks

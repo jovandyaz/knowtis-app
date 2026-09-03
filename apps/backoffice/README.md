@@ -2,6 +2,12 @@
 
 Internal admin panel. Isolated from the end-user `notes` app — separate bundle, separate Vercel project, role-gated (`admin`).
 
+## Pages
+
+`src/routes/_authenticated/`: dashboard (`index`), `users`, `audit`, `feature-flags` (the `product`-domain flags), `ai-metrics` (spend/token/request charts) and `ai-config` — the single AI-ops surface.
+
+The **AI Config** page composes `src/components/ai-config/`: `ModelsSection` (which model each kind of turn runs on), `RoutingSection` (the fallback chain order), `UpstreamSection` (the OpenRouter upstream allowlist), `ReasoningSection` (the global reasoning-effort default), `CeilingSection` (the free-tier price ceiling), `ProvidersSection` with a `ProviderCard` per provider (stored key, enablement, live probe verdict), `CatalogSection` + `PromotedTable` / `CandidatesTable` for the open-tier catalog, and `ConfigSourceCell`, which badges every setting `custom` / `default` / `stale` — `stale` destructively, next to the stored value the runtime is ignoring. `assignable-model-options.ts` is what limits the model pickers in `ModelsSection` / `RoutingSection` to models a keyed, enabled provider can actually route. See [docs/AI.md](../../docs/AI.md).
+
 ## Local development
 
 ```bash

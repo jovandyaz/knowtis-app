@@ -16,23 +16,23 @@ This package imports **no other `@knowtis/*` package** and **no framework** (no 
 
 ## Module map
 
-| Folder        | Responsibility                                                                                                               |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `catalog/`    | `model-catalog` (curated metadata), `litellm-catalog` + `model-prices.snapshot` (pricing), `compute-token-cost`              |
-| `chain/`      | `model-chain` (`executeWithChain` / `streamWithChain`, candidate resolution, error classifiers), `provider-cooldown.tracker` |
-| `guard/`      | `prompt-guard` (`detectPromptInjection`), `input-sanitizer` (`sanitizeContent`)                                              |
-| `tokens/`     | `token-estimator` (`estimateTokenCount`)                                                                                     |
-| `web-search/` | `web-search.types` (port), `tavily-web-search` (impl), `filter-external-content` (URL allowlist)                             |
+| Folder        | Responsibility                                                                                                                                                                                                                       |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `catalog/`    | `model-catalog` (curated metadata), `litellm-catalog` + `model-prices.snapshot` (pricing), `compute-token-cost`                                                                                                                      |
+| `chain/`      | `model-chain` (`executeWithChain` / `streamWithChain`, candidate resolution, `cooldownKeyOf`, error classifiers), `provider-cooldown.tracker`                                                                                        |
+| `guard/`      | `prompt-guard` (`detectPromptInjection`), `input-sanitizer` (`sanitizeContent`), `injection-corpus` (`ATTACK_CORPUS` / `BENIGN_CORPUS`, the package-local regression corpus the guard is tested against; not part of the public API) |
+| `tokens/`     | `token-estimator` (`estimateTokenCount`)                                                                                                                                                                                             |
+| `web-search/` | `web-search.types` (port), `tavily-web-search` (impl), `filter-external-content` (URL allowlist), `extract-urls` (`extractHttpUrls`)                                                                                                 |
 
 ## Public API
 
 Everything is exported from [`src/index.ts`](src/index.ts):
 
 - **Catalog:** `MODEL_CATALOG`, `LiteLLMCatalog`, `toLiteLLMKey`, `computeTokenCostUsd`, `MODEL_PRICES_SNAPSHOT` (+ `ModelCatalog`, `ModelPricing`, `ModelContextWindow`, `TokenCostInput` types).
-- **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ chain/cooldown types).
+- **Chain:** `executeWithChain`, `streamWithChain`, `resolveChainCandidates`, `providerOf`, `cooldownKeyOf`, `OPENROUTER_PROVIDER`, `isAbortError`, `isOverloadedError`, `ProviderCooldownTracker` (+ `ChainScope`, `ChainContext`, `StreamChainContext`, `ChainAttemptInfo`, `ChainResolutionInput`, `CooldownConfig`, `ProviderCooldown`, `ProviderHealthSnapshot` types).
 - **Guard:** `detectPromptInjection`, `sanitizeContent`.
 - **Tokens:** `estimateTokenCount`.
-- **Web search:** `TavilyWebSearch`, `filterExternalHits`, `isHttpUrl`, `WebSearchProvider` port (+ `WebSearchHit`, `WebSearchResult`, `WebFetchResult`, `WebSearchOptions`, `TavilyConfig`, `SafeExternalSource` types).
+- **Web search:** `TavilyWebSearch`, `filterExternalHits`, `isHttpUrl`, `extractHttpUrls`, `WebSearchProvider` port (+ `WebSearchHit`, `WebSearchResult`, `WebFetchResult`, `WebSearchOptions`, `TavilyConfig`, `SafeExternalSource` types).
 
 ## Ports & adapters
 
