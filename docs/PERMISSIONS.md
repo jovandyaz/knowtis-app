@@ -2,7 +2,7 @@
 
 This document describes how note permissions, access control, and sharing work in Knowtis using the **General Access** model (similar to Google Docs).
 
-The permission system is built on a layered package architecture. For package internals, see [PERMISSIONS-PACKAGES.md](PERMISSIONS-PACKAGES.md).
+The permission packages (`@jovandyaz/permissions-core`, `-nestjs`, `-react`) each document their API in their own README; see [Authorization & Permissions Packages](#authorization--permissions-packages) for how the app uses them.
 
 ---
 
@@ -110,22 +110,23 @@ Access is validated at multiple layers: HTTP handlers, the repository, and the H
 
 ### HTTP Layer
 
-The controller uses `JwtAuthGuard` + `PoliciesGuard` on all endpoints except those marked `@Public()`. Each endpoint declares a required permission via `@RequirePermission(action, subject)`.
+`NotesController` uses `JwtAuthGuard` + `PoliciesGuard` on all endpoints except those marked `@Public()`. Each endpoint declares a required permission via `@RequirePermission(action, SUBJECTS.Note)`, but this is a **class-level** check: `AppAbilityFactory.createAbility(request)` receives the request user and `request.permissionContext`, and nothing on the HTTP path populates `permissionContext` (the only caller that does is `ApproveMutationHandler.canCreate` in the agent module, with an empty `sharedNotes`). The guard therefore answers "may this kind of user do this kind of action" — for example it refuses `share` for an anonymous user — and never looks at a specific note.
 
-Individual handlers validate ownership and permissions:
+Per-note authorization on HTTP happens in the handlers and the repository:
 
 ```
-Controller (@RequirePermission) → Handler (business logic check) → Repository (hasAccess)
+Controller (@RequirePermission, class-level) → Handler (isOwner / editorsCanShare) → Repository (hasAccess)
 ```
 
 ### `hasAccess()` Method
 
-Located in `DrizzleNoteRepository`, this is the central access check. It evaluates in order:
+Implemented in `DrizzlePermissionRepository` (`DrizzleNoteRepository.hasAccess` delegates to it). It evaluates in order:
 
-1. **Owner?** → `note.ownerId === userId` → full access
-2. **General Access enabled?** → `note.generalAccess === 'anyone_with_link'` AND no specific permission required → read access (permission level from `generalAccessPermission`)
-3. **Direct permission?** → Lookup in `note_permissions` table
-   - If `requiredPermission='editor'` → only if `permission.isEditor()`
+1. **Note exists and is not soft-deleted** (`deleted_at IS NULL`) → otherwise `false`, even for the owner
+2. **Owner?** → `note.ownerId === userId` → `true`
+3. **General Access enabled?** → `note.generalAccess === 'anyone_with_link'` AND no `requiredPermission` was passed → `true`. `generalAccessPermission` is **not** consulted here; a caller that needs to know whether a link grants editing must pass `requiredPermission: 'editor'`, which skips this branch and falls through to direct permissions
+4. **Direct permission?** → lookup in `note_permissions`
+   - If `requiredPermission === 'editor'` → only if `permission.isEditor()`
    - Otherwise → any permission grants access
 
 If none of the above match, access is denied.
@@ -186,8 +187,8 @@ narrowing general access back to `restricted` applies: an unverified owner must
 still be able to take back access they already granted. Gating it would leave an
 unverified owner unable to undo their own sharing.
 
-`POST /auth/resend-verification` (`AuthAccountController.resendVerification`,
-`apps/api/src/modules/auth/auth-account.controller.ts:149-155`) does not go
+`POST /auth/resend-verification` (`AuthAccountController.resendVerification` in
+`apps/api/src/modules/auth/auth-account.controller.ts`) does not go
 through `VerifiedIdentityPolicy` at all, even though it is the email-verification
 flow itself. It refuses an **anonymous** session outright, unconditional on the
 `EMAIL_VERIFICATION_GATE` flag: an anonymous account's address is the synthetic
@@ -236,7 +237,7 @@ Access is checked in the `onAuthenticate` hook. Throwing from the hook aborts th
    - If `cannot('read', note)` → throw `Forbidden` (handshake rejected).
    - If `cannot('update', note)` → set `connectionConfig.readOnly = true`.
 
-The same `hasAccess`/permission semantics used by the HTTP layer are reused here through the shared `defineAbilityFor` ability — there is no separate WS access path.
+HTTP and WebSocket are **two different enforcement paths** that aim at the same outcome. HTTP decides per note in the handlers and `hasAccess()` (see [Access Validation](#access-validation)), with CASL only doing the class-level `@RequirePermission` check. The Hocuspocus handshake is the one place where CASL evaluates **conditions against a concrete note**: `defineAbilityFor(user, { sharedNotes })` gets the user's direct permissions plus the synthetic share-token entry, and `ability.can('read' | 'update', note)` decides admission and read-only mode. Keep the two in step when changing either.
 
 ### Read-only Connections
 
@@ -258,13 +259,17 @@ All endpoints are under `POST|GET|PATCH|DELETE /notes/...` and require `JwtAuthG
 
 ### Note CRUD
 
-| Method   | Path         | Auth | Description                                                                       |
-| -------- | ------------ | ---- | --------------------------------------------------------------------------------- |
-| `GET`    | `/notes`     | JWT  | List accessible notes (owned + shared)                                            |
-| `GET`    | `/notes/:id` | JWT  | Get single note with access level                                                 |
-| `POST`   | `/notes`     | JWT  | Create note                                                                       |
-| `PATCH`  | `/notes/:id` | JWT  | Update note (owner: all fields; editor: title+content+sharing if editorsCanShare) |
-| `DELETE` | `/notes/:id` | JWT  | Delete note (owner only)                                                          |
+| Method   | Path                 | Auth | `@RequirePermission` | Description                                                                                        |
+| -------- | -------------------- | ---- | -------------------- | -------------------------------------------------------------------------------------------------- |
+| `GET`    | `/notes`             | JWT  | `read`               | List accessible notes (owned + shared)                                                             |
+| `GET`    | `/notes/supertags`   | JWT  | `read`               | Static note-type catalog (field descriptors per supertag)                                          |
+| `GET`    | `/notes/counts`      | JWT  | `read`               | Accessible note counts per PARA bucket and supertag                                                |
+| `GET`    | `/notes/:id`         | JWT  | `read`               | Get single note with access level                                                                  |
+| `POST`   | `/notes`             | JWT  | `create`             | Create note (also passes `AnonymousNoteLimitGuard`)                                                |
+| `PATCH`  | `/notes/:id`         | JWT  | `update`             | Update note (owner: all fields; editor: title+content+sharing if editorsCanShare)                  |
+| `DELETE` | `/notes/:id`         | JWT  | `delete`             | **Soft-delete** note (owner only): sets `deleted_at`, `204`                                        |
+| `POST`   | `/notes/:id/restore` | JWT  | `delete`             | Restore a soft-deleted note (owner only)                                                           |
+| `POST`   | `/notes/:id/images`  | JWT  | `update`             | Upload an image (`multipart/form-data`, ≤ 10 MB, png/jpeg/gif/webp); needs edit access to the note |
 
 #### Update Note Fields
 
@@ -282,11 +287,11 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 
 ### Direct Permissions
 
-| Method   | Path                       | Auth | Description                                       |
-| -------- | -------------------------- | ---- | ------------------------------------------------- |
-| `POST`   | `/notes/:id/share`         | JWT  | Grant/update permission (owner or sharing editor) |
-| `DELETE` | `/notes/:id/share/:userId` | JWT  | Revoke user access (owner only)                   |
-| `GET`    | `/notes/:id/collaborators` | JWT  | List collaborators (owner only)                   |
+| Method   | Path                       | Auth | `@RequirePermission` | Description                                       |
+| -------- | -------------------------- | ---- | -------------------- | ------------------------------------------------- |
+| `POST`   | `/notes/:id/share`         | JWT  | `share`              | Grant/update permission (owner or sharing editor) |
+| `DELETE` | `/notes/:id/share/:userId` | JWT  | `share`              | Revoke user access (owner only)                   |
+| `GET`    | `/notes/:id/collaborators` | JWT  | `read`               | List collaborators (owner only)                   |
 
 ### Public Share Link Access
 
@@ -294,11 +299,13 @@ A retained token grants nothing on its own. Every reader gates on `generalAccess
 | ------ | ---------------------- | ---------- | ------------------------------------- |
 | `GET`  | `/notes/shared/:token` | **Public** | Access note via share token (no auth) |
 
-### Error Codes
+### Error Codes (access and sharing)
+
+The subset of `NoteErrorCodes` (`apps/api/src/modules/notes/domain/errors/note.errors.ts`) that access control and sharing produce. The remaining codes — `INVALID_TITLE`, `INVALID_CONTENT`, `INVALID_TAG`, `INVALID_SUPERTAG`, `TAG_NOT_FOUND`, `CONTENT_OVERWRITE_REFUSED`, `INTERNAL_ERROR` — are input, tag and persistence errors outside this document.
 
 | Code                    | HTTP Status | Description                                                                                       |
 | ----------------------- | ----------- | ------------------------------------------------------------------------------------------------- |
-| `NOTE_NOT_FOUND`        | 404         | Note does not exist                                                                               |
+| `NOTE_NOT_FOUND`        | 404         | Note does not exist or is soft-deleted                                                            |
 | `PERMISSION_DENIED`     | 403         | User lacks required permission (incl. owner-only operations, via `NoteErrors.ownerOnly()`)        |
 | `SHARE_TOKEN_NOT_FOUND` | 404         | Token does not match or access is restricted                                                      |
 | `INVALID_PERMISSION`    | 400         | Invalid permission level                                                                          |
@@ -390,21 +397,25 @@ The ShareDialog component provides:
 
 ### `notes`
 
-| Column                      | Type                    | Description                                           |
-| --------------------------- | ----------------------- | ----------------------------------------------------- |
-| `id`                        | uuid (PK)               | Note identifier                                       |
-| `title`                     | text                    | Note title                                            |
-| `content`                   | text                    | Note content (HTML)                                   |
-| `yjs_state`                 | bytea                   | Yjs CRDT document state                               |
-| `owner_id`                  | uuid (FK → users)       | Note owner                                            |
-| `general_access`            | general_access enum     | Access level: `restricted` or `anyone_with_link`      |
-| `general_access_permission` | permission_level enum   | Permission for link access: `viewer` or `editor`      |
-| `share_token`               | text (unique, nullable) | 32-char hex token for link sharing                    |
-| `editors_can_share`         | boolean                 | Whether editors can manage sharing (default: `false`) |
-| `created_at`                | timestamptz             | Creation timestamp                                    |
-| `updated_at`                | timestamptz             | Last update timestamp                                 |
+| Column                      | Type                    | Description                                                        |
+| --------------------------- | ----------------------- | ------------------------------------------------------------------ |
+| `id`                        | uuid (PK)               | Note identifier                                                    |
+| `title`                     | text                    | Note title                                                         |
+| `content`                   | text                    | Note content (HTML)                                                |
+| `yjs_state`                 | bytea                   | Yjs CRDT document state                                            |
+| `owner_id`                  | uuid (FK → users)       | Note owner                                                         |
+| `general_access`            | general_access enum     | Access level: `restricted` or `anyone_with_link`                   |
+| `general_access_permission` | permission_level enum   | Permission for link access: `viewer` or `editor`                   |
+| `share_token`               | text (unique, nullable) | 32-char hex token for link sharing                                 |
+| `editors_can_share`         | boolean                 | Whether editors can manage sharing (default: `false`)              |
+| `bucket`                    | text (nullable)         | PARA bucket (`ParaBucket` from `@knowtis/shared-types`)            |
+| `supertag`                  | text (nullable)         | Note type (`Supertag`)                                             |
+| `supertag_fields`           | jsonb (nullable)        | Typed fields for the supertag (`SupertagFields`)                   |
+| `created_at`                | timestamptz             | Creation timestamp                                                 |
+| `updated_at`                | timestamptz             | Last update timestamp                                              |
+| `deleted_at`                | timestamptz (nullable)  | Soft-delete marker; every read and `hasAccess()` filters `IS NULL` |
 
-Indexes: `owner_id`, `updated_at`, `general_access`, `share_token`
+Indexes: `owner_id`, `updated_at`, `general_access`, `share_token`; partial `(owner_id, updated_at) WHERE deleted_at IS NULL`, `(owner_id, bucket) WHERE deleted_at IS NULL`, `(owner_id, supertag) WHERE supertag IS NOT NULL`
 
 PostgreSQL enums:
 
@@ -448,10 +459,15 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Infrastructure
 
-| File                                                                               | Description                             |
-| ---------------------------------------------------------------------------------- | --------------------------------------- |
-| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note.repository.ts` | Repository implementation (Drizzle ORM) |
-| `apps/api/src/database/schema/notes.schema.ts`                                     | Database schema (notes, permissions)    |
+| File                                                                                     | Description                                                                       |
+| ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note.repository.ts`       | `NoteRepository` facade; delegates to the read, write and permission repositories |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-read.repository.ts`  | Queries: `findById`, `findAccessibleByUser`, `findByShareToken`, counts, search   |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-write.repository.ts` | `create`, `update`, soft `delete`, owner-only `restore`                           |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-permission.repository.ts` | `note_permissions` CRUD and `hasAccess()`                                         |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-tag.repository.ts`        | Tags                                                                              |
+| `apps/api/src/modules/notes/infrastructure/persistence/drizzle-note-image.repository.ts` | Note image rows (`POST /notes/:id/images`)                                        |
+| `apps/api/src/database/schema/notes.schema.ts`                                           | Database schema (notes, permissions)                                              |
 
 ### Application (Handlers)
 
@@ -475,16 +491,28 @@ Indexes: `note_id`, `user_id`, composite `(note_id, user_id)`
 
 ### Authorization & Permissions Packages
 
-| File                                        | Description                                               |
-| ------------------------------------------- | --------------------------------------------------------- |
-| `packages/permissions/`                     | Core: `Ability` types, `definePermissions`, `RoleManager` |
-| `packages/permissions-nestjs/`              | NestJS: `PoliciesGuard`, `@RequirePermission` decorator   |
-| `packages/permissions-react/`               | React: `createPermissionContext` (provider, hooks, `Can`) |
-| `libs/authorization/src/lib/types.ts`       | App types: `AppAbility`, `Action`, `Subject`, `AuthUser`  |
-| `libs/authorization/src/lib/permissions.ts` | `defineAbilityFor` — builds ability from user + context   |
-| `libs/authorization/src/lib/roles.ts`       | `appRoleManager` — pre-defined role templates             |
+| File                                                                       | Description                                                                                                                                                                                                                                                                                                                                                                                            |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/permissions/`](../packages/permissions/README.md)               | `@jovandyaz/permissions-core`: `Ability` types, `definePermissions`, `RoleManager` (CASL hidden inside). `RoleManager` is exported but unused by the app                                                                                                                                                                                                                                               |
+| [`packages/permissions-nestjs/`](../packages/permissions-nestjs/README.md) | `@jovandyaz/permissions-nestjs`: `PoliciesGuard`, `@RequirePermission`, `ABILITY_FACTORY_KEY`                                                                                                                                                                                                                                                                                                          |
+| [`packages/permissions-react/`](../packages/permissions-react/README.md)   | `@jovandyaz/permissions-react`: `createPermissionContext` (provider, `useAbility`, `usePermission`, `Can`)                                                                                                                                                                                                                                                                                             |
+| `libs/authorization/src/index.ts`                                          | Public API of `@knowtis/authorization`: `defineAbilityFor`, `SUBJECTS`, and the types below. The lib has exactly two source files; there is no roles module                                                                                                                                                                                                                                            |
+| `libs/authorization/src/lib/types.ts`                                      | `Action` (`create`/`read`/`update`/`delete`/`share`/`manage`), `SUBJECTS` (`{ Note: 'Note' }`), `NoteSubject` (`{ __typename, id, ownerId, generalAccess }`), `Subject`, `AppAbility`, `AuthUser` (`{ id; isAnonymous?; role? }`), `SharedNote`, `PermissionContext` (`{ sharedNotes? }`)                                                                                                              |
+| `libs/authorization/src/lib/permissions.ts`                                | `defineAbilityFor(user, context)`: no user → `read` notes with `generalAccess: anyone_with_link`; `role === 'admin'` → `manage` all notes; anonymous → `create`, and `read`/`update`/`delete` own notes (no `manage`, so no `share`); authenticated → `manage` own notes; everyone signed-in also reads link-shared notes and gets `read` (+ `update` for editors) on each `context.sharedNotes` entry |
+| `apps/api/src/modules/authorization/ability.factory.ts`                    | `AppAbilityFactory` bound to `ABILITY_FACTORY_KEY`; passes `request.user` and `request.permissionContext` to `defineAbilityFor`                                                                                                                                                                                                                                                                        |
+| `apps/api/src/modules/authorization/roles.guard.ts`                        | `RolesGuard` + `@Roles(...roles)`: role-based gate on `request.user.role` (used for admin routes), independent of CASL                                                                                                                                                                                                                                                                                 |
+| `apps/notes/src/providers/ability-context.ts`, `ability-provider.tsx`      | Frontend: `createPermissionContext<AppAbility>()` and an `AbilityProvider` mounted in `AppProviders` with `defineAbilityFor({ id })`. **Nothing consumes it**: no component imports `Can`, `usePermission` or `useAbility`. UI gating uses the note's `accessLevel` and `editorsCanShare` from the API (see [Frontend Behavior](#frontend-behavior))                                                   |
 
-> Package internals documented in [PERMISSIONS-PACKAGES.md](PERMISSIONS-PACKAGES.md).
+Backend flow for the class-level check:
+
+```
+Controller  @RequirePermission('read', SUBJECTS.Note)
+  → PoliciesGuard → AppAbilityFactory.createAbility(request)
+    → defineAbilityFor(request.user, request.permissionContext)   // permissionContext is undefined on HTTP
+      → ability.can('read', 'Note')
+```
+
+Design notes: CASL is encapsulated in `permissions-core` (only `can`/`cannot` leak out); object subjects resolve by `__typename`; `AbilityFactory` keeps ability construction in the app; `createPermissionContext` avoids a singleton so several contexts can coexist.
 
 ### Frontend
 
