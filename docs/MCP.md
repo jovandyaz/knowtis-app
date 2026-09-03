@@ -73,7 +73,7 @@ OAuth clients request scopes individually; the consent screen lists each one bef
 
 `offline_access` is OAuth-only and grants no data access — it only signals that the client wants a refresh token. Per [OIDC Core §11](https://openid.net/specs/openid-connect-core-1_0.html#OfflineAccess) the authorization server **drops `offline_access` from any request whose `prompt` does not contain `consent`**, and MCP clients are inconsistent here: some hardcode `prompt=consent`, others send no scope at all. So rather than depend on the client, Knowtis issues a refresh token to **every public MCP client** — the authorization-code + PKCE flow with no client authentication (`token_endpoint_auth_method: none`) — whether or not `offline_access` survived the strip. This uses oidc-provider's supported `issueRefreshToken` override and is what keeps a connection alive past the 1h access-token expiry; clients that _do_ send `prompt=consent` additionally see "Stay connected" listed on the consent screen. The one exception is an **explicit denial**: if `offline_access` was requested but rejected on the grant (recorded as a rejected OIDC scope), no refresh token is issued — a rejection always wins over the default-issue policy.
 
-**Scope of the policy.** Dynamic client registration is open (no initial access token) and `clientDefaults` force `token_endpoint_auth_method: none`, so effectively **every dynamically-registered client is a public web client** and the always-issue policy applies universally. That is accepted for this authorization server — it is purpose-built for MCP — and the blast radius is bounded by refresh-token rotation, the 30/90-day TTLs, and the **Settings > Connected apps** revoke UI. The exception is a client that registers `application_type: native`: native public clients fall back to the spec-default, `offline_access`-gated path and only receive a refresh token when the scope actually survives.
+**Scope of the policy.** Dynamic client registration is open (no initial access token) and `clientDefaults` set `token_endpoint_auth_method: none` as the default, so a client that registers without choosing an auth method ends up a **public web client** and the always-issue policy applies to it. The policy is exactly `application_type === 'web' && token_endpoint_auth_method === 'none'` (`shouldIssueRefreshToken` in `oidc-provider.factory.ts`); a client that registers `application_type: native`, or that registers with a client secret, falls back to the spec-default, `offline_access`-gated path and only receives a refresh token when the scope survives. That is accepted for this authorization server — it is purpose-built for MCP — and the blast radius is bounded by refresh-token rotation, the 30/90-day TTLs, and the **Settings > Connected apps** revoke UI.
 
 Refresh tokens **rotate on every use with no grace window**: replaying an already-used refresh token revokes the whole token family (`invalid_grant`). They live 30 days for remote (CIMD/URL) clients and 90 days for locally registered clients.
 
@@ -185,7 +185,7 @@ npx mcp-remote https://mcp.knowtis.app/mcp \
 
 ## API Key Management
 
-API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All key-management endpoints require JWT authentication.
+API keys are managed from the Knowtis web app under **Settings > Integrations**, or via the API directly. All key-management endpoints require a session JWT (`JwtAuthGuard`); an MCP-sourced token (API-key exchange or OAuth) is refused with `403` by `McpScopeGuard`, because `McpKeysController` declares no `@RequireMcpScope` — keys cannot manage keys. Creating a key also requires a verified, non-anonymous account when the `email_verification_gate` flag is on (see [PERMISSIONS.md](PERMISSIONS.md#verified-identity-gate)).
 
 ### Create a key
 
@@ -195,6 +195,10 @@ curl -X POST http://localhost:3333/api/v1/mcp/keys \
   -H "Content-Type: application/json" \
   -d '{"name": "My Claude Key", "scopes": "notes:read,notes:write,notes:share"}'
 ```
+
+`name` is 1–100 characters. `scopes` is optional and must be one of the three CSV bundles below; the API defaults to `notes:read` (`CreateMcpKeyDto`, `McpKeysService.create`), while the web UI's `CreateKeyDialog` pre-selects `notes:read,notes:write`.
+
+The key is `knowtis_mcp_{live|test}_{random}` — `live` in production, `test` elsewhere — where `random` is 32 bytes as base64url. Only a SHA-256 hash and the first 24 characters (`keyPrefix`) are stored; the exchange endpoint looks the key up by that prefix and then verifies the hash in constant time.
 
 Response includes the full API key (shown only once):
 
@@ -222,6 +226,8 @@ curl http://localhost:3333/api/v1/mcp/keys \
   -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
+Returns the active keys as an array of `{ id, name, keyPrefix, scopes, lastUsedAt, createdAt, expiresAt }` — never the key itself.
+
 ### Revoke a key
 
 ```bash
@@ -229,7 +235,11 @@ curl -X DELETE http://localhost:3333/api/v1/mcp/keys/{keyId} \
   -H "Authorization: Bearer $JWT_TOKEN"
 ```
 
-Revocation stops new token exchanges immediately; tokens already issued for the key remain valid for up to 15 minutes.
+Answers `204`; `404` when the key does not exist or is already revoked. Revocation is a soft delete (`is_active = false`) and stops new token exchanges immediately; tokens already issued for the key remain valid for up to 15 minutes.
+
+### Token exchange
+
+`POST /api/v1/auth/token-exchange { apiKey }` is what the MCP server calls with an API key. It is throttled to **5 requests per minute** per caller, refuses expired keys (`expiresAt`) as well as unknown or revoked ones with a uniform `401 Invalid API key`, and returns `{ accessToken, expiresIn: 900, scopes }` — an HS256 JWT with `source: 'mcp'` and the key's scopes CSV, valid 15 minutes.
 
 ## Distribution & Installation
 
@@ -271,7 +281,7 @@ cursor://anysphere.cursor-deeplink/mcp/install?name=knowtis&config=eyJ1cmwiOiJod
 
 ### Maintainer runbook
 
-The version in `apps/mcp/package.json`, `apps/mcp/mcpb/manifest.json`, and `apps/mcp/server.json` must all match — the pack script fails on `package.json`/`manifest.json` drift.
+The version in `apps/mcp/package.json`, `apps/mcp/mcpb/manifest.json`, and `apps/mcp/server.json` must all match — `apps/mcp/scripts/pack-mcpb.sh` reads all three and exits on any drift.
 
 ```bash
 # 1. Bump the version in all three:
@@ -283,10 +293,9 @@ pnpm exec nx run mcp:pack-mcpb
 # 3. Publish the GitHub Release
 gh release create mcp-v<version> dist/apps/mcp-mcpb/knowtis-mcp-<version>.mcpb
 
-# 4. Hash the RELEASE asset (not the local file). First release: ADD the
-#    packages entry to apps/mcp/server.json — registryType "mcpb",
-#    identifier = the release asset URL, transport {"type":"stdio"},
-#    fileSha256 = this hash. Later releases: update identifier + fileSha256.
+# 4. Hash the RELEASE asset (not the local file) and update the existing
+#    packages[0] entry in apps/mcp/server.json: identifier = the new release
+#    asset URL, fileSha256 = this hash.
 curl -sL <asset-url> | shasum -a 256
 
 # 5. Publish to the registry (the key lives in the GitHub secret MCP_PUBLISHER_PRIVATE_KEY)
@@ -306,22 +315,24 @@ mcp-publisher status --status deprecated app.knowtis/knowtis <version>
 
 All 8 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
 
-| Tool                | Title             | Description                                                  | Parameters                                                            | Result shape                                                                      | Annotations                 | Scope         |
-| ------------------- | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------------------------- | ------------- |
-| `list-notes`        | List Notes        | List the user's notes by recency, with cursor pagination     | `search?` (string), `limit?` (1–100, default 20), `cursor?` (opaque)  | `{ notes: [{ id, title, updatedAt }], nextCursor? }`                              | read-only, idempotent       | `notes:read`  |
-| `search-notes`      | Search Notes      | Hybrid (full-text + semantic) search across accessible notes | `query` (string), `limit?` (1–20, default 20)                         | `{ hits: [{ id, title, updatedAt, isOwner, isSharedWithMe, isPubliclyShared }] }` | read-only, idempotent       | `notes:read`  |
-| `get-note`          | Get Note          | Get the full content of a note, returned as **Markdown**     | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | read-only, idempotent       | `notes:read`  |
-| `create-note`       | Create Note       | Create a note (title + optional Markdown content)            | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | create, non-idempotent      | `notes:write` |
-| `update-note`       | Update Note       | Update the title or content of an existing note              | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                 | destructive, idempotent     | `notes:write` |
-| `delete-note`       | Delete Note       | Permanently delete a note (cannot be undone)                 | `noteId` (UUID)                                                       | `{ success, message }`                                                            | destructive, idempotent     | `notes:write` |
-| `get-collaborators` | Get Collaborators | List who has access to a note and their permission           | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }`                        | read-only, idempotent       | `notes:read`  |
-| `share-note`        | Share Note        | Share a note with another user by their user ID              | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                                     | non-destructive, idempotent | `notes:share` |
+| Tool                | Title             | Description                                                  | Parameters                                                            | Result shape                                                                                               | Annotations                 | Scope         |
+| ------------------- | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------- | ------------- |
+| `list-notes`        | List Notes        | List the user's notes by recency, with cursor pagination     | `search?` (string), `limit?` (1–100, default 20), `cursor?` (opaque)  | `{ notes: [{ id, title, updatedAt }], nextCursor? }`                                                       | read-only, idempotent       | `notes:read`  |
+| `search-notes`      | Search Notes      | Hybrid (full-text + semantic) search across accessible notes | `query` (string, 1–200 chars), `limit?` (1–20, default 20)            | `{ hits: [{ id, title, updatedAt, isOwner, isSharedWithMe, isPubliclyShared }] }`                          | read-only, idempotent       | `notes:read`  |
+| `get-note`          | Get Note          | Get the full content of a note, returned as **Markdown**     | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | read-only, idempotent       | `notes:read`  |
+| `create-note`       | Create Note       | Create a note (title + optional Markdown content)            | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | create, non-idempotent      | `notes:write` |
+| `update-note`       | Update Note       | Update the title or content of an existing note              | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | destructive, idempotent     | `notes:write` |
+| `delete-note`       | Delete Note       | Deletes a note (soft delete; restorable via the app)         | `noteId` (UUID)                                                       | `{ success, message }`                                                                                     | destructive, idempotent     | `notes:write` |
+| `get-collaborators` | Get Collaborators | List who has access to a note and their permission           | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }` (`permission`: `owner` \| `viewer` \| `editor`) | read-only, idempotent       | `notes:read`  |
+| `share-note`        | Share Note        | Share a note with another user by their user ID              | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                                                              | non-destructive, idempotent | `notes:share` |
 
 `create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting — and converts back on read: the `content` in `get-note`, `create-note`, and `update-note` results is always Markdown, never the stored HTML.
 
 `list-notes` orders by recency and paginates with an **opaque cursor**: when more notes remain, the result carries a `nextCursor` to pass to the next call. An invalid or missing cursor starts from the first page.
 
 `search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one.
+
+`delete-note` calls `DELETE /api/v1/notes/:id`, which is a **soft delete**: the API stamps `notes.deleted_at` and the note disappears from every listing and access check, but the owner can bring it back with `POST /api/v1/notes/:id/restore` from the web app. There is no restore tool.
 
 Annotation semantics (MCP tool hints):
 
@@ -377,7 +388,7 @@ Notes / Sharing API endpoints
 
 1. The client sends the API key as a Bearer token on the `/mcp` request. If the `Authorization` header is missing or malformed, the request is rejected at the door with `HTTP 401` and a `WWW-Authenticate: Bearer` challenge — no tool runs.
 2. On the first tool call, the server exchanges the API key for a short-lived JWT via `POST /api/v1/auth/token-exchange`.
-3. The JWT is cached in a **module-scope, shared token cache** keyed by the **SHA-256 hash of the full API key** (never the raw key), with a 1-minute buffer subtracted from the reported expiry. The cache is shared across all requests handled by the process.
+3. The JWT is cached in the **token cache of the single `AuthService` instance** that `index.ts` constructs at startup, keyed by the **SHA-256 hash of the full API key** (never the raw key), with a 1-minute buffer subtracted from the reported expiry. Every request handled by the process shares that instance, so the cache is shared across requests.
 4. Subsequent calls reuse the cached JWT as a Bearer token until it nears expiry.
 5. **Scope enforcement** happens per tool: each tool declares a required scope (`notes:read`, `notes:write`, or `notes:share`), and a call is rejected if the key's scopes don't include it.
 
@@ -389,20 +400,24 @@ Unlike the API-key path there is **no token-exchange**: the verified JWT is forw
 
 ## Local Development
 
-The **stdio** entry point (`dist/apps/mcp/stdio.js`) is **for local development only** — the hosted Streamable HTTP server is the path for real clients.
+The server has two entry points built from the same `createMcpServer` factory. `index.ts` is the **hosted path**: Streamable HTTP behind Hono, what `mcp.knowtis.app` runs. `stdio.ts` is the **local-install path**: the `build-mcpb` target bundles it into the MCPB artifact (`apps/mcp/project.json`) and `apps/mcp/server.json` lists it as the registry's `stdio` package, so it is what Claude Desktop launches after a `.mcpb` install. stdio is API-key only.
 
 ### Run the server
 
 ```bash
-# 1. Create the local env file (the serve target reads apps/mcp/.env)
+# 1. Create the local env file (the serve target reads apps/mcp/.env).
+#    `pnpm run setup` scaffolds it together with the other apps' .env files;
+#    by hand:
 cp apps/mcp/.env.example apps/mcp/.env
 
 # 2. Start the API backend (port 3333)
 pnpm dev:api
 
-# 3. Serve the MCP server locally
-pnpm nx serve mcp
+# 3. Serve the MCP server locally (tsx watch on index.ts)
+pnpm dev:mcp          # alias for: pnpm nx serve mcp
 ```
+
+Use `pnpm run setup`, not `pnpm setup` — `setup` is a pnpm built-in that would run instead of the repo script.
 
 The server exposes:
 
@@ -471,22 +486,22 @@ HTTP mode (`index.ts`):
 
 DNS-rebinding protection is **enabled automatically whenever `MCP_ALLOWED_HOSTS` or `MCP_ALLOWED_ORIGINS` is non-empty**. In development the allowed-hosts default keeps it on for localhost. In production the server **refuses to start unless at least one of these variables is set** (the deployed config sets `MCP_ALLOWED_HOSTS`, see [Deployment](#deployment)). When `MCP_ALLOWED_ORIGINS` is set, the CORS `Access-Control-Allow-Origin` on `/mcp` is restricted to the same list; otherwise it stays `*` (auth is a Bearer token, never cookies).
 
-For **stdio** mode (`stdio.ts`), use `KNOWTIS_API_URL` instead of `API_INTERNAL_URL`, and pass the API key as an env var (stdio is API-key only):
+For **stdio** mode (`stdio.ts`), the API URL is resolved by `resolveApiUrl` in `config.ts`: `KNOWTIS_API_URL` if set, else `API_INTERNAL_URL`, else `https://api.knowtis.app`. The API key is an env var (stdio is API-key only). The production host/origin check is skipped (`requireHttpSecurity: false`).
 
-| Variable          | Required | Description                    |
-| ----------------- | -------- | ------------------------------ |
-| `KNOWTIS_API_URL` | Yes      | Knowtis API base URL           |
-| `KNOWTIS_API_KEY` | Yes      | Your MCP API key for this host |
+| Variable          | Required | Default                   | Description                                                                                                                                               |
+| ----------------- | -------- | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `KNOWTIS_API_URL` | No       | `https://api.knowtis.app` | Knowtis API base URL; overrides `API_INTERNAL_URL`                                                                                                        |
+| `KNOWTIS_API_KEY` | No       | —                         | Your MCP API key. The process starts without it and prints a warning to stderr; every tool call and resource read then fails with `NO_CREDENTIAL_MESSAGE` |
 
 ### Source layout
 
 ```text
 apps/mcp/src/
-├── index.ts                  # HTTP entry point (Hono + @hono/node-server)
-├── stdio.ts                  # stdio entry point (dev-only)
+├── index.ts                  # HTTP entry point (Hono + @hono/node-server) — the hosted server
+├── stdio.ts                  # stdio entry point — bundled into the MCPB / registry package
 ├── server.ts                 # MCP server factory (instructions, tools, resources)
-├── transport.ts              # Hono app: /health, CORS, PRM well-knowns, /mcp (Bearer check + Streamable HTTP)
-├── config.ts                 # Zod-validated configuration
+├── transport.ts              # Hono app: secureHeaders(), /health, CORS, PRM well-knowns, /mcp (Bearer check + Streamable HTTP)
+├── config.ts                 # Zod-validated configuration, resolveApiUrl
 ├── auth/
 │   ├── auth-service.ts       # API key → JWT exchange, SHA-256-keyed cache, scope checks
 │   ├── credentials.ts        # Bearer classification (api-key vs oauth)
@@ -502,15 +517,19 @@ apps/mcp/src/
 ├── resources/
 │   └── note-resources.ts     # knowtis://notes/{noteId} list/read/templates handlers
 ├── tools/
+│   ├── annotations.ts        # READ_ONLY / NON_DESTRUCTIVE / NON_DESTRUCTIVE_IDEMPOTENT / DESTRUCTIVE_IDEMPOTENT hint sets
 │   ├── notes.tools.ts        # list/search/get/create/update/delete-note
 │   ├── sharing.tools.ts      # get-collaborators, share-note
 │   ├── wrap-tool-handler.ts  # Auth + scope + logging + dual-result wrapper
 │   └── format-error.ts       # Tool error formatting
+├── types/                    # Ambient .d.ts for markdown-it plugins and turndown-plugin-gfm
 └── utils/
     ├── html-to-markdown.ts   # Editor HTML → Markdown for reads (turndown)
     ├── markdown-to-html.ts   # Markdown → editor HTML for create/update
     └── note-cursor.ts        # Opaque base64url recency cursor + pagination
 ```
+
+Tests sit in `__tests__/` directories next to the code they cover (`src/__tests__/`, `src/resources/__tests__/`, `src/utils/__tests__/`).
 
 ## Deployment
 
