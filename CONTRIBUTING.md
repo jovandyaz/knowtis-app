@@ -36,8 +36,8 @@ Run `pnpm graph` to visualize the dependency graph.
 ### 1. Fork and Clone
 
 ```bash
-git clone https://github.com/<your-username>/knowtis_app.git
-cd knowtis_app
+git clone https://github.com/<your-username>/knowtis-app.git
+cd knowtis-app
 pnpm install
 ```
 
@@ -85,11 +85,11 @@ The commit message format is enforced by a Git hook.
 
 ## Finding Issues to Work On
 
-Look for issues labeled [`good first issue`](https://github.com/jovandyaz/knowtis_app/labels/good%20first%20issue) or [`help wanted`](https://github.com/jovandyaz/knowtis_app/labels/help%20wanted) to get started.
+Look for issues labeled [`good first issue`](https://github.com/jovandyaz/knowtis-app/labels/good%20first%20issue) or [`help wanted`](https://github.com/jovandyaz/knowtis-app/labels/help%20wanted) to get started.
 
 ## Reporting Bugs and Requesting Features
 
-Use [GitHub Issues](https://github.com/jovandyaz/knowtis_app/issues) with the provided templates. For security vulnerabilities, see [SECURITY.md](SECURITY.md).
+Use [GitHub Issues](https://github.com/jovandyaz/knowtis-app/issues) with the provided templates. For security vulnerabilities, see [SECURITY.md](SECURITY.md).
 
 ## License
 

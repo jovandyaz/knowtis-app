@@ -7,8 +7,8 @@ This guide is the ground truth for onboarding. It documents the exact working se
 ## TL;DR
 
 ```bash
-git clone git@github.com:jovandyaz/knowtis_app.git
-cd knowtis_app
+git clone git@github.com:jovandyaz/knowtis-app.git
+cd knowtis-app
 pnpm setup       # Node/Docker checks, scaffolds .env files, installs deps, starts Docker, pushes schema
 pnpm dev:all     # API (:3333) + Notes (:4200) + Backoffice (:4400)
 ```

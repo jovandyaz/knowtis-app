@@ -2,7 +2,7 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability in Knowtis, please report it responsibly through [GitHub's private vulnerability reporting](https://github.com/jovandyaz/knowtis_app/security/advisories/new).
+If you discover a security vulnerability in Knowtis, please report it responsibly through [GitHub's private vulnerability reporting](https://github.com/jovandyaz/knowtis-app/security/advisories/new).
 
 **Please do not open a public issue for security vulnerabilities.**
 

@@ -152,6 +152,51 @@ type:data-access  ───────────────────┘
 
 Note: `design-system` is `type:ui` and is **not** part of the data-access import chain; `api-client` is `type:data-access`, not a separate tier. Scope constraints (`scope:shared` / `scope:notes` / `scope:api`) apply on top of these type rules.
 
+### Dependency Graph
+
+```mermaid
+graph TD
+    subgraph Apps
+        Notes[apps/notes]
+        Backoffice[apps/backoffice]
+        API[apps/api]
+    end
+
+    subgraph Libs
+        ApiClient[libs/api-client]
+        DataAccess[libs/data-access]
+        Authorization[libs/authorization]
+    end
+
+    subgraph SharedPackages
+        DesignSystem[packages/design-system]
+        Shared[packages/shared]
+    end
+
+    Notes --> ApiClient
+    Notes --> DataAccess
+    Notes --> DesignSystem
+    Backoffice --> DataAccess
+    Backoffice --> DesignSystem
+    ApiClient --> Shared
+    DataAccess --> ApiClient
+    DataAccess --> Shared
+    DesignSystem --> Shared
+
+    subgraph Packages
+        Email[packages/email]
+        EmailNestjs[packages/email-nestjs]
+        Auth[packages/auth]
+        AuthNestjs[packages/auth-nestjs]
+    end
+
+    API --> EmailNestjs
+    API --> AuthNestjs
+    EmailNestjs --> Email
+    EmailNestjs --> AuthNestjs
+    AuthNestjs --> Auth
+```
+
 ---
 
 ## Tech Stack
