@@ -82,7 +82,8 @@ export function CopilotModelPicker() {
       setReasoningEffort('auto');
     }
   }, [effortStale, setReasoningEffort]);
-  const activeEffort = effortStale ? 'auto' : effortValue;
+  // The anonymous row is pinned to auto, so nothing may advertise a level for a guest.
+  const activeEffort = isAnonymous || effortStale ? 'auto' : effortValue;
 
   if (!showPicker) {
     return null;
@@ -94,9 +95,7 @@ export function CopilotModelPicker() {
     ? t('aiAssistant.empty')
     : (selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never));
   const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
-  // The anonymous row is pinned to auto, so the tail must not advertise a level.
-  const triggerDetail =
-    !isAnonymous && activeEffort !== 'auto' ? effortLabel : undefined;
+  const triggerDetail = activeEffort !== 'auto' ? effortLabel : undefined;
 
   const effort: ModelMenuEffort | undefined =
     effortOpts.length === 0

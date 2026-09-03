@@ -68,7 +68,7 @@ interface AgentState {
   pendingProposal: PendingProposal | null;
   /** Rolling tail of the model's live reasoning; ephemeral, never persisted into a message. */
   thinkingText: string;
-  /** Per-conversation BYOK reasoning effort; never a stored preference. */
+  /** Per-conversation reasoning effort for the registered caller; never a stored preference. */
   reasoningEffort: CopilotEffort;
   _streamHandle: AgentStreamHandle | null;
   setReasoningEffort: (effort: CopilotEffort) => void;

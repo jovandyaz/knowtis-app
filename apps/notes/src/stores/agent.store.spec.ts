@@ -99,7 +99,7 @@ describe('useAgentStore', () => {
     );
   });
 
-  it('byok conversation effort rides every send while not auto', () => {
+  it('the conversation effort rides every send while not auto', () => {
     capture();
     useAgentStore.getState().setReasoningEffort('medium');
     useAgentStore.getState().sendMessage('hola');
@@ -108,7 +108,7 @@ describe('useAgentStore', () => {
     });
   });
 
-  it('byok conversation effort also rides a retry', () => {
+  it('the conversation effort also rides a retry', () => {
     const { get } = capture();
     useAgentStore.getState().setReasoningEffort('medium');
     useAgentStore.getState().sendMessage('hola');
