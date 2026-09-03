@@ -2,11 +2,7 @@ import type { Logger } from '@nestjs/common';
 import type { JwtService } from '@nestjs/jwt';
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  authenticateSocket,
-  realIpOf,
-  type AuthenticatedSocket,
-} from './socket-auth';
+import { authenticateSocket, type AuthenticatedSocket } from './socket-auth';
 
 function makeLogger(): Logger {
   return { log: vi.fn(), warn: vi.fn() } as unknown as Logger;
@@ -28,22 +24,6 @@ function makeClient(
     handshake: { auth: { token: 'jwt' }, headers, address },
   } as unknown as AuthenticatedSocket;
 }
-
-describe('realIpOf', () => {
-  it('returns the x-real-ip header value', () => {
-    expect(realIpOf({ 'x-real-ip': '203.0.113.7' })).toBe('203.0.113.7');
-  });
-
-  it('returns undefined when the header is missing', () => {
-    expect(realIpOf({})).toBeUndefined();
-  });
-
-  it('takes the first element when the header arrives as an array', () => {
-    expect(realIpOf({ 'x-real-ip': ['203.0.113.7', '198.51.100.9'] })).toBe(
-      '203.0.113.7'
-    );
-  });
-});
 
 describe('authenticateSocket client IP', () => {
   it('stores the x-real-ip header on client.data.clientIp', () => {
