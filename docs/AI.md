@@ -938,7 +938,8 @@ pnpm nx run api:eval
 - **Gated:** each suite self-skips when its own provider key is unset, so a run with no
   provider keys skips cleanly (exit 0). It is opt-in and excluded from CI and
   `nx affected` (paid + non-deterministic).
-- **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
+- **Prerequisites:** `pnpm docker:up` running, plus `ANTHROPIC_API_KEY` in `apps/api/.env` for the
+  Anthropic-gated suites (without it they skip and the command still exits 0) — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
   (e.g. `AI_EVAL_MODEL=anthropic:claude-haiku-4-5` for cheaper local runs).

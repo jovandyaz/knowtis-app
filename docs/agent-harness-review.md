@@ -151,7 +151,7 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 10. **`maxOutputTokens` global** ignorando el techo por modelo que el catálogo ya persiste. La mitad de `temperature` dejó de morder en #381: el provider la filtra en los modelos que la rechazan, aunque el harness sigue mandando 0.7 fijo en vez de derivarla por tarea.
 11. **Agotar `maxSteps` es silencioso** — resuelto en Bolt 1: `done` lleva `stopReason` (`completed` | `max_steps` | `length` | `token_budget` | `content_filter`) y cada caso anómalo deja un warn.
 12. **BYOK pierde toda la resiliencia** — sin fallback chain ni failover por step.
-13. **Evals nightly-only** — single-trial **resuelto (#393)**: `AI_EVAL_TRIALS` (nightly 3) juzga cada caso por su tasa de aprobación con umbral `ceil(2/3 × trials)`, y #401 saca del denominador los trials cuyo único fallo fue un error de transporte del grader sin dejar que un caso 100% no calificado pase. Queda abierto el gate en PRs (solo nightly) y el único caso E2E de injection. Desde #381 tampoco califican en silencio al modelo equivocado: el transcript guarda `servedModel` y el harness truena si difiere del modelo fijado (`anthropic:claude-sonnet-5`, guard `assertPinnedModelServed` de #387).
+13. **Evals nightly-only** — single-trial **resuelto (#393)**: `AI_EVAL_TRIALS` (nightly 3) juzga cada caso por su tasa de aprobación con umbral `ceil(2/3 × trials)`, y #401 saca del denominador los trials cuyo único fallo fue un error de transporte del grader sin dejar que un caso 100% no calificado pase. Queda abierto el gate en PRs (solo nightly) y el único caso E2E de injection. Desde #381 tampoco califican en silencio al modelo equivocado: el transcript guarda `servedModel` y el harness truena si difiere del modelo fijado (`anthropic:claude-sonnet-5` por defecto, sobreescribible con `AI_EVAL_MODEL`; guard `assertPinnedModelServed` de #387).
 14. **Sin correlación trace↔costo** en observabilidad.
 15. **Sin dead-letter** para reconciliación de usage fallida (reserva colgada hasta rollover diario).
 
@@ -247,7 +247,7 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 2. **Budget económico dentro del loop** — first-class en 2026 (`maxBudgetUsd`); knowtis solo gatea pre-turno con estimación.
 3. **Agotar max steps debe señalizarse** — SDKs lanzan error explícito; knowtis emite `done` silencioso.
 4. **Presupuesto de contexto dinámico + compaction** — budget fijo 12k desacoplado de `maxInputTokens` que el catálogo ya tiene.
-5. **Evals: dual CI + multi-trial pass@k** — multi-trial resuelto (#393, #401); sigue faltando el gate determinista en PRs: knowtis corre solo nightly.
+5. **Evals: dual CI + umbral multi-trial de tasa de aprobación** — multi-trial resuelto (#393, #401); sigue faltando el gate determinista en PRs: knowtis corre solo nightly.
 6. **Verify con grader fresco / scoring asíncrono** — knowtis tiene capa determinista pero cero verificación semántica ni async.
 7. **Tool events al cliente** — el SDK que usan lo trae de fábrica; no emiten nada.
 8. **Sampling por step** — `prepareStep` disponible en su dependencia; temperature hardcoded.
@@ -261,17 +261,17 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 
 ### 3.4 Priorización final
 
-| #   | Acción                                                                                                                                                     | Esfuerzo   | Respaldo                                                 |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
-| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles) (resuelto en Bolt 2 / SP1 — 2026-08-30; replay incondicional desde #377)           | Medio      | Consenso unánime                                         |
-| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                           | Bajo       | Consenso + primitiva disponible                          |
-| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                                 | Bajo       | Deriva de #1                                             |
-| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`)          | Bajo-medio | Claude SDK, OWASP LLM10                                  |
-| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                                      | Medio      | Anthropic context engineering                            |
-| 6   | Suite de regresión como PR gate (paths-filtered) (pass@k resuelto en #393/#401: `AI_EVAL_TRIALS` + umbral `ceil(2/3 × trials)`; solo queda el gate en PRs) | Medio      | Promptfoo/Anthropic                                      |
-| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                                  | Trivial    | Audit propio                                             |
-| 8   | Stream de tool events al cliente                                                                                                                           | Bajo       | Vercel UI parts                                          |
-| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                                | Medio      | Consenso plataformas                                     |
-| 10  | Compaction/summarización de historial                                                                                                                      | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
+| #   | Acción                                                                                                                                                                 | Esfuerzo   | Respaldo                                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
+| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles) (resuelto en Bolt 2 / SP1 — 2026-08-30; replay incondicional desde #377)                       | Medio      | Consenso unánime                                         |
+| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                                       | Bajo       | Consenso + primitiva disponible                          |
+| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                                             | Bajo       | Deriva de #1                                             |
+| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`)                      | Bajo-medio | Claude SDK, OWASP LLM10                                  |
+| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                                                  | Medio      | Anthropic context engineering                            |
+| 6   | Suite de regresión como PR gate (paths-filtered) (umbral multi-trial resuelto en #393/#401: `AI_EVAL_TRIALS` + umbral `ceil(2/3 × trials)`; solo queda el gate en PRs) | Medio      | Promptfoo/Anthropic                                      |
+| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                                              | Trivial    | Audit propio                                             |
+| 8   | Stream de tool events al cliente                                                                                                                                       | Bajo       | Vercel UI parts                                          |
+| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                                            | Medio      | Consenso plataformas                                     |
+| 10  | Compaction/summarización de historial                                                                                                                                  | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
 
 Nota sobre moderación de output: según consenso, opcional para agente interno cuyo output no se publica — knowtis prioriza guardrails de acción (correcto). Sube a obligatorio si las notas generadas se comparten públicamente.

@@ -89,7 +89,7 @@ The banner goes away on the next profile load — sign out and in to see it imme
 Nothing AI works out of the box: `ai_enabled` has no seeded row and a missing flag reads **off**, so turn on the ones you need from the backoffice **AI Config** page (or `PUT /api/v1/flags/:key` with an admin JWT).
 
 - **`OPENROUTER_API_KEY`** is the one key worth setting: the shipped code defaults (`AI_SETTING_DEFAULTS`) are all `openrouter:*` models, so without it (or a key stored from the backoffice) no default model can serve a turn.
-- **`ANTHROPIC_API_KEY`** is required for `pnpm nx run api:eval` — the harness drives `anthropic:claude-sonnet-5` and its `llm-rubric` grader is Anthropic regardless of `AI_EVAL_MODEL`. Each suite self-skips without its provider key, so a run without it exits 0 having done nothing. `VOYAGE_API_KEY` and `TAVILY_API_KEY` light up the retrieval/memory and web-search suites.
+- **`ANTHROPIC_API_KEY`** is required for the Anthropic-gated suites of `pnpm nx run api:eval` — the harness drives `anthropic:claude-sonnet-5` and its `llm-rubric` grader is Anthropic regardless of `AI_EVAL_MODEL`. Each suite self-skips without its provider key, so a run without it exits 0 having done nothing. `VOYAGE_API_KEY` and `TAVILY_API_KEY` light up the retrieval/memory and web-search suites.
 - **`BYOK_ENCRYPTION_KEY`** (32 bytes, base64) is only needed if you turn `agent_byok` on.
 
 Every AI variable, its default, and the flag it pairs with is in [AI.md → Environment Variables](AI.md#environment-variables).
