@@ -146,7 +146,11 @@ const FULL_LISTING: SelectableModel[] = [
     servesIntent: 'balanced',
     isDefault: true,
   }),
-  entry({ id: INTENT_MODELS.powerful, tier: 'powerful', servesIntent: 'powerful' }),
+  entry({
+    id: INTENT_MODELS.powerful,
+    tier: 'powerful',
+    servesIntent: 'powerful',
+  }),
   entry({ id: 'openrouter:promoted-mock' }),
   entry({ id: 'google:byok-model', billedToUser: true }),
 ];
@@ -453,9 +457,7 @@ describe('ModelPreferenceService', () => {
       const byId = new Map(listing.map((m) => [m.id, m]));
       expect(byId.get(SYSTEM_DEFAULT)?.access).toBe('granted');
       expect(byId.get(INTENT_MODELS.fast)?.access).toBe('requires_account');
-      expect(byId.get(INTENT_MODELS.powerful)?.access).toBe(
-        'requires_account'
-      );
+      expect(byId.get(INTENT_MODELS.powerful)?.access).toBe('requires_account');
       expect(byId.get(INTENT_MODELS.fast)?.reasoning).toEqual({
         levels: ['low', 'medium', 'high'],
         mandatory: false,
