@@ -98,7 +98,7 @@
   },
   "aiAssistant": {
     "intentTitle": "Copilot style",
-    "intentDescription": "Choose the model for each turn. Add your key to unlock more models and the effort control.",
+    "intentDescription": "Choose the model for each turn and how hard it reasons. Add your key to unlock more models and their full effort range.",
     "editorTitle": "Editor AI",
     "editorComingSoon": "Coming soon.",
     "loadError": "Couldn't load models",

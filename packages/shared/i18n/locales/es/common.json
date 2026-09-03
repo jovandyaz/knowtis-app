@@ -98,7 +98,7 @@
   },
   "aiAssistant": {
     "intentTitle": "Estilo del copilot",
-    "intentDescription": "Elige el modelo de cada turno. Añade tu clave para desbloquear más modelos y el control de esfuerzo.",
+    "intentDescription": "Elige el modelo de cada turno y cuánto razona. Añade tu clave para desbloquear más modelos y todo su rango de esfuerzo.",
     "editorTitle": "IA del editor",
     "editorComingSoon": "Próximamente.",
     "loadError": "No se pudieron cargar los modelos",
