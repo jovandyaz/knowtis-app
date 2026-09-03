@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Inject, UseFilters } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import {
   HealthCheck,
@@ -6,21 +6,23 @@ import {
   MemoryHealthIndicator,
 } from '@nestjs/terminus';
 
+import { RSS_LIMIT_BYTES } from './container-memory-limit';
 import { DbHealthIndicator } from './db-health.indicator';
+import { HealthCheckExceptionFilter } from './health-check-exception.filter';
 
 const indicatorStatus = {
   type: 'object' as const,
   properties: { status: { type: 'string', example: 'up' } },
 };
 
-const memoryHealthSchema = {
+const fullHealthSchema = {
   type: 'object' as const,
   properties: {
     status: { type: 'string', example: 'ok' },
     info: {
       type: 'object' as const,
       properties: {
-        memory_heap: indicatorStatus,
+        database: indicatorStatus,
         memory_rss: indicatorStatus,
       },
     },
@@ -58,32 +60,36 @@ const pingSchema = {
 
 @ApiTags('Health')
 @Controller('health')
+@UseFilters(HealthCheckExceptionFilter)
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
     private readonly memory: MemoryHealthIndicator,
-    private readonly db: DbHealthIndicator
+    private readonly db: DbHealthIndicator,
+    @Inject(RSS_LIMIT_BYTES) private readonly rssLimitBytes: number
   ) {}
 
   @ApiOperation({
     summary: 'Full health check',
-    description: 'Checks memory heap and RSS usage against configured limits.',
+    description:
+      'Checks database connectivity and resident memory against 90% of the container memory limit.',
   })
   @ApiResponse({
     status: 200,
     description: 'All health indicators are healthy',
-    schema: memoryHealthSchema,
+    schema: fullHealthSchema,
   })
   @ApiResponse({
     status: 503,
-    description: 'One or more health indicators are unhealthy',
+    description:
+      'One or more indicators are down; the body is the Terminus result naming them',
   })
   @Get()
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.memory.checkHeap('memory_heap', 150 * 1024 * 1024),
-      () => this.memory.checkRSS('memory_rss', 300 * 1024 * 1024),
+      () => this.db.isHealthy('database'),
+      () => this.memory.checkRSS('memory_rss', this.rssLimitBytes),
     ]);
   }
 

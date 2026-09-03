@@ -3,7 +3,6 @@ import { totalmem } from 'node:os';
 /** Injection token for the RSS ceiling, in bytes, that /health reports against. */
 export const RSS_LIMIT_BYTES = 'HEALTH_RSS_LIMIT_BYTES';
 
-// Report "down" before the kernel OOM-kills the container, not after.
 const RSS_LIMIT_RATIO = 0.9;
 
 export interface MemoryLimitProbe {
@@ -28,6 +27,10 @@ export function containerMemoryLimitBytes(
   return constrained > 0 ? constrained : probe.totalMemory();
 }
 
+/**
+ * RSS ceiling for /health: 90% of the container limit, so the check reports
+ * "down" before the kernel OOM-kills the process rather than after.
+ */
 export function rssLimitBytes(): number {
   return Math.floor(containerMemoryLimitBytes() * RSS_LIMIT_RATIO);
 }

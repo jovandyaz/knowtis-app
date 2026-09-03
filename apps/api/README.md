@@ -159,11 +159,11 @@ AI variables are documented in [docs/AI.md → Environment Variables](../../docs
 
 ### Health
 
-| Endpoint               | Behaviour                                                     |
-| ---------------------- | ------------------------------------------------------------- |
-| `/api/v1/health/ping`  | `{ status: 'ok', timestamp }` — liveness; Railway healthcheck |
-| `/api/v1/health/ready` | Terminus check of database connectivity; 503 when unreachable |
-| `/api/v1/health`       | Terminus memory heap/RSS indicators                           |
+| Endpoint               | Behaviour                                                                                                                                                 |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/health/ping`  | `{ status: 'ok', timestamp }` — liveness; Railway healthcheck                                                                                             |
+| `/api/v1/health/ready` | Terminus check of database connectivity; 503 when unreachable                                                                                             |
+| `/api/v1/health`       | Terminus check of database connectivity and RSS against 90% of the container memory limit; a 503 body is the Terminus result naming the failing indicator |
 
 ---
 

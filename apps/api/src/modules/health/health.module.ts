@@ -1,12 +1,16 @@
 import { Module } from '@nestjs/common';
 import { TerminusModule } from '@nestjs/terminus';
 
+import { RSS_LIMIT_BYTES, rssLimitBytes } from './container-memory-limit';
 import { DbHealthIndicator } from './db-health.indicator';
 import { HealthController } from './health.controller';
 
 @Module({
   imports: [TerminusModule],
   controllers: [HealthController],
-  providers: [DbHealthIndicator],
+  providers: [
+    DbHealthIndicator,
+    { provide: RSS_LIMIT_BYTES, useFactory: rssLimitBytes },
+  ],
 })
 export class HealthModule {}

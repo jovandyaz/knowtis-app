@@ -152,11 +152,11 @@ openssl rand -base64 32   # TOKEN_HASH_KEY, BYOK_ENCRYPTION_KEY — must decode 
 
 `apps/api/src/modules/health/health.controller.ts`:
 
-| Endpoint               | Purpose                                                       |
-| ---------------------- | ------------------------------------------------------------- |
-| `/api/v1/health/ping`  | Liveness (`{ status: 'ok', timestamp }`); Railway healthcheck |
-| `/api/v1/health/ready` | Readiness: database connectivity only; 503 when unreachable   |
-| `/api/v1/health`       | Terminus memory heap/RSS indicators                           |
+| Endpoint               | Purpose                                                                                                                               |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/v1/health/ping`  | Liveness (`{ status: 'ok', timestamp }`); Railway healthcheck                                                                         |
+| `/api/v1/health/ready` | Readiness: database connectivity only; 503 when unreachable                                                                           |
+| `/api/v1/health`       | `database` + `memory_rss` (RSS vs 90% of `process.constrainedMemory()`, `container-memory-limit.ts`); 503 body is the Terminus result |
 
 ---
 
