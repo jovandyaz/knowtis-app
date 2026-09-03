@@ -320,6 +320,17 @@ describe('CopilotModelPicker', () => {
     expect(keysEnabled).toHaveBeenCalledWith(false);
   });
 
+  it('anonymous: the trigger tail never advertises a level the locked row denies', () => {
+    authUser.mockReturnValue({ isAnonymous: true });
+    modelsData.mockReturnValue(anonymousModels);
+    useAgentStore.setState({ reasoningEffort: 'low' });
+    render(<CopilotModelPicker />);
+
+    expect(
+      screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
+    ).not.toHaveTextContent('aiAssistant.menu.effortLow');
+  });
+
   it('anonymous: no locked effort row when the default model declares no levels', async () => {
     const user = userEvent.setup();
     authUser.mockReturnValue({ isAnonymous: true });
@@ -360,6 +371,16 @@ describe('CopilotModelPicker', () => {
       screen.getByRole('button', { name: /aiAssistant\.menu\.triggerLabel/ })
     ).toHaveTextContent('aiAssistant.menu.effortLow');
     expect(useAgentStore.getState().reasoningEffort).toBe('low');
+
+    await openMenu(user);
+    await user.click(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
+    );
+    expect(
+      await screen.findByRole('menuitemradio', {
+        name: 'aiAssistant.menu.effortLow',
+      })
+    ).toHaveAttribute('aria-checked', 'true');
   });
 
   it('key holder on another provider still gets the ladder of the resolved model', async () => {
@@ -369,9 +390,11 @@ describe('CopilotModelPicker', () => {
 
     await openMenu(user);
 
-    expect(
-      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.effort/ })
-    ).toBeInTheDocument();
+    const effortRow = screen.getByRole('menuitem', {
+      name: /aiAssistant\.menu\.effort/,
+    });
+    expect(effortRow).toBeInTheDocument();
+    expect(effortRow).not.toHaveAttribute('aria-disabled');
   });
 
   it('byok user changes effort and the trigger grows the tail', async () => {

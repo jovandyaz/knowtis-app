@@ -94,7 +94,9 @@ export function CopilotModelPicker() {
     ? t('aiAssistant.empty')
     : (selectedModel?.label ?? t(`aiAssistant.intent.${intent}` as never));
   const effortLabel = effortOpts.find((o) => o.id === activeEffort)?.label;
-  const triggerDetail = activeEffort !== 'auto' ? effortLabel : undefined;
+  // The anonymous row is pinned to auto, so the tail must not advertise a level.
+  const triggerDetail =
+    !isAnonymous && activeEffort !== 'auto' ? effortLabel : undefined;
 
   const effort: ModelMenuEffort | undefined =
     effortOpts.length === 0

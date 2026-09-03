@@ -124,8 +124,6 @@
       "registerCta": "Create your account to choose model and effort",
       "triggerLabel": "Model and effort"
     },
-    "think": "Think",
-    "thinkHint": "Reasons more before answering",
     "intent": {
       "label": "Assistant style",
       "fast": "Fast",

@@ -124,8 +124,6 @@
       "registerCta": "Crea tu cuenta para elegir modelo y esfuerzo",
       "triggerLabel": "Modelo y esfuerzo"
     },
-    "think": "Pensar",
-    "thinkHint": "Razona más antes de responder",
     "intent": {
       "label": "Estilo del asistente",
       "fast": "Rápido",
