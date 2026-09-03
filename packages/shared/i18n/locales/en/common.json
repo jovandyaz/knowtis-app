@@ -116,6 +116,7 @@
       "effortXhigh": "Very high",
       "effortMax": "Max",
       "effortFootnote": "Higher effort uses more of your key's tokens and takes longer.",
+      "effortFootnoteFree": "Higher effort takes longer to answer.",
       "moreModels": "More models",
       "groupOpen": "Open models",
       "groupByok": "With your key",

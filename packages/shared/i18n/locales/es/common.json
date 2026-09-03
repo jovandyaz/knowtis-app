@@ -116,6 +116,7 @@
       "effortXhigh": "Muy alto",
       "effortMax": "Máximo",
       "effortFootnote": "Más esfuerzo usa más tokens de tu clave y tarda más.",
+      "effortFootnoteFree": "Más esfuerzo tarda más en responder.",
       "moreModels": "Más modelos",
       "groupOpen": "Modelos abiertos",
       "groupByok": "Con tu clave",
