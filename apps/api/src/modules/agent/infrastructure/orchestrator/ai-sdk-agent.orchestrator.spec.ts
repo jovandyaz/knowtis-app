@@ -181,7 +181,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(system).toContain('note-xyz');
   });
 
-  it('passes the reasoning effort to openrouter models only', async () => {
+  it('passes the reasoning effort to openrouter models as an openrouter block', async () => {
     streamTextMock.mockClear();
     const orchestrator = makeOrchestrator();
 
@@ -200,11 +200,29 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('omits providerOptions for non-openrouter models', async () => {
+  it('passes the reasoning effort to a direct provider through its native option', async () => {
     streamTextMock.mockClear();
     const orchestrator = makeOrchestrator();
 
     await collect(orchestrator.run({ ...baseInput, reasoningEffort: 'low' }));
+
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'adaptive', display: 'summarized' },
+            effort: 'low',
+          },
+        },
+      })
+    );
+  });
+
+  it('omits providerOptions for a direct provider when no effort is set', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
 
     expect(streamTextMock).toHaveBeenCalledWith(
       expect.not.objectContaining({ providerOptions: expect.anything() })
@@ -298,7 +316,7 @@ describe('AiSdkAgentOrchestrator', () => {
     );
   });
 
-  it('drops providerOptions when an openrouter turn fails over to another provider', async () => {
+  it('swaps in the native provider block when an openrouter turn fails over to another provider', async () => {
     streamTextMock.mockClear();
     streamTextMock
       .mockImplementationOnce(() => ({
@@ -330,9 +348,22 @@ describe('AiSdkAgentOrchestrator', () => {
       })
     );
 
-    expect(streamTextMock.mock.calls[0][0]).toHaveProperty('providerOptions');
-    expect(streamTextMock.mock.calls[1][0]).not.toHaveProperty(
-      'providerOptions'
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        providerOptions: { openrouter: { reasoning: { effort: 'high' } } },
+      })
+    );
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'adaptive', display: 'summarized' },
+            effort: 'high',
+          },
+        },
+      })
     );
   });
 
@@ -2704,9 +2735,22 @@ describe('AiSdkAgentOrchestrator', () => {
     await consumed;
 
     expect(streamTextMock).toHaveBeenCalledTimes(4);
-    expect(streamTextMock.mock.calls[0][0]).toHaveProperty('providerOptions');
-    expect(streamTextMock.mock.calls[3][0]).not.toHaveProperty(
-      'providerOptions'
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        providerOptions: { openrouter: { reasoning: { effort: 'high' } } },
+      })
+    );
+    expect(streamTextMock).toHaveBeenNthCalledWith(
+      4,
+      expect.objectContaining({
+        providerOptions: {
+          anthropic: {
+            thinking: { type: 'adaptive', display: 'summarized' },
+            effort: 'high',
+          },
+        },
+      })
     );
   });
 

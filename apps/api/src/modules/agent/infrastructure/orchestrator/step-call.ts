@@ -19,12 +19,12 @@ import {
   cacheableInstructions,
   withLastMessageCache,
 } from '../../../ai/infrastructure/providers/anthropic-cache';
-import type { OpenrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import {
   withTraceIdentity,
   type TraceIdentityAttrs,
 } from '../../../ai/infrastructure/providers/trace-identity';
+import type { TurnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type {
   AgentEvent,
   AgentSource,
@@ -124,7 +124,7 @@ export interface StepCallParams {
   readonly tools: ToolSet;
   readonly telemetry: TelemetryOptions;
   readonly traceIdentity: TraceIdentityAttrs;
-  readonly providerOptions: OpenrouterProviderOptions;
+  readonly providerOptions: TurnProviderOptions;
   readonly history: ModelMessage[];
   readonly budgets: {
     readonly stallMs: number;

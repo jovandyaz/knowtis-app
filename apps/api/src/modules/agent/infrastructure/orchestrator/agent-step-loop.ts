@@ -15,9 +15,9 @@ import {
 import { AGENT_STOP_REASON, type AgentStopReason } from '@knowtis/shared-types';
 
 import { AIErrors } from '../../../ai/domain/errors/ai.errors';
-import { openrouterProviderOptions } from '../../../ai/infrastructure/providers/openrouter-options';
 import { ProviderRegistryFactory } from '../../../ai/infrastructure/providers/provider-registry.factory';
 import type { TraceIdentityAttrs } from '../../../ai/infrastructure/providers/trace-identity';
+import { turnProviderOptions } from '../../../ai/infrastructure/providers/turn-provider-options';
 import type { AgentEvent, AgentSource } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
 import { fromResponseMessages } from './message-mapper';
@@ -158,7 +158,7 @@ export async function* runAgentStepLoop(
   const byok = Boolean(input.byokApiKey);
 
   let currentModel = params.model;
-  let providerOptions = openrouterProviderOptions({
+  let providerOptions = turnProviderOptions({
     model: currentModel,
     reasoningEffort: input.reasoningEffort,
     providerOrder: input.openrouterProviderOrder,
@@ -259,7 +259,7 @@ export async function* runAgentStepLoop(
             });
             currentModel = nextModel;
             params.onModelSettled?.(currentModel);
-            providerOptions = openrouterProviderOptions({
+            providerOptions = turnProviderOptions({
               model: currentModel,
               reasoningEffort: input.reasoningEffort,
               providerOrder: input.openrouterProviderOrder,

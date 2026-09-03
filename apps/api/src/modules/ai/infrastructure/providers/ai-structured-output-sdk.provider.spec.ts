@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { createMockConfig } from '../../testing/create-mock-config';
 import { createTestChain } from '../../testing/create-test-chain';
 import { AIStructuredOutputSDKProvider } from './ai-structured-output-sdk.provider';
-import type { OpenRouterRoutingSource } from './openrouter-options';
+import type { OpenRouterRoutingSource } from './turn-provider-options';
 
 const { languageModel } = vi.hoisted(() => ({
   languageModel: vi.fn().mockReturnValue('mock-model'),
