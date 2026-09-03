@@ -1,6 +1,6 @@
 # Knowtis Architecture
 
-This document provides a comprehensive overview of the Knowtis monorepo architecture, design principles, and technical standards.
+Overview of the Knowtis monorepo: structure, tech stack, application layering, data flow, real-time collaboration, the copilot agent, and quality tooling. Every path and symbol below exists in the repo; when something here disagrees with the code, the code wins and this file should be fixed.
 
 ---
 
@@ -35,35 +35,42 @@ Knowtis is a full-stack collaborative notes platform consisting of:
 │  └────────────────────────────────┘ └────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                       TRANSPORT LAYER                           │
-│         HTTP/REST                    WebSocket (Hocuspocus)     │
+│   HTTP/REST (/api/v1)                                           │
+│   WebSocket: Hocuspocus on /collaboration (raw WS, y-protocols) │
+│              Socket.io namespaces /ai and /agent                │
 ├─────────────────────────────────────────────────────────────────┤
 │                        SERVER LAYER                             │
 │  ┌───────────────────────────────────────────────────────────┐  │
-│  │                    API (NestJS) v1                         │  │
-│  │  • Authentication (JWT)                                    │  │
-│  │  • Authorization (CASL)                                    │  │
-│  │  • Notes CRUD (logical delete + restore)                   │  │
-│  │  • AI Assistant (streaming)                                │  │
-│  │  • Study Artifacts (flashcards, quizzes, summaries)        │  │
-│  │  • Collaboration Service (Hocuspocus + Yjs)                │  │
-│  │  • Feature Flags (DB-backed, Redis-cached)                 │  │
-│  │  • MCP API key exchange                                    │  │
-│  │  • Admin (user management, AI metrics)                     │  │
-│  │  • Health checks & Observability (telemetry)               │  │
-│  │  • WebSocket gateway infrastructure                        │  │
+│  │                    API (NestJS) v1                        │  │
+│  │  • Authentication (JWT + HttpOnly refresh cookie)         │  │
+│  │  • Authorization (CASL)                                   │  │
+│  │  • Notes CRUD (logical delete + restore), tags, search    │  │
+│  │  • AI Assistant (streaming) + Copilot agent (HITL)        │  │
+│  │  • Study Artifacts (flashcards, quizzes, summaries)       │  │
+│  │  • Collaboration (Hocuspocus + Yjs persistence)           │  │
+│  │  • Feature Flags (DB-backed, in-process cache, 30s)       │  │
+│  │  • OAuth 2.1 authorization server (oidc-provider, MCP)    │  │
+│  │  • MCP API key exchange                                   │  │
+│  │  • Admin (user management, AI metrics, audit log)         │  │
+│  │  • Health checks & Observability (Langfuse)               │  │
 │  └───────────────────────────────────────────────────────────┘  │
 ├─────────────────────────────────────────────────────────────────┤
 │                         DATA LAYER                              │
-│  ┌──────────────────────┐    ┌──────────────────────────────┐  │
-│  │   PostgreSQL 16      │    │         Redis 7              │  │
-│  │  • Users             │    │  • Session cache             │  │
-│  │  • Notes             │    │  • Rate limiting (AI)        │  │
-│  │  • Collaborators     │    │  • Feature flag cache (30s)  │  │
-│  │  • Feature flags     │    │  • AI response cache         │  │
-│  │  • Artifacts         │    │                              │  │
-│  └──────────────────────┘    └──────────────────────────────┘  │
+│  ┌──────────────────────┐    ┌──────────────────────────────┐   │
+│  │ PostgreSQL 16        │    │ Redis 7                      │   │
+│  │ (pgvector/pgvector:  │    │ • AI rate limiting (RPM)     │   │
+│  │  pg16, `vector` ext) │    │ • AI response cache          │   │
+│  │ 27 tables, see       │    │ • Agent HITL pending         │   │
+│  │ apps/api/src/        │    │   proposals                  │   │
+│  │ database/schema/     │    │ • Hocuspocus multi-instance  │   │
+│  │ (users, notes, tags, │    │   sync (extension-redis)     │   │
+│  │  sessions, artifacts,│    │                              │   │
+│  │  conversations, ...) │    │                              │   │
+│  └──────────────────────┘    └──────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+Sessions are stored in the Postgres `sessions` table (`apps/api/src/modules/auth/infrastructure/persistence/drizzle-session.repository.ts`), not in Redis. Feature flags use NestJS `CacheModule.register()` (in-process, 30s TTL) in `apps/api/src/modules/feature-flags/`; they never touch Redis.
 
 ---
 
@@ -80,19 +87,19 @@ knowtis/
 ├── apps/                    # Deployable applications
 │   ├── api/                 # Backend (NestJS)
 │   ├── backoffice/          # Admin frontend (React) — superadmin/ops surface
-│   ├── mcp/                 # MCP server for AI assistants (Hono)
+│   ├── mcp/                 # MCP server for AI assistants (Hono, no workspace deps)
 │   └── notes/               # Frontend (React)
 │
 ├── libs/                    # App-specific libraries (not publishable)
 │   ├── api-client/          # HTTP/WebSocket client
 │   ├── authorization/       # CASL permission definitions
-│   └── data-access/         # Domain logic & state
+│   └── data-access/         # React Query hooks + Zod schemas per domain
 │       ├── admin/           # Backoffice hooks & schemas (users, metrics, config, audit)
-│       ├── artifacts/       # Study artifacts hooks & schemas
-│       ├── feature-flags/   # Feature flags hooks & schemas
+│       ├── artifacts/       # Study artifacts hooks
+│       ├── feature-flags/   # Feature flags hooks
 │       ├── mcp-keys/        # MCP API keys hooks & schemas
-│       ├── notes/           # Notes hooks & store
-│       ├── oauth/           # OAuth client-registration hooks & schemas
+│       ├── notes/           # Notes, tags, organization, image-upload hooks
+│       ├── oauth/           # OAuth consent/grants hooks & schemas
 │       └── users/           # Users hooks & schemas
 │
 └── packages/                # Shared packages (framework-light, reusable)
@@ -122,7 +129,7 @@ knowtis/
 | ----------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | **API Client**    | `libs/api-client`                                                 | HTTP client, WebSocket client, API types                                  |
 | **Authorization** | `libs/authorization`                                              | CASL permission definitions (shared FE/BE)                                |
-| **Data Access**   | `libs/data-access/*`                                              | Domain logic, Zustand stores, React Query hooks                           |
+| **Data Access**   | `libs/data-access/*`                                              | React Query hooks + Zod schemas per domain (see below)                    |
 | **AI Gateway**    | `packages/ai-gateway`                                             | AI gateway core: fallback chain, pricing catalog, injection guard, tokens |
 | **Auth**          | `packages/auth`, `auth-nestjs`, `auth-react`                      | Auth core + NestJS/React adapters (JWT, sessions, anon)                   |
 | **Permissions**   | `packages/permissions`, `permissions-nestjs`, `permissions-react` | CASL core + NestJS/React adapters                                         |
@@ -130,6 +137,22 @@ knowtis/
 | **Email**         | `packages/email`, `email-nestjs`                                  | React Email templates + NestJS delivery adapter                           |
 | **Design System** | `packages/design-system`                                          | UI components, design tokens, styles                                      |
 | **Shared**        | `packages/shared/*`                                               | Hooks, i18n, utilities, TypeScript types                                  |
+
+#### Data access libraries
+
+The `libs/data-access/*` libraries wrap `@knowtis/api-client` in React Query hooks so components never call the API directly. Client-side Zustand stores are **not** here: they live in `apps/notes/src/stores/` and `packages/auth-react`. Each library follows the same shape: `useXxx` hooks (`useQuery` for reads, `useMutation` for writes), a hierarchical `xxxQueryKeys` factory, and co-located Zod schemas where a domain needs input validation. Exports below are read from each `src/index.ts`.
+
+| Library                          | Alias                                | Scope              | Key exports                                                                                                   |
+| -------------------------------- | ------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------- |
+| `libs/data-access/admin`         | `@knowtis/data-access-admin`         | `scope:backoffice` | `useAdminUsers`, `useAuditLog`, `useAiConfig`, `useSystemProviders`, `useUpsertFeatureFlag`, `adminQueryKeys` |
+| `libs/data-access/artifacts`     | `@knowtis/data-access-artifacts`     | `scope:notes`      | `useArtifacts`, `useGenerateArtifact`, `useDueCards`, `useReviewCard`, `useSubmitQuiz`, `artifactsQueryKeys`  |
+| `libs/data-access/feature-flags` | `@knowtis/data-access-feature-flags` | `scope:shared`     | `useFeatureFlags`, `useFeatureFlag`, `featureFlagsQueryKeys`                                                  |
+| `libs/data-access/mcp-keys`      | `@knowtis/data-access-mcp-keys`      | `scope:shared`     | `useMcpKeys`, `useCreateMcpKey`, `useRevokeMcpKey`, `createMcpKeySchema`, `mcpKeysQueryKeys`                  |
+| `libs/data-access/notes`         | `@knowtis/data-access-notes`         | `scope:notes`      | `useNotes`, `useNote`, `useCreateNote`, `useRestoreNote`, `useTags`, `useUploadImage`, `notesQueryKeys`       |
+| `libs/data-access/oauth`         | `@knowtis/data-access-oauth`         | `scope:notes`      | `useOauthInteraction`, `useConsentDecision`, `useOauthGrants`, `useRevokeGrant`, `classifyConsentError`       |
+| `libs/data-access/users`         | `@knowtis/data-access-users`         | `scope:shared`     | `useUpdateProfile`, `usersQueryKeys`, `UpdateProfileSchema`                                                   |
+
+Run `nx test data-access-<name>` for a single library.
 
 ### Dependency Rules
 
@@ -146,13 +169,15 @@ type:data-access  ───────────────────┘
 ```
 
 - **`type:app`** — applications; may depend on `type:ui`, `type:data-access`, `type:util`.
-- **`type:ui`** — UI libraries (e.g. `design-system`, `editor`); may depend on `type:ui` and `type:util` only. Cannot reach into `type:data-access` or `type:app`.
+- **`type:ui`** — UI libraries (`design-system`, `editor`, `crdt`); may depend on `type:ui` and `type:util` only. Cannot reach into `type:data-access` or `type:app`.
 - **`type:data-access`** — state/API access; may depend on `type:data-access` and `type:util`. `api-client` is itself `type:data-access`.
 - **`type:util`** — pure utilities; may depend on `type:util` only.
 
-Note: `design-system` is `type:ui` and is **not** part of the data-access import chain; `api-client` is `type:data-access`, not a separate tier. Scope constraints (`scope:shared` / `scope:notes` / `scope:api`) apply on top of these type rules.
+Note: `design-system` is `type:ui` and is **not** part of the data-access import chain; `api-client` is `type:data-access`, not a separate tier. Scope constraints apply on top of these type rules: `scope:shared` may be used by anyone; `scope:notes`, `scope:api`, and `scope:backoffice` may only depend on `scope:shared` or their own scope.
 
 ### Dependency Graph
+
+Simplified; `pnpm graph` renders the full graph.
 
 ```mermaid
 graph TD
@@ -160,48 +185,64 @@ graph TD
         Notes[apps/notes]
         Backoffice[apps/backoffice]
         API[apps/api]
+        MCP[apps/mcp]
     end
 
     subgraph Libs
         ApiClient[libs/api-client]
-        DataAccess[libs/data-access]
+        DataAccess[libs/data-access/*]
         Authorization[libs/authorization]
     end
 
     subgraph SharedPackages
         DesignSystem[packages/design-system]
-        Shared[packages/shared]
+        Editor[packages/editor + editor-schema + crdt]
+        Shared[packages/shared/*]
+    end
+
+    subgraph Packages
+        AiGateway[packages/ai-gateway]
+        Email[packages/email]
+        EmailNestjs[packages/email-nestjs]
+        Auth[packages/auth]
+        AuthNestjs[packages/auth-nestjs]
+        AuthReact[packages/auth-react]
     end
 
     Notes --> ApiClient
     Notes --> DataAccess
     Notes --> DesignSystem
+    Notes --> Editor
+    Notes --> Authorization
+    Notes --> AuthReact
+    Backoffice --> ApiClient
     Backoffice --> DataAccess
     Backoffice --> DesignSystem
+    Backoffice --> AuthReact
     ApiClient --> Shared
     DataAccess --> ApiClient
     DataAccess --> Shared
     DesignSystem --> Shared
+    AuthReact --> Auth
 
-    subgraph Packages
-        Email[packages/email]
-        EmailNestjs[packages/email-nestjs]
-        Auth[packages/auth]
-        AuthNestjs[packages/auth-nestjs]
-    end
-
+    API --> AiGateway
+    API --> Authorization
     API --> EmailNestjs
     API --> AuthNestjs
+    API --> Shared
     EmailNestjs --> Email
-    EmailNestjs --> AuthNestjs
     AuthNestjs --> Auth
 ```
+
+`apps/mcp` (`scope:api`) has no workspace imports; it talks to the API over HTTP. `packages/ai-gateway` (`scope:api`) has zero workspace dependencies by design.
 
 ---
 
 ## Tech Stack
 
-### Frontend (Notes App)
+Versions are the ranges declared in the root `package.json`.
+
+### Frontend (Notes App, Backoffice)
 
 | Technology      | Version | Purpose                 |
 | --------------- | ------- | ----------------------- |
@@ -216,32 +257,38 @@ graph TD
 
 ### Backend (API)
 
-| Technology      | Version | Purpose                    |
-| --------------- | ------- | -------------------------- |
-| NestJS          | 11      | Server framework           |
-| Drizzle ORM     | 0.45    | Type-safe database ORM     |
-| PostgreSQL      | 16      | Primary database           |
-| Redis           | 7       | Caching & sessions         |
-| Hocuspocus      | 4       | Yjs WebSocket sync server  |
-| Passport        | 0.7     | Authentication middleware  |
-| bcryptjs        | 3       | Password hashing           |
-| class-validator | 0.14    | Request validation (DTO)   |
-| neverthrow      | 8       | Result type error handling |
-| Helmet          | 8       | Security headers           |
-| Swagger/OpenAPI | 11      | API documentation          |
+| Technology           | Version                       | Purpose                                                                                                                                                                                                   |
+| -------------------- | ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NestJS               | 11                            | Server framework                                                                                                                                                                                          |
+| Drizzle ORM          | 0.45                          | Type-safe database ORM                                                                                                                                                                                    |
+| PostgreSQL           | 16 (`pgvector/pgvector:pg16`) | Primary database; `vector` extension required                                                                                                                                                             |
+| Redis                | 7 (`ioredis` 5)               | AI rate limiting/cache, HITL proposals, Hocuspocus multi-instance                                                                                                                                         |
+| Hocuspocus           | 4                             | Yjs WebSocket sync server                                                                                                                                                                                 |
+| Socket.io            | 4.8                           | `/ai` and `/agent` streaming namespaces                                                                                                                                                                   |
+| Vercel AI SDK (`ai`) | 7                             | LLM streaming; providers `@ai-sdk/anthropic`, `@ai-sdk/google`, `@ai-sdk/openai`, `@openrouter/ai-sdk-provider`. Code defaults route through OpenRouter (`apps/api/src/modules/ai/domain/ai-settings.ts`) |
+| oidc-provider        | 9.8                           | OAuth 2.1 authorization server for MCP clients                                                                                                                                                            |
+| Passport             | 0.7                           | Authentication middleware                                                                                                                                                                                 |
+| bcryptjs             | 3                             | Password hashing                                                                                                                                                                                          |
+| class-validator      | 0.14                          | Request validation (DTO)                                                                                                                                                                                  |
+| neverthrow           | 8                             | Result type error handling                                                                                                                                                                                |
+| Pino                 | 10                            | Structured logging                                                                                                                                                                                        |
+| @nestjs/terminus     | 11                            | Health checks                                                                                                                                                                                             |
+| @nestjs/schedule     | 6                             | Scheduled tasks (auth cleanup, catalog sync, agent health report, memory extraction)                                                                                                                      |
+| Helmet               | 8                             | Security headers                                                                                                                                                                                          |
+| Swagger/OpenAPI      | 11                            | API documentation                                                                                                                                                                                         |
 
 ### Tooling
 
-| Tool             | Purpose                            |
-| ---------------- | ---------------------------------- |
-| Nx               | Monorepo management & task running |
-| TypeScript       | Type safety                        |
-| ESLint           | Code linting (flat config)         |
-| Prettier         | Code formatting                    |
-| Vitest           | Unit & integration testing         |
-| Lefthook         | Git hooks (lint, test, commit-msg) |
-| Storybook        | Component documentation            |
-| Style Dictionary | Design token generation            |
+| Tool             | Purpose                                                                        |
+| ---------------- | ------------------------------------------------------------------------------ |
+| Nx               | Monorepo management & task running                                             |
+| TypeScript       | Type safety (5.9)                                                              |
+| ESLint           | Code linting (flat config)                                                     |
+| Prettier         | Code formatting                                                                |
+| Vitest           | Unit & integration testing (4)                                                 |
+| Lefthook         | Git hooks: lint, format, typecheck, auto-generate migrations, test, commit-msg |
+| Storybook        | Component documentation                                                        |
+| Style Dictionary | Design token generation                                                        |
 
 ---
 
@@ -249,86 +296,87 @@ graph TD
 
 ### Frontend Architecture
 
+Provider order is `apps/notes/src/providers/AppProviders.tsx`; pages are `apps/notes/src/pages/`.
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                         App Shell                           │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │               Providers (Context)                      │  │
-│  │  • QueryClientProvider (React Query)                  │  │
-│  │  • ThemeProvider (Dark/Light mode)                    │  │
-│  │  • AuthProvider (Authentication state)                │  │
-│  │  • YjsProvider (Collaboration documents)              │  │
+│  │  Providers (outer → inner)                            │  │
+│  │  PostHogProvider > QueryClientProvider > AuthProvider │  │
+│  │  > ThemeProvider > TooltipProvider > AbilityProvider  │  │
+│  │  > YjsProvider                                        │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │                     Router                             │  │
-│  │  • TanStack Router with type-safe routes              │  │
-│  │  • Protected route wrapper for auth                   │  │
+│  │  Router — TanStack Router, file-based routes in       │  │
+│  │  apps/notes/src/routes/ (`_app` layout guards auth)   │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │               Page Components                          │  │
-│  │  • HomePage (notes dashboard)                         │  │
-│  │  • LoginPage / RegisterPage                           │  │
-│  │  • NoteEditorPage — center tabs Nota | Estudio        │  │
-│  │    (study tools), copilot-only right dock             │  │
+│  │  Pages                                                │  │
+│  │  HomePage, NoteEditorPage, SharedNotePage,            │  │
+│  │  WelcomePage, LoginPage, RegisterPage,                │  │
+│  │  ForgotPasswordPage, ResetPasswordPage,               │  │
+│  │  VerifyEmailPage                                      │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │              Feature Components                        │  │
-│  │  • NoteEditor, EditorToolbar                          │  │
-│  │  • NoteList, NoteCard                                 │  │
-│  │  • CollaboratorList                                   │  │
+│  │  Feature components (apps/notes/src/components/)      │  │
+│  │  editor/CollaborativeEditor, notes/NoteList,          │  │
+│  │  notes/NoteCard, notes/ShareDialog, copilot/,         │  │
+│  │  artifacts/, right-dock/, settings/                   │  │
+│  │  EditorToolbar lives in packages/editor               │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │          Design System Components                      │  │
-│  │  • Button, Input, Card, Dialog, etc.                  │  │
-│  │  • Design tokens (colors, spacing, typography)        │  │
+│  │  Design System (packages/design-system)               │  │
+│  │  Button, Input, Card, Dialog, ...; design tokens      │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ### Backend Architecture (Modular DDD)
 
-The backend follows a **Modular Monolith** architecture where core domains (`auth`, `notes`, `ai`, `artifacts`) implement **DDD/Clean Architecture**:
+The backend is a **modular monolith**. `apps/api/src/modules/` holds 17 modules: `admin`, `agent`, `ai`, `artifacts`, `auth`, `authorization`, `collaboration`, `feature-flags`, `health`, `mcp`, `notes`, `oauth`, `observability`, `organization`, `search`, `users`, `websocket`.
+
+`notes`, `ai`, `agent`, and `artifacts` are DDD-layered (`application/`, `domain/`, `infrastructure/`). `auth` has `application/services` and `infrastructure/` only: its domain (entities, value objects, token crypto) lives in `packages/auth` and `packages/auth-nestjs`. The rest are service-based. Patterns (neverthrow `Result`, ports & adapters, value objects) are described in [apps/api/README.md → Patterns](../apps/api/README.md#patterns).
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      NestJS Application                      │
+│                      NestJS Application                     │
 │                                                             │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │                    Controllers                         │  │
-│  │  • AuthController (HTTP -> Command/Query)             │  │
-│  │  • NotesController (HTTP -> Command/Query)            │  │
-│  │  • AIController + AIGateway (HTTP + WebSocket)        │  │
-│  │  • AgentGateway (copilot, WebSocket + HITL)           │  │
-│  │  • ArtifactsController (study artifacts)              │  │
-│  │  • AdminController (user mgmt, AI metrics)            │  │
-│  │  • McpKeysController (MCP API key exchange)           │  │
+│  │  Controllers — 25 (`rg @Controller apps/api/src`)     │  │
+│  │  e.g. AuthAccountController, AuthSessionController,   │  │
+│  │  NotesController, TagsController, SearchController,   │  │
+│  │  AIController, ArtifactsController, AdminController,  │  │
+│  │  McpKeysController, OauthGrantsController             │  │
+│  │  Gateways — AIGateway (/ai), AgentGateway (/agent)    │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │                 Application Layer                      │  │
-│  │  • Command Handlers (CreateNote, LoginUser)           │  │
-│  │  • Query Handlers (GetNote, GetProfile)               │  │
-│  │  • AI Orchestration (streaming, rate limiting)        │  │
-│  │  • Artifact Generation (flashcards, quizzes, etc.)   │  │
+│  │  Application Layer                                    │  │
+│  │  • Command handlers (CreateNoteHandler, ShareNote...) │  │
+│  │  • Query handlers (GetNoteHandler, GetNotesHandler)   │  │
+│  │  • AI orchestration (streaming, rate limiting)        │  │
+│  │  • Agent turn loop + HITL approve/reject handlers     │  │
+│  │  • Artifact generation                                │  │
 │  │  • Authorization (CASL ability factory)               │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │                   Domain Layer                         │  │
-│  │  • Entities (User, Note)                              │  │
-│  │  • Value Objects (Email, NoteTitle)                   │  │
-│  │  • Ports (UserRepository, NoteRepository)             │  │
+│  │  Domain Layer                                         │  │
+│  │  • Entities (Note), events (NoteCreated, NoteUpdated) │  │
+│  │  • Value Objects (NoteTitle, NoteContent, TagPath)    │  │
+│  │  • Ports (NoteReadRepository, NoteWriteRepository,    │  │
+│  │    TagRepository, ImageStorage, ...)                  │  │
 │  └───────────────────────────────────────────────────────┘  │
-│                           ↓                                  │
+│                           ↓                                 │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │               Infrastructure Layer                     │  │
-│  │  • Adapters (DrizzleUserRepository)                   │  │
-│  │  • Persistence (Drizzle ORM)                          │  │
-│  │  • External Services (Redis, Crypto)                  │  │
+│  │  Infrastructure Layer                                 │  │
+│  │  • Drizzle adapters (DrizzleNoteReadRepository, ...)  │  │
+│  │  • VercelBlobStorage, Redis stores, AI providers      │  │
 │  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -344,19 +392,19 @@ User Action (view notes)
        ↓
 Page Component
        ↓
-useNotes() hook
+useNotes() hook (@knowtis/data-access-notes)
        ↓
-API Client (notesApi.getAll)
+API Client (@knowtis/api-client)
        ↓
 HTTP GET /api/v1/notes
        ↓
-NotesController.findAll()
+NotesController
        ↓
-GetNotesHandler.execute() (Application)
+GetNotesHandler.execute() (application/queries/get-notes.handler.ts)
        ↓
-NoteRepository.findByOwner() (Domain Port)
+NoteRepository.findAccessibleByUser() (domain port)
        ↓
-DrizzleNoteRepository (Infrastructure Adapter)
+DrizzleNoteRepository (infrastructure adapter)
        ↓
 Drizzle ORM → PostgreSQL
        ↓
@@ -368,25 +416,21 @@ Response mapped to DTO
 ```
 User Action (create note)
        ↓
-Form Component
-       ↓
 useCreateNote() mutation
        ↓
 HTTP POST /api/v1/notes
        ↓
-NotesController.create()
+NotesController
        ↓
-CreateNoteHandler.execute()
+CreateNoteHandler.execute() (application/commands/create-note.handler.ts)
        ↓
-NoteTitle.create() (Domain Validation)
+NoteTitle.create() / NoteContent.create() (domain validation)
        ↓
-NoteRepository.create() (Domain Port)
-       ↓
-DrizzleNoteRepository (Infrastructure Adapter)
+NOTE_WRITE_REPOSITORY port → DrizzleNoteWriteRepository
        ↓
 PostgreSQL
        ↓
-UI Update
+React Query cache update
 ```
 
 ---
@@ -395,50 +439,47 @@ UI Update
 
 ### CRDT Architecture
 
-We use [Yjs](https://yjs.dev/) for conflict-free real-time collaboration:
+We use [Yjs](https://yjs.dev/) for conflict-free real-time collaboration. The server side is a Hocuspocus instance mounted on the API's HTTP server for the `/collaboration` upgrade path (`apps/api/src/modules/collaboration/hocuspocus.service.ts`). There is no NestJS gateway for collaboration; Hocuspocus speaks the binary y-protocols sync and awareness messages directly.
 
 ```
-┌─────────────┐    ┌─────────────┐    ┌─────────────┐
-│   User A    │    │   Server    │    │   User B    │
-│             │    │             │    │             │
-│  ┌───────┐  │    │ ┌─────────┐ │    │  ┌───────┐  │
-│  │ Y.Doc │←───────→│ Gateway │←───────→│ Y.Doc │  │
-│  └───────┘  │    │ └─────────┘ │    │  └───────┘  │
-│      ↓      │    │             │    │      ↓      │
-│  ┌───────┐  │    │             │    │  ┌───────┐  │
-│  │Tiptap │  │    │             │    │  │Tiptap │  │
-│  │Editor │  │    │             │    │  │Editor │  │
-│  └───────┘  │    │             │    │  └───────┘  │
-│      ↓      │    │             │    │      ↓      │
-│  IndexedDB  │    │  PostgreSQL │    │  IndexedDB  │
-└─────────────┘    └─────────────┘    └─────────────┘
+┌─────────────┐    ┌──────────────┐    ┌─────────────┐
+│   User A    │    │    Server    │    │   User B    │
+│             │    │              │    │             │
+│  ┌───────┐  │    │ ┌──────────┐ │    │  ┌───────┐  │
+│  │ Y.Doc │←───────→│Hocuspocus│←───────→│ Y.Doc │  │
+│  └───────┘  │    │ └──────────┘ │    │  └───────┘  │
+│      ↓      │    │      ↓       │    │      ↓      │
+│  ┌───────┐  │    │  PostgreSQL  │    │  ┌───────┐  │
+│  │Tiptap │  │    │  (yjs state) │    │  │Tiptap │  │
+│  └───────┘  │    │              │    │  └───────┘  │
+│      ↓      │    │              │    │      ↓      │
+│  IndexedDB  │    │              │    │  IndexedDB  │
+└─────────────┘    └──────────────┘    └─────────────┘
 ```
 
 ### Synchronization Flow
 
-1. **User makes edit** → Tiptap updates Y.Doc
-2. **Y.Doc generates update** → Binary diff (Uint8Array)
-3. **Update sent via WebSocket** → collaboration:sync event
-4. **Server broadcasts to room** → Other clients receive update
-5. **Clients apply update** → Y.Doc merges automatically (CRDT)
-6. **Tiptap re-renders** → UI shows combined edits
+1. User edits → Tiptap updates the `Y.Doc`.
+2. `Y.Doc` emits a binary update (`Uint8Array`).
+3. `HocuspocusProvider` sends it over the `/collaboration` WebSocket; the token is supplied through the provider's `token` callback (`apps/notes/src/collaboration/useHocuspocusCollaboration.ts`).
+4. The server applies it to the room document, persists it (`HocuspocusPersistenceExtension`), and broadcasts to other clients.
+5. Clients merge automatically (CRDT); Tiptap re-renders.
+
+With `REDIS_URL` set, Hocuspocus adds `@hocuspocus/extension-redis` so several API instances share rooms; without it the server runs single-instance.
+
+### Offline and cross-tab
+
+`packages/crdt/src/YjsProvider.tsx` always attaches an `IndexeddbPersistence` (`note-<noteId>`) to each document and relays updates between tabs of the same browser over a `BroadcastChannel`, independent of the server connection.
+
+`VITE_COLLABORATION_MODE` decides whether the Hocuspocus connection is opened at all: `websocket` or `hybrid` turns it on; any other value keeps the editor local-only (`isWebSocketEnabled()` in `useHocuspocusCollaboration.ts`). Production must set `websocket`.
 
 ### Presence (Awareness)
 
-Users see each other's cursors via Yjs Awareness:
+Awareness carries two separate fields: `user` (set in `YjsProvider.tsx`) and `cursor` (set by `packages/editor/src/components/CollaborativeCursors.tsx` from the ProseMirror selection).
 
 ```typescript
-// Broadcast local state
-provider.awareness.setLocalStateField('user', {
-  name: 'John',
-  color: '#ff0000',
-  cursor: { from: 10, to: 15 },
-});
-
-// Receive others' state
-provider.awareness.on('change', ({ added, updated, removed }) => {
-  // Update collaborator display
-});
+awareness.setLocalStateField('user', { name, color });
+awareness.setLocalStateField('cursor', { anchor, head });
 ```
 
 ---
@@ -453,20 +494,20 @@ Each turn runs an **agent-owned step loop** (`agent-step-loop.ts`, driven from `
 
 Owning the loop is what makes **step-boundary failover** possible: a continuation step whose model goes silent fails over mid-turn to the next fallback-chain candidate, replaying the threaded history (pruned of the dead model's reasoning) on the new model without re-executing tools. Stream health telemetry (`agent.turn.health`) is logged per call. Tools are organized as flag-gated **tool groups** resolved per turn, so retrieval, web search, and write capabilities toggle independently. Full semantics: [AI.md → Conversation memory (A6a)](./AI.md#conversation-memory-a6a).
 
-The persisted transcript now carries more than final text: each row can hold structured `parts` (a versioned jsonb envelope) alongside plain `content`, a terminal assistant row carries its `stop_reason` whenever the turn ends on assistant text, and a truncated reply (`aborted | error | length`) is always replayed with a `[reply cut off: <reason>]` marker so the model treats its own cutoff as data on the next turn. The last two tool-using turns are replayed verbatim — tool calls and results included, not just their final text — while every older turn is rendered as text-only history; the row window now counts tool rows (see `docs/AI.md` for the exact boundary).
+The persisted transcript carries more than final text: each row can hold structured `parts` (a versioned jsonb envelope) alongside plain `content`, a terminal assistant row carries its `stop_reason` whenever the turn ends on assistant text, and a truncated reply (`aborted | error | length`) is always replayed with a `[reply cut off: <reason>]` marker so the model treats its own cutoff as data on the next turn. The last two tool-using turns are replayed verbatim — tool calls and results included, not just their final text — while every older turn is rendered as text-only history; the row window counts tool rows (see `docs/AI.md` for the exact boundary).
 
 ### Server-authoritative & human-in-the-loop
 
 The agent is **server-authoritative**: the client sends one new message plus a `conversationId` — optionally the `noteId` in view, a `model`, and a per-turn reasoning `effort` — never its own history. The server rebuilds the thread from Postgres each turn.
 
-Mutations (create / update note) never execute directly. The model emits a **proposal**; the server parks it in Redis and pushes it to the client for **approval**. Only on `agent:approve` does the server commit the change and resume the turn — a strict human-in-the-loop (HITL) gate that an MCP-scoped token cannot bypass.
+Mutations (`create` / `update` / `share`, see `agent/domain/proposed-mutation.ts`) never execute directly. The model emits a **proposal**; the server parks it in Redis (`RedisPendingMutationStore`) and pushes it to the client for **approval**. Only on `agent:approve` does the server commit the change and resume the turn — a strict human-in-the-loop (HITL) gate that an MCP-scoped token cannot bypass. `agent:reject` discards it.
 
 ```
-agent:turn ──▶ load thread ──▶ tool loop ──▶ propose mutation
-                                                    │
-client  ◀── agent:proposal ─────────────────────────┘
+agent:message ──▶ load thread ──▶ tool loop ──▶ propose mutation
+                                                       │
+client  ◀── agent:proposal ────────────────────────────┘
    │
-   └─ agent:approve ──▶ commit ──▶ resume ──▶ agent:done
+   └─ agent:approve ──▶ commit ──▶ agent:committed ──▶ resume ──▶ agent:done
 ```
 
 ### Memory & retrieval layers
@@ -484,63 +525,17 @@ See [AI Module → Conversation memory (A6a)](./AI.md#conversation-memory-a6a) a
 
 ### Model selection & billing (BYOK)
 
-The copilot model is resolved per turn through a cascade — `conversations.model` (the model a resumed thread already ran on) → `user_ai_settings.preferred_model` (an Advanced, BYOK-billed pick) → `user_ai_settings.preferred_intent` (`fast` / `balanced` / `powerful`, mapped to the configured `ai_fast_model` / `ai_default_model` / `ai_deep_model`) → the system `ai_default_model` (`ModelPreferenceService.getEffectiveDefault`) — over a catalog that unions a **curated** list shipped in code with the open-weight models an admin has promoted from the daily OpenRouter sync (flag `ai_catalog_sync`). Pricing, not the promotion, decides who may run a model: above the free-tier ceiling it stays BYOK-only. Users can also bring their own key (BYOK): provider keys are AES-256-GCM-encrypted at rest, injected per request, and a stored key unlocks that provider's models while billing the user directly (the per-user LLM token/USD budget is bypassed; RPM and the BYOK side-cost ceiling (`AI_BYOK_DAILY_COST_LIMIT_USD`, behind `ai_byok_cost_gate`) remain enforced). A BYOK turn skips the server fallback chain and redacts provider errors. Flag `agent_byok`.
-
-**Reasoning effort** is chosen per turn, not per account. The client may send an `effort` with `agent:message`; `TurnEffortResolver` accepts it only where the model declares that level and the caller's audience may spend it — the free tier is clamped to `FREE_BOOST_CEILING` (`high`), a BYOK caller gets the model's full declared ladder, and an anonymous turn is rejected before a conversation row exists. Without an accepted per-turn effort the turn runs at the global `ai_reasoning_effort` config value. The resolved effort reaches the provider through `effortFor(model)`, re-evaluated for whichever model actually serves a step (so a step-boundary failover re-resolves), and `turnProviderOptions` maps it to each SDK's native option — Anthropic `thinking` + `effort`, OpenAI `reasoningEffort`, Google `thinkingConfig.thinkingLevel`, OpenRouter `reasoning.effort`.
-
-See [AI Module → Copilot Model Selection](./AI.md#copilot-model-selection), [Reasoning effort](./AI.md#reasoning-effort), and [Bring-your-own-key (BYOK)](./AI.md#bring-your-own-key-byok).
+The copilot model is resolved per turn through a cascade (conversation model → user preferred model → user intent → system default) over a catalog of curated plus admin-promoted models; BYOK keys unlock a provider's models and bill the user directly. Details: [AI.md → Copilot Model Selection](./AI.md#copilot-model-selection), [Reasoning effort](./AI.md#reasoning-effort), and [Bring-your-own-key (BYOK)](./AI.md#bring-your-own-key-byok).
 
 ---
 
 ## Authentication Flow
 
-### JWT Token Strategy
+Full reference: [AUTH.md](./AUTH.md).
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Authentication Flow                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  1. LOGIN                                                   │
-│  ┌──────────┐  POST /api/v1/auth/login ┌──────────┐         │
-│  │  Client  │ ─────────────────→ │  Server  │              │
-│  │          │ ←───────────────── │          │              │
-│  │          │   { accessToken,   │          │              │
-│  │          │     refreshToken } │          │              │
-│  └──────────┘                    └──────────┘              │
-│                                                             │
-│  2. API REQUESTS                                            │
-│  ┌──────────┐  Authorization:    ┌──────────┐              │
-│  │  Client  │  Bearer <token>    │  Server  │              │
-│  │          │ ─────────────────→ │          │              │
-│  │          │ ←───────────────── │  (JWT    │              │
-│  │          │   Response         │   Guard) │              │
-│  └──────────┘                    └──────────┘              │
-│                                                             │
-│  3. TOKEN REFRESH (when access token expires)               │
-│  ┌──────────┐  POST /api/v1/auth/refresh ┌──────────┐      │
-│  │  Client  │  { refreshToken }     │  Server  │             │
-│  │          │ ─────────────────→  │          │             │
-│  │          │ ←─────────────────  │          │             │
-│  │          │   { accessToken,    │          │             │
-│  │          │     refreshToken }  │          │             │
-│  └──────────┘                     └──────────┘             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
-```
+Login and register (`apps/api/src/modules/auth/auth-session.controller.ts`) return `{ user, tokens: { accessToken } }` in the body and set the refresh token as an HttpOnly cookie scoped to `path=/api/v1/auth` — `rid` for the notes app, `rid_bo` for the backoffice (`modules/auth/utils/cookie.utils.ts`), so the two frontends never share a session. Requests carry `Authorization: Bearer <accessToken>`. `POST /api/v1/auth/refresh` reads the cookie, rotates the session, sets a new cookie, and returns `{ accessToken }`. `GET /api/v1/auth/me` returns `{ user: req.user }` straight from the JWT guard (`auth-account.controller.ts`).
 
-### Token Management (Client)
-
-The `@knowtis/api-client` handles token refresh automatically:
-
-```typescript
-// On 401 response:
-1. Pause outgoing requests
-2. Call POST /api/v1/auth/refresh
-3. Update stored tokens
-4. Retry failed request
-5. Resume queue
-```
+On the client, `libs/api-client/src/lib/session-refresh.ts` makes refresh single-flight within a tab and serializes it across tabs with the Web Lock `knowtis-auth-refresh`, so a rotating refresh token is never consumed twice. There is no request queue; a 401 triggers one refresh and the failed request is retried.
 
 ---
 
@@ -570,7 +565,7 @@ The `@knowtis/api-client` handles token refresh automatically:
 | ---------- | ------------------------------ | ------------------------- |
 | Components | PascalCase                     | `NoteCard.tsx`            |
 | Hooks      | camelCase with `use` prefix    | `useNotes.ts`             |
-| Stores     | camelCase with `.store` suffix | `notes.store.ts`          |
+| Stores     | camelCase with `.store` suffix | `agent.store.ts`          |
 | Utils      | camelCase                      | `formatDate.ts`           |
 | Types      | PascalCase                     | `Note`, `CreateNoteInput` |
 | Constants  | SCREAMING_SNAKE_CASE           | `MAX_TITLE_LENGTH`        |
@@ -581,15 +576,21 @@ The `@knowtis/api-client` handles token refresh automatically:
 
 ### TypeScript Configuration
 
-Strict mode is enabled for maximum type safety:
+`tsconfig.base.json` enables strict mode plus:
 
 ```json
 {
   "compilerOptions": {
     "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "noUncheckedIndexedAccess": true
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedSideEffectImports": true,
+    "noImplicitReturns": true,
+    "noImplicitOverride": true,
+    "exactOptionalPropertyTypes": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
   }
 }
 ```
@@ -601,18 +602,11 @@ Strict mode is enabled for maximum type safety:
 
 ### Testing Strategy
 
-| Layer        | Focus                     | Tools                 |
-| ------------ | ------------------------- | --------------------- |
-| Unit         | Business logic, utilities | Vitest                |
-| Component    | UI interaction, rendering | React Testing Library |
-| Integration  | API endpoints, services   | Vitest + supertest    |
-| E2E (future) | Full user flows           | Playwright            |
-
-### Coverage Goals
-
-- **Critical paths** (auth, notes CRUD): 80%+
-- **Utilities & shared code**: 90%+
-- **UI components**: Snapshot + interaction tests
+| Layer       | Focus                                           | Tools                                                                          |
+| ----------- | ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Unit        | Business logic, utilities                       | Vitest                                                                         |
+| Component   | UI interaction, rendering                       | React Testing Library                                                          |
+| Integration | Handlers and repositories against real Postgres | Vitest, `*.db.spec.ts` (own sequential project in `apps/api/vitest.config.ts`) |
 
 ### CI/CD Pipeline
 
@@ -620,7 +614,7 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 **Triggers:** pushes to `main`/`develop`, and pull requests whose **base** branch is `main`, `develop`, or any Conventional-prefixed feature branch (`feat/**`, `fix/**`, …) — the latter so stacked PRs run CI against their parent branch instead of showing up with no checks. For stacked PRs, `nx-set-shas` computes affected against the PR's real base ref (`git merge-base origin/<base> HEAD`), so each level only re-verifies its own changes.
 
-**CI job** (single job, sequential steps): lint → typecheck → test (`--parallel=2`, hosted runners OOM beyond that) → migration-drift check (`nx db:generate api` must produce no diff) → production build. It then exposes one `*_affected` output per app.
+**CI job** (single job, sequential steps): `pnpm skills:check` → lint → typecheck → apply migrations (`nx db:migrate:run api` against the CI Postgres) → test (`--parallel=2`, hosted runners OOM beyond that) → migration-drift check (`nx db:generate api` must produce no diff) → production build. It then exposes one `*_affected` output per app.
 
 **Deploy jobs** (main push only, each gated on its app being affected):
 
@@ -633,21 +627,19 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 **Neither frontend auto-deploys from Vercel's Git integration** — `vercel.json` sets `git.deploymentEnabled: false`; every deploy is CI-driven and gated on the checks above. See [DEPLOYMENT.md](./DEPLOYMENT.md).
 
+### Git hooks (Lefthook)
+
+`lefthook.yml`: pre-commit runs ESLint + Prettier on staged files, `nx affected -t typecheck`, and — when a file under `apps/api/src/database/schema/` is staged — `nx db:generate api`, staging any new files under `apps/api/drizzle/`. Pre-push runs `nx affected -t test`. Commit-msg enforces Conventional Commits.
+
 ---
 
 ## Related Documentation
 
 - [Root README](../README.md) - Quick start & scripts
-- [API Documentation](../apps/api/README.md) - Backend details
-- [API Architecture](../apps/api/ARCHITECTURE.md) - DDD patterns
+- [API Documentation](../apps/api/README.md) - Backend details and patterns
 - [Notes App Documentation](../apps/notes/README.md) - Frontend details
-- [AI Module](./AI.md) - AI assistant & voice notes
+- [Authentication](./AUTH.md) - Auth flows, cookies, sessions
+- [AI Module](./AI.md) - AI assistant, copilot, voice notes
 - [MCP Server](./MCP.md) - MCP integration for AI assistants
+- [Migrations](./MIGRATIONS.md) - Drizzle migration workflow
 - [Deployment Guide](./DEPLOYMENT.md) - Railway & Vercel deployment
-
----
-
-<p align="center">
-  <strong>Knowtis Architecture v1.4</strong><br/>
-  Last updated: July 2026
-</p>

@@ -15,6 +15,9 @@ reviewed in PRs, and **applied automatically on every deploy**.
    ```bash
    pnpm db:generate            # -> apps/api/drizzle/NNNN_*.sql + meta snapshot
    ```
+   The Lefthook pre-commit hook (`lefthook.yml`, `check-migrations`) does this
+   for you when a staged file matches `apps/api/src/database/schema/**/*.ts`: it
+   runs `nx db:generate api` and stages whatever appears under `apps/api/drizzle/`.
 3. Commit the generated `.sql` + `meta/` changes. Never edit an applied migration.
 4. Apply locally to your dev DB:
    ```bash
@@ -22,6 +25,29 @@ reviewed in PRs, and **applied automatically on every deploy**.
    ```
    (`pnpm db:migrate`, the raw `drizzle-kit migrate`, also works once the DB is
    tracked — see bootstrap below.)
+
+## Bootstrapping a fresh local DB
+
+`pnpm run setup` (`tools/setup.mjs`; use `pnpm run` because `setup` is also a
+pnpm built-in) scaffolds `.env` files, starts Docker, and initializes the local
+database. Then, or on any fresh Postgres:
+
+```bash
+pnpm docker:up
+pnpm db:migrate:run
+```
+
+If the local database was initialized with `db:push` (for example by an older
+version of the setup script), it has no migration journal. Run `pnpm db:baseline`
+once before `pnpm db:migrate:run`; see the next section.
+
+## CI
+
+`.github/workflows/ci.yml` applies the committed migrations to the CI Postgres
+(`nx db:migrate:run api`) before the test step, so `*.db.spec.ts` specs run
+against the real schema. After tests it runs `nx db:generate api` and fails the
+job when that produces any change under `apps/api/drizzle/` — a schema edit
+without its migration never reaches `main`.
 
 ## Automatic application on deploy
 
@@ -36,9 +62,19 @@ This is the **single source of truth** for applying migrations. It runs
 `migrate()` against the service's own `DATABASE_URL` — the same connection the app
 uses, so there is no risk of a CI secret drifting from the real database — and a
 non-zero exit **aborts the deploy**, so the app never boots against an un-migrated
-schema. It takes a Postgres advisory lock first, so overlapping deploys serialize
-instead of racing the journal. Run the exact same path locally with
-`pnpm db:migrate:run`.
+schema. Run the exact same path locally with `pnpm db:migrate:run`.
+
+`apps/api/src/database/migrate.ts`:
+
+1. Takes the Postgres advisory lock `MIGRATION_LOCK_KEY`, so overlapping deploys
+   serialize instead of racing the journal.
+2. Only then sets `lock_timeout` (`LOCK_TIMEOUT_SECONDS`, 5s). Setting it before
+   the advisory lock would make a deploy queued behind another one fail instead of
+   waiting its turn.
+3. Runs `migrate()` through `applyWithLockRetry`
+   (`database/migration-retry.ts`), which retries only a Postgres lock timeout
+   (`55P03`) up to `MAX_MIGRATION_ATTEMPTS` (3) with a 3s delay. Any other error,
+   or exhausting the attempts, rejects and blocks the deploy.
 
 ## One-time bootstrap for an existing (push-managed) database
 
@@ -66,7 +102,7 @@ pnpm db:baseline 0007_worried_zaladane
 so the rows it inserts match what `migrate()` checks. It is idempotent.
 
 > Dev and prod are already tracked (migrate-managed), so the baseline above is
-> only needed when adopting a brand-new push-managed database.
+> only needed when adopting a push-managed database.
 
 ## Zero-downtime changes
 

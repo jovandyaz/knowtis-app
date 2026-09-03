@@ -1,655 +1,225 @@
 # Knowtis API
 
-<p align="center">
-  <img src="https://img.shields.io/badge/NestJS-11-E0234E?style=flat-square&logo=nestjs" alt="NestJS" />
-  <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql" alt="PostgreSQL" />
-  <img src="https://img.shields.io/badge/Drizzle-ORM-C5F74F?style=flat-square" alt="Drizzle" />
-  <img src="https://img.shields.io/badge/Socket.io-4.8-010101?style=flat-square&logo=socket.io" alt="Socket.io" />
-</p>
+NestJS 11 backend for the Knowtis collaborative notes platform: JWT authentication with HttpOnly refresh cookies, CASL authorization, notes/tags/search, AI assistant and copilot agent, study artifacts, Hocuspocus collaboration, OAuth 2.1 authorization server for MCP clients, and PostgreSQL persistence through Drizzle ORM.
 
-**Backend API** for the Knowtis collaborative notes platform. Built with NestJS, featuring JWT authentication, real-time collaboration via WebSocket, and PostgreSQL persistence.
-
----
+System-level design lives in [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md); this file covers what is specific to `apps/api`.
 
 ## Table of Contents
 
-- [Features](#features)
 - [Quick Start](#quick-start)
 - [Project Structure](#project-structure)
+- [Modules](#modules)
+- [Patterns](#patterns)
 - [Configuration](#configuration)
-- [API Reference](#api-reference)
+- [HTTP API](#http-api)
+- [WebSocket Transports](#websocket-transports)
 - [Database](#database)
-- [WebSocket Events](#websocket-events)
 - [Testing](#testing)
-- [Production Deployment](#production-deployment)
-
----
-
-## Features
-
-| Feature               | Description                                  |
-| --------------------- | -------------------------------------------- |
-| 🔐 JWT Authentication | Access + refresh token pattern               |
-| 📝 Notes CRUD         | Full create, read, update, delete operations |
-| 👥 User Management    | User profiles and settings                   |
-| 🔄 Real-time Sync     | WebSocket + Yjs for live collaboration       |
-| 🤖 AI Assistant       | Text completions, WebSocket streaming, voice |
-| 🎴 Artifacts          | Flashcards, quizzes, summaries, mind maps    |
-| 🔑 Authorization      | CASL-based permissions and roles             |
-| 🔌 MCP Integration    | API key exchange for AI assistant tools      |
-| 🛠️ Admin              | Administrative features and management       |
-| 🗄️ PostgreSQL         | Reliable data persistence with Drizzle ORM   |
-| ⚡ Redis Cache        | Session and cache management                 |
-| 🛡️ Input Validation   | class-validator for request validation       |
-| 📊 Structured Logging | Request logging and error tracking           |
-| 📖 API Docs           | Swagger/OpenAPI at `/api/docs` (dev)         |
-| 🚀 API Versioning     | URI Versioning (v1)                          |
+- [Deployment](#deployment)
 
 ---
 
 ## Quick Start
 
-### Prerequisites
-
-| Requirement | Version |
-| ----------- | ------- |
-| Node.js     | ≥ 22.x  |
-| pnpm        | ≥ 10.x  |
-| Docker      | ≥ 20.x  |
-
-### 1. Start Infrastructure
+Prerequisites: Node.js >= 22, pnpm >= 10, Docker.
 
 ```bash
-# From workspace root
-pnpm docker:up
+# From the workspace root
+pnpm docker:up                              # PostgreSQL 16 (pgvector) on 5432, Redis 7 on 6379
+cp apps/api/.env.example apps/api/.env      # then fill in the required values (see Configuration)
+pnpm db:migrate:run                         # apply committed migrations
+pnpm dev:api                                # http://localhost:3333
 ```
 
-This starts:
-
-- **PostgreSQL 16** on port 5432
-- **Redis 7** on port 6379
-
-### 2. Configure Environment
-
-```bash
-cp apps/api/.env.example apps/api/.env
-```
-
-Edit `.env` with your settings (see [Configuration](#configuration)).
-
-### 3. Initialize Database
-
-```bash
-# Push schema to database (development)
-pnpm db:push
-
-# Or run migrations (production)
-pnpm db:migrate
-```
-
-### 4. Start Development Server
-
-```bash
-pnpm dev:api
-```
-
-The API will be available at:
-
-- **REST API**: http://localhost:3333/api/v1
-- **WebSocket**: ws://localhost:3333/collaboration
-
-### 5. Verify Installation
-
-```bash
-curl http://localhost:3333/api/v1/health/ping
-# Response: {"status":"ok","timestamp":"..."}
-```
-
----
-
-## Project Structure
-
-```
-src/
-├── app/          # Root module
-├── adapters/     # WebSocket adapter (Socket.io)
-├── config/       # Environment validation (Zod)
-├── core/         # Filters, interceptors, exceptions, logging (Pino)
-├── database/     # Drizzle schema and module
-└── modules/      # Feature modules (see table below)
-```
-
-### Modules
-
-| Module          | Pattern | Description                                                                                                                                                                                                                                                                                                                                              |
-| --------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `auth`          | DDD     | JWT authentication (access + refresh tokens)                                                                                                                                                                                                                                                                                                             |
-| `notes`         | DDD     | Notes CRUD with sharing and permissions                                                                                                                                                                                                                                                                                                                  |
-| `ai`            | DDD     | AI text assistant (WebSocket streaming) plus the shared model layer: selectable + admin-assignable model catalog, per-user model/intent preferences, system provider keys with live probes, and per-turn reasoning-effort resolution (`ai.controller`, `ai-models.controller`, `ai-keys.controller`, `ai-providers.controller`, `ai-catalog.controller`) |
-| `artifacts`     | DDD     | Flashcards, quizzes, summaries, mind maps                                                                                                                                                                                                                                                                                                                |
-| `agent`         | DDD     | Conversational copilot (tool-use, HITL, memory)                                                                                                                                                                                                                                                                                                          |
-| `collaboration` | Service | Real-time Yjs sync via WebSocket gateway                                                                                                                                                                                                                                                                                                                 |
-| `authorization` | Service | CASL-based permissions and roles                                                                                                                                                                                                                                                                                                                         |
-| `mcp`           | Service | MCP API key exchange for AI assistants                                                                                                                                                                                                                                                                                                                   |
-| `admin`         | Service | Admin features and management                                                                                                                                                                                                                                                                                                                            |
-| `users`         | Service | User profiles and settings                                                                                                                                                                                                                                                                                                                               |
-| `feature-flags` | Service | DB-backed feature flags with Redis cache                                                                                                                                                                                                                                                                                                                 |
-| `health`        | Service | Health check endpoints                                                                                                                                                                                                                                                                                                                                   |
-| `observability` | Service | Langfuse OpenTelemetry tracing for AI paths                                                                                                                                                                                                                                                                                                              |
-| `websocket`     | Service | Socket.IO auth, concurrency & heartbeat utils                                                                                                                                                                                                                                                                                                            |
-
-DDD modules follow Clean Architecture with `application/`, `domain/`, `infrastructure/` layers. See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
-
----
-
-## Configuration
-
-### Environment Variables
-
-Create `.env` in `apps/api/`:
-
-```env
-# Database
-DATABASE_URL=postgresql://knowtis:knowtis_dev@localhost:5432/knowtis
-
-# JWT Authentication
-JWT_SECRET=your-super-secret-jwt-key-min-32-chars
-JWT_REFRESH_SECRET=your-super-secret-refresh-key-min-32-chars
-JWT_EXPIRES_IN=15m
-JWT_REFRESH_EXPIRES_IN=7d
-
-# Server
-PORT=3333
-NODE_ENV=development
-
-# CORS
-FRONTEND_URL=http://localhost:4200
-
-# Redis (optional)
-REDIS_URL=redis://localhost:6379
-```
-
-### Environment Variable Reference
-
-| Variable                 | Required | Default                 | Description                  |
-| ------------------------ | -------- | ----------------------- | ---------------------------- |
-| `DATABASE_URL`           | Yes      | -                       | PostgreSQL connection string |
-| `JWT_SECRET`             | Yes      | -                       | Secret for access tokens     |
-| `JWT_REFRESH_SECRET`     | Yes      | -                       | Secret for refresh tokens    |
-| `JWT_EXPIRES_IN`         | No       | `15m`                   | Access token expiration      |
-| `JWT_REFRESH_EXPIRES_IN` | No       | `7d`                    | Refresh token expiration     |
-| `PORT`                   | No       | `3333`                  | Server port                  |
-| `NODE_ENV`               | No       | `development`           | Environment mode             |
-| `FRONTEND_URL`           | No       | `http://localhost:4200` | Allowed CORS origin          |
-| `REDIS_URL`              | No       | -                       | Redis connection string      |
-
----
-
-## API Reference
-
-### Base URL
-
-```
-http://localhost:3333/api/v1
-```
-
-### Authentication
-
-All endpoints except those marked `[Public]` require authentication via Bearer token:
-
-```
-Authorization: Bearer <access_token>
-```
-
----
-
-### Auth Endpoints
-
-#### Register User `[Public]`
-
-```http
-POST /api/v1/auth/register
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "securePassword123",
-  "name": "John Doe"
-}
-```
-
-**Response** `201 Created`:
-
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1...",
-  "refreshToken": "eyJhbGciOiJIUzI1...",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "avatarUrl": null,
-    "createdAt": "2026-01-04T00:00:00.000Z"
-  }
-}
-```
-
-#### Login `[Public]`
-
-```http
-POST /api/v1/auth/login
-Content-Type: application/json
-
-{
-  "email": "user@example.com",
-  "password": "securePassword123"
-}
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1...",
-  "refreshToken": "eyJhbGciOiJIUzI1...",
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe"
-  }
-}
-```
-
-#### Refresh Token `[Public]`
-
-```http
-POST /api/v1/auth/refresh
-Content-Type: application/json
-
-{
-  "refreshToken": "eyJhbGciOiJIUzI1..."
-}
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "accessToken": "eyJhbGciOiJIUzI1...",
-  "refreshToken": "eyJhbGciOiJIUzI1..."
-}
-```
-
-#### Get Current User
-
-```http
-GET /api/v1/auth/me
-Authorization: Bearer <access_token>
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "user": {
-    "id": "uuid",
-    "email": "user@example.com",
-    "name": "John Doe",
-    "avatarUrl": null
-  }
-}
-```
-
-#### Logout
-
-```http
-POST /api/v1/auth/logout
-Authorization: Bearer <access_token>
-```
-
-**Response** `204 No Content`
-
----
-
-### Notes Endpoints
-
-#### List Notes
-
-```http
-GET /api/v1/notes
-Authorization: Bearer <access_token>
-```
-
-**Query Parameters**:
-| Parameter | Type | Description |
-| --------- | ------ | ------------------- |
-| `search` | string | Search in title |
-| `page` | number | Page number (1-based)|
-| `limit` | number | Items per page |
-
-**Response** `200 OK`:
-
-```json
-{
-  "data": [
-    {
-      "id": "uuid",
-      "title": "My Note",
-      "content": "<p>Content here...</p>",
-      "ownerId": "user-uuid",
-      "createdAt": "2026-01-04T00:00:00.000Z",
-      "updatedAt": "2026-01-04T00:00:00.000Z"
-    }
-  ],
-  "meta": {
-    "total": 100,
-    "page": 1,
-    "limit": 20,
-    "totalPages": 5
-  }
-}
-```
-
-#### Get Single Note
-
-```http
-GET /api/v1/notes/:id
-Authorization: Bearer <access_token>
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "id": "uuid",
-  "title": "My Note",
-  "content": "<p>Content here...</p>",
-  "ownerId": "user-uuid",
-  "createdAt": "2026-01-04T00:00:00.000Z",
-  "updatedAt": "2026-01-04T00:00:00.000Z",
-  "collaborators": []
-}
-```
-
-#### Create Note
-
-```http
-POST /api/v1/notes
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "title": "New Note",
-  "content": "<p>Initial content</p>"
-}
-```
-
-**Response** `201 Created`:
-
-```json
-{
-  "id": "uuid",
-  "title": "New Note",
-  "content": "<p>Initial content</p>",
-  "ownerId": "user-uuid",
-  "createdAt": "2026-01-04T00:00:00.000Z",
-  "updatedAt": "2026-01-04T00:00:00.000Z"
-}
-```
-
-#### Update Note
-
-```http
-PATCH /api/v1/notes/:id
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "title": "Updated Title",
-  "content": "<p>Updated content</p>"
-}
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "id": "uuid",
-  "title": "Updated Title",
-  "content": "<p>Updated content</p>",
-  "updatedAt": "2026-01-04T00:00:00.000Z"
-}
-```
-
-#### Delete Note
-
-```http
-DELETE /api/v1/notes/:id
-Authorization: Bearer <access_token>
-```
-
-**Response** `204 No Content`
-
-#### Share Note
-
-```http
-POST /api/v1/notes/:id/share
-Authorization: Bearer <access_token>
-Content-Type: application/json
-
-{
-  "userId": "user-uuid",
-  "permission": "edit"
-}
-```
-
-**Response** `200 OK`:
-
-```json
-{
-  "message": "Note shared successfully"
-}
-```
-
----
-
-### Error Responses
-
-All errors follow this format:
-
-```json
-{
-  "statusCode": 400,
-  "message": "Validation failed",
-  "error": "Bad Request",
-  "timestamp": "2026-01-04T00:00:00.000Z",
-  "path": "/api/v1/notes"
-}
-```
-
-| Status Code | Description                    |
-| ----------- | ------------------------------ |
-| 400         | Bad Request / Validation Error |
-| 401         | Unauthorized                   |
-| 403         | Forbidden                      |
-| 404         | Not Found                      |
-| 409         | Conflict (e.g., duplicate)     |
-| 500         | Internal Server Error          |
-
----
-
-## Database
-
-### Technology
-
-- **PostgreSQL 16** - Primary database
-- **Drizzle ORM** - Type-safe SQL toolkit
-
-### Schema Overview
-
-Core tables: `users`, `notes`, `note_permissions`, `sessions`, `artifacts`, `feature_flags`. Schema defined in `src/database/schema/` — use `pnpm db:studio` to explore visually.
-
-### Database Commands
-
-| Command            | Description                         |
-| ------------------ | ----------------------------------- |
-| `pnpm db:push`     | Push schema changes to DB (dev)     |
-| `pnpm db:generate` | Generate migration files            |
-| `pnpm db:migrate`  | Run pending migrations              |
-| `pnpm db:studio`   | Open Drizzle Studio (visual editor) |
-
-### Migrations
-
-```bash
-# Generate migration after schema changes
-pnpm db:generate
-
-# Apply migrations
-pnpm db:migrate
-```
-
----
-
-## WebSocket Events
-
-### Namespace
-
-```
-/collaboration
-```
-
-### Connection
-
-```typescript
-import { io } from 'socket.io-client';
-
-const socket = io('http://localhost:3333/collaboration', {
-  auth: { token: accessToken },
-});
-```
-
-### Events
-
-#### Client → Server
-
-| Event                     | Payload                                  | Description             |
-| ------------------------- | ---------------------------------------- | ----------------------- |
-| `collaboration:join`      | `{ noteId: string, user: User }`         | Join collaboration room |
-| `collaboration:leave`     | `{ noteId: string }`                     | Leave room              |
-| `collaboration:sync`      | `{ noteId: string, update: Uint8Array }` | Send Yjs update         |
-| `collaboration:awareness` | `{ noteId: string, state: object }`      | Send presence update    |
-
-#### Server → Client
-
-| Event                       | Payload                     | Description        |
-| --------------------------- | --------------------------- | ------------------ |
-| `collaboration:joined`      | `{ noteId, users: User[] }` | Room joined        |
-| `collaboration:user-joined` | `{ user: User }`            | New user in room   |
-| `collaboration:user-left`   | `{ userId: string }`        | User left room     |
-| `collaboration:update`      | `{ update: Uint8Array }`    | Receive Yjs update |
-| `collaboration:awareness`   | `{ userId, state }`         | Receive presence   |
-
----
-
-## Testing
-
-### Running Tests
-
-```bash
-# Run all tests
-nx test api
-
-# Watch mode
-nx test api --watch
-
-# With coverage
-nx test api --coverage
-```
-
-Tests are co-located with the code they cover. Specs that hit the real Postgres are named `*.db.spec.ts` — the vitest config runs them sequentially in their own project so their fixture teardowns cannot race, and a guard in `src/test-support/fixture-ids.spec.ts` fails when a database-touching spec misses the suffix or two db specs share a fixture id.
-
----
-
-## Production Deployment
-
-### Build
-
-```bash
-pnpm build:api
-```
-
-Output: `dist/apps/api/main.js`
-
-### Run
-
-```bash
-# Set production environment variables first
-export NODE_ENV=production
-export DATABASE_URL=postgresql://...
-export JWT_SECRET=...
-# etc.
-
-# Run
-node dist/apps/api/main.js
-```
-
-### Docker
-
-```dockerfile
-FROM node:22-alpine
-
-WORKDIR /app
-
-# Copy built application
-COPY dist/apps/api ./
-COPY node_modules ./node_modules
-
-# Set environment
-ENV NODE_ENV=production
-ENV PORT=3333
-
-EXPOSE 3333
-
-CMD ["node", "main.js"]
-```
-
-### Docker Build
-
-```bash
-docker build -t knowtis-api .
-docker run -p 3333:3333 --env-file .env knowtis-api
-```
-
-### Health Check
+Verify:
 
 ```bash
 curl http://localhost:3333/api/v1/health/ping
 # {"status":"ok","timestamp":"..."}
 ```
 
-### Production Checklist
+- REST: `http://localhost:3333/api/v1`
+- Swagger UI (development only): `http://localhost:3333/api/docs`
+- Collaboration WebSocket: `ws://localhost:3333/collaboration`
 
-- [ ] Set strong `JWT_SECRET` and `JWT_REFRESH_SECRET` (min 32 chars)
-- [ ] Use secure PostgreSQL credentials
-- [ ] Set `NODE_ENV=production`
-- [ ] Configure proper `FRONTEND_URL` for CORS
-- [ ] Enable HTTPS (via reverse proxy)
-- [ ] Set up database backups
-- [ ] Configure logging aggregation
-- [ ] Set up health monitoring
+---
+
+## Project Structure
+
+```
+apps/api/src/
+├── adapters/       # SocketIoAdapter (Socket.io on the Nest HTTP server)
+├── app/            # AppModule, AppController
+├── assets/         # Static assets copied into the build
+├── config/         # env.config.ts — Zod schema for environment variables
+├── core/           # Cross-cutting: auth, domain, exceptions, filters, http,
+│                   # interceptors, logging (Pino), pagination, swagger, throttling
+├── database/       # Drizzle schema (27 tables), migrate.ts, baseline, module
+├── i18n/           # Validation messages (en, es)
+├── modules/        # Feature modules (below)
+├── scripts/        # seed-admin.ts, generate-oauth-jwks.ts
+├── test-support/   # DB test helpers, fixture-id guard
+├── types/          # Ambient type declarations
+└── main.ts         # Bootstrap: helmet, cookies, OIDC mount, /api prefix, URI versioning v1
+```
+
+## Modules
+
+`apps/api/src/modules/` — 17 modules.
+
+| Module          | Layout                 | Description                                                                                                                                         |
+| --------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `admin`         | Service                | User management, AI metrics, admin audit log                                                                                                        |
+| `agent`         | DDD                    | Conversational copilot: tool-use step loop, HITL proposals (Redis), long-term memory. See `modules/agent/README.md`                                 |
+| `ai`            | DDD                    | Editor AI assistant (WebSocket streaming) plus the shared model layer: catalog, per-user preferences, system provider keys, reasoning effort        |
+| `artifacts`     | DDD                    | Flashcards, quizzes, summaries, mind maps; spaced repetition                                                                                        |
+| `auth`          | Controllers + services | Register/login/refresh/logout, email verification, password reset. Domain lives in `packages/auth` and `packages/auth-nestjs`; sessions in Postgres |
+| `authorization` | Service                | CASL ability factory over `libs/authorization`                                                                                                      |
+| `collaboration` | Service                | `HocuspocusService`: Hocuspocus on the `/collaboration` upgrade path, auth + persistence extensions, optional Redis extension. No Nest gateway      |
+| `feature-flags` | Service                | DB-backed flags with an in-process `CacheModule` cache (30s TTL)                                                                                    |
+| `health`        | Service                | Terminus health endpoints                                                                                                                           |
+| `mcp`           | Service                | MCP API keys and API-key → JWT token exchange                                                                                                       |
+| `notes`         | DDD                    | Notes CRUD with soft delete/restore, sharing, tags, image upload                                                                                    |
+| `oauth`         | Service                | OAuth 2.1 authorization server (`oidc-provider`) for MCP clients: interactions, grants, Drizzle adapter                                             |
+| `observability` | Service                | Langfuse OpenTelemetry tracing for AI paths                                                                                                         |
+| `organization`  | DDD                    | AI suggestions for note buckets and tags                                                                                                            |
+| `search`        | Service                | Full-text search over accessible notes                                                                                                              |
+| `users`         | Service                | Profile updates, verified-identity policy                                                                                                           |
+| `websocket`     | Service                | Socket.io handshake auth, per-instance concurrency slots, heartbeat                                                                                 |
+
+DDD modules use `application/` (command and query handlers), `domain/` (entities, value objects, errors, ports), and `infrastructure/` (adapters). Wiring is in each `*.module.ts`.
+
+## Patterns
+
+### Result type (neverthrow)
+
+Domain and application operations return `Result<T, E>` instead of throwing. Controllers convert with `unwrapOrThrow(result, ERROR_STATUS_MAP)`, which maps domain error codes to HTTP statuses.
+
+```typescript
+const title = NoteTitle.create(input.title);
+if (title.isErr()) return err(title.error);
+```
+
+### Ports and adapters
+
+Handlers depend on port interfaces from `domain/ports/` and receive adapters through NestJS DI tokens. In `notes`:
+
+```typescript
+// application/commands/create-note.handler.ts
+@Inject(NOTE_WRITE_REPOSITORY) private readonly notes: NoteWriteRepository
+
+// notes.module.ts
+{ provide: NOTE_WRITE_REPOSITORY, useClass: DrizzleNoteWriteRepository }
+```
+
+The module wires six Drizzle adapters — `DrizzleNoteRepository`, `DrizzleNoteReadRepository`, `DrizzleNoteWriteRepository`, `DrizzlePermissionRepository`, `DrizzleTagRepository`, `DrizzleNoteImageRepository` — plus `VercelBlobStorage` for `IMAGE_STORAGE`. Handlers inject `NOTE_REPOSITORY`, `NOTE_READ_REPOSITORY`, `NOTE_WRITE_REPOSITORY`, `TAG_REPOSITORY`, `PERMISSION_REPOSITORY`, or `NOTE_IMAGE_REPOSITORY` as needed.
+
+### Value objects
+
+Immutable objects that validate on construction and return `Result`: `NoteTitle` (1–`NOTE_TITLE_MAX_LENGTH` = 200 chars), `NoteContent`, `PermissionLevel` (`viewer` | `editor`), `TagPath`, `SupertagAssignment` (`modules/notes/domain/value-objects/`).
+
+### Request flow
+
+```
+Request → Controller → Handler → Value objects / domain logic → Port → Adapter → Postgres
+                                        ↓
+                        Result<T, E> → unwrapOrThrow() → HTTP response
+```
+
+---
+
+## Configuration
+
+`apps/api/.env.example` is the source of truth for variable names, defaults, and comments; `src/config/env.config.ts` validates them with Zod at boot. Do not maintain a second list here.
+
+Boot-blocking variables:
+
+| Variable             | Notes                                                                                                                      |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`       | Required                                                                                                                   |
+| `JWT_SECRET`         | Required, min 32 chars; must differ from `JWT_REFRESH_SECRET`; placeholder-looking values rejected in production           |
+| `JWT_REFRESH_SECRET` | Required, min 32 chars                                                                                                     |
+| `TOKEN_HASH_KEY`     | Required in every environment (32 bytes, base64). Keys every stored token hash; setting or rotating it logs every user out |
+| `BACKOFFICE_URL`     | Required in production (separate refresh cookie per frontend); optional in development                                     |
+| `REDIS_URL`          | Schema default `redis://localhost:6379`; production must set it explicitly                                                 |
+
+AI variables are documented in [docs/AI.md → Environment Variables](../../docs/AI.md#environment-variables); OAuth variables (`OAUTH_ISSUER`, `OAUTH_JWKS`, `OAUTH_COOKIE_KEYS`, `MCP_RESOURCE_URL`) in [docs/MCP.md](../../docs/MCP.md).
+
+---
+
+## HTTP API
+
+- Global prefix `/api`, URI versioning with default version `1` → every route is `/api/v1/...` (`main.ts`).
+- Swagger UI at `/api/docs` when `NODE_ENV=development`.
+- 25 controllers (`rg @Controller apps/api/src --glob '!*.spec.ts'`): `auth`, `notes`, `tags`, `search`, `ai`, `ai/models`, `ai/keys`, `ai/providers`, `ai/catalog`, `ai/organization`, `agent/memories`, `artifacts`, `notes/shared`, `admin`, `users`, `flags`, `mcp/keys`, `auth/token-exchange`, `oauth/grants`, `oauth/interactions`, `health`.
+- Authentication: `Authorization: Bearer <accessToken>`; refresh token in an HttpOnly cookie (`rid` / `rid_bo`, path `/api/v1/auth`). See [docs/AUTH.md](../../docs/AUTH.md).
+- Rate limit: 60 requests per 60 s window, keyed per registered user (per IP for anonymous callers) — `core/throttling/`.
+- Pagination envelope: `{ items, total, page, limit }`; defaults `page=1`, `limit=25`; ceilings `MAX_PAGE` and `MAX_LIMIT` (100) in `core/pagination/pagination.constants.ts`.
+- Error shape (`core/filters/http-exception.filter.ts`): `{ statusCode, message, error, code?, errors?, timestamp, path }`. 5xx responses have their message redacted to `Internal server error`.
+
+### Health
+
+| Endpoint               | Behaviour                                                     |
+| ---------------------- | ------------------------------------------------------------- |
+| `/api/v1/health/ping`  | `{ status: 'ok', timestamp }` — liveness; Railway healthcheck |
+| `/api/v1/health/ready` | Terminus check of database connectivity; 503 when unreachable |
+| `/api/v1/health`       | Terminus memory heap/RSS indicators                           |
+
+---
+
+## WebSocket Transports
+
+| Transport  | Path / namespace | Auth                                                   | Events                                                                                                                                                                        |
+| ---------- | ---------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hocuspocus | `/collaboration` | JWT via `HocuspocusProvider`'s `token` callback        | Binary y-protocols sync + awareness; no named events                                                                                                                          |
+| Socket.io  | `/ai`            | JWT in `socket.auth.token` (or `Authorization` header) | in: `ai:complete`, `ai:cancel` — out: `ai:chunk`, `ai:done`, `ai:error`                                                                                                       |
+| Socket.io  | `/agent`         | same                                                   | in: `agent:message`, `agent:cancel`, `agent:approve`, `agent:reject` — out: `agent:thinking`, `agent:chunk`, `agent:proposal`, `agent:committed`, `agent:done`, `agent:error` |
+
+Payloads and error codes: [docs/AI.md → WebSocket Protocol](../../docs/AI.md#websocket-protocol) and `modules/agent/README.md`.
+
+---
+
+## Database
+
+PostgreSQL 16 with the `vector` extension (`pgvector/pgvector:pg16` in `docker-compose.yml` and CI). Schema: `src/database/schema/` (27 tables); browse with `pnpm db:studio`.
+
+| Command               | Purpose                                                                                            |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| `pnpm db:generate`    | Generate a migration from schema changes (`apps/api/drizzle/`)                                     |
+| `pnpm db:migrate:run` | Apply migrations via `src/database/migrate.ts` (advisory lock, lock-timeout retry). Canonical path |
+| `pnpm db:baseline`    | Record existing migrations as applied on a DB that was previously managed with `db:push`           |
+| `pnpm db:seed:admin`  | Create an admin user from `ADMIN_EMAIL` / `ADMIN_PASSWORD`                                         |
+| `pnpm db:studio`      | Drizzle Studio                                                                                     |
+| `pnpm db:push`        | Throwaway local databases only; leaves no migration history                                        |
+
+Workflow, bootstrap, and zero-downtime guidance: [docs/MIGRATIONS.md](../../docs/MIGRATIONS.md).
+
+---
+
+## Testing
+
+```bash
+nx test api              # all specs once
+nx test api --watch
+nx test api --coverage
+```
+
+Tests are co-located with the code they cover. Specs that hit the real Postgres are named `*.db.spec.ts`; `vitest.config.ts` runs them sequentially in their own project so fixture teardowns cannot race, and `src/test-support/fixture-ids.spec.ts` fails when a database-touching spec misses the suffix or two db specs share a fixture id. There is no supertest layer; integration coverage is handlers and repositories against the database.
+
+---
+
+## Deployment
+
+Production runs on Railway with the nixpacks builder (`railway.toml`); there is no Dockerfile. Build with `pnpm build:api` (output `dist/apps/api/main.js`), start with `node dist/apps/api/main.js`; migrations run in Railway's `preDeployCommand`. See [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md).
 
 ---
 
 ## Related Documentation
 
-- [Root README](../../README.md) - Workspace overview
-- [Notes App](../notes/README.md) - Frontend application
-- [Architecture Guide](../../docs/ARCHITECTURE.md) - System design
-- [API Architecture](./ARCHITECTURE.md) - DDD patterns & module structure
-- [Deployment Guide](../../docs/DEPLOYMENT.md) - Railway & Vercel
-
----
-
-<p align="center">
-  Part of the <strong>Knowtis</strong> monorepo
-</p>
+- [Root README](../../README.md)
+- [Architecture](../../docs/ARCHITECTURE.md)
+- [Authentication](../../docs/AUTH.md)
+- [AI Module](../../docs/AI.md)
+- [MCP Server](../../docs/MCP.md)
+- [Migrations](../../docs/MIGRATIONS.md)
+- [Deployment](../../docs/DEPLOYMENT.md)
