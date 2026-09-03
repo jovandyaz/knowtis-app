@@ -1,10 +1,12 @@
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import {
+  ipKeyGenerator,
   rateLimit,
   type AugmentedRequest,
   type Options,
 } from 'express-rate-limit';
 
+import { clientIpOf } from '../../core/http/client-ip';
 import { isOauthPath } from './oidc-mount.middleware';
 
 // oidc-provider's koa router is non-strict + case-insensitive, so open DCR
@@ -57,6 +59,9 @@ function buildTier(tier: RateLimitTier): RequestHandler {
     limit: tier.limit,
     standardHeaders: true,
     legacyHeaders: false,
+    // ipKeyGenerator folds IPv6 into a /56 so one client cannot rotate
+    // addresses inside its own allocation.
+    keyGenerator: (req) => ipKeyGenerator(clientIpOf(req)),
     handler: sendRateLimited,
   });
 }
@@ -66,8 +71,8 @@ function buildTier(tier: RateLimitTier): RequestHandler {
  * createOidcMount so it also covers requests that oidc-provider handles before
  * Nest's ThrottlerGuard. A strict tier bounds the open DCR write
  * (POST /oauth/reg); a looser tier covers token/authorize/discovery. Non-oauth
- * paths pass through uncounted. Keys on req.ip, so express must trust the
- * Railway proxy (app.set('trust proxy', 1)) or every client shares one bucket.
+ * paths pass through uncounted. Keys on the edge-set X-Real-IP
+ * (core/http/client-ip.ts), falling back to req.ip where no edge is present.
  */
 export function createOauthRateLimit(
   options?: OauthRateLimitOptions

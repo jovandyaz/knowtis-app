@@ -67,6 +67,11 @@ describe('ThrottlingModule', () => {
     return response.status;
   }
 
+  async function probeAs(headers: Record<string, string>): Promise<number> {
+    const response = await fetch(`${baseUrl}/probe`, { headers });
+    return response.status;
+  }
+
   async function probe(token?: string): Promise<number> {
     return probeAt('/probe', token);
   }
@@ -86,6 +91,7 @@ describe('ThrottlingModule', () => {
       imports: [ProbeModule],
     }).compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
+    app.set('trust proxy', 1);
     await app.listen(0);
     baseUrl = (await app.getUrl()).replace('[::1]', '127.0.0.1');
   });
@@ -129,5 +135,23 @@ describe('ThrottlingModule', () => {
 
     expect(new Set(statuses)).toEqual(new Set([200]));
     expect(await probeAt('/probe/unthrottled', tokenA)).toBe(429);
+  });
+
+  it('keys a signed-out caller on the edge-set X-Real-IP, not on X-Forwarded-For', async () => {
+    const edgeIp = '203.0.113.7';
+    expect(
+      await probeAs({ 'x-real-ip': edgeIp, 'x-forwarded-for': '10.0.0.1' })
+    ).toBe(200);
+
+    // Rotating the client-controlled header must not buy a fresh bucket.
+    expect(
+      await probeAs({ 'x-real-ip': edgeIp, 'x-forwarded-for': '10.0.0.2' })
+    ).toBe(429);
+  });
+
+  it('gives signed-out callers behind different edge IPs their own buckets', async () => {
+    expect(await probeAs({ 'x-real-ip': '203.0.113.7' })).toBe(200);
+
+    expect(await probeAs({ 'x-real-ip': '203.0.113.8' })).toBe(200);
   });
 });

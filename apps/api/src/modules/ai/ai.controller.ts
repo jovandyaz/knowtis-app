@@ -35,11 +35,11 @@ import type { Request } from 'express';
 
 import { AI_CONFIG_SOURCES } from '@knowtis/shared-types';
 
+import { clientIpOf } from '../../core/http/client-ip';
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { ApiAuthErrors, ApiBadRequest } from '../../core/swagger';
 import { Roles, RolesGuard } from '../authorization/roles.guard';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
-import { realIpOf } from '../websocket/socket-auth';
 import { CompleteTextHandler } from './application/commands/complete-text.handler';
 import { VoiceNoteHandler } from './application/commands/voice-note.handler';
 import {
@@ -273,7 +273,7 @@ export class AIController {
     @Body() dto: AICompleteDto,
     @Req() req: Request
   ) {
-    const clientIp = realIpOf(req.headers) ?? req.ip;
+    const clientIp = clientIpOf(req);
     const result = await this.completeTextHandler.execute({
       userId: user.id,
       action: dto.action,
@@ -284,7 +284,7 @@ export class AIController {
       }),
       ...(dto.targetTone !== undefined && { targetTone: dto.targetTone }),
       ...(user.isAnonymous && { isAnonymous: true }),
-      ...(clientIp ? { clientIp } : {}),
+      clientIp,
     });
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
   }
@@ -339,14 +339,14 @@ export class AIController {
     @CurrentUser() user: RequestUser,
     @Req() req: Request
   ) {
-    const clientIp = realIpOf(req.headers) ?? req.ip;
+    const clientIp = clientIpOf(req);
     const result = await this.voiceNoteHandler.execute({
       userId: user.id,
       audio: audio.buffer,
       mode: dto.mode,
       ...(dto.language !== undefined && { language: dto.language }),
       ...(user.isAnonymous && { isAnonymous: true }),
-      ...(clientIp ? { clientIp } : {}),
+      clientIp,
     });
 
     return unwrapOrThrow(result, AI_ERROR_STATUS_MAP);
