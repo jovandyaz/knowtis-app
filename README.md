@@ -35,22 +35,22 @@ Requires Node.js 22, pnpm 10, and Docker.
 ```bash
 git clone git@github.com:jovandyaz/knowtis-app.git
 cd knowtis-app
-pnpm setup      # deps, .env files, Postgres + Redis, schema
+pnpm run setup  # deps, .env files, Postgres + Redis, migrations
 pnpm dev:all    # API :3333, Notes :4200, Backoffice :4400
 ```
 
-AI features need an `ANTHROPIC_API_KEY` (or OpenAI / Google key) in `apps/api/.env`. The full walkthrough, including how email verification works locally and how to connect an MCP client, is in [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
+`run` is required: bare `pnpm setup` is a pnpm built-in. AI features need `OPENROUTER_API_KEY` in `apps/api/.env` (Anthropic, OpenAI and Google keys are optional per-provider) and the `ai_enabled` feature flag. The full walkthrough, including how email verification works locally and how to connect an MCP client, is in [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
 
 ## Stack
 
-| Layer     | Technology                                              |
-| --------- | ------------------------------------------------------- |
-| Frontend  | React 19, Vite, TanStack Router and Query, Tailwind CSS |
-| Backend   | NestJS 11, Drizzle ORM, Socket.io                       |
-| Data      | PostgreSQL 16, Redis 7                                  |
-| Real-time | Yjs (CRDT), IndexedDB                                   |
-| AI        | Vercel AI SDK, Anthropic, OpenAI, Google, MCP           |
-| Tooling   | Nx 22, TypeScript 5.9, Vitest, pnpm                     |
+| Layer     | Technology                                                |
+| --------- | --------------------------------------------------------- |
+| Frontend  | React 19, Vite, TanStack Router and Query, Tailwind CSS   |
+| Backend   | NestJS 11, Drizzle ORM, Socket.io                         |
+| Data      | PostgreSQL 16, Redis 7                                    |
+| Real-time | Yjs (CRDT), Hocuspocus, IndexedDB                         |
+| AI        | Vercel AI SDK, OpenRouter, Anthropic, OpenAI, Google, MCP |
+| Tooling   | Nx 22, TypeScript 5.9, Vitest, pnpm                       |
 
 ## Repository layout
 
@@ -69,7 +69,8 @@ packages/
   crdt/           Yjs helpers
   editor/         Tiptap editor and schema
   design-system/  UI components and design tokens
-  auth/ email/ permissions/   Core packages with React and NestJS adapters
+  auth/ permissions/   Core packages with React and NestJS adapters
+  email/          React Email templates and NestJS adapter
   shared/         Hooks, i18n, types, utilities
 ```
 

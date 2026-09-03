@@ -1,28 +1,4 @@
 /**
- * WebSocket collaboration events
- * Shared between frontend and backend
- */
-export const COLLABORATION_EVENTS = {
-  // Client -> Server
-  JOIN_ROOM: 'collaboration:join',
-  LEAVE_ROOM: 'collaboration:leave',
-  SYNC_UPDATE: 'collaboration:sync',
-  AWARENESS_UPDATE: 'collaboration:awareness',
-
-  // Server -> Client
-  INITIAL_STATE: 'collaboration:initial-state',
-  DOCUMENT_UPDATE: 'collaboration:update',
-  USER_JOINED: 'collaboration:user-joined',
-  USER_LEFT: 'collaboration:user-left',
-  AWARENESS_CHANGE: 'collaboration:awareness-change',
-  EDIT_DENIED: 'collaboration:edit-denied',
-  ERROR: 'collaboration:error',
-} as const;
-
-export type CollaborationEventType =
-  (typeof COLLABORATION_EVENTS)[keyof typeof COLLABORATION_EVENTS];
-
-/**
  * User in a collaborative session
  */
 export interface CollaborationUser {

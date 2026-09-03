@@ -133,7 +133,7 @@ describe('registerNotesTools', () => {
         'call to fetch the next page; prefer search-notes for content lookup.'
     );
     expect(getTool(tools, 'delete-note').config.description).toBe(
-      'Permanently delete a note. This action cannot be undone.'
+      'Delete a note. The note is soft-deleted and can be restored from the app.'
     );
     expect(getTool(tools, 'get-note').config.description).toContain(
       'Content is returned as Markdown.'
