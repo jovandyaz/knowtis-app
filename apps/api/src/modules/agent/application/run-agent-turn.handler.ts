@@ -663,7 +663,7 @@ export class RunAgentTurnHandler {
         model,
         maxSteps,
         maxTurnTokens,
-        reasoningEffort,
+        ...(reasoningEffort ? { reasoningEffort } : {}),
         openrouterProviderOrder,
         ...(input.noteId ? { noteId: input.noteId } : {}),
         ...(input.knownNotes ? { knownNotes: input.knownNotes } : {}),

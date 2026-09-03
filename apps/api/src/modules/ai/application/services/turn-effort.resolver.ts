@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 
-import type { ReasoningEffort } from '@knowtis/shared-types';
+import { providerOf } from '@knowtis/ai-gateway';
+import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
 import {
   clampEffort,
@@ -8,6 +9,8 @@ import {
 } from '../../domain/model-catalog/effort-policy';
 import { AIConfigService } from './ai-config.service';
 import { ModelPreferenceService } from './model-preference.service';
+
+const OPENROUTER_PROVIDER = 'openrouter';
 
 export interface TurnEffortRequest {
   readonly userId: string;
@@ -27,18 +30,18 @@ export class TurnEffortResolver {
 
   /**
    * The effort a turn runs at: the caller's request when the model declares it
-   * and the audience may spend it, else the configured global default. A
-   * refused or lowered request is logged with a structured warn — never a
-   * silent mismatch.
+   * and the audience may spend it, else the configured global default where the
+   * provider accepts it, else nothing. A refused or lowered request is logged
+   * with a structured warn — never a silent mismatch.
    */
   async resolve({
     userId,
     model,
     isByok,
     requested,
-  }: TurnEffortRequest): Promise<ReasoningEffort> {
+  }: TurnEffortRequest): Promise<ReasoningEffort | undefined> {
     if (!requested) {
-      return this.aiConfig.getReasoningEffort();
+      return this.defaultFor(model, userId);
     }
     const audience: Exclude<EffortAudience, 'anonymous'> = isByok
       ? 'byok'
@@ -51,7 +54,7 @@ export class TurnEffortResolver {
         model,
         requested,
       });
-      return this.aiConfig.getReasoningEffort();
+      return this.defaultFor(model, userId, declared);
     }
     if (clamped !== requested) {
       this.logger.warn({
@@ -62,5 +65,27 @@ export class TurnEffortResolver {
       });
     }
     return clamped;
+  }
+
+  /**
+   * The global default, only where the provider will accept it: always for
+   * OpenRouter, and for a direct provider only when the model declares that
+   * level — an undeclared model gets no reasoning option, so the SDK's own
+   * capability checks are never bypassed.
+   */
+  private async defaultFor(
+    model: string,
+    userId: string,
+    declared?: ModelReasoning | null
+  ): Promise<ReasoningEffort | undefined> {
+    const fallback = await this.aiConfig.getReasoningEffort();
+    if (providerOf(model) === OPENROUTER_PROVIDER) {
+      return fallback;
+    }
+    const levels =
+      declared === undefined
+        ? (await this.modelPreference.reasoningFor(model, userId))?.levels
+        : declared?.levels;
+    return levels?.includes(fallback) ? fallback : undefined;
   }
 }

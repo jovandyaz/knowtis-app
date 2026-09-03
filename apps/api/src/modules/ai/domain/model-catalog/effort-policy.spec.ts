@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ModelReasoning, ReasoningEffort } from '@knowtis/shared-types';
 
-import { clampEffort, FREE_BOOST_CEILING } from './effort-policy';
+import { clampEffort, FREE_BOOST_CEILING, freeLevels } from './effort-policy';
 
 function reasoning(levels: readonly ReasoningEffort[]): ModelReasoning {
   return { levels, mandatory: false };
@@ -29,16 +29,28 @@ describe('clampEffort', () => {
   });
 
   describe('free audience', () => {
-    it('clamps to the highest declared level at or below the ceiling regardless of the request', () => {
-      const declared = reasoning(['low', 'medium', 'high', 'xhigh']);
+    const declared = reasoning(['low', 'medium', 'high', 'xhigh']);
+
+    it('honours a requested level the model declares at or below the ceiling', () => {
+      expect(clampEffort('low', declared, 'free')).toBe('low');
+      expect(clampEffort('medium', declared, 'free')).toBe('medium');
       expect(clampEffort('high', declared, 'free')).toBe('high');
-      expect(clampEffort('max', declared, 'free')).toBe('high');
-      expect(clampEffort('low', declared, 'free')).toBe('high');
     });
 
-    it('clamps below the ceiling when the model declares nothing at it', () => {
-      expect(clampEffort('high', reasoning(['low', 'medium']), 'free')).toBe(
+    it('lowers a request above the ceiling to the highest declared level within it', () => {
+      expect(clampEffort('xhigh', declared, 'free')).toBe('high');
+      expect(clampEffort('max', declared, 'free')).toBe('high');
+    });
+
+    it('lowers below the ceiling when the model declares nothing at it', () => {
+      expect(clampEffort('max', reasoning(['low', 'medium']), 'free')).toBe(
         'medium'
+      );
+    });
+
+    it('returns null for a level within the ceiling the model does not declare', () => {
+      expect(clampEffort('medium', reasoning(['low', 'high']), 'free')).toBe(
+        null
       );
     });
 
@@ -62,5 +74,15 @@ describe('clampEffort', () => {
     it('returns null for an empty level list', () => {
       expect(clampEffort('high', reasoning([]), 'free')).toBe(null);
     });
+  });
+});
+
+describe('freeLevels', () => {
+  it('keeps the declared levels at or below the ceiling, in declared order', () => {
+    expect(freeLevels(['max', 'high', 'low'])).toEqual(['high', 'low']);
+  });
+
+  it('is empty when nothing is within the ceiling', () => {
+    expect(freeLevels(['xhigh', 'max'])).toEqual([]);
   });
 });
