@@ -2,7 +2,6 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import {
   MODEL_CATALOG,
-  OPENROUTER_PROVIDER,
   providerOf,
   type ModelCatalog,
 } from '@knowtis/ai-gateway';
@@ -10,9 +9,11 @@ import {
   MODEL_INTENTS,
   type ModelAccess,
   type ModelIntent,
+  type ModelReasoning,
   type SelectableModel,
 } from '@knowtis/shared-types';
 
+import { freeLevels } from '../../domain/model-catalog/effort-policy';
 import {
   accessFor,
   type AccessCandidate,
@@ -29,6 +30,22 @@ const NO_BYOK: ReadonlySet<string> = new Set();
 
 interface OfferedModel extends CuratedModel {
   description?: string;
+}
+
+/** The ladder this caller may pick from — the model's own when the turn bills their key, else the server-billed slice — or undefined when none survives. */
+function offeredReasoning(
+  model: OfferedModel,
+  billedToUser: boolean
+): ModelReasoning | undefined {
+  if (!model.reasoning) {
+    return undefined;
+  }
+  const levels = billedToUser
+    ? model.reasoning.levels
+    : freeLevels(model.reasoning.levels);
+  return levels.length === 0
+    ? undefined
+    : { levels, mandatory: model.reasoning.mandatory };
 }
 
 @Injectable()
@@ -144,6 +161,8 @@ export class SelectableModelsService {
     return this.catalogUnion(configured, byokProviders)
       .filter((m) => this.invocable(m, byokProviders))
       .map((m) => {
+        const billedToUser = byokProviders.has(providerOf(m.id));
+        const reasoning = offeredReasoning(m, billedToUser);
         const servesIntent = intentModels
           ? MODEL_INTENTS.find((intent) => intentModels[intent] === m.id)
           : undefined;
@@ -157,7 +176,7 @@ export class SelectableModelsService {
             this.catalog.getContextWindow(m.id)?.maxInputTokens ?? 0,
           costClass: this.costClass(m.id),
           isDefault: m.id === systemDefault,
-          billedToUser: byokProviders.has(providerOf(m.id)),
+          billedToUser,
           routableByServer: this.registry.isModelAvailable(m.id),
           access: this.accessFor(
             m,
@@ -165,9 +184,7 @@ export class SelectableModelsService {
             tierGatingOn,
             maxOutputCostPerToken
           ),
-          ...(m.reasoning && providerOf(m.id) === OPENROUTER_PROVIDER
-            ? { reasoning: m.reasoning }
-            : {}),
+          ...(reasoning ? { reasoning } : {}),
           ...(servesIntent ? { servesIntent } : {}),
         };
       });
