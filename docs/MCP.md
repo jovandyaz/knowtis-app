@@ -535,19 +535,11 @@ Tests sit in `__tests__/` directories next to the code they cover (`src/__tests_
 
 ### Railway
 
-The MCP server runs as its own Railway service, configured in [`apps/mcp/railway.toml`](../apps/mcp/railway.toml):
-
-| Setting           | Value                                                                      |
-| ----------------- | -------------------------------------------------------------------------- |
-| `buildCommand`    | `NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp` |
-| `startCommand`    | `node dist/apps/mcp/index.js`                                              |
-| `healthcheckPath` | `/health`                                                                  |
-
-Railway config-as-code cannot set environment variables (`railway.toml` has no `[env]` section). The `deploy-mcp` job in `.github/workflows/ci.yml` pins `NODE_ENV=production` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` on the service via `railway variable set` before every `railway up`. `API_INTERNAL_URL` is a Railway service variable pointing at the API's internal URL (e.g. `http://api.railway.internal:3333`).
+The MCP server runs as its own Railway service (`knowtis-mcp`), declared next to the API in [`.railway/railway.ts`](../.railway/railway.ts): nixpacks build `NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp`, start `node dist/apps/mcp/index.js`, healthcheck `/health`, restart on failure with 3 retries. Its variables (`NODE_ENV`, `MCP_ALLOWED_HOSTS`, `API_INTERNAL_URL`, the OAuth pair below, ...) are `preserve()` in that file: managed in Railway and referenced from the file, never written to source. The `deploy-mcp` job in `.github/workflows/ci.yml` additionally pins `NODE_ENV=production` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` on the service via `railway variable set` before every `railway up`. `API_INTERNAL_URL` is a Railway service variable pointing at the API's private-network endpoint (`knowtisapp` in `.railway/railway.ts`, e.g. `http://knowtisapp.railway.internal:3333`).
 
 To enable OAuth in production, set on the **MCP** service `MCP_OAUTH_ISSUER=https://api.knowtis.app` and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`, and on the **API** service `OAUTH_ISSUER=https://api.knowtis.app`, `OAUTH_JWKS` (a **prod-generated** keypair — never the dev one), `OAUTH_COOKIE_KEYS`, and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`. The resource server can be deployed with its env set while `mcp_oauth` stays off (it is env-gated); flip the flag to turn on the authorization server.
 
-Deploys are CI-driven via `railway up`, gated on the `mcp` project being affected on `main`. `railway.toml` deliberately has no `watchPatterns`: Railway checks them against the uploaded snapshot and **skips the build** when no watched file changed — silently deploying nothing while the CI job reports success. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
+Deploys are CI-driven via `railway up`, gated on the `mcp` project being affected on `main`. The service declares no `watchPatterns`: Railway would check them against the uploaded snapshot and **skip the build** when none matched — silently deploying nothing while the CI job reports success. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
 
 ### DNS-rebinding protection
 

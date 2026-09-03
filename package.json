@@ -243,6 +243,7 @@
     "nx": "^22.3.3",
     "prettier": "^3.7.4",
     "promptfoo": "^0.121.15",
+    "railway": "^3.11.0",
     "storybook": "^10.1.10",
     "style-dictionary": "^5.1.1",
     "tslib": "^2.3.0",

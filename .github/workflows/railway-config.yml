@@ -1,0 +1,61 @@
+name: Railway config
+
+# Plans .railway/railway.ts on pull requests and applies the reviewed, pinned
+# plan when the PR merges (railwayapp/config pins the change set, the
+# environment etag and the .railway/ tree, so what was reviewed is what lands).
+# Direct pushes to main have no pinned plan and fail by design. Destructive
+# changes are refused: widen the file, re-plan, review.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - '.railway/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  actions: read
+
+jobs:
+  plan:
+    name: Plan
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - uses: railwayapp/config@v1
+        with:
+          command: plan
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          confirm-destructive: false
+
+  apply:
+    name: Apply
+    if: github.event.action == 'closed' && github.event.pull_request.merged && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: 'pnpm'
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - uses: railwayapp/config@v1
+        with:
+          command: apply
+          railway-token: ${{ secrets.RAILWAY_TOKEN }}
+          confirm-destructive: false

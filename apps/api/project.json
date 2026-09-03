@@ -12,7 +12,7 @@
       "defaultConfiguration": "production",
       "inputs": [
         "default",
-        "{workspaceRoot}/railway.toml",
+        "{workspaceRoot}/.railway/railway.ts",
         "{workspaceRoot}/.github/workflows/ci.yml"
       ],
       "options": {
