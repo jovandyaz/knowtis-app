@@ -4,9 +4,9 @@ Internal admin panel. Isolated from the end-user `notes` app — separate bundle
 
 ## Pages
 
-`src/routes/_authenticated/`: dashboard (`index`), `users`, `audit`, `feature-flags` (the `product`-domain flags), `ai-metrics` (spend/token/request charts) and `ai-config` — the single AI-ops surface.
+`src/routes/_authenticated/`: dashboard (`index`), `users`, `audit`, `feature-flags` (the `product`-domain flags), `ai-metrics` (spend/token/request charts) and `ai-config` — the single AI-ops surface. Public routes: `/login` and `/forbidden` (`src/routes/login.tsx`, `forbidden.tsx`). Route files only mount the page components in `src/pages/`; feature-flag and chart components live in `src/components/flags/` and `src/components/charts/`.
 
-The **AI Config** page composes `src/components/ai-config/`: `ModelsSection` (which model each kind of turn runs on), `RoutingSection` (the fallback chain order), `UpstreamSection` (the OpenRouter upstream allowlist), `ReasoningSection` (the global reasoning-effort default), `CeilingSection` (the free-tier price ceiling), `ProvidersSection` with a `ProviderCard` per provider (stored key, enablement, live probe verdict), `CatalogSection` + `PromotedTable` / `CandidatesTable` for the open-tier catalog, and `ConfigSourceCell`, which badges every setting `custom` / `default` / `stale` — `stale` destructively, next to the stored value the runtime is ignoring. `assignable-model-options.ts` is what limits the model pickers in `ModelsSection` / `RoutingSection` to models a keyed, enabled provider can actually route. See [docs/AI.md](../../docs/AI.md).
+The **AI Config** page (`src/pages/AiConfigPage.tsx`) composes `src/components/ai-config/`: `AiConfigStatusHeader`, `CatalogAlerts`, `ConfigSection` (section shell), `ModelsSection` (which model each kind of turn runs on), `RoutingSection` (the fallback chain order), `UpstreamSection` (the OpenRouter upstream allowlist), `ReasoningSection` (the global reasoning-effort default), `CeilingSection` (the free-tier price ceiling), `ProvidersSection` with a `ProviderCard` per provider (stored key, enablement, live probe verdict), `CatalogSection` + `PromotedTable` / `CandidatesTable` for the open-tier catalog, and `ConfigSourceCell`, which badges every setting `custom` / `default` / `stale` — `stale` destructively, next to the stored value the runtime is ignoring. `assignable-model-options.ts` is what limits the model pickers in `ModelsSection` / `RoutingSection` to models a keyed, enabled provider can actually route; `useForkedDraft.ts` keeps a local edit only while the server value it forked from is unchanged; `catalog-pricing.ts` and `serving-roles.ts` hold catalog-pricing and serving-role helpers. See [docs/AI.md](../../docs/AI.md).
 
 ## Local development
 
@@ -16,7 +16,9 @@ pnpm dev:api          # API on :3333
 pnpm dev:backoffice   # app on :4400
 ```
 
-Seed an admin user: see `apps/api/src/scripts/seed-admin.ts`.
+`.env.example` has a single variable, `VITE_API_URL` (fallback `http://localhost:3333/api/v1` in `libs/api-client/src/lib/config.ts`).
+
+Seed an admin user: `pnpm db:seed:admin` (runs `nx seed-admin api`).
 
 ## Deploy constraints
 
