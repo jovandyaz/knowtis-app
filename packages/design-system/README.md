@@ -23,7 +23,7 @@ Stories are co-located with each component (`Button.stories.tsx` next to `Button
 
 ## Components
 
-~45 entries under `src/components/` (45 component + story + test files), all re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenu`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelSelect`, `SegmentedControl`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`.
+35 components under `src/components/` (63 files in the directory, counting co-located stories and tests), every one re-exported from `src/index.ts`: primitives like `Button`, `Input`, `Textarea`, `Badge`, `Switch`, `Card`; overlays like `Dialog`, `DropdownMenu`, `Tooltip`, `CommandMenu`; state views `LoadingState` / `ErrorState` / `EmptyState`; plus app-shaped pieces such as `ModelMenu`, `ModelSelect`, `SegmentedControl`, `RadioCardGroup`, `VoiceButton`, `RecordingModal`, `ThemeToggle`, and `PasswordInput`/`PasswordStrength`.
 
 ## Design tokens & styles
 

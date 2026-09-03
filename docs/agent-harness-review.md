@@ -2,7 +2,7 @@
 
 > Fecha: 2026-08-27
 > Referencias `archivo:línea` tomadas el 2026-08-27; el código ha cambiado desde entonces (Bolt 1, Bolt 2/SP1, upgrade a AI SDK v7), tratarlas como orientación, no como ancla exacta.
-> Última actualización de estados: 2026-08-31.
+> Última actualización de estados: 2026-09-03.
 > Alcance: agente AI de Knowtis (`apps/api/src/modules/agent`, `apps/api/src/modules/ai`, `packages/ai-gateway`, `apps/mcp`) evaluado contra los 6 pilares de un agent harness (Tool Registry, Model, Context Management, Guardrails, Agent Loop, Verify) y contra las buenas prácticas de industria 2025–2026.
 
 ## Resumen ejecutivo
@@ -18,14 +18,18 @@
 
 No es un wrapper de LLM: loop multi-step propio sobre Vercel AI SDK, HITL para escrituras, injection guard de 2 capas, catálogo de modelos db-backed, rate limiting multicapa. Los 3 pilares fuertes están por encima de la media de la industria. Las divergencias principales que quedan contra el consenso 2025–2026: presupuesto dentro del loop denominado en USD (el cap en tokens llegó en Bolt 1; el consenso lo expresa en costo — #365), presupuesto de contexto derivado de `maxInputTokens` (#366), y evals en CI. La persistencia del transcript dejó de ser divergencia: shippeó en Bolt 2 / SP1 y corre sin flag desde #377.
 
-### Avance (al 2026-08-31)
+### Avance (al 2026-09-03)
 
-| Entrega                               | PRs                          | Qué cerró                                                                                                                                                           |
-| ------------------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bolt 1 — endurecimiento del loop      | #336                         | `stopReason` en `agent:done`, presupuesto de tokens por turno, persist-once en todo camino terminal, `agent.tool.error`, fix de `releaseReservation`                |
-| Bolt 2 / SP1 — transcript persistente | #369, #371, #374, #375, #377 | `parts` (tool_use/tool_result) por step, `stop_reason`, `turn_id`, `pruneTranscript`; el flag se retiró tras validarlo en prod                                      |
-| Higiene del protocolo                 | #379                         | Se eliminó el evento de dominio `committed`, nunca emitido, y su plumbing muerto (el evento de socket `agent:committed` sigue vivo)                                 |
-| Upgrade a AI SDK v7                   | #381                         | Cierra #373 (sampling filtrado por modelo + guard de `servedModel` en evals), migra la telemetría a `@ai-sdk/otel` + Langfuse v7 y corrige la redacción por default |
+| Entrega                               | PRs                          | Qué cerró                                                                                                                                                                                                                                            |
+| ------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bolt 1 — endurecimiento del loop      | #336                         | `stopReason` en `agent:done`, presupuesto de tokens por turno, persist-once en todo camino terminal, `agent.tool.error`, fix de `releaseReservation`                                                                                                 |
+| Bolt 2 / SP1 — transcript persistente | #369, #371, #374, #375, #377 | `parts` (tool_use/tool_result) por step, `stop_reason`, `turn_id`, `pruneTranscript`; el flag se retiró tras validarlo en prod                                                                                                                       |
+| Higiene del protocolo                 | #379                         | Se eliminó el evento de dominio `committed`, nunca emitido, y su plumbing muerto (el evento de socket `agent:committed` sigue vivo)                                                                                                                  |
+| Upgrade a AI SDK v7                   | #381                         | Cierra #373 (sampling filtrado por modelo + guard de `servedModel` en evals), migra la telemetría a `@ai-sdk/otel` + Langfuse v7 y corrige la redacción por default                                                                                  |
+| Pre-flight de evals + catálogo BYOK   | #387, #388, #389             | Pre-flight del modelo fijado y deuda de campos de usage v7, modelos por proveedor scopeados a BYOK con el lineup curado de agosto 2026, y el eval de exfiltración falla por enlaces seguibles y no por menciones seguras                             |
+| Evals multi-trial + calibración       | #393, #394, #397             | `AI_EVAL_TRIALS` (nightly 3) con umbral por caso `ceil(2/3 × trials)`, `AI_EVAL_OUTPUT_DIR` + artefacto `eval-results`, tooling de calibración del LLM-judge, y el modelo del eval fijado a `anthropic:claude-sonnet-5`                              |
+| Model picker v2                       | #395, #396, #398, #399       | `ModelMenu` + submenús en el design system, `servesIntent` / `access` / `reasoning` en `GET /ai/models` con listado anónimo de solo-intents, esfuerzo por turno en el composer, y en backoffice los modelos asignables por proveedor + probes de key |
+| Denominador de evals + esfuerzo       | #401, #402                   | Los errores de transporte del grader salen del denominador (un caso 100% no calificado igual falla), y el esfuerzo llega nativo a anthropic/openai/google además de openrouter vía `turnProviderOptions` + `effortFor` por modelo servido            |
 
 Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como changelog:
 
@@ -80,12 +84,14 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 - Resolución en cadena (`run-agent-turn.handler.ts:747-798`): request → conversación (resume HITL) → preferencia usuario BYOK → intent DB (`ai_fast/default/deep_model`) → default de sistema → primer seleccionable. Validación final contra catálogo (`AIModel.create`).
 - Catálogo db-backed (`ai_catalog_models`, `ai-catalog.schema.ts:37`): sync diario de OpenRouter (`catalog-sync.task.ts:75`), precios LiteLLM con alertas de drift, cache caliente 60s que nunca rechaza, fusión código+DB donde curado gana (`composite-model-catalog.ts:47-53`), admin de promote/retire en backoffice.
 - Config en DB (`ai_config`): default/fast/deep model, fallback chain, reasoning effort, providers OpenRouter, techo free tier. Defaults de código como piso.
+- Selección de modelo por usuario (picker v2, #395–#399): `GET /ai/models` publica `access`, `reasoning` y `servesIntent` por modelo, con las filas de intent como única vista anónima (todo lo que no es el default corre bloqueado como upsell); `offeredReasoning` (`selectable-models.service.ts`) recorta la escalera declarada a lo que la capa del usuario puede gastar; el backoffice administra los modelos asignables por proveedor (`assignable-models.service.ts`) y prueba las keys con `provider-probe.ts`.
+- Esfuerzo por turno (#402): el turno acepta `effort` en `agent:message` y `TurnEffortResolver` decide — `clampEffort` con `FREE_BOOST_CEILING = 'high'` para la capa gratis, escalera completa para BYOK, y rechazo antes de crear conversación para anónimos (`run-agent-turn.handler.ts:175-178`); sin `effort` aceptado corre el default global `ai_reasoning_effort`, y solo donde el modelo declara el nivel. `turnProviderOptions` es la única costura que arma `providerOptions`, compartida con todo el structured output.
 - BYOK: AES-256-GCM con IV aleatorio (`secret-cipher.ts`), `BYOK_ENCRYPTION_KEY` 32 bytes validada al arranque, validación de key con generateText real, fail-closed si no descifra (`run-agent-turn.handler.ts:547-563`). Turno BYOK: sin fallback chain, sin caching, sin contenido en telemetría, salta rate limit de costo.
-- Sampling: `temperature` hardcoded 0.7 (`step-call.ts:43`), ahora inocua en los modelos que la rechazan — `@ai-sdk/anthropic@4` la filtra por modelo (`rejectsSamplingParameters`) y emite un warning en vez de dejar que el proveedor devuelva 400 (#373); `maxOutputTokens` global por env (8192), ignora el techo por modelo del catálogo; reasoning effort desde DB pero solo aplica a `openrouter:*`; prompt caching solo `anthropic:*` y flag-gated (inerte con defaults de fábrica `openrouter:*`).
+- Sampling: `temperature` hardcoded 0.7 (`step-call.ts:43`), ahora inocua en los modelos que la rechazan — `@ai-sdk/anthropic@4` la filtra por modelo (`rejectsSamplingParameters`) y emite un warning en vez de dejar que el proveedor devuelva 400 (#373); `maxOutputTokens` global por env (8192), ignora el techo por modelo del catálogo; prompt caching solo `anthropic:*` y flag-gated (inerte con defaults de fábrica `openrouter:*`). **Reasoning effort: RESUELTO (#402)** — ya no es solo `openrouter:*`. `turn-provider-options.ts` compone el bloque nativo de cada proveedor (`anthropic.{thinking, effort}`, `openai.reasoningEffort`, `google.thinkingConfig`, `openrouter.reasoning.effort`) y el step loop lo re-resuelve por modelo candidato vía `effortFor`, así que un failover a mitad de turno nunca manda la opción de otro proveedor.
 
 ### 1.4 Guardrails — ✅ input / ⚠️ output
 
-**Injection guard** (`packages/ai-gateway/src/guard/prompt-guard.ts`): 24 patrones ponderados EN/ES, scoring acumulativo, umbral 0.6, normalización NFKC + strip de 17 codepoints zero-width/bidi, guard anti-ReDoS (rechaza >50k chars). Aplicado en 10 puntos: preflight completions, último mensaje del turno, historial (mensajes user inseguros se descartan), pre-embed de memoria, hits de web search, respuesta Tavily, contenido de webFetch, cuerpos de notas recuperadas (flag-gated), memorias extraídas por LLM, clasificación de organización.
+**Injection guard** (`packages/ai-gateway/src/guard/prompt-guard.ts`): 23 patrones ponderados EN/ES, scoring acumulativo, umbral 0.6, normalización NFKC + strip de 17 codepoints zero-width/bidi, guard anti-ReDoS (rechaza >50k chars). Aplicado en 10 puntos: preflight completions, último mensaje del turno, historial (mensajes user inseguros se descartan), pre-embed de memoria, hits de web search, respuesta Tavily, contenido de webFetch, cuerpos de notas recuperadas (flag-gated), memorias extraídas por LLM, clasificación de organización.
 
 **Escalación a classifier LLM** en zona gris 0.3–0.6 (flag `agent_injection_classifier`), fail-open, fuera del fallback chain, `recordContent: false` incondicional.
 
@@ -95,14 +101,14 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 
 **Rate limiting / costos** (`ai-rate-limit.service.ts`): breaker global de gasto (`AI_GLOBAL_DAILY_COST_LIMIT_USD` 25) → RPM por usuario (15) → reserva atómica token+costo (100k tokens / $1 día, anónimos 33%) → budget per-IP anónimos → fallback PG si Redis cae → warning al 80% con webhook.
 
-**Feature flags:** 17 tipados, 5 marcados GUARDRAIL; todo lookup fail-safe (error → off). `ai_enabled` master en controllers + chequeo manual en gateways WS.
+**Feature flags:** 18 tipados, 6 marcados GUARDRAIL; todo lookup fail-safe (error → off). `ai_enabled` master en controllers + chequeo manual en gateways WS.
 
 **Output:** solo sanitización HTML + re-screen de inyección en memorias extraídas. Sin moderación, sin PII redaction, sin re-scan del texto assistant.
 
 ### 1.5 Context Management — ⚠️ parcial
 
 - Token estimator (`packages/ai-gateway/src/tokens/token-estimator.ts`): chunking de 4k chars (BPE cuadrático), specials contados como texto, nunca lanza, drift <1%, bien testeado. **Se usa solo para dinero, nunca para caber.**
-- Historial: 40 mensajes DB → filtro de seguridad (solo user) → `AGENT_HISTORY_TOKEN_BUDGET = 12_000` hardcoded (`run-agent-turn.handler.ts:114`) recorriendo de atrás hacia adelante. Cap 50k chars por mensaje user.
+- Historial: `AI_AGENT_HISTORY_LIMIT` filas de DB (default 120, no turnos — ver 1.1) → filtro de seguridad (solo user) → `AGENT_HISTORY_TOKEN_BUDGET = 12_000` hardcoded (`run-agent-turn.handler.ts:131`) recorriendo de atrás hacia adelante. Cap 50k chars por mensaje user.
 - `maxInputTokens` existe en el catálogo (`model-catalog.ts:12`) y solo se consume para display: nada compara estimación contra ventana real antes de llamar.
 - Sin compaction/resumen (grep: cero hits). Ventana deslizante pura.
 - Tool results del turno no entran en ningún presupuesto: 8 steps × getNote 10k chars ≈ 20k tokens no contabilizados.
@@ -116,7 +122,7 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 
 **Structured output:** `Output.object({ schema })` con Zod en voice-note, artifacts, organización, memory-reconcile.
 
-**Tests:** 111 specs entre agent/ai/ai-gateway. Corpus de inyección: 45 ataques + 36 benignos (`injection-corpus.ts`). Evals promptfoo (`modules/agent/eval/`): injection, copilot, memory recall, retrieval quality, web search quality; grader `claude-haiku-4-5`; assertions estructurales (`assertGrounding` exige orden searchNotes→getNote + sources).
+**Tests:** 128 specs entre agent/ai/ai-gateway. Corpus de inyección: 44 ataques + 35 benignos (`injection-corpus.ts`). Evals promptfoo (`modules/agent/eval/`): injection, copilot, memory recall, retrieval quality, web search quality; grader `claude-haiku-4-5`; assertions estructurales (`assertGrounding` exige orden searchNotes→getNote + sources).
 
 **CI de evals:** solo nightly (`.github/workflows/nightly-eval.yml`, cron 08:00, falla si falta la key). NO corre en PRs.
 
@@ -145,7 +151,7 @@ Dos hallazgos del upgrade que valen como aprendizaje del harness, no solo como c
 10. **`maxOutputTokens` global** ignorando el techo por modelo que el catálogo ya persiste. La mitad de `temperature` dejó de morder en #381: el provider la filtra en los modelos que la rechazan, aunque el harness sigue mandando 0.7 fijo en vez de derivarla por tarea.
 11. **Agotar `maxSteps` es silencioso** — resuelto en Bolt 1: `done` lleva `stopReason` (`completed` | `max_steps` | `length` | `token_budget` | `content_filter`) y cada caso anómalo deja un warn.
 12. **BYOK pierde toda la resiliencia** — sin fallback chain ni failover por step.
-13. **Evals nightly-only**, single-trial, 1 caso E2E de injection. Desde #381 al menos ya no califican en silencio al modelo equivocado: el transcript guarda `servedModel` y el harness truena si difiere del modelo fijado.
+13. **Evals nightly-only** — single-trial **resuelto (#393)**: `AI_EVAL_TRIALS` (nightly 3) juzga cada caso por su tasa de aprobación con umbral `ceil(2/3 × trials)`, y #401 saca del denominador los trials cuyo único fallo fue un error de transporte del grader sin dejar que un caso 100% no calificado pase. Queda abierto el gate en PRs (solo nightly) y el único caso E2E de injection. Desde #381 tampoco califican en silencio al modelo equivocado: el transcript guarda `servedModel` y el harness truena si difiere del modelo fijado (#397 lo fija a `anthropic:claude-sonnet-5`).
 14. **Sin correlación trace↔costo** en observabilidad.
 15. **Sin dead-letter** para reconciliación de usage fallida (reserva colgada hasta rollover diario).
 
@@ -241,7 +247,7 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 2. **Budget económico dentro del loop** — first-class en 2026 (`maxBudgetUsd`); knowtis solo gatea pre-turno con estimación.
 3. **Agotar max steps debe señalizarse** — SDKs lanzan error explícito; knowtis emite `done` silencioso.
 4. **Presupuesto de contexto dinámico + compaction** — budget fijo 12k desacoplado de `maxInputTokens` que el catálogo ya tiene.
-5. **Evals: dual CI + multi-trial pass@k** — knowtis nightly-only, single-trial.
+5. **Evals: dual CI + multi-trial pass@k** — multi-trial resuelto (#393, #401); sigue faltando el gate determinista en PRs: knowtis corre solo nightly.
 6. **Verify con grader fresco / scoring asíncrono** — knowtis tiene capa determinista pero cero verificación semántica ni async.
 7. **Tool events al cliente** — el SDK que usan lo trae de fábrica; no emiten nada.
 8. **Sampling por step** — `prepareStep` disponible en su dependencia; temperature hardcoded.
@@ -251,21 +257,21 @@ Leyenda: **[CONSENSO]** = multi-vendor/estándar · **[VENDOR]** = posición de 
 - **Flywheel producción→eval ausente**: sin captura de feedback como scores ni conversión de fallas a casos de eval.
 - **`experimental_repairToolCall` sin usar.**
 - **OTel GenAI semconv**: adoptar atributos `gen_ai.*` + propagar `requestId` a telemetría cerraría la correlación trace↔costo.
-- **Tool error rate**: la métrica/alerta #1 recomendada por la industria; instrumentada en Bolt 1 (`agent.tool.error` + `toolErrors` en `agent.turn.health`), falta la alerta.
+- **Tool error rate**: la métrica/alerta #1 recomendada por la industria; instrumentada en Bolt 1 (`agent.tool.error` + `toolErrors` en `agent.turn.health`) y la alerta ya shippeó — cron diario detrás del flag `agent_health_alerts` (`infrastructure/health/agent-health-report.task.ts`) con umbrales `AGENT_TOOL_ERROR_ALERT_RATE` (0.10) y `AGENT_STOP_ANOMALY_ALERT_RATE` (0.20) al webhook de alertas.
 
 ### 3.4 Priorización final
 
-| #   | Acción                                                                                                                                            | Esfuerzo   | Respaldo                                                 |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
-| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles) (resuelto en Bolt 2 / SP1 — 2026-08-30; replay incondicional desde #377)  | Medio      | Consenso unánime                                         |
-| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                  | Bajo       | Consenso + primitiva disponible                          |
-| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                        | Bajo       | Deriva de #1                                             |
-| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`) | Bajo-medio | Claude SDK, OWASP LLM10                                  |
-| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                             | Medio      | Anthropic context engineering                            |
-| 6   | Suite de regresión como PR gate (paths-filtered) + pass@k                                                                                         | Medio      | Promptfoo/Anthropic                                      |
-| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                         | Trivial    | Audit propio                                             |
-| 8   | Stream de tool events al cliente                                                                                                                  | Bajo       | Vercel UI parts                                          |
-| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                       | Medio      | Consenso plataformas                                     |
-| 10  | Compaction/summarización de historial                                                                                                             | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
+| #   | Acción                                                                                                                                                     | Esfuerzo   | Respaldo                                                 |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------- |
+| 1   | Persistir tool_use/tool_result (schema `conversation_messages` + roles) (resuelto en Bolt 2 / SP1 — 2026-08-30; replay incondicional desde #377)           | Medio      | Consenso unánime                                         |
+| 2   | Instrumentar `tool-error` + métrica tool error rate (resuelto en Bolt 1 — 2026-08-27; `repairToolCall` diferido)                                           | Bajo       | Consenso + primitiva disponible                          |
+| 3   | Persistir mensaje user en turnos abortados/error (resuelto en Bolt 1 — 2026-08-27; persistencia de tool calls sigue en #1)                                 | Bajo       | Deriva de #1                                             |
+| 4   | Cost/token stop condition en el loop + señal `max_steps` (resuelto en Bolt 1 — 2026-08-27: `AI_AGENT_TURN_TOKEN_BUDGET` + `stopReason` en `done`)          | Bajo-medio | Claude SDK, OWASP LLM10                                  |
+| 5   | Budget de contexto derivado de `maxInputTokens` + contar tool results                                                                                      | Medio      | Anthropic context engineering                            |
+| 6   | Suite de regresión como PR gate (paths-filtered) (pass@k resuelto en #393/#401: `AI_EVAL_TRIALS` + umbral `ceil(2/3 × trials)`; solo queda el gate en PRs) | Medio      | Promptfoo/Anthropic                                      |
+| 7   | Fix bug `releaseReservation` (IP cruda) (resuelto en Bolt 1 — 2026-08-27)                                                                                  | Trivial    | Audit propio                                             |
+| 8   | Stream de tool events al cliente                                                                                                                           | Bajo       | Vercel UI parts                                          |
+| 9   | Flywheel feedback→dataset (scores Langfuse)                                                                                                                | Medio      | Consenso plataformas                                     |
+| 10  | Compaction/summarización de historial                                                                                                                      | Alto       | Anthropic; diferible mientras conversaciones sean cortas |
 
 Nota sobre moderación de output: según consenso, opcional para agente interno cuyo output no se publica — knowtis prioriza guardrails de acción (correcto). Sube a obligatorio si las notas generadas se comparten públicamente.

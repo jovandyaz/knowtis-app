@@ -121,22 +121,22 @@ src/
 
 ### Modules
 
-| Module          | Pattern | Description                                     |
-| --------------- | ------- | ----------------------------------------------- |
-| `auth`          | DDD     | JWT authentication (access + refresh tokens)    |
-| `notes`         | DDD     | Notes CRUD with sharing and permissions         |
-| `ai`            | DDD     | AI text assistant with WebSocket streaming      |
-| `artifacts`     | DDD     | Flashcards, quizzes, summaries, mind maps       |
-| `agent`         | DDD     | Conversational copilot (tool-use, HITL, memory) |
-| `collaboration` | Service | Real-time Yjs sync via WebSocket gateway        |
-| `authorization` | Service | CASL-based permissions and roles                |
-| `mcp`           | Service | MCP API key exchange for AI assistants          |
-| `admin`         | Service | Admin features and management                   |
-| `users`         | Service | User profiles and settings                      |
-| `feature-flags` | Service | DB-backed feature flags with Redis cache        |
-| `health`        | Service | Health check endpoints                          |
-| `observability` | Service | Langfuse OpenTelemetry tracing for AI paths     |
-| `websocket`     | Service | Socket.IO auth, concurrency & heartbeat utils   |
+| Module          | Pattern | Description                                                                                                                                                                                                                                                                                                                                              |
+| --------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`          | DDD     | JWT authentication (access + refresh tokens)                                                                                                                                                                                                                                                                                                             |
+| `notes`         | DDD     | Notes CRUD with sharing and permissions                                                                                                                                                                                                                                                                                                                  |
+| `ai`            | DDD     | AI text assistant (WebSocket streaming) plus the shared model layer: selectable + admin-assignable model catalog, per-user model/intent preferences, system provider keys with live probes, and per-turn reasoning-effort resolution (`ai.controller`, `ai-models.controller`, `ai-keys.controller`, `ai-providers.controller`, `ai-catalog.controller`) |
+| `artifacts`     | DDD     | Flashcards, quizzes, summaries, mind maps                                                                                                                                                                                                                                                                                                                |
+| `agent`         | DDD     | Conversational copilot (tool-use, HITL, memory)                                                                                                                                                                                                                                                                                                          |
+| `collaboration` | Service | Real-time Yjs sync via WebSocket gateway                                                                                                                                                                                                                                                                                                                 |
+| `authorization` | Service | CASL-based permissions and roles                                                                                                                                                                                                                                                                                                                         |
+| `mcp`           | Service | MCP API key exchange for AI assistants                                                                                                                                                                                                                                                                                                                   |
+| `admin`         | Service | Admin features and management                                                                                                                                                                                                                                                                                                                            |
+| `users`         | Service | User profiles and settings                                                                                                                                                                                                                                                                                                                               |
+| `feature-flags` | Service | DB-backed feature flags with Redis cache                                                                                                                                                                                                                                                                                                                 |
+| `health`        | Service | Health check endpoints                                                                                                                                                                                                                                                                                                                                   |
+| `observability` | Service | Langfuse OpenTelemetry tracing for AI paths                                                                                                                                                                                                                                                                                                              |
+| `websocket`     | Service | Socket.IO auth, concurrency & heartbeat utils                                                                                                                                                                                                                                                                                                            |
 
 DDD modules follow Clean Architecture with `application/`, `domain/`, `infrastructure/` layers. See [ARCHITECTURE.md](./ARCHITECTURE.md) for details.
 

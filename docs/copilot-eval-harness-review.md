@@ -31,7 +31,7 @@ Detalles de arquitectura: 2 suites usan promptfoo como librería (`runEvalSuite`
 
 ### Tier 1 — divergencias de consenso con impacto directo
 
-**G1. Single-trial con exigencia de 100%.** Cada caso corre 1 vez con la temperatura de producción (0.7 fija, `step-call.ts:43`) y se exige `failures === 0`. Consenso unánime (Anthropic; promptfoo `repeat` + pass-rate threshold): comportamiento agéntico estocástico nunca se evalúa con un solo trial. Un rojo no distingue regresión de varianza (→ se ignora); un verde puede ocultar regresión que pasó por suerte. Con 14 casos, 3× los casos rubric cuesta centavos. **La mejora más barata con mayor retorno.**
+**G1. Single-trial con exigencia de 100%.** Cada caso corre 1 vez con la temperatura de producción (0.7 fija, `step-call.ts:43`) y se exige `failures === 0`. Consenso unánime (Anthropic; promptfoo `repeat` + pass-rate threshold): comportamiento agéntico estocástico nunca se evalúa con un solo trial. Un rojo no distingue regresión de varianza (→ se ignora); un verde puede ocultar regresión que pasó por suerte. Con 14 casos, 3× los casos rubric cuesta centavos. **La mejora más barata con mayor retorno.** — **Resuelto (#393, refinado por #401)**: ver Estado.
 
 **G2. Cero gate en PRs.** La regla del repo ("toda modificación de prompt/tools lleva eval antes de merge") no tiene enforcement: los evals corren nightly, post-merge. Consenso: **CI dual** — subset determinista barato en PRs paths-filtered (`agent-system-prompt.ts`, `tools/`, `orchestrator/`) + suite completa nightly. Los casos con assertions puramente `javascript` + modelo barato (`AI_EVAL_MODEL`) darían un smoke gate de <2 min.
 
@@ -57,18 +57,18 @@ No hay feedback de usuario (thumbs), ni annotation queue, ni conversión de fall
 
 ### Tier 2 — deuda metodológica
 
-**G5. LLM-as-judge sin calibrar.** `llm-rubric` con haiku, nunca alineado contra etiquetas humanas. Práctica establecida (Hamel): juicios binarios + crítica, calibrados contra ~30 ejemplos etiquetados por el experto, midiendo precision/recall (no acuerdo bruto). Hoy nadie sabe si el grader aprueba respuestas que el equipo reprobaría. Versión ligera: etiquetar transcripts de 2-3 nightly runs y medir acuerdo.
+**G5. LLM-as-judge sin calibrar.** `llm-rubric` con haiku, nunca alineado contra etiquetas humanas. Práctica establecida (Hamel): juicios binarios + crítica, calibrados contra ~30 ejemplos etiquetados por el experto, midiendo precision/recall (no acuerdo bruto). Hoy nadie sabe si el grader aprueba respuestas que el equipo reprobaría. Versión ligera: etiquetar transcripts de 2-3 nightly runs y medir acuerdo. — **Resuelto solo como tooling (#394)**: `api:eval-judgments` + `api:eval-agreement` miden precision/recall contra etiquetas commiteadas, ninguno gatea CI; el paso humano de etiquetar sigue abierto.
 
-**G6. Sin baselines ni tracking histórico.** Único registro: log de GitHub Actions. Sin output JSON, sin artefactos, sin comparación entre runs — imposible distinguir regresión gradual de estado histórico, e imposible hacer hill-climbing (capability evals vs regression evals, distinción de Anthropic). Promptfoo emite JSON/JUnit nativamente.
+**G6. Sin baselines ni tracking histórico.** Único registro: log de GitHub Actions. Sin output JSON, sin artefactos, sin comparación entre runs — imposible distinguir regresión gradual de estado histórico, e imposible hacer hill-climbing (capability evals vs regression evals, distinción de Anthropic). Promptfoo emite JSON/JUnit nativamente. — **Resuelto (#393)**: `AI_EVAL_OUTPUT_DIR`, artifact `eval-results` a 90 días y tabla de drift vs el último nightly exitoso; la cobertura sigue limitada a las suites promptfoo (G7).
 
-**G7. Arquitectura fragmentada.** 2 suites promptfoo + 4 Vitest puro = dos modelos de assertion/reporting; los resultados vitest-puros no entran al JSON de promptfoo (limita la cobertura del drift de G6 a los casos promptfoo). La extracción del runtime a `packages/eval-runtime` tenía trigger "2ª suite" — hay 6 y sigue interna (`docs/AI.md` §"extraction target" desactualizado).
+**G7. Arquitectura fragmentada.** 2 suites promptfoo + 4 Vitest puro = dos modelos de assertion/reporting; los resultados vitest-puros no entran al JSON de promptfoo (limita la cobertura del drift de G6 a los casos promptfoo). La extracción del runtime a `packages/eval-runtime` tenía trigger "2ª suite" — hay 6 y sigue interna; `docs/AI.md` ya describe `runtime/eval-runtime.ts` como el runtime compartido en lugar de un "extraction target" pendiente.
 
-**G8. Sin evals online / verificación asíncrona.** Consenso baseline: offline + scoring asíncrono sobre traces (groundedness, URLs citadas ⊆ `webSources`). Tensión real: Langfuse redacta contenido por default (decisión de privacidad correcta post-#381), lo que bloquea scoring semántico online. Señales estructurales sin contenido disponibles hoy: alerta de tool error rate (instrumentada, sin alerta), drift de distribución de `stopReason` (subida de `max_steps`/`token_budget` = regresión de eficiencia del loop).
+**G8. Sin evals online / verificación asíncrona.** Consenso baseline: offline + scoring asíncrono sobre traces (groundedness, URLs citadas ⊆ `webSources`). Tensión real: Langfuse redacta contenido por default (decisión de privacidad correcta post-#381), lo que bloquea scoring semántico online. Señales estructurales sin contenido disponibles hoy: alerta de tool error rate (la alerta shippeó como el ítem 7 — ver Estado), drift de distribución de `stopReason` (subida de `max_steps`/`token_budget` = regresión de eficiencia del loop, todavía sin implementar).
 
 ### Tier 3 — higiene
 
 - **G9. `passWithNoTests: true`** (`vitest.eval.config.ts:14`): si el glob `src/**/*.eval.ts` se rompe en un refactor, el nightly pasa verde con 0 tests.
-- **G10. Red-teaming manual, no generativo.** El corpus del guard (73 entradas) cubre la capa regex; la resistencia E2E conductual son 4 casos manuales. `promptfoo redteam` genera variantes de indirect injection / BOLA / tool misuse — útil como corrida trimestral.
+- **G10. Red-teaming manual, no generativo.** El corpus del guard (79 entradas) cubre la capa regex; la resistencia E2E conductual son 4 casos manuales. `promptfoo redteam` genera variantes de indirect injection / BOLA / tool misuse — útil como corrida trimestral.
 - **G11. `maxConcurrency: 1` hardcoded** — correcto hoy (recording adapter singleton con estado); cuello de botella cuando crezca el dataset.
 
 ## Plan recomendado
@@ -87,11 +87,13 @@ Quick wins: 1, 4, 6, 7. Trabajo real: 2, 3, 5.
 
 **Observación**: `docs/agent-harness-review.md` ya identificaba G1/G2 (prioridad 6) y G3 (prioridad 9) desde agosto; se ejecutó primero el harness de runtime (Bolt 1/2, SDK v7). Con el runtime sólido, el eval harness es hoy el eslabón más débil del sistema.
 
-## Estado (2026-08-31, rama feat/eval-harness-quick-wins)
+## Estado (2026-09-03; la rama `feat/eval-harness-quick-wins` mergeó como #393/#394)
 
 Ítems 1, 4 y 7 entregados; semántica as-built donde difiere de lo propuesto arriba:
 
-- **Ítem 1 (G1)**: `AI_EVAL_TRIALS` aplica a _todos_ los casos promptfoo (superset de "casos rubric"); umbral `ceil(2/3 × trials)` por caso. Los asserts `errors === 0` se retiraron a propósito: un error de proveedor en un trial se absorbe por el umbral (tolerancia a flakes), mientras un error sistemático (p. ej. key sin créditos) falla 0/N y sigue poniendo el nightly en rojo.
+- **Ítem 1 (G1, #393)**: `AI_EVAL_TRIALS` aplica a _todos_ los casos promptfoo (superset de "casos rubric"); umbral `ceil(2/3 × trials)` por caso. Los asserts `errors === 0` se retiraron a propósito: un error de proveedor en un trial se absorbe por el umbral (tolerancia a flakes), mientras un error sistemático (p. ej. key sin créditos) falla 0/N y sigue poniendo el nightly en rojo.
+- **Denominador del umbral (#401)**: un trial cuyos fallos son todos error de transporte del grader (`metadata.graderError`) no lleva veredicto y **sale del denominador** en vez de contar como regresión. Dos guardas evitan que eso convierta rojo en verde: un caso con _todos_ sus trials no calificados falla, y un trial mixto — fallo conductual **más** error de grader — sigue siendo fallo, igual que un throw del provider (que es como truena `assertPinnedModelServed`).
+- **Modelo del eval (#397)**: fijado a `anthropic:claude-sonnet-5` en las cuatro suites que corren un turno del agente (`eval/copilot.eval.ts:20`, injection-guard, transcript-replay, web-search-quality), sobreescribible con `AI_EVAL_MODEL`; antes heredaba el default del agente, que ya no es un modelo Anthropic.
 - **Ítem 4 (G6)**: `AI_EVAL_OUTPUT_DIR` persiste JSON nativo de promptfoo + `<suite>.summary.json` por suite promptfoo y `vitest.json` para el resto; artifact `eval-results` (90 días) y tabla de drift vs el último nightly exitoso (rehúsa comparar si cambia modelo o trials). La tabla cubre solo las suites promptfoo; la cobertura completa llega con G7.
 - **Ítem 7 (G8)**: v0 con umbrales fijos (`AGENT_TOOL_ERROR_ALERT_RATE`, `AGENT_STOP_ANOMALY_ALERT_RATE`, n ≥ 20) sobre `conversation_messages` persistido (parts `outputType` de error y `stop_reason`), no sobre el log `agent.turn.health`; drift estadístico con baseline móvil queda como follow-up si el umbral fijo resulta ruidoso.
 

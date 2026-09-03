@@ -346,7 +346,7 @@ A `model` key takes a single server-invocable model id — curated, or promoted 
 
 | Method | Path              | Description                                                                                                                                                                |
 | ------ | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| GET    | `/ai/config`      | Effective config entries (`{key, value, source, description, updatedAt}[]`; source is `custom` or `default`)                                                               |
+| GET    | `/ai/config`      | Effective config entries (`{key, value, kind, source, storedValue, description, updatedAt}[]`; source is `custom`, `default`, or `stale`)                                  |
 | PUT    | `/ai/config/:key` | Update a config value (allowlisted keys; a `model` key takes one server-invocable id, `ai_fallback_chain` a comma-separated list with at least one server-routable member) |
 | DELETE | `/ai/config/:key` | Reset a key to its code default — deletes the DB row, audits `ai_config.reset`, returns the effective entries.                                                             |
 
@@ -427,7 +427,7 @@ The `ai_openrouter_providers` config key (see [Dynamic Model Configuration](#dyn
 
 Both the copilot's step loop and every structured-output call (`suggest-organization`, memory extraction, artifacts, voice notes) build the block through the shared `turnProviderOptions` seam. Structured output additionally asks for `require_parameters: true` — OpenRouter records parameter support per _endpoint_, not per model, so this is the documented way to keep a `json_schema` request on upstreams that can honour it.
 
-On `minimax/minimax-m3` — the fast model prod classifies with — the measured effect is much larger than parameter support alone (30 concurrent classifications per arm, 2026-08):
+Measured on `minimax/minimax-m3`, the fast model in service at the time (the shipped `ai_fast_model` default is now `openrouter:minimax/minimax-m2.5`), the effect is much larger than parameter support alone (30 concurrent classifications per arm, 2026-08):
 
 | routing                                            | upstreams reached                   | unparseable answers |
 | -------------------------------------------------- | ----------------------------------- | ------------------- |
@@ -620,7 +620,7 @@ Cache read/write tokens from `usage.inputTokenDetails` are carried on `AgentTurn
 
 ## Runtime AI Config (code defaults, database overrides)
 
-`ai_default_model`, `ai_fast_model`, `ai_deep_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the code defaults (`AI_SETTING_DEFAULTS`) when no row exists — or when the table read fails, so a database outage degrades to the defaults instead of erroring. There is no environment layer: a stored row is **Custom**, its absence is **Default**, and that is exactly what the backoffice badges show. A stored model row naming an id the catalog no longer supports also reads **Default**, because the code default is what the runtime serves for it. Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); reset to the code default via the page's **Reset to default** button or `DELETE /api/v1/ai/config/:key`. A `model` key takes a curated or promoted model id and `ai_fallback_chain` takes a comma-separated list of catalog-supported ids; changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated` / `ai_config.reset`).
+`ai_default_model`, `ai_fast_model`, `ai_deep_model`, and `ai_fallback_chain` resolve **database-first**: `AIConfigService` reads the `ai_config` table (30s cache) and falls back to the code defaults (`AI_SETTING_DEFAULTS`) when no row exists — or when the table read fails, so a database outage degrades to the defaults instead of erroring. There is no environment layer: a stored row is **Custom** and its absence is **Default**. A stored row the runtime cannot honour — a model id the catalog no longer supports — is **Stale**: the code default is served, and the entry carries the ignored value in `storedValue` so the dead override stays visible instead of reading as Default. `AI_CONFIG_SOURCES` (`custom` | `default` | `stale`) is computed per key in `AIConfigService`, and the backoffice renders `stale` as a destructive badge next to the stored value (`apps/backoffice/src/components/ai-config/ConfigSourceCell.tsx`). Mutate via the backoffice **AI Config** page or `PUT /api/v1/ai/config/:key` (admin JWT); reset to the code default via the page's **Reset to default** button or `DELETE /api/v1/ai/config/:key`. A `model` key takes a curated or promoted model id and `ai_fallback_chain` takes a comma-separated list of catalog-supported ids; changes apply within 30 seconds without redeploy, and every write lands in the admin audit log (`ai_config.updated` / `ai_config.reset`).
 
 The **AI Config** page is the single AI-ops surface: a sticky status header (master `ai_enabled` toggle, provider health, today's spend) over four tabs — **Models** (default/fast/chain/reasoning/upstream allowlist), **Guardrails & Limits**, **Providers** (key management + probes), and **Capabilities & Access** (the AI-domain feature flags). **AI Metrics** is its read-side companion: stat cards, a time-series chart (cost/tokens/requests × day/week/month), and per-model and per-action breakdown tables fed by `GET /admin/ai/metrics` and `GET /admin/ai/metrics/timeseries`.
 
@@ -642,9 +642,12 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `AI_TRANSCRIPTION_MODEL`         | No       | `openai:whisper-1`           | Voice transcription model (only `openai:` supported)                 |
 | `AI_PRICING_REFRESH_ENABLED`     | No       | `false`                      | Refresh model pricing from LiteLLM's JSON at boot                    |
 | `AI_ALERT_WEBHOOK_URL`           | No       | —                            | Webhook for `budget.warning` / `cooldown_start` alerts               |
+| `AGENT_TOOL_ERROR_ALERT_RATE`    | No       | `0.1`                        | Tool-error rate that trips the daily agent health alert (0–1)        |
+| `AGENT_STOP_ANOMALY_ALERT_RATE`  | No       | `0.2`                        | Anomalous stop-reason rate that trips the same alert (0–1)           |
 | `AI_DAILY_TOKEN_LIMIT`           | No       | `100000`                     | Per-user daily token cap                                             |
 | `AI_DAILY_COST_LIMIT_USD`        | No       | `1.0`                        | Per-user daily cost cap (USD)                                        |
 | `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No       | `25`                         | Global daily cap on ALL server-billed spend (USD)                    |
+| `AI_BYOK_DAILY_COST_LIMIT_USD`   | No       | `1.0`                        | Daily ceiling on server-billed side costs of BYOK turns (USD)        |
 | `AI_ANONYMOUS_DAILY_LIMIT_PCT`   | No       | `0.33`                       | Fraction of daily limits for anonymous users                         |
 | `AI_MAX_RETRIES`                 | No       | `3`                          | Provider retry count                                                 |
 | `AI_TIMEOUT_MS`                  | No       | `30000`                      | Total request timeout (ms) — REST completions only                   |
@@ -668,12 +671,14 @@ All AI variables go in `apps/api/.env`. Feature toggles (`ai_enabled`, `voice_no
 | `agent_injection_classifier` | Model-based gray-zone injection classifier ([Prompt Injection Defense](#prompt-injection-defense))        |
 | `agent_scan_retrieved_notes` | Guard-scan of retrieved note bodies ([Prompt Injection Defense](#prompt-injection-defense))               |
 | `agent_prompt_caching`       | Anthropic prompt caching on the agent path ([Anthropic Prompt Caching](#anthropic-prompt-caching))        |
+| `agent_health_alerts`        | Daily agent health report + webhook alert ([Agent health alerts](#agent-health-alerts))                   |
 | `ai_cost_reserve`            | Atomic cost reservation in the daily-budget Lua ([Rate Limiting](#rate-limiting))                         |
 | `ai_byok_cost_gate`          | Ceiling on server-billed side costs of BYOK turns ([BYOK](#bring-your-own-key-byok))                      |
 | `ai_global_spend_breaker`    | Global daily-spend circuit breaker over all server-billed spend ([Rate Limiting](#rate-limiting))         |
 | `ai_anon_ip_budget`          | Per-IP daily budget for anonymous users ([Rate Limiting](#rate-limiting))                                 |
 | `ai_tier_gating`             | Price-gates non-open models to BYOK callers (`access`, [Copilot Model Selection](#selectablemodel-shape)) |
 | `ai_catalog_sync`            | Daily OpenRouter catalog sync and curated-model watch ([Catalog](#open-tier-model-catalog))               |
+| `ai_auto_organize`           | Organization suggestions (PARA/tags) on notes                                                             |
 
 Managed via `PUT /api/v1/flags/:key` (admin only). Cached in Redis (30s TTL).
 
@@ -882,7 +887,7 @@ All endpoints under `/api/v1/ai`. Require `JwtAuthGuard` + feature flag `ai_enab
 | GET    | `/ai/usage`                    | Daily token + cost usage for authenticated user.                                                                                                                                  |
 | GET    | `/ai/metrics`                  | Usage summary. Query: `?period=day\|week\|month`.                                                                                                                                 |
 | GET    | `/ai/health`                   | Per-provider cooldown snapshot (admin only).                                                                                                                                      |
-| GET    | `/ai/config`                   | Effective config entries with `source: custom\|default` (admin only).                                                                                                             |
+| GET    | `/ai/config`                   | Effective config entries with `source: custom\|default\|stale` (admin only).                                                                                                      |
 | PUT    | `/ai/config/:key`              | Update a config value — a server-invocable curated or promoted model id, or for `ai_fallback_chain` a comma-separated list with at least one server-routable member (admin only). |
 | DELETE | `/ai/config/:key`              | Reset a config key to its code default; audits `ai_config.reset` (admin only).                                                                                                    |
 | GET    | `/ai/providers`                | Provider key sources + enablement (admin only). See [System Provider Keys](#system-provider-keys-database-overrides-env).                                                         |
@@ -930,8 +935,9 @@ pnpm docker:up         # Postgres + Redis must be healthy (the full DI graph boo
 pnpm nx run api:eval
 ```
 
-- **Gated:** skips cleanly (the single test is skipped, exit 0) when `ANTHROPIC_API_KEY` is
-  unset. It is opt-in and excluded from CI and `nx affected` (paid + non-deterministic).
+- **Gated:** each suite self-skips when its own provider key is unset, so a run without
+  `ANTHROPIC_API_KEY` skips cleanly (exit 0). It is opt-in and excluded from CI and
+  `nx affected` (paid + non-deterministic).
 - **Prerequisites:** `ANTHROPIC_API_KEY` in `apps/api/.env` and `pnpm docker:up` running — the
   harness boots the real module graph, whose `onModuleInit` hooks reach Postgres/Redis.
 - **Model:** runs the built-in eval default (sonnet); set `AI_EVAL_MODEL` to override
@@ -969,8 +975,11 @@ pnpm nx run api:eval
   injection resistance. With `AI_EVAL_TRIALS` > 1 each case is judged on its per-case pass
   rate over the graded trials (threshold 2/3), so one flaky trial does not fail the suite but a
   consistent regression does.
-- **Code:** `apps/api/src/modules/agent/eval/`. The generic Promptfoo runtime lives under
-  `runtime/eval-runtime.ts` and is the extraction target if a second eval suite is added.
+- **Code:** `apps/api/src/modules/agent/eval/` — six suites today. `runtime/eval-runtime.ts` is
+  the runtime they share: the Promptfoo runner (`runEvalSuite`, trial summarisation, result
+  output) drives `copilot.eval.ts` and `injection-guard.eval.ts`, while `evalGateOpen` /
+  `resolveEvalModel` also gate `transcript-replay.eval.ts`; `memory-recall`,
+  `retrieval-quality`, and `web-search-quality` assert directly in Vitest.
 
 ### Nightly CI run
 
@@ -1093,11 +1102,12 @@ The provider sits behind the agnostic `WEB_SEARCH_PORT`. Tavily is the first ada
 
 ### Environment variables
 
-| Variable                    | Required | Default | Description                                                                                      |
-| --------------------------- | -------- | ------- | ------------------------------------------------------------------------------------------------ |
-| `TAVILY_API_KEY`            | No       | —       | Tavily key. Without it the `agent_web_search` flag must stay off (the tools throw when invoked). |
-| `AI_WEB_SEARCH_MAX_RESULTS` | No       | `5`     | Max results requested per search.                                                                |
-| `AI_WEB_SEARCH_DEPTH`       | No       | `basic` | Tavily search depth (`basic` or `advanced`).                                                     |
+| Variable                             | Required | Default | Description                                                                                      |
+| ------------------------------------ | -------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `TAVILY_API_KEY`                     | No       | —       | Tavily key. Without it the `agent_web_search` flag must stay off (the tools throw when invoked). |
+| `AI_WEB_SEARCH_MAX_RESULTS`          | No       | `5`     | Max results requested per search.                                                                |
+| `AI_WEB_SEARCH_DEPTH`                | No       | `basic` | Tavily search depth (`basic` or `advanced`).                                                     |
+| `AI_WEB_SEARCH_PRICE_PER_CREDIT_USD` | No       | `0`     | USD per Tavily credit, used to record the server-billed side cost of a search/fetch.             |
 
 ### Web-search eval
 
@@ -1154,7 +1164,7 @@ Long-term memory extraction never sees tool activity: it calls `loadMessages(con
 
 ### HITL resume
 
-When a turn proposes a mutation (create/update note), the pending proposal is parked in Redis keyed by `conversationId` (TTL `AI_AGENT_PROPOSAL_TTL_SECONDS`, default 600 s). On `agent:approve` / `agent:reject` the client sends only the `conversationId`; the handler re-validates ownership via `findByIdForUser`, rebuilds the full thread from the DB, and resumes — no client-supplied history is trusted.
+When a turn proposes a mutation (create/update note), the pending proposal is parked in Redis keyed by its own `proposalId` (TTL `AI_AGENT_PROPOSAL_TTL_SECONDS`, default 600 s). On `agent:approve` the client sends `{ proposalId, noteId? }` and on `agent:reject` `{ proposalId, noteId?, reason? }`; the store's `take(proposalId, userId)` is a Lua compare-and-delete that only releases a record to its owner, and the handler then re-validates ownership via `findByIdForUser`, rebuilds the full thread from the DB, and resumes — no client-supplied history is trusted.
 
 ### Environment variables
 
@@ -1283,7 +1293,7 @@ Registered users can store their own provider API keys so the copilot runs on **
 | PUT    | `/ai/keys/:provider` | Validate `{ apiKey }` against the live provider, then encrypt + store (upsert).      |
 | DELETE | `/ai/keys/:provider` | Remove the stored key for that provider.                                             |
 
-`:provider` is one of `anthropic | openai | google` (validated by `ProviderParamDto`). A `PUT` first probes the provider with a tiny `generateText` call (`maxOutputTokens: 16`, the universal minimum OpenAI's Responses API accepts) — an invalid or quota-less key returns `422` and nothing is stored.
+`:provider` is one of `anthropic | openai | google | openrouter` (`BYOK_PROVIDERS`, validated by `ProviderParamDto`). A `PUT` first probes the provider with a tiny `generateText` call (`maxOutputTokens: 16`, the universal minimum OpenAI's Responses API accepts) — an invalid or quota-less key returns `422` and nothing is stored.
 
 ### Encryption
 
@@ -1293,11 +1303,11 @@ There is no lossless rotation path because stored rows have no key version and d
 
 ### Storage
 
-`user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` adds the provider `CHECK`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google'))`. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.
+`user_provider_keys` (migration `0014_windy_master_mold.sql`; `0015_perfect_sentinel.sql` added the provider `CHECK`, widened to four providers by `0023_wide_bedlam.sql`): composite PK `(user_id, provider)`, `ciphertext` / `iv` / `auth_tag` text, `key_prefix` varchar(12), `last_used_at?`, `created_at`, `updated_at`, FK `user_id → users` CASCADE, and `CHECK (provider in ('anthropic','openai','google','openrouter'))`. The same `0014` migration adds the `ai_usage.byok` boolean (default false) that tags user-billed turns.
 
 ### Per-request provider injection
 
-`ProviderRegistryFactory.languageModel(modelId, byokKey?)` builds a per-request ephemeral provider from the decrypted key (`createAnthropic` / `createOpenAI` / `createGoogleGenerativeAI({ apiKey })`). The BYOK branch is checked **before** the gateway branch, so a BYOK turn never bills the server gateway while being recorded as user-billed. When a BYOK key is in scope the orchestrator **skips the [fallback chain](#cross-provider-fallback-chain)** (no silent server-billed fallback) and **redacts** provider errors to a generic `BYOK provider request failed` (client and logs) so key fragments can't leak. Resume (HITL) turns also use the BYOK key.
+`ProviderRegistryFactory.languageModel(modelId, byokKey?)` builds a per-request ephemeral provider from the decrypted key (`createAnthropic` / `createOpenAI` / `createGoogleGenerativeAI` / `createOpenRouter({ apiKey })`). The BYOK branch is checked **before** the gateway branch, so a BYOK turn never bills the server gateway while being recorded as user-billed. When a BYOK key is in scope the orchestrator **skips the [fallback chain](#cross-provider-fallback-chain)** (no silent server-billed fallback) and **redacts** provider errors to a generic `BYOK provider request failed` (client and logs) so key fragments can't leak. Resume (HITL) turns also use the BYOK key.
 
 ### Billing & rate limiting
 

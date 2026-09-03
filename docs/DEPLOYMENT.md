@@ -60,6 +60,8 @@ That script starts the deploy detached and then polls until the deployment reach
 
 > A third deploy job, `deploy-mcp`, ships the MCP server to Railway through the same gated script on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set.
 
+> `nightly-eval.yml` pins `AI_EVAL_TRIALS=3` (so a case is judged on its pass rate rather than one stochastic trial), sets `AI_EVAL_OUTPUT_DIR` to a workspace directory, and uploads it as the `eval-results` artifact with a 90-day retention — that artifact is the only historical record of eval runs.
+
 ### Frontend (Vercel) — CI-driven
 
 Like the API, the frontend is deployed by the **CI pipeline**, not by Vercel's GitHub integration. `vercel.json` sets `"git": { "deploymentEnabled": false }`, so pushes never trigger a Vercel build directly.
@@ -123,6 +125,18 @@ restartPolicyMaxRetries = 3
 | `NODE_ENV`               | No       | Set by railway.toml (`production`)                                                                                                                                                                                            |
 | `PORT`                   | No       | Set by railway.toml (`3333`)                                                                                                                                                                                                  |
 
+AI variables (the full table lives in [AI.md → Environment Variables](AI.md#environment-variables)); the ones that matter for a production deploy:
+
+| Variable                         | Required                         | Description                                                                                                                                                                                                       |
+| -------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY`              | No                               | Fallback source for the Anthropic routing key; a key stored in `system_provider_keys` from the backoffice wins.                                                                                                   |
+| `OPENROUTER_API_KEY`             | No                               | Same, for OpenRouter — the provider the shipped code defaults route through, so without it (or a stored key) the open tier cannot serve a turn.                                                                   |
+| `BYOK_ENCRYPTION_KEY`            | When `agent_byok` is on          | 32-byte base64 master key for the AES-256-GCM envelope over user provider keys. **Not rotatable without invalidating every stored key** — rotating means disabling the flag and having users re-enter their keys. |
+| `AI_GLOBAL_DAILY_COST_LIMIT_USD` | No (default `25`)                | Global daily ceiling on all server-billed AI spend; enforced by the `ai_global_spend_breaker` flag.                                                                                                               |
+| `AI_ALERT_WEBHOOK_URL`           | When `agent_health_alerts` is on | Destination for budget, cooldown and agent-health alerts.                                                                                                                                                         |
+
+`AI_GATEWAY_API_KEY` is also read (it switches every provider call onto the Vercel AI Gateway); leave it unset to run in direct mode against the keys above.
+
 Use Railway reference variables for internal networking (free, faster):
 
 ```bash
@@ -183,6 +197,8 @@ VITE_COLLABORATION_MODE=websocket
 ---
 
 ## Feature Flag Rollouts
+
+AI-domain flags are rolled out from the backoffice **AI Config** page rather than the Feature Flags page, and each one's prerequisites (`agent_health_alerts` needs `AI_ALERT_WEBHOOK_URL`, `ai_tier_gating` changes who may run which model, `ai_catalog_sync` starts the daily OpenRouter sync) are documented in [AI.md → Feature Flags (DB-backed)](AI.md#feature-flags-db-backed).
 
 ### Email verification gate (`email_verification_gate`)
 

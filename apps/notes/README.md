@@ -27,29 +27,29 @@
 
 ## Features
 
-| Feature                 | Description                                                                                                                                             |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔐 Authentication       | Login, register, forgot/reset password, email verification, protected routes with JWT                                                                   |
-| 📝 Rich Text Editor     | Tiptap-based editor with formatting toolbar, heading dropdown, link popover, code blocks                                                                |
-| 🤖 AI Writing Assistant | Bubble menu AI actions (improve, fix spelling, summarize, translate, expand, change tone)                                                               |
-| ✨ AI Slash Commands    | `/` commands to trigger AI actions, generate study tools, and insert voice notes inline                                                                 |
-| 👻 Ghost Text           | AI-powered autocomplete suggestions displayed as inline ghost text while typing                                                                         |
-| 🧩 AI Blocks            | Custom editor nodes for inline AI content generation with streaming status                                                                              |
-| 💬 AI Copilot           | Conversational side-panel agent that reads and edits notes with approval (HITL); per-conversation model selection and bring-your-own-key (BYOK) billing |
-| 📊 Artifacts & Study    | AI-generated flashcards, quizzes, summaries, and mind maps in a dedicated sidebar                                                                       |
-| 🃏 Spaced Repetition    | SM2 algorithm for flashcard review with advanced rating, progress tracking, and missed cards                                                            |
-| 🎙️ Voice Notes          | Voice recording with live audio preview, transcription, and editor insertion                                                                            |
-| 🔗 Note Sharing         | Share notes via link with configurable access levels (viewer/editor), editors-can-share toggle                                                          |
-| 👤 Anonymous Mode       | Try the app without an account with usage limit modal and upgrade prompts                                                                               |
-| 🔄 Real-time Sync       | CRDT-based collaboration using Yjs                                                                                                                      |
-| 👥 Live Presence        | See collaborators' cursors and selections                                                                                                               |
-| ⚙️ Settings             | Modal with profile, account, appearance (theme), language, AI Assistant (copilot model + your provider keys), and MCP integrations sections             |
-| 🌐 Internationalization | i18n support with English and Spanish via react-i18next                                                                                                 |
-| 📱 Responsive Design    | Mobile-first with bottom nav and floating action button                                                                                                 |
-| 🌙 Dark Mode            | System-aware theme switching                                                                                                                            |
-| 💾 Offline Support      | IndexedDB persistence for offline editing                                                                                                               |
-| 📈 Analytics            | PostHog integration for product analytics                                                                                                               |
-| ⚡ Fast Performance     | Optimized with React 19 and Vite                                                                                                                        |
+| Feature                 | Description                                                                                                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🔐 Authentication       | Login, register, forgot/reset password, email verification, protected routes with JWT                                                                                                                      |
+| 📝 Rich Text Editor     | Tiptap-based editor with formatting toolbar, heading dropdown, link popover, code blocks                                                                                                                   |
+| 🤖 AI Writing Assistant | Bubble menu AI actions (improve, fix spelling, summarize, translate, expand, change tone)                                                                                                                  |
+| ✨ AI Slash Commands    | `/` commands to trigger AI actions, generate study tools, and insert voice notes inline                                                                                                                    |
+| 👻 Ghost Text           | AI-powered autocomplete suggestions displayed as inline ghost text while typing                                                                                                                            |
+| 🧩 AI Blocks            | Custom editor nodes for inline AI content generation with streaming status                                                                                                                                 |
+| 💬 AI Copilot           | Conversational side-panel agent that reads and edits notes with approval (HITL); account-default model selection (by model or by intent), per-turn reasoning effort, and bring-your-own-key (BYOK) billing |
+| 📊 Artifacts & Study    | AI-generated flashcards, quizzes, summaries, and mind maps in a dedicated sidebar                                                                                                                          |
+| 🃏 Spaced Repetition    | SM2 algorithm for flashcard review with advanced rating, progress tracking, and missed cards                                                                                                               |
+| 🎙️ Voice Notes          | Voice recording with live audio preview, transcription, and editor insertion                                                                                                                               |
+| 🔗 Note Sharing         | Share notes via link with configurable access levels (viewer/editor), editors-can-share toggle                                                                                                             |
+| 👤 Anonymous Mode       | Try the app without an account with usage limit modal and upgrade prompts                                                                                                                                  |
+| 🔄 Real-time Sync       | CRDT-based collaboration using Yjs                                                                                                                                                                         |
+| 👥 Live Presence        | See collaborators' cursors and selections                                                                                                                                                                  |
+| ⚙️ Settings             | Modal with profile, account, appearance (theme), language, AI Assistant (copilot model + your provider keys), and MCP integrations sections                                                                |
+| 🌐 Internationalization | i18n support with English and Spanish via react-i18next                                                                                                                                                    |
+| 📱 Responsive Design    | Mobile-first with bottom nav and floating action button                                                                                                                                                    |
+| 🌙 Dark Mode            | System-aware theme switching                                                                                                                                                                               |
+| 💾 Offline Support      | IndexedDB persistence for offline editing                                                                                                                                                                  |
+| 📈 Analytics            | PostHog integration for product analytics                                                                                                                                                                  |
+| ⚡ Fast Performance     | Optimized with React 19 and Vite                                                                                                                                                                           |
 
 ---
 
@@ -160,18 +160,18 @@ User Action → Component → Custom Hook → React Query / Zustand → Re-rende
 
 ### Key Component Areas
 
-| Area                 | Description                                                                                        |
-| -------------------- | -------------------------------------------------------------------------------------------------- |
-| `editor/`            | Tiptap collaborative editor with toolbar, cursors, save indicator                                  |
-| `editor/ai/`         | AI bubble menu, slash commands, streaming preview                                                  |
-| `editor/extensions/` | Ghost text autocomplete, AI blocks, code blocks                                                    |
-| `artifacts/`         | Study tools sidebar (flashcards with SM2, quizzes, summaries, mind maps)                           |
-| `voice-note/`        | Voice recording, live preview, transcription                                                       |
-| `notes/`             | Note list, cards, sharing dialog                                                                   |
-| `copilot/`           | Conversational agent panel — composer, message list, proposal cards, source chips                  |
-| `settings/`          | Profile, account, appearance, language, AI Assistant (copilot model + BYOK keys), MCP integrations |
-| `layout/`            | Sidebar, bottom nav (mobile), floating action button                                               |
-| `anonymous/`         | Usage limit modal for unauthenticated users                                                        |
+| Area                 | Description                                                                                                                                                                                       |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `editor/`            | Tiptap collaborative editor with toolbar, cursors, save indicator                                                                                                                                 |
+| `editor/ai/`         | AI bubble menu, slash commands, streaming preview                                                                                                                                                 |
+| `editor/extensions/` | Ghost text autocomplete, AI blocks, code blocks                                                                                                                                                   |
+| `artifacts/`         | Study tools sidebar (flashcards with SM2, quizzes, summaries, mind maps)                                                                                                                          |
+| `voice-note/`        | Voice recording, live preview, transcription                                                                                                                                                      |
+| `notes/`             | Note list, cards, sharing dialog                                                                                                                                                                  |
+| `copilot/`           | Conversational agent panel — composer, message list, proposal cards, source chips, retry banner, and the model/effort picker (`CopilotModelPicker`, `IntentModelPicker`, `intent-picker-options`) |
+| `settings/`          | Profile, account, appearance, language, AI Assistant (copilot model + BYOK keys), MCP integrations                                                                                                |
+| `layout/`            | Sidebar, bottom nav (mobile), floating action button                                                                                                                                              |
+| `anonymous/`         | Usage limit modal for unauthenticated users                                                                                                                                                       |
 
 ---
 

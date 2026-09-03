@@ -14,21 +14,24 @@ The frontend's HTTP/WebSocket layer: a shared `HttpClient` with automatic token 
 
 Exported from [`src/index.ts`](src/index.ts):
 
-| Export                                           | Purpose                                                                                |
-| ------------------------------------------------ | -------------------------------------------------------------------------------------- |
-| `HttpClient`, `httpClient`, `IHttpClient`        | Core HTTP client (singleton + class) — [http-client.ts](src/lib/http-client.ts)        |
-| `ApiClientError`, `FieldError`, `TokenProvider`  | Error + auth types                                                                     |
-| `createTokenRefreshPolicy`, `TokenRefreshPolicy` | Shared 401-refresh policy — [token-refresh-policy.ts](src/lib/token-refresh-policy.ts) |
-| `deriveWsBaseUrl`                                | HTTP→WS origin derivation — [ws-url.ts](src/lib/ws-url.ts)                             |
-| `aiClient`, `AIClient`                           | AI text streaming over Socket.IO                                                       |
-| `agentClient`, `AgentClient`                     | Copilot agent streaming (chunks/proposals/committed/web sources)                       |
-| `notesApi`                                       | Notes CRUD + collaborators/sharing                                                     |
-| `usersApi`                                       | Profile read/update                                                                    |
-| `artifactsApi`                                   | Flashcards / quizzes / summaries generation + review                                   |
-| `imagesApi`                                      | Editor image upload                                                                    |
-| `mcpKeysApi`                                     | MCP API key management                                                                 |
-| `aiModelsApi`                                    | Copilot model catalog (selectable models)                                              |
-| `aiKeysApi`                                      | BYOK per-user provider keys                                                            |
+| Export                                           | Purpose                                                                                                                       |
+| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| `HttpClient`, `httpClient`, `IHttpClient`        | Core HTTP client (singleton + class) — [http-client.ts](src/lib/http-client.ts)                                               |
+| `ApiClientError`, `FieldError`, `TokenProvider`  | Error + auth types                                                                                                            |
+| `createTokenRefreshPolicy`, `TokenRefreshPolicy` | Shared 401-refresh policy — [token-refresh-policy.ts](src/lib/token-refresh-policy.ts)                                        |
+| `deriveWsBaseUrl`                                | HTTP→WS origin derivation — [ws-url.ts](src/lib/ws-url.ts)                                                                    |
+| `aiClient`, `AIClient`                           | AI text streaming over Socket.IO                                                                                              |
+| `agentClient`, `AgentClient`                     | Copilot agent streaming (chunks/proposals/committed/web sources)                                                              |
+| `notesApi`                                       | Notes CRUD + collaborators/sharing                                                                                            |
+| `organizationApi`                                | AI organization suggestions (`/ai/organization/suggest`)                                                                      |
+| `tagsApi`                                        | Tag catalog read/update                                                                                                       |
+| `oauthApi`                                       | Hosted OAuth consent screen transport for MCP clients                                                                         |
+| `usersApi`                                       | Profile read/update                                                                                                           |
+| `artifactsApi`                                   | Flashcards / quizzes / summaries generation + review                                                                          |
+| `imagesApi`                                      | Editor image upload                                                                                                           |
+| `mcpKeysApi`                                     | MCP API key management                                                                                                        |
+| `aiModelsApi`                                    | Copilot model catalog (`/ai/models`) + user model preferences (`getPreferences` / `updatePreferences` over `/ai/preferences`) |
+| `aiKeysApi`                                      | BYOK per-user provider keys                                                                                                   |
 
 ## Token refresh flow
 
@@ -50,8 +53,12 @@ src/
 │   ├── ws-url.ts                 # deriveWsBaseUrl
 │   ├── ai.client.ts              # aiClient (text streaming)
 │   ├── agent.client.ts           # agentClient (copilot turns)
+│   ├── session-refresh.ts        # refreshSessionTokens + withAuthRefreshLock
+│   ├── refresh-failure.ts        # classifyRefreshFailure
+│   ├── retry-after.ts            # retryAfterMsOf
 │   ├── notes.api.ts  users.api.ts  artifacts.api.ts
-│   ├── images.api.ts  mcp-keys.api.ts
+│   ├── images.api.ts  mcp-keys.api.ts  oauth.api.ts
+│   ├── organization.api.ts  tags.api.ts
 │   ├── ai-models.api.ts  ai-keys.api.ts
 │   └── config.ts
 └── index.ts                      # Public API
