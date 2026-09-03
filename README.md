@@ -35,8 +35,8 @@ Requires Node.js 22, pnpm 10, and Docker.
 ```bash
 git clone git@github.com:jovandyaz/knowtis-app.git
 cd knowtis-app
-pnpm setup      # installs deps, scaffolds .env files, starts Postgres + Redis, pushes the schema
-pnpm dev:all    # API on :3333, Notes on :4200, Backoffice on :4400
+pnpm setup      # deps, .env files, Postgres + Redis, schema
+pnpm dev:all    # API :3333, Notes :4200, Backoffice :4400
 ```
 
 AI features need an `ANTHROPIC_API_KEY` (or OpenAI / Google key) in `apps/api/.env`. The full walkthrough, including how email verification works locally and how to connect an MCP client, is in [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md).
