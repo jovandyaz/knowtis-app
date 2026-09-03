@@ -28,5 +28,5 @@ export function realIpOf(headers: IncomingHttpHeaders): string | undefined {
  * adversary to control it.
  */
 export function clientIpOf(req: ClientIpSource): string {
-  return realIpOf(req.headers) ?? req.ip ?? 'unknown';
+  return realIpOf(req.headers) || req.ip || 'unknown';
 }

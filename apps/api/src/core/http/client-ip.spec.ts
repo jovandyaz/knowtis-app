@@ -20,6 +20,11 @@ describe('realIpOf', () => {
   it('never reads X-Forwarded-For', () => {
     expect(realIpOf({ 'x-forwarded-for': '203.0.113.7' })).toBeUndefined();
   });
+
+  it('treats an empty header as absent', () => {
+    expect(realIpOf({ 'x-real-ip': '' })).toBeUndefined();
+    expect(realIpOf({ 'x-real-ip': [] })).toBeUndefined();
+  });
 });
 
 describe('clientIpOf', () => {
@@ -35,5 +40,15 @@ describe('clientIpOf', () => {
 
   it('never returns an empty key', () => {
     expect(clientIpOf({ headers: {} })).toBe('unknown');
+  });
+
+  it('falls back to req.ip when X-Real-IP is empty', () => {
+    expect(clientIpOf({ headers: { 'x-real-ip': '' }, ip: '10.0.0.1' })).toBe(
+      '10.0.0.1'
+    );
+  });
+
+  it('never uses an empty req.ip as the key', () => {
+    expect(clientIpOf({ headers: {}, ip: '' })).toBe('unknown');
   });
 });
