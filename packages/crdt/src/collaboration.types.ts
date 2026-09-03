@@ -8,7 +8,7 @@ import type {
 
 /**
  * Generic collaboration provider interface
- * Works with both WebRTC and WebSocket providers
+ * Satisfied by any Yjs provider exposing awareness (e.g. HocuspocusProvider)
  */
 export interface CollaborationProvider {
   awareness: Awareness;

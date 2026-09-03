@@ -7,279 +7,123 @@
   <img src="https://img.shields.io/badge/TailwindCSS-4-38B2AC?style=flat-square&logo=tailwindcss" alt="TailwindCSS" />
 </p>
 
-**The Notes App** is a modern, real-time collaborative notes application built with React 19. It features rich text editing, live collaboration, and offline support.
-
----
-
-## Table of Contents
-
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Project Structure](#project-structure)
-- [Configuration](#configuration)
-- [Architecture](#frontend-architecture)
-- [Components](#components)
-- [Real-time Collaboration](#real-time-collaboration)
-- [Testing](#testing)
-- [Building for Production](#building-for-production)
-
----
+Real-time collaborative notes frontend: Tiptap editor on a Yjs document, AI writing tools and copilot, study artifacts, voice notes, note sharing and an anonymous try-it mode. Runs on http://localhost:4200.
 
 ## Features
 
-| Feature                 | Description                                                                                                                                                                                                |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🔐 Authentication       | Login, register, forgot/reset password, email verification, protected routes with JWT                                                                                                                      |
-| 📝 Rich Text Editor     | Tiptap-based editor with formatting toolbar, heading dropdown, link popover, code blocks                                                                                                                   |
-| 🤖 AI Writing Assistant | Bubble menu AI actions (improve, fix spelling, summarize, translate, expand, change tone)                                                                                                                  |
-| ✨ AI Slash Commands    | `/` commands to trigger AI actions, generate study tools, and insert voice notes inline                                                                                                                    |
-| 👻 Ghost Text           | AI-powered autocomplete suggestions displayed as inline ghost text while typing                                                                                                                            |
-| 🧩 AI Blocks            | Custom editor nodes for inline AI content generation with streaming status                                                                                                                                 |
-| 💬 AI Copilot           | Conversational side-panel agent that reads and edits notes with approval (HITL); account-default model selection (by model or by intent), per-turn reasoning effort, and bring-your-own-key (BYOK) billing |
-| 📊 Artifacts & Study    | AI-generated flashcards, quizzes, summaries, and mind maps in a dedicated sidebar                                                                                                                          |
-| 🃏 Spaced Repetition    | SM2 algorithm for flashcard review with advanced rating, progress tracking, and missed cards                                                                                                               |
-| 🎙️ Voice Notes          | Voice recording with live audio preview, transcription, and editor insertion                                                                                                                               |
-| 🔗 Note Sharing         | Share notes via link with configurable access levels (viewer/editor), editors-can-share toggle                                                                                                             |
-| 👤 Anonymous Mode       | Try the app without an account with usage limit modal and upgrade prompts                                                                                                                                  |
-| 🔄 Real-time Sync       | CRDT-based collaboration using Yjs                                                                                                                                                                         |
-| 👥 Live Presence        | See collaborators' cursors and selections                                                                                                                                                                  |
-| ⚙️ Settings             | Modal with profile, account, appearance (theme), language, AI Assistant (copilot model + your provider keys), and MCP integrations sections                                                                |
-| 🌐 Internationalization | i18n support with English and Spanish via react-i18next                                                                                                                                                    |
-| 📱 Responsive Design    | Mobile-first with bottom nav and floating action button                                                                                                                                                    |
-| 🌙 Dark Mode            | System-aware theme switching                                                                                                                                                                               |
-| 💾 Offline Support      | IndexedDB persistence for offline editing                                                                                                                                                                  |
-| 📈 Analytics            | PostHog integration for product analytics                                                                                                                                                                  |
-| ⚡ Fast Performance     | Optimized with React 19 and Vite                                                                                                                                                                           |
-
----
+| Feature              | Description                                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication       | Login, register, forgot/reset password, email verification (link or code); anonymous session for visitors without an account                |
+| Rich text editor     | Tiptap editor from `@knowtis/editor`: toolbar, code blocks, Mermaid diagrams, tables, images, tags                                          |
+| AI writing assistant | Bubble menu actions (improve, fix spelling, shorter/longer, action items, translate, tone, summarize)                                       |
+| AI slash commands    | `/` menu with formatting blocks plus AI actions (continue, outline, learn, study tools, voice note)                                         |
+| Ghost text           | Inline autocomplete suggestions while typing                                                                                                |
+| AI blocks            | Editor nodes for inline AI generation with streaming status                                                                                 |
+| AI copilot           | Right-dock agent that reads and edits notes with approval (HITL); default model by model or by intent, per-turn reasoning effort, BYOK keys |
+| Artifacts and study  | Flashcards (SM2 review, missed cards), quizzes, summaries, mind maps in a sidebar                                                           |
+| Voice notes          | Recording with live preview, transcription, insertion into the editor                                                                       |
+| Organization         | Buckets, tags, supertags and list views on `/notes`                                                                                         |
+| Note sharing         | Share links with viewer/editor access and an editors-can-share toggle                                                                       |
+| Real-time sync       | Yjs CRDT over Hocuspocus, live cursors, IndexedDB persistence (see [Collaboration](#collaboration))                                         |
+| Settings             | Profile, account, appearance, language, AI assistant (copilot model + provider keys), integrations (MCP keys, connected apps)               |
+| i18n                 | English and Spanish via react-i18next                                                                                                       |
+| Dark mode            | System-aware theme                                                                                                                          |
+| Analytics            | PostHog (disabled when the key is empty)                                                                                                    |
 
 ## Quick Start
 
-### Prerequisites
-
-Ensure the backend API is running. See the [root README](../../README.md) for full setup instructions.
-
-### Development
-
 ```bash
-# From workspace root
-pnpm dev
-
-# Or using Nx directly
-nx serve notes
+pnpm dev          # nx serve notes -> http://localhost:4200
+pnpm docker:up    # PostgreSQL + Redis
+pnpm dev:all      # notes + api + backoffice
 ```
 
-The app will be available at **http://localhost:4200**
+The API must be running for auth, notes and collaboration. See the [root README](../../README.md).
 
-### With Backend
+## Configuration
 
-```bash
-# Start everything
-pnpm docker:up    # Database
-pnpm dev:all      # API + Notes + Backoffice
-```
+Copy `.env.example` to `.env` in `apps/notes/`:
 
----
+| Variable                   | Purpose                                                                                                                                            |
+| -------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_API_URL`             | REST base URL. Default `http://localhost:3333/api/v1` (`libs/api-client/src/lib/config.ts`)                                                        |
+| `VITE_WS_URL`              | WebSocket base. When unset it is derived from `VITE_API_URL`; the app appends `/collaboration` (`src/collaboration/useHocuspocusCollaboration.ts`) |
+| `VITE_COLLABORATION_MODE`  | `websocket` or `hybrid` connects to Hocuspocus; any other value keeps the editor local-only. Use `websocket`                                       |
+| `VITE_MCP_URL`             | MCP connector URL shown in Settings > Integrations (`McpConnectCard.tsx`). Default `https://mcp.knowtis.app/mcp`                                   |
+| `VITE_PUBLIC_POSTHOG_KEY`  | PostHog project key; empty disables analytics (`src/lib/posthog.ts`)                                                                               |
+| `VITE_PUBLIC_POSTHOG_HOST` | PostHog host; defaults to the `/t` reverse proxy                                                                                                   |
 
 ## Project Structure
 
 ```
 src/
-├── components/       # Feature components (editor, ai, copilot, artifacts, voice-note, settings, layout, notes, anonymous)
-├── pages/            # Route page components
+├── auth/             # Auth adapters, initAuth, anonymous/guest session, verify-email guard
+├── collaboration/    # useHocuspocusCollaboration, collaboration token provider
+├── components/       # AppErrorBoundary, ai-elements, anonymous, artifacts, auth, copilot, editor,
+│                     # layout, notes, oauth, organization, right-dock, settings, voice-note
+├── config/           # ROUTES, navigation, storage keys
+├── hooks/            # App hooks (collaborative editor, voice recorder, auto-title, provider keys, ...)
+├── lib/              # i18n, query-client, posthog, sanitize-ai-html, note-permissions
+├── pages/            # Page components mounted by routes
+├── providers/        # AppProviders, PostHogProvider, ThemeProvider, CASL ability provider
 ├── routes/           # TanStack Router file-based routes
-├── providers/        # React context providers (Yjs, Theme, PostHog, CASL)
-├── stores/           # Zustand stores (ai, agent, artifacts, sidebar, settings, voice-note)
-├── hooks/            # App-specific hooks (collaboration, voice, auto-title)
-├── auth/             # Auth adapters and anonymous session
-├── lib/              # Utilities (i18n, query-client, collaboration)
-├── config/           # Navigation, routes, storage keys
-└── types/            # TypeScript type definitions
+├── stores/           # Zustand: agent, ai, ai-menu, anonymous-limit, artifact-sidebar, chunk-buffer,
+│                     # notes-search, right-dock, settings, sidebar, verify-email, voice-note-editor, workspace
+└── types/
 ```
 
----
+Editor extensions (ghost text, AI block, code block, Mermaid, image, suggestion menu) live in `packages/editor`; the Yjs provider lives in `packages/crdt`.
 
-## Configuration
+## Routes
 
-### Environment Variables
+Routes under `_app` run `initAuth()` first: it restores a stored session or creates an anonymous one, so they work without an account unless noted.
 
-Create a `.env` file in `apps/notes/`:
+| Route              | Component            | Session      | Notes                                                     |
+| ------------------ | -------------------- | ------------ | --------------------------------------------------------- |
+| `/`                | `RootRedirect`       | anonymous ok | Creates a note and navigates to it                        |
+| `/notes`           | `HomePage`           | anonymous ok | Notes list with bucket/tag/view search                    |
+| `/notes/$noteId`   | `NoteEditorPage`     | anonymous ok | Collaborative editor                                      |
+| `/dashboard`       | `WelcomePage`        | anonymous ok | Greeting, recent notes                                    |
+| `/oauth/consent`   | `OauthConsentRoute`  | account      | Redirects anonymous visitors to `/login`                  |
+| `/s/$token`        | `SharedNotePage`     | public       | Shared note by token                                      |
+| `/login`           | `LoginPage`          | public       | Signed-in accounts are redirected away                    |
+| `/register`        | `RegisterPage`       | public       |                                                           |
+| `/forgot-password` | `ForgotPasswordPage` | public       |                                                           |
+| `/reset-password`  | `ResetPasswordPage`  | public       | `?token=`                                                 |
+| `/verify-email`    | `VerifyEmailPage`    | public       | Signed-in accounts are sent to `/dashboard` (code dialog) |
 
-```env
-# API Configuration
-VITE_API_URL=http://localhost:3333/api/v1
-VITE_WS_URL=http://localhost:3333
+Unknown paths redirect to `/`.
 
-# Collaboration Mode
-# Options: 'webrtc' | 'websocket' | 'hybrid'
-#
-# - webrtc:    P2P only, works offline (no backend needed)
-# - websocket: Server-based only (requires API)
-# - hybrid:    WebSocket primary, WebRTC fallback
-VITE_COLLABORATION_MODE=websocket
-```
+## Collaboration
 
-### Collaboration Modes
+- Transport: `@hocuspocus/provider` over WebSocket at `${VITE_WS_URL}/collaboration`; enabled when `VITE_COLLABORATION_MODE` is `websocket` or `hybrid`.
+- Persistence: every note document is stored in IndexedDB and synced across tabs by `@knowtis/crdt`, regardless of mode.
+- Socket.io is used only for the `/ai` and `/agent` streams (`libs/api-client`), not for document sync.
 
-| Mode        | Backend Required | Offline | Description                       |
-| ----------- | ---------------- | ------- | --------------------------------- |
-| `webrtc`    | No               | Yes     | Peer-to-peer via WebRTC signaling |
-| `websocket` | Yes              | No      | Server-based sync via Socket.io   |
-| `hybrid`    | Optional         | Yes     | WebSocket with WebRTC fallback    |
-
----
-
-## Frontend Architecture
-
-### Data Flow
-
-```
-User Action → Component → Custom Hook → React Query / Zustand → Re-render
-```
-
-- **Server state**: React Query hooks from `@knowtis/data-access-notes` (caching, optimistic updates)
-- **Client state**: Zustand stores in `src/stores/` (UI state, AI state, sidebar)
-
----
-
-## Components
-
-### Pages
-
-| Page                 | Route              | Auth Required | Description                  |
-| -------------------- | ------------------ | ------------- | ---------------------------- |
-| `HomePage`           | `/`                | Yes           | Notes dashboard              |
-| `LoginPage`          | `/login`           | No            | User login form              |
-| `RegisterPage`       | `/register`        | No            | User registration            |
-| `ForgotPasswordPage` | `/forgot-password` | No            | Password reset request       |
-| `ResetPasswordPage`  | `/reset-password`  | No            | Password reset form          |
-| `VerifyEmailPage`    | `/verify-email`    | No            | Email verification           |
-| `NoteEditorPage`     | `/notes/:id`       | Yes           | Rich text note editor        |
-| `SharedNotePage`     | `/s/:token`        | No            | Shared note access via token |
-| `WelcomePage`        | `/`                | No            | Landing page for new users   |
-
-### Key Component Areas
-
-| Area                 | Description                                                                                                                                                                                       |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `editor/`            | Tiptap collaborative editor with toolbar, cursors, save indicator                                                                                                                                 |
-| `editor/ai/`         | AI bubble menu, slash commands, streaming preview                                                                                                                                                 |
-| `editor/extensions/` | Ghost text autocomplete, AI blocks, code blocks                                                                                                                                                   |
-| `artifacts/`         | Study tools sidebar (flashcards with SM2, quizzes, summaries, mind maps)                                                                                                                          |
-| `voice-note/`        | Voice recording, live preview, transcription                                                                                                                                                      |
-| `notes/`             | Note list, cards, sharing dialog                                                                                                                                                                  |
-| `copilot/`           | Conversational agent panel — composer, message list, proposal cards, source chips, retry banner, and the model/effort picker (`CopilotModelPicker`, `IntentModelPicker`, `intent-picker-options`) |
-| `settings/`          | Profile, account, appearance, language, AI Assistant (copilot model + BYOK keys), MCP integrations                                                                                                |
-| `layout/`            | Sidebar, bottom nav (mobile), floating action button                                                                                                                                              |
-| `anonymous/`         | Usage limit modal for unauthenticated users                                                                                                                                                       |
-
----
-
-## Real-time Collaboration
-
-### Technology Stack
-
-| Technology | Purpose                                     |
-| ---------- | ------------------------------------------- |
-| Yjs        | CRDT for conflict-free data synchronization |
-| Tiptap     | Rich text editor with Yjs integration       |
-| Socket.io  | WebSocket transport for server sync         |
-| WebRTC     | Peer-to-peer transport for offline mode     |
-| IndexedDB  | Local persistence for offline support       |
-
-### How It Works
-
-1. **Document Creation**: Each note has a `Y.Doc` (Yjs document)
-2. **Content Storage**: Text stored as `Y.XmlFragment` (ProseMirror compatible)
-3. **Synchronization**:
-   - Changes broadcast via WebSocket or WebRTC
-   - Conflicts resolved automatically by CRDT algorithm
-4. **Persistence**:
-   - Remote: Saved to PostgreSQL via API
-   - Local: Cached in IndexedDB
-
-### Awareness (Live Presence)
-
-Collaborators see each other's:
-
-- Cursor positions
-- Text selections
-- User info (name, avatar, color)
-
-```typescript
-// In YjsProvider
-provider.awareness.setLocalStateField('user', {
-  name: currentUser.name,
-  color: userColor,
-  cursor: cursorPosition,
-});
-```
-
-### Testing Collaboration
-
-#### Local (Multiple Tabs)
-
-1. Open the app in your browser
-2. Create or select a note
-3. Open the same URL in another tab
-4. Edit in both tabs simultaneously
-5. Changes sync in real-time via BroadcastChannel
-
-#### Remote (Multiple Users)
-
-1. Share the note URL with another user
-2. Both users can edit simultaneously
-3. Changes sync via WebSocket server
-
----
+Details: [Architecture: Real-time Collaboration](../../docs/ARCHITECTURE.md#real-time-collaboration) and [packages/crdt](../../packages/crdt/README.md).
 
 ## Testing
 
-### Running Tests
-
 ```bash
-# Watch mode
-nx test notes
-
-# Single run
-nx test notes --run
-
-# With coverage
+nx test notes                         # single run (@nx/vitest:test)
+nx test notes --watch
 nx test notes --coverage
-
-# Specific file
-nx test notes --testPathPattern=NoteCard
+nx test notes --testFiles=src/components/notes/NoteList.test.tsx
 ```
 
-Tests are co-located with source files (`*.test.tsx`). Uses Vitest + React Testing Library.
+Vitest + React Testing Library. Tests are `*.test.tsx`, `*.spec.ts` and `__tests__/` directories next to the source.
 
----
-
-## Building for Production
-
-### Build Command
+## Build
 
 ```bash
-# From workspace root
-pnpm build
-
-# Or directly
-nx build notes
+pnpm build        # nx build notes -> dist/apps/notes/
 ```
 
-Output: `dist/apps/notes/`. Deployed to Vercel (see [Deployment Guide](../../docs/DEPLOYMENT.md)).
-
----
+Deployed to Vercel from CI; see the [Deployment Guide](../../docs/DEPLOYMENT.md).
 
 ## Related Documentation
 
-- [Root README](../../README.md) - Workspace overview
-- [API Documentation](../api/README.md) - Backend API
-- [Architecture Guide](../../docs/ARCHITECTURE.md) - System design
-- [Deployment Guide](../../docs/DEPLOYMENT.md) - Railway & Vercel
-
----
-
-<p align="center">
-  Part of the <strong>Knowtis</strong> monorepo
-</p>
+- [Root README](../../README.md)
+- [API](../api/README.md)
+- [Architecture](../../docs/ARCHITECTURE.md)
+- [Deployment](../../docs/DEPLOYMENT.md)
