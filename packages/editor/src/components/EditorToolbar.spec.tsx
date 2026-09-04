@@ -130,28 +130,17 @@ describe('EditorToolbar folding', () => {
     ).toBeInTheDocument();
   });
 
-  it('folds everything foldable before the first measurement', () => {
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 0,
-      height: 0,
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      x: 0,
-      y: 0,
-      toJSON: () => ({}),
-    });
-    editor = new Editor({ extensions: [StarterKit], content: '<p>x</p>' });
-    render(
-      <TooltipProvider>
-        <EditorToolbar editor={editor} />
-      </TooltipProvider>
-    );
+  it('folds everything foldable when the container has no width', () => {
+    mount(0);
 
     expect(
       screen.getByRole('button', { name: KEY.moreTools })
     ).toBeInTheDocument();
+    for (const tool of [...EARLY_TOOLS, ...LATE_TOOLS]) {
+      expect(
+        screen.queryByRole('button', { name: tool.labelKey })
+      ).not.toBeInTheDocument();
+    }
   });
 });
 
@@ -193,6 +182,28 @@ describe('EditorToolbar overflow menu', () => {
     expect(
       screen.getByRole('menuitem', { name: startsWith(KEY.redo) })
     ).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it('leaves focus off the trigger after running a tool from the menu', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early - 1);
+    await openOverflowMenu();
+
+    await userEvent.click(
+      screen.getByRole('menuitem', { name: startsWith(KEY.horizontalRule) })
+    );
+
+    expect(
+      screen.getByRole('button', { name: KEY.moreTools })
+    ).not.toHaveFocus();
+  });
+
+  it('returns focus to the trigger when the menu is dismissed', async () => {
+    mount(TOOLBAR_FOLD_WIDTHS.early - 1);
+    await openOverflowMenu();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(screen.getByRole('button', { name: KEY.moreTools })).toHaveFocus();
   });
 
   it('checks the folded toggle that is active', async () => {

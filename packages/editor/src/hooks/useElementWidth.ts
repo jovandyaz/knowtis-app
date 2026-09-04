@@ -18,7 +18,10 @@ export function useElementWidth(
 
     const observer = new ResizeObserver(([entry]) => {
       if (entry) {
-        setWidth(entry.contentRect.width);
+        setWidth(
+          entry.borderBoxSize?.[0]?.inlineSize ??
+            entry.target.getBoundingClientRect().width
+        );
       }
     });
     observer.observe(element);

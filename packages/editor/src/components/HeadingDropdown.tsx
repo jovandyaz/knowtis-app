@@ -1,4 +1,3 @@
-import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Editor } from '@tiptap/react';
@@ -16,6 +15,7 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import { useMenuFocusReturn } from '../hooks/useMenuFocusReturn';
 import { toolbarButtonClasses } from './toolbar-button.styles';
 
 interface HeadingDropdownProps {
@@ -31,7 +31,7 @@ const HEADING_OPTIONS = [
 
 export function HeadingDropdown({ editor }: HeadingDropdownProps) {
   const { t } = useTranslation('notes');
-  const selectedRef = useRef(false);
+  const { markSelected, onCloseAutoFocus } = useMenuFocusReturn();
   const label = t('editor.toolbar.heading');
   const isAnyHeadingActive = [1, 2, 3].some((level) =>
     editor.isActive('heading', { level })
@@ -59,14 +59,7 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
         side="bottom"
         align="start"
         sideOffset={8}
-        // Radix returns focus to the trigger on close; after picking a level
-        // the caret must stay in the editor, so only Escape keeps that default.
-        onCloseAutoFocus={(event) => {
-          if (selectedRef.current) {
-            selectedRef.current = false;
-            event.preventDefault();
-          }
-        }}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         {HEADING_OPTIONS.map((option) => {
           const Icon = option.icon;
@@ -80,7 +73,7 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
               key={option.level}
               className={cn(isActive && 'bg-(--muted)')}
               onSelect={() => {
-                selectedRef.current = true;
+                markSelected();
                 if (option.level === 0) {
                   editor.chain().focus().setParagraph().run();
                 } else {

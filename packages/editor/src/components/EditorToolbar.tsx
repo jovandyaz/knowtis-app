@@ -27,6 +27,7 @@ import {
   type ToolbarToolConfig,
 } from '../editor.config';
 import { useElementWidth } from '../hooks/useElementWidth';
+import { useMenuFocusReturn } from '../hooks/useMenuFocusReturn';
 import { HeadingDropdown } from './HeadingDropdown';
 import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';
@@ -136,7 +137,7 @@ interface ToolbarOverflowMenuProps {
 
 function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
   const { t: tNotes } = useTranslation('notes');
-  const selectedRef = useRef(false);
+  const { markSelected, onCloseAutoFocus } = useMenuFocusReturn();
   const label = tNotes('editor.toolbar.moreTools');
   const hasActiveTool = items.some(
     (item) => isTool(item) && item.isActive?.(editor)
@@ -164,14 +165,7 @@ function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
         side="bottom"
         align="end"
         sideOffset={8}
-        // Radix returns focus to the trigger on close; after running a tool
-        // the caret must stay in the editor, so only Escape keeps that default.
-        onCloseAutoFocus={(event) => {
-          if (selectedRef.current) {
-            selectedRef.current = false;
-            event.preventDefault();
-          }
-        }}
+        onCloseAutoFocus={onCloseAutoFocus}
       >
         {items.map((item, index) => {
           if (!isTool(item)) {
@@ -191,7 +185,7 @@ function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
           );
           const disabled = item.disabled?.(editor) ?? false;
           const onSelect = () => {
-            selectedRef.current = true;
+            markSelected();
             item.action(editor);
           };
 
