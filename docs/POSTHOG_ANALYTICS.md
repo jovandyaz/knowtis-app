@@ -17,7 +17,8 @@ Server analytics belongs only to Railway's `knowtis_app` service:
 - `POSTHOG_PROJECT_TOKEN` is the PostHog **project ingestion token**, never a
   Personal API Key.
 - `POSTHOG_HOST` is the ingestion host and defaults in the API to
-  `https://us.i.posthog.com`.
+  `https://us.i.posthog.com`. The schema rejects plain-HTTP hosts so the
+  project token and person properties never travel in cleartext.
 
 Both server variables are declared with `preserve()` in
 `.railway/railway.ts`; their values remain remote secrets and must not be
@@ -48,12 +49,35 @@ All product events include `environment`, `app_version`, `actor_type`,
 
 Browser anonymous creation is deliberately browser-authoritative so it retains
 the browser distinct ID and joins the pre-signup funnel. Registered API events
-use the stable database user ID. The browser identifies registered users with
-that database ID, never email, and calls `reset()` before the next anonymous
-context after sign-out or a transition to anonymous.
+use the stable database user ID. `shared note viewed` is not emitted when the
+viewer is the note's owner; owners opening their own link are not an audience.
 
 Only identification may set these person properties: `email`, `name`, `role`,
-`locale`, and `is_internal`. Email and name are not event properties.
+`locale`, and `is_internal`. Email and name are not event properties. Event
+names and categorical values are declared once in `@knowtis/shared-types`
+(`PRODUCT_EVENT_NAMES` and friends) and both emitters type against them.
+
+## Identity lifecycle
+
+`AnalyticsIdentitySync` mirrors the auth store into PostHog:
+
+- The browser identifies registered users with the database ID, never email,
+  and calls `reset()` before the next anonymous context after sign-out, a
+  transition to anonymous, or a switch to a different account.
+- PostHog persists its identified state across page loads. On the first sync
+  of a page load the synchronizer compares that persisted state with the auth
+  state and calls `reset()` when PostHog still holds a different or stale
+  identified distinct ID, so a new anonymous session never inherits the
+  previous account.
+- Capture is paused while a transition is in flight. The SDK's automatic
+  `$pageleave` is dropped in `before_send` during the pause so it cannot carry
+  the previous identity; the transition events themselves (`$identify`,
+  `$set`) still pass.
+- A failed transition is retried up to three times, one second apart. If the
+  budget is exhausted the synchronizer logs a warning, resets PostHog to a
+  fresh anonymous identity, registers anonymous context, and resumes capture,
+  so a broken identify can never silence the session. Returning to the last
+  completed identity also resumes capture immediately.
 
 ## Privacy boundary
 
@@ -65,7 +89,12 @@ person payloads. The only retained first-party path templates are:
 
 It removes every query string and fragment; external referrers keep only their
 origin; malformed URL values are dropped. It also removes sensitive
-event-property keys. Never send note IDs, titles, contents, tags,
+event-property keys and acquisition click identifiers (`gclid`, `fbclid`,
+`utm_*`, ...), including the copies posthog-js re-emits as
+`$session_entry_*` and `$initial_*` on every event of a session. Person
+properties are filtered by an allowlist whether they arrive at the top level
+of the payload or nested under `properties.$set` / `properties.$set_once`,
+which is the shape the SDK uses once a distinct ID is already identified. Never send note IDs, titles, contents, tags,
 collaborator IDs, share or verification tokens, API keys, query strings,
 emails, names, prompts, responses, source text, model output, token counts,
 or costs. Autocapture remains off, router navigation emits manual pageviews,
