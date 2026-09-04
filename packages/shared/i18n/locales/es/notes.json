@@ -131,6 +131,8 @@
     "loadingNote": "Cargando nota...",
     "failedToLoad": "Error al cargar la nota",
     "notFound": "Nota no encontrada",
+    "permissionDenied": "No tienes acceso a esta nota",
+    "loadErrorGeneric": "Algo salió mal al cargar la nota. Inténtalo de nuevo.",
     "accessLost": "El acceso a esta nota terminó",
     "accessLostDesc": "El dueño pudo haber revocado tu acceso, o la nota fue eliminada. Tu cuenta y sesión no se ven afectadas.",
     "loadingEditor": "Cargando editor...",
