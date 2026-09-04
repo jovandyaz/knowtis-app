@@ -7,7 +7,8 @@ import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { McpKeyCreatedEvent } from '../mcp/mcp-key-created.event';
-import { NoteCreatedEvent, NoteSharedEvent } from '../notes/domain/events';
+import { NoteCreatedEvent } from '../notes/domain/events/note-created.event';
+import { NoteSharedEvent } from '../notes/domain/events/note-shared.event';
 import type { UsersService } from '../users/users.service';
 import { ProductAnalyticsListener } from './product-analytics.listener';
 import type { ProductAnalytics } from './product-analytics.service';
@@ -178,7 +179,7 @@ describe('ProductAnalyticsListener', () => {
     });
   });
 
-  it('maps admins to internal actors and defaults a missing locale to es', async () => {
+  it('maps admins to internal actors and defaults a missing locale to the workspace default', async () => {
     findById.mockResolvedValue({ ...USER, role: 'admin', locale: null });
 
     await listener.handleNoteShared(
@@ -190,7 +191,7 @@ describe('ProductAnalyticsListener', () => {
         actor: {
           actor_type: 'registered',
           is_internal: true,
-          locale: 'es',
+          locale: 'en',
         },
       })
     );

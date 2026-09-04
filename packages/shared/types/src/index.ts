@@ -166,3 +166,20 @@ export {
 } from './lib/catalog.types';
 
 export * from './lib/organization.types';
+
+export {
+  PRODUCT_EVENT_NAMES,
+  PRODUCT_ACTOR_TYPES,
+  PRODUCT_USER_ROLES,
+  NOTE_SHARE_TYPES,
+  MCP_SCOPE_LEVELS,
+  AI_ASSISTANT_TYPES,
+  type ProductEventName,
+  type ProductActorType,
+  type ProductUserRole,
+  type NoteShareType,
+  type McpScopeLevel,
+  type AIAssistantType,
+  type ProductActorContext,
+  type ProductPersonProperties,
+} from './lib/analytics.types';

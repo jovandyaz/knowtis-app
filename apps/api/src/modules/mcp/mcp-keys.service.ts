@@ -5,12 +5,11 @@ import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, eq } from 'drizzle-orm';
 
+import type { McpScopeLevel } from '@knowtis/shared-types';
+
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
 import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
-import {
-  McpKeyCreatedEvent,
-  type McpScopeLevel,
-} from './mcp-key-created.event';
+import { McpKeyCreatedEvent } from './mcp-key-created.event';
 import { MCP_SCOPES, type McpScopeCsv } from './mcp-token';
 
 interface KeyParts {

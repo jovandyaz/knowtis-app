@@ -2,6 +2,8 @@ import { Injectable, Logger, type OnApplicationShutdown } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { PostHog } from 'posthog-node';
 
+import { pickDefined } from '@knowtis/shared-util';
+
 import type { EnvConfig } from '../../config/env.config';
 import type {
   ServerActorContext,
@@ -32,22 +34,8 @@ const PERSON_PROPERTY_KEYS = [
   'is_internal',
 ] as const satisfies readonly (keyof ServerPersonProperties)[];
 
-function pickDefinedProperties(
-  properties: object,
-  keys: readonly string[]
-): Record<string, unknown> {
-  const picked: Record<string, unknown> = {};
-  const provided = properties as Record<string, unknown>;
-
-  for (const key of keys) {
-    const value = provided[key];
-    if (value !== undefined) {
-      picked[key] = value;
-    }
-  }
-
-  return picked;
-}
+/** Build stamp when Railway does not inject a commit SHA (local runs). */
+const UNKNOWN_APP_VERSION = '0.1.0';
 
 @Injectable()
 export class ProductAnalytics implements OnApplicationShutdown {
@@ -59,7 +47,8 @@ export class ProductAnalytics implements OnApplicationShutdown {
   ) {
     this.commonProperties = {
       environment: configService.get('NODE_ENV'),
-      app_version: configService.get('RAILWAY_GIT_COMMIT_SHA') ?? '0.1.0',
+      app_version:
+        configService.get('RAILWAY_GIT_COMMIT_SHA') ?? UNKNOWN_APP_VERSION,
     };
   }
 
@@ -85,17 +74,14 @@ export class ProductAnalytics implements OnApplicationShutdown {
         event: input.event,
         properties: {
           ...this.commonProperties,
-          ...pickDefinedProperties(
-            input.properties,
-            EVENT_PROPERTY_KEYS[input.event]
+          ...pickDefined(
+            input.properties as Record<string, unknown>,
+            EVENT_PROPERTY_KEYS[input.event] as readonly string[]
           ),
-          ...pickDefinedProperties(input.actor, ACTOR_PROPERTY_KEYS),
+          ...pickDefined(input.actor, ACTOR_PROPERTY_KEYS),
           ...(input.personProperties
             ? {
-                $set: pickDefinedProperties(
-                  input.personProperties,
-                  PERSON_PROPERTY_KEYS
-                ),
+                $set: pickDefined(input.personProperties, PERSON_PROPERTY_KEYS),
               }
             : {}),
         },

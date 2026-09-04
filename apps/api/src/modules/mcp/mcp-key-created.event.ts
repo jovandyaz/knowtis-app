@@ -1,4 +1,4 @@
-export type McpScopeLevel = 'read' | 'write' | 'share';
+import type { McpScopeLevel } from '@knowtis/shared-types';
 
 export class McpKeyCreatedEvent {
   static readonly EVENT_NAME = 'mcp.key.created';
