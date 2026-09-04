@@ -10,11 +10,7 @@
       "executor": "@nx/webpack:webpack",
       "outputs": ["{options.outputPath}"],
       "defaultConfiguration": "production",
-      "inputs": [
-        "default",
-        "{workspaceRoot}/.railway/railway.ts",
-        "{workspaceRoot}/.github/workflows/ci.yml"
-      ],
+      "inputs": ["default", "{workspaceRoot}/.github/workflows/ci.yml"],
       "options": {
         "target": "node",
         "compiler": "tsc",

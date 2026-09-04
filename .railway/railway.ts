@@ -18,8 +18,8 @@ export default defineRailway(() => {
     },
     deploy: {
       startCommand: 'node dist/apps/api/main.js',
-      // The only production migrator; a non-zero exit aborts the deploy.
-      // See docs/MIGRATIONS.md.
+      // Nothing else migrates production: CI only migrates its own throwaway
+      // database, so dropping this line would ship code against an old schema.
       preDeployCommand: ['pnpm exec tsx apps/api/src/database/migrate.ts'],
       healthcheckPath: '/api/v1/health/ping',
       healthcheckTimeout: 120,
@@ -49,13 +49,13 @@ export default defineRailway(() => {
       LANGFUSE_PUBLIC_KEY: preserve(),
       LANGFUSE_SECRET_KEY: preserve(),
       MCP_RESOURCE_URL: preserve(),
-      NODE_ENV: preserve(),
+      NODE_ENV: 'production',
       OAUTH_COOKIE_KEYS: preserve(),
       OAUTH_ISSUER: preserve(),
       OAUTH_JWKS: preserve(),
       OPENAI_API_KEY: preserve(),
       OPENROUTER_API_KEY: preserve(),
-      PORT: preserve(),
+      PORT: '3333',
       REDIS_URL: preserve(),
       RESEND_API_KEY: preserve(),
       TAVILY_API_KEY: preserve(),
@@ -80,11 +80,11 @@ export default defineRailway(() => {
     domains: ['mcp.knowtis.app'],
     env: {
       API_INTERNAL_URL: preserve(),
-      MCP_ALLOWED_HOSTS: preserve(),
+      MCP_ALLOWED_HOSTS: 'mcp.knowtis.app',
       MCP_OAUTH_ISSUER: preserve(),
       MCP_RESOURCE_URL: preserve(),
-      NODE_ENV: preserve(),
-      PORT: preserve(),
+      NODE_ENV: 'production',
+      PORT: '3334',
       VOICE_NOTES_ENABLED: preserve(),
     },
   });

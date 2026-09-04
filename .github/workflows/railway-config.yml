@@ -1,10 +1,16 @@
 name: Railway config
 
 # Plans .railway/railway.ts on pull requests and applies the reviewed, pinned
-# plan when the PR merges (railwayapp/config pins the change set, the
-# environment etag and the .railway/ tree, so what was reviewed is what lands).
-# Direct pushes to main have no pinned plan and fail by design. Destructive
-# changes are refused: widen the file, re-plan, review.
+# plan when the PR merges. The plan job is hand-rolled because
+# railwayapp/config's plan mode runs `npm install` on the repo, which this
+# pnpm workspace cannot tolerate; it uploads the same `railway-plan` artifact
+# the action's apply mode looks up by PR head SHA, so what was reviewed is
+# what lands (change set + environment etag + .railway/ tree). Destructive
+# changes are refused here; an intended deletion is applied locally with
+# `railway config apply --confirm-destructive` after review.
+# Only pull requests trigger this: a direct push to main that touches
+# .railway/ is never applied, so the environment silently drifts from the file
+# until the next PR plans it. Branch protection keeps that path closed.
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
@@ -21,6 +27,8 @@ jobs:
     name: Plan
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -32,11 +40,51 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - uses: railwayapp/config@v1
+      - name: Typecheck the configuration
+        # `railway config plan` strips types instead of checking them; a type
+        # error would otherwise reach the plan as a runtime failure.
+        run: pnpm exec tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --skipLibCheck .railway/railway.ts
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Plan
+        run: railway config plan --out railway-plan.json | tee plan.txt
+      - uses: actions/upload-artifact@v4
         with:
-          command: plan
-          railway-token: ${{ secrets.RAILWAY_TOKEN }}
-          confirm-destructive: false
+          name: railway-plan
+          path: railway-plan.json
+      - name: Comment plan
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const plan = JSON.parse(fs.readFileSync('railway-plan.json', 'utf8'));
+            const text = fs.readFileSync('plan.txt', 'utf8').trimEnd();
+            const changes = Array.isArray(plan.changeSet?.changes) ? plan.changeSet.changes.length : 0;
+            const summary = changes === 0
+              ? 'No changes: the environment already matches `.railway/`.'
+              : `**${changes} change${changes === 1 ? '' : 's'}** will apply on merge.`;
+            const body = [
+              '<!-- railway-config-plan -->',
+              '### Railway config plan',
+              '',
+              summary,
+              '',
+              '```',
+              text,
+              '```',
+              '',
+              plan.destructive ? '> [!WARNING]\n> This plan is destructive; the merge apply will refuse it.' : '',
+              `Pinned: tree \`${plan.sourceTree}\`, etag \`${plan.configEtag}\`, change-set \`${plan.changeSetHash}\`. If the environment or \`.railway/\` moves first, the apply fails and the PR needs a fresh plan.`,
+            ].join('\n');
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const existing = (await github.rest.issues.listComments({ owner, repo, issue_number, per_page: 100 })).data
+              .find((c) => c.body?.startsWith('<!-- railway-config-plan -->'));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
 
   apply:
     name: Apply
@@ -47,13 +95,6 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.merge_commit_sha }}
           persist-credentials: false
-      - uses: pnpm/action-setup@v6
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: 'pnpm'
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
       - uses: railwayapp/config@v1
         with:
           command: apply
