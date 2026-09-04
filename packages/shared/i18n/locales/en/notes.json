@@ -131,6 +131,8 @@
     "loadingNote": "Loading note...",
     "failedToLoad": "Failed to load note",
     "notFound": "Note not found",
+    "permissionDenied": "You don't have access to this note",
+    "loadErrorGeneric": "Something went wrong while loading the note. Please try again.",
     "accessLost": "Access to this note ended",
     "accessLostDesc": "The owner may have revoked your access, or the note was deleted. Your account and session are unaffected.",
     "loadingEditor": "Loading editor...",
