@@ -9,6 +9,7 @@ import {
   Button,
   cn,
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -66,7 +67,8 @@ interface ToolbarButtonProps {
 
 function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
   const Icon = tool.icon;
-  const isActive = tool.isActive(editor);
+  const isToggle = tool.isActive !== undefined;
+  const isActive = tool.isActive?.(editor) ?? false;
   const isDisabled = tool.disabled?.(editor) ?? false;
   const tooltipLabel = tool.shortcut
     ? `${tool.label} (${tool.shortcut})`
@@ -89,6 +91,7 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
           onClick={() => tool.action(editor)}
           disabled={isDisabled}
           aria-label={tool.label}
+          aria-pressed={isToggle ? isActive : undefined}
         >
           <Icon className="h-4 w-4" />
         </Button>
@@ -108,7 +111,7 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
   const { t: tNotes } = useTranslation('notes');
   const label = tNotes('editor.toolbar.moreTools');
   const hasActiveTool = SECONDARY_ITEMS.some(
-    (item) => isTool(item) && item.isActive(editor)
+    (item) => isTool(item) && item.isActive?.(editor)
   );
 
   return (
@@ -141,13 +144,8 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
             return <DropdownMenuSeparator key={`sep-${index}`} />;
           }
           const Icon = item.icon;
-          return (
-            <DropdownMenuItem
-              key={item.label}
-              className={cn(item.isActive(editor) && 'bg-(--muted)')}
-              disabled={item.disabled?.(editor) ?? false}
-              onSelect={() => item.action(editor)}
-            >
+          const content = (
+            <>
               <Icon className="h-4 w-4" />
               <span>{item.label}</span>
               {item.shortcut && (
@@ -155,6 +153,28 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
                   {item.shortcut}
                 </span>
               )}
+            </>
+          );
+          const disabled = item.disabled?.(editor) ?? false;
+          const onSelect = () => item.action(editor);
+
+          return item.isActive ? (
+            <DropdownMenuCheckboxItem
+              key={item.label}
+              checked={item.isActive(editor)}
+              disabled={disabled}
+              onSelect={onSelect}
+            >
+              {content}
+            </DropdownMenuCheckboxItem>
+          ) : (
+            <DropdownMenuItem
+              key={item.label}
+              className="pr-8"
+              disabled={disabled}
+              onSelect={onSelect}
+            >
+              {content}
             </DropdownMenuItem>
           );
         })}

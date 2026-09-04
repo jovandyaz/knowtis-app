@@ -45,9 +45,10 @@ describe('EditorToolbar overflow menu', () => {
 
     expect(SECONDARY_TOOLS.length).toBeGreaterThan(0);
     for (const tool of SECONDARY_TOOLS) {
-      const item = screen.getByRole('menuitem', {
-        name: new RegExp(`^${tool.label}`),
-      });
+      const item = screen.getByRole(
+        tool.isActive ? 'menuitemcheckbox' : 'menuitem',
+        { name: new RegExp(`^${tool.label}`) }
+      );
       if (tool.shortcut) {
         expect(item.textContent).toContain(tool.shortcut);
       }
@@ -70,7 +71,7 @@ describe('EditorToolbar overflow menu', () => {
       screen.getByRole('button', { name: 'editor.toolbar.moreTools' })
     );
     await userEvent.click(
-      screen.getByRole('menuitem', { name: /^Code Block/ })
+      screen.getByRole('menuitemcheckbox', { name: /^Code Block/ })
     );
 
     expect(editor.isActive('codeBlock')).toBe(true);
@@ -97,18 +98,47 @@ describe('EditorToolbar overflow menu', () => {
 });
 
 describe('EditorToolbar active state', () => {
-  const ACTIVE_CLASS = 'bg-foreground';
-
-  it('marks a tool active as soon as its mark is applied', () => {
+  it('marks a tool pressed as soon as its mark is applied', () => {
     mount();
     const bold = screen.getByRole('button', { name: 'Bold' });
-    expect(bold.className).not.toContain(ACTIVE_CLASS);
+    expect(bold.getAttribute('aria-pressed')).toBe('false');
 
     act(() => {
       editor.chain().selectAll().toggleBold().run();
     });
 
-    expect(bold.className).toContain(ACTIVE_CLASS);
+    expect(bold.getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('does not describe one-shot actions as toggles', () => {
+    mount();
+    for (const label of ['Horizontal Rule', 'Undo', 'Redo']) {
+      expect(
+        screen.getByRole('button', { name: label }).hasAttribute('aria-pressed')
+      ).toBe(false);
+    }
+  });
+
+  it('checks the folded toggle that is active in the menu', async () => {
+    mount();
+    act(() => {
+      editor.chain().selectAll().toggleCode().run();
+    });
+
+    await userEvent.click(
+      screen.getByRole('button', { name: 'editor.toolbar.moreTools' })
+    );
+
+    expect(
+      screen
+        .getByRole('menuitemcheckbox', { name: /^Inline Code/ })
+        .getAttribute('aria-checked')
+    ).toBe('true');
+    expect(
+      screen
+        .getByRole('menuitemcheckbox', { name: /^Code Block/ })
+        .getAttribute('aria-checked')
+    ).toBe('false');
   });
 
   it('enables undo once the document has history', () => {

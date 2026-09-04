@@ -20,7 +20,8 @@ export interface ToolbarToolConfig {
   icon: typeof Bold;
   label: string;
   action: (editor: Editor) => void;
-  isActive: (editor: Editor) => boolean;
+  /** Present on toggles only; one-shot actions (undo, insert rule) omit it. */
+  isActive?: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
   shortcut?: string;
   /** Folds into the overflow menu when the toolbar container is narrow. */
@@ -154,7 +155,6 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     icon: Minus,
     label: 'Horizontal Rule',
     action: (editor) => editor.chain().focus().setHorizontalRule().run(),
-    isActive: () => false,
     secondary: true,
   },
   { type: 'separator', secondary: true },
@@ -162,7 +162,6 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     icon: Undo,
     label: 'Undo',
     action: (editor) => editor.chain().focus().undo().run(),
-    isActive: () => false,
     disabled: (editor) => !editor.can().undo(),
     secondary: true,
   },
@@ -170,7 +169,6 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     icon: Redo,
     label: 'Redo',
     action: (editor) => editor.chain().focus().redo().run(),
-    isActive: () => false,
     disabled: (editor) => !editor.can().redo(),
     secondary: true,
   },

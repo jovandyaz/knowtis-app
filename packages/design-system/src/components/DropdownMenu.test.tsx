@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuRadioGroup,
@@ -56,6 +57,31 @@ describe('DropdownMenuRadioItem', () => {
         .getByRole('menuitemradio', { name: 'Areas' })
         .querySelector('[data-state="checked"]')
     ).toHaveClass('absolute');
+  });
+});
+
+describe('DropdownMenuCheckboxItem', () => {
+  it('exposes the checked state to assistive tech and shows the indicator', async () => {
+    render(
+      <DropdownMenu>
+        <DropdownMenuTrigger>Format</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <DropdownMenuCheckboxItem checked>Bold</DropdownMenuCheckboxItem>
+          <DropdownMenuCheckboxItem checked={false}>
+            Italic
+          </DropdownMenuCheckboxItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Format' }));
+
+    const bold = screen.getByRole('menuitemcheckbox', { name: 'Bold' });
+    const italic = screen.getByRole('menuitemcheckbox', { name: 'Italic' });
+    expect(bold).toHaveAttribute('aria-checked', 'true');
+    expect(bold.querySelector('svg')).toBeInTheDocument();
+    expect(italic).toHaveAttribute('aria-checked', 'false');
+    expect(italic.querySelector('svg')).toBeNull();
+    expect(bold).toHaveClass('relative', 'pr-8');
   });
 });
 
