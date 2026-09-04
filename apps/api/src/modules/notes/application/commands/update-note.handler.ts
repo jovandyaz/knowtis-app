@@ -33,6 +33,7 @@ import {
   type UpdateNoteData,
 } from '../../domain';
 import {
+  NoteSharedEvent,
   NoteUpdatedEvent,
   type NoteUpdatedEventUpdates,
 } from '../../domain/events';
@@ -141,6 +142,8 @@ export class UpdateNoteHandler {
     }
 
     const isOwner = note.ownerId === input.userId;
+    const nextLinkExposure = linkExposureAfter(note, input);
+    const linkExposureWidened = widensLinkExposure(note, nextLinkExposure);
 
     // Only an owner widening the link is gated — opening it, or letting an open
     // one write. Narrowing stays free: an unverified user must be able to
@@ -149,7 +152,7 @@ export class UpdateNoteHandler {
     // verify.
     if (
       isOwner &&
-      widensLinkExposure(note, linkExposureAfter(note, input)) &&
+      linkExposureWidened &&
       !(await this.verifiedIdentity.isVerified(input.userId))
     ) {
       return err(NoteErrors.verificationRequired());
@@ -177,6 +180,19 @@ export class UpdateNoteHandler {
       if (tagged.isErr()) {
         return err(tagged.error);
       }
+    }
+
+    if (isOwner && linkExposureWidened) {
+      this.eventEmitter.emit(
+        NoteSharedEvent.EVENT_NAME,
+        new NoteSharedEvent(
+          input.userId,
+          'link',
+          nextLinkExposure.generalAccessPermission === 'editor'
+            ? 'editor'
+            : 'viewer'
+        )
+      );
     }
 
     this.emitUpdateEvent(input, note.id, persisted.value.yjsState);

@@ -3,12 +3,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { PostHog } from 'posthog-node';
 
 import type { EnvConfig } from '../../config/env.config';
+import { UsersModule } from '../users/users.module';
+import { ProductAnalyticsListener } from './product-analytics.listener';
 import { ProductAnalytics } from './product-analytics.service';
 
 const POSTHOG_CLIENT = Symbol('POSTHOG_CLIENT');
 
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, UsersModule],
   providers: [
     {
       provide: POSTHOG_CLIENT,
@@ -32,6 +34,7 @@ const POSTHOG_CLIENT = Symbol('POSTHOG_CLIENT');
         configService: ConfigService<EnvConfig, true>
       ) => new ProductAnalytics(client, configService),
     },
+    ProductAnalyticsListener,
   ],
   exports: [ProductAnalytics],
 })

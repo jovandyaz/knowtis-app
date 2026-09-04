@@ -1,5 +1,5 @@
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as Y from 'yjs';
 
@@ -158,6 +158,70 @@ describe('UpdateNoteHandler', () => {
         generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
         shareToken: expect.stringMatching(/^[a-f0-9]{32}$/),
       })
+    );
+  });
+
+  it('emits a safe link-share event only after link exposure widens successfully', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({
+        ...mockNote,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      })
+    );
+
+    await handler.execute({
+      noteId: 'private-note-id',
+      userId: OWNER_ID,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    });
+
+    const shareCall = vi
+      .mocked(mockEventEmitter.emit)
+      .mock.calls.find(([eventName]) => eventName === 'note.shared');
+    expect(shareCall?.[1]).toEqual({
+      actorId: OWNER_ID,
+      shareType: 'link',
+      permission: PERMISSION.VIEWER,
+    });
+  });
+
+  it('does not emit a link-share event when an already-open setting is saved', async () => {
+    const publicNote = {
+      ...mockNote,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    };
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(publicNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(ok(publicNote));
+
+    await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      generalAccessPermission: PERMISSION.VIEWER,
+    });
+
+    expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+      'note.shared',
+      expect.anything()
+    );
+  });
+
+  it('does not emit a link-share event when persistence fails', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      err(NoteErrors.permissionDenied())
+    );
+
+    await handler.execute({
+      noteId,
+      userId: OWNER_ID,
+      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+    });
+
+    expect(mockEventEmitter.emit).not.toHaveBeenCalledWith(
+      'note.shared',
+      expect.anything()
     );
   });
 

@@ -1,8 +1,10 @@
-import { Logger } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { I18nService } from 'nestjs-i18n';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DATABASE_CONNECTION } from '../../database';
 import { AnalyticsModule } from './analytics.module';
 import { ProductAnalytics } from './product-analytics.service';
 
@@ -18,6 +20,16 @@ const { capture, shutdown, PostHog } = vi.hoisted(() => {
 
 vi.mock('posthog-node', () => ({ PostHog }));
 
+@Global()
+@Module({
+  providers: [
+    { provide: DATABASE_CONNECTION, useValue: {} },
+    { provide: I18nService, useValue: { t: vi.fn() } },
+  ],
+  exports: [DATABASE_CONNECTION, I18nService],
+})
+class StubInfrastructureModule {}
+
 function createConfigService(env: Record<string, string | undefined>) {
   return {
     get: vi.fn((key: string) => env[key]),
@@ -26,7 +38,7 @@ function createConfigService(env: Record<string, string | undefined>) {
 
 async function createAnalytics(env: Record<string, string | undefined>) {
   const module = await Test.createTestingModule({
-    imports: [AnalyticsModule],
+    imports: [StubInfrastructureModule, AnalyticsModule],
   })
     .overrideProvider(ConfigService)
     .useValue(createConfigService(env))

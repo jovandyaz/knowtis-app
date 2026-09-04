@@ -1,4 +1,5 @@
 import { HttpStatus } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { describe, expect, it, vi } from 'vitest';
 
 import { EMAIL_NOT_VERIFIED_CODE } from '@knowtis/shared-types';
@@ -55,12 +56,14 @@ describe('McpKeysService.create', () => {
     const insert = vi.fn().mockReturnValue({ values });
     const db = { insert };
     const configService = { get: vi.fn().mockReturnValue('test') };
+    const eventEmitter = { emit: vi.fn() } as unknown as EventEmitter2;
     const service = new McpKeysService(
       db as never,
       configService as never,
-      policyFor(state)
+      policyFor(state),
+      eventEmitter
     );
-    return { service, insert, values };
+    return { service, insert, values, returning, eventEmitter };
   }
 
   const persistedRecordFor = (key: string) => ({
@@ -97,5 +100,41 @@ describe('McpKeysService.create', () => {
 
     expect(key).toMatch(/^knowtis_mcp_test_/);
     expect(values).toHaveBeenCalledWith(persistedRecordFor(key));
+  });
+
+  it.each([
+    [MCP_SCOPES.READ, 'read'],
+    [`${MCP_SCOPES.READ},${MCP_SCOPES.WRITE}`, 'write'],
+    [`${MCP_SCOPES.READ},${MCP_SCOPES.WRITE},${MCP_SCOPES.SHARE}`, 'share'],
+  ] as const)(
+    'emits a safe key-created event after persistence for %s',
+    async (scopes, scopeLevel) => {
+      const { service, returning, eventEmitter } = makeService(
+        IDENTITY_STATE.VERIFIED
+      );
+
+      await service.create('user-1', 'private-key-name', scopes);
+
+      expect(returning).toHaveBeenCalledOnce();
+      expect(eventEmitter.emit).toHaveBeenCalledWith('mcp.key.created', {
+        userId: 'user-1',
+        scopeLevel,
+      });
+      expect(
+        Object.keys(vi.mocked(eventEmitter.emit).mock.calls[0][1])
+      ).toEqual(['userId', 'scopeLevel']);
+    }
+  );
+
+  it('does not emit when persistence rejects', async () => {
+    const { service, returning, eventEmitter } = makeService(
+      IDENTITY_STATE.VERIFIED
+    );
+    returning.mockRejectedValueOnce(new Error('database unavailable'));
+
+    await expect(service.create('user-1', 'laptop')).rejects.toThrow(
+      'database unavailable'
+    );
+    expect(eventEmitter.emit).not.toHaveBeenCalled();
   });
 });

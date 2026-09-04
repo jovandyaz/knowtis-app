@@ -2,10 +2,15 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { and, eq } from 'drizzle-orm';
 
 import { DATABASE_CONNECTION, mcpApiKeys, type Database } from '../../database';
 import { VerifiedIdentityPolicy } from '../users/verified-identity.policy';
+import {
+  McpKeyCreatedEvent,
+  type McpScopeLevel,
+} from './mcp-key-created.event';
 import { MCP_SCOPES, type McpScopeCsv } from './mcp-token';
 
 interface KeyParts {
@@ -24,7 +29,8 @@ export class McpKeysService {
     @Inject(DATABASE_CONNECTION)
     private readonly db: Database,
     private readonly configService: ConfigService,
-    private readonly verifiedIdentity: VerifiedIdentityPolicy
+    private readonly verifiedIdentity: VerifiedIdentityPolicy,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   /**
@@ -97,9 +103,21 @@ export class McpKeysService {
       })
       .returning();
 
+    this.eventEmitter.emit(
+      McpKeyCreatedEvent.EVENT_NAME,
+      new McpKeyCreatedEvent(userId, McpKeysService.scopeLevel(scopes))
+    );
+
     this.logger.log(`MCP API key created for user ${userId}: ${prefix}...`);
 
     return { key: fullKey, record };
+  }
+
+  private static scopeLevel(scopes: McpScopeCsv): McpScopeLevel {
+    if (scopes.includes(MCP_SCOPES.SHARE)) {
+      return 'share';
+    }
+    return scopes.includes(MCP_SCOPES.WRITE) ? 'write' : 'read';
   }
 
   /**
