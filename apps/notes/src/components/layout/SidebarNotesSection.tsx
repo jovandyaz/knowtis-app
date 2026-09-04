@@ -3,6 +3,13 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from '@tanstack/react-router';
 
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
+import {
+  NAV_ICON_SLOT,
+  NAV_LABEL,
+  NAV_ROW,
+  NAV_ROW_ACTIVE,
+  NAV_ROW_IDLE,
+} from '@/components/organization/nav-row.styles';
 import { ROUTES, STORAGE_KEYS } from '@/config';
 import { useCreateNoteAction } from '@/hooks/useCreateNoteAction';
 import { canPerformNoteAction } from '@/lib';
@@ -34,33 +41,35 @@ export function SidebarNotesSection() {
           {tCommon('labels.notes')}
         </span>
 
-        <div className="flex items-center justify-between">
-          <div className="flex flex-1 items-center gap-0.5 min-w-0">
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-              title={
-                isCollapsed
-                  ? tCommon('labels.expand')
-                  : tCommon('labels.collapse')
-              }
-            >
-              <ChevronIcon className="h-3.5 w-3.5" />
-            </button>
-            <Link
-              to={ROUTES.NOTES}
-              className="flex-1 truncate rounded-md px-1.5 py-1 text-sm font-medium text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
-            >
+        <div
+          className={`${NAV_ROW} ${NAV_ROW_IDLE} relative has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-(--ring)`}
+        >
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className={`${NAV_ICON_SLOT} relative z-10 cursor-pointer after:absolute after:-inset-1 after:content-['']`}
+            title={
+              isCollapsed
+                ? tCommon('labels.expand')
+                : tCommon('labels.collapse')
+            }
+          >
+            <ChevronIcon className="h-3.5 w-3.5 shrink-0" />
+          </button>
+          <Link
+            to={ROUTES.NOTES}
+            className="flex min-w-0 flex-1 items-center after:absolute after:inset-0 after:content-[''] focus-visible:outline-none"
+          >
+            <span className={`${NAV_LABEL} font-medium`}>
               {t('sidebar.myNotes')}
-            </Link>
-          </div>
+            </span>
+          </Link>
 
           <button
             type="button"
             onClick={createNote}
             onPointerDown={preloadEditorChunk}
-            className="rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
+            className="relative z-10 shrink-0 rounded-md p-1 text-muted-foreground hover:bg-primary/5 hover:text-primary transition-colors cursor-pointer"
             title={t('sidebar.newNote')}
           >
             <Plus className="h-3.5 w-3.5" />
@@ -68,7 +77,7 @@ export function SidebarNotesSection() {
         </div>
 
         {!isCollapsed && (
-          <div className="flex flex-col gap-0.5 pl-2">
+          <div className="flex flex-col gap-0.5">
             {notes?.map((note) => (
               <div
                 key={note.id}
@@ -77,19 +86,19 @@ export function SidebarNotesSection() {
                 <Link
                   to={ROUTES.NOTE}
                   params={{ noteId: note.id }}
-                  className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1 pr-8 text-sm transition-colors cursor-pointer truncate ${
-                    activeNoteId === note.id
-                      ? 'bg-muted text-foreground font-medium'
-                      : 'text-muted-foreground hover:bg-primary/5 hover:text-primary'
+                  className={`${NAV_ROW} pr-8 ${
+                    activeNoteId === note.id ? NAV_ROW_ACTIVE : NAV_ROW_IDLE
                   }`}
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">
+                  <span className={NAV_ICON_SLOT}>
+                    <FileText className="h-3.5 w-3.5 shrink-0" />
+                  </span>
+                  <span className={NAV_LABEL}>
                     {note.title || t('sidebar.untitled')}
                   </span>
                 </Link>
                 {canPerformNoteAction(note.accessLevel, 'delete') && (
-                  <div className="absolute right-0.5 opacity-100 transition-opacity md:opacity-0 md:group-hover/note:opacity-100 md:focus-within:opacity-100">
+                  <div className="absolute right-0.5 z-10 opacity-100 transition-opacity md:opacity-0 md:group-hover/note:opacity-100 md:focus-within:opacity-100">
                     <NoteActionsMenu
                       noteId={note.id}
                       noteTitle={note.title || t('sidebar.untitled')}
