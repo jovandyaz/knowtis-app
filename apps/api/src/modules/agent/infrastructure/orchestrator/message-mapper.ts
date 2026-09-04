@@ -24,12 +24,13 @@ type ToolResultContentValue = Extract<
 
 const EXECUTION_DENIED_FALLBACK = 'execution denied';
 
-function fromAssistant(message: AssistantModelMessage): AgentMessage {
+function fromAssistant(message: AssistantModelMessage): AgentMessage[] {
   if (typeof message.content === 'string') {
-    return { role: 'assistant', content: message.content };
+    return [{ role: 'assistant', content: message.content }];
   }
 
   const parts: AgentMessagePart[] = [];
+  const results: AgentToolResultPart[] = [];
   for (const part of message.content) {
     if (part.type === 'text') {
       parts.push({ type: 'text', text: part.text });
@@ -40,13 +41,29 @@ function fromAssistant(message: AssistantModelMessage): AgentMessage {
         toolName: part.toolName,
         input: part.input,
       });
+    } else if (part.type === 'tool-result') {
+      results.push(fromToolResult(part));
     }
   }
 
   const content = textOfParts(parts);
-  return parts.some((part) => part.type === 'tool-call')
+  const assistant: AgentMessage = parts.some(
+    (part) => part.type === 'tool-call'
+  )
     ? { role: 'assistant', content, parts }
     : { role: 'assistant', content };
+  return results.length > 0
+    ? [assistant, { role: 'tool', content: '', parts: results }]
+    : [assistant];
+}
+
+function fromToolResult(part: ToolResultPart): AgentToolResultPart {
+  return {
+    type: 'tool-result',
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    ...fromToolOutput(part.output),
+  };
 }
 
 function fromToolOutput(
@@ -75,12 +92,7 @@ function fromTool(message: ToolModelMessage): AgentMessage {
   const parts: AgentMessagePart[] = [];
   for (const part of message.content) {
     if (part.type === 'tool-result') {
-      parts.push({
-        type: 'tool-result',
-        toolCallId: part.toolCallId,
-        toolName: part.toolName,
-        ...fromToolOutput(part.output),
-      });
+      parts.push(fromToolResult(part));
     }
   }
   return parts.length > 0
@@ -95,13 +107,17 @@ function carriesTranscript(message: AgentMessage): boolean {
 /**
  * Domain view of one step's `response.messages`; reasoning, file and approval parts are dropped,
  * and a message left with neither text nor parts is omitted so no empty row reaches the transcript.
+ * A provider-executed tool reports its result inside the assistant content; it becomes the tool
+ * row that follows the assistant row, so the call/result pair stays paired through pruning and replay.
  */
 export function fromResponseMessages(
   messages: readonly ResponseMessage[]
 ): AgentMessage[] {
   return messages
-    .map((message) =>
-      message.role === 'assistant' ? fromAssistant(message) : fromTool(message)
+    .flatMap((message) =>
+      message.role === 'assistant'
+        ? fromAssistant(message)
+        : [fromTool(message)]
     )
     .filter(carriesTranscript);
 }
