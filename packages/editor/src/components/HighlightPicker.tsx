@@ -14,6 +14,8 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import { toolbarButtonClasses } from './toolbar-button.styles';
+
 const HIGHLIGHT_COLORS = [
   { labelKey: 'editor.highlight.colorYellow', value: '#fef08a' },
   { labelKey: 'editor.highlight.colorGreen', value: '#bbf7d0' },
@@ -41,12 +43,7 @@ export function HighlightPicker({ editor }: HighlightPickerProps) {
               type="button"
               variant="ghost"
               size="sm"
-              className={cn(
-                'h-8 w-8 rounded-full p-0 transition-all shrink-0',
-                isActive
-                  ? 'bg-foreground text-background hover:bg-foreground/90'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
+              className={toolbarButtonClasses(isActive)}
               aria-label={label}
             >
               <Highlighter className="h-4 w-4" />

@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { Editor } from '@tiptap/react';
 import { Link, Unlink } from 'lucide-react';
 
 import {
   Button,
-  cn,
   Input,
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@knowtis/design-system';
+
+import { toolbarButtonClasses } from './toolbar-button.styles';
 
 interface LinkPopoverProps {
   editor: Editor;
@@ -71,7 +73,9 @@ export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen, closePopover]);
 
-  const tooltipLabel = shortcut ? `Link (${shortcut})` : 'Link';
+  const { t } = useTranslation('notes');
+  const label = t('editor.toolbar.link');
+  const tooltipLabel = shortcut ? `${label} (${shortcut})` : label;
 
   return (
     <div ref={containerRef} className="relative shrink-0">
@@ -81,14 +85,9 @@ export function LinkPopover({ editor, shortcut }: LinkPopoverProps) {
             type="button"
             variant="ghost"
             size="sm"
-            className={cn(
-              'h-8 w-8 rounded-full p-0 transition-all',
-              isActive
-                ? 'bg-foreground text-background hover:bg-foreground/90'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            )}
+            className={toolbarButtonClasses(isActive)}
             onClick={() => openPopover()}
-            aria-label="Link"
+            aria-label={label}
           >
             {isActive ? (
               <Unlink className="h-4 w-4" />
