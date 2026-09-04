@@ -18,6 +18,22 @@ import {
   Undo,
 } from 'lucide-react';
 
+/**
+ * Tier at which a tool leaves the row for the overflow menu as the toolbar
+ * container narrows: `early` tools go first, `late` tools only when the row is
+ * still too wide without them.
+ */
+export type ToolbarFold = 'early' | 'late';
+
+/**
+ * Container widths (px) below which each tier folds. `early` is the width of
+ * the full row; `late` is the width of the row once the early tier has folded.
+ */
+export const TOOLBAR_FOLD_WIDTHS: Readonly<Record<ToolbarFold, number>> = {
+  early: 864,
+  late: 640,
+};
+
 export interface ToolbarToolConfig {
   icon: typeof Bold;
   labelKey: ParseKeys<'notes'>;
@@ -26,13 +42,11 @@ export interface ToolbarToolConfig {
   isActive?: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
   shortcut?: string;
-  /** Folds into the overflow menu when the toolbar container is narrow. */
-  secondary?: boolean;
+  fold?: ToolbarFold;
 }
 
 export interface ToolbarSeparatorConfig {
   type: 'separator';
-  secondary?: boolean;
 }
 
 export interface ToolbarHeadingConfig {
@@ -97,18 +111,21 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
   {
     icon: List,
     labelKey: 'editor.toolbar.bulletList',
+    fold: 'late',
     action: (editor) => editor.chain().focus().toggleBulletList().run(),
     isActive: (editor) => editor.isActive('bulletList'),
   },
   {
     icon: ListOrdered,
     labelKey: 'editor.toolbar.numberedList',
+    fold: 'late',
     action: (editor) => editor.chain().focus().toggleOrderedList().run(),
     isActive: (editor) => editor.isActive('orderedList'),
   },
   {
     icon: CheckSquare,
     labelKey: 'editor.toolbar.taskList',
+    fold: 'late',
     action: (editor) => editor.chain().focus().toggleTaskList().run(),
     isActive: (editor) => editor.isActive('taskList'),
   },
@@ -119,7 +136,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCode().run(),
     isActive: (editor) => editor.isActive('code'),
     shortcut: 'Ctrl+E',
-    secondary: true,
+    fold: 'early',
   },
   {
     icon: CodeXml,
@@ -127,9 +144,9 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCodeBlock().run(),
     isActive: (editor) => editor.isActive('codeBlock'),
     shortcut: 'Ctrl+Alt+C',
-    secondary: true,
+    fold: 'early',
   },
-  { type: 'separator', secondary: true },
+  { type: 'separator' },
   { type: 'link-popover', shortcut: 'Ctrl+K' },
   { type: 'highlight-picker' },
   {
@@ -138,7 +155,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleSuperscript().run(),
     isActive: (editor) => editor.isActive('superscript'),
     shortcut: 'Ctrl+.',
-    secondary: true,
+    fold: 'early',
   },
   {
     icon: SubscriptIcon,
@@ -146,11 +163,12 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleSubscript().run(),
     isActive: (editor) => editor.isActive('subscript'),
     shortcut: 'Ctrl+,',
-    secondary: true,
+    fold: 'early',
   },
   {
     icon: Table2,
     labelKey: 'editor.table.insert',
+    fold: 'late',
     action: (editor) => editor.chain().focus().insertTable(DEFAULT_TABLE).run(),
   },
   { type: 'image-button' },
@@ -158,21 +176,21 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     icon: Minus,
     labelKey: 'editor.toolbar.horizontalRule',
     action: (editor) => editor.chain().focus().setHorizontalRule().run(),
-    secondary: true,
+    fold: 'early',
   },
-  { type: 'separator', secondary: true },
+  { type: 'separator' },
   {
     icon: Undo,
     labelKey: 'editor.toolbar.undo',
     action: (editor) => editor.chain().focus().undo().run(),
     disabled: (editor) => !editor.can().undo(),
-    secondary: true,
+    fold: 'early',
   },
   {
     icon: Redo,
     labelKey: 'editor.toolbar.redo',
     action: (editor) => editor.chain().focus().redo().run(),
     disabled: (editor) => !editor.can().redo(),
-    secondary: true,
+    fold: 'early',
   },
 ];

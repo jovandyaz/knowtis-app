@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useEditorState, type Editor } from '@tiptap/react';
@@ -20,43 +20,75 @@ import {
 } from '@knowtis/design-system';
 
 import {
+  TOOLBAR_FOLD_WIDTHS,
   TOOLBAR_TOOLS,
   type ToolbarItemConfig,
   type ToolbarSeparatorConfig,
   type ToolbarToolConfig,
 } from '../editor.config';
+import { useElementWidth } from '../hooks/useElementWidth';
 import { HeadingDropdown } from './HeadingDropdown';
 import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';
+import { toolbarButtonClasses } from './toolbar-button.styles';
 
-/**
- * Container width at which every tool fits in a single row (the full pill
- * measures ~840px). Below it, secondary tools fold into the overflow menu.
- */
-const EXPANDED_INLINE = '@min-[54rem]:inline-flex';
-const EXPANDED_BLOCK = '@min-[54rem]:block';
-const COLLAPSED_ONLY = '@min-[54rem]:hidden';
-
-type SecondaryItem = ToolbarToolConfig | ToolbarSeparatorConfig;
-
-function isTool(item: ToolbarItemConfig): item is ToolbarToolConfig {
-  return !('type' in item);
-}
-
-function isSecondary(item: ToolbarItemConfig): item is SecondaryItem {
-  if (isTool(item)) {
-    return item.secondary === true;
-  }
-  return item.type === 'separator' && item.secondary === true;
-}
-
-const SECONDARY_ITEMS = TOOLBAR_TOOLS.filter(isSecondary);
+type MenuItem = ToolbarToolConfig | ToolbarSeparatorConfig;
 
 interface EditorToolbarProps {
   editor: Editor | null;
   onVoiceNote?: (() => void) | undefined;
   onAskAI?: (() => void) | undefined;
   onAddImage?: (() => void) | undefined;
+}
+
+function isTool(item: ToolbarItemConfig): item is ToolbarToolConfig {
+  return !('type' in item);
+}
+
+function isSeparator(item: ToolbarItemConfig): item is ToolbarSeparatorConfig {
+  return 'type' in item && item.type === 'separator';
+}
+
+function isFolded(tool: ToolbarToolConfig, width: number | null): boolean {
+  if (tool.fold === undefined) {
+    return false;
+  }
+  return width === null || width < TOOLBAR_FOLD_WIDTHS[tool.fold];
+}
+
+function withoutDanglingSeparators<T extends ToolbarItemConfig>(
+  items: readonly T[]
+): T[] {
+  const result: T[] = [];
+  for (const item of items) {
+    const previous = result[result.length - 1];
+    if (isSeparator(item) && (!previous || isSeparator(previous))) {
+      continue;
+    }
+    result.push(item);
+  }
+  const last = result[result.length - 1];
+  if (last && isSeparator(last)) {
+    result.pop();
+  }
+  return result;
+}
+
+/**
+ * Separators stay in both lists so each side keeps the original grouping;
+ * the ones left without tools around them are dropped afterwards.
+ */
+function splitToolbar(width: number | null) {
+  const row = withoutDanglingSeparators(
+    TOOLBAR_TOOLS.filter((item) => !isTool(item) || !isFolded(item, width))
+  );
+  const menu = withoutDanglingSeparators(
+    TOOLBAR_TOOLS.filter(
+      (item): item is MenuItem =>
+        isSeparator(item) || (isTool(item) && isFolded(item, width))
+    )
+  );
+  return { row, menu };
 }
 
 interface ToolbarButtonProps {
@@ -70,7 +102,6 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
   const label = tNotes(tool.labelKey);
   const isToggle = tool.isActive !== undefined;
   const isActive = tool.isActive?.(editor) ?? false;
-  const isDisabled = tool.disabled?.(editor) ?? false;
   const tooltipLabel = tool.shortcut ? `${label} (${tool.shortcut})` : label;
 
   return (
@@ -80,15 +111,9 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
           type="button"
           variant="ghost"
           size="sm"
-          className={cn(
-            'h-8 w-8 rounded-full p-0 transition-all shrink-0',
-            isActive
-              ? 'bg-foreground text-background hover:bg-foreground/90'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-            tool.secondary && cn('hidden', EXPANDED_INLINE)
-          )}
+          className={toolbarButtonClasses(isActive)}
           onClick={() => tool.action(editor)}
-          disabled={isDisabled}
+          disabled={tool.disabled?.(editor) ?? false}
           aria-label={label}
           aria-pressed={isToggle ? isActive : undefined}
         >
@@ -100,16 +125,20 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
   );
 }
 
-function ToolbarSeparator({ className }: { className?: string | undefined }) {
-  return (
-    <div className={cn('mx-1 h-4 w-px bg-border max-md:hidden', className)} />
-  );
+function ToolbarSeparator() {
+  return <div className="mx-1 h-4 w-px shrink-0 bg-border" />;
 }
 
-function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
+interface ToolbarOverflowMenuProps {
+  editor: Editor;
+  items: readonly MenuItem[];
+}
+
+function ToolbarOverflowMenu({ editor, items }: ToolbarOverflowMenuProps) {
   const { t: tNotes } = useTranslation('notes');
+  const selectedRef = useRef(false);
   const label = tNotes('editor.toolbar.moreTools');
-  const hasActiveTool = SECONDARY_ITEMS.some(
+  const hasActiveTool = items.some(
     (item) => isTool(item) && item.isActive?.(editor)
   );
 
@@ -122,13 +151,7 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
               type="button"
               variant="ghost"
               size="sm"
-              className={cn(
-                'h-8 w-8 shrink-0 rounded-full p-0 transition-all',
-                COLLAPSED_ONLY,
-                hasActiveTool
-                  ? 'bg-foreground text-background hover:bg-foreground/90'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
+              className={toolbarButtonClasses(hasActiveTool)}
               aria-label={label}
             >
               <Ellipsis className="h-4 w-4" />
@@ -137,8 +160,20 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="bottom" align="end" sideOffset={8}>
-        {SECONDARY_ITEMS.map((item, index) => {
+      <DropdownMenuContent
+        side="bottom"
+        align="end"
+        sideOffset={8}
+        // Radix returns focus to the trigger on close; after running a tool
+        // the caret must stay in the editor, so only Escape keeps that default.
+        onCloseAutoFocus={(event) => {
+          if (selectedRef.current) {
+            selectedRef.current = false;
+            event.preventDefault();
+          }
+        }}
+      >
+        {items.map((item, index) => {
           if (!isTool(item)) {
             return <DropdownMenuSeparator key={`sep-${index}`} />;
           }
@@ -155,7 +190,10 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
             </>
           );
           const disabled = item.disabled?.(editor) ?? false;
-          const onSelect = () => item.action(editor);
+          const onSelect = () => {
+            selectedRef.current = true;
+            item.action(editor);
+          };
 
           return item.isActive ? (
             <DropdownMenuCheckboxItem
@@ -182,13 +220,20 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
   );
 }
 
-export const EditorToolbar = memo(function EditorToolbar({
+interface ToolbarBodyProps extends Omit<EditorToolbarProps, 'editor'> {
+  editor: Editor;
+}
+
+function ToolbarBody({
   editor,
   onVoiceNote,
   onAskAI,
   onAddImage,
-}: EditorToolbarProps) {
+}: ToolbarBodyProps) {
   const { t: tNotes } = useTranslation('notes');
+  const containerRef = useRef<HTMLDivElement>(null);
+  const width = useElementWidth(containerRef);
+  const { row, menu } = splitToolbar(width);
 
   // Tiptap v3 no longer re-renders `useEditor` consumers per transaction, and
   // every button below reads `isActive`/`can()` during render, so the toolbar
@@ -198,16 +243,13 @@ export const EditorToolbar = memo(function EditorToolbar({
     selector: ({ transactionNumber }) => transactionNumber,
   });
 
-  if (!editor) {
-    return null;
-  }
-
   return (
     <motion.div
+      ref={containerRef}
       initial={{ opacity: 0, y: -10 }}
       animate={{ opacity: 1, y: 0 }}
       className={cn(
-        '@container pointer-events-none z-10 w-full',
+        'pointer-events-none z-10 w-full',
         'sticky top-0 mb-4',
         'max-md:fixed max-md:bottom-3 max-md:left-0 max-md:right-0 max-md:top-auto max-md:mb-0 max-md:px-4 max-md:pb-[env(safe-area-inset-bottom)]'
       )}
@@ -238,7 +280,7 @@ export const EditorToolbar = memo(function EditorToolbar({
             <ToolbarSeparator />
           </>
         )}
-        {TOOLBAR_TOOLS.map((item, index) => {
+        {row.map((item, index) => {
           if (isTool(item)) {
             return (
               <ToolbarButton key={item.labelKey} editor={editor} tool={item} />
@@ -246,14 +288,7 @@ export const EditorToolbar = memo(function EditorToolbar({
           }
           switch (item.type) {
             case 'separator':
-              return (
-                <ToolbarSeparator
-                  key={`sep-${index}`}
-                  className={
-                    item.secondary ? cn('hidden', EXPANDED_BLOCK) : undefined
-                  }
-                />
-              );
+              return <ToolbarSeparator key={`sep-${index}`} />;
             case 'heading-dropdown':
               return <HeadingDropdown key="heading" editor={editor} />;
             case 'link-popover':
@@ -274,7 +309,7 @@ export const EditorToolbar = memo(function EditorToolbar({
                       type="button"
                       variant="ghost"
                       size="sm"
-                      className="h-8 w-8 shrink-0 rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className={toolbarButtonClasses(false)}
                       onClick={onAddImage}
                       aria-label={tNotes('ai.slash.image')}
                     >
@@ -292,8 +327,12 @@ export const EditorToolbar = memo(function EditorToolbar({
             }
           }
         })}
-        <ToolbarSeparator className={COLLAPSED_ONLY} />
-        <ToolbarOverflowMenu editor={editor} />
+        {menu.length > 0 && (
+          <>
+            <ToolbarSeparator />
+            <ToolbarOverflowMenu editor={editor} items={menu} />
+          </>
+        )}
         {onVoiceNote && (
           <Button
             type="button"
@@ -309,4 +348,14 @@ export const EditorToolbar = memo(function EditorToolbar({
       </div>
     </motion.div>
   );
+}
+
+export const EditorToolbar = memo(function EditorToolbar({
+  editor,
+  ...props
+}: EditorToolbarProps) {
+  if (!editor) {
+    return null;
+  }
+  return <ToolbarBody editor={editor} {...props} />;
 });

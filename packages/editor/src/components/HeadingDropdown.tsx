@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { Editor } from '@tiptap/react';
@@ -15,6 +16,8 @@ import {
   TooltipTrigger,
 } from '@knowtis/design-system';
 
+import { toolbarButtonClasses } from './toolbar-button.styles';
+
 interface HeadingDropdownProps {
   editor: Editor;
 }
@@ -28,6 +31,7 @@ const HEADING_OPTIONS = [
 
 export function HeadingDropdown({ editor }: HeadingDropdownProps) {
   const { t } = useTranslation('notes');
+  const selectedRef = useRef(false);
   const label = t('editor.toolbar.heading');
   const isAnyHeadingActive = [1, 2, 3].some((level) =>
     editor.isActive('heading', { level })
@@ -42,12 +46,7 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
               type="button"
               variant="ghost"
               size="sm"
-              className={cn(
-                'h-8 w-8 rounded-full p-0 transition-all',
-                isAnyHeadingActive
-                  ? 'bg-foreground text-background hover:bg-foreground/90'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-              )}
+              className={toolbarButtonClasses(isAnyHeadingActive)}
               aria-label={label}
             >
               <Heading className="h-4 w-4" />
@@ -56,7 +55,19 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
         </TooltipTrigger>
         <TooltipContent>{label}</TooltipContent>
       </Tooltip>
-      <DropdownMenuContent side="bottom" align="start" sideOffset={8}>
+      <DropdownMenuContent
+        side="bottom"
+        align="start"
+        sideOffset={8}
+        // Radix returns focus to the trigger on close; after picking a level
+        // the caret must stay in the editor, so only Escape keeps that default.
+        onCloseAutoFocus={(event) => {
+          if (selectedRef.current) {
+            selectedRef.current = false;
+            event.preventDefault();
+          }
+        }}
+      >
         {HEADING_OPTIONS.map((option) => {
           const Icon = option.icon;
           const isActive =
@@ -69,6 +80,7 @@ export function HeadingDropdown({ editor }: HeadingDropdownProps) {
               key={option.level}
               className={cn(isActive && 'bg-(--muted)')}
               onSelect={() => {
+                selectedRef.current = true;
                 if (option.level === 0) {
                   editor.chain().focus().setParagraph().run();
                 } else {

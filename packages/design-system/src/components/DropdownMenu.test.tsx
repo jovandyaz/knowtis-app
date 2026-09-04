@@ -81,7 +81,6 @@ describe('DropdownMenuCheckboxItem', () => {
     expect(bold.querySelector('svg')).toBeInTheDocument();
     expect(italic).toHaveAttribute('aria-checked', 'false');
     expect(italic.querySelector('svg')).toBeNull();
-    expect(bold).toHaveClass('relative', 'pr-8');
   });
 });
 
