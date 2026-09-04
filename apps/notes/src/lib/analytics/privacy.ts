@@ -60,6 +60,11 @@ const QUERY_DERIVED_PROPERTY_KEYS = new Set([
 const QUERY_DERIVED_COMPACT_KEYS = new Set(
   [...QUERY_DERIVED_PROPERTY_KEYS].map((key) => key.replace(/[^a-z0-9]/g, ''))
 );
+/**
+ * posthog-js carries the public project token in `properties.token`, and the
+ * capture endpoint rejects the whole batch with a 401 when it is missing.
+ */
+const SDK_PROJECT_TOKEN_KEY = 'token';
 const SDK_CAMPAIGN_COPY_PREFIXES = ['session_entry_', 'initial_'];
 const NESTED_PERSON_PROPERTY_KEYS = new Set(['$set', '$set_once']);
 
@@ -154,6 +159,10 @@ function sanitizeProperties(
       if (sanitizedUrl !== undefined) {
         sanitized[key] = sanitizedUrl;
       }
+      continue;
+    }
+    if (propertyKind === 'event' && key === SDK_PROJECT_TOKEN_KEY) {
+      sanitized[key] = value;
       continue;
     }
     if (propertyKind === 'event' && isQueryDerivedProperty(key)) {
