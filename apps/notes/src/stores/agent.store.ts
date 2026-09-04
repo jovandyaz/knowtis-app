@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { queryClient } from '@/lib/query-client';
 import { create } from 'zustand';
 
@@ -166,7 +167,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           thinkingBuffer.push(text);
         },
         onDone: ({ sources, webSources }) => {
-          if (version !== streamVersion) {
+          if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
           buffer.clearInactivityTimer();
@@ -181,6 +182,10 @@ export const useAgentStore = create<AgentState>((set, get) => {
               m.id === id ? { ...m, sources, webSources } : m
             ),
           }));
+          captureProductEvent('ai response completed', {
+            source: 'copilot',
+            assistant_type: 'agent',
+          });
         },
         onError: (error) => {
           if (version !== streamVersion) {

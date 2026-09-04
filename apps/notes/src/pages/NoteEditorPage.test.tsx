@@ -15,6 +15,9 @@ const renderWithClient = (ui: ReactElement) =>
   );
 
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
+const { captureProductEvent } = vi.hoisted(() => ({
+  captureProductEvent: vi.fn(),
+}));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -32,6 +35,7 @@ vi.mock('@knowtis/crdt', () => ({
 vi.mock('@jovandyaz/auth-react', () => ({
   useAuthUser: () => authUser(),
 }));
+vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 
 const propertiesRowProps = vi.fn();
 
@@ -106,6 +110,13 @@ const loadedNote = {
 };
 const noteQuery = vi.fn<() => Record<string, unknown>>();
 
+function loadNote(overrides: Partial<typeof loadedNote.data>) {
+  noteQuery.mockReturnValue({
+    ...loadedNote,
+    data: { ...loadedNote.data, ...overrides },
+  });
+}
+
 vi.mock('@knowtis/data-access-notes', () => ({
   useNote: () => noteQuery(),
   useUpdateNote: () => ({ mutate: updateNoteMutate, isPending: false }),
@@ -124,6 +135,7 @@ describe('NoteEditorPage', () => {
     capturedOnUpdate = undefined;
     capturedOnVoiceNote = undefined;
     updateNoteMutate.mockClear();
+    captureProductEvent.mockClear();
     propertiesRowProps.mockClear();
     noteQuery.mockReturnValue(loadedNote);
     authUser.mockReturnValue({ isAnonymous: false });
@@ -198,8 +210,10 @@ describe('NoteEditorPage', () => {
     vi.useFakeTimers();
     try {
       renderWithClient(<NoteEditorPage />);
-      capturedOnUpdate?.('<p>hello world</p>');
-      await vi.runAllTimersAsync();
+      await act(async () => {
+        capturedOnUpdate?.('<p>hello world</p>');
+        await vi.runAllTimersAsync();
+      });
 
       expect(updateNoteMutate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -273,5 +287,48 @@ describe('NoteEditorPage', () => {
       expect(screen.getByText('editor.loadErrorGeneric')).toBeInTheDocument();
       expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
     });
+  });
+
+  it.each(['', '<p></p>', '<p><br></p>', '<p>&nbsp;</p>'])(
+    'captures activation once when an initially trivial note (%s) becomes meaningful',
+    (initialContent) => {
+      loadNote({ content: initialContent });
+      renderWithClient(<NoteEditorPage />);
+
+      act(() => capturedOnUpdate?.('<p>First words</p>'));
+      act(() => capturedOnUpdate?.('<p>First words and more</p>'));
+
+      expect(captureProductEvent).toHaveBeenCalledTimes(1);
+      expect(captureProductEvent).toHaveBeenCalledWith('note activated', {
+        source: 'editor',
+      });
+    }
+  );
+
+  it('does not activate an initially populated note', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    act(() => capturedOnUpdate?.('<p>Changed words</p>'));
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not activate a read-only note', () => {
+    loadNote({ content: '', accessLevel: 'viewer' });
+    renderWithClient(<NoteEditorPage />);
+
+    act(() => capturedOnUpdate?.('<p>Words</p>'));
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not activate while changes remain trivial', () => {
+    loadNote({ content: '' });
+    renderWithClient(<NoteEditorPage />);
+
+    act(() => capturedOnUpdate?.('<p>&nbsp;</p>'));
+    act(() => capturedOnUpdate?.('<p><br></p>'));
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from '@tanstack/react-router';
 
 import { ROUTES } from '@/config';
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { useAuthUser } from '@jovandyaz/auth-react';
 import { toast } from 'sonner';
 
@@ -82,6 +83,12 @@ export function useCreateAndNavigateToNote() {
     createNote
       .mutateAsync({ id: noteId, title: defaultTitle, content: '' })
       .then(() => {
+        if (user?.isAnonymous) {
+          captureProductEvent('note created', {
+            source: 'browser',
+            actor_type: 'anonymous',
+          });
+        }
         isCreatingRef.current = false;
       })
       .catch((err) => {

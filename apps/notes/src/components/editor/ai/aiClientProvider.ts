@@ -1,3 +1,5 @@
+import { captureProductEvent } from '@/lib/analytics/product-events';
+
 import { aiClient } from '@knowtis/api-client';
 import type { GhostTextProvider, GhostTextStreamInput } from '@knowtis/editor';
 import type { AIAction } from '@knowtis/shared-types';
@@ -40,6 +42,7 @@ async function* pump(
   input: GhostTextStreamInput
 ): AsyncIterable<{ text: string }> {
   const buffer: Event[] = [];
+  let aborted = false;
   let notify: (() => void) | null = null;
   const wait = () =>
     new Promise<void>((resolve) => {
@@ -76,6 +79,7 @@ async function* pump(
   );
 
   const onAbort = () => {
+    aborted = true;
     handle.cancel();
     buffer.push({ kind: 'done' });
     wake();
@@ -101,6 +105,13 @@ async function* pump(
         throw ev.error;
       }
       if (ev.kind === 'done') {
+        if (!aborted) {
+          captureProductEvent('ai response completed', {
+            source: 'editor',
+            assistant_type: 'ghost_text',
+            action,
+          });
+        }
         return;
       }
       yield { text: ev.text };

@@ -18,6 +18,10 @@ import {
   useAgentStore,
 } from './agent.store';
 
+const { captureProductEvent } = vi.hoisted(() => ({
+  captureProductEvent: vi.fn(),
+}));
+
 vi.mock('@knowtis/api-client', () => ({
   agentClient: {
     sendMessage: vi.fn(() => ({ cancel: vi.fn() })),
@@ -27,6 +31,7 @@ vi.mock('@knowtis/api-client', () => ({
     resetConversation: vi.fn(),
   },
 }));
+vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 
 vi.mock('@/lib/query-client', async () => {
   const { QueryClient } = await import('@tanstack/react-query');
@@ -156,6 +161,83 @@ describe('useAgentStore', () => {
     expect(messages.at(-1)?.sources).toEqual([
       { id: 'n1', title: 'Productividad' },
     ]);
+  });
+
+  it('captures successful copilot completion without response metadata', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('private prompt');
+
+    get().onDone({
+      usage: { inputTokens: 1, outputTokens: 2, model: 'private', costUsd: 3 },
+      sources: [{ id: 'private-id', title: 'Private title' }],
+      knownNotes: [],
+      webSources: [{ title: 'Private source', url: 'https://example.com' }],
+    });
+
+    expect(captureProductEvent).toHaveBeenCalledWith('ai response completed', {
+      source: 'copilot',
+      assistant_type: 'agent',
+    });
+    expect(captureProductEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not capture completion after an error', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('first');
+    get().onError({ code: 'X', message: 'failed' });
+    get().onDone({
+      usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+    });
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not capture completion after cancellation', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('second');
+    useAgentStore.getState().cancel();
+    get().onDone({
+      usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+    });
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not capture completion after timeout', () => {
+    const { get } = capture();
+    useAgentStore.getState().sendMessage('third');
+    vi.advanceTimersByTime(AGENT_STREAM_INACTIVITY_MS);
+    get().onDone({
+      usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+    });
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not capture completion from a stale stream', () => {
+    const first = capture();
+    useAgentStore.getState().sendMessage('first');
+    const staleDone = first.get().onDone;
+
+    capture();
+    useAgentStore.getState().sendMessage('second');
+    staleDone({
+      usage: { inputTokens: 0, outputTokens: 0, model: 'm', costUsd: 0 },
+      sources: [],
+      knownNotes: [],
+      webSources: [],
+    });
+
+    expect(captureProductEvent).not.toHaveBeenCalled();
   });
 
   it('times out and cancels after inactivity', () => {

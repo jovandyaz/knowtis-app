@@ -1,3 +1,4 @@
+import { captureProductEvent } from '@/lib/analytics/product-events';
 import { create } from 'zustand';
 
 import {
@@ -38,6 +39,7 @@ interface AIState {
 }
 
 export const useAIStore = create<AIState>((set, get) => {
+  let streamVersion = 0;
   const buffer = createChunkBuffer({
     flushMs: CHUNK_FLUSH_MS,
     inactivityMs: STREAM_INACTIVITY_MS,
@@ -46,6 +48,7 @@ export const useAIStore = create<AIState>((set, get) => {
     },
     onInactivity: () => {
       get()._streamHandle?.cancel();
+      streamVersion++;
       set({ status: 'timeout', _streamHandle: null });
     },
   });
@@ -61,6 +64,7 @@ export const useAIStore = create<AIState>((set, get) => {
     _streamHandle: null,
 
     startStream: (payload) => {
+      const version = ++streamVersion;
       const current = get();
       if (current.status === 'streaming' && current._streamHandle) {
         current._streamHandle.cancel();
@@ -82,9 +86,17 @@ export const useAIStore = create<AIState>((set, get) => {
           buffer.push(text);
         },
         onDone: () => {
+          if (version !== streamVersion || get().status !== 'streaming') {
+            return;
+          }
           buffer.clearInactivityTimer();
           buffer.flush();
           set({ status: 'done', _streamHandle: null });
+          captureProductEvent('ai response completed', {
+            source: 'assistant',
+            assistant_type: 'selection',
+            action: payload.action,
+          });
         },
         onError: (error) => {
           buffer.clearInactivityTimer();
@@ -122,6 +134,7 @@ export const useAIStore = create<AIState>((set, get) => {
     cancelStream: () => {
       const { _streamHandle } = get();
       _streamHandle?.cancel();
+      streamVersion++;
       buffer.clearInactivityTimer();
       buffer.discard();
       set({
@@ -134,6 +147,7 @@ export const useAIStore = create<AIState>((set, get) => {
     },
 
     reset: () => {
+      streamVersion++;
       buffer.clearInactivityTimer();
       buffer.discard();
       set({
