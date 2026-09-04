@@ -1,6 +1,7 @@
 import type { AIAction } from '@knowtis/shared-types';
 
 import { posthog } from '../posthog';
+import { runAnalyticsSafely } from './best-effort';
 
 export interface BrowserActorContext {
   environment: 'production';
@@ -27,6 +28,15 @@ export interface BrowserProductEventMap {
 
 export type BrowserProductEventName = keyof BrowserProductEventMap;
 
+const PRODUCT_EVENT_PROPERTY_KEYS = {
+  'note created': ['source', 'actor_type'],
+  'note activated': ['source'],
+  'shared note viewed': ['source', 'permission', 'actor_type'],
+  'ai response completed': ['source', 'assistant_type', 'action'],
+} as const satisfies {
+  [E in BrowserProductEventName]: readonly (keyof BrowserProductEventMap[E])[];
+};
+
 let analyticsContext: BrowserActorContext = {
   environment: 'production',
   app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
@@ -35,6 +45,21 @@ let analyticsContext: BrowserActorContext = {
   locale: 'es',
 };
 
+function pickProductEventProperties<E extends BrowserProductEventName>(
+  event: E,
+  properties: BrowserProductEventMap[E]
+): BrowserProductEventMap[E] {
+  const picked: Record<string, unknown> = {};
+  const provided = properties as Record<string, unknown>;
+  for (const key of PRODUCT_EVENT_PROPERTY_KEYS[event]) {
+    const value = provided[key];
+    if (value !== undefined) {
+      picked[key] = value;
+    }
+  }
+  return picked as BrowserProductEventMap[E];
+}
+
 export function captureProductEvent<E extends BrowserProductEventName>(
   event: E,
   properties: BrowserProductEventMap[E]
@@ -42,12 +67,17 @@ export function captureProductEvent<E extends BrowserProductEventName>(
   if (!posthog.__loaded) {
     return;
   }
-  posthog.capture(event, { ...analyticsContext, ...properties });
+  runAnalyticsSafely(() => {
+    posthog.capture(event, {
+      ...analyticsContext,
+      ...pickProductEventProperties(event, properties),
+    });
+  });
 }
 
 export function setAnalyticsContext(context: BrowserActorContext): void {
   analyticsContext = context;
   if (posthog.__loaded) {
-    posthog.register(context);
+    runAnalyticsSafely(() => posthog.register(context));
   }
 }

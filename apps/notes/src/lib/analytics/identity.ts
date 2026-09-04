@@ -1,6 +1,7 @@
 import type { AuthUserProfile } from '@jovandyaz/auth-react';
 import type { PostHog } from 'posthog-js';
 
+import { runAnalyticsSafely } from './best-effort';
 import { setAnalyticsContext } from './product-events';
 
 type IdentityClient = Pick<PostHog, 'identify' | 'reset'>;
@@ -55,7 +56,7 @@ export function createIdentitySynchronizer(client: IdentityClient): {
 
       if (identity.actor_type === 'anonymous') {
         if (lastIdentity?.actor_type === 'registered') {
-          client.reset();
+          runAnalyticsSafely(() => client.reset());
         }
         setAnalyticsContext({
           environment: 'production',
@@ -65,12 +66,14 @@ export function createIdentitySynchronizer(client: IdentityClient): {
           locale: identity.locale,
         });
       } else {
-        client.identify(identity.id, {
-          email: identity.email,
-          name: identity.name,
-          role: identity.role,
-          locale: identity.locale,
-          is_internal: identity.is_internal,
+        runAnalyticsSafely(() => {
+          client.identify(identity.id, {
+            email: identity.email,
+            name: identity.name,
+            role: identity.role,
+            locale: identity.locale,
+            is_internal: identity.is_internal,
+          });
         });
         setAnalyticsContext({
           environment: 'production',

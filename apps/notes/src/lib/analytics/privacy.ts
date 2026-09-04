@@ -8,16 +8,29 @@ const URL_PROPERTY_KEYS = new Set([
   '$pathname',
   '$referrer',
 ]);
-const SENSITIVE_PROPERTY_SEGMENTS = new Set([
+const PERSON_PROPERTY_KEYS = new Set([
+  'email',
+  'is_internal',
+  'locale',
+  'name',
+  'role',
+]);
+const SENSITIVE_PROPERTY_ROOTS = [
+  'collaborator',
   'content',
+  'cost',
   'key',
+  'model',
   'note',
+  'output',
   'prompt',
   'query',
   'response',
+  'source',
+  'text',
   'title',
   'token',
-]);
+];
 
 function templatePathname(pathname: string): string {
   if (/^\/notes\/[^/]+/.test(pathname)) {
@@ -55,17 +68,26 @@ function sanitizeUrl(key: string, value: Property): Property | undefined {
 }
 
 function isSensitiveEventProperty(key: string): boolean {
-  return key
+  const normalizedKey = key
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .toLowerCase()
-    .replace(/^\$+/, '')
+    .replace(/^\$+/, '');
+  if (normalizedKey === 'source') {
+    return false;
+  }
+
+  return normalizedKey
     .split(/[^a-z0-9]+/)
-    .some((segment) => SENSITIVE_PROPERTY_SEGMENTS.has(segment));
+    .some((segment) =>
+      SENSITIVE_PROPERTY_ROOTS.some(
+        (root) => segment === root || segment === `${root}s`
+      )
+    );
 }
 
 function sanitizeProperties(
   properties: Properties,
-  dropSensitiveKeys: boolean
+  propertyKind: 'event' | 'person'
 ): Properties {
   const sanitized: Properties = {};
 
@@ -77,7 +99,10 @@ function sanitizeProperties(
       }
       continue;
     }
-    if (!dropSensitiveKeys || !isSensitiveEventProperty(key)) {
+    if (
+      (propertyKind === 'event' && !isSensitiveEventProperty(key)) ||
+      (propertyKind === 'person' && PERSON_PROPERTY_KEYS.has(key))
+    ) {
       sanitized[key] = value;
     }
   }
@@ -94,12 +119,12 @@ export function sanitizePostHogEvent(
 
   return {
     ...event,
-    properties: sanitizeProperties(event.properties, true),
+    properties: sanitizeProperties(event.properties, 'event'),
     ...(event.$set
-      ? { $set: sanitizeProperties(event.$set, false) }
+      ? { $set: sanitizeProperties(event.$set, 'person') }
       : undefined),
     ...(event.$set_once
-      ? { $set_once: sanitizeProperties(event.$set_once, false) }
+      ? { $set_once: sanitizeProperties(event.$set_once, 'person') }
       : undefined),
   };
 }

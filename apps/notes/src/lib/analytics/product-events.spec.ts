@@ -35,6 +35,24 @@ describe('browser product events', () => {
     });
   });
 
+  it('runtime-picks declared fields from a structurally compatible variable', () => {
+    const properties = {
+      source: 'editor' as const,
+      collaboratorId: 'collaborator-1',
+    };
+
+    captureProductEvent('note activated', properties);
+
+    expect(posthog.capture).toHaveBeenCalledWith('note activated', {
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'es',
+      source: 'editor',
+    });
+  });
+
   it('replaces and registers the typed analytics context when loaded', () => {
     setAnalyticsContext({
       environment: 'production',
@@ -82,6 +100,42 @@ describe('browser product events', () => {
       actor_type: 'anonymous',
       is_internal: false,
       locale: 'es',
+      source: 'editor',
+    });
+  });
+
+  it('contains capture failures so analytics cannot interrupt product behavior', () => {
+    posthog.capture.mockImplementationOnce(() => {
+      throw new Error('capture unavailable');
+    });
+
+    expect(() =>
+      captureProductEvent('note activated', { source: 'editor' })
+    ).not.toThrow();
+  });
+
+  it('contains registration failures while retaining the replacement context', () => {
+    posthog.register.mockImplementationOnce(() => {
+      throw new Error('register unavailable');
+    });
+
+    expect(() =>
+      setAnalyticsContext({
+        environment: 'production',
+        app_version: 'sha-after-register-failure',
+        actor_type: 'registered',
+        is_internal: false,
+        locale: 'en',
+      })
+    ).not.toThrow();
+
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).toHaveBeenCalledWith('note activated', {
+      environment: 'production',
+      app_version: 'sha-after-register-failure',
+      actor_type: 'registered',
+      is_internal: false,
+      locale: 'en',
       source: 'editor',
     });
   });

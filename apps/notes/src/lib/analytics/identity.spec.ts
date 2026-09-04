@@ -160,4 +160,42 @@ describe('createIdentitySynchronizer', () => {
       is_internal: false,
     });
   });
+
+  it('contains identify failures and still registers and remembers context', () => {
+    posthog.identify.mockImplementationOnce(() => {
+      throw new Error('identify unavailable');
+    });
+    const synchronizer = createIdentitySynchronizer(posthog);
+
+    expect(() => synchronizer.sync(REGISTERED_USER)).not.toThrow();
+    expect(posthog.register).toHaveBeenCalledWith({
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'registered',
+      is_internal: false,
+      locale: 'es',
+    });
+
+    synchronizer.sync(REGISTERED_USER);
+    expect(posthog.identify).toHaveBeenCalledOnce();
+    expect(posthog.register).toHaveBeenCalledOnce();
+  });
+
+  it('contains reset failures and still registers anonymous context', () => {
+    const synchronizer = createIdentitySynchronizer(posthog);
+    synchronizer.sync(REGISTERED_USER);
+    vi.clearAllMocks();
+    posthog.reset.mockImplementationOnce(() => {
+      throw new Error('reset unavailable');
+    });
+
+    expect(() => synchronizer.sync(null)).not.toThrow();
+    expect(posthog.register).toHaveBeenCalledWith({
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'es',
+    });
+  });
 });

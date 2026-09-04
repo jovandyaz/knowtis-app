@@ -92,6 +92,10 @@ describe('sanitizePostHogEvent', () => {
         query: 'private query',
         search_query: 'private search',
         searchQuery: 'private search 2',
+        collaboratorId: 'collaborator-1',
+        sourceText: 'private source text',
+        modelOutput: 'private model output',
+        cost: 42,
         $current_url: 'https://knowtis.app/notes/550e8400?token=secret#x',
       },
       $set: {
@@ -100,12 +104,24 @@ describe('sanitizePostHogEvent', () => {
         role: 'admin',
         locale: 'es',
         is_internal: true,
+        noteId: 'note-person-1',
+        content: 'private person content',
+        prompt: 'private person prompt',
+        collaboratorId: 'collaborator-person-1',
+        sourceText: 'private person source text',
+        modelOutput: 'private person model output',
+        cost: 84,
         $current_url: 'https://knowtis.app/s/private-token?utm_source=x',
       },
       $set_once: {
         $initial_current_url:
           'https://knowtis.app/notes/550e8400?token=secret#x',
         $initial_referrer: 'https://partner.example/path?code=secret',
+        token: 'private-once-token',
+        collaboratorId: 'collaborator-once-1',
+        sourceText: 'private once source text',
+        modelOutput: 'private once model output',
+        cost: 126,
       },
     };
 
