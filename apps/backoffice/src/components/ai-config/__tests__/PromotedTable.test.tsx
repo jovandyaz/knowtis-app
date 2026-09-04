@@ -302,6 +302,44 @@ describe('PromotedTable', () => {
     ).not.toHaveFocus();
   });
 
+  it('should not steal focus from a control the user reached while the retire was pending', async () => {
+    const other = model({
+      id: 'openrouter:vendor/live-two',
+      label: 'Live Two',
+    });
+    const roles: ReadonlyMap<string, readonly ServingRole[]> = new Map([
+      [MODEL_ID, ['Default'] as const],
+    ]);
+    const view = (models: CatalogModel[]) => (
+      <PromotedTable
+        models={models}
+        disabled={false}
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+        servingRoles={roles}
+        onSave={vi.fn()}
+        onRetire={vi.fn()}
+      />
+    );
+    const { rerender } = render(view([model(), other]));
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /retire live one/i })
+    );
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /retire anyway/i,
+      })
+    );
+    const otherLabel = screen.getByLabelText(`Label for ${other.id}`);
+    otherLabel.focus();
+    rerender(view([other]));
+
+    expect(otherLabel).toHaveFocus();
+    expect(
+      screen.getByRole('heading', { name: 'Promoted (1)' })
+    ).not.toHaveFocus();
+  });
+
   it('should retire an unreferenced model without asking', async () => {
     const onRetire = vi.fn();
     renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, { onRetire });

@@ -223,7 +223,9 @@ export function PromotedTable({
       return;
     }
     confirmedRetireId.current = null;
-    headingRef.current?.focus();
+    if (document.activeElement === document.body) {
+      headingRef.current?.focus();
+    }
   }, [models]);
 
   return (
