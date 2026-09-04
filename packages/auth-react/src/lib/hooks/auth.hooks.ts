@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 
 import {
+  skipToken,
   useMutation,
   useQuery,
   useQueryClient,
@@ -16,6 +17,8 @@ import type { AuthUserProfile } from '../types';
 export const authQueryKeys = {
   all: ['auth'] as const,
   profile: () => [...authQueryKeys.all, 'profile'] as const,
+  verifyEmail: (token: string | undefined) =>
+    [...authQueryKeys.all, 'verify-email', token] as const,
 } as const;
 
 export function useProfile(): UseQueryResult<AuthUserProfile> {
@@ -117,16 +120,35 @@ export function useResetPassword(): UseMutationResult<
   });
 }
 
-export function useVerifyEmail(): UseMutationResult<void, Error, string> {
+/**
+ * Redeems the token an email link carried. The server consumes the token on
+ * the first attempt, so the request is a query keyed by it: a StrictMode
+ * remount, a refocus or a second visit with the same link within the session
+ * all read the one cached outcome instead of posting again.
+ */
+export function useVerifyEmail(
+  token: string | undefined
+): UseQueryResult<true, Error> {
   const api = useAuthApi();
   const queryClient = useQueryClient();
 
-  return useMutation({
-    mutationFn: (token: string) => api.verifyEmail(token),
-    // Same contract as the code path: without this the banner outlives a
-    // successful link verification for the profile query's whole staleTime.
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: authQueryKeys.profile() }),
+  return useQuery({
+    queryKey: authQueryKeys.verifyEmail(token),
+    queryFn: token
+      ? async () => {
+          await api.verifyEmail(token);
+          // Same contract as the code path: without this the banner outlives a
+          // successful link verification for the profile query's whole staleTime.
+          await queryClient.invalidateQueries({
+            queryKey: authQueryKeys.profile(),
+          });
+          return true as const;
+        }
+      : skipToken,
+    retry: false,
+    retryOnMount: false,
+    staleTime: 'static',
+    gcTime: Infinity,
   });
 }
 

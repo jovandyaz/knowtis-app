@@ -111,11 +111,62 @@ describe('useVerifyEmail', () => {
     const api = createMockApi();
     const { wrapper } = setup(api);
 
-    const { result } = renderHook(() => useVerifyEmail(), { wrapper });
-    result.current.mutate('link-token');
+    const { result } = renderHook(() => useVerifyEmail('link-token'), {
+      wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(api.verifyEmail).toHaveBeenCalledWith('link-token');
+  });
+
+  it('sends nothing until a token is in hand', () => {
+    const api = createMockApi();
+    const { wrapper } = setup(api);
+
+    const { result } = renderHook(() => useVerifyEmail(undefined), {
+      wrapper,
+    });
+
+    expect(result.current.fetchStatus).toBe('idle');
+    expect(api.verifyEmail).not.toHaveBeenCalled();
+  });
+
+  it('posts a token once, however often the observer remounts', async () => {
+    const api = createMockApi();
+    const { wrapper } = setup(api);
+
+    const first = renderHook(() => useVerifyEmail('link-token'), { wrapper });
+    await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+    first.unmount();
+
+    const second = renderHook(() => useVerifyEmail('link-token'), {
+      wrapper,
+    });
+
+    expect(second.result.current.isSuccess).toBe(true);
+    expect(second.result.current.isFetching).toBe(false);
+    expect(api.verifyEmail).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a refusal instead of retrying the consumed token on remount', async () => {
+    const api = createMockApi({
+      verifyEmail: vi.fn().mockRejectedValue(new Error('Expired')),
+    });
+    const { wrapper } = setup(api);
+
+    const first = renderHook(() => useVerifyEmail('stale-token'), {
+      wrapper,
+    });
+    await waitFor(() => expect(first.result.current.isError).toBe(true));
+    first.unmount();
+
+    const second = renderHook(() => useVerifyEmail('stale-token'), {
+      wrapper,
+    });
+
+    expect(second.result.current.isError).toBe(true);
+    expect(second.result.current.isFetching).toBe(false);
+    expect(api.verifyEmail).toHaveBeenCalledTimes(1);
   });
 
   it('invalidates the cached profile, exactly as the code path does', async () => {
@@ -123,8 +174,9 @@ describe('useVerifyEmail', () => {
     const { queryClient, wrapper } = setup(api);
     queryClient.setQueryData(authQueryKeys.profile(), UNVERIFIED_PROFILE);
 
-    const { result } = renderHook(() => useVerifyEmail(), { wrapper });
-    result.current.mutate('link-token');
+    const { result } = renderHook(() => useVerifyEmail('link-token'), {
+      wrapper,
+    });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(
@@ -139,8 +191,9 @@ describe('useVerifyEmail', () => {
     const { queryClient, wrapper } = setup(api);
     queryClient.setQueryData(authQueryKeys.profile(), UNVERIFIED_PROFILE);
 
-    const { result } = renderHook(() => useVerifyEmail(), { wrapper });
-    result.current.mutate('stale-token');
+    const { result } = renderHook(() => useVerifyEmail('stale-token'), {
+      wrapper,
+    });
 
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(
