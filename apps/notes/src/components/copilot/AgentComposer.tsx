@@ -1,10 +1,11 @@
 import { useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAutoResizeTextarea } from '@/hooks/useAutoResizeTextarea';
 import type { AgentStatus } from '@/stores/agent.store';
 import { ArrowUp, Square } from 'lucide-react';
 
-import { Button, cn, Textarea } from '@knowtis/design-system';
+import { Button, Textarea } from '@knowtis/design-system';
 
 interface AgentComposerProps {
   onSend: (text: string) => void;
@@ -22,6 +23,7 @@ export function AgentComposer({
   const { t } = useTranslation('notes');
   const [value, setValue] = useState('');
   const ref = useRef<HTMLTextAreaElement>(null);
+  useAutoResizeTextarea(ref, value);
 
   const isStreaming = status === 'streaming';
   const sendBlocked = isStreaming || status === 'pendingProposal';
@@ -56,9 +58,7 @@ export function AgentComposer({
           placeholder={t('ai.copilot.placeholder')}
           aria-label={t('ai.copilot.placeholder')}
           rows={1}
-          className={cn(
-            'min-h-9 max-h-48 resize-none border-0 bg-transparent px-1 py-0.5 shadow-none focus-visible:ring-0'
-          )}
+          className="max-h-48 min-h-9 resize-none overflow-y-auto border-0 bg-transparent px-1 py-0.5 shadow-none focus-visible:ring-0"
         />
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">{modelPicker}</div>

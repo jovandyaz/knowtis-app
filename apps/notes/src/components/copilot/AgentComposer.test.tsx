@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentComposer } from './AgentComposer';
 
@@ -85,5 +85,30 @@ describe('AgentComposer', () => {
       />
     );
     expect(screen.getByText('picker')).toBeInTheDocument();
+  });
+});
+
+describe('AgentComposer sizing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('grows the textarea with its content and shrinks back after sending', async () => {
+    const scrollHeight = vi
+      .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+      .mockReturnValue(24);
+    const user = userEvent.setup();
+    render(<AgentComposer onSend={vi.fn()} onStop={vi.fn()} status="idle" />);
+    const box = screen.getByRole('textbox');
+    expect(box.style.height).toBe('24px');
+
+    scrollHeight.mockReturnValue(96);
+    await user.type(box, 'line1{Shift>}{Enter}{/Shift}line2');
+    expect(box.style.height).toBe('96px');
+
+    scrollHeight.mockReturnValue(24);
+    await user.keyboard('{Enter}');
+    expect(box).toHaveValue('');
+    expect(box.style.height).toBe('24px');
   });
 });
