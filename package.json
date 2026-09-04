@@ -275,7 +275,7 @@
       "picomatch": ">=4.0.4",
       "postcss": ">=8.5.10",
       "protobufjs": ">=7.5.8",
-      "qs": ">=6.14.2",
+      "qs": ">=6.16.0",
       "rollup": ">=4.59.0",
       "seroval": ">=1.4.1",
       "socket.io-parser": ">=4.2.6",
