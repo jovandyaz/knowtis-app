@@ -13,6 +13,7 @@ import {
   parseChain,
   TOKENS_PER_MILLION,
   USD_PER_MILLION_FORMAT,
+  type AIConfigKey,
   type AIConfigSource,
   type GlobalReasoningEffort,
   type ModelIntent,
@@ -97,17 +98,15 @@ const CONFIG_KEYS = {
     default: AI_SETTING_DEFAULTS.ai_free_tier_ceiling,
     kind: 'money',
   },
-} as const satisfies Record<string, ConfigKeyDef>;
-
-type ConfigKey = keyof typeof CONFIG_KEYS;
+} as const satisfies Record<AIConfigKey, ConfigKeyDef>;
 
 const INTENT_CONFIG_KEYS = {
   fast: 'ai_fast_model',
   balanced: 'ai_default_model',
   powerful: 'ai_deep_model',
-} as const satisfies Record<ModelIntent, ConfigKey>;
+} as const satisfies Record<ModelIntent, AIConfigKey>;
 
-function isConfigKey(key: string): key is ConfigKey {
+function isConfigKey(key: string): key is AIConfigKey {
   return Object.hasOwn(CONFIG_KEYS, key);
 }
 
@@ -120,7 +119,7 @@ export class InvalidAIConfigError extends Error {
 }
 
 export interface AIConfigEntry {
-  key: ConfigKey;
+  key: AIConfigKey;
   value: string;
   kind: AIConfigKind;
   source: AIConfigSource;
@@ -404,7 +403,7 @@ export class AIConfigService {
   /** Resolves every config key to the value the runtime actually serves: the DB row when present and still servable, the code default otherwise (no cache — intentional for admin freshness). A DB failure resolves everything from the code defaults, mirroring the runtime fallback in getConfigValue. */
   async getEffectiveConfig(): Promise<AIConfigEntry[]> {
     const rows = new Map((await this.getAllRowsSafe()).map((r) => [r.key, r]));
-    return (Object.keys(CONFIG_KEYS) as ConfigKey[]).map((key) => {
+    return (Object.keys(CONFIG_KEYS) as AIConfigKey[]).map((key) => {
       const stored = rows.get(key);
       const value = this.servedValue(key, stored);
       const diverged =
@@ -423,7 +422,7 @@ export class AIConfigService {
   }
 
   /** The stored string in the form the runtime parses it, so whitespace alone never reads as a divergence. */
-  private canonical(key: ConfigKey, value: string): string {
+  private canonical(key: AIConfigKey, value: string): string {
     const { kind } = CONFIG_KEYS[key];
     if (kind === 'chain') {
       return parseChain(value).join(CHAIN_SEPARATOR);
@@ -432,7 +431,7 @@ export class AIConfigService {
   }
 
   /** What the runtime resolves for this key, mirroring the getters above: each drops the parts of a stored row it cannot use, so the served value can differ from what is stored. */
-  private servedValue(key: ConfigKey, row: AIConfigRow | undefined): string {
+  private servedValue(key: AIConfigKey, row: AIConfigRow | undefined): string {
     const def = CONFIG_KEYS[key];
     if (!row) {
       return def.default;
@@ -483,7 +482,7 @@ export class AIConfigService {
   }
 
   /** Mirrors the catalog filter getFallbackChain applies: a model retired out of band must never be served as a single-value default either. */
-  private async getSupportedModel(dbKey: ConfigKey): Promise<string> {
+  private async getSupportedModel(dbKey: AIConfigKey): Promise<string> {
     const value = await this.getConfigValue(dbKey);
     if (this.modelCatalog.isSupported(value)) {
       return value;
@@ -494,7 +493,7 @@ export class AIConfigService {
     return CONFIG_KEYS[dbKey].default;
   }
 
-  private async getConfigValue(dbKey: ConfigKey): Promise<string> {
+  private async getConfigValue(dbKey: AIConfigKey): Promise<string> {
     const cacheKey = `${CACHE_PREFIX}${dbKey}`;
 
     const cached = await this.cache.get<string>(cacheKey);
