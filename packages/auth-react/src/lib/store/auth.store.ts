@@ -13,6 +13,17 @@ export interface CreateAuthStoreOptions {
 
 const DEFAULT_STORAGE_KEY = 'auth-store';
 
+// Only what the shell reads before the profile refetch lands; the rest of the
+// /auth/me payload stays in memory.
+function toPersistedUser(user: AuthUserProfile | null) {
+  if (user === null) {
+    return null;
+  }
+  const { id, email, name, avatarUrl, isAnonymous, emailVerifiedAt, locale } =
+    user;
+  return { id, email, name, avatarUrl, isAnonymous, emailVerifiedAt, locale };
+}
+
 /**
  * Creates a Zustand auth store with persist middleware.
  */
@@ -62,7 +73,7 @@ export function createAuthStore(options: CreateAuthStoreOptions) {
       {
         name: storageKey,
         partialize: (state) => ({
-          user: state.user,
+          user: toPersistedUser(state.user),
           isAuthenticated: state.isAuthenticated,
         }),
         onRehydrateStorage: () => (state) => {
