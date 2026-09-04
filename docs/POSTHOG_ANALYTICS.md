@@ -100,8 +100,11 @@ emails, names, prompts, responses, source text, model output, token counts,
 or costs. The single exception is `properties.token`, the public browser
 project token posthog-js stamps on every event: the capture endpoint
 authenticates the batch with it and answers `401 event submitted without an
-api_key` when it is missing. Autocapture remains off, router navigation emits
-manual pageviews, and replay masks all inputs and text.
+api_key` when it is missing. Autocapture, heatmaps, and replay stay off in
+the client configuration regardless of the PostHog project settings: heatmap
+payloads are keyed by the raw page URL (note IDs and query strings included)
+and replay snapshots embed hrefs, so `before_send` drops both events outright
+rather than filtering them. Router navigation emits manual pageviews.
 
 ## Release validation
 

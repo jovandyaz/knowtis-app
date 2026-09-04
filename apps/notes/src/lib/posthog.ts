@@ -36,6 +36,7 @@ export function buildPostHogOptions(host?: string): Partial<PostHogConfig> {
     capture_pageview: false,
     capture_pageleave: true,
     autocapture: false,
+    capture_heatmaps: false,
     disable_session_recording: true,
     before_send: filterPostHogEvent,
     session_recording: {

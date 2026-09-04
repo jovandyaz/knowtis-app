@@ -67,6 +67,11 @@ const QUERY_DERIVED_COMPACT_KEYS = new Set(
 const SDK_PROJECT_TOKEN_KEY = 'token';
 const SDK_CAMPAIGN_COPY_PREFIXES = ['session_entry_', 'initial_'];
 const NESTED_PERSON_PROPERTY_KEYS = new Set(['$set', '$set_once']);
+/**
+ * Replay snapshots and heatmaps embed raw URLs (`$heatmap_data` is keyed by
+ * the unsanitized page URL), so neither can be filtered field by field.
+ */
+const UNSANITIZABLE_EVENTS = new Set(['$snapshot', '$$heatmap']);
 
 function templatePathname(pathname: string): string {
   if (/^\/notes\/[^/]+/.test(pathname)) {
@@ -193,7 +198,7 @@ export function sanitizePostHogEvent(
   if (event === null) {
     return null;
   }
-  if (event.event === '$snapshot') {
+  if (UNSANITIZABLE_EVENTS.has(event.event)) {
     return null;
   }
 
