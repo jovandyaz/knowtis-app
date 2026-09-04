@@ -1,6 +1,6 @@
 # Knowtis MCP Server
 
-Model Context Protocol (MCP) server that lets AI assistants (Claude Desktop, Claude Code, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 8 tools for notes CRUD, search, and sharing, plus every note as an MCP resource.
+Model Context Protocol (MCP) server that lets AI assistants (Claude Desktop, Claude Code, Cursor, VS Code Copilot, and any MCP-capable client) manage Knowtis notes programmatically. It exposes 9 tools for notes CRUD, search, and sharing, plus every note as an MCP resource.
 
 The **hosted server is the primary way to connect**:
 
@@ -313,7 +313,7 @@ mcp-publisher status --status deprecated app.knowtis/knowtis <version>
 
 ## Tools
 
-All 8 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
+All 9 tools are registered via `registerTool` and return a **dual result**: a `structuredContent` object matching the result shape below, plus the same object serialized as JSON in a `text` content block.
 
 | Tool                | Title             | Description                                                  | Parameters                                                            | Result shape                                                                                               | Annotations                 | Scope         |
 | ------------------- | ----------------- | ------------------------------------------------------------ | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- | --------------------------- | ------------- |
@@ -322,24 +322,25 @@ All 8 tools are registered via `registerTool` and return a **dual result**: a `s
 | `get-note`          | Get Note          | Get the full content of a note, returned as **Markdown**     | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | read-only, idempotent       | `notes:read`  |
 | `create-note`       | Create Note       | Create a note (title + optional Markdown content)            | `title` (string), `content?` (Markdown string)                        | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | create, non-idempotent      | `notes:write` |
 | `update-note`       | Update Note       | Update the title or content of an existing note              | `noteId` (UUID), `title?` (string), `content?` (Markdown string)      | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | destructive, idempotent     | `notes:write` |
-| `delete-note`       | Delete Note       | Deletes a note (soft delete; restorable via the app)         | `noteId` (UUID)                                                       | `{ success, message }`                                                                                     | destructive, idempotent     | `notes:write` |
+| `delete-note`       | Delete Note       | Deletes a note (soft delete; restorable via `restore-note`)  | `noteId` (UUID)                                                       | `{ success, message }`                                                                                     | destructive, idempotent     | `notes:write` |
+| `restore-note`      | Restore Note      | Restores a soft-deleted note (undoes `delete-note`)          | `noteId` (UUID)                                                       | `{ note: { id, title, content, ownerId, createdAt, updatedAt } }`                                          | non-destructive, idempotent | `notes:write` |
 | `get-collaborators` | Get Collaborators | List who has access to a note and their permission           | `noteId` (UUID)                                                       | `{ collaborators: [{ userId, email, name, permission }] }` (`permission`: `owner` \| `viewer` \| `editor`) | read-only, idempotent       | `notes:read`  |
 | `share-note`        | Share Note        | Share a note with another user by their user ID              | `noteId` (UUID), `userId` (UUID), `permission` (`viewer` \| `editor`) | `{ success }`                                                                                              | non-destructive, idempotent | `notes:share` |
 
-`create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting — and converts back on read: the `content` in `get-note`, `create-note`, and `update-note` results is always Markdown, never the stored HTML.
+`create-note` and `update-note` accept **Markdown** content (headings, bold/italic/strike, inline & fenced code, links, ordered/unordered/task lists, blockquotes, horizontal rules, GFM tables, highlight, super/subscript, and Mermaid diagrams). The server converts it to the editor's HTML before persisting — and converts back on read: the `content` in `get-note`, `create-note`, `update-note`, and `restore-note` results is always Markdown, never the stored HTML.
 
 `list-notes` orders by recency and paginates with an **opaque cursor**: when more notes remain, the result carries a `nextCursor` to pass to the next call. An invalid or missing cursor starts from the first page.
 
 `search-notes` delegates to the API's hybrid retrieval endpoint (`GET /api/v1/search` — full-text + semantic ranking server-side) and returns the most relevant notes the user can access. Use it to find notes by meaning, then `get-note` to read one.
 
-`delete-note` calls `DELETE /api/v1/notes/:id`, which is a **soft delete**: the API stamps `notes.deleted_at` and the note disappears from every listing and access check, but the owner can bring it back with `POST /api/v1/notes/:id/restore` from the web app. There is no restore tool.
+`delete-note` calls `DELETE /api/v1/notes/:id`, which is a **soft delete**: the API stamps `notes.deleted_at` and the note disappears from every listing and access check, but the owner can bring it back with `restore-note`, which calls `POST /api/v1/notes/:id/restore` and returns the restored note. Restoring a note that is not deleted (or not owned) is a `404`.
 
 Annotation semantics (MCP tool hints):
 
 - **read-only** (`list-notes`, `search-notes`, `get-note`, `get-collaborators`) — `readOnlyHint: true`, `destructiveHint: false`, `idempotentHint: true`.
 - **create** (`create-note`) — not read-only, not destructive, `idempotentHint: false` (each call creates a new note).
 - **destructive, idempotent** (`update-note`, `delete-note`) — `destructiveHint: true`, `idempotentHint: true`.
-- **non-destructive, idempotent** (`share-note`) — not destructive, `idempotentHint: true`.
+- **non-destructive, idempotent** (`restore-note`, `share-note`) — not destructive, `idempotentHint: true`.
 
 All tools declare `openWorldHint: false`.
 
@@ -518,7 +519,7 @@ apps/mcp/src/
 │   └── note-resources.ts     # knowtis://notes/{noteId} list/read/templates handlers
 ├── tools/
 │   ├── annotations.ts        # READ_ONLY / NON_DESTRUCTIVE / NON_DESTRUCTIVE_IDEMPOTENT / DESTRUCTIVE_IDEMPOTENT hint sets
-│   ├── notes.tools.ts        # list/search/get/create/update/delete-note
+│   ├── notes.tools.ts        # list/search/get/create/update/delete/restore-note
 │   ├── sharing.tools.ts      # get-collaborators, share-note
 │   ├── wrap-tool-handler.ts  # Auth + scope + logging + dual-result wrapper
 │   └── format-error.ts       # Tool error formatting

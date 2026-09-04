@@ -80,6 +80,17 @@ describe('AuthService', () => {
     expect(() => service.checkScopes([], 'list-notes')).toThrow(/notes:read/);
   });
 
+  it('should require notes:write for restore-note, matching delete-note', () => {
+    const service = new AuthService(EXCHANGE_URL);
+
+    expect(() => service.checkScopes(['notes:read'], 'restore-note')).toThrow(
+      /notes:write/
+    );
+    expect(() =>
+      service.checkScopes(['notes:write'], 'restore-note')
+    ).not.toThrow();
+  });
+
   it('should throw when the token exchange responds non-ok', async () => {
     fetchMock.mockResolvedValue({
       ok: false,
