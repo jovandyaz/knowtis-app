@@ -228,6 +228,36 @@ Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows e
 
 ---
 
+## Post-deploy Verification
+
+Run after every production deploy that touches health, rate limiting or Railway config; each line names what it proves.
+
+```bash
+# The deploy gate waited for the real terminal status (not an attached CLI return)
+gh run view <ci-run-id> --log | grep -E "waiting up to|succeeded"
+
+# Running build: boot log shows the migrator and the detected RSS ceiling (90% of the container limit)
+railway logs --service knowtis_app -n 400 | grep -E "schema up to date|RSS health ceiling"
+
+# Full health: 200 with database and memory_rss up; a 503 body names the failing indicator
+curl --fail-with-body https://<api-domain>/api/v1/health
+curl --fail-with-body https://<mcp-domain>/health
+
+# Anonymous rate limit keys on the edge-set X-Real-IP: the 6th failed login is 429
+# and neither spoof opens a new bucket (also 429). Costs your own IP 15 minutes of login.
+for i in 1 2 3 4 5 6; do curl -s -o /dev/null -w "%{http_code} " -H 'content-type: application/json' \
+  -d '{"email":"probe@example.com","password":"wrong"}' https://<api-domain>/api/v1/auth/login; done
+curl -s -o /dev/null -w "%{http_code}\n" -H 'X-Forwarded-For: 203.0.113.7' -H 'content-type: application/json' \
+  -d '{"email":"probe@example.com","password":"wrong"}' https://<api-domain>/api/v1/auth/login
+curl -s -o /dev/null -w "%{http_code}\n" -H 'X-Real-IP: 203.0.113.8' -H 'content-type: application/json' \
+  -d '{"email":"probe@example.com","password":"wrong"}' https://<api-domain>/api/v1/auth/login
+
+# Railway config matches .railway/railway.ts (needs the linked project and `pnpm install`)
+railway config plan
+```
+
+Locally the same health paths are exercised against the built API (`pnpm nx build api && node --env-file=apps/api/.env dist/apps/api/main.js`): `docker stop knowtis-postgres` turns `/api/v1/health` and `/ready` into 503 with `Database unreachable` (the driver error stays in the log) while `/ping` stays 200, and they recover once Postgres is back. Without an edge, `X-Real-IP` is client-supplied, so the local spoof check is "fixed `X-Real-IP` + rotating `X-Forwarded-For` stays 429".
+
 ## Quick Reference
 
 ```bash
