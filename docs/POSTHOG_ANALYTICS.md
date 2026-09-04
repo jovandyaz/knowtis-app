@@ -112,6 +112,8 @@ WHERE timestamp >= now() - INTERVAL 24 HOUR
 LIMIT 100
 ```
 
-The second query must show only `/notes/:noteId` and `/s/:shareToken` for
-these routes, never literal identifiers or tokens. Inspect event properties
-before expanding a dashboard or adding a new event field.
+For these routes, `$pathname` must be `/notes/:noteId` or `/s/:shareToken`.
+When present, `$current_url` must be the corresponding normalized first-party
+URL (for example, `https://knowtis.app/notes/:noteId`), never a literal
+identifier or token. Inspect event properties before expanding a dashboard or
+adding a new event field.
