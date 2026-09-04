@@ -1,6 +1,7 @@
 import type { CaptureResult, Properties, Property } from 'posthog-js';
 
-const FIRST_PARTY_ORIGIN = 'https://knowtis.app';
+import { FIRST_PARTY_ORIGIN } from './constants';
+
 const URL_PROPERTY_KEYS = new Set([
   '$current_url',
   '$initial_current_url',
@@ -30,7 +31,6 @@ const SENSITIVE_PROPERTY_ROOTS = [
   'prompt',
   'query',
   'response',
-  'source',
   'text',
   'title',
   'token',
@@ -60,6 +60,8 @@ const QUERY_DERIVED_PROPERTY_KEYS = new Set([
 const QUERY_DERIVED_COMPACT_KEYS = new Set(
   [...QUERY_DERIVED_PROPERTY_KEYS].map((key) => key.replace(/[^a-z0-9]/g, ''))
 );
+const SDK_CAMPAIGN_COPY_PREFIXES = ['session_entry_', 'initial_'];
+const NESTED_PERSON_PROPERTY_KEYS = new Set(['$set', '$set_once']);
 
 function templatePathname(pathname: string): string {
   if (/^\/notes\/[^/]+/.test(pathname)) {
@@ -103,8 +105,15 @@ function normalizePropertyKey(key: string): string {
     .replace(/^\$+/, '');
 }
 
+function withoutSdkCampaignPrefix(normalizedKey: string): string {
+  const prefix = SDK_CAMPAIGN_COPY_PREFIXES.find((candidate) =>
+    normalizedKey.startsWith(candidate)
+  );
+  return prefix ? normalizedKey.slice(prefix.length) : normalizedKey;
+}
+
 function isQueryDerivedProperty(key: string): boolean {
-  const normalizedKey = normalizePropertyKey(key);
+  const normalizedKey = withoutSdkCampaignPrefix(normalizePropertyKey(key));
   const segments = normalizedKey.split(/[^a-z0-9]+/);
   const compactKey = normalizedKey.replace(/[^a-z0-9]/g, '');
 
@@ -119,13 +128,12 @@ function isQueryDerivedProperty(key: string): boolean {
   );
 }
 
-function isSensitiveEventProperty(key: string): boolean {
-  const normalizedKey = normalizePropertyKey(key);
-  if (normalizedKey === 'source') {
-    return false;
-  }
+function isPlainObject(value: Property): value is Properties {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-  return normalizedKey
+function isSensitiveEventProperty(key: string): boolean {
+  return normalizePropertyKey(key)
     .split(/[^a-z0-9]+/)
     .some((segment) =>
       SENSITIVE_PROPERTY_ROOTS.some(
@@ -149,6 +157,14 @@ function sanitizeProperties(
       continue;
     }
     if (propertyKind === 'event' && isQueryDerivedProperty(key)) {
+      continue;
+    }
+    if (
+      propertyKind === 'event' &&
+      NESTED_PERSON_PROPERTY_KEYS.has(key) &&
+      isPlainObject(value)
+    ) {
+      sanitized[key] = sanitizeProperties(value, 'person');
       continue;
     }
     if (

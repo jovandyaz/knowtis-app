@@ -68,6 +68,13 @@ describe('sanitizePostHogEvent', () => {
         gclid: 'private-google-click-id',
         clickId: 'private-click-id',
         searchEngine: 'private-search-engine',
+        $session_entry_gclid: 'private-session-google-click-id',
+        $session_entry_fbclid: 'private-session-facebook-click-id',
+        $session_entry_mc_cid: 'private-session-mailchimp-id',
+        $session_entry_utm_source: 'private-session-source',
+        $initial_gclid: 'private-initial-google-click-id',
+        $initial_utm_campaign: 'private-initial-campaign',
+        $session_entry_referring_domain: 'partner.example',
         $geoip_country_code: 'MX',
       },
     };
@@ -98,6 +105,7 @@ describe('sanitizePostHogEvent', () => {
         $session_entry_url: 'https://knowtis.app/notes/:noteId',
         $session_entry_referrer: 'https://partner.example',
         $session_entry_pathname: '/s/:shareToken',
+        $session_entry_referring_domain: 'partner.example',
         $geoip_country_code: 'MX',
       },
     });
@@ -227,6 +235,48 @@ describe('sanitizePostHogEvent', () => {
       $set_once: {
         $initial_current_url: 'https://knowtis.app/notes/:noteId',
         $initial_referrer: 'https://partner.example',
+      },
+    });
+  });
+
+  it('applies the person allowlist to $set and $set_once nested inside event properties', () => {
+    const personUpdate: CaptureResult = {
+      uuid: 'event-5',
+      event: '$set',
+      properties: {
+        $set: {
+          email: 'person@example.com',
+          name: 'Person',
+          role: 'user',
+          locale: 'es',
+          is_internal: false,
+          noteId: 'note-person-1',
+          $current_url: 'https://knowtis.app/notes/550e8400?token=secret',
+        },
+        $set_once: {
+          $initial_current_url: 'https://knowtis.app/s/private-token?x=1',
+          $initial_gclid: 'private-initial-google-click-id',
+        },
+        $current_url: 'https://knowtis.app/notes/550e8400',
+      },
+    };
+
+    expect(sanitizePostHogEvent(personUpdate)).toEqual({
+      uuid: 'event-5',
+      event: '$set',
+      properties: {
+        $set: {
+          email: 'person@example.com',
+          name: 'Person',
+          role: 'user',
+          locale: 'es',
+          is_internal: false,
+          $current_url: 'https://knowtis.app/notes/:noteId',
+        },
+        $set_once: {
+          $initial_current_url: 'https://knowtis.app/s/:shareToken',
+        },
+        $current_url: 'https://knowtis.app/notes/:noteId',
       },
     });
   });
