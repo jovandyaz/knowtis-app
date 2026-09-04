@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateEnv } from '../../../config/env.config';
 import { AgentModule } from '../../agent/agent.module';
 import { ApproveMutationHandler } from '../../agent/application/approve-mutation.handler';
+import { NoteMutateToolGroup } from '../../agent/infrastructure/tools/note-mutate.tool-group';
 import { AIModule } from '../../ai/ai.module';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { AI_REDIS } from '../../ai/infrastructure/redis/ai-redis.provider';
@@ -25,6 +26,11 @@ const GATED_SITES = [
   {
     name: 'ApproveMutationHandler',
     target: ApproveMutationHandler,
+    owner: AgentModule,
+  },
+  {
+    name: 'NoteMutateToolGroup',
+    target: NoteMutateToolGroup,
     owner: AgentModule,
   },
 ] as const;
