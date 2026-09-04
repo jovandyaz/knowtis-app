@@ -7,6 +7,7 @@ import {
   desc,
   eq,
   ilike,
+  inArray,
   isNotNull,
   isNull,
   ne,
@@ -40,6 +41,7 @@ import { escapeLike } from '../../../../database/escape-like';
 import type {
   AccessibleNotePage,
   AccessibleNotesCount,
+  NoteContentSummary,
   NoteEntity,
   NoteListFilters,
   NotePageRequest,
@@ -74,6 +76,13 @@ const noteSummaryColumns = {
   shareToken: notes.shareToken,
   createdAt: notes.createdAt,
   updatedAt: notes.updatedAt,
+};
+
+const noteContentSummaryColumns = {
+  id: notes.id,
+  ownerId: notes.ownerId,
+  title: notes.title,
+  content: notes.content,
 };
 
 const ownerColumns = {
@@ -151,6 +160,25 @@ export class DrizzleNoteReadRepository implements NoteReadRepository {
       .orderBy(desc(notes.updatedAt));
 
     return results.map(mapToNoteEntity);
+  }
+
+  async findOwnedSummariesByIds(
+    ids: string[],
+    userId: UserId
+  ): Promise<NoteContentSummary[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.db
+      .select(noteContentSummaryColumns)
+      .from(notes)
+      .where(
+        and(
+          inArray(notes.id, ids),
+          eq(notes.ownerId, userId.value),
+          isNull(notes.deletedAt)
+        )
+      );
   }
 
   async findAccessibleByUser(

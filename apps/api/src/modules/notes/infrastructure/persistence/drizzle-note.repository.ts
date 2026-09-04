@@ -13,6 +13,7 @@ import type {
   AccessibleNotePage,
   AccessibleNotesCount,
   CreateNoteData,
+  NoteContentSummary,
   NoteDomainError,
   NoteEntity,
   NoteListFilters,
@@ -59,6 +60,13 @@ export class DrizzleNoteRepository implements NoteRepository {
 
   findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]> {
     return this.readRepo.findByOwner(ownerId, search);
+  }
+
+  findOwnedSummariesByIds(
+    ids: string[],
+    userId: UserId
+  ): Promise<NoteContentSummary[]> {
+    return this.readRepo.findOwnedSummariesByIds(ids, userId);
   }
 
   findAccessibleByUser(

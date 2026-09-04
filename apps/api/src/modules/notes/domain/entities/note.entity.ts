@@ -59,6 +59,14 @@ export interface NoteSummary {
   readonly updatedAt: Date;
 }
 
+/** The text of a note plus who owns it; carries no CRDT state, so it is safe to fetch in bulk. */
+export interface NoteContentSummary {
+  readonly id: string;
+  readonly ownerId: string;
+  readonly title: string;
+  readonly content: string;
+}
+
 export interface NoteOwner {
   readonly id: string;
   readonly name: string;
