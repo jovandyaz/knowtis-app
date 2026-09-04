@@ -629,7 +629,7 @@ The project uses GitHub Actions (`.github/workflows/ci.yml`) with **Nx affected*
 
 ### Git hooks (Lefthook)
 
-`lefthook.yml`: pre-commit runs ESLint + Prettier on staged files, `nx affected -t typecheck`, and — when a file under `apps/api/src/database/schema/` is staged — `nx db:generate api`, staging any new files under `apps/api/drizzle/`. Pre-push runs `nx affected -t test`. Commit-msg enforces Conventional Commits.
+`lefthook.yml`: pre-commit runs ESLint + Prettier on staged files, `nx affected -t typecheck` (each project's target is `tools/typecheck-project.sh {projectRoot}`, run from the workspace root so it resolves the same way in linked worktrees), and — when a file under `apps/api/src/database/schema/` is staged — `nx db:generate api`, staging any new files under `apps/api/drizzle/`. Pre-push runs `nx affected -t test`. Commit-msg enforces Conventional Commits.
 
 ---
 

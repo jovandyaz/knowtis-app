@@ -173,7 +173,7 @@ Follow Conventional Commits. Types accepted by the commit-msg hook: `feat`, `fix
 
 ### Git Hooks (Lefthook)
 
-- **pre-commit**: ESLint + Prettier on staged `*.ts`/`*.tsx` (Prettier also on staged json/md/yaml), `nx affected -t typecheck --base=origin/main`, and `check-migrations` (when schema files under `apps/api/src/database/schema/` are staged, runs `nx db:generate api` and stages `apps/api/drizzle/`)
+- **pre-commit**: ESLint + Prettier on staged `*.ts`/`*.tsx` (Prettier also on staged json/md/yaml), `nx affected -t typecheck --base=origin/main` (every `typecheck` target runs `tools/typecheck-project.sh {projectRoot}` from the workspace root, so the hook also works in linked worktrees where git exports `GIT_DIR`), and `check-migrations` (when schema files under `apps/api/src/database/schema/` are staged, runs `nx db:generate api` and stages `apps/api/drizzle/`)
 - **pre-push**: `nx affected -t test --base=origin/main`
 - **commit-msg**: Validates Conventional Commits format
 
