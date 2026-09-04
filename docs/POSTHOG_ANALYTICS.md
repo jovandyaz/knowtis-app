@@ -120,9 +120,9 @@ adding a new event field.
 
 ## PostHog project assets
 
-The following assets were created in PostHog project `344524` and read back
-after configuration. Reuse exact-name matches and these IDs; do not rename or
-delete historical assets.
+The following assets were created or updated in PostHog project `344524` and
+read back after configuration. Reuse exact-name matches and these IDs; do not
+rename or delete historical assets.
 
 | Asset name                                    | Kind                      | PostHog ID                             |
 | --------------------------------------------- | ------------------------- | -------------------------------------- |
