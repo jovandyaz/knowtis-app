@@ -348,7 +348,7 @@ importers:
         specifier: ^1.375.0
         version: 1.375.0
       posthog-node:
-        specifier: 5.51.6
+        specifier: ^5.51.6
         version: 5.51.6(rxjs@7.8.2)
       react:
         specifier: 19.2.1
