@@ -29,17 +29,22 @@ function toRetryAfterSeconds(retryAfterMs: number): number | null {
 
 /**
  * Returns the Result value, or throws an HttpException whose status comes
- * from statusMap[error.code] (BAD_REQUEST when the code is unmapped). The
- * domain code is echoed as `code`, the only field `ApiClientError` reads.
- * An error carrying a usable `retryAfterMs` throws a `RetryAfterHttpException`
- * instead, which the global filter turns into a `Retry-After` header.
+ * from statusMap[error.code]. A code missing from the map is a server-side
+ * omission, not a client fault, so it falls back to INTERNAL_SERVER_ERROR:
+ * clients treat 5xx as retryable, whereas a 4xx would make them act on the
+ * refusal (the notes frontend discards its stored identity on a 400 from
+ * `/auth/refresh`). The domain code is echoed as `code`, the only field
+ * `ApiClientError` reads. An error carrying a usable `retryAfterMs` throws a
+ * `RetryAfterHttpException` instead, which the global filter turns into a
+ * `Retry-After` header.
  */
 export function unwrapOrThrow<T, E extends DomainErrorLike>(
   result: Result<T, E>,
   statusMap: Record<string, HttpStatus>
 ): T {
   if (result.isErr()) {
-    const status = statusMap[result.error.code] ?? HttpStatus.BAD_REQUEST;
+    const status =
+      statusMap[result.error.code] ?? HttpStatus.INTERNAL_SERVER_ERROR;
     const body = {
       statusCode: status,
       error: result.error.code,

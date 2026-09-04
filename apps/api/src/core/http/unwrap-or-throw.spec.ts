@@ -35,14 +35,20 @@ describe('unwrapOrThrow', () => {
     }
   });
 
-  it('falls back to 400 for an unmapped code', () => {
+  it('falls back to 500 for an unmapped code, since the omission is server-side', () => {
     try {
       unwrapOrThrow(err({ code: 'MYSTERY', message: 'boom' }), STATUS_MAP);
       expect.unreachable('expected unwrapOrThrow to throw');
     } catch (thrown) {
       expect((thrown as HttpException).getStatus()).toBe(
-        HttpStatus.BAD_REQUEST
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
+      // The global filter masks 5xx bodies for clients; the code and message
+      // stay on the exception so its server-side log line names the culprit.
+      expect((thrown as HttpException).getResponse()).toMatchObject({
+        code: 'MYSTERY',
+        message: 'boom',
+      });
     }
   });
 
