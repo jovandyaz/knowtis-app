@@ -48,6 +48,10 @@ describe('buildPostHogOptions', () => {
     expect(buildPostHogOptions().disable_session_recording).toBe(true);
   });
 
+  it('disables heatmaps locally so the remote project setting cannot enable them', () => {
+    expect(buildPostHogOptions().capture_heatmaps).toBe(false);
+  });
+
   it('uses the provided api host with the proxy fallback', () => {
     expect(buildPostHogOptions('https://ph.example.com').api_host).toBe(
       'https://ph.example.com'

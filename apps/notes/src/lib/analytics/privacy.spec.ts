@@ -140,6 +140,23 @@ describe('sanitizePostHogEvent', () => {
     expect(sanitizePostHogEvent(replayEvent)).toBeNull();
   });
 
+  it('drops heatmap events because their data is keyed by raw page URLs', () => {
+    const heatmap = {
+      uuid: 'event-heatmap',
+      event: '$$heatmap',
+      properties: {
+        $current_url: 'https://knowtis.app/notes/private-note-id',
+        $heatmap_data: {
+          'https://knowtis.app/notes/private-note-id?utm_source=private': [
+            { x: 200, y: 300, type: 'click' },
+          ],
+        },
+      },
+    } as unknown as CaptureResult;
+
+    expect(sanitizePostHogEvent(heatmap)).toBeNull();
+  });
+
   it('keeps only the origin of external referrers and removes malformed URLs', () => {
     const event: CaptureResult = {
       uuid: 'event-3',
