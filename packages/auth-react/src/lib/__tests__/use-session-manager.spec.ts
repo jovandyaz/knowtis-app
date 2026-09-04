@@ -226,4 +226,63 @@ describe('useSessionManager', () => {
       expect(refreshToken).not.toHaveBeenCalled();
     });
   });
+
+  describe('anonymous sessions', () => {
+    const anonymousUser = {
+      id: 'anon-1',
+      email: '',
+      name: 'Anonymous',
+      avatarUrl: null,
+      isAnonymous: true,
+    };
+
+    it('does not refresh on bootstrap and leaves the session in place', async () => {
+      const refreshToken = vi.fn();
+      const { store, wrapper } = setup({ refreshToken });
+
+      store.setState({
+        isAuthenticated: true,
+        isLoading: true,
+        user: anonymousUser,
+      });
+
+      await act(async () => {
+        renderHook(() => useSessionManager(), { wrapper });
+      });
+
+      expect(refreshToken).not.toHaveBeenCalled();
+      expect(store.getState().isLoading).toBe(false);
+      expect(store.getState().isAuthenticated).toBe(true);
+    });
+
+    it('lets the access token expire instead of refreshing before exp or on visibility', async () => {
+      const expiresInMs = 900_000;
+      const token = createJwt(Math.floor((Date.now() + expiresInMs) / 1000));
+      const refreshToken = vi.fn();
+      const { tokenStorage, store, wrapper } = setup({ refreshToken });
+
+      tokenStorage.setAccessToken(token);
+      store.getState().setUser(anonymousUser);
+
+      renderHook(() => useSessionManager({ refreshMarginMs: 60_000 }), {
+        wrapper,
+      });
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(expiresInMs + 100);
+      });
+
+      Object.defineProperty(document, 'visibilityState', {
+        value: 'visible',
+        writable: true,
+        configurable: true,
+      });
+      await act(async () => {
+        document.dispatchEvent(new Event('visibilitychange'));
+      });
+
+      expect(refreshToken).not.toHaveBeenCalled();
+      expect(store.getState().isAuthenticated).toBe(true);
+    });
+  });
 });

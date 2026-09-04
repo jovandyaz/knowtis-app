@@ -17,7 +17,6 @@ export const AI_ACTION = {
   GENERATE_QUIZ: 'generate-quiz',
   GENERATE_SUMMARY: 'generate-summary',
   GENERATE_MIND_MAP: 'generate-mind-map',
-  GENERATE_OUTLINE: 'generate-outline',
   LEARN_TOPIC: 'learn-topic',
   SUGGEST_ORGANIZATION: 'suggest-organization',
 } as const;
