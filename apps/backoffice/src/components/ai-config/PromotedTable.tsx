@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { formatTokenCount, formatUsdPerMillionTokens } from '@/lib/format';
 
@@ -45,7 +45,7 @@ interface PromotedModelRowProps {
   /** `null` while the config query is unresolved: the guard cannot rule the model out, so retiring asks. */
   roles: readonly ServingRole[] | null;
   onSave: (label: string, description: string) => void;
-  onRetire: () => void;
+  onRetire: (confirmed: boolean) => void;
 }
 
 function PromotedModelRow({
@@ -153,7 +153,7 @@ function PromotedModelRow({
             onClick={() =>
               roles === null || roles.length > 0
                 ? setConfirmingRetire(true)
-                : onRetire()
+                : onRetire(false)
             }
           >
             Retire
@@ -180,7 +180,7 @@ function PromotedModelRow({
                   disabled={disabled}
                   onClick={() => {
                     setConfirmingRetire(false);
-                    onRetire();
+                    onRetire(true);
                   }}
                 >
                   Retire anyway
@@ -212,9 +212,29 @@ export function PromotedTable({
   onSave,
   onRetire,
 }: PromotedTableProps) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // The dialog restores focus to the row's Retire button, which a successful
+  // retire unmounts, so focus would fall to <body> once the row leaves the list.
+  const confirmedRetireId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const id = confirmedRetireId.current;
+    if (id === null || models.some((model) => model.id === id)) {
+      return;
+    }
+    confirmedRetireId.current = null;
+    if (document.activeElement === document.body) {
+      headingRef.current?.focus();
+    }
+  }, [models]);
+
   return (
     <Card className="flex min-w-0 flex-col gap-3 p-4">
-      <h3 className="text-sm font-medium text-(--muted-foreground)">
+      <h3
+        ref={headingRef}
+        tabIndex={-1}
+        className="text-sm font-medium text-(--muted-foreground)"
+      >
         Promoted ({models.length})
       </h3>
       <p className="text-xs text-(--muted-foreground)">
@@ -259,7 +279,12 @@ export function PromotedTable({
                 onSave={(label, description) =>
                   onSave({ id: model.id, label, description })
                 }
-                onRetire={() => onRetire(model.id)}
+                onRetire={(confirmed) => {
+                  if (confirmed) {
+                    confirmedRetireId.current = model.id;
+                  }
+                  onRetire(model.id);
+                }}
               />
             ))}
           </TableBody>

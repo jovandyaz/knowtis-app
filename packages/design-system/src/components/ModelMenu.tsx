@@ -154,6 +154,7 @@ export function ModelMenu({
 }: ModelMenuProps) {
   const isLoading = status === 'loading';
   const isError = status === 'error';
+  const hasRows = primary.length > 0 || moreModels !== undefined;
   const triggerText = isLoading ? (loadingLabel ?? triggerLabel) : triggerLabel;
   const composedAriaLabel = ariaLabel
     ? `${ariaLabel}: ${triggerText}${triggerDetail ? `, ${triggerDetail}` : ''}`
@@ -252,18 +253,7 @@ export function ModelMenu({
         collisionPadding={8}
         className="w-72 max-h-(--radix-dropdown-menu-content-available-height) overflow-y-auto"
       >
-        {isError ? (
-          <>
-            <div className={FOOTNOTE_CLASSES}>
-              {errorLabel ?? FALLBACK_LABEL}
-            </div>
-            {onRetry && retryLabel && (
-              <DropdownMenuItem onSelect={onRetry}>
-                {retryLabel}
-              </DropdownMenuItem>
-            )}
-          </>
-        ) : (
+        {(!isError || hasRows) && (
           <>
             <DropdownMenuRadioGroup
               {...(value !== null && { value })}
@@ -355,6 +345,19 @@ export function ModelMenu({
                   {moreModelsSection}
                 </>
               ))}
+          </>
+        )}
+        {isError && (
+          <>
+            {hasRows && <DropdownMenuSeparator />}
+            <div className={FOOTNOTE_CLASSES}>
+              {errorLabel ?? FALLBACK_LABEL}
+            </div>
+            {onRetry && retryLabel && (
+              <DropdownMenuItem onSelect={onRetry}>
+                {retryLabel}
+              </DropdownMenuItem>
+            )}
           </>
         )}
         {footerCta && (

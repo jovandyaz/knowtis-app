@@ -15,16 +15,16 @@ import {
   TableHeader,
   TableRow,
 } from '@knowtis/design-system';
-import { MODEL_TIERS } from '@knowtis/shared-types';
+import { AI_CONFIG_KEYS, MODEL_TIERS } from '@knowtis/shared-types';
 
 import { toModelSelectOption } from './assignable-model-options';
 import { ConfigSection } from './ConfigSection';
 import { ConfigSourceCell } from './ConfigSourceCell';
 
 const KEY_LABELS: Record<string, string> = {
-  ai_default_model: 'Default model',
-  ai_fast_model: 'Fast model',
-  ai_deep_model: 'Deep model',
+  [AI_CONFIG_KEYS.DEFAULT_MODEL]: 'Default model',
+  [AI_CONFIG_KEYS.FAST_MODEL]: 'Fast model',
+  [AI_CONFIG_KEYS.DEEP_MODEL]: 'Deep model',
 };
 
 interface ModelsSectionProps {

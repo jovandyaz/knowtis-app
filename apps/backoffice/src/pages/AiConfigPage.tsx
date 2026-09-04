@@ -22,6 +22,7 @@ import {
   TabsTrigger,
 } from '@knowtis/design-system';
 import {
+  AI_CONFIG_KEYS,
   FEATURE_FLAG_KEYS,
   FLAG_DOMAIN,
   FLAG_GROUP,
@@ -98,8 +99,8 @@ export function AiConfigPage() {
     (entry) => entry.kind === 'model'
   );
   const defaultModel =
-    config.data?.find((entry) => entry.key === 'ai_default_model')?.value ??
-    null;
+    config.data?.find((entry) => entry.key === AI_CONFIG_KEYS.DEFAULT_MODEL)
+      ?.value ?? null;
 
   const aiEnabled =
     (flags.data ?? []).find((flag) => flag.key === FEATURE_FLAG_KEYS.AI_ENABLED)

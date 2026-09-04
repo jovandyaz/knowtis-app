@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   AGENT_STOP_REASON,
+  AI_CONFIG_KEYS,
   GLOBAL_REASONING_EFFORTS,
   isGlobalReasoningEffort,
   isReasoningEffort,
@@ -49,5 +50,15 @@ describe('stop reasons', () => {
       'token_budget',
       'content_filter',
     ]);
+  });
+});
+
+describe('AI config keys', () => {
+  it('names every ai_config row once, under the ai_ prefix', () => {
+    const keys = Object.values(AI_CONFIG_KEYS);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const key of keys) {
+      expect(key).toMatch(/^ai_[a-z_]+$/);
+    }
   });
 });
