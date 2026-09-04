@@ -58,8 +58,6 @@ export interface UpdateNoteInput {
    * from the HTML — the root cause of duplicated notes.
    */
   readonly yjsState?: string;
-  /** Deprecated pre-rollout flag; honoured so old bundles keep autosaving. */
-  readonly skipYjsState?: boolean;
   readonly bucket?: ParaBucket | null;
   readonly tags?: string[];
   readonly supertag?: Supertag | null;
@@ -206,8 +204,7 @@ export class UpdateNoteHandler {
       updateData,
       input.content,
       clientYjsState,
-      note.yjsState,
-      input.skipYjsState
+      note.yjsState
     );
   }
 
@@ -245,8 +242,7 @@ export class UpdateNoteHandler {
       pickDefined(input, [...CONTENT_FIELDS]),
       input.content,
       clientYjsState,
-      note.yjsState,
-      input.skipYjsState
+      note.yjsState
     );
   }
 
@@ -255,8 +251,7 @@ export class UpdateNoteHandler {
     updateData: UpdateNoteData,
     content: string | undefined,
     clientYjsState: Buffer | undefined,
-    existingYjsState: Buffer | null,
-    legacySkipYjsState?: boolean
+    existingYjsState: Buffer | null
   ): Promise<Result<PersistUpdateResult, NoteDomainError>> {
     if (content === undefined) {
       const result = await this.noteRepository.update(noteId, updateData);
@@ -279,9 +274,8 @@ export class UpdateNoteHandler {
 
     // A write that came from the editor is not an external mutation:
     // broadcasting it back would clear and refill the sender's own document.
-    const fromEditor = clientYjsState !== undefined || legacySkipYjsState;
     return result.map((entity) =>
-      fromEditor ? { entity } : { entity, yjsState }
+      clientYjsState !== undefined ? { entity } : { entity, yjsState }
     );
   }
 

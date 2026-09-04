@@ -108,15 +108,6 @@ export class UpdateNoteDto {
   yjsState?: string;
 
   @ApiPropertyOptional({
-    deprecated: true,
-    description:
-      'Superseded by yjsState. Tolerated so tabs still running the previous bundle do not lose every autosave to forbidNonWhitelisted during the rollout.',
-  })
-  @IsBoolean()
-  @IsOptional()
-  skipYjsState?: boolean;
-
-  @ApiPropertyOptional({
     description: 'General access level for the note',
     enum: [...GENERAL_ACCESS_LEVELS],
     example: 'restricted',
