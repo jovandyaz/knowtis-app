@@ -21,6 +21,7 @@ import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
 import { captureProductEvent } from '@/lib/analytics/product-events';
+import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
@@ -80,13 +81,6 @@ interface NoteEditorProps {
   editorsCanShare: boolean;
 }
 
-function hasMeaningfulText(html: string): boolean {
-  const parsed = new DOMParser().parseFromString(html, 'text/html');
-  return (
-    (parsed.body.textContent ?? '').replace(/\u00a0/g, ' ').trim().length > 0
-  );
-}
-
 function NoteEditor({
   noteId,
   initialTitle,
@@ -132,7 +126,7 @@ function NoteEditor({
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
   const contentRef = useRef(initialContent);
-  const initiallyEmptyRef = useRef(!hasMeaningfulText(initialContent));
+  const [initiallyEmpty] = useState(() => !hasMeaningfulText(initialContent));
   const activationCapturedRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
@@ -239,7 +233,7 @@ function NoteEditor({
         return;
       }
       if (
-        initiallyEmptyRef.current &&
+        initiallyEmpty &&
         !activationCapturedRef.current &&
         hasMeaningfulText(newContent)
       ) {
@@ -257,7 +251,13 @@ function NoteEditor({
       reportEditRef.current(newContent);
       deriveAutoTitle(newContent);
     },
-    [canEdit, debouncedUpdateNote, deriveAutoTitle, refreshNotesList]
+    [
+      canEdit,
+      debouncedUpdateNote,
+      deriveAutoTitle,
+      initiallyEmpty,
+      refreshNotesList,
+    ]
   );
 
   const handleEditorReady = useCallback((editor: Editor) => {
