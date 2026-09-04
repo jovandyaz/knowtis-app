@@ -179,6 +179,16 @@ describe('MemoryExtractionTask', () => {
     );
   });
 
+  it('scopes provider fallback to the primary model family', async () => {
+    const { task, structured } = make();
+    await task.reconcile();
+    expect(structured.generateStructuredOutput).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ fallbackScope: 'same-family' })
+    );
+  });
+
   it('does nothing when the flag is off', async () => {
     const { task, conversations, flags } = make();
     flags.isEnabled.mockResolvedValue(false);

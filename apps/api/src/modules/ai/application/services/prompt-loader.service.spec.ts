@@ -61,7 +61,7 @@ describe('PromptLoaderService', () => {
     expect(ghostText.cache).toBe(false);
   });
 
-  it('should load all 20 expected action ids', () => {
+  it('should load all 19 expected action ids', () => {
     service.onModuleInit();
     const expectedIds = [
       'summarize',
@@ -80,7 +80,6 @@ describe('PromptLoaderService', () => {
       'generate-quiz',
       'generate-summary',
       'generate-mind-map',
-      'generate-outline',
       'learn-topic',
       'structure-voice-note',
       'voice-transcription',
