@@ -1,0 +1,191 @@
+import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { AnalyticsModule } from './analytics.module';
+import { ProductAnalytics } from './product-analytics.service';
+
+const { capture, shutdown, PostHog } = vi.hoisted(() => {
+  const capture = vi.fn();
+  const shutdown = vi.fn().mockResolvedValue(undefined);
+  const PostHog = vi.fn(function () {
+    return { capture, shutdown };
+  });
+
+  return { capture, shutdown, PostHog };
+});
+
+vi.mock('posthog-node', () => ({ PostHog }));
+
+function createConfigService(env: Record<string, string | undefined>) {
+  return {
+    get: vi.fn((key: string) => env[key]),
+  } as unknown as ConfigService;
+}
+
+async function createAnalytics(env: Record<string, string | undefined>) {
+  const module = await Test.createTestingModule({
+    imports: [AnalyticsModule],
+  })
+    .overrideProvider(ConfigService)
+    .useValue(createConfigService(env))
+    .compile();
+
+  return {
+    analytics: module.get(ProductAnalytics),
+    close: () => module.close(),
+  };
+}
+
+describe('ProductAnalytics', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    shutdown.mockResolvedValue(undefined);
+  });
+
+  it('queues a typed event with server common and person properties', async () => {
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+      RAILWAY_GIT_COMMIT_SHA: 'sha-123',
+    });
+
+    analytics.capture({
+      distinctId: 'user-1',
+      event: 'user signed up',
+      properties: { source: 'api' },
+      actor: { actor_type: 'registered', is_internal: false, locale: 'es' },
+      personProperties: {
+        email: 'person@example.com',
+        name: 'Person',
+        role: 'user',
+        locale: 'es',
+        is_internal: false,
+      },
+    });
+
+    expect(capture).toHaveBeenCalledWith({
+      distinctId: 'user-1',
+      event: 'user signed up',
+      properties: {
+        environment: 'production',
+        app_version: 'sha-123',
+        source: 'api',
+        actor_type: 'registered',
+        is_internal: false,
+        locale: 'es',
+        $set: {
+          email: 'person@example.com',
+          name: 'Person',
+          role: 'user',
+          locale: 'es',
+          is_internal: false,
+        },
+      },
+    });
+
+    await close();
+  });
+
+  it('does not throw when the PostHog client is unavailable', async () => {
+    const { analytics, close } = await createAnalytics({ NODE_ENV: 'test' });
+
+    expect(() =>
+      analytics.capture({
+        distinctId: 'user-1',
+        event: 'user signed up',
+        properties: { source: 'api' },
+        actor: { actor_type: 'registered', is_internal: false, locale: 'es' },
+      })
+    ).not.toThrow();
+    expect(capture).not.toHaveBeenCalled();
+
+    await close();
+  });
+
+  it.each(['test', 'development'] as const)(
+    'does not construct a client in %s',
+    async (NODE_ENV) => {
+      const { close } = await createAnalytics({
+        NODE_ENV,
+        POSTHOG_PROJECT_TOKEN: 'project-token',
+      });
+
+      expect(PostHog).not.toHaveBeenCalled();
+      await close();
+    }
+  );
+
+  it('does not construct a client without a project token', async () => {
+    const { close } = await createAnalytics({ NODE_ENV: 'production' });
+
+    expect(PostHog).not.toHaveBeenCalled();
+    await close();
+  });
+
+  it('constructs a production client with the configured PostHog host', async () => {
+    const { close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+    });
+
+    expect(PostHog).toHaveBeenCalledWith('project-token', {
+      host: 'https://eu.i.posthog.com',
+    });
+    await close();
+  });
+
+  it('swallows client capture failures and logs only the event name', async () => {
+    const errorSpy = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    capture.mockImplementationOnce(() => {
+      throw new Error('queue unavailable');
+    });
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+    });
+
+    expect(() =>
+      analytics.capture({
+        distinctId: 'private-user-id',
+        event: 'user signed up',
+        properties: { source: 'api' },
+        actor: { actor_type: 'registered', is_internal: true, locale: 'es' },
+      })
+    ).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledWith(
+      'PostHog capture failed for event: user signed up'
+    );
+    expect(errorSpy.mock.calls.flat().join(' ')).not.toContain(
+      'private-user-id'
+    );
+
+    errorSpy.mockRestore();
+    await close();
+  });
+
+  it('awaits PostHog shutdown and swallows shutdown failures without payloads', async () => {
+    const errorSpy = vi
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    shutdown.mockRejectedValueOnce(new Error('shutdown unavailable'));
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+    });
+
+    await expect(analytics.onApplicationShutdown()).resolves.toBeUndefined();
+    expect(shutdown).toHaveBeenCalledOnce();
+    expect(errorSpy).toHaveBeenCalledWith('PostHog shutdown failed');
+
+    errorSpy.mockRestore();
+    await close();
+  });
+});

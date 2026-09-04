@@ -83,6 +83,9 @@ const envSchemaBase = z.object({
   LANGFUSE_PUBLIC_KEY: z.string().optional(),
   LANGFUSE_SECRET_KEY: z.string().optional(),
   LANGFUSE_BASE_URL: z.url().default('https://cloud.langfuse.com'),
+  POSTHOG_PROJECT_TOKEN: z.string().optional(),
+  POSTHOG_HOST: z.url().default('https://us.i.posthog.com'),
+  RAILWAY_GIT_COMMIT_SHA: z.string().optional(),
   BYOK_ENCRYPTION_KEY: z
     .string()
     .refine(

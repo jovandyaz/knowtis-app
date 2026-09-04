@@ -246,6 +246,23 @@ describe('env.config oauth vars', () => {
 });
 
 describe('validateEnv', () => {
+  it('defaults POSTHOG_HOST to the US PostHog ingestion host', () => {
+    expect(validateEnv(baseEnv).POSTHOG_HOST).toBe('https://us.i.posthog.com');
+  });
+
+  it('accepts PostHog configuration and the Railway commit SHA', () => {
+    const env = validateEnv({
+      ...baseEnv,
+      POSTHOG_PROJECT_TOKEN: 'phc_project_token',
+      POSTHOG_HOST: 'https://eu.i.posthog.com',
+      RAILWAY_GIT_COMMIT_SHA: 'sha-123',
+    });
+
+    expect(env.POSTHOG_PROJECT_TOKEN).toBe('phc_project_token');
+    expect(env.POSTHOG_HOST).toBe('https://eu.i.posthog.com');
+    expect(env.RAILWAY_GIT_COMMIT_SHA).toBe('sha-123');
+  });
+
   it('should accept a valid config and default BCRYPT_ROUNDS to 12', () => {
     const config = validateEnv(validEnv);
     expect(config.BCRYPT_ROUNDS).toBe(12);

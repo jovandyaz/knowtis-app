@@ -347,6 +347,9 @@ importers:
       posthog-js:
         specifier: ^1.375.0
         version: 1.375.0
+      posthog-node:
+        specifier: 5.51.6
+        version: 5.51.6(rxjs@7.8.2)
       react:
         specifier: 19.2.1
         version: 19.2.1
@@ -4872,6 +4875,9 @@ packages:
   '@posthog/core@1.29.8':
     resolution: {integrity: sha512-wdX4/WzZ+sV92z4ppC9SjOWdztY/0bN74SbJFy1X8/1N8+aNTSHsGEKHtbHitkIkJc861oYWr4ZzOoV0iVDP4w==}
 
+  '@posthog/core@1.50.5':
+    resolution: {integrity: sha512-afEchuShDaVIoxAIj76kDZQ1DhfesDmgfVp+mtTzsA3wlc8DF5uoz8YjuTjnxOicWkpP5HCDqYidK/1kT125Cg==}
+
   '@posthog/react@1.8.2':
     resolution: {integrity: sha512-KzUuXIcAR8fAjU7IeDq+XfEcUTNvzgEGB381WRrFUUsu7jFTcKZZ6crx/ukHRCzTnoEuy5EJDkL7b7sJecPlCg==}
     peerDependencies:
@@ -4884,6 +4890,9 @@ packages:
 
   '@posthog/types@1.375.0':
     resolution: {integrity: sha512-ykjHtJv1eUnEUQIuCavMi/+lnBhZPRVnFDrbG6m4fS+vZ3ajn8dGooPpbWjF33Uo4g7W4ew51dBtJGf2evvurA==}
+
+  '@posthog/types@1.409.0':
+    resolution: {integrity: sha512-239umoaZVb2GBaXeEyJpwFvjhrrChJH8NHCwiao23EBSu3NA6EN0MTMoaHSmMEf4yjiXEFFoYJA6FjJAXF5HGA==}
 
   '@radix-ui/primitive@1.1.3':
     resolution: {integrity: sha512-JTF99U/6XIjCBo0wqkU5sK10glYe27MRRsfwoiq5zzOEZLHU3A3KCMa5X/azekYRCJ0HlwI0crAXS/5dEHTzDg==}
@@ -13778,6 +13787,15 @@ packages:
     resolution: {integrity: sha512-mdb8TKt+YCRbGQdYar3AKNUPCyEiqcprScF4unYpGALF6HlBaEuO6wPuIqXXpCWkw4VclJYCKbb6lq6pH6bJeA==}
     engines: {node: ^20.20.0 || >=22.22.0}
 
+  posthog-node@5.51.6:
+    resolution: {integrity: sha512-r+Ge3p0OnOcOWeTnvKZmAtDwECeIoyNTyxBxuZc8wM6RHCQ9j2Xrhogrf39HSq1Y2gIOpWLqIDRmWDcu7xmqcA==}
+    engines: {node: ^20.20.0 || >=22.22.0}
+    peerDependencies:
+      rxjs: ^7.0.0
+    peerDependenciesMeta:
+      rxjs:
+        optional: true
+
   preact@10.29.0:
     resolution: {integrity: sha512-wSAGyk2bYR1c7t3SZ3jHcM6xy0lcBcDel6lODcs9ME6Th++Dx2KU+6D3HD8wMMKGA8Wpw7OMd3/4RGzYRpzwRg==}
 
@@ -21236,6 +21254,10 @@ snapshots:
     dependencies:
       '@posthog/types': 1.375.0
 
+  '@posthog/core@1.50.5':
+    dependencies:
+      '@posthog/types': 1.409.0
+
   '@posthog/react@1.8.2(@types/react@19.2.14)(posthog-js@1.375.0)(react@19.2.1)':
     dependencies:
       posthog-js: 1.375.0
@@ -21244,6 +21266,8 @@ snapshots:
       '@types/react': 19.2.14
 
   '@posthog/types@1.375.0': {}
+
+  '@posthog/types@1.409.0': {}
 
   '@radix-ui/primitive@1.1.3': {}
 
@@ -31195,6 +31219,12 @@ snapshots:
   posthog-node@5.24.17:
     dependencies:
       '@posthog/core': 1.23.1
+
+  posthog-node@5.51.6(rxjs@7.8.2):
+    dependencies:
+      '@posthog/core': 1.50.5
+    optionalDependencies:
+      rxjs: 7.8.2
 
   preact@10.29.0: {}
 
