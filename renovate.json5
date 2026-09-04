@@ -18,8 +18,7 @@
   postUpdateOptions: ['pnpmDedupe'],
   prHourlyLimit: 0,
   prConcurrentLimit: 5,
-  // No branch protection on main, so GitHub auto-merge is unavailable.
-  platformAutomerge: false,
+  platformAutomerge: true,
   automergeStrategy: 'squash',
   lockFileMaintenance: { automerge: true },
   vulnerabilityAlerts: { addLabels: ['security'] },
