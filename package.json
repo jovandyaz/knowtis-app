@@ -267,7 +267,7 @@
       "fast-uri": ">=3.1.2",
       "happy-dom": ">=20.8.9",
       "immutable": ">=5.1.5",
-      "ip-address": ">=10.1.1",
+      "ip-address": ">=10.7.0",
       "lodash": ">=4.18.0",
       "lodash-es": ">=4.18.0",
       "multer": ">=2.1.1",
