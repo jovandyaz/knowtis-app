@@ -561,11 +561,42 @@ describe('CopilotModelPicker', () => {
 
     await openMenu(user);
     expect(screen.getByText('aiAssistant.loadError')).toBeInTheDocument();
+    expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
     await user.click(
       screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
     );
 
     expect(modelsRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the cached models selectable when a refetch fails', async () => {
+    const user = userEvent.setup();
+    modelsError.mockReturnValue(true);
+    render(<CopilotModelPicker />);
+
+    const trigger = screen.getByRole('button', {
+      name: /aiAssistant\.menu\.triggerLabel/,
+    });
+    expect(trigger).toHaveTextContent('Sonnet 5');
+    await user.click(trigger);
+
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      screen.getByRole('menuitem', { name: /aiAssistant\.menu\.moreModels/ })
+    ).toBeInTheDocument();
+    expect(screen.getByText('aiAssistant.loadError')).toBeInTheDocument();
+
+    await user.click(
+      screen.getByRole('menuitem', { name: 'aiAssistant.retry' })
+    );
+    expect(modelsRefetch).toHaveBeenCalledTimes(1);
+
+    await openMenu(user);
+    await user.click(screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ }));
+    expect(updatePreferences).toHaveBeenCalledWith({
+      preferredModel: null,
+      preferredIntent: 'fast',
+    });
   });
 
   it('keeps the BYOK bridge appended after the trigger for a keyless user', async () => {

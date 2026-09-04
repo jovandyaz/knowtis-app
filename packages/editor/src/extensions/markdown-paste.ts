@@ -2,11 +2,13 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import MarkdownIt from 'markdown-it';
 
+import { mermaidFence } from '../markdown/mermaid-fence';
+
 const md = new MarkdownIt('commonmark', {
   html: false,
   linkify: true,
   typographer: false,
-});
+}).use(mermaidFence);
 
 const MARKDOWN_INDICATORS = [
   /^#{1,6}\s/m, // headings
