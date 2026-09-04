@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
@@ -27,36 +27,35 @@ import { AuthPageLayout } from './AuthPageLayout';
 
 export function VerifyEmailPage() {
   const { t } = useTranslation('auth');
-  const { token } = useSearch({ from: '/verify-email' });
-  const verifyEmail = useVerifyEmail();
+  const { token: linkToken } = useSearch({ from: '/verify-email' });
+  // Scrubbing the URL empties the search, so the token is remembered from the
+  // first render: it keeps the outcome on screen and tells a bare visit apart.
+  const [token] = useState(linkToken);
+  const verifyEmail = useVerifyEmail(token);
   // No code was just sent from this screen, so the first send is one click away.
   const resend = useResendCooldown({ startHeld: false });
   const { canVerify } = useVerifyEmailGate();
   const navigate = useNavigate();
-  const hasAttempted = useRef(false);
+  const hasAnnounced = useRef(false);
 
+  const { isPending, isSuccess } = verifyEmail;
   useEffect(() => {
-    if (token && !hasAttempted.current) {
-      hasAttempted.current = true;
-      verifyEmail.mutate(token, {
-        onSuccess: () => {
-          toast.success(t('verifyEmail.verifiedToast'));
-        },
-        // The token must not survive in history or in a referrer header.
-        onSettled: () => {
-          void navigate({
-            to: ROUTES.VERIFY_EMAIL,
-            search: {},
-            replace: true,
-          });
-        },
-      });
+    if (!linkToken || isPending || hasAnnounced.current) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    hasAnnounced.current = true;
+    if (isSuccess) {
+      toast.success(t('verifyEmail.verifiedToast'));
+    }
+    // The token must not survive in history or in a referrer header.
+    void navigate({
+      to: ROUTES.VERIFY_EMAIL,
+      search: {},
+      replace: true,
+    });
+  }, [linkToken, isPending, isSuccess, navigate, t]);
 
-  // Scrubbing the token empties `token`, so only a bare visit is a bad link.
-  if (!token && !hasAttempted.current) {
+  if (!token) {
     return (
       <AuthPageLayout>
         <CardHeader className="space-y-1 text-center">
