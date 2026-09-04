@@ -232,6 +232,76 @@ describe('PromotedTable', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  // The dialog hands focus back to the row's Retire button, but a successful
+  // retire unmounts that row, so the heading has to catch focus instead.
+  it('should move focus to the heading once a confirmed retire removes the row', async () => {
+    const other = model({
+      id: 'openrouter:vendor/live-two',
+      label: 'Live Two',
+    });
+    const roles: ReadonlyMap<string, readonly ServingRole[]> = new Map([
+      [MODEL_ID, ['Default'] as const],
+    ]);
+    const view = (models: CatalogModel[]) => (
+      <PromotedTable
+        models={models}
+        disabled={false}
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+        servingRoles={roles}
+        onSave={vi.fn()}
+        onRetire={vi.fn()}
+      />
+    );
+    const { rerender } = render(view([model(), other]));
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /retire live one/i })
+    );
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /retire anyway/i,
+      })
+    );
+    rerender(view([other]));
+
+    expect(screen.getByRole('heading', { name: 'Promoted (1)' })).toHaveFocus();
+  });
+
+  it('should leave focus alone when a row disappears without a confirmed retire', async () => {
+    const other = model({
+      id: 'openrouter:vendor/live-two',
+      label: 'Live Two',
+    });
+    const roles: ReadonlyMap<string, readonly ServingRole[]> = new Map([
+      [MODEL_ID, ['Default'] as const],
+    ]);
+    const view = (models: CatalogModel[]) => (
+      <PromotedTable
+        models={models}
+        disabled={false}
+        maxOutputCostPerToken={FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN}
+        servingRoles={roles}
+        onSave={vi.fn()}
+        onRetire={vi.fn()}
+      />
+    );
+    const { rerender } = render(view([model(), other]));
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /retire live one/i })
+    );
+    await userEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /cancel/i,
+      })
+    );
+    rerender(view([other]));
+
+    expect(
+      screen.getByRole('heading', { name: 'Promoted (1)' })
+    ).not.toHaveFocus();
+  });
+
   it('should retire an unreferenced model without asking', async () => {
     const onRetire = vi.fn();
     renderTable([model()], FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN, { onRetire });
