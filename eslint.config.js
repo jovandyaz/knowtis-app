@@ -10,6 +10,12 @@ import tseslint from 'typescript-eslint';
 
 import minimalComments from './tools/lint-rules/minimal-comments.js';
 
+// Project-level eslint.config.mjs files spread this array, and ESLint resolves
+// relative `files` globs against the importing config's directory. Anchoring
+// the path-scoped blocks to the workspace root keeps `apps/**` and
+// `packages/**` matching when a project lints from its own directory.
+const workspaceRoot = import.meta.dirname;
+
 export default defineConfig([
   globalIgnores([
     'dist',
@@ -124,6 +130,7 @@ export default defineConfig([
   },
   // React-specific config
   {
+    basePath: workspaceRoot,
     files: [
       'apps/notes/**/*.{ts,tsx}',
       'apps/backoffice/**/*.{ts,tsx}',
@@ -140,6 +147,7 @@ export default defineConfig([
   },
   // Accessibility - a single-select group without exposed state ships silently otherwise
   {
+    basePath: workspaceRoot,
     files: [
       'apps/notes/**/*.tsx',
       'apps/backoffice/**/*.tsx',
@@ -159,6 +167,7 @@ export default defineConfig([
   },
   // NestJS backend config - adjust rules for NestJS patterns
   {
+    basePath: workspaceRoot,
     files: ['apps/api/**/*.ts', 'packages/*-nestjs/**/*.ts'],
     rules: {
       // Allow empty functions for NestJS decorators

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import type { NodeViewProps } from '@tiptap/react';
@@ -40,6 +41,7 @@ export function AIBlockView({
   editor,
   getPos,
 }: NodeViewProps) {
+  const { t } = useTranslation('notes');
   const attrs = readAttrs(node);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -93,8 +95,11 @@ export function AIBlockView({
 
   return (
     <NodeViewWrapper>
+      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- focus is parked on the group on mount so Escape cancels before any control is focused; it is never a tab stop */}
       <div
         ref={wrapperRef}
+        role="group"
+        aria-label={t('ai.aiBlock.title')}
         tabIndex={-1}
         onKeyDown={handleKeyDown}
         contentEditable={false}

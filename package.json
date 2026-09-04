@@ -23,6 +23,7 @@
     "skills:check": "node tools/verify-agent-skills.mjs",
     "catalog:refresh-snapshot": "node tools/refresh-model-catalog.mjs",
     "lint": "nx run-many -t lint",
+    "lint:config": "node --test tools/__tests__/eslint-config.test.mjs",
     "lint:fix": "nx run-many -t lint -- --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
