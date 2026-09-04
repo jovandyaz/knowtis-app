@@ -21,7 +21,7 @@ import {
   NoteRepository,
   TagRepository,
 } from '../../domain';
-import { NoteUpdatedEvent } from '../../domain/events';
+import { NoteUpdatedEvent } from '../../domain/events/note-updated.event';
 import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
 import { UpdateNoteHandler } from './update-note.handler';
 
@@ -180,6 +180,34 @@ describe('UpdateNoteHandler', () => {
       .mocked(mockEventEmitter.emit)
       .mock.calls.find(([eventName]) => eventName === 'note.shared');
     expect(shareCall?.[1]).toEqual({
+      actorId: OWNER_ID,
+      shareType: 'link',
+      permission: PERMISSION.VIEWER,
+    });
+  });
+
+  it('still emits the link-share event when tag replacement fails after the link widened', async () => {
+    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
+    vi.spyOn(mockRepository, 'update').mockResolvedValue(
+      ok({
+        ...mockNote,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+      })
+    );
+    vi.mocked(mockTagRepository.ensurePaths).mockRejectedValue(
+      new Error('tags unavailable')
+    );
+
+    await expect(
+      handler.execute({
+        noteId: 'private-note-id',
+        userId: OWNER_ID,
+        generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
+        tags: ['projects/knowtis'],
+      })
+    ).rejects.toThrow('tags unavailable');
+
+    expect(mockEventEmitter.emit).toHaveBeenCalledWith('note.shared', {
       actorId: OWNER_ID,
       shareType: 'link',
       permission: PERMISSION.VIEWER,

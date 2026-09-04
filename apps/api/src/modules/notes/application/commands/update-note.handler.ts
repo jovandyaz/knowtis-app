@@ -7,6 +7,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import {
   GENERAL_ACCESS,
+  PERMISSION,
   type GeneralAccessLevel,
   type ParaBucket,
   type PermissionLevel,
@@ -32,11 +33,11 @@ import {
   type TagRepository,
   type UpdateNoteData,
 } from '../../domain';
+import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 import {
-  NoteSharedEvent,
   NoteUpdatedEvent,
   type NoteUpdatedEventUpdates,
-} from '../../domain/events';
+} from '../../domain/events/note-updated.event';
 import {
   evolveYjsState,
   htmlToYjsState,
@@ -171,6 +172,19 @@ export class UpdateNoteHandler {
       return err(persisted.error);
     }
 
+    if (isOwner && linkExposureWidened) {
+      this.eventEmitter.emit(
+        NoteSharedEvent.EVENT_NAME,
+        new NoteSharedEvent(
+          input.userId,
+          'link',
+          nextLinkExposure.generalAccessPermission === PERMISSION.EDITOR
+            ? PERMISSION.EDITOR
+            : PERMISSION.VIEWER
+        )
+      );
+    }
+
     if (isOwner && input.tags !== undefined) {
       const tagged = await this.replaceTags(
         note.id,
@@ -180,19 +194,6 @@ export class UpdateNoteHandler {
       if (tagged.isErr()) {
         return err(tagged.error);
       }
-    }
-
-    if (isOwner && linkExposureWidened) {
-      this.eventEmitter.emit(
-        NoteSharedEvent.EVENT_NAME,
-        new NoteSharedEvent(
-          input.userId,
-          'link',
-          nextLinkExposure.generalAccessPermission === 'editor'
-            ? 'editor'
-            : 'viewer'
-        )
-      );
     }
 
     this.emitUpdateEvent(input, note.id, persisted.value.yjsState);
