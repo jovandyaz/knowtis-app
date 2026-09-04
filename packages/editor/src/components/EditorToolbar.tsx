@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { Editor } from '@tiptap/react';
+import { useEditorState, type Editor } from '@tiptap/react';
 import { Ellipsis, Image as ImageIcon, Mic, Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -170,6 +170,14 @@ export const EditorToolbar = memo(function EditorToolbar({
   onAddImage,
 }: EditorToolbarProps) {
   const { t: tNotes } = useTranslation('notes');
+
+  // Tiptap v3 no longer re-renders `useEditor` consumers per transaction, and
+  // every button below reads `isActive`/`can()` during render, so the toolbar
+  // has to subscribe to transactions itself or its state goes stale.
+  useEditorState({
+    editor,
+    selector: ({ transactionNumber }) => transactionNumber,
+  });
 
   if (!editor) {
     return null;

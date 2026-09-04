@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -93,5 +93,33 @@ describe('EditorToolbar overflow menu', () => {
         .getByRole('menuitem', { name: /^Redo/ })
         .getAttribute('aria-disabled')
     ).toBe('true');
+  });
+});
+
+describe('EditorToolbar active state', () => {
+  const ACTIVE_CLASS = 'bg-foreground';
+
+  it('marks a tool active as soon as its mark is applied', () => {
+    mount();
+    const bold = screen.getByRole('button', { name: 'Bold' });
+    expect(bold.className).not.toContain(ACTIVE_CLASS);
+
+    act(() => {
+      editor.chain().selectAll().toggleBold().run();
+    });
+
+    expect(bold.className).toContain(ACTIVE_CLASS);
+  });
+
+  it('enables undo once the document has history', () => {
+    mount();
+    const undo = screen.getByRole('button', { name: 'Undo' });
+    expect((undo as HTMLButtonElement).disabled).toBe(true);
+
+    act(() => {
+      editor.chain().insertContent(' edited').run();
+    });
+
+    expect((undo as HTMLButtonElement).disabled).toBe(false);
   });
 });
