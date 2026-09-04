@@ -1,11 +1,13 @@
 import type { AIAction } from '@knowtis/shared-types';
+import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { posthog } from '../posthog';
 import { runAnalyticsSafely } from './best-effort';
+import { ANALYTICS_ENVIRONMENT, APP_VERSION } from './constants';
 import { canCaptureAnalytics, isAnalyticsReady } from './runtime';
 
 export interface BrowserActorContext {
-  environment: 'production';
+  environment: typeof ANALYTICS_ENVIRONMENT;
   app_version: string;
   actor_type: 'anonymous' | 'registered';
   is_internal: boolean;
@@ -39,11 +41,11 @@ const PRODUCT_EVENT_PROPERTY_KEYS = {
 };
 
 let analyticsContext: BrowserActorContext = {
-  environment: 'production',
-  app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
+  environment: ANALYTICS_ENVIRONMENT,
+  app_version: APP_VERSION,
   actor_type: 'anonymous',
   is_internal: false,
-  locale: 'es',
+  locale: DEFAULT_LOCALE,
 };
 
 function pickProductEventProperties<E extends BrowserProductEventName>(

@@ -1,6 +1,8 @@
 import type { AuthUserProfile } from '@jovandyaz/auth-react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { logger } from '@knowtis/shared-util';
+
 import {
   createIdentityRetryController,
   createIdentitySynchronizer,
@@ -15,6 +17,8 @@ const { posthog } = vi.hoisted(() => ({
     identify: vi.fn(),
     register: vi.fn(),
     reset: vi.fn(),
+    get_distinct_id: vi.fn(),
+    get_property: vi.fn(),
   },
 }));
 
@@ -37,6 +41,8 @@ describe('createIdentitySynchronizer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     posthog.__loaded = true;
+    posthog.get_property.mockReturnValue('anonymous');
+    posthog.get_distinct_id.mockReturnValue('device-1');
     setAnalyticsReady(true);
     resumeAnalyticsCapture();
     setAnalyticsContext({
@@ -44,7 +50,7 @@ describe('createIdentitySynchronizer', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
-      locale: 'es',
+      locale: 'en',
     });
     vi.clearAllMocks();
   });
@@ -65,7 +71,7 @@ describe('createIdentitySynchronizer', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
-      locale: 'es',
+      locale: 'en',
     });
   });
 
@@ -157,7 +163,7 @@ describe('createIdentitySynchronizer', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
-      locale: 'es',
+      locale: 'en',
     });
     expect(posthog.reset.mock.invocationCallOrder[0]).toBeLessThan(
       posthog.register.mock.invocationCallOrder[0] ?? 0
@@ -233,8 +239,95 @@ describe('createIdentitySynchronizer', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
+      locale: 'en',
+    });
+  });
+
+  it('resumes capture when auth returns to the last completed identity after a failed transition', () => {
+    const synchronizer = createIdentitySynchronizer(posthog);
+    synchronizer.sync(REGISTERED_USER);
+    posthog.reset.mockImplementationOnce(() => {
+      throw new Error('reset unavailable');
+    });
+    expect(synchronizer.sync(null)).toBe(false);
+    vi.clearAllMocks();
+
+    expect(synchronizer.sync(REGISTERED_USER)).toBe(true);
+
+    expect(posthog.identify).not.toHaveBeenCalled();
+    expect(posthog.reset).not.toHaveBeenCalled();
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).toHaveBeenCalledOnce();
+  });
+
+  it('resets a stale persisted identity before registering an anonymous session', () => {
+    posthog.get_property.mockReturnValue('identified');
+    posthog.get_distinct_id.mockReturnValue('user-9');
+
+    expect(createIdentitySynchronizer(posthog).sync(null)).toBe(true);
+
+    expect(posthog.get_property).toHaveBeenCalledWith('$user_state');
+    expect(posthog.reset).toHaveBeenCalledOnce();
+    expect(posthog.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      posthog.register.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  it('resets a stale persisted identity before identifying a different user', () => {
+    posthog.get_property.mockReturnValue('identified');
+    posthog.get_distinct_id.mockReturnValue('user-9');
+
+    expect(createIdentitySynchronizer(posthog).sync(REGISTERED_USER)).toBe(
+      true
+    );
+
+    expect(posthog.reset).toHaveBeenCalledOnce();
+    expect(posthog.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      posthog.identify.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  it('keeps a persisted identity that already matches the signed-in user', () => {
+    posthog.get_property.mockReturnValue('identified');
+    posthog.get_distinct_id.mockReturnValue('user-1');
+
+    expect(createIdentitySynchronizer(posthog).sync(REGISTERED_USER)).toBe(
+      true
+    );
+
+    expect(posthog.reset).not.toHaveBeenCalled();
+    expect(posthog.identify).toHaveBeenCalledOnce();
+  });
+
+  it('falls back to an anonymous identity and resumes capture after the retry budget is exhausted', () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    posthog.identify.mockImplementation(() => {
+      throw new Error('identify unavailable');
+    });
+    const controller = createIdentityRetryController(
+      createIdentitySynchronizer(posthog)
+    );
+
+    controller.sync(REGISTERED_USER);
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).not.toHaveBeenCalled();
+    vi.runAllTimers();
+
+    expect(posthog.identify).toHaveBeenCalledTimes(3);
+    expect(posthog.reset).toHaveBeenCalledOnce();
+    expect(posthog.register).toHaveBeenLastCalledWith({
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
       locale: 'es',
     });
+    expect(warn).toHaveBeenCalledOnce();
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).toHaveBeenCalledOnce();
+    posthog.identify.mockReset();
+    controller.stop();
   });
 
   it('resets before identifying and registering a different registered user', () => {
@@ -270,19 +363,24 @@ describe('createIdentitySynchronizer', () => {
   it('retries a failed identity sync and stops after the bounded attempt count', () => {
     vi.useFakeTimers();
     const sync = vi.fn().mockReturnValue(false);
-    const controller = createIdentityRetryController({ sync });
+    const recover = vi.fn();
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const controller = createIdentityRetryController({ sync, recover });
 
     controller.sync(REGISTERED_USER);
     vi.runAllTimers();
 
     expect(sync).toHaveBeenCalledTimes(3);
+    expect(recover).toHaveBeenCalledExactlyOnceWith(REGISTERED_USER);
+    expect(warn).toHaveBeenCalledOnce();
     controller.stop();
   });
 
   it('cancels pending identity retries on state change and cleanup', () => {
     vi.useFakeTimers();
     const sync = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
-    const controller = createIdentityRetryController({ sync });
+    const recover = vi.fn();
+    const controller = createIdentityRetryController({ sync, recover });
     const nextUser = { ...REGISTERED_USER, id: 'user-2' };
 
     controller.sync(REGISTERED_USER);
@@ -298,5 +396,6 @@ describe('createIdentitySynchronizer', () => {
     controller.stop();
     vi.runAllTimers();
     expect(sync).toHaveBeenCalledTimes(3);
+    expect(recover).not.toHaveBeenCalled();
   });
 });

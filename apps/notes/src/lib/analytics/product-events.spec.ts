@@ -19,10 +19,17 @@ vi.mock('../posthog', () => ({ posthog }));
 
 describe('browser product events', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
     posthog.__loaded = true;
     setAnalyticsReady(true);
     resumeAnalyticsCapture();
+    setAnalyticsContext({
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'en',
+    });
+    vi.clearAllMocks();
   });
 
   it('captures only a declared event payload plus the current common context', () => {
@@ -33,7 +40,7 @@ describe('browser product events', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
-      locale: 'es',
+      locale: 'en',
       source: 'editor',
     });
   });
@@ -51,7 +58,7 @@ describe('browser product events', () => {
       app_version: '0.1.0',
       actor_type: 'anonymous',
       is_internal: false,
-      locale: 'es',
+      locale: 'en',
       source: 'editor',
     });
   });
@@ -155,6 +162,5 @@ describe('browser product events', () => {
     expectTypeOf<Record<string, unknown>>().not.toExtend<
       BrowserProductEventMap['note activated']
     >();
-    expect(posthog.capture).not.toHaveBeenCalled();
   });
 });

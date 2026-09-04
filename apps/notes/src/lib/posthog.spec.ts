@@ -1,6 +1,6 @@
+import type { CaptureResult } from 'posthog-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { sanitizePostHogEvent } from './analytics/privacy';
 import {
   pauseAnalyticsCapture,
   resumeAnalyticsCapture,
@@ -9,6 +9,7 @@ import {
 import {
   buildPostHogOptions,
   capturePageview,
+  filterPostHogEvent,
   initializePostHog,
   isPostHogEligible,
 } from './posthog';
@@ -62,7 +63,47 @@ describe('buildPostHogOptions', () => {
   });
 
   it('applies the final privacy filter before every event is sent', () => {
-    expect(buildPostHogOptions().before_send).toBe(sanitizePostHogEvent);
+    expect(buildPostHogOptions().before_send).toBe(filterPostHogEvent);
+  });
+});
+
+describe('filterPostHogEvent', () => {
+  const pageleave: CaptureResult = {
+    uuid: 'event-pageleave',
+    event: '$pageleave',
+    properties: { $current_url: 'https://knowtis.app/notes/private-note-id' },
+  };
+  const identify: CaptureResult = {
+    uuid: 'event-identify',
+    event: '$identify',
+    properties: { $current_url: 'https://knowtis.app/notes/private-note-id' },
+  };
+
+  it('drops automatic pageleave events while an identity transition is in progress', () => {
+    pauseAnalyticsCapture();
+
+    expect(filterPostHogEvent(pageleave)).toBeNull();
+  });
+
+  it('sanitizes pageleave events once capture resumes', () => {
+    setAnalyticsReady(true);
+    resumeAnalyticsCapture();
+
+    expect(filterPostHogEvent(pageleave)).toEqual({
+      uuid: 'event-pageleave',
+      event: '$pageleave',
+      properties: { $current_url: 'https://knowtis.app/notes/:noteId' },
+    });
+  });
+
+  it('lets the identity transition itself through while paused', () => {
+    pauseAnalyticsCapture();
+
+    expect(filterPostHogEvent(identify)).toEqual({
+      uuid: 'event-identify',
+      event: '$identify',
+      properties: { $current_url: 'https://knowtis.app/notes/:noteId' },
+    });
   });
 });
 
