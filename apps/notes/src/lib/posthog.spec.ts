@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildPostHogOptions } from './posthog';
+import { sanitizePostHogEvent } from './analytics/privacy';
+import { buildPostHogOptions, isPostHogEligible } from './posthog';
 
 describe('buildPostHogOptions', () => {
   it('disables autocapture so interacted-element text never reaches analytics', () => {
@@ -28,5 +29,42 @@ describe('buildPostHogOptions', () => {
 
     expect(options.capture_pageview).toBe(false);
     expect(options.capture_pageleave).toBe(true);
+  });
+
+  it('applies the final privacy filter before every event is sent', () => {
+    expect(buildPostHogOptions().before_send).toBe(sanitizePostHogEvent);
+  });
+});
+
+describe('isPostHogEligible', () => {
+  it('allows only a configured production build on the exact production host', () => {
+    expect(
+      isPostHogEligible({
+        key: 'project-key',
+        isDev: false,
+        hostname: 'knowtis.app',
+      })
+    ).toBe(true);
+    expect(
+      isPostHogEligible({
+        key: undefined,
+        isDev: false,
+        hostname: 'knowtis.app',
+      })
+    ).toBe(false);
+    expect(
+      isPostHogEligible({
+        key: 'project-key',
+        isDev: true,
+        hostname: 'knowtis.app',
+      })
+    ).toBe(false);
+    expect(
+      isPostHogEligible({
+        key: 'project-key',
+        isDev: false,
+        hostname: 'preview.knowtis.app',
+      })
+    ).toBe(false);
   });
 });

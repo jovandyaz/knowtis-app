@@ -1,6 +1,8 @@
 import posthog from 'posthog-js';
 import type { PostHogConfig } from 'posthog-js';
 
+import { sanitizePostHogEvent } from './analytics/privacy';
+
 const POSTHOG_KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as
   | string
   | undefined;
@@ -15,6 +17,7 @@ export function buildPostHogOptions(host?: string): Partial<PostHogConfig> {
     capture_pageview: false,
     capture_pageleave: true,
     autocapture: false,
+    before_send: sanitizePostHogEvent,
     session_recording: {
       maskAllInputs: true,
       maskTextSelector: '*',
@@ -22,8 +25,29 @@ export function buildPostHogOptions(host?: string): Partial<PostHogConfig> {
   };
 }
 
+interface PostHogEligibilityInput {
+  key: string | undefined;
+  isDev: boolean;
+  hostname: string;
+}
+
+export function isPostHogEligible({
+  key,
+  isDev,
+  hostname,
+}: PostHogEligibilityInput): boolean {
+  return Boolean(key) && !isDev && hostname === 'knowtis.app';
+}
+
 export function initPostHog(): void {
-  if (import.meta.env.DEV || !POSTHOG_KEY) {
+  if (
+    !POSTHOG_KEY ||
+    !isPostHogEligible({
+      key: POSTHOG_KEY,
+      isDev: import.meta.env.DEV,
+      hostname: window.location.hostname,
+    })
+  ) {
     return;
   }
 
