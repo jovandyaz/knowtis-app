@@ -39,6 +39,14 @@ const INTERVAL_MS = 120_000;
 const TRANSCRIPT_MESSAGES = 40;
 const MAX_OUTPUT_TOKENS = 1024;
 
+/**
+ * Memories are persisted as the user's data: a cross-family fallback would
+ * store another model's judgement about which memories to keep, merge or
+ * drop. Skipping a reconcile round (the conversation is retried on the next
+ * tick) is cheaper than an inconsistent memory set.
+ */
+const MEMORY_FALLBACK_SCOPE = 'same-family' as const;
+
 @Injectable()
 export class MemoryExtractionTask {
   private readonly logger = new Logger(MemoryExtractionTask.name);
@@ -132,6 +140,7 @@ export class MemoryExtractionTask {
         model: await this.aiConfig.getFastModel(),
         instructions: MEMORY_RECONCILE_SYSTEM,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
+        fallbackScope: MEMORY_FALLBACK_SCOPE,
       }
     );
     const { adds, updates, deletes } = partitionOps(
