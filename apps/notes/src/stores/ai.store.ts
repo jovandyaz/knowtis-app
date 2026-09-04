@@ -83,6 +83,9 @@ export const useAIStore = create<AIState>((set, get) => {
 
       const handle = aiClient.stream(payload, {
         onChunk: ({ text }) => {
+          if (version !== streamVersion || get().status !== 'streaming') {
+            return;
+          }
           buffer.push(text);
         },
         onDone: () => {
@@ -99,6 +102,9 @@ export const useAIStore = create<AIState>((set, get) => {
           });
         },
         onError: (error) => {
+          if (version !== streamVersion || get().status !== 'streaming') {
+            return;
+          }
           buffer.clearInactivityTimer();
           buffer.flush();
           set({ status: 'error', error, _streamHandle: null });

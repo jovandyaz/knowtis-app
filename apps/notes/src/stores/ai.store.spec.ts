@@ -173,6 +173,30 @@ describe('useAIStore', () => {
       expect(captureProductEvent).not.toHaveBeenCalled();
     });
 
+    it('does not let a stale error suppress a current completion', () => {
+      const first = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      const staleError = first.getCallbacks().onError;
+
+      const second = captureCallbacks();
+      useAIStore.getState().startStream({ ...PAYLOAD, action: 'expand' });
+      staleError({ code: 'X', message: 'stale failure' });
+      second.getCallbacks().onDone({ usage: {} });
+
+      expect(useAIStore.getState()).toMatchObject({
+        status: 'done',
+        error: null,
+      });
+      expect(captureProductEvent).toHaveBeenCalledWith(
+        'ai response completed',
+        {
+          source: 'assistant',
+          assistant_type: 'selection',
+          action: 'expand',
+        }
+      );
+    });
+
     it('does not capture completion from a stale stream', () => {
       const first = captureCallbacks();
       useAIStore.getState().startStream(PAYLOAD);
