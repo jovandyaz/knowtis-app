@@ -51,11 +51,10 @@ without its migration never reaches `main`.
 
 ## Automatic application on deploy
 
-Railway runs a **pre-deploy command** (`railway.toml`) between build and release:
+Railway runs a **pre-deploy command** (declared for `knowtis_app` in [`.railway/railway.ts`](../.railway/railway.ts)) between build and release:
 
-```toml
-[deploy]
-preDeployCommand = "pnpm exec tsx apps/api/src/database/migrate.ts"
+```ts
+preDeployCommand: ['pnpm exec tsx apps/api/src/database/migrate.ts'],
 ```
 
 This is the **single source of truth** for applying migrations. It runs

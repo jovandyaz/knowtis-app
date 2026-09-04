@@ -33,18 +33,19 @@ Push to main → CI: skills:check, lint, typecheck, apply migrations, test, drif
 
 The CI pipeline (`.github/workflows/ci.yml`) runs all checks first. Only after everything passes, the `deploy` job runs `.github/scripts/railway-deploy.sh` in the Railway CLI container.
 
-That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; `SKIPPED` fails (the new deployment did not become live; see the `watchPatterns` note under [railway.toml](#railwaytoml)). `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 25-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
+That script starts the deploy detached and then polls until the deployment reaches a terminal status. `SUCCESS` passes; `SKIPPED` fails (the new deployment did not become live; see the `watchPatterns` note under [.railway/railway.ts](#railwayrailwayts)). `FAILED`, `CRASHED`, `REMOVED`, a listing that never contains the deployment, or a 25-minute timeout fail the job. Agent automation must not trust an attached, non-TTY, `--ci`, or detached CLI return as terminal evidence: use `railway up --detach --json`, capture the exact deployment ID, and poll it to `SUCCESS`. `.github/workflows/deploy-gate.yml` runs `.github/scripts/railway-deploy.test.sh` on any change under `.github/scripts/`.
 
 **Config files:**
 
-| File                                 | Purpose                                                      |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `railway.toml`                       | API build/start commands, healthcheck, pre-deploy migrations |
-| `vercel.json`                        | Notes frontend: build, SPA rewrite, PostHog `/t/*` proxy     |
-| `apps/backoffice/vercel.json`        | Backoffice: build, SPA rewrite                               |
-| `.github/workflows/ci.yml`           | CI pipeline with the four deploy jobs                        |
-| `.github/workflows/deploy-gate.yml`  | Tests the Railway deploy gate script whenever it changes     |
-| `.github/workflows/nightly-eval.yml` | Scheduled AI eval run (no deploy)                            |
+| File                                   | Purpose                                                                                                                                                                                                                        |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.railway/railway.ts`                  | Railway service config for `knowtis_app` and `knowtis-mcp`: build/start commands, healthchecks, pre-deploy migrations, restart policy; `NODE_ENV`, `PORT` and `MCP_ALLOWED_HOSTS` declared, every other variable `preserve()`d |
+| `vercel.json`                          | Notes frontend: build, SPA rewrite, PostHog `/t/*` proxy                                                                                                                                                                       |
+| `apps/backoffice/vercel.json`          | Backoffice: build, SPA rewrite                                                                                                                                                                                                 |
+| `.github/workflows/ci.yml`             | CI pipeline with the four deploy jobs                                                                                                                                                                                          |
+| `.github/workflows/railway-config.yml` | Plans `.railway/railway.ts` on PRs touching `.railway/**`, applies the pinned plan on merge                                                                                                                                    |
+| `.github/workflows/deploy-gate.yml`    | Tests the Railway deploy gate script whenever it changes                                                                                                                                                                       |
+| `.github/workflows/nightly-eval.yml`   | Scheduled AI eval run (no deploy)                                                                                                                                                                                              |
 
 **Required GitHub secrets/variables:**
 
@@ -61,7 +62,7 @@ That script starts the deploy detached and then polls until the deployment reach
 | `VOYAGE_API_KEY`               | Secret   | Optional — lights up the retrieval/memory eval suites         |
 | `TAVILY_API_KEY`               | Secret   | Optional — lights up the web-search eval suite                |
 
-> A third deploy job, `deploy-mcp`, ships the MCP server to Railway through the same gated script on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set. Before deploying it pins `NODE_ENV` and `MCP_ALLOWED_HOSTS` on the MCP service and asserts OAuth env parity between the two services (see [OAuth variables](#oauth-variables-api-and-mcp)).
+> A third deploy job, `deploy-mcp`, ships the MCP server to Railway through the same gated script on `push` to `main` when the `mcp` app is affected and `RAILWAY_MCP_SERVICE_ID` is set. Before deploying it asserts OAuth env parity between the two services (see [OAuth variables](#oauth-variables-api-and-mcp)).
 
 > `nightly-eval.yml` pins `AI_EVAL_TRIALS=3` (so a case is judged on its pass rate rather than one stochastic trial), sets `AI_EVAL_OUTPUT_DIR` to a workspace directory, and uploads it as the `eval-results` artifact with a 90-day retention — that artifact is the only historical record of eval runs.
 
@@ -89,9 +90,13 @@ The admin backoffice deploys the same way through the `deploy-backoffice` job, g
 
 ## Railway Configuration
 
-### railway.toml
+### .railway/railway.ts
 
-[`railway.toml`](../railway.toml) is the API service's config-as-code: nixpacks builder, `pnpm install --frozen-lockfile && pnpm build:api` (with `NODE_ENV=development` so build-time devDependencies install), `node dist/apps/api/main.js` as start command, `/api/v1/health/ping` as healthcheck, `ON_FAILURE` restart with 3 retries, and the pre-deploy migration command below. Read the file rather than a copy here.
+[`.railway/railway.ts`](../.railway/railway.ts) is Railway Infrastructure as Code for the whole production environment: both services (`knowtis_app`, `knowtis-mcp`), their nixpacks build commands (`NODE_ENV=development pnpm install --frozen-lockfile` so build-time devDependencies install, then `pnpm build:api` / `pnpm nx build mcp`), start commands, `/api/v1/health/ping` and `/health` healthchecks, restart on failure with 3 retries (`restartPolicyMaxRetries`; the `ON_FAILURE` type is Railway's default and is left implicit because `railway config plan` normalizes defaults to null), and the API's pre-deploy migration command. The non-secret runtime variables (`NODE_ENV`, `PORT`, and `MCP_ALLOWED_HOSTS` on the MCP) are declared in the file; every other variable, secrets included, is `preserve()`: its value lives only in Railway and the file merely references it. Read the file rather than a copy here.
+
+The file is applied by `railway config apply`, not read at deploy time, and Railway redeploys a service whose settings the apply changed. `.github/workflows/railway-config.yml` plans every PR that touches `.railway/**` (the plan is posted as a PR comment together with the pinned tree, etag and change-set hash) and applies exactly that plan on merge; if the environment or `.railway/` moved in between, the apply fails and the PR needs a fresh plan. Destructive changes (a resource or variable removed from the file) are refused by the workflow; an intended deletion is applied locally after review with `railway config apply --confirm-destructive`. Locally: `railway config plan` previews, `railway config apply` applies. Config changes therefore flow through this workflow while code changes flow through `railway-deploy.sh`; the file is deliberately not an Nx input of any project. `railway.toml` config-as-code was retired in favour of this file (Railway stops reading it on 2026-12-01).
+
+Do not reach for `railway config migrate` to re-import: its dry run mapped the root toml to a service named after the repository directory and downgraded `preDeployCommand`, `builder` and the restart settings to comments. `railway config pull --force` plus a hand-port is the path that was used.
 
 The API declares no `watchPatterns`: CI already gates `railway up` on Nx affected, and patterns made Railway record `SKIPPED` for snapshots CI had approved (for example a change confined to `packages/`). `.github/scripts/railway-deploy.sh` treats `SKIPPED` as a failure for the same reason.
 
@@ -119,8 +124,8 @@ The API declares no `watchPatterns`: CI already gates `railway up` on Nx affecte
 | `RESEND_API_KEY`               | When `EMAIL_PROVIDER=resend` | Resend API key                                                                                                                                                        |
 | `EMAIL_FROM`                   | No                           | Sender address                                                                                                                                                        |
 | `VERCEL_BLOB_READ_WRITE_TOKEN` | For image uploads            | Vercel Blob store token used by `VercelBlobStorage`                                                                                                                   |
-| `NODE_ENV`                     | No                           | Set by `railway.toml` (`production`)                                                                                                                                  |
-| `PORT`                         | No                           | Set by `railway.toml` (`3333`)                                                                                                                                        |
+| `NODE_ENV`                     | No                           | Declared as `production` in `.railway/railway.ts`                                                                                                                     |
+| `PORT`                         | No                           | Declared as `3333` in `.railway/railway.ts` (also the schema default)                                                                                                 |
 
 AI variables (`ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`, `BYOK_ENCRYPTION_KEY`, budgets, alert webhook, Langfuse, Voyage, Tavily, …) are documented in [AI.md → Environment Variables](AI.md#environment-variables).
 
@@ -216,7 +221,7 @@ Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows e
 | WebSocket not connecting                         | Frontend `VITE_WS_URL` correct and `VITE_COLLABORATION_MODE=websocket`; `REDIS_URL` set if more than one API instance runs                                                                                                                                    |
 | Database connection                              | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                                                                                                                                                       |
 | Deploy job red before a deployment id is printed | `railway up` could not start: check the `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` / `RAILWAY_MCP_SERVICE_ID` variables in GitHub                                                                                                                        |
-| Deploy job red on `SKIPPED`                      | A service declares `watchPatterns`; remove them — CI already gates on Nx affected                                                                                                                                                                             |
+| Deploy job red on `SKIPPED`                      | A service in `.railway/railway.ts` declares `watchPatterns`; remove them — CI already gates on Nx affected                                                                                                                                                    |
 | Deploy job red on `still BUILDING after 1500s`   | The build outlasted the poller; check the logs URL in the job output — Railway may have finished it. Raise `RAILWAY_DEPLOY_TIMEOUT_SECONDS` (default 1500 in `railway-deploy.sh`) and the jobs' `timeout-minutes` together if builds legitimately take longer |
 | API crashes on boot                              | `TOKEN_HASH_KEY` present and valid; `BACKOFFICE_URL` set when `NODE_ENV=production` (see [TOKEN_HASH_KEY](#token_hash_key))                                                                                                                                   |
 | OAuth tokens rejected                            | `deploy-mcp` parity check output: issuer/resource URL drift or trailing slash                                                                                                                                                                                 |
@@ -238,7 +243,7 @@ railway up --service <SERVICE_ID>
 
 ## Official Docs
 
-- [Railway Config as Code](https://docs.railway.com/guides/config-as-code)
+- [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code)
 - [Railway Private Networking](https://docs.railway.com/guides/private-networking)
 - [Railway Variables Reference](https://docs.railway.com/reference/variables)
 - [Vercel Vite Framework](https://vercel.com/docs/frameworks/frontend/vite)
