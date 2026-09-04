@@ -1,7 +1,11 @@
 import posthog from 'posthog-js';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { resumeAnalyticsCapture, setAnalyticsReady } from './analytics/runtime';
+import {
+  pauseAnalyticsCapture,
+  resumeAnalyticsCapture,
+  setAnalyticsReady,
+} from './analytics/runtime';
 import { buildPostHogOptions } from './posthog';
 
 const PROJECT_TOKEN = 'phc_payload_spec_project_token';
@@ -26,6 +30,12 @@ describe('posthog-js capture payload', () => {
 
     expect(captured?.properties.token).toBe(PROJECT_TOKEN);
     expect(captured?.properties.source).toBe('browser');
+  });
+
+  it('drops the SDK pageleave raised while an identity transition is in flight', () => {
+    pauseAnalyticsCapture();
+
+    expect(posthog.capture('$pageleave')).toBeUndefined();
   });
 
   it('templates the note route the SDK reads off the browser location', () => {
