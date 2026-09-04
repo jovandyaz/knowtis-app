@@ -97,8 +97,11 @@ of the payload or nested under `properties.$set` / `properties.$set_once`,
 which is the shape the SDK uses once a distinct ID is already identified. Never send note IDs, titles, contents, tags,
 collaborator IDs, share or verification tokens, API keys, query strings,
 emails, names, prompts, responses, source text, model output, token counts,
-or costs. Autocapture remains off, router navigation emits manual pageviews,
-and replay masks all inputs and text.
+or costs. The single exception is `properties.token`, the public browser
+project token posthog-js stamps on every event: the capture endpoint
+authenticates the batch with it and answers `401 event submitted without an
+api_key` when it is missing. Autocapture remains off, router navigation emits
+manual pageviews, and replay masks all inputs and text.
 
 ## Release validation
 
@@ -110,7 +113,9 @@ and replay masks all inputs and text.
    plan before any future apply; it must contain no service deletion, domain,
    replica, or deployment change.
 3. In production at `https://knowtis.app`, verify one manual `$pageview` after
-   a resolved SPA navigation and verify it uses only normalized URLs. Verify
+   a resolved SPA navigation and verify it uses only normalized URLs. Confirm
+   the capture request itself answers `200 {"status":"Ok"}` and that the event
+   reaches PostHog: a stubbed or unread response hides a rejected batch. Verify
    preview and localhost produce no browser capture.
 4. Exercise one successful path for each applicable event. Confirm failures,
    aborts, loading/error shared links, and duplicate save actions do not create

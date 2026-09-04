@@ -239,6 +239,31 @@ describe('sanitizePostHogEvent', () => {
     });
   });
 
+  it('keeps the SDK project token while stripping token-shaped first-party fields', () => {
+    const event: CaptureResult = {
+      uuid: 'event-6',
+      event: 'note created',
+      properties: {
+        token: 'phc_public_project_token',
+        share_token: 'private-share-token',
+        apiToken: 'private-api-token',
+        refresh_tokens: 'private-refresh-tokens',
+      },
+      $set_once: {
+        token: 'private-person-token',
+      },
+    };
+
+    expect(sanitizePostHogEvent(event)).toEqual({
+      uuid: 'event-6',
+      event: 'note created',
+      properties: {
+        token: 'phc_public_project_token',
+      },
+      $set_once: {},
+    });
+  });
+
   it('applies the person allowlist to $set and $set_once nested inside event properties', () => {
     const personUpdate: CaptureResult = {
       uuid: 'event-5',
