@@ -18,6 +18,20 @@ const baseProps = {
 };
 
 describe('MobileEditorHeader', () => {
+  it('stays in the page flow so layout above it can push it down', () => {
+    render(
+      <MobileEditorHeader
+        {...baseProps}
+        accessLevel="owner"
+        editorsCanShare={false}
+      />
+    );
+    const bar = screen.getByRole('button', { name: 'editor.back' })
+      .parentElement as HTMLElement;
+    expect(bar).toHaveClass('sticky');
+    expect(bar).not.toHaveClass('fixed');
+  });
+
   it('shows the delete menu for an owner', () => {
     render(
       <MobileEditorHeader

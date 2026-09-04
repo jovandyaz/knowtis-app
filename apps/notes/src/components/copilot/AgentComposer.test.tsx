@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentComposer } from './AgentComposer';
 
@@ -89,6 +89,10 @@ describe('AgentComposer', () => {
 });
 
 describe('AgentComposer sizing', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('grows the textarea with its content and shrinks back after sending', async () => {
     const scrollHeight = vi
       .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
@@ -106,7 +110,5 @@ describe('AgentComposer sizing', () => {
     await user.keyboard('{Enter}');
     expect(box).toHaveValue('');
     expect(box.style.height).toBe('24px');
-
-    scrollHeight.mockRestore();
   });
 });
