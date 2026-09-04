@@ -59,4 +59,8 @@ export class NotesApi {
   async delete(token: string, noteId: string): Promise<void> {
     return this.client.delete(`/api/v1/notes/${noteId}`, token);
   }
+
+  async restore(token: string, noteId: string): Promise<NoteResponse> {
+    return this.client.post(`/api/v1/notes/${noteId}/restore`, token);
+  }
 }

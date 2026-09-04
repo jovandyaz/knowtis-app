@@ -41,7 +41,7 @@ import {
   NOTE_REPOSITORY,
   TAG_REPOSITORY,
   TagPath,
-  type NoteEntity,
+  type NoteContentSummary,
   type NoteRepository,
   type TagRepository,
 } from '../../../notes/domain';
@@ -124,14 +124,14 @@ export class SuggestOrganizationHandler {
     const noteIds = [...new Set(input.noteIds)];
 
     // Ownership is checked for every id before any provider call: suggestions
-    // set a classification only the owner may write.
-    const notes = await Promise.all(
-      noteIds.map((id) => this.noteRepository.findById(id))
-    );
-    const owned = notes.filter(
-      (note): note is NoteEntity =>
-        note !== null && note.ownerId === input.userId
-    );
+    // set a classification only the owner may write. A missing note and a
+    // foreign one must fail identically so the endpoint is not an existence oracle.
+    const owned = (
+      await this.noteRepository.findOwnedSummariesByIds(
+        noteIds,
+        userIdResult.value
+      )
+    ).filter((note) => note.ownerId === input.userId);
     if (owned.length !== noteIds.length) {
       return err(
         AIErrors.forbidden('Suggestions are only available on your own notes')
@@ -251,7 +251,7 @@ export class SuggestOrganizationHandler {
    * failing the whole bulk pass — the user still gets the rows that worked.
    */
   private async suggestOne(params: {
-    note: NoteEntity;
+    note: NoteContentSummary;
     userId: string;
     model: string;
     instructions: string;

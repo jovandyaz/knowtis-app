@@ -11,6 +11,7 @@ import { decodePageCursor, nextPageCursor } from '../utils/note-cursor.js';
 import {
   DESTRUCTIVE_IDEMPOTENT,
   NON_DESTRUCTIVE,
+  NON_DESTRUCTIVE_IDEMPOTENT,
   READ_ONLY,
 } from './annotations.js';
 import { wrapToolHandler } from './wrap-tool-handler.js';
@@ -234,7 +235,7 @@ export function registerNotesTools(
     {
       title: 'Delete Note',
       description:
-        'Delete a note. The note is soft-deleted and can be restored from the app.',
+        'Delete a note. The note is soft-deleted and can be restored with restore-note.',
       inputSchema: {
         noteId: z.string().uuid().describe('The UUID of the note to delete'),
       },
@@ -247,6 +248,29 @@ export function registerNotesTools(
       async (token, { noteId }) => {
         await notesApi.delete(token, noteId);
         return { success: true, message: 'Note deleted.' };
+      },
+      credential
+    )
+  );
+
+  server.registerTool(
+    'restore-note',
+    {
+      title: 'Restore Note',
+      description:
+        'Restore a soft-deleted note (undoes delete-note). Only the owner can restore.',
+      inputSchema: {
+        noteId: z.string().uuid().describe('The UUID of the note to restore'),
+      },
+      outputSchema: { note: z.object(noteShape) },
+      annotations: NON_DESTRUCTIVE_IDEMPOTENT,
+    },
+    wrapToolHandler(
+      'restore-note',
+      authService,
+      async (token, { noteId }) => {
+        const note = await notesApi.restore(token, noteId);
+        return { note: { ...note, content: htmlToMarkdown(note.content) } };
       },
       credential
     )
