@@ -117,3 +117,48 @@ When present, `$current_url` must be the corresponding normalized first-party
 URL (for example, `https://knowtis.app/notes/:noteId`), never a literal
 identifier or token. Inspect event properties before expanding a dashboard or
 adding a new event field.
+
+## PostHog project assets
+
+The following assets were created in PostHog project `344524` and read back
+after configuration. Reuse exact-name matches and these IDs; do not rename or
+delete historical assets.
+
+| Asset name                                    | Kind                      | PostHog ID                             |
+| --------------------------------------------- | ------------------------- | -------------------------------------- |
+| `user signed up`                              | Event definition          | `01a06da6-51e3-0000-9516-b0a4a296cf33` |
+| `email verified`                              | Event definition          | `01a06da6-535e-0000-26dd-f222a32df2cf` |
+| `note created`                                | Event definition          | `01a06da6-54ce-0000-3fa9-695c8b3e0320` |
+| `note activated`                              | Event definition          | `01a06da6-5675-0000-6c2f-d16bcfaea2f1` |
+| `note shared`                                 | Event definition          | `01a06da6-58e4-0000-b4c9-fb04d25a18d5` |
+| `shared note viewed`                          | Event definition          | `01a06da6-5acd-0000-cade-7038c762a234` |
+| `ai response completed`                       | Event definition          | `01a06da6-5bef-0000-433a-d31318b6d3ca` |
+| `mcp key created`                             | Event definition          | `01a06da6-5d9b-0000-c573-c27cf9434a8f` |
+| `$pathname`                                   | Event property definition | `019cf52e-e328-7591-8627-b18ed2aa2244` |
+| `$current_url`                                | Event property definition | `019cf52e-e328-7591-8627-afefb352077d` |
+| `$referrer`                                   | Event property definition | `019cf52e-e328-7591-8627-b1c8ef680625` |
+| `$geoip_country_name`                         | Event property definition | `019cf52e-e328-7591-8627-b06a58114f54` |
+| `Knowtis product activity`                    | Dashboard                 | `2065684`                              |
+| `Knowtis weekly active users`                 | Trends insight            | `11618349`                             |
+| `Knowtis acquisition by referrer and country` | Trends insight            | `11618350`                             |
+| `Knowtis activation funnel`                   | Funnel insight            | `11618351`                             |
+| `Knowtis note activation retention`           | Retention insight         | `11618352`                             |
+| `Knowtis AI adoption`                         | Trends insight            | `11618353`                             |
+| `Knowtis MCP adoption`                        | Trends insight            | `11618354`                             |
+
+PostHog can create custom event definitions before first ingestion, but its
+property-definition endpoint can only update properties that already exist in
+the taxonomy. Until real production events introduce a custom property, an
+update returns `Property definition not found`. Do not send synthetic
+production events to work around this. After the first real ingestion,
+describe and verify the custom properties listed in the event contract above.
+
+When verifying these assets, confirm the dashboard contains the six saved
+insights listed above and that each remains attached to dashboard `2065684`.
+Every insight must retain `environment = production` and exclude
+`is_internal = true`. Confirm the activation funnel remains ordered from
+`user signed up` through `email verified`, `note created`, `note activated`,
+and `note shared`; retention remains anchored on `note activated`; and the AI
+and MCP insights retain only their approved categorical breakdowns. Treat URL,
+referrer, and country breakdowns as safe only after the privacy checks in this
+runbook pass.
