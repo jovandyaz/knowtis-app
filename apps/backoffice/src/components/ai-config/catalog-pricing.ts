@@ -1,10 +1,9 @@
 import type { AiConfigEntry, CatalogModel } from '@knowtis/data-access-admin';
 import {
+  AI_CONFIG_KEYS,
   FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN,
   TOKENS_PER_MILLION,
 } from '@knowtis/shared-types';
-
-const CEILING_KEY = 'ai_free_tier_ceiling';
 
 /** Mirrors the server's access policy, where a negative stored price is a broken row rather than a discount. */
 export function isByokOnly(
@@ -26,7 +25,9 @@ export function isByokOnly(
 export function freeTierCeilingFrom(
   entries: readonly AiConfigEntry[] | undefined
 ): number {
-  const value = entries?.find((entry) => entry.key === CEILING_KEY)?.value;
+  const value = entries?.find(
+    (entry) => entry.key === AI_CONFIG_KEYS.FREE_TIER_CEILING
+  )?.value;
   if (value === undefined) {
     return FREE_TIER_MAX_OUTPUT_COST_PER_TOKEN;
   }
