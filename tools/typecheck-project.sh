@@ -1,8 +1,12 @@
 #!/bin/bash
 # Typecheck a project's source and test files.
 # Runs tsc --noEmit against tsconfig.lib.json (or tsconfig.app.json) and tsconfig.spec.json.
-# Designed to be run with cwd set to a project root.
+# Takes the project root as its only argument; Nx passes {projectRoot} so the
+# script never has to locate the workspace itself (git-based lookups break in
+# hooks inside linked worktrees, where GIT_DIR points at the main repository).
 set -e
+
+cd "${1:?usage: typecheck-project.sh <project-root>}"
 
 status=0
 

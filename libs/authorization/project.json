@@ -22,8 +22,7 @@
     "typecheck": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "bash $(git rev-parse --show-toplevel)/tools/typecheck-project.sh",
-        "cwd": "{projectRoot}"
+        "command": "tools/typecheck-project.sh {projectRoot}"
       }
     }
   }
