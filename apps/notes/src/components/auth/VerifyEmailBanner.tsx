@@ -57,20 +57,18 @@ function UnverifiedEmailBanner() {
   return (
     <div
       role="status"
-      className="mx-4 mt-3 flex shrink-0 flex-col gap-3 rounded-lg border border-(--border) bg-(--primary)/5 p-3 md:mx-8 sm:flex-row sm:items-center sm:justify-between"
+      className="mx-4 mt-3 flex shrink-0 items-start gap-2 rounded-lg border border-(--border) bg-(--primary)/5 p-2 pl-3 sm:items-center sm:p-3 md:mx-8"
     >
-      <div className="flex items-start gap-2">
-        <MailWarning className="mt-0.5 h-4 w-4 shrink-0 text-(--primary)" />
-        <p className="text-sm text-(--foreground)">
-          {t(
-            gateEnforced
-              ? 'verifyEmail.bannerTextGated'
-              : 'verifyEmail.bannerText'
-          )}
-        </p>
-      </div>
+      <MailWarning className="mt-2 h-4 w-4 shrink-0 text-(--primary) sm:mt-0" />
+      <p className="min-w-0 flex-1 py-1.5 text-sm leading-snug text-(--foreground) sm:py-0">
+        {t(
+          gateEnforced
+            ? 'verifyEmail.bannerTextGated'
+            : 'verifyEmail.bannerText'
+        )}
+      </p>
 
-      <div className="flex shrink-0 items-center gap-2 self-end sm:self-auto">
+      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
         <Button size="sm" onClick={() => openVerifyDialog('inApp')}>
           {t('verifyEmail.bannerCta')}
         </Button>

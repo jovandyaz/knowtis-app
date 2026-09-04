@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next';
 
-import { FloatingActionButton } from '@/components/layout/FloatingActionButton';
 import { NoteActionsMenu } from '@/components/notes/NoteActionsMenu';
 import { canPerformNoteAction } from '@/lib';
 import { ArrowLeft, Share2 } from 'lucide-react';
@@ -9,7 +8,7 @@ import { Button } from '@knowtis/design-system';
 import type { NoteAccessLevel } from '@knowtis/shared-types';
 
 const FLOATING_TRIGGER_CLASSES =
-  'h-10 w-10 rounded-full bg-(--background)/80 shadow-sm backdrop-blur-md';
+  'pointer-events-auto h-10 w-10 rounded-full bg-(--background)/80 shadow-sm backdrop-blur-md';
 
 interface MobileEditorHeaderProps {
   noteId: string;
@@ -36,16 +35,23 @@ export function MobileEditorHeader({
   const canDelete = canPerformNoteAction(accessLevel, 'delete');
 
   return (
-    <>
-      <FloatingActionButton
-        icon={ArrowLeft}
-        position="left"
+    // Sticky inside the page scroller (not fixed to the viewport) so anything
+    // the app layout stacks above the page, like the verify-email banner,
+    // pushes these controls down instead of sliding underneath them.
+    <div className="pointer-events-none sticky top-0 z-30 flex items-start justify-between pb-4 md:hidden">
+      <Button
+        type="button"
+        variant="outline"
+        size="icon"
+        className={FLOATING_TRIGGER_CLASSES}
         onClick={onBack}
         aria-label={t('editor.back')}
-      />
+      >
+        <ArrowLeft className="h-5 w-5" />
+      </Button>
 
       {(canShare || canDelete) && (
-        <div className="fixed right-4 top-4 z-50 flex items-center gap-2 md:hidden">
+        <div className="flex items-center gap-2">
           {canShare && (
             <Button
               type="button"
@@ -68,8 +74,6 @@ export function MobileEditorHeader({
           )}
         </div>
       )}
-
-      <div className="h-14 md:hidden" />
-    </>
+    </div>
   );
 }
