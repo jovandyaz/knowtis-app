@@ -13,7 +13,7 @@ import {
   type NotePermissionEntity,
   type NoteRepository,
 } from '../../domain';
-import { NoteSharedEvent } from '../../domain/events';
+import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 
 export interface ShareNoteInput {
   readonly noteId: string;

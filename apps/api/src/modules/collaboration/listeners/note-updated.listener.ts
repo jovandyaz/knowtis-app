@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
-import { NoteUpdatedEvent } from '../../notes/domain/events';
+import { NoteUpdatedEvent } from '../../notes/domain/events/note-updated.event';
 import { HocuspocusService } from '../hocuspocus.service';
 
 /**
