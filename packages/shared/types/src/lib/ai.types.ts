@@ -131,6 +131,18 @@ export const MESSAGE_STOP_REASON = [
 ] as const;
 export type MessageStopReason = (typeof MESSAGE_STOP_REASON)[number];
 
+/** The `ai_config` row keys the API serves and the backoffice edits — the wire contract both sides must spell identically. */
+export const AI_CONFIG_KEYS = {
+  DEFAULT_MODEL: 'ai_default_model',
+  FAST_MODEL: 'ai_fast_model',
+  DEEP_MODEL: 'ai_deep_model',
+  FALLBACK_CHAIN: 'ai_fallback_chain',
+  REASONING_EFFORT: 'ai_reasoning_effort',
+  OPENROUTER_PROVIDERS: 'ai_openrouter_providers',
+  FREE_TIER_CEILING: 'ai_free_tier_ceiling',
+} as const;
+export type AIConfigKey = (typeof AI_CONFIG_KEYS)[keyof typeof AI_CONFIG_KEYS];
+
 /** Where an AI config key's served value comes from; `stale` means a row is stored but the runtime ignores it and serves the code default. */
 export const AI_CONFIG_SOURCES = ['custom', 'default', 'stale'] as const;
 export type AIConfigSource = (typeof AI_CONFIG_SOURCES)[number];

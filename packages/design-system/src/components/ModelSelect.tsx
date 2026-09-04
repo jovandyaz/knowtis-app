@@ -321,9 +321,63 @@ export function ModelSelect({
             ))}
           </OptionGroup>
         )}
-        {isError ? (
+        {groups.map((g, i) => {
+          const level = tierCostLevel(g.items);
+          return (
+            <OptionGroup
+              key={g.key}
+              asActions={rowsAreActions}
+              value={value}
+              onSelect={onSelect}
+            >
+              {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
+              <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
+                <span>{g.label}</span>
+                {!flatGroup && level > NO_COST_LEVEL && (
+                  <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
+                    {costGlyphs(level)}
+                  </span>
+                )}
+              </DropdownMenuLabel>
+              {g.items.map((m) => {
+                const description = renderDescription?.(m);
+                const rowLevel = costLevel(m);
+                return (
+                  <OptionItem
+                    key={m.id}
+                    id={m.id}
+                    asAction={rowsAreActions}
+                    disabled={m.disabled ?? false}
+                    onSelect={onSelect}
+                  >
+                    <OptionRow
+                      label={m.label}
+                      description={description}
+                      cost={
+                        flatGroup && rowLevel > NO_COST_LEVEL
+                          ? costGlyphs(rowLevel)
+                          : undefined
+                      }
+                      badge={
+                        m.billedToUser && billedBadgeLabel ? (
+                          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
+                            <KeyRound className="h-2.5 w-2.5" />
+                            {billedBadgeLabel}
+                          </span>
+                        ) : undefined
+                      }
+                    />
+                  </OptionItem>
+                );
+              })}
+            </OptionGroup>
+          );
+        })}
+        {isError && (
           <>
-            {hasLeadingSection && <DropdownMenuSeparator />}
+            {(hasLeadingSection || groups.length > 0) && (
+              <DropdownMenuSeparator />
+            )}
             <div className="px-2 py-1.5 text-xs text-(--muted-foreground)">
               {errorLabel ?? FALLBACK_LABEL}
             </div>
@@ -332,61 +386,6 @@ export function ModelSelect({
                 {retryLabel}
               </DropdownMenuItem>
             )}
-          </>
-        ) : (
-          <>
-            {groups.map((g, i) => {
-              const level = tierCostLevel(g.items);
-              return (
-                <OptionGroup
-                  key={g.key}
-                  asActions={rowsAreActions}
-                  value={value}
-                  onSelect={onSelect}
-                >
-                  {(i > 0 || hasLeadingSection) && <DropdownMenuSeparator />}
-                  <DropdownMenuLabel className="flex items-center justify-between text-xs uppercase tracking-wide">
-                    <span>{g.label}</span>
-                    {!flatGroup && level > NO_COST_LEVEL && (
-                      <span className="font-normal normal-case tracking-normal text-(--muted-foreground)">
-                        {costGlyphs(level)}
-                      </span>
-                    )}
-                  </DropdownMenuLabel>
-                  {g.items.map((m) => {
-                    const description = renderDescription?.(m);
-                    const rowLevel = costLevel(m);
-                    return (
-                      <OptionItem
-                        key={m.id}
-                        id={m.id}
-                        asAction={rowsAreActions}
-                        disabled={m.disabled ?? false}
-                        onSelect={onSelect}
-                      >
-                        <OptionRow
-                          label={m.label}
-                          description={description}
-                          cost={
-                            flatGroup && rowLevel > NO_COST_LEVEL
-                              ? costGlyphs(rowLevel)
-                              : undefined
-                          }
-                          badge={
-                            m.billedToUser && billedBadgeLabel ? (
-                              <span className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-(--muted) px-1.5 py-0.5 text-[10px] font-normal text-(--muted-foreground)">
-                                <KeyRound className="h-2.5 w-2.5" />
-                                {billedBadgeLabel}
-                              </span>
-                            ) : undefined
-                          }
-                        />
-                      </OptionItem>
-                    );
-                  })}
-                </OptionGroup>
-              );
-            })}
           </>
         )}
       </DropdownMenuContent>

@@ -1,14 +1,13 @@
 import type { AiConfigEntry } from '@knowtis/data-access-admin';
-import { parseChain } from '@knowtis/shared-types';
+import { AI_CONFIG_KEYS, parseChain } from '@knowtis/shared-types';
 
 const INTENT_ROLE_BY_KEY = {
-  ai_default_model: 'Default',
-  ai_fast_model: 'Fast',
-  ai_deep_model: 'Deep',
+  [AI_CONFIG_KEYS.DEFAULT_MODEL]: 'Default',
+  [AI_CONFIG_KEYS.FAST_MODEL]: 'Fast',
+  [AI_CONFIG_KEYS.DEEP_MODEL]: 'Deep',
 } as const;
 
 const FALLBACK_ROLE = 'Fallback' as const;
-const FALLBACK_CHAIN_KEY = 'ai_fallback_chain';
 
 export type ServingRole =
   | (typeof INTENT_ROLE_BY_KEY)[keyof typeof INTENT_ROLE_BY_KEY]
@@ -39,7 +38,9 @@ export function servingRolesFrom(
       add(entry.value, INTENT_ROLE_BY_KEY[entry.key]);
     }
   }
-  const chain = entries?.find((entry) => entry.key === FALLBACK_CHAIN_KEY);
+  const chain = entries?.find(
+    (entry) => entry.key === AI_CONFIG_KEYS.FALLBACK_CHAIN
+  );
   for (const member of chain ? parseChain(chain.value) : []) {
     add(member, FALLBACK_ROLE);
   }

@@ -441,6 +441,63 @@ describe('ModelSelect', () => {
     expect(screen.getByRole('menuitem', { name: 'Retry' })).toBeInTheDocument();
   });
 
+  it('keeps the cached models selectable when a refetch fails', async () => {
+    const onSelect = vi.fn();
+    const onRetry = vi.fn();
+    render(
+      <ModelSelect
+        models={[...models]}
+        value="a:fast"
+        onSelect={onSelect}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={onRetry}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const rows = screen.getAllByRole('menuitemradio');
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringContaining('Fast One'),
+      expect.stringContaining('Balanced One'),
+    ]);
+    expect(screen.getByText('Could not load')).toBeInTheDocument();
+    expect(screen.getAllByRole('separator')).toHaveLength(2);
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Retry' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    await userEvent.click(screen.getByRole('button'));
+    await userEvent.click(
+      screen.getByRole('menuitemradio', { name: /Balanced One/ })
+    );
+    expect(onSelect).toHaveBeenCalledWith('a:bal');
+  });
+
+  it('shows only the error and retry when a load fails with nothing cached', async () => {
+    render(
+      <ModelSelect
+        models={[]}
+        value={null}
+        onSelect={vi.fn()}
+        status="error"
+        errorLabel="Could not load"
+        retryLabel="Retry"
+        onRetry={vi.fn()}
+      />
+    );
+    await userEvent.click(screen.getByRole('button'));
+
+    const menu = screen.getByRole('menu');
+    expect(within(menu).queryAllByRole('menuitemradio')).toHaveLength(0);
+    expect(within(menu).queryAllByRole('separator')).toHaveLength(0);
+    expect(within(menu).getByText('Could not load')).toBeInTheDocument();
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Retry' })
+    ).toBeInTheDocument();
+  });
+
   it('disables the trigger when the leading section has no options and models are empty', () => {
     render(
       <ModelSelect
