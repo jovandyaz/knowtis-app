@@ -5,6 +5,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiClientError } from '@knowtis/api-client';
+
 import { NoteEditorPage } from './NoteEditorPage';
 
 const renderWithClient = (ui: ReactElement) =>
@@ -86,23 +88,26 @@ vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
   VoiceNoteRecorder: () => <div data-testid="voice-note-recorder" />,
 }));
 
+const loadedNote = {
+  data: {
+    id: 'note-1',
+    title: 'My Note',
+    content: '<p>hello</p>',
+    accessLevel: 'owner',
+    bucket: null,
+    generalAccess: 'restricted',
+    generalAccessPermission: 'viewer',
+    shareToken: null,
+    editorsCanShare: false,
+  },
+  isLoading: false,
+  isError: false,
+  error: null,
+};
+const noteQuery = vi.fn<() => Record<string, unknown>>();
+
 vi.mock('@knowtis/data-access-notes', () => ({
-  useNote: () => ({
-    data: {
-      id: 'note-1',
-      title: 'My Note',
-      content: '<p>hello</p>',
-      accessLevel: 'owner',
-      bucket: null,
-      generalAccess: 'restricted',
-      generalAccessPermission: 'viewer',
-      shareToken: null,
-      editorsCanShare: false,
-    },
-    isLoading: false,
-    isError: false,
-    error: null,
-  }),
+  useNote: () => noteQuery(),
   useUpdateNote: () => ({ mutate: updateNoteMutate, isPending: false }),
   useDeleteNote: () => ({ mutate: vi.fn() }),
   useRestoreNote: () => ({ mutate: vi.fn() }),
@@ -120,6 +125,7 @@ describe('NoteEditorPage', () => {
     capturedOnVoiceNote = undefined;
     updateNoteMutate.mockClear();
     propertiesRowProps.mockClear();
+    noteQuery.mockReturnValue(loadedNote);
     authUser.mockReturnValue({ isAnonymous: false });
     aiEnabled.mockReturnValue(true);
     voiceNotesEnabled.mockReturnValue(true);
@@ -218,5 +224,54 @@ describe('NoteEditorPage', () => {
     });
 
     expect(editorRenders.count).toBe(1);
+  });
+
+  describe('load errors', () => {
+    const failWith = (error: unknown) => {
+      noteQuery.mockReturnValue({
+        data: undefined,
+        isLoading: false,
+        isError: true,
+        error,
+      });
+    };
+
+    it('translates a known error code instead of printing the server message', () => {
+      failWith(
+        new ApiClientError('Permission denied', 403, 'PERMISSION_DENIED')
+      );
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(screen.getByText('editor.permissionDenied')).toBeInTheDocument();
+      expect(screen.queryByText('Permission denied')).not.toBeInTheDocument();
+    });
+
+    it('translates a not-found code', () => {
+      failWith(new ApiClientError('Note abc not found', 404, 'NOTE_NOT_FOUND'));
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(screen.getByText('editor.notFound')).toBeInTheDocument();
+      expect(screen.queryByText('Note abc not found')).not.toBeInTheDocument();
+    });
+
+    it('falls back to a generic translated message for an unknown code', () => {
+      failWith(new ApiClientError('Something exploded', 500, 'INTERNAL_ERROR'));
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(screen.getByText('editor.loadErrorGeneric')).toBeInTheDocument();
+      expect(screen.queryByText('Something exploded')).not.toBeInTheDocument();
+    });
+
+    it('falls back to the generic message for a non-API error', () => {
+      failWith(new TypeError('Failed to fetch'));
+
+      renderWithClient(<NoteEditorPage />);
+
+      expect(screen.getByText('editor.loadErrorGeneric')).toBeInTheDocument();
+      expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
+    });
   });
 });

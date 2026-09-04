@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '../api-client/client.js';
 import type { NoteResponse, NotesApi } from '../api-client/notes.api.js';
 import type { SearchApi, SearchHit } from '../api-client/search.api.js';
 import { AuthService } from '../auth/auth-service.js';
@@ -23,6 +24,7 @@ function createMockNotesApi(overrides: Partial<NotesApi> = {}): NotesApi {
     create: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
+    restore: vi.fn(),
     ...overrides,
   } as unknown as NotesApi;
 }
@@ -48,6 +50,13 @@ const DESTRUCTIVE_IDEMPOTENT = {
   openWorldHint: false,
 };
 
+const NON_DESTRUCTIVE_IDEMPOTENT = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+};
+
 describe('registerNotesTools', () => {
   let notesApi: NotesApi;
   let searchApi: SearchApi;
@@ -59,7 +68,7 @@ describe('registerNotesTools', () => {
     authService = createMockAuthService();
   });
 
-  it('should register all six notes tools via registerTool', () => {
+  it('should register all seven notes tools via registerTool', () => {
     const { server, tools } = createFakeServer();
 
     registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
@@ -69,6 +78,7 @@ describe('registerNotesTools', () => {
       'delete-note',
       'get-note',
       'list-notes',
+      'restore-note',
       'search-notes',
       'update-note',
     ]);
@@ -101,6 +111,19 @@ describe('registerNotesTools', () => {
     });
   });
 
+  it('should annotate restore-note as non-destructive and idempotent', () => {
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    expect(getTool(tools, 'restore-note').config.annotations).toEqual(
+      NON_DESTRUCTIVE_IDEMPOTENT
+    );
+    expect(getTool(tools, 'restore-note').config.title).toBe('Restore Note');
+    expect(getTool(tools, 'restore-note').config.description).toBe(
+      'Restore a soft-deleted note (undoes delete-note). Only the owner can restore.'
+    );
+  });
+
   it('should set titles and expected output-schema shapes on every tool', () => {
     const { server, tools } = createFakeServer();
     registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
@@ -116,6 +139,7 @@ describe('registerNotesTools', () => {
       'create-note': ['note'],
       'update-note': ['note'],
       'delete-note': ['success', 'message'],
+      'restore-note': ['note'],
     };
     for (const [name, keys] of Object.entries(expectedOutputKeys)) {
       expect(
@@ -133,7 +157,7 @@ describe('registerNotesTools', () => {
         'call to fetch the next page; prefer search-notes for content lookup.'
     );
     expect(getTool(tools, 'delete-note').config.description).toBe(
-      'Delete a note. The note is soft-deleted and can be restored from the app.'
+      'Delete a note. The note is soft-deleted and can be restored with restore-note.'
     );
     expect(getTool(tools, 'get-note').config.description).toContain(
       'Content is returned as Markdown.'
@@ -349,6 +373,75 @@ describe('registerNotesTools', () => {
       success: true,
       message: 'Note deleted.',
     });
+  });
+
+  it('should return the restored note as Markdown from the restore-note handler', async () => {
+    const restoredNote: NoteResponse = {
+      id: 'note-4',
+      title: 'Back',
+      content: '<h2>Back</h2><p>again</p>',
+      ownerId: 'owner-9',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    };
+    notesApi = createMockNotesApi({
+      restore: vi.fn().mockResolvedValue(restoredNote),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'restore-note').cb({
+      noteId: 'note-4',
+    });
+
+    expect(notesApi.restore).toHaveBeenCalledWith('jwt-token-123', 'note-4');
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toEqual({
+      note: { ...restoredNote, content: '## Back\n\nagain' },
+    });
+  });
+
+  it('should map a 404 from restore-note to the not-found message', async () => {
+    notesApi = createMockNotesApi({
+      restore: vi
+        .fn()
+        .mockRejectedValue(new ApiError(404, { message: 'Note not found' })),
+    });
+    const { server, tools } = createFakeServer();
+    registerNotesTools(server, notesApi, searchApi, authService, CREDENTIAL);
+
+    const result = await getTool(tools, 'restore-note').cb({
+      noteId: 'note-4',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toBe('Note not found.');
+    expect(result.structuredContent).toBeUndefined();
+  });
+
+  it('should reject restore-note without notes:write scope', async () => {
+    const oauthCredential: McpCredential = {
+      kind: 'oauth',
+      jwt: 'oauth-jwt',
+      scopes: ['notes:read'],
+    };
+    const realAuthService = new AuthService('http://localhost/exchange');
+    const { server, tools } = createFakeServer();
+    registerNotesTools(
+      server,
+      notesApi,
+      searchApi,
+      realAuthService,
+      oauthCredential
+    );
+
+    const result = await getTool(tools, 'restore-note').cb({
+      noteId: 'note-4',
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('notes:write');
+    expect(notesApi.restore).not.toHaveBeenCalled();
   });
 
   it('should return search hits for a given query', async () => {

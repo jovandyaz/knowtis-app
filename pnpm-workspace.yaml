@@ -3,3 +3,6 @@ packages:
   - 'libs/*'
   - 'libs/data-access/*'
   - 'packages/*'
+
+# 3 days; Renovate's npm cooldown does not reach pnpm's transitive resolution.
+minimumReleaseAge: 4320

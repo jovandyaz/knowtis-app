@@ -38,6 +38,7 @@ describe('GetNotesHandler', () => {
       findById: vi.fn(),
       findByIdWithOwner: vi.fn(),
       findByOwner: vi.fn(),
+      findOwnedSummariesByIds: vi.fn(),
       findAccessibleByUser: vi.fn(),
       findByShareToken: vi.fn(),
       findByIdForUser: vi.fn(),

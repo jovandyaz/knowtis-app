@@ -9,6 +9,7 @@ import type {
 } from '@knowtis/shared-types';
 
 import type {
+  NoteContentSummary,
   NoteEntity,
   NoteSummary,
   NoteView,
@@ -43,6 +44,11 @@ export interface NoteReadRepository {
   findByIdWithOwner(id: string): Promise<NoteViewWithOwner | null>;
   findByIdForUser(noteId: string, userId: UserId): Promise<NoteView | null>;
   findByOwner(ownerId: UserId, search?: string): Promise<NoteEntity[]>;
+  /** Live notes among `ids` that `userId` owns, in one round trip; ids that are missing, deleted or foreign are simply absent. */
+  findOwnedSummariesByIds(
+    ids: string[],
+    userId: UserId
+  ): Promise<NoteContentSummary[]>;
   findAccessibleByUser(
     userId: UserId,
     page: NotePageRequest,
