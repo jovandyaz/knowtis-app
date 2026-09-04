@@ -123,6 +123,87 @@ describe('fromResponseMessages', () => {
     };
     expect(fromResponseMessages([empty, assistantWithCall])).toHaveLength(1);
   });
+
+  it('persists a provider-executed tool result as the tool row after its call', () => {
+    const providerExecuted: AssistantModelMessage = {
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'Searching. ' },
+        {
+          type: 'tool-call',
+          toolCallId: 'p1',
+          toolName: 'web_search',
+          input: { query: 'gtd' },
+          providerExecuted: true,
+        },
+        {
+          type: 'tool-result',
+          toolCallId: 'p1',
+          toolName: 'web_search',
+          output: { type: 'json', value: { results: ['a'] } },
+        },
+        { type: 'text', text: 'Found one.' },
+      ],
+    };
+
+    const persisted = fromResponseMessages([providerExecuted]);
+
+    expect(persisted).toEqual([
+      {
+        role: 'assistant',
+        content: 'Searching. Found one.',
+        parts: [
+          { type: 'text', text: 'Searching. ' },
+          {
+            type: 'tool-call',
+            toolCallId: 'p1',
+            toolName: 'web_search',
+            input: { query: 'gtd' },
+          },
+          { type: 'text', text: 'Found one.' },
+        ],
+      },
+      {
+        role: 'tool',
+        content: '',
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'p1',
+            toolName: 'web_search',
+            output: { results: ['a'] },
+            outputType: 'json',
+          },
+        ],
+      },
+    ]);
+    expect(toModelMessages(persisted)).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Searching. ' },
+          {
+            type: 'tool-call',
+            toolCallId: 'p1',
+            toolName: 'web_search',
+            input: { query: 'gtd' },
+          },
+          { type: 'text', text: 'Found one.' },
+        ],
+      },
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'p1',
+            toolName: 'web_search',
+            output: { type: 'json', value: { results: ['a'] } },
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('tool output round-trip', () => {
