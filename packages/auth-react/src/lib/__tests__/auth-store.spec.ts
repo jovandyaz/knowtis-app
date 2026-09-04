@@ -1,16 +1,23 @@
-import type { AuthResponse } from '@jovandyaz/auth';
+import { USER_ROLE, type AuthResponse } from '@jovandyaz/auth';
 
 import { createTokenStorage } from '../storage/token-storage';
 import { createAuthStore } from '../store/auth.store';
+import type { AuthUserProfile } from '../types';
 
 describe('createAuthStore', () => {
   function setup() {
     const tokenStorage = createTokenStorage();
-    const store = createAuthStore({
-      tokenStorage,
-      storageKey: `test-auth-${Date.now()}`,
-    });
-    return { store, tokenStorage };
+    const storageKey = `test-auth-${Date.now()}`;
+    const store = createAuthStore({ tokenStorage, storageKey });
+    return { store, tokenStorage, storageKey };
+  }
+
+  function readPersistedUser(storageKey: string): unknown {
+    const raw = localStorage.getItem(storageKey);
+    if (raw === null) {
+      throw new Error(`nothing persisted under ${storageKey}`);
+    }
+    return JSON.parse(raw).state.user;
   }
 
   beforeEach(() => {
@@ -114,6 +121,89 @@ describe('createAuthStore', () => {
     expect(state.isLoading).toBe(false);
 
     expect(tokenStorage.getAccessToken()).toBeNull();
+  });
+
+  describe('persistence', () => {
+    const profile: AuthUserProfile = {
+      id: '1',
+      email: 'test@example.com',
+      name: 'Test User',
+      avatarUrl: 'https://example.com/avatar.png',
+      isAnonymous: false,
+      emailVerifiedAt: '2026-01-01T00:00:00.000Z',
+      locale: 'es',
+      role: USER_ROLE.ADMIN,
+    };
+    const serverPayload = {
+      ...profile,
+      familyId: 'family-1',
+    } as AuthUserProfile;
+
+    it('persists only the fields the shell reads on cold start', () => {
+      const { store, storageKey } = setup();
+
+      store.getState().setUser(serverPayload);
+
+      expect(readPersistedUser(storageKey)).toStrictEqual({
+        id: '1',
+        email: 'test@example.com',
+        name: 'Test User',
+        avatarUrl: 'https://example.com/avatar.png',
+        isAnonymous: false,
+        emailVerifiedAt: '2026-01-01T00:00:00.000Z',
+        locale: 'es',
+      });
+    });
+
+    it('does not persist role or fields outside the profile contract', () => {
+      const { store, storageKey } = setup();
+
+      store.getState().setUser(serverPayload);
+
+      const persisted = readPersistedUser(storageKey);
+      expect(persisted).not.toHaveProperty('role');
+      expect(persisted).not.toHaveProperty('familyId');
+    });
+
+    it('keeps the full profile in memory', () => {
+      const { store } = setup();
+
+      store.getState().setUser(serverPayload);
+
+      expect(store.getState().user).toStrictEqual(serverPayload);
+    });
+
+    it('persists a null user after logout', () => {
+      const { store, storageKey } = setup();
+
+      store.getState().setUser(serverPayload);
+      store.getState().logout();
+
+      expect(readPersistedUser(storageKey)).toBeNull();
+    });
+
+    it('rehydrates the narrowed user as authenticated', () => {
+      const { store, storageKey } = setup();
+      store.getState().setUser(serverPayload);
+
+      const rehydrated = createAuthStore({
+        tokenStorage: createTokenStorage(),
+        storageKey,
+      });
+
+      const state = rehydrated.getState();
+      expect(state.isAuthenticated).toBe(true);
+      expect(state.isLoading).toBe(true);
+      expect(state.user).toStrictEqual({
+        id: '1',
+        email: 'test@example.com',
+        name: 'Test User',
+        avatarUrl: 'https://example.com/avatar.png',
+        isAnonymous: false,
+        emailVerifiedAt: '2026-01-01T00:00:00.000Z',
+        locale: 'es',
+      });
+    });
   });
 
   it('should set loading state', () => {
