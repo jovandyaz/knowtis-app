@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { NoteUpdatedEvent } from '../../notes/domain/events';
+import { NoteUpdatedEvent } from '../../notes/domain/events/note-updated.event';
 import type { HocuspocusService } from '../hocuspocus.service';
 import { NoteUpdatedListener } from './note-updated.listener';
 

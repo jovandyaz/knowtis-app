@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Link, useParams } from '@tanstack/react-router';
@@ -9,6 +9,8 @@ import { CollaborativeEditor } from '@/components/editor/CollaborativeEditor';
 import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
+import { captureProductEvent } from '@/lib/analytics/product-events';
+import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { format } from 'date-fns';
 import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -35,6 +37,8 @@ export function SharedNotePage() {
   const { t: tCommon } = useTranslation('common');
   const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
+  const user = useAuthUser();
+  const isAuthLoading = useAuthLoading();
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
@@ -43,6 +47,27 @@ export function SharedNotePage() {
   const { copied, copy: copyLink } = useCopyLink();
   const hasArtifacts = !!artifacts && artifacts.length > 0;
   const sharedPath = sharedNotePath(token);
+  const capturedTokenRef = useRef<string | null>(null);
+  const permission =
+    data?.accessLevel === PERMISSION.VIEWER ||
+    data?.accessLevel === PERMISSION.EDITOR
+      ? data.accessLevel
+      : undefined;
+  const actorType = user?.isAnonymous === false ? 'registered' : 'anonymous';
+  const isResolved =
+    !isLoading && !isError && data !== undefined && !isAuthLoading;
+
+  useEffect(() => {
+    if (!isResolved || !permission || capturedTokenRef.current === token) {
+      return;
+    }
+    capturedTokenRef.current = token;
+    captureProductEvent('shared note viewed', {
+      source: 'share_link',
+      permission,
+      actor_type: actorType,
+    });
+  }, [actorType, isResolved, permission, token]);
 
   const handleEditDenied = useCallback(() => {
     setIsEditing(false);

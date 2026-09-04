@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 
 import { authApi, authStore, tokenStorage } from '@/auth';
 import { AppErrorBoundary } from '@/components/AppErrorBoundary';
+import { AnalyticsIdentitySync } from '@/lib/analytics/AnalyticsIdentitySync';
 import { queryClient } from '@/lib/query-client';
 import { AuthProvider, useSessionManager } from '@jovandyaz/auth-react';
 
@@ -64,6 +65,7 @@ export function AppProviders({ children }: AppProvidersProps) {
           >
             <SessionManager />
             <AuthCacheSync />
+            <AnalyticsIdentitySync />
             <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
               <TooltipProvider delayDuration={300}>
                 <AbilityProvider>

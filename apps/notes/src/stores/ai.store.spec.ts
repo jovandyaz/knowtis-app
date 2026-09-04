@@ -10,9 +10,14 @@ import { aiClient } from '@knowtis/api-client';
 
 import { STREAM_INACTIVITY_MS, useAIStore } from './ai.store';
 
+const { captureProductEvent } = vi.hoisted(() => ({
+  captureProductEvent: vi.fn(),
+}));
+
 vi.mock('@knowtis/api-client', () => ({
   aiClient: { stream: vi.fn() },
 }));
+vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 
 interface StreamCallbacks {
   onChunk: (payload: { text: string }) => void;
@@ -114,6 +119,94 @@ describe('useAIStore', () => {
 
       expect(useAIStore.getState().status).toBe('done');
       expect(useAIStore.getState().streamedText).toBe('partial');
+    });
+  });
+
+  describe('completion analytics', () => {
+    it('captures a successful selection response without sensitive payload data', () => {
+      const { getCallbacks } = captureCallbacks();
+
+      useAIStore.getState().startStream(PAYLOAD);
+      getCallbacks().onDone({
+        usage: {
+          inputTokens: 4,
+          outputTokens: 8,
+          model: 'private',
+          costUsd: 1,
+        },
+      });
+
+      expect(captureProductEvent).toHaveBeenCalledWith(
+        'ai response completed',
+        {
+          source: 'assistant',
+          assistant_type: 'selection',
+          action: 'summarize',
+        }
+      );
+      expect(captureProductEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not capture an error', () => {
+      const { getCallbacks } = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      getCallbacks().onError({ code: 'X', message: 'failed' });
+
+      expect(captureProductEvent).not.toHaveBeenCalled();
+    });
+
+    it('does not capture completion after a timeout', () => {
+      const { getCallbacks } = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      vi.advanceTimersByTime(STREAM_INACTIVITY_MS);
+      getCallbacks().onDone({ usage: {} });
+
+      expect(captureProductEvent).not.toHaveBeenCalled();
+    });
+
+    it('does not capture completion after cancellation', () => {
+      const { getCallbacks } = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      useAIStore.getState().cancelStream();
+      getCallbacks().onDone({ usage: {} });
+
+      expect(captureProductEvent).not.toHaveBeenCalled();
+    });
+
+    it('does not let a stale error suppress a current completion', () => {
+      const first = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      const staleError = first.getCallbacks().onError;
+
+      const second = captureCallbacks();
+      useAIStore.getState().startStream({ ...PAYLOAD, action: 'expand' });
+      staleError({ code: 'X', message: 'stale failure' });
+      second.getCallbacks().onDone({ usage: {} });
+
+      expect(useAIStore.getState()).toMatchObject({
+        status: 'done',
+        error: null,
+      });
+      expect(captureProductEvent).toHaveBeenCalledWith(
+        'ai response completed',
+        {
+          source: 'assistant',
+          assistant_type: 'selection',
+          action: 'expand',
+        }
+      );
+    });
+
+    it('does not capture completion from a stale stream', () => {
+      const first = captureCallbacks();
+      useAIStore.getState().startStream(PAYLOAD);
+      const staleDone = first.getCallbacks().onDone;
+
+      captureCallbacks();
+      useAIStore.getState().startStream({ ...PAYLOAD, action: 'expand' });
+      staleDone({ usage: {} });
+
+      expect(captureProductEvent).not.toHaveBeenCalled();
     });
   });
 });

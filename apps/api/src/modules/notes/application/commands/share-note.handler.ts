@@ -1,5 +1,6 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
 import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
@@ -12,6 +13,7 @@ import {
   type NotePermissionEntity,
   type NoteRepository,
 } from '../../domain';
+import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 
 export interface ShareNoteInput {
   readonly noteId: string;
@@ -24,7 +26,8 @@ export interface ShareNoteInput {
 export class ShareNoteHandler {
   constructor(
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
-    private readonly verifiedIdentity: VerifiedIdentityPolicy
+    private readonly verifiedIdentity: VerifiedIdentityPolicy,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
@@ -68,10 +71,19 @@ export class ShareNoteHandler {
       }
     }
 
-    return this.noteRepository.upsertPermission({
+    const result = await this.noteRepository.upsertPermission({
       noteId: input.noteId,
       userId: targetUserIdResult.value,
       permission: input.permission,
     });
+
+    if (result.isOk()) {
+      this.eventEmitter.emit(
+        NoteSharedEvent.EVENT_NAME,
+        new NoteSharedEvent(input.userId, 'collaborator', input.permission)
+      );
+    }
+
+    return result;
   }
 }

@@ -7,6 +7,7 @@ import { err, ok, type Result } from 'neverthrow';
 
 import {
   GENERAL_ACCESS,
+  PERMISSION,
   type GeneralAccessLevel,
   type ParaBucket,
   type PermissionLevel,
@@ -32,10 +33,11 @@ import {
   type TagRepository,
   type UpdateNoteData,
 } from '../../domain';
+import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 import {
   NoteUpdatedEvent,
   type NoteUpdatedEventUpdates,
-} from '../../domain/events';
+} from '../../domain/events/note-updated.event';
 import {
   evolveYjsState,
   htmlToYjsState,
@@ -141,6 +143,8 @@ export class UpdateNoteHandler {
     }
 
     const isOwner = note.ownerId === input.userId;
+    const nextLinkExposure = linkExposureAfter(note, input);
+    const linkExposureWidened = widensLinkExposure(note, nextLinkExposure);
 
     // Only an owner widening the link is gated — opening it, or letting an open
     // one write. Narrowing stays free: an unverified user must be able to
@@ -149,7 +153,7 @@ export class UpdateNoteHandler {
     // verify.
     if (
       isOwner &&
-      widensLinkExposure(note, linkExposureAfter(note, input)) &&
+      linkExposureWidened &&
       !(await this.verifiedIdentity.isVerified(input.userId))
     ) {
       return err(NoteErrors.verificationRequired());
@@ -166,6 +170,19 @@ export class UpdateNoteHandler {
 
     if (persisted.isErr()) {
       return err(persisted.error);
+    }
+
+    if (isOwner && linkExposureWidened) {
+      this.eventEmitter.emit(
+        NoteSharedEvent.EVENT_NAME,
+        new NoteSharedEvent(
+          input.userId,
+          'link',
+          nextLinkExposure.generalAccessPermission === PERMISSION.EDITOR
+            ? PERMISSION.EDITOR
+            : PERMISSION.VIEWER
+        )
+      );
     }
 
     if (isOwner && input.tags !== undefined) {

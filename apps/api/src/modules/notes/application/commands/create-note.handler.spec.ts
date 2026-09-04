@@ -7,7 +7,7 @@ import * as Y from 'yjs';
 import { YJS_XML_FRAGMENT_NAME } from '@knowtis/editor-schema';
 
 import { NoteEntity, NoteErrorCodes, NoteWriteRepository } from '../../domain';
-import { NoteCreatedEvent } from '../../domain/events';
+import { NoteCreatedEvent } from '../../domain/events/note-created.event';
 import { editorSchema } from '../../infrastructure/html-to-yjs';
 import * as htmlToYjsModule from '../../infrastructure/html-to-yjs';
 import { CreateNoteHandler } from './create-note.handler';

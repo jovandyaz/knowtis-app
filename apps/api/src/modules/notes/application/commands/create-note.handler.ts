@@ -12,7 +12,7 @@ import {
   type NoteEntity,
   type NoteWriteRepository,
 } from '../../domain';
-import { NoteCreatedEvent } from '../../domain/events';
+import { NoteCreatedEvent } from '../../domain/events/note-created.event';
 import { htmlToYjsState } from '../../infrastructure/html-to-yjs';
 
 export interface CreateNoteInput {

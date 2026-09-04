@@ -1,4 +1,5 @@
-import { ok } from 'neverthrow';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EMAIL_NOT_VERIFIED_CODE, PERMISSION } from '@knowtis/shared-types';
@@ -10,6 +11,7 @@ import {
 } from '../../../../test-support/verified-identity';
 import {
   NoteErrorCodes,
+  NoteErrors,
   PermissionLevel,
   type NoteEntity,
   type NotePermissionEntity,
@@ -55,6 +57,7 @@ const mockPermission: NotePermissionEntity = {
 describe('ShareNoteHandler', () => {
   let handler: ShareNoteHandler;
   let noteRepo: NoteRepository;
+  let eventEmitter: EventEmitter2;
 
   beforeEach(() => {
     noteRepo = {
@@ -84,10 +87,57 @@ describe('ShareNoteHandler', () => {
       deletePermission: vi.fn(),
       hasAccess: vi.fn(),
     };
+    eventEmitter = { emit: vi.fn() } as unknown as EventEmitter2;
     handler = new ShareNoteHandler(
       noteRepo,
-      policyFor(IDENTITY_STATE.VERIFIED)
+      policyFor(IDENTITY_STATE.VERIFIED),
+      eventEmitter
     );
+  });
+
+  describe('Product analytics event', () => {
+    it('emits a safe collaborator-share event after permission persistence succeeds', async () => {
+      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
+        ok(mockPermission)
+      );
+
+      await handler.execute({
+        noteId: 'private-note-id',
+        userId: 'owner-1',
+        targetUserId: 'private-collaborator-id',
+        permission: PERMISSION.VIEWER,
+      });
+
+      expect(eventEmitter.emit).toHaveBeenCalledOnce();
+      expect(eventEmitter.emit).toHaveBeenCalledWith(
+        'note.shared',
+        expect.objectContaining({
+          actorId: 'owner-1',
+          shareType: 'collaborator',
+          permission: PERMISSION.VIEWER,
+        })
+      );
+      expect(
+        Object.keys(vi.mocked(eventEmitter.emit).mock.calls[0][1])
+      ).toEqual(['actorId', 'shareType', 'permission']);
+    });
+
+    it('does not emit when permission persistence fails', async () => {
+      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
+      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
+        err(NoteErrors.permissionDenied())
+      );
+
+      await handler.execute({
+        noteId: 'note-1',
+        userId: 'owner-1',
+        targetUserId: 'user-2',
+        permission: PERMISSION.EDITOR,
+      });
+
+      expect(eventEmitter.emit).not.toHaveBeenCalled();
+    });
   });
 
   describe('Owner sharing', () => {
@@ -301,7 +351,11 @@ describe('ShareNoteHandler', () => {
 
   describe('Verified email gate', () => {
     const shareAs = (state: IdentityState) => {
-      const gated = new ShareNoteHandler(noteRepo, policyFor(state));
+      const gated = new ShareNoteHandler(
+        noteRepo,
+        policyFor(state),
+        eventEmitter
+      );
       return gated.execute({
         noteId: 'note-1',
         userId: 'owner-1',

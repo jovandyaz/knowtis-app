@@ -55,6 +55,8 @@ export default defineRailway(() => {
       OAUTH_JWKS: preserve(),
       OPENAI_API_KEY: preserve(),
       OPENROUTER_API_KEY: preserve(),
+      POSTHOG_HOST: preserve(),
+      POSTHOG_PROJECT_TOKEN: preserve(),
       PORT: '3333',
       REDIS_URL: preserve(),
       RESEND_API_KEY: preserve(),

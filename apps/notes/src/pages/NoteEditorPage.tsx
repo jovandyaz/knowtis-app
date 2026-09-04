@@ -20,6 +20,8 @@ import { useAutoTitle } from '@/hooks/useAutoTitle';
 import { useNotesListRefresh } from '@/hooks/useNotesListRefresh';
 import { useNoteSuggestion } from '@/hooks/useNoteSuggestion';
 import { canPerformNoteAction, DEBOUNCE_DELAYS } from '@/lib';
+import { captureProductEvent } from '@/lib/analytics/product-events';
+import { hasMeaningfulText } from '@/lib/html-text';
 import { useAIStore } from '@/stores/ai.store';
 import { useArtifactSidebarStore } from '@/stores/artifact-sidebar.store';
 import { useVoiceNoteEditorStore } from '@/stores/voice-note-editor.store';
@@ -124,6 +126,8 @@ function NoteEditor({
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const pendingUpdateRef = useRef(false);
   const contentRef = useRef(initialContent);
+  const [initiallyEmpty] = useState(() => !hasMeaningfulText(initialContent));
+  const activationCapturedRef = useRef(false);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const editorRef = useRef<Editor | null>(null);
   const isLiveCollabRef = useRef(false);
@@ -228,6 +232,14 @@ function NoteEditor({
       if (newContent === contentRef.current) {
         return;
       }
+      if (
+        initiallyEmpty &&
+        !activationCapturedRef.current &&
+        hasMeaningfulText(newContent)
+      ) {
+        activationCapturedRef.current = true;
+        captureProductEvent('note activated', { source: 'editor' });
+      }
       contentRef.current = newContent;
       if (!isLiveCollabRef.current) {
         // Live CRDT already holds these edits and persists them via Hocuspocus
@@ -239,7 +251,13 @@ function NoteEditor({
       reportEditRef.current(newContent);
       deriveAutoTitle(newContent);
     },
-    [canEdit, debouncedUpdateNote, deriveAutoTitle, refreshNotesList]
+    [
+      canEdit,
+      debouncedUpdateNote,
+      deriveAutoTitle,
+      initiallyEmpty,
+      refreshNotesList,
+    ]
   );
 
   const handleEditorReady = useCallback((editor: Editor) => {
