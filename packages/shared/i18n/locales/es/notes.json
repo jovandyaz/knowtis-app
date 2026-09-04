@@ -141,6 +141,9 @@
     "errorDetails": "Detalles del Error",
     "usersEditing_one": "{{count}} usuario editando",
     "usersEditing_other": "{{count}} usuarios editando",
+    "toolbar": {
+      "moreTools": "Más herramientas"
+    },
     "table": {
       "insert": "Insertar tabla",
       "options": "Opciones de tabla",

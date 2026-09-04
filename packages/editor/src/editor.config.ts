@@ -23,11 +23,13 @@ export interface ToolbarToolConfig {
   isActive: (editor: Editor) => boolean;
   disabled?: (editor: Editor) => boolean;
   shortcut?: string;
-  hideOnMobile?: boolean;
+  /** Folds into the overflow menu when the toolbar container is narrow. */
+  secondary?: boolean;
 }
 
-interface ToolbarSeparatorConfig {
+export interface ToolbarSeparatorConfig {
   type: 'separator';
+  secondary?: boolean;
 }
 
 export interface ToolbarHeadingConfig {
@@ -117,7 +119,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCode().run(),
     isActive: (editor) => editor.isActive('code'),
     shortcut: 'Ctrl+E',
-    hideOnMobile: true,
+    secondary: true,
   },
   {
     icon: CodeXml,
@@ -125,9 +127,9 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleCodeBlock().run(),
     isActive: (editor) => editor.isActive('codeBlock'),
     shortcut: 'Ctrl+Alt+C',
-    hideOnMobile: true,
+    secondary: true,
   },
-  { type: 'separator' },
+  { type: 'separator', secondary: true },
   { type: 'link-popover', shortcut: 'Ctrl+K' },
   { type: 'highlight-picker' },
   {
@@ -136,7 +138,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleSuperscript().run(),
     isActive: (editor) => editor.isActive('superscript'),
     shortcut: 'Ctrl+.',
-    hideOnMobile: true,
+    secondary: true,
   },
   {
     icon: SubscriptIcon,
@@ -144,7 +146,7 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().toggleSubscript().run(),
     isActive: (editor) => editor.isActive('subscript'),
     shortcut: 'Ctrl+,',
-    hideOnMobile: true,
+    secondary: true,
   },
   { type: 'table-insert' },
   { type: 'image-button' },
@@ -153,16 +155,16 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     label: 'Horizontal Rule',
     action: (editor) => editor.chain().focus().setHorizontalRule().run(),
     isActive: () => false,
-    hideOnMobile: true,
+    secondary: true,
   },
-  { type: 'separator' },
+  { type: 'separator', secondary: true },
   {
     icon: Undo,
     label: 'Undo',
     action: (editor) => editor.chain().focus().undo().run(),
     isActive: () => false,
     disabled: (editor) => !editor.can().undo(),
-    hideOnMobile: true,
+    secondary: true,
   },
   {
     icon: Redo,
@@ -170,6 +172,6 @@ export const TOOLBAR_TOOLS: readonly ToolbarItemConfig[] = [
     action: (editor) => editor.chain().focus().redo().run(),
     isActive: () => false,
     disabled: (editor) => !editor.can().redo(),
-    hideOnMobile: true,
+    secondary: true,
   },
 ];

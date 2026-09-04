@@ -141,6 +141,9 @@
     "errorDetails": "Error Details",
     "usersEditing_one": "{{count}} user editing",
     "usersEditing_other": "{{count}} users editing",
+    "toolbar": {
+      "moreTools": "More tools"
+    },
     "table": {
       "insert": "Insert table",
       "options": "Table options",
