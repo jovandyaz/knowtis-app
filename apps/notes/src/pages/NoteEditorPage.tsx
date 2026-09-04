@@ -79,6 +79,7 @@ function NoteEditor({
   const canEdit = canPerformNoteAction(accessLevel, 'update');
   const isOwner = accessLevel === ACCESS.OWNER;
   const aiEnabled = useAIStore((s) => s.aiEnabled);
+  const voiceNotesEnabled = useAIStore((s) => s.voiceNotesEnabled);
   const autoOrganizeEnabled = useFeatureFlag(
     FEATURE_FLAG_KEYS.AI_AUTO_ORGANIZE
   );
@@ -257,7 +258,7 @@ function NoteEditor({
 
   const isSaving = updateNote.isPending || isPendingUpdate;
   const openShareDialog = () => setIsShareDialogOpen(true);
-  const showVoiceNote = canEdit && aiEnabled;
+  const showVoiceNote = canEdit && aiEnabled && voiceNotesEnabled;
 
   return (
     <div className="mx-auto max-w-4xl">

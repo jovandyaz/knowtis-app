@@ -41,11 +41,17 @@ vi.mock('@/components/organization/NotePropertiesRow', () => ({
 }));
 
 const aiEnabled = vi.fn<() => boolean>();
+const voiceNotesEnabled = vi.fn<() => boolean>();
 const autoOrganizeEnabled = vi.fn<() => boolean>();
 
 vi.mock('@/stores/ai.store', () => ({
-  useAIStore: (selector: (s: { aiEnabled: boolean }) => unknown) =>
-    selector({ aiEnabled: aiEnabled() }),
+  useAIStore: (
+    selector: (s: { aiEnabled: boolean; voiceNotesEnabled: boolean }) => unknown
+  ) =>
+    selector({
+      aiEnabled: aiEnabled(),
+      voiceNotesEnabled: voiceNotesEnabled(),
+    }),
 }));
 vi.mock('@knowtis/data-access-feature-flags', () => ({
   useFeatureFlag: () => autoOrganizeEnabled(),
@@ -53,12 +59,17 @@ vi.mock('@knowtis/data-access-feature-flags', () => ({
 
 const editorRenders: { count: number } = { count: 0 };
 let capturedOnUpdate: ((html: string) => void) | undefined;
+let capturedOnVoiceNote: (() => void) | undefined;
 const updateNoteMutate = vi.fn();
 
 vi.mock('@/components/editor/CollaborativeEditor', () => ({
-  CollaborativeEditor: (props: { onUpdate: (html: string) => void }) => {
+  CollaborativeEditor: (props: {
+    onUpdate: (html: string) => void;
+    onVoiceNote?: () => void;
+  }) => {
     editorRenders.count += 1;
     capturedOnUpdate = props.onUpdate;
+    capturedOnVoiceNote = props.onVoiceNote;
     return <div data-testid="collaborative-editor" />;
   },
 }));
@@ -72,7 +83,7 @@ vi.mock('@/components/editor/NoteControlsPortal', () => ({
 }));
 
 vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
-  VoiceNoteRecorder: () => null,
+  VoiceNoteRecorder: () => <div data-testid="voice-note-recorder" />,
 }));
 
 vi.mock('@knowtis/data-access-notes', () => ({
@@ -106,11 +117,38 @@ describe('NoteEditorPage', () => {
   beforeEach(() => {
     editorRenders.count = 0;
     capturedOnUpdate = undefined;
+    capturedOnVoiceNote = undefined;
     updateNoteMutate.mockClear();
     propertiesRowProps.mockClear();
     authUser.mockReturnValue({ isAnonymous: false });
     aiEnabled.mockReturnValue(true);
+    voiceNotesEnabled.mockReturnValue(true);
     autoOrganizeEnabled.mockReturnValue(true);
+  });
+
+  it('offers the voice note entry points when AI and voice notes are both enabled', () => {
+    renderWithClient(<NoteEditorPage />);
+
+    expect(capturedOnVoiceNote).toBeInstanceOf(Function);
+    expect(screen.getByTestId('voice-note-recorder')).toBeInTheDocument();
+  });
+
+  it('hides the voice note entry points when voice notes are disabled', () => {
+    voiceNotesEnabled.mockReturnValue(false);
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(capturedOnVoiceNote).toBeUndefined();
+    expect(screen.queryByTestId('voice-note-recorder')).not.toBeInTheDocument();
+  });
+
+  it('hides the voice note entry points when AI is disabled', () => {
+    aiEnabled.mockReturnValue(false);
+
+    renderWithClient(<NoteEditorPage />);
+
+    expect(capturedOnVoiceNote).toBeUndefined();
+    expect(screen.queryByTestId('voice-note-recorder')).not.toBeInTheDocument();
   });
 
   it('offers the suggestion affordance when both AI flags are on', () => {

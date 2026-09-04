@@ -74,7 +74,11 @@ function AppLayout() {
   const setSidebarCollapsed = useSidebarStore((s) => s.setCollapsed);
   const toggle = useSidebarStore((s) => s.toggle);
   const aiEnabled = useFeatureFlag(FEATURE_FLAG_KEYS.AI_ENABLED);
+  const voiceNotesEnabled = useFeatureFlag(
+    FEATURE_FLAG_KEYS.VOICE_NOTES_ENABLED
+  );
   const setAIEnabled = useAIStore((s) => s.setAIEnabled);
+  const setVoiceNotesEnabled = useAIStore((s) => s.setVoiceNotesEnabled);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const showLimitModal = useAnonymousLimitStore((s) => s.showModal);
   const closeLimitModal = useAnonymousLimitStore((s) => s.closeModal);
@@ -99,6 +103,10 @@ function AppLayout() {
   useEffect(() => {
     setAIEnabled(aiEnabled);
   }, [aiEnabled, setAIEnabled]);
+
+  useEffect(() => {
+    setVoiceNotesEnabled(voiceNotesEnabled);
+  }, [voiceNotesEnabled, setVoiceNotesEnabled]);
 
   useEffect(() => {
     if (user?.locale && user.locale !== i18n.language) {
