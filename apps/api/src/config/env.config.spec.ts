@@ -263,6 +263,12 @@ describe('validateEnv', () => {
     expect(env.RAILWAY_GIT_COMMIT_SHA).toBe('sha-123');
   });
 
+  it('rejects a plain-HTTP PostHog host so the project token never travels in cleartext', () => {
+    expect(() =>
+      validateEnv({ ...baseEnv, POSTHOG_HOST: 'http://us.i.posthog.com' })
+    ).toThrow();
+  });
+
   it('should accept a valid config and default BCRYPT_ROUNDS to 12', () => {
     const config = validateEnv(validEnv);
     expect(config.BCRYPT_ROUNDS).toBe(12);
