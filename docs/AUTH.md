@@ -192,7 +192,7 @@ All FKs cascade on delete. Token tables are indexed on `user_id` and `token_hash
 
 `@jovandyaz/auth-react` is decoupled from any HTTP client via the `AuthApiAdapter` interface. The adapter is implemented in `apps/notes/src/auth/auth-api-adapter.ts`.
 
-Token storage: access token **in-memory only**, refresh token in **HttpOnly cookie** (set by the backend, not accessible from JS). On rehydration the persisted store only keeps `isLoading` true for a previously authenticated user; the silent refresh that validates the cookie is run by `useSessionManager` (mounted in `AppProviders`), which also refreshes proactively before `exp` and when the tab becomes visible again.
+Token storage: access token **in-memory only**, refresh token in **HttpOnly cookie** (set by the backend, not accessible from JS). On rehydration the persisted store only keeps `isLoading` true for a previously authenticated user; the silent refresh that validates the cookie is run by `useSessionManager` (mounted in `AppProviders`), which also refreshes proactively before `exp` and when the tab becomes visible again. Anonymous sessions are intentionally excluded from all three: they receive the same 15-minute access token and refresh cookie as registered users, but the session manager's only recovery from a failed refresh is `logout()`, so the notes app instead refreshes them on demand from the API client's `401` handler (falling back to a fresh anonymous identity) and an idle anonymous session is allowed to expire.
 
 Automatic token refresh is handled by `HttpClient` in `@knowtis/api-client`: on 401 → refresh callback (sends cookie via `credentials: 'include'`) → retry request. Wired via `httpClient.setRefreshTokenCallback()` in the adapter.
 

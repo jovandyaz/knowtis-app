@@ -35,23 +35,28 @@ export function useSessionManager(
   } = options;
 
   const refreshMarginRef = useRef(refreshMarginMs);
-  refreshMarginRef.current = refreshMarginMs;
-
   const isTerminalRef = useRef(isTerminalRefreshFailure);
-  isTerminalRef.current = isTerminalRefreshFailure;
-
   const apiRef = useRef(api);
-  apiRef.current = api;
-
   const storeRef = useRef(store);
-  storeRef.current = store;
-
   const tokenStorageRef = useRef(tokenStorage);
-  tokenStorageRef.current = tokenStorage;
+
+  useEffect(() => {
+    refreshMarginRef.current = refreshMarginMs;
+    isTerminalRef.current = isTerminalRefreshFailure;
+    apiRef.current = api;
+    storeRef.current = store;
+    tokenStorageRef.current = tokenStorage;
+  });
+
+  // Anonymous sessions are deliberately left out of every refresh path below.
+  // They hold the same short-lived access token and refresh cookie as
+  // registered users, but this hook's only answer to a failed refresh is
+  // logout(), which is the wrong recovery for a throwaway identity. Hosts
+  // refresh anonymous sessions on demand when a request is rejected, or mint
+  // a new identity, so an idle anonymous session is simply allowed to expire.
 
   // --- Bootstrap validation ---
   // On mount, if store says authenticated but no in-memory token, try silent refresh.
-  // Anonymous users skip refresh (they use long-lived access tokens, no refresh tokens).
   useEffect(() => {
     const { isAuthenticated, user, setLoading, logout } =
       storeRef.current.getState();
@@ -97,7 +102,6 @@ export function useSessionManager(
   }, []);
 
   // --- Proactive refresh timer ---
-  // Anonymous users use long-lived access tokens with no refresh tokens, so skip.
   useEffect(() => {
     if (store.getState().user?.isAnonymous) {
       return;
@@ -141,7 +145,6 @@ export function useSessionManager(
   }, [api, tokenStorage, store]);
 
   // --- Visibility change handler ---
-  // Anonymous users use long-lived access tokens with no refresh tokens, so skip.
   useEffect(() => {
     if (store.getState().user?.isAnonymous) {
       return;
