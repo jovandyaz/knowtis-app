@@ -370,7 +370,6 @@ export class NotesController {
         'title',
         'content',
         'yjsState',
-        'skipYjsState',
         'generalAccess',
         'generalAccessPermission',
         'editorsCanShare',

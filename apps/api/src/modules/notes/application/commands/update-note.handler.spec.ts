@@ -327,33 +327,6 @@ describe('UpdateNoteHandler', () => {
     expect(mockRepository.updateContentWithYjsState).not.toHaveBeenCalled();
   });
 
-  // A pre-rollout bundle cannot send CRDT state, but leaving yjs_state unset
-  // is what let those notes duplicate in the first place. The flag now only
-  // suppresses the broadcast; the state is still kept coherent.
-  it('keeps CRDT state coherent for a pre-rollout bundle without echoing it back', async () => {
-    vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
-    vi.spyOn(mockRepository, 'updateContentWithYjsState').mockResolvedValue(
-      ok({ ...mockNote, content: '<p>Old tab</p>' })
-    );
-
-    const result = await handler.execute({
-      noteId: 'note-1',
-      userId: 'owner-1',
-      content: '<p>Old tab</p>',
-      skipYjsState: true,
-    });
-
-    expect(result.isOk()).toBe(true);
-    const [, , bufferArg] = vi.mocked(mockRepository.updateContentWithYjsState)
-      .mock.calls[0];
-    expect(Buffer.isBuffer(bufferArg)).toBe(true);
-    expect((bufferArg as Buffer).byteLength).toBeGreaterThan(0);
-
-    const emitted = vi.mocked(mockEventEmitter.emit).mock
-      .calls[0]?.[1] as NoteUpdatedEvent;
-    expect(emitted.yjsState).toBeUndefined();
-  });
-
   it('should reject bytes that are not a Yjs update', async () => {
     vi.spyOn(mockRepository, 'findById').mockResolvedValue(mockNote);
 
