@@ -233,11 +233,16 @@ Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows e
 Run after every production deploy that touches health, rate limiting or Railway config; each line names what it proves.
 
 ```bash
-# The deploy gate waited for the real terminal status (not an attached CLI return)
-gh run view <ci-run-id> --log | grep -E "waiting up to|succeeded"
+# The CI run concluded with success (non-zero exit otherwise), and the deploy gate
+# polled the deployment to its real terminal status (not an attached CLI return)
+gh run view <ci-run-id> --exit-status --json conclusion
+job=$(gh run view <ci-run-id> --json jobs -q '.jobs[] | select(.name=="Deploy API to Railway") | .databaseId')
+gh api "repos/jovandyaz/knowtis-app/actions/jobs/$job/logs" | grep -F "Deployment" | grep -E "waiting up to [0-9]+s|succeeded\.$"
 
-# Running build: boot log shows the migrator and the detected RSS ceiling (90% of the container limit)
-railway logs --service knowtis_app -n 400 | grep -E "schema up to date|RSS health ceiling"
+# Running build: the boot log shows both the migrator and the detected RSS ceiling
+# (90% of the container limit); each grep fails on its own if a marker is missing
+log=$(railway logs --service knowtis_app -n 400)
+grep -Fq "schema up to date" <<<"$log" && grep -F "RSS health ceiling" <<<"$log"
 
 # Full health: 200 with database and memory_rss up; a 503 body names the failing indicator
 curl --fail-with-body https://<api-domain>/api/v1/health
@@ -256,7 +261,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -H 'X-Real-IP: 203.0.113.8' -H 'content
 railway config plan
 ```
 
-Locally the same health paths are exercised against the built API (`pnpm nx build api && node --env-file=apps/api/.env dist/apps/api/main.js`): `docker stop knowtis-postgres` turns `/api/v1/health` and `/ready` into 503 with `Database unreachable` (the driver error stays in the log) while `/ping` stays 200, and they recover once Postgres is back. Without an edge, `X-Real-IP` is client-supplied, so the local spoof check is "fixed `X-Real-IP` + rotating `X-Forwarded-For` stays 429".
+Locally the same health paths are exercised against the built API (`pnpm nx build api && node --env-file=apps/api/.env dist/apps/api/main.js`): `docker stop knowtis-postgres` turns `/api/v1/health` and `/api/v1/health/ready` into 503 with `Database unreachable` (the driver error stays in the log) while `/api/v1/health/ping` stays 200, and they recover once Postgres is back. Without an edge, `X-Real-IP` is client-supplied, so the local spoof check is "fixed `X-Real-IP` + rotating `X-Forwarded-For` stays 429".
 
 ## Quick Reference
 
