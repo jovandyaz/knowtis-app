@@ -5,6 +5,7 @@ import {
   setAnalyticsContext,
   type BrowserProductEventMap,
 } from './product-events';
+import { resumeAnalyticsCapture, setAnalyticsReady } from './runtime';
 
 const { posthog } = vi.hoisted(() => ({
   posthog: {
@@ -20,6 +21,8 @@ describe('browser product events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     posthog.__loaded = true;
+    setAnalyticsReady(true);
+    resumeAnalyticsCapture();
   });
 
   it('captures only a declared event payload plus the current common context', () => {
@@ -81,7 +84,7 @@ describe('browser product events', () => {
   });
 
   it('replaces context without registering while PostHog is not loaded', () => {
-    posthog.__loaded = false;
+    setAnalyticsReady(false);
     setAnalyticsContext({
       environment: 'production',
       app_version: 'sha-unloaded',
@@ -92,7 +95,7 @@ describe('browser product events', () => {
 
     expect(posthog.register).not.toHaveBeenCalled();
 
-    posthog.__loaded = true;
+    setAnalyticsReady(true);
     captureProductEvent('note activated', { source: 'editor' });
     expect(posthog.capture).toHaveBeenCalledWith('note activated', {
       environment: 'production',
@@ -114,12 +117,20 @@ describe('browser product events', () => {
     ).not.toThrow();
   });
 
-  it('contains registration failures while retaining the replacement context', () => {
+  it('reports registration failures and retains the last completed context', () => {
+    setAnalyticsContext({
+      environment: 'production',
+      app_version: 'sha-completed',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'es',
+    });
+    vi.clearAllMocks();
     posthog.register.mockImplementationOnce(() => {
       throw new Error('register unavailable');
     });
 
-    expect(() =>
+    expect(
       setAnalyticsContext({
         environment: 'production',
         app_version: 'sha-after-register-failure',
@@ -127,15 +138,15 @@ describe('browser product events', () => {
         is_internal: false,
         locale: 'en',
       })
-    ).not.toThrow();
+    ).toBe(false);
 
     captureProductEvent('note activated', { source: 'editor' });
     expect(posthog.capture).toHaveBeenCalledWith('note activated', {
       environment: 'production',
-      app_version: 'sha-after-register-failure',
-      actor_type: 'registered',
+      app_version: 'sha-completed',
+      actor_type: 'anonymous',
       is_internal: false,
-      locale: 'en',
+      locale: 'es',
       source: 'editor',
     });
   });

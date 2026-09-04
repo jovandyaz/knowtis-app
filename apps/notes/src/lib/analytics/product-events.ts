@@ -2,6 +2,7 @@ import type { AIAction } from '@knowtis/shared-types';
 
 import { posthog } from '../posthog';
 import { runAnalyticsSafely } from './best-effort';
+import { canCaptureAnalytics, isAnalyticsReady } from './runtime';
 
 export interface BrowserActorContext {
   environment: 'production';
@@ -64,7 +65,7 @@ export function captureProductEvent<E extends BrowserProductEventName>(
   event: E,
   properties: BrowserProductEventMap[E]
 ): void {
-  if (!posthog.__loaded) {
+  if (!canCaptureAnalytics()) {
     return;
   }
   runAnalyticsSafely(() => {
@@ -75,9 +76,14 @@ export function captureProductEvent<E extends BrowserProductEventName>(
   });
 }
 
-export function setAnalyticsContext(context: BrowserActorContext): void {
-  analyticsContext = context;
-  if (posthog.__loaded) {
-    runAnalyticsSafely(() => posthog.register(context));
+export function setAnalyticsContext(context: BrowserActorContext): boolean {
+  if (
+    isAnalyticsReady() &&
+    !runAnalyticsSafely(() => posthog.register(context))
+  ) {
+    return false;
   }
+
+  analyticsContext = context;
+  return true;
 }

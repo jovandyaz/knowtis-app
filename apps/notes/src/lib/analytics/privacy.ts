@@ -6,7 +6,11 @@ const URL_PROPERTY_KEYS = new Set([
   '$initial_current_url',
   '$initial_referrer',
   '$pathname',
+  '$prev_pageview_pathname',
   '$referrer',
+  '$session_entry_pathname',
+  '$session_entry_referrer',
+  '$session_entry_url',
 ]);
 const PERSON_PROPERTY_KEYS = new Set([
   'email',
@@ -31,6 +35,31 @@ const SENSITIVE_PROPERTY_ROOTS = [
   'title',
   'token',
 ];
+const QUERY_DERIVED_PROPERTY_KEYS = new Set([
+  '_kx',
+  'dclid',
+  'epik',
+  'fbclid',
+  'gad_source',
+  'gbraid',
+  'gclid',
+  'gclsrc',
+  'igshid',
+  'irclid',
+  'li_fat_id',
+  'mc_cid',
+  'msclkid',
+  'ph_keyword',
+  'qclid',
+  'rdt_cid',
+  'sccid',
+  'ttclid',
+  'twclid',
+  'wbraid',
+]);
+const QUERY_DERIVED_COMPACT_KEYS = new Set(
+  [...QUERY_DERIVED_PROPERTY_KEYS].map((key) => key.replace(/[^a-z0-9]/g, ''))
+);
 
 function templatePathname(pathname: string): string {
   if (/^\/notes\/[^/]+/.test(pathname)) {
@@ -67,11 +96,31 @@ function sanitizeUrl(key: string, value: Property): Property | undefined {
   }
 }
 
-function isSensitiveEventProperty(key: string): boolean {
-  const normalizedKey = key
+function normalizePropertyKey(key: string): string {
+  return key
     .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
     .toLowerCase()
     .replace(/^\$+/, '');
+}
+
+function isQueryDerivedProperty(key: string): boolean {
+  const normalizedKey = normalizePropertyKey(key);
+  const segments = normalizedKey.split(/[^a-z0-9]+/);
+  const compactKey = normalizedKey.replace(/[^a-z0-9]/g, '');
+
+  return (
+    QUERY_DERIVED_PROPERTY_KEYS.has(normalizedKey) ||
+    QUERY_DERIVED_COMPACT_KEYS.has(compactKey) ||
+    segments.includes('utm') ||
+    segments.includes('campaign') ||
+    segments.includes('keyword') ||
+    segments.includes('search') ||
+    (segments.includes('click') && segments.includes('id'))
+  );
+}
+
+function isSensitiveEventProperty(key: string): boolean {
+  const normalizedKey = normalizePropertyKey(key);
   if (normalizedKey === 'source') {
     return false;
   }
@@ -99,6 +148,9 @@ function sanitizeProperties(
       }
       continue;
     }
+    if (propertyKind === 'event' && isQueryDerivedProperty(key)) {
+      continue;
+    }
     if (
       (propertyKind === 'event' && !isSensitiveEventProperty(key)) ||
       (propertyKind === 'person' && PERSON_PROPERTY_KEYS.has(key))
@@ -114,6 +166,9 @@ export function sanitizePostHogEvent(
   event: CaptureResult | null
 ): CaptureResult | null {
   if (event === null) {
+    return null;
+  }
+  if (event.event === '$snapshot') {
     return null;
   }
 

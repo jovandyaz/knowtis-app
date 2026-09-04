@@ -48,6 +48,90 @@ describe('sanitizePostHogEvent', () => {
     });
   });
 
+  it('sanitizes PostHog pageview and pageleave paths and drops query-derived acquisition fields', () => {
+    const pageview: CaptureResult = {
+      uuid: 'event-pageview',
+      event: '$pageview',
+      properties: {
+        $current_url:
+          'https://knowtis.app/notes/private-note-id?search=private-query',
+        $pathname: '/notes/private-note-id',
+        $prev_pageview_pathname: '/s/private-share-token?code=private-code',
+        $session_entry_url:
+          'https://knowtis.app/notes/private-entry-note?utm_source=private-source',
+        $session_entry_referrer:
+          'https://partner.example/private/path?code=private-code',
+        $session_entry_pathname: '/s/private-entry-share-token',
+        ph_keyword: 'private-keyword',
+        $utm_medium: 'private-medium',
+        utmCampaign: 'private-campaign',
+        gclid: 'private-google-click-id',
+        clickId: 'private-click-id',
+        searchEngine: 'private-search-engine',
+        $geoip_country_code: 'MX',
+      },
+    };
+    const pageleave: CaptureResult = {
+      uuid: 'event-pageleave',
+      event: '$pageleave',
+      properties: {
+        $current_url:
+          'https://knowtis.app/s/private-share-token?utm_source=private-source',
+        $pathname: '/s/private-share-token',
+        $prev_pageview_pathname: '/notes/private-note-id#private-fragment',
+        fbclid: 'private-facebook-click-id',
+        fbClid: 'private-facebook-camel-click-id',
+        g_clid: 'private-google-snake-click-id',
+        msClkId: 'private-microsoft-camel-click-id',
+        campaign_id: 'private-campaign-id',
+        search_query: 'private-search-query',
+      },
+    };
+
+    expect(sanitizePostHogEvent(pageview)).toEqual({
+      uuid: 'event-pageview',
+      event: '$pageview',
+      properties: {
+        $current_url: 'https://knowtis.app/notes/:noteId',
+        $pathname: '/notes/:noteId',
+        $prev_pageview_pathname: '/s/:shareToken',
+        $session_entry_url: 'https://knowtis.app/notes/:noteId',
+        $session_entry_referrer: 'https://partner.example',
+        $session_entry_pathname: '/s/:shareToken',
+        $geoip_country_code: 'MX',
+      },
+    });
+    expect(sanitizePostHogEvent(pageleave)).toEqual({
+      uuid: 'event-pageleave',
+      event: '$pageleave',
+      properties: {
+        $current_url: 'https://knowtis.app/s/:shareToken',
+        $pathname: '/s/:shareToken',
+        $prev_pageview_pathname: '/notes/:noteId',
+      },
+    });
+  });
+
+  it('drops replay snapshots containing current, DOM, and nested href values', () => {
+    const replayEvent = {
+      uuid: 'event-replay',
+      event: '$snapshot',
+      properties: {
+        $current_url: 'https://knowtis.app/notes/private-note-id',
+        $snapshot_data: {
+          href: 'https://knowtis.app/s/private-share-token',
+          nested: {
+            attributes: {
+              href: 'https://knowtis.app/notes/another-private-note-id',
+            },
+          },
+        },
+      },
+    } as unknown as CaptureResult;
+
+    expect(sanitizePostHogEvent(replayEvent)).toBeNull();
+  });
+
   it('keeps only the origin of external referrers and removes malformed URLs', () => {
     const event: CaptureResult = {
       uuid: 'event-3',

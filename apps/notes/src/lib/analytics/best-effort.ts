@@ -1,7 +1,8 @@
-export function runAnalyticsSafely(operation: () => void): void {
+export function runAnalyticsSafely(operation: () => void): boolean {
   try {
     operation();
+    return true;
   } catch {
-    return;
+    return false;
   }
 }

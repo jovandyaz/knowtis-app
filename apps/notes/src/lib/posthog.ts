@@ -1,7 +1,9 @@
 import posthog from 'posthog-js';
-import type { PostHogConfig } from 'posthog-js';
+import type { PostHog, PostHogConfig } from 'posthog-js';
 
+import { runAnalyticsSafely } from './analytics/best-effort';
 import { sanitizePostHogEvent } from './analytics/privacy';
+import { canCaptureAnalytics, setAnalyticsReady } from './analytics/runtime';
 
 const POSTHOG_KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY as
   | string
@@ -17,6 +19,7 @@ export function buildPostHogOptions(host?: string): Partial<PostHogConfig> {
     capture_pageview: false,
     capture_pageleave: true,
     autocapture: false,
+    disable_session_recording: true,
     before_send: sanitizePostHogEvent,
     session_recording: {
       maskAllInputs: true,
@@ -31,6 +34,10 @@ interface PostHogEligibilityInput {
   hostname: string;
 }
 
+interface PostHogInitializationInput extends PostHogEligibilityInput {
+  host: string | undefined;
+}
+
 export function isPostHogEligible({
   key,
   isDev,
@@ -39,19 +46,38 @@ export function isPostHogEligible({
   return Boolean(key) && !isDev && hostname === 'knowtis.app';
 }
 
-export function initPostHog(): void {
-  if (
-    !POSTHOG_KEY ||
-    !isPostHogEligible({
-      key: POSTHOG_KEY,
-      isDev: import.meta.env.DEV,
-      hostname: window.location.hostname,
-    })
-  ) {
-    return;
+export function initializePostHog(
+  client: Pick<PostHog, 'init'>,
+  input: PostHogInitializationInput
+): boolean {
+  const key = input.key;
+  if (!key || !isPostHogEligible(input)) {
+    return false;
   }
 
-  posthog.init(POSTHOG_KEY, buildPostHogOptions(POSTHOG_HOST));
+  const initialized = runAnalyticsSafely(() => {
+    client.init(key, buildPostHogOptions(input.host));
+  });
+  if (initialized) {
+    setAnalyticsReady(true);
+  }
+  return initialized;
+}
+
+export function initPostHog(): boolean {
+  return initializePostHog(posthog, {
+    key: POSTHOG_KEY,
+    host: POSTHOG_HOST,
+    isDev: import.meta.env.DEV,
+    hostname: window.location.hostname,
+  });
+}
+
+export function capturePageview(): void {
+  if (!canCaptureAnalytics()) {
+    return;
+  }
+  runAnalyticsSafely(() => posthog.capture('$pageview'));
 }
 
 export { posthog };

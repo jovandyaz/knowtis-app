@@ -101,6 +101,69 @@ describe('ProductAnalytics', () => {
     await close();
   });
 
+  it('runtime-picks exact event, actor, and person allowlists from structural variables', async () => {
+    const { analytics, close } = await createAnalytics({
+      NODE_ENV: 'production',
+      POSTHOG_PROJECT_TOKEN: 'project-token',
+      POSTHOG_HOST: 'https://us.i.posthog.com',
+      RAILWAY_GIT_COMMIT_SHA: 'sha-allowlist',
+    });
+    const properties = {
+      source: 'api' as const,
+      verification_method: 'link' as const,
+      noteId: 'private-note-id',
+      content: 'private-content',
+      optionalExtra: undefined,
+    };
+    const actor = {
+      actor_type: 'registered' as const,
+      is_internal: true,
+      locale: 'en',
+      userId: 'private-user-id',
+    };
+    const personProperties = {
+      email: 'person@example.com',
+      name: 'Person',
+      role: 'admin' as const,
+      locale: 'en',
+      is_internal: true,
+      arbitraryPersonField: 'private-person-value',
+      noteId: 'private-person-note-id',
+      optionalExtra: undefined,
+    };
+
+    analytics.capture({
+      distinctId: 'user-1',
+      event: 'email verified',
+      properties,
+      actor,
+      personProperties,
+    });
+
+    expect(capture).toHaveBeenCalledWith({
+      distinctId: 'user-1',
+      event: 'email verified',
+      properties: {
+        environment: 'production',
+        app_version: 'sha-allowlist',
+        source: 'api',
+        verification_method: 'link',
+        actor_type: 'registered',
+        is_internal: true,
+        locale: 'en',
+        $set: {
+          email: 'person@example.com',
+          name: 'Person',
+          role: 'admin',
+          locale: 'en',
+          is_internal: true,
+        },
+      },
+    });
+
+    await close();
+  });
+
   it('does not throw when the PostHog client is unavailable', async () => {
     const { analytics, close } = await createAnalytics({ NODE_ENV: 'test' });
 

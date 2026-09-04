@@ -3,8 +3,13 @@ import type { PostHog } from 'posthog-js';
 
 import { runAnalyticsSafely } from './best-effort';
 import { setAnalyticsContext } from './product-events';
+import { pauseAnalyticsCapture, resumeAnalyticsCapture } from './runtime';
 
 type IdentityClient = Pick<PostHog, 'identify' | 'reset'>;
+type IdentitySynchronizer = ReturnType<typeof createIdentitySynchronizer>;
+
+const IDENTITY_RETRY_DELAY_MS = 1_000;
+const MAX_IDENTITY_SYNC_ATTEMPTS = 3;
 
 type NormalizedIdentity =
   | { actor_type: 'anonymous'; locale: string }
@@ -43,7 +48,7 @@ function identitiesMatch(
 }
 
 export function createIdentitySynchronizer(client: IdentityClient): {
-  sync(user: AuthUserProfile | null): void;
+  sync(user: AuthUserProfile | null): boolean;
 } {
   let lastIdentity: NormalizedIdentity | undefined;
 
@@ -51,40 +56,113 @@ export function createIdentitySynchronizer(client: IdentityClient): {
     sync(user) {
       const identity = normalizeIdentity(user);
       if (identitiesMatch(lastIdentity, identity)) {
-        return;
+        return true;
+      }
+
+      pauseAnalyticsCapture();
+
+      const requiresReset =
+        lastIdentity?.actor_type === 'registered' &&
+        (identity.actor_type === 'anonymous' ||
+          identity.id !== lastIdentity.id);
+      if (requiresReset && !runAnalyticsSafely(() => client.reset())) {
+        return false;
       }
 
       if (identity.actor_type === 'anonymous') {
-        if (lastIdentity?.actor_type === 'registered') {
-          runAnalyticsSafely(() => client.reset());
-        }
-        setAnalyticsContext({
-          environment: 'production',
-          app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
-          actor_type: 'anonymous',
-          is_internal: false,
-          locale: identity.locale,
-        });
-      } else {
-        runAnalyticsSafely(() => {
-          client.identify(identity.id, {
-            email: identity.email,
-            name: identity.name,
-            role: identity.role,
+        if (
+          !setAnalyticsContext({
+            environment: 'production',
+            app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
+            actor_type: 'anonymous',
+            is_internal: false,
             locale: identity.locale,
+          })
+        ) {
+          return false;
+        }
+      } else {
+        if (
+          !runAnalyticsSafely(() => {
+            client.identify(identity.id, {
+              email: identity.email,
+              name: identity.name,
+              role: identity.role,
+              locale: identity.locale,
+              is_internal: identity.is_internal,
+            });
+          })
+        ) {
+          return false;
+        }
+        if (
+          !setAnalyticsContext({
+            environment: 'production',
+            app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
+            actor_type: 'registered',
             is_internal: identity.is_internal,
-          });
-        });
-        setAnalyticsContext({
-          environment: 'production',
-          app_version: import.meta.env.VITE_APP_VERSION || '0.1.0',
-          actor_type: 'registered',
-          is_internal: identity.is_internal,
-          locale: identity.locale,
-        });
+            locale: identity.locale,
+          })
+        ) {
+          return false;
+        }
       }
 
       lastIdentity = identity;
+      resumeAnalyticsCapture();
+      return true;
+    },
+  };
+}
+
+export function createIdentityRetryController(
+  synchronizer: IdentitySynchronizer
+): {
+  sync(user: AuthUserProfile | null): void;
+  stop(): void;
+} {
+  let activeSequence = 0;
+  let retryTimer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+
+  const clearRetry = () => {
+    if (retryTimer !== undefined) {
+      clearTimeout(retryTimer);
+      retryTimer = undefined;
+    }
+  };
+
+  const attemptSync = (
+    user: AuthUserProfile | null,
+    attempt: number,
+    sequence: number
+  ) => {
+    if (stopped || sequence !== activeSequence) {
+      return;
+    }
+    if (synchronizer.sync(user) || attempt >= MAX_IDENTITY_SYNC_ATTEMPTS) {
+      return;
+    }
+
+    retryTimer = setTimeout(() => {
+      retryTimer = undefined;
+      attemptSync(user, attempt + 1, sequence);
+    }, IDENTITY_RETRY_DELAY_MS);
+  };
+
+  return {
+    sync(user) {
+      if (stopped) {
+        return;
+      }
+      activeSequence += 1;
+      clearRetry();
+      attemptSync(user, 1, activeSequence);
+    },
+    stop() {
+      stopped = true;
+      activeSequence += 1;
+      clearRetry();
     },
   };
 }

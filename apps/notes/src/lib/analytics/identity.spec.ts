@@ -1,7 +1,12 @@
 import type { AuthUserProfile } from '@jovandyaz/auth-react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createIdentitySynchronizer } from './identity';
+import {
+  createIdentityRetryController,
+  createIdentitySynchronizer,
+} from './identity';
+import { captureProductEvent, setAnalyticsContext } from './product-events';
+import { resumeAnalyticsCapture, setAnalyticsReady } from './runtime';
 
 const { posthog } = vi.hoisted(() => ({
   posthog: {
@@ -25,7 +30,22 @@ const REGISTERED_USER: AuthUserProfile = {
 };
 
 describe('createIdentitySynchronizer', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   beforeEach(() => {
+    vi.clearAllMocks();
+    posthog.__loaded = true;
+    setAnalyticsReady(true);
+    resumeAnalyticsCapture();
+    setAnalyticsContext({
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'anonymous',
+      is_internal: false,
+      locale: 'es',
+    });
     vi.clearAllMocks();
   });
 
@@ -161,13 +181,19 @@ describe('createIdentitySynchronizer', () => {
     });
   });
 
-  it('contains identify failures and still registers and remembers context', () => {
+  it('keeps capture paused after identify failure and retries the incomplete identity', () => {
     posthog.identify.mockImplementationOnce(() => {
       throw new Error('identify unavailable');
     });
     const synchronizer = createIdentitySynchronizer(posthog);
 
-    expect(() => synchronizer.sync(REGISTERED_USER)).not.toThrow();
+    expect(synchronizer.sync(REGISTERED_USER)).toBe(false);
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).not.toHaveBeenCalled();
+    expect(posthog.register).not.toHaveBeenCalled();
+
+    expect(synchronizer.sync(REGISTERED_USER)).toBe(true);
+    expect(posthog.identify).toHaveBeenCalledTimes(2);
     expect(posthog.register).toHaveBeenCalledWith({
       environment: 'production',
       app_version: '0.1.0',
@@ -175,13 +201,19 @@ describe('createIdentitySynchronizer', () => {
       is_internal: false,
       locale: 'es',
     });
-
-    synchronizer.sync(REGISTERED_USER);
-    expect(posthog.identify).toHaveBeenCalledOnce();
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).toHaveBeenCalledWith('note activated', {
+      environment: 'production',
+      app_version: '0.1.0',
+      actor_type: 'registered',
+      is_internal: false,
+      locale: 'es',
+      source: 'editor',
+    });
     expect(posthog.register).toHaveBeenCalledOnce();
   });
 
-  it('contains reset failures and still registers anonymous context', () => {
+  it('keeps capture paused after reset failure and retries before changing context', () => {
     const synchronizer = createIdentitySynchronizer(posthog);
     synchronizer.sync(REGISTERED_USER);
     vi.clearAllMocks();
@@ -189,7 +221,13 @@ describe('createIdentitySynchronizer', () => {
       throw new Error('reset unavailable');
     });
 
-    expect(() => synchronizer.sync(null)).not.toThrow();
+    expect(synchronizer.sync(null)).toBe(false);
+    captureProductEvent('note activated', { source: 'editor' });
+    expect(posthog.capture).not.toHaveBeenCalled();
+    expect(posthog.register).not.toHaveBeenCalled();
+
+    expect(synchronizer.sync(null)).toBe(true);
+    expect(posthog.reset).toHaveBeenCalledTimes(2);
     expect(posthog.register).toHaveBeenCalledWith({
       environment: 'production',
       app_version: '0.1.0',
@@ -197,5 +235,68 @@ describe('createIdentitySynchronizer', () => {
       is_internal: false,
       locale: 'es',
     });
+  });
+
+  it('resets before identifying and registering a different registered user', () => {
+    const synchronizer = createIdentitySynchronizer(posthog);
+    synchronizer.sync(REGISTERED_USER);
+    vi.clearAllMocks();
+
+    expect(
+      synchronizer.sync({
+        ...REGISTERED_USER,
+        id: 'user-2',
+        email: 'other@example.com',
+        name: 'Other Person',
+      })
+    ).toBe(true);
+
+    expect(posthog.reset).toHaveBeenCalledOnce();
+    expect(posthog.identify).toHaveBeenCalledWith('user-2', {
+      email: 'other@example.com',
+      name: 'Other Person',
+      role: 'user',
+      locale: 'es',
+      is_internal: false,
+    });
+    expect(posthog.reset.mock.invocationCallOrder[0]).toBeLessThan(
+      posthog.identify.mock.invocationCallOrder[0] ?? 0
+    );
+    expect(posthog.identify.mock.invocationCallOrder[0]).toBeLessThan(
+      posthog.register.mock.invocationCallOrder[0] ?? 0
+    );
+  });
+
+  it('retries a failed identity sync and stops after the bounded attempt count', () => {
+    vi.useFakeTimers();
+    const sync = vi.fn().mockReturnValue(false);
+    const controller = createIdentityRetryController({ sync });
+
+    controller.sync(REGISTERED_USER);
+    vi.runAllTimers();
+
+    expect(sync).toHaveBeenCalledTimes(3);
+    controller.stop();
+  });
+
+  it('cancels pending identity retries on state change and cleanup', () => {
+    vi.useFakeTimers();
+    const sync = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const controller = createIdentityRetryController({ sync });
+    const nextUser = { ...REGISTERED_USER, id: 'user-2' };
+
+    controller.sync(REGISTERED_USER);
+    controller.sync(nextUser);
+    vi.runAllTimers();
+
+    expect(sync).toHaveBeenCalledTimes(2);
+    expect(sync).toHaveBeenNthCalledWith(1, REGISTERED_USER);
+    expect(sync).toHaveBeenNthCalledWith(2, nextUser);
+
+    sync.mockReturnValue(false);
+    controller.sync(REGISTERED_USER);
+    controller.stop();
+    vi.runAllTimers();
+    expect(sync).toHaveBeenCalledTimes(3);
   });
 });
