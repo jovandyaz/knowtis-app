@@ -980,7 +980,7 @@ Three entry points:
 2. **Editor toolbar, insert mode** — the mic button in `EditorToolbar` (`packages/editor`) calls `onVoiceNote`; `pages/NoteEditorPage.tsx` renders `VoiceNoteRecorder mode="insert"` and inserts the result at the cursor.
 3. **Slash command, insert mode** — `ai-voice-note` in `components/editor/ai/ai-actions.config.ts` (keywords `voice`, `voz`, `grabar`, ...) opens `useVoiceNoteEditorStore` (`stores/voice-note-editor.store.ts`) with the cursor position and the pre-acquired stream; `NoteEditorPage` reads the store and mounts the recorder.
 
-**Known gap:** the server gates on both flags, but every frontend entry point checks only `aiEnabled` from `useAIStore` (`NoteList.tsx`, `FloatingCreateButton.tsx`, `NoteEditorPage.tsx`). With `ai_enabled` on and `voice_notes_enabled` off, the recorder renders and the request fails with `FeatureFlagGuard`'s `403 Feature 'voice_notes_enabled' is not enabled`.
+**Flag gating:** every entry point requires both `ai_enabled` and `voice_notes_enabled`, mirroring the server's `FeatureFlagGuard`. `routes/_app.tsx` reads both flags through `useFeatureFlag` and mirrors them into `useAIStore` (`aiEnabled`, `voiceNotesEnabled`); the components read the store, and the slash-command filter (`slash-commands.config.ts`, which runs outside React) reads it via `useAIStore.getState()`. With `voice_notes_enabled` off, no recorder, toolbar mic, or `ai-voice-note` command renders.
 
 ---
 

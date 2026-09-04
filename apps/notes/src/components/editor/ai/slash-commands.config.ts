@@ -1,3 +1,4 @@
+import { useAIStore } from '@/stores/ai.store';
 import type { Editor, Range } from '@tiptap/react';
 import {
   CheckSquare,
@@ -32,18 +33,25 @@ export interface SlashCommandItem {
   action: (editor: Editor, range: Range) => void;
 }
 
-const AI_SLASH_COMMANDS: SlashCommandItem[] = getAIActionsForContext(
-  AI_MENU_CONTEXT.CURSOR
-).map((config) => ({
-  id: config.id,
-  icon: config.icon,
-  labelKey: config.labelKey,
-  descriptionKey: config.descriptionKey ?? config.labelKey,
-  group: 'ai',
-  keywords: [...config.keywords],
-  action: (editor, range) =>
-    executeAIAction({ editor, config, context: AI_MENU_CONTEXT.CURSOR, range }),
-}));
+function buildAISlashCommands(voiceNotesEnabled: boolean): SlashCommandItem[] {
+  return getAIActionsForContext(AI_MENU_CONTEXT.CURSOR, {
+    voiceNotesEnabled,
+  }).map((config) => ({
+    id: config.id,
+    icon: config.icon,
+    labelKey: config.labelKey,
+    descriptionKey: config.descriptionKey ?? config.labelKey,
+    group: 'ai',
+    keywords: [...config.keywords],
+    action: (editor, range) =>
+      executeAIAction({
+        editor,
+        config,
+        context: AI_MENU_CONTEXT.CURSOR,
+        range,
+      }),
+  }));
+}
 
 const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   {
@@ -192,19 +200,28 @@ const FORMATTING_SLASH_COMMANDS: SlashCommandItem[] = [
   },
 ];
 
-export const SLASH_COMMANDS: SlashCommandItem[] = [
-  ...AI_SLASH_COMMANDS,
+const SLASH_COMMANDS_WITH_VOICE: SlashCommandItem[] = [
+  ...buildAISlashCommands(true),
+  ...FORMATTING_SLASH_COMMANDS,
+];
+
+const SLASH_COMMANDS_WITHOUT_VOICE: SlashCommandItem[] = [
+  ...buildAISlashCommands(false),
   ...FORMATTING_SLASH_COMMANDS,
 ];
 
 export function filterSlashCommands(query: string): SlashCommandItem[] {
+  const commands = useAIStore.getState().voiceNotesEnabled
+    ? SLASH_COMMANDS_WITH_VOICE
+    : SLASH_COMMANDS_WITHOUT_VOICE;
+
   if (!query) {
-    return SLASH_COMMANDS;
+    return commands;
   }
 
   const normalizedQuery = query.toLowerCase();
 
-  return SLASH_COMMANDS.filter((item) => {
+  return commands.filter((item) => {
     const matchesId = item.id.toLowerCase().includes(normalizedQuery);
     const matchesKeywords = item.keywords.some((keyword) =>
       keyword.toLowerCase().includes(normalizedQuery)

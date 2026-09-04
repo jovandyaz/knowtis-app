@@ -56,6 +56,7 @@ function pending(overrides: Partial<NotesQueryResult>): NotesQueryResult {
 
 const useNotes = vi.fn<(filters?: NotesListFilters) => NotesQueryResult>();
 const authUser = vi.fn<() => { isAnonymous: boolean }>();
+const aiState = { aiEnabled: false, voiceNotesEnabled: false };
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useNotes: (filters?: NotesListFilters) => useNotes(filters),
@@ -73,8 +74,13 @@ vi.mock('@/hooks/useCreateNoteAction', () => ({
   useCreateNoteAction: () => ({ createNote: vi.fn() }),
 }));
 vi.mock('@/stores/ai.store', () => ({
-  useAIStore: (selector: (s: { aiEnabled: boolean }) => unknown) =>
-    selector({ aiEnabled: false }),
+  useAIStore: (selector: (s: typeof aiState) => unknown) => selector(aiState),
+}));
+vi.mock('@/components/voice-note/VoiceNoteRecorder', () => ({
+  VoiceNoteRecorder: () => <button type="button">voice-note-recorder</button>,
+}));
+vi.mock('./FloatingCreateButton', () => ({
+  FloatingCreateButton: () => null,
 }));
 vi.mock('./NoteCard', () => ({
   NoteCard: ({ note }: { note: NoteWithAccess }) => (
@@ -129,7 +135,42 @@ describe('NoteList', () => {
     useNotes.mockReset();
     useNotes.mockReturnValue(loaded([]));
     authUser.mockReturnValue({ isAnonymous: false });
+    aiState.aiEnabled = false;
+    aiState.voiceNotesEnabled = false;
     useNotesSearchStore.setState({ query: '', focusRequested: false });
+  });
+
+  it('offers the voice recorder when AI and voice notes are both enabled', async () => {
+    aiState.aiEnabled = true;
+    aiState.voiceNotesEnabled = true;
+
+    await renderAt('/notes');
+
+    expect(
+      screen.getByRole('button', { name: 'voice-note-recorder' })
+    ).toBeInTheDocument();
+  });
+
+  it('hides the voice recorder when voice notes are disabled', async () => {
+    aiState.aiEnabled = true;
+    aiState.voiceNotesEnabled = false;
+
+    await renderAt('/notes');
+
+    expect(
+      screen.queryByRole('button', { name: 'voice-note-recorder' })
+    ).not.toBeInTheDocument();
+  });
+
+  it('hides the voice recorder when AI is disabled', async () => {
+    aiState.aiEnabled = false;
+    aiState.voiceNotesEnabled = true;
+
+    await renderAt('/notes');
+
+    expect(
+      screen.queryByRole('button', { name: 'voice-note-recorder' })
+    ).not.toBeInTheDocument();
   });
 
   it('offers the view picker to a signed-up user', async () => {
