@@ -14,6 +14,7 @@ const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
 }));
 const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
+const authLoading = vi.fn<() => boolean>();
 let denyEdit: (() => void) | undefined;
 let token = 'tok';
 let noteQuery: {
@@ -42,7 +43,10 @@ vi.mock('@tanstack/react-router', () => ({
     <a href="/login">{children}</a>
   ),
 }));
-vi.mock('@jovandyaz/auth-react', () => ({ useAuthUser: () => authUser() }));
+vi.mock('@jovandyaz/auth-react', () => ({
+  useAuthUser: () => authUser(),
+  useAuthLoading: () => authLoading(),
+}));
 vi.mock('@/lib/analytics/product-events', () => ({ captureProductEvent }));
 vi.mock('@/auth/setup', () => ({
   ensureGuestSession: () => ensureGuestSession(),
@@ -83,6 +87,7 @@ describe('SharedNotePage editing as a visitor', () => {
     denyEdit = undefined;
     token = 'tok';
     authUser.mockReturnValue({ isAnonymous: true });
+    authLoading.mockReturnValue(false);
     noteQuery = {
       data: {
         id: 'note-1',
@@ -123,6 +128,26 @@ describe('SharedNotePage editing as a visitor', () => {
       expect(captureProductEvent).toHaveBeenCalledTimes(1);
     }
   );
+
+  it('waits for the auth state before attributing the shared view', async () => {
+    authLoading.mockReturnValue(true);
+    authUser.mockReturnValue(null);
+    const { rerender } = render(<SharedNotePage />, { wrapper });
+    expect(captureProductEvent).not.toHaveBeenCalled();
+
+    authLoading.mockReturnValue(false);
+    authUser.mockReturnValue({ isAnonymous: false });
+    rerender(<SharedNotePage />);
+
+    await waitFor(() =>
+      expect(captureProductEvent).toHaveBeenCalledWith('shared note viewed', {
+        source: 'share_link',
+        permission: 'editor',
+        actor_type: 'registered',
+      })
+    );
+    expect(captureProductEvent).toHaveBeenCalledTimes(1);
+  });
 
   it.each([
     ['loading', { data: undefined, isLoading: true, isError: false }],

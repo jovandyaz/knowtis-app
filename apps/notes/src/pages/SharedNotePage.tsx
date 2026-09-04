@@ -10,7 +10,7 @@ import { KnowtisLogo } from '@/components/layout/KnowtisLogo';
 import { ROUTES, sharedNotePath } from '@/config';
 import { useCopyLink } from '@/hooks/useCopyLink';
 import { captureProductEvent } from '@/lib/analytics/product-events';
-import { useAuthUser } from '@jovandyaz/auth-react';
+import { useAuthLoading, useAuthUser } from '@jovandyaz/auth-react';
 import { format } from 'date-fns';
 import { Check, Eye, PanelLeft, Pencil, Share2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,6 +38,7 @@ export function SharedNotePage() {
   const { token } = useParams({ from: '/s/$token' });
   const { data, isLoading, isError, error, refetch } = useNoteByToken(token);
   const user = useAuthUser();
+  const isAuthLoading = useAuthLoading();
   const { data: artifacts } = useSharedNoteArtifacts(token);
   const [isEditing, setIsEditing] = useState(false);
   const [isPreparingEdit, setIsPreparingEdit] = useState(false);
@@ -53,7 +54,8 @@ export function SharedNotePage() {
       ? data.accessLevel
       : undefined;
   const actorType = user?.isAnonymous === false ? 'registered' : 'anonymous';
-  const isResolved = !isLoading && !isError && data !== undefined;
+  const isResolved =
+    !isLoading && !isError && data !== undefined && !isAuthLoading;
 
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {
