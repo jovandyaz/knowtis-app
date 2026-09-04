@@ -121,7 +121,7 @@ All constants are defined in `packages/shared/types/src/lib/ai.types.ts` and sha
 
 ### Actions
 
-`AI_ACTION` has 21 entries:
+`AI_ACTION` has 20 entries:
 
 | Action                 | Model   | Cacheable | Completion surface | Description                                                            |
 | ---------------------- | ------- | --------- | ------------------ | ---------------------------------------------------------------------- |
@@ -142,7 +142,6 @@ All constants are defined in `packages/shared/types/src/lib/ai.types.ts` and sha
 | `generate-quiz`        | default | No        | Yes                | Quiz from note content (structured output, artifacts module)           |
 | `generate-summary`     | default | No        | Yes                | Structured summary from note (structured output, artifacts module)     |
 | `generate-mind-map`    | default | No        | Yes                | Mind map from note content (structured output, artifacts module)       |
-| `generate-outline`     | default | No        | Yes                | Defined with a prompt file; no caller in the codebase                  |
 | `voice-transcription`  | —       | No        | No                 | Whisper leg of `POST /ai/voice-note` ([Voice Notes](#voice-notes))     |
 | `structure-voice-note` | default | No        | No                 | Structuring leg of `POST /ai/voice-note`                               |
 | `suggest-organization` | fast    | No        | No                 | `POST /ai/organization/suggest` ([REST API](#rest-api))                |
