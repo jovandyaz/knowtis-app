@@ -351,12 +351,14 @@ describe('ModelMenu', () => {
     expect(trigger).toHaveTextContent('Cargando…');
   });
 
-  it('surfaces an error message and retries on demand', async () => {
+  it('surfaces an error message and retries on demand when nothing is cached', async () => {
     const user = userEvent.setup();
     const onRetry = vi.fn();
     render(
       <ModelMenu
         {...baseProps({
+          primary: [],
+          value: null,
           status: 'error',
           errorLabel: 'No se pudieron cargar los modelos',
           retryLabel: 'Reintentar',
@@ -370,8 +372,46 @@ describe('ModelMenu', () => {
       screen.getByText('No se pudieron cargar los modelos')
     ).toBeInTheDocument();
     expect(screen.queryAllByRole('menuitemradio')).toHaveLength(0);
+    expect(screen.queryAllByRole('separator')).toHaveLength(0);
 
     await user.click(screen.getByRole('menuitem', { name: 'Reintentar' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the cached rows selectable beside the error when a refetch fails', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const onRetry = vi.fn();
+    render(
+      <ModelMenu
+        {...baseProps({
+          onSelect,
+          moreModels: MORE_MODELS,
+          status: 'error',
+          errorLabel: 'No se pudieron cargar los modelos',
+          retryLabel: 'Reintentar',
+          onRetry,
+        })}
+      />
+    );
+    await user.click(screen.getByRole('button'));
+
+    expect(screen.getAllByRole('menuitemradio')).toHaveLength(3);
+    expect(
+      screen.getByRole('menuitemradio', { name: /Sonnet 5/ })
+    ).toHaveAttribute('aria-checked', 'true');
+    expect(
+      screen.getByRole('menuitem', { name: /Más modelos/ })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('No se pudieron cargar los modelos')
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole('menuitem', { name: 'Reintentar' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button'));
+    await user.click(screen.getByRole('menuitemradio', { name: /Haiku 4\.5/ }));
+    expect(onSelect).toHaveBeenCalledWith('fast');
   });
 });
