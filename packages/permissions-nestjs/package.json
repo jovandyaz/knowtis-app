@@ -7,7 +7,7 @@
   "peerDependencies": {
     "@jovandyaz/permissions-core": "workspace:*",
     "@nestjs/common": "^11.0.0",
-    "@nestjs/core": "^11.0.0"
+    "@nestjs/core": "^11.1.18"
   },
   "dependencies": {},
   "publishConfig": {
