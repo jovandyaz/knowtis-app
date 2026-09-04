@@ -28,7 +28,6 @@ import {
 import { HeadingDropdown } from './HeadingDropdown';
 import { HighlightPicker } from './HighlightPicker';
 import { LinkPopover } from './LinkPopover';
-import { TableInsertButton } from './TableInsertButton';
 
 /**
  * Container width at which every tool fits in a single row (the full pill
@@ -66,13 +65,13 @@ interface ToolbarButtonProps {
 }
 
 function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
+  const { t: tNotes } = useTranslation('notes');
   const Icon = tool.icon;
+  const label = tNotes(tool.labelKey);
   const isToggle = tool.isActive !== undefined;
   const isActive = tool.isActive?.(editor) ?? false;
   const isDisabled = tool.disabled?.(editor) ?? false;
-  const tooltipLabel = tool.shortcut
-    ? `${tool.label} (${tool.shortcut})`
-    : tool.label;
+  const tooltipLabel = tool.shortcut ? `${label} (${tool.shortcut})` : label;
 
   return (
     <Tooltip>
@@ -90,7 +89,7 @@ function ToolbarButton({ editor, tool }: ToolbarButtonProps) {
           )}
           onClick={() => tool.action(editor)}
           disabled={isDisabled}
-          aria-label={tool.label}
+          aria-label={label}
           aria-pressed={isToggle ? isActive : undefined}
         >
           <Icon className="h-4 w-4" />
@@ -147,7 +146,7 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
           const content = (
             <>
               <Icon className="h-4 w-4" />
-              <span>{item.label}</span>
+              <span>{tNotes(item.labelKey)}</span>
               {item.shortcut && (
                 <span className="ml-auto pl-4 text-xs text-muted-foreground">
                   {item.shortcut}
@@ -160,7 +159,7 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
 
           return item.isActive ? (
             <DropdownMenuCheckboxItem
-              key={item.label}
+              key={item.labelKey}
               checked={item.isActive(editor)}
               disabled={disabled}
               onSelect={onSelect}
@@ -169,7 +168,7 @@ function ToolbarOverflowMenu({ editor }: { editor: Editor }) {
             </DropdownMenuCheckboxItem>
           ) : (
             <DropdownMenuItem
-              key={item.label}
+              key={item.labelKey}
               className="pr-8"
               disabled={disabled}
               onSelect={onSelect}
@@ -242,7 +241,7 @@ export const EditorToolbar = memo(function EditorToolbar({
         {TOOLBAR_TOOLS.map((item, index) => {
           if (isTool(item)) {
             return (
-              <ToolbarButton key={item.label} editor={editor} tool={item} />
+              <ToolbarButton key={item.labelKey} editor={editor} tool={item} />
             );
           }
           switch (item.type) {
@@ -267,8 +266,6 @@ export const EditorToolbar = memo(function EditorToolbar({
               );
             case 'highlight-picker':
               return <HighlightPicker key="highlight" editor={editor} />;
-            case 'table-insert':
-              return <TableInsertButton key="table" editor={editor} />;
             case 'image-button':
               return onAddImage ? (
                 <Tooltip key="image">

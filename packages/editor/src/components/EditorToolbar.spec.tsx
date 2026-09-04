@@ -47,7 +47,7 @@ describe('EditorToolbar overflow menu', () => {
     for (const tool of SECONDARY_TOOLS) {
       const item = screen.getByRole(
         tool.isActive ? 'menuitemcheckbox' : 'menuitem',
-        { name: new RegExp(`^${tool.label}`) }
+        { name: new RegExp(`^${tool.labelKey}`) }
       );
       if (tool.shortcut) {
         expect(item.textContent).toContain(tool.shortcut);
@@ -59,7 +59,7 @@ describe('EditorToolbar overflow menu', () => {
     mount();
 
     for (const tool of SECONDARY_TOOLS) {
-      expect(screen.getByRole('button', { name: tool.label })).toBeTruthy();
+      expect(screen.getByRole('button', { name: tool.labelKey })).toBeTruthy();
     }
   });
 
@@ -71,7 +71,9 @@ describe('EditorToolbar overflow menu', () => {
       screen.getByRole('button', { name: 'editor.toolbar.moreTools' })
     );
     await userEvent.click(
-      screen.getByRole('menuitemcheckbox', { name: /^Code Block/ })
+      screen.getByRole('menuitemcheckbox', {
+        name: /^editor\.toolbar\.codeBlock/,
+      })
     );
 
     expect(editor.isActive('codeBlock')).toBe(true);
@@ -86,12 +88,12 @@ describe('EditorToolbar overflow menu', () => {
 
     expect(
       screen
-        .getByRole('menuitem', { name: /^Undo/ })
+        .getByRole('menuitem', { name: /^editor\.toolbar\.undo/ })
         .getAttribute('aria-disabled')
     ).toBe('true');
     expect(
       screen
-        .getByRole('menuitem', { name: /^Redo/ })
+        .getByRole('menuitem', { name: /^editor\.toolbar\.redo/ })
         .getAttribute('aria-disabled')
     ).toBe('true');
   });
@@ -100,7 +102,7 @@ describe('EditorToolbar overflow menu', () => {
 describe('EditorToolbar active state', () => {
   it('marks a tool pressed as soon as its mark is applied', () => {
     mount();
-    const bold = screen.getByRole('button', { name: 'Bold' });
+    const bold = screen.getByRole('button', { name: 'editor.toolbar.bold' });
     expect(bold.getAttribute('aria-pressed')).toBe('false');
 
     act(() => {
@@ -112,7 +114,11 @@ describe('EditorToolbar active state', () => {
 
   it('does not describe one-shot actions as toggles', () => {
     mount();
-    for (const label of ['Horizontal Rule', 'Undo', 'Redo']) {
+    for (const label of [
+      'editor.toolbar.horizontalRule',
+      'editor.toolbar.undo',
+      'editor.toolbar.redo',
+    ]) {
       expect(
         screen.getByRole('button', { name: label }).hasAttribute('aria-pressed')
       ).toBe(false);
@@ -131,19 +137,19 @@ describe('EditorToolbar active state', () => {
 
     expect(
       screen
-        .getByRole('menuitemcheckbox', { name: /^Inline Code/ })
+        .getByRole('menuitemcheckbox', { name: /^editor\.toolbar\.inlineCode/ })
         .getAttribute('aria-checked')
     ).toBe('true');
     expect(
       screen
-        .getByRole('menuitemcheckbox', { name: /^Code Block/ })
+        .getByRole('menuitemcheckbox', { name: /^editor\.toolbar\.codeBlock/ })
         .getAttribute('aria-checked')
     ).toBe('false');
   });
 
   it('enables undo once the document has history', () => {
     mount();
-    const undo = screen.getByRole('button', { name: 'Undo' });
+    const undo = screen.getByRole('button', { name: 'editor.toolbar.undo' });
     expect((undo as HTMLButtonElement).disabled).toBe(true);
 
     act(() => {
