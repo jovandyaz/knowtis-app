@@ -25,6 +25,7 @@
     "tslib": "^2.3.0"
   },
   "peerDependencies": {
+    "i18next": "^25.0.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^16.0.0"
@@ -33,6 +34,7 @@
     "@types/markdown-it": "^14.1.2",
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
+    "i18next": "^25.8.13",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-i18next": "^16.5.4"
