@@ -28,6 +28,7 @@ import { useAuthUser } from '@jovandyaz/auth-react';
 import type { Editor } from '@tiptap/react';
 import { toast } from 'sonner';
 
+import { ApiClientError } from '@knowtis/api-client';
 import { docStateToBase64, useYjs } from '@knowtis/crdt';
 import { useFeatureFlag } from '@knowtis/data-access-feature-flags';
 import { useNote, useUpdateNote } from '@knowtis/data-access-notes';
@@ -43,6 +44,25 @@ import {
   type Supertag,
   type SupertagFields,
 } from '@knowtis/shared-types';
+
+type NoteLoadErrorKey =
+  | 'editor.notFound'
+  | 'editor.permissionDenied'
+  | 'editor.loadErrorGeneric';
+
+const GENERIC_NOTE_LOAD_ERROR_KEY: NoteLoadErrorKey = 'editor.loadErrorGeneric';
+
+const NOTE_LOAD_ERROR_KEYS: Record<string, NoteLoadErrorKey> = {
+  NOTE_NOT_FOUND: 'editor.notFound',
+  PERMISSION_DENIED: 'editor.permissionDenied',
+};
+
+function noteLoadErrorKey(error: unknown): NoteLoadErrorKey {
+  if (!ApiClientError.isApiClientError(error) || error.code === undefined) {
+    return GENERIC_NOTE_LOAD_ERROR_KEY;
+  }
+  return NOTE_LOAD_ERROR_KEYS[error.code] ?? GENERIC_NOTE_LOAD_ERROR_KEY;
+}
 
 interface NoteEditorProps {
   noteId: string;
@@ -387,7 +407,7 @@ export function NoteEditorPage() {
     return (
       <ErrorState
         title={t('editor.failedToLoad')}
-        message={error instanceof Error ? error.message : t('editor.notFound')}
+        message={t(noteLoadErrorKey(error))}
         onRetry={() => navigate({ to: ROUTES.DASHBOARD })}
         retryLabel={t('editor.backToNotes')}
       />
