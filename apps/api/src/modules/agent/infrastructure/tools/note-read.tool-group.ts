@@ -7,6 +7,18 @@ import {
   type RetrievalPort,
 } from '../../domain/ports/retrieval.port';
 import type { AgentToolContext, AgentToolGroup } from './agent-tool';
+import {
+  TOOL_ERROR_CODES,
+  ToolExecutionError,
+  wrapUpstreamFailure,
+} from './tool-execution.error';
+
+function classifyNoteStoreFailure(): ToolExecutionError {
+  return new ToolExecutionError(
+    TOOL_ERROR_CODES.NOTE_STORE_FAILED,
+    'Note store request failed'
+  );
+}
 
 @Injectable()
 export class NoteReadToolGroup implements AgentToolGroup {
@@ -32,7 +44,11 @@ export class NoteReadToolGroup implements AgentToolGroup {
             .min(1)
             .describe('Keywords to search note titles/content'),
         }),
-        execute: async ({ query }) => this.retrieval.search(userId, query),
+        execute: async ({ query }) =>
+          wrapUpstreamFailure(
+            () => this.retrieval.search(userId, query),
+            classifyNoteStoreFailure
+          ),
       }),
       getNote: tool({
         description:
@@ -41,7 +57,10 @@ export class NoteReadToolGroup implements AgentToolGroup {
           noteId: z.string().uuid().describe('The note id from searchNotes'),
         }),
         execute: async ({ noteId }) => {
-          const note = await this.retrieval.getById(userId, noteId);
+          const note = await wrapUpstreamFailure(
+            () => this.retrieval.getById(userId, noteId),
+            classifyNoteStoreFailure
+          );
           return note ?? { error: 'Note not found or not accessible.' };
         },
       }),
@@ -57,13 +76,21 @@ export class NoteReadToolGroup implements AgentToolGroup {
             .default(5)
             .describe('How many recent notes to return'),
         }),
-        execute: async ({ limit }) => this.retrieval.listRecent(userId, limit),
+        execute: async ({ limit }) =>
+          wrapUpstreamFailure(
+            () => this.retrieval.listRecent(userId, limit),
+            classifyNoteStoreFailure
+          ),
       }),
       getNotesOverview: tool({
         description:
           "Get counts of the user's notes: total accessible, owned by the user, and shared-with-the-user. Use for 'how many notes do I have' style questions.",
         inputSchema: z.object({}),
-        execute: async () => this.retrieval.overview(userId),
+        execute: async () =>
+          wrapUpstreamFailure(
+            () => this.retrieval.overview(userId),
+            classifyNoteStoreFailure
+          ),
       }),
     };
   }

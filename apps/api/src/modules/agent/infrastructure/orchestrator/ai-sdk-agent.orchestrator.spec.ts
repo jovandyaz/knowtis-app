@@ -8,6 +8,10 @@ import { createTestChain } from '../../../ai/testing/create-test-chain';
 import type { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { ProposedMutation } from '../../domain/proposed-mutation';
 import type { AgentToolContext } from '../tools/agent-tool';
+import {
+  TOOL_ERROR_CODES,
+  ToolExecutionError,
+} from '../tools/tool-execution.error';
 import type { AgentToolRegistry } from './agent-tool.registry';
 import { AiSdkAgentOrchestrator } from './ai-sdk-agent.orchestrator';
 
@@ -3324,7 +3328,42 @@ describe('AiSdkAgentOrchestrator', () => {
       expect.objectContaining({
         event: 'agent.tool.error',
         toolName: 'webFetch',
+        code: 'UNCLASSIFIED',
         error: 'non-Error value thrown',
+      })
+    );
+    warnSpy.mockRestore();
+  });
+
+  it('logs the code and safe message of a typed tool error', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'webSearch',
+          input: { query: 'q' },
+          error: new ToolExecutionError(
+            TOOL_ERROR_CODES.WEB_UPSTREAM_FAILED,
+            'Web provider request failed'
+          ),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'agent.tool.error',
+        toolName: 'webSearch',
+        code: 'WEB_UPSTREAM_FAILED',
+        error: 'Web provider request failed',
       })
     );
     warnSpy.mockRestore();
@@ -3362,6 +3401,7 @@ describe('AiSdkAgentOrchestrator', () => {
         event: 'agent.tool.error',
         toolName: 'getNote',
         userId: 'u1',
+        code: 'UNCLASSIFIED',
         error: 'boom',
       })
     );

@@ -31,6 +31,7 @@ import type {
   AgentTurnUsage,
 } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
+import { ToolExecutionError } from '../tools/tool-execution.error';
 import {
   createHealth,
   openrouterUpstreamOf,
@@ -50,14 +51,20 @@ export function errorMessage(error: unknown, redact: boolean): string {
   return error instanceof Error ? error.message : 'Agent run failed';
 }
 
-function describeToolError(error: unknown): string {
+function describeToolError(error: unknown): { code: string; error: string } {
+  if (error instanceof ToolExecutionError) {
+    return { code: error.code, error: error.message };
+  }
   const message =
     error instanceof Error
       ? error.message
       : typeof error === 'string'
         ? error
         : 'non-Error value thrown';
-  return message.slice(0, TOOL_ERROR_LOG_MAX_CHARS);
+  return {
+    code: 'UNCLASSIFIED',
+    error: message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+  };
 }
 
 export function toError(error: unknown, redact = false) {
@@ -280,7 +287,7 @@ export async function* runStepCall(
             userId: input.userId,
             model,
             toolName: part.toolName,
-            error: describeToolError(part.error),
+            ...describeToolError(part.error),
           });
           break;
         case 'finish':
