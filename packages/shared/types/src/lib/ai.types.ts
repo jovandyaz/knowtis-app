@@ -188,8 +188,8 @@ export type UpdateAiPreferencesInput = Partial<AIPreferences>;
 
 /**
  * Every provider the server can route to. BYOK_PROVIDERS is a subset — not
- * every provider supports a per-user key yet. Adding one here also needs a
- * migration widening the `system_provider_keys` provider CHECK.
+ * every provider supports a per-user key yet. The provider CHECK constraints
+ * are derived from these arrays, so widening one only needs `db:generate`.
  */
 export const AI_PROVIDERS = [
   'anthropic',
