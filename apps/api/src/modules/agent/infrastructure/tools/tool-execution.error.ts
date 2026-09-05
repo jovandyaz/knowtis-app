@@ -9,14 +9,16 @@ export type ToolErrorCode =
 
 /**
  * A tool failure whose message is authored by us, never copied from the
- * upstream provider, so it is safe to log and surface.
+ * upstream provider, so it is safe to log and surface. The raw upstream
+ * error stays on `cause` for debuggers and error trackers only.
  */
 export class ToolExecutionError extends Error {
   constructor(
     readonly code: ToolErrorCode,
-    message: string
+    message: string,
+    options?: { cause?: unknown }
   ) {
-    super(message);
+    super(message, options);
     this.name = 'ToolExecutionError';
   }
 }

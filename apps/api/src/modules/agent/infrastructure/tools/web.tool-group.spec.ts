@@ -276,12 +276,11 @@ describe('WebToolGroup', () => {
   });
 
   it('never forwards the search provider message', async () => {
+    const upstream = new Error(
+      'Tavily search failed (500): {"detail":"key sk-live-123"}'
+    );
     const web = {
-      search: vi
-        .fn()
-        .mockRejectedValue(
-          new Error('Tavily search failed (500): {"detail":"key sk-live-123"}')
-        ),
+      search: vi.fn().mockRejectedValue(upstream),
       fetch: vi.fn(),
     } as unknown as WebSearchPort;
     const group = makeGroup(web, makeRateLimit(), makeGuard(true));
@@ -292,6 +291,41 @@ describe('WebToolGroup', () => {
       name: 'ToolExecutionError',
       code: 'WEB_UPSTREAM_FAILED',
       message: expect.not.stringContaining('sk-live-123'),
+    });
+  });
+
+  it('keeps the upstream error as the cause for debuggers', async () => {
+    const upstream = new Error('Tavily search failed (500): body');
+    const web = {
+      search: vi.fn().mockRejectedValue(upstream),
+      fetch: vi.fn(),
+    } as unknown as WebSearchPort;
+    const group = makeGroup(web, makeRateLimit(), makeGuard(true));
+
+    const thrown = await run(group, ctx(), 'webSearch', { query: 'x' }).catch(
+      (e: unknown) => e
+    );
+
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).cause).toBe(upstream);
+  });
+
+  it('does not classify an aborted fetch as a timeout', async () => {
+    const web = {
+      search: vi.fn(),
+      fetch: vi
+        .fn()
+        .mockRejectedValue(new DOMException('aborted', 'AbortError')),
+    } as unknown as WebSearchPort;
+    const c = ctx();
+    c.webFetchAllowlist.add('https://example.com');
+    const group = makeGroup(web, makeRateLimit(), makeGuard(true));
+
+    await expect(
+      run(group, c, 'webFetch', { url: 'https://example.com' })
+    ).rejects.toMatchObject({
+      name: 'ToolExecutionError',
+      code: 'WEB_UPSTREAM_FAILED',
     });
   });
 
@@ -329,7 +363,7 @@ describe('WebToolGroup', () => {
     ).rejects.toMatchObject({
       name: 'ToolExecutionError',
       code: 'WEB_UPSTREAM_FAILED',
-      message: expect.not.stringContaining('private'),
+      message: 'Web fetch of https://example.com failed',
     });
   });
 });

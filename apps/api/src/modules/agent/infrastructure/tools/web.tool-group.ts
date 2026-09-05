@@ -28,19 +28,37 @@ const MAX_WEB_FETCH_CHARS = 8000;
 const FETCH_DROPPED_NOTE =
   'Fetched content failed the safety check and was dropped.';
 
-function classifyWebFailure(error: unknown): ToolExecutionError {
-  const timedOut =
-    error instanceof DOMException &&
-    (error.name === 'TimeoutError' || error.name === 'AbortError');
-  return timedOut
+function isTimeout(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'TimeoutError';
+}
+
+function classifyWebSearchFailure(error: unknown): ToolExecutionError {
+  return isTimeout(error)
     ? new ToolExecutionError(
         TOOL_ERROR_CODES.WEB_TIMEOUT,
-        'Web request timed out'
+        'Web request timed out',
+        { cause: error }
       )
     : new ToolExecutionError(
         TOOL_ERROR_CODES.WEB_UPSTREAM_FAILED,
-        'Web provider request failed'
+        'Web provider request failed',
+        { cause: error }
       );
+}
+
+function classifyWebFetchFailure(url: string) {
+  return (error: unknown): ToolExecutionError =>
+    isTimeout(error)
+      ? new ToolExecutionError(
+          TOOL_ERROR_CODES.WEB_TIMEOUT,
+          'Web request timed out',
+          { cause: error }
+        )
+      : new ToolExecutionError(
+          TOOL_ERROR_CODES.WEB_UPSTREAM_FAILED,
+          `Web fetch of ${url} failed`,
+          { cause: error }
+        );
 }
 
 @Injectable()
@@ -68,7 +86,7 @@ export class WebToolGroup implements AgentToolGroup {
         execute: async ({ query }) => {
           const result = await wrapUpstreamFailure(
             () => this.web.search(query),
-            classifyWebFailure
+            classifyWebSearchFailure
           );
           await this.recordCost(ctx, result.costUsd);
           const safe = filterExternalHits(result.hits, {
@@ -106,7 +124,7 @@ export class WebToolGroup implements AgentToolGroup {
           }
           const result = await wrapUpstreamFailure(
             () => this.web.fetch(url),
-            classifyWebFailure
+            classifyWebFetchFailure(url)
           );
           await this.recordCost(ctx, result.costUsd);
           const verdict = await this.injectionGuard.guard(

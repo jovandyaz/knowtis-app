@@ -3335,7 +3335,7 @@ describe('AiSdkAgentOrchestrator', () => {
     warnSpy.mockRestore();
   });
 
-  it('logs the code and safe message of a typed tool error', async () => {
+  it('logs the code and safe message of a typed tool error, never its cause', async () => {
     const warnSpy = vi.spyOn(Logger.prototype, 'warn');
     streamTextMock.mockImplementationOnce(() => ({
       stream: (async function* () {
@@ -3346,7 +3346,12 @@ describe('AiSdkAgentOrchestrator', () => {
           input: { query: 'q' },
           error: new ToolExecutionError(
             TOOL_ERROR_CODES.WEB_UPSTREAM_FAILED,
-            'Web provider request failed'
+            'Web provider request failed',
+            {
+              cause: new Error(
+                'Tavily search failed (500): {"detail":"key sk-live-123"}'
+              ),
+            }
           ),
         };
         yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
@@ -3358,14 +3363,25 @@ describe('AiSdkAgentOrchestrator', () => {
 
     await collect(orchestrator.run(baseInput));
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
+    const toolErrorLogs = warnSpy.mock.calls
+      .map(([payload]) => payload)
+      .filter(
+        (p): p is Record<string, unknown> =>
+          typeof p === 'object' &&
+          p !== null &&
+          (p as { event?: string }).event === 'agent.tool.error'
+      );
+    expect(toolErrorLogs).toEqual([
+      {
         event: 'agent.tool.error',
+        userId: 'u1',
+        model: expect.any(String),
         toolName: 'webSearch',
         code: 'WEB_UPSTREAM_FAILED',
         error: 'Web provider request failed',
-      })
-    );
+      },
+    ]);
+    expect(JSON.stringify(toolErrorLogs)).not.toContain('sk-live-123');
     warnSpy.mockRestore();
   });
 

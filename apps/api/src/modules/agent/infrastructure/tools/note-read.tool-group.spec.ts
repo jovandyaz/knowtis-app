@@ -31,27 +31,27 @@ function run(
 }
 
 describe('NoteReadToolGroup', () => {
-  it('never forwards the note store message', async () => {
+  it('never forwards the note store message but keeps it as the cause', async () => {
+    const upstream = new Error(
+      'relation "notes" ... duplicate key value violates unique constraint'
+    );
     const retrieval = {
-      search: vi
-        .fn()
-        .mockRejectedValue(
-          new Error(
-            'relation "notes" ... duplicate key value violates unique constraint'
-          )
-        ),
+      search: vi.fn().mockRejectedValue(upstream),
       getById: vi.fn(),
       listRecent: vi.fn(),
       overview: vi.fn(),
     } as unknown as RetrievalPort;
     const group = new NoteReadToolGroup(retrieval);
 
-    await expect(
-      run(group, ctx(), 'searchNotes', { query: 'x' })
-    ).rejects.toMatchObject({
+    const thrown = await run(group, ctx(), 'searchNotes', { query: 'x' }).catch(
+      (e: unknown) => e
+    );
+
+    expect(thrown).toMatchObject({
       name: 'ToolExecutionError',
       code: 'NOTE_STORE_FAILED',
       message: expect.not.stringContaining('relation'),
     });
+    expect((thrown as Error).cause).toBe(upstream);
   });
 });

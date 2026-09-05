@@ -13,10 +13,11 @@ import {
   wrapUpstreamFailure,
 } from './tool-execution.error';
 
-function classifyNoteStoreFailure(): ToolExecutionError {
+function classifyNoteStoreFailure(error: unknown): ToolExecutionError {
   return new ToolExecutionError(
     TOOL_ERROR_CODES.NOTE_STORE_FAILED,
-    'Note store request failed'
+    'Note store request failed',
+    { cause: error }
   );
 }
 
