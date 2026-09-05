@@ -27,14 +27,10 @@ import {
   type ModelTier,
 } from '@knowtis/shared-types';
 
+import { sqlLiteralList } from './sql-literal-list';
 import { users } from './users.schema';
 
 const DEFAULT_CATALOG_MODEL_TIER: ModelTier = 'open';
-
-/** sql.raw does not escape: only compile-time literal arrays, never runtime-derived strings. */
-function sqlLiteralList(values: readonly string[]) {
-  return sql.raw(values.map((value) => `'${value}'`).join(', '));
-}
 
 export const aiCatalogModels = pgTable(
   'ai_catalog_models',
