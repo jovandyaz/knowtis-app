@@ -9,3 +9,5 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   # Renovate security update: pnpm@10.34.5
   - pnpm@10.34.5
+  # Renovate security update: @tiptap/core@3.30.4
+  - "@tiptap/core@3.30.4"
