@@ -9,6 +9,9 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { AI_PROVIDERS } from '@knowtis/shared-types';
+
+import { sqlLiteralList } from './sql-literal-list';
 import { users } from './users.schema';
 
 export const systemProviderKeys = pgTable(
@@ -33,7 +36,7 @@ export const systemProviderKeys = pgTable(
   (table) => [
     check(
       'system_provider_keys_provider_check',
-      sql`${table.provider} in ('anthropic', 'openai', 'google', 'openrouter')`
+      sql`${table.provider} in (${sqlLiteralList(AI_PROVIDERS)})`
     ),
     // A row may carry no key (enablement only, env supplies the key); when it
     // does, the AES-GCM parts and the prefix shown to admins travel together.
