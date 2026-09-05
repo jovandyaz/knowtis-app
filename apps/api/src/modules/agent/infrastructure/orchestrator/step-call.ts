@@ -246,6 +246,14 @@ export async function* runStepCall(
   try {
     armStallTimer();
     for await (const part of result.stream) {
+      // The SDK never throws from streamText: a failed call (after its own
+      // maxRetries) arrives as this terminal part. Nothing reached the client,
+      // so it must not count as a received part or the "before anything
+      // streamed" retry gates could never fire.
+      if (part.type === 'error') {
+        streamError = part.error;
+        continue;
+      }
       if (STREAM_MARKER_PART_TYPES.has(part.type)) {
         continue;
       }
@@ -292,9 +300,6 @@ export async function* runStepCall(
           break;
         case 'finish':
           health.finishReason = part.finishReason;
-          break;
-        case 'error':
-          streamError = part.error;
           break;
         default:
           break;
