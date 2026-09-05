@@ -13,7 +13,7 @@ const toastError = vi.fn();
 const { captureProductEvent } = vi.hoisted(() => ({
   captureProductEvent: vi.fn(),
 }));
-const authUser = vi.fn<() => { isAnonymous: boolean } | null>();
+const authUser = vi.fn<() => { isAnonymous?: boolean } | null>();
 const authLoading = vi.fn<() => boolean>();
 let denyEdit: (() => void) | undefined;
 let token = 'tok';
@@ -123,6 +123,12 @@ describe('SharedNotePage sign-in call to action', () => {
 
   it('hides sign-in from a signed-in account', () => {
     authUser.mockReturnValue({ isAnonymous: false });
+    renderPage();
+    expect(signInLinks()).toHaveLength(0);
+  });
+
+  it('hides sign-in from an account whose profile has no isAnonymous flag', () => {
+    authUser.mockReturnValue({});
     renderPage();
     expect(signInLinks()).toHaveLength(0);
   });
