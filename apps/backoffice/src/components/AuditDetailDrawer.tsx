@@ -8,6 +8,7 @@ import type { AuditEntry } from '@knowtis/data-access-admin';
 import {
   Badge,
   Dialog,
+  DIALOG_SIDE,
   DialogContent,
   DialogDescription,
   DialogHeader,
@@ -25,7 +26,7 @@ export function AuditDetailDrawer({ entry, onClose }: AuditDetailDrawerProps) {
   return (
     <Dialog open={entry !== null} onOpenChange={(open) => !open && onClose()}>
       {entry ? (
-        <DialogContent side="right">
+        <DialogContent side={DIALOG_SIDE.RIGHT}>
           <DialogHeader>
             <DialogTitle>{entry.action}</DialogTitle>
             <DialogDescription>

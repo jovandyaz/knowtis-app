@@ -7,6 +7,7 @@ import { RotateCcw } from 'lucide-react';
 import {
   Button,
   Dialog,
+  DIALOG_SIDE,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -66,7 +67,7 @@ export function RightDock() {
   if (isDesktop) {
     return (
       <ResizablePanel
-        side="right"
+        side={DIALOG_SIDE.RIGHT}
         defaultWidth={DOCK_DEFAULT_WIDTH}
         minWidth={DOCK_MIN_WIDTH}
         maxWidth={DOCK_MAX_WIDTH}
