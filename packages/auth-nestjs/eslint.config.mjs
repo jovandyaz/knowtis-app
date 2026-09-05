@@ -1,18 +1,9 @@
 import nxPlugin from '@nx/eslint-plugin';
+
 import baseConfig from '../../eslint.config.js';
 
 export default [
   ...baseConfig,
-  // NestJS-specific overrides (base config patterns are root-relative, not package-relative)
-  {
-    files: ['**/*.ts'],
-    rules: {
-      '@typescript-eslint/no-empty-function': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-extraneous-class': 'off',
-      '@typescript-eslint/consistent-type-imports': 'off',
-    },
-  },
   {
     files: ['**/*.json'],
     plugins: {

@@ -79,6 +79,9 @@ jobs:
       - name: Verify vendored agent skills
         run: pnpm skills:check
 
+      - name: Verify ESLint config resolves per project
+        run: pnpm lint:config
+
       - name: Lint (affected)
         run: npx nx affected -t lint
 

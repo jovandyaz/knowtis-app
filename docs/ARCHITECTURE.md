@@ -597,7 +597,7 @@ On the client, `libs/api-client/src/lib/session-refresh.ts` makes refresh single
 
 ### Linting & Formatting
 
-- **ESLint** - Modern flat config with React and TypeScript rules
+- **ESLint** - Modern flat config with React and TypeScript rules. The root `eslint.config.js` is the single source of rules; projects that need `@nx/dependency-checks` (the publishable packages, `libs/api-client`, `libs/authorization`, `packages/shared/types` and `apps/api`) ship a thin `eslint.config.mjs` that spreads it. Because Nx runs each inferred `lint` target as `eslint .` from the project directory, the root's path-scoped blocks (React hooks + a11y for `apps/notes`, `apps/backoffice`, `libs`, `packages`; NestJS overrides for `apps/api` and `packages/*-nestjs`) carry `basePath: workspaceRoot` so their globs keep matching when imported from a subdirectory. `pnpm lint:config` (`tools/__tests__/eslint-config.test.mjs`, run in CI before lint) asserts those blocks resolve from every project that has its own config.
 - **Prettier** - Consistent formatting with import sorting
 
 ### Testing Strategy
