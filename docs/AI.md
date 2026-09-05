@@ -1069,9 +1069,10 @@ pnpm nx run api:eval
   `assertPinnedModelServed` gate throws that way, and excusing it would let a run graded
   against the fallback chain pass.
 - **Results:** set `AI_EVAL_OUTPUT_DIR` to persist results — promptfoo's native JSON and a
-  `<suite>.summary.json` (per-case `passes`/`graderErrors`/`trials`, model, trials, git SHA)
-  per promptfoo suite, plus Vitest's `vitest.json` for the remaining suites. Unset (the local
-  default), nothing is written.
+  `<suite>.summary.json` (per-case `passes`/`graderErrors`/`trials`, summed
+  `inputTokens`/`outputTokens` and `costUsd` — `null` when a trial's served model had no
+  catalog pricing — plus model, trials, git SHA) per promptfoo suite, and Vitest's
+  `vitest.json` for the remaining suites. Unset (the local default), nothing is written.
 
 ### How it works
 

@@ -10,6 +10,8 @@ const INVALID_TRANSCRIPT: EvalTranscript = {
   stopReason: null,
   servedModel: null,
   steps: [],
+  usage: null,
+  costUsd: null,
 };
 
 export function asTranscript(output: unknown): EvalTranscript {

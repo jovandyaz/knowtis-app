@@ -104,6 +104,9 @@ describe('summarizeTrials', () => {
         passes: 2,
         graderErrors: 0,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
       {
         key: '{"fixtureSet":"recent","message":"case-b"}',
@@ -111,6 +114,9 @@ describe('summarizeTrials', () => {
         passes: 2,
         graderErrors: 0,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ]);
   });
@@ -128,6 +134,9 @@ describe('summarizeTrials', () => {
         passes: 2,
         graderErrors: 1,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ]);
     expect(casesBelowThreshold).toEqual([]);
@@ -155,6 +164,9 @@ describe('summarizeTrials', () => {
         passes: 0,
         graderErrors: 3,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ]);
   });
@@ -206,6 +218,9 @@ describe('summarizeTrials', () => {
         passes: 1,
         graderErrors: 0,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ]);
   });
@@ -238,6 +253,69 @@ describe('summarizeTrials', () => {
     const { cases } = summarizeTrials([{ success: true }]);
     expect(cases[0]?.label).toBe('(case)');
   });
+
+  it('sums token usage and cost over the trials of a case', () => {
+    const { cases } = summarizeTrials([
+      {
+        ...trial('case-a', true),
+        usage: { inputTokens: 100, outputTokens: 20 },
+        costUsd: 0.001,
+      },
+      {
+        ...trial('case-a', true),
+        usage: { inputTokens: 50, outputTokens: 10 },
+        costUsd: 0.0005,
+      },
+    ]);
+    expect(cases).toEqual([
+      {
+        key: '{"fixtureSet":"recent","message":"case-a"}',
+        label: 'case-a',
+        passes: 2,
+        graderErrors: 0,
+        trials: 2,
+        inputTokens: 150,
+        outputTokens: 30,
+        costUsd: 0.0015,
+      },
+    ]);
+  });
+
+  it('reports a null cost when any trial of the case lacked pricing', () => {
+    const { cases } = summarizeTrials([
+      {
+        ...trial('case-a', true),
+        usage: { inputTokens: 100, outputTokens: 20 },
+        costUsd: 0.001,
+      },
+      {
+        ...trial('case-a', true),
+        usage: { inputTokens: 50, outputTokens: 10 },
+        costUsd: null,
+      },
+    ]);
+    expect(cases[0]).toMatchObject({
+      inputTokens: 150,
+      outputTokens: 30,
+      costUsd: null,
+    });
+  });
+
+  it('counts a trial without usage as zero tokens and unknown cost', () => {
+    const { cases } = summarizeTrials([
+      {
+        ...trial('case-a', true),
+        usage: { inputTokens: 100, outputTokens: 20 },
+        costUsd: 0.001,
+      },
+      trial('case-a', false),
+    ]);
+    expect(cases[0]).toMatchObject({
+      inputTokens: 100,
+      outputTokens: 20,
+      costUsd: null,
+    });
+  });
 });
 
 describe('toTrialResult', () => {
@@ -247,6 +325,67 @@ describe('toTrialResult', () => {
     expect(toTrialResult({ success: true, vars, gradingResult: null })).toEqual(
       { success: true, vars, errored: false }
     );
+  });
+
+  it('copies usage and cost from a transcript output', () => {
+    expect(
+      toTrialResult({
+        success: true,
+        vars,
+        gradingResult: null,
+        response: {
+          output: {
+            text: 'hi',
+            usage: { inputTokens: 10, outputTokens: 5, cacheReadTokens: 2 },
+            costUsd: 0.00002,
+          },
+        },
+      })
+    ).toEqual({
+      success: true,
+      vars,
+      errored: false,
+      usage: { inputTokens: 10, outputTokens: 5 },
+      costUsd: 0.00002,
+    });
+  });
+
+  it('reads usage from a transcript output serialised as JSON', () => {
+    expect(
+      toTrialResult({
+        success: true,
+        vars,
+        gradingResult: null,
+        response: {
+          output: JSON.stringify({
+            usage: { inputTokens: 10, outputTokens: 5 },
+            costUsd: null,
+          }),
+        },
+      })
+    ).toMatchObject({
+      usage: { inputTokens: 10, outputTokens: 5 },
+      costUsd: null,
+    });
+  });
+
+  it('tolerates an output without usage', () => {
+    expect(
+      toTrialResult({
+        success: true,
+        vars,
+        gradingResult: null,
+        response: { output: { text: 'hi', usage: null } },
+      })
+    ).toEqual({ success: true, vars, errored: false });
+    expect(
+      toTrialResult({
+        success: true,
+        vars,
+        gradingResult: null,
+        response: { output: 'plain text' },
+      })
+    ).toEqual({ success: true, vars, errored: false });
   });
 
   it('keeps an assertion failure as a behavioral failure', () => {
@@ -384,6 +523,9 @@ describe('a pinned-model violation across trials', () => {
         passes: 1,
         graderErrors: 0,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ]);
     expect(casesBelowThreshold).toHaveLength(1);
@@ -391,26 +533,66 @@ describe('a pinned-model violation across trials', () => {
 });
 
 describe('formatCaseOutcome', () => {
-  const outcome = (passes: number, graderErrors: number, trials: number) => ({
+  const outcome = (
+    passes: number,
+    graderErrors: number,
+    trials: number,
+    tokens: {
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number | null;
+    } = {
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: null,
+    }
+  ) => ({
     key: 'k',
     label: 'case-a',
     passes,
     graderErrors,
     trials,
+    ...tokens,
   });
 
   it('shows plain passes over trials when everything was graded', () => {
-    expect(formatCaseOutcome(outcome(2, 0, 3), [])).toBe('PASS 2/3');
+    expect(formatCaseOutcome(outcome(2, 0, 3), [])).toBe('PASS 2/3 · 0/0 tok');
   });
 
   it('names the graded denominator and the ungraded trials', () => {
     const below = outcome(1, 2, 3);
     expect(formatCaseOutcome(below, [])).toBe(
-      'PASS 1/1 graded, 2 of 3 ungraded'
+      'PASS 1/1 graded, 2 of 3 ungraded · 0/0 tok'
     );
     expect(formatCaseOutcome(below, [below])).toBe(
-      'FAIL 1/1 graded, 2 of 3 ungraded'
+      'FAIL 1/1 graded, 2 of 3 ungraded · 0/0 tok'
     );
+  });
+
+  it('appends the token totals and the cost when pricing was known', () => {
+    expect(
+      formatCaseOutcome(
+        outcome(3, 0, 3, {
+          inputTokens: 1200,
+          outputTokens: 340,
+          costUsd: 0.012345,
+        }),
+        []
+      )
+    ).toBe('PASS 3/3 · 1200/340 tok · $0.0123');
+  });
+
+  it('omits the cost when pricing was unknown for a trial', () => {
+    expect(
+      formatCaseOutcome(
+        outcome(3, 0, 3, {
+          inputTokens: 1200,
+          outputTokens: 340,
+          costUsd: null,
+        }),
+        []
+      )
+    ).toBe('PASS 3/3 · 1200/340 tok');
   });
 });
 
@@ -514,6 +696,9 @@ describe('writeEvalSummary', () => {
         passes: 2,
         graderErrors: 0,
         trials: 3,
+        inputTokens: 0,
+        outputTokens: 0,
+        costUsd: null,
       },
     ],
     casesBelowThreshold: [],
