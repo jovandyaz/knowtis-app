@@ -9,6 +9,7 @@ import {
 import {
   cooldownKeyOf,
   isAbortError,
+  isOverloadedError,
   providerOf,
   type ProviderCooldown,
 } from '@knowtis/ai-gateway';
@@ -58,23 +59,45 @@ class AgentStallError extends Error {
   }
 }
 
+type StepRetryReason = 'ttft' | 'transient';
+
 function logRetry(
   logger: Logger,
   userId: string,
   model: string,
-  attempt: number
+  attempt: number,
+  reason: StepRetryReason
 ): void {
   logger.warn({
     event: 'agent.turn.retry',
     userId,
     model,
     attempt,
-    reason: 'ttft',
+    reason,
   });
 }
 
 function canRetrySilentStep(health: StreamHealth, attempt: number): boolean {
   return health.parts === 0 && attempt + 1 < MAX_STEP_ATTEMPTS;
+}
+
+// A BYOK turn must never bill another key, so a 429/503 gets one more shot on
+// the same key and model instead of failing over. Only before anything reached
+// the client, so nothing streamed is duplicated. No backoff here: the retried
+// step re-enters streamText, whose maxRetries already backs off exponentially.
+function canRetryTransientStep(
+  health: StreamHealth,
+  attempt: number,
+  cause: unknown,
+  byok: boolean
+): boolean {
+  return (
+    byok &&
+    health.parts === 0 &&
+    attempt + 1 < MAX_STEP_ATTEMPTS &&
+    isOverloadedError(cause) &&
+    !isAbortError(cause)
+  );
 }
 
 function eligibleForStepFailover(
@@ -239,7 +262,7 @@ export async function* runAgentStepLoop(
             modelsUsed
           );
           if (canRetrySilentStep(result.health, attempt)) {
-            logRetry(logger, input.userId, currentModel, attempt + 1);
+            logRetry(logger, input.userId, currentModel, attempt + 1, 'ttft');
             continue;
           }
           const nextModel = eligibleForStepFailover(
@@ -281,6 +304,16 @@ export async function* runAgentStepLoop(
         }
         case STEP_CALL_KIND.ERRORED: {
           const { cause, fromStream } = result;
+          if (canRetryTransientStep(result.health, attempt, cause, byok)) {
+            logRetry(
+              logger,
+              input.userId,
+              currentModel,
+              attempt + 1,
+              'transient'
+            );
+            continue;
+          }
           const throwFreshFailure =
             params.throwOnFreshFailure &&
             !turn.progressed &&
