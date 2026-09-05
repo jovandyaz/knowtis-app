@@ -48,6 +48,28 @@ class InMemoryVerificationTokenRepository implements EmailVerificationTokenRepos
     return Promise.resolve(ok(row));
   }
 
+  replaceIfOlderThan(data: CreateEmailVerificationTokenData, minAgeMs: number) {
+    const index = this.rows.findIndex((row) => row.userId === data.userId);
+    if (index === -1) {
+      return this.create(data);
+    }
+    const current = this.rows[index];
+    if (current.createdAt.getTime() > Date.now() - minAgeMs) {
+      return Promise.resolve(ok(null));
+    }
+    const replaced: EmailVerificationTokenEntity = {
+      ...current,
+      tokenHash: data.tokenHash,
+      expiresAt: data.expiresAt,
+      codeHash: data.codeHash,
+      codeExpiresAt: data.codeExpiresAt,
+      attempts: 0,
+      createdAt: new Date(),
+    };
+    this.rows[index] = replaced;
+    return Promise.resolve(ok(replaced));
+  }
+
   findByTokenHash(tokenHash: string) {
     return Promise.resolve(
       this.rows.find((row) => row.tokenHash === tokenHash) ?? null
@@ -130,7 +152,6 @@ describe('verification attempt budget', () => {
 
     resendHandler = new ResendVerificationHandler(
       userRepository,
-      tokenRepository,
       new VerificationEmailIssuer(tokenRepository, emailService, tokenHasher)
     );
     const eventEmitter = { emit: vi.fn() } as unknown as EventEmitter2;

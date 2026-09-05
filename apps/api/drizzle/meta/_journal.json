@@ -302,6 +302,13 @@
       "when": 1788329553076,
       "tag": "0042_low_meteorite",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788631360884,
+      "tag": "0043_sticky_power_man",
+      "breakpoints": true
     }
   ]
 }

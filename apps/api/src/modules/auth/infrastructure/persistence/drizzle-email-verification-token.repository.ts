@@ -52,6 +52,45 @@ export class DrizzleEmailVerificationTokenRepository implements EmailVerificatio
     }
   }
 
+  /** Updates in place so a verify attempt holding the old row id still lands; resetting `createdAt` is what restarts the cooldown and the attempt budget. */
+  async replaceIfOlderThan(
+    data: CreateEmailVerificationTokenData,
+    minAgeMs: number
+  ): Promise<Result<EmailVerificationTokenEntity | null, AuthDomainError>> {
+    try {
+      const rows = await this.db
+        .insert(emailVerificationTokens)
+        .values({
+          userId: data.userId,
+          tokenHash: data.tokenHash,
+          expiresAt: data.expiresAt,
+          codeHash: data.codeHash,
+          codeExpiresAt: data.codeExpiresAt,
+        })
+        .onConflictDoUpdate({
+          target: emailVerificationTokens.userId,
+          set: {
+            tokenHash: data.tokenHash,
+            expiresAt: data.expiresAt,
+            codeHash: data.codeHash,
+            codeExpiresAt: data.codeExpiresAt,
+            attempts: 0,
+            createdAt: sql`now()`,
+          },
+          setWhere: sql`${emailVerificationTokens.createdAt} <= now() - make_interval(secs => ${minAgeMs / 1000})`,
+        })
+        .returning();
+
+      return ok(rows[0] ? this.mapToEntity(rows[0]) : null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      this.logger.error(
+        `Failed to replace email verification token: ${message}`
+      );
+      return err(AuthErrors.internalError(message));
+    }
+  }
+
   async findByTokenHash(
     tokenHash: string
   ): Promise<EmailVerificationTokenEntity | null> {
