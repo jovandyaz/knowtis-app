@@ -73,4 +73,47 @@ describe('createCrossTabSync', () => {
 
     expect(onLogoutDetected).not.toHaveBeenCalled();
   });
+
+  it('reports a verified user broadcast by another tab', () => {
+    const onVerifiedUserDetected = vi.fn();
+    const cleanup = createCrossTabSync({
+      storageKey: 'auth',
+      onLogoutDetected: vi.fn(),
+      onVerifiedUserDetected,
+    });
+    fireStorageEvent(
+      'auth',
+      JSON.stringify({
+        state: {
+          isAuthenticated: true,
+          user: { id: 'u1', emailVerifiedAt: '2026-09-05T10:00:00.000Z' },
+        },
+      })
+    );
+    expect(onVerifiedUserDetected).toHaveBeenCalledWith({
+      id: 'u1',
+      emailVerifiedAt: '2026-09-05T10:00:00.000Z',
+    });
+    cleanup();
+  });
+
+  it('stays silent for an unverified user broadcast', () => {
+    const onVerifiedUserDetected = vi.fn();
+    const cleanup = createCrossTabSync({
+      storageKey: 'auth',
+      onLogoutDetected: vi.fn(),
+      onVerifiedUserDetected,
+    });
+    fireStorageEvent(
+      'auth',
+      JSON.stringify({
+        state: {
+          isAuthenticated: true,
+          user: { id: 'u1', emailVerifiedAt: null },
+        },
+      })
+    );
+    expect(onVerifiedUserDetected).not.toHaveBeenCalled();
+    cleanup();
+  });
 });

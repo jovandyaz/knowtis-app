@@ -267,6 +267,29 @@ describe('AgentGateway', () => {
     );
   });
 
+  it('emits agent:conversation when the handler announces a created conversation', async () => {
+    const execute = vi.fn(
+      async (
+        _input: unknown,
+        cb: { onConversation?: (conversationId: string) => void }
+      ): Promise<void> => {
+        cb.onConversation?.('conv-9');
+      }
+    );
+    const gateway = makeGateway({
+      handler: { execute } as Partial<RunAgentTurnHandler>,
+    });
+    const client = makeClient('u1');
+
+    await gateway.handleMessage(client as never, {
+      message: { content: 'hi' },
+    });
+
+    expect(client.emit).toHaveBeenCalledWith('agent:conversation', {
+      conversationId: 'conv-9',
+    });
+  });
+
   it.each(Object.values(AGENT_STOP_REASON))(
     'forwards stopReason %s on agent:done',
     async (stopReason) => {

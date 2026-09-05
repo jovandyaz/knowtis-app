@@ -6,3 +6,8 @@ packages:
 
 # 3 days; Renovate's npm cooldown does not reach pnpm's transitive resolution.
 minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  # Renovate security update: pnpm@10.34.5
+  - pnpm@10.34.5
+  # Renovate security update: nx@22.7.7
+  - nx@22.7.7

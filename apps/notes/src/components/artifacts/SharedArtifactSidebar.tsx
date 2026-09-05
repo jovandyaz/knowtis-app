@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 
 import {
   Dialog,
+  DIALOG_SIDE,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -65,7 +66,7 @@ export function SharedArtifactSidebar({
   if (isDesktop) {
     return (
       <ResizablePanel
-        side="right"
+        side={DIALOG_SIDE.RIGHT}
         defaultWidth={SIDEBAR_DEFAULT_WIDTH}
         minWidth={SIDEBAR_MIN_WIDTH}
         maxWidth={SIDEBAR_MAX_WIDTH}

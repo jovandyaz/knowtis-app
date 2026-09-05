@@ -960,6 +960,129 @@ describe('RunAgentTurnHandler', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it('announces a freshly created conversation before the turn can end', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+    const controller = new AbortController();
+    controller.abort();
+    const onConversation = vi.fn();
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+        onConversation,
+      },
+      controller.signal
+    );
+
+    expect(onConversation).toHaveBeenCalledWith('conv-1');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('does not re-announce a conversation the client already named', async () => {
+    const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      conversations,
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+    const onConversation = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' }, conversationId: 'conv-1' },
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+        onConversation,
+      },
+      undefined
+    );
+
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(onConversation).not.toHaveBeenCalled();
+  });
+
+  it('still announces the conversation when the first turn is aborted', async () => {
+    const { rateLimit, config, pendingStore } = makeDeps({});
+    const orchestrator = orchestratorYielding([
+      {
+        type: 'aborted',
+        usage: {
+          inputTokens: 0,
+          outputTokens: 0,
+          model: 'anthropic:claude-sonnet-4-20250514',
+        },
+      },
+    ]);
+    const handler = new RunAgentTurnHandler(
+      orchestrator,
+      rateLimit,
+      config,
+      pendingStore,
+      createTestCatalog(),
+      makeConversations(),
+      makeMemory(),
+      makeEmbed(),
+      makeFlags(),
+      makeModelPreference(),
+      makeByok(),
+      makeGuard(),
+      makeAIConfig(),
+      makeTurnEffort()
+    );
+    const onConversation = vi.fn();
+    const onDone = vi.fn();
+
+    await handler.execute(
+      { userId: USER, message: { content: 'hi' } },
+      {
+        onChunk: vi.fn(),
+        onDone,
+        onError: vi.fn(),
+        onProposal: vi.fn(),
+        onConversation,
+      },
+      undefined
+    );
+
+    expect(onConversation).toHaveBeenCalledWith('conv-1');
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
   it('calls onError with providerError when onChunk throws inside the for-await loop', async () => {
     const { rateLimit, config, pendingStore } = makeDeps({});
     const orchestrator = orchestratorYielding([
@@ -2590,13 +2713,14 @@ describe('RunAgentTurnHandler', () => {
 
   it('rejects a fresh user message that exceeds the length cap', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      conversations,
       makeMemory(),
       makeEmbed(),
       makeFlags(),
@@ -2607,19 +2731,28 @@ describe('RunAgentTurnHandler', () => {
       makeTurnEffort()
     );
     const onError = vi.fn();
+    const onConversation = vi.fn();
 
     await handler.execute(
       {
         userId: USER,
         message: { content: 'x'.repeat(50_001) },
       },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError,
+        onProposal: vi.fn(),
+        onConversation,
+      }
     );
 
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_INVALID_INPUT' })
     );
     expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(onConversation).not.toHaveBeenCalled();
   });
 
   it('drops an oversized older message instead of failing the turn', async () => {

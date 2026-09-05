@@ -4,6 +4,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -26,7 +27,7 @@ export const emailVerificationTokens = pgTable(
       .defaultNow(),
   },
   (table) => [
-    index('email_verification_tokens_user_id_idx').on(table.userId),
+    uniqueIndex('email_verification_tokens_user_id_idx').on(table.userId),
     index('email_verification_tokens_token_hash_idx').on(table.tokenHash),
   ]
 );

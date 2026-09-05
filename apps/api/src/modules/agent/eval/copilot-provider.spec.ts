@@ -13,6 +13,8 @@ const TRANSCRIPT: EvalTranscript = {
   stopReason: 'completed',
   servedModel: null,
   steps: [],
+  usage: null,
+  costUsd: null,
 };
 
 describe('createCopilotProvider', () => {

@@ -99,6 +99,8 @@ export interface RunAgentTurnCallbacks {
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
+  /** Fires once, when this turn had to create the conversation; the id must not wait for `done`. */
+  readonly onConversation?: (conversationId: string) => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -131,6 +133,12 @@ const AGENT_PROMPT_OVERHEAD_TOKENS = 1500;
 const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = 50_000;
+
+function messageTooLongError() {
+  return AIErrors.invalidInput(
+    `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
+  );
+}
 
 @Injectable()
 export class RunAgentTurnHandler {
@@ -211,6 +219,12 @@ export class RunAgentTurnHandler {
     if (!message) {
       return;
     }
+    // Reject before resolveConversation so an oversized first message leaves
+    // no titled conversation row behind.
+    if (message.content.length > MAX_USER_MESSAGE_CHARS) {
+      callbacks.onError(messageTooLongError());
+      return;
+    }
     const conversation = await this.resolveConversation(input, message);
     if (!conversation) {
       callbacks.onError({
@@ -220,6 +234,9 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
+    if (conversation.created) {
+      callbacks.onConversation?.(conversationId);
+    }
     const { history, knownNotes } =
       await this.loadConversationContext(conversationId);
     const messages = coalesceMessages([
@@ -306,19 +323,20 @@ export class RunAgentTurnHandler {
   private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<{ id: string; model: string | null } | null> {
+  ): Promise<{ id: string; model: string | null; created: boolean } | null> {
     if (input.conversationId) {
-      return this.conversations.findByIdForUser(
+      const existing = await this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
+      return existing ? { ...existing, created: false } : null;
     }
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: [...message.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
     });
-    return { id: created.id, model: null };
+    return { id: created.id, model: null, created: true };
   }
 
   private async loadConversationContext(
@@ -493,11 +511,7 @@ export class RunAgentTurnHandler {
     const lastUserMessage = inputMessages.findLast((m) => m.role === 'user');
     if (lastUserMessage) {
       if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
-        callbacks.onError(
-          AIErrors.invalidInput(
-            `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
-          )
-        );
+        callbacks.onError(messageTooLongError());
         return;
       }
       const verdict = await this.injectionGuard.guard(

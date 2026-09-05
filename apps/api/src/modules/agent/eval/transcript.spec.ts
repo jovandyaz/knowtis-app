@@ -59,6 +59,68 @@ describe('drainEvents', () => {
     expect(t.servedModel).toBe(USAGE.model);
   });
 
+  it('keeps the turn usage from the terminal event', async () => {
+    const t = await drainEvents(
+      scripted([
+        {
+          type: 'done',
+          usage: USAGE,
+          sources: [],
+          knownNotes: [],
+          webSources: [],
+          stopReason: 'completed',
+        },
+      ])
+    );
+
+    expect(t.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+  });
+
+  it('keeps cache token counts when the terminal event reports them', async () => {
+    const t = await drainEvents(
+      scripted([
+        {
+          type: 'aborted',
+          usage: { ...USAGE, cacheReadTokens: 3, cacheWriteTokens: 2 },
+        },
+      ])
+    );
+
+    expect(t.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 3,
+      cacheWriteTokens: 2,
+    });
+  });
+
+  it('keeps the usage of an errored turn when the event carries one', async () => {
+    const t = await drainEvents(
+      scripted([
+        {
+          type: 'error',
+          error: { code: 'AI_TIMEOUT', message: 'timed out' },
+          usage: USAGE,
+        },
+      ])
+    );
+
+    expect(t.usage).toEqual({ inputTokens: 10, outputTokens: 5 });
+  });
+
+  it('reports no usage when the turn errored before any step', async () => {
+    const t = await drainEvents(
+      scripted([
+        {
+          type: 'error',
+          error: { code: 'AI_PROVIDER_ERROR', message: 'boom' },
+        },
+      ])
+    );
+
+    expect(t.usage).toBeNull();
+  });
+
   it('returns an empty transcript when the stream yields no events', async () => {
     const t = await drainEvents(scripted([]));
 
@@ -70,6 +132,7 @@ describe('drainEvents', () => {
       stopReason: null,
       servedModel: null,
       steps: [],
+      usage: null,
     });
   });
 

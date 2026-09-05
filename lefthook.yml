@@ -22,7 +22,9 @@ pre-commit:
         - merge
         - rebase
     check-migrations:
-      glob: 'apps/api/src/database/schema/**/*.ts'
+      glob:
+        - 'apps/api/src/database/schema/**/*.ts'
+        - 'packages/shared/types/src/lib/ai.types.ts'
       run: |
         npx nx db:generate api --no-cloud 2>/dev/null
         if ! git diff --exit-code -- apps/api/drizzle/ > /dev/null 2>&1; then

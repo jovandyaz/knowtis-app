@@ -45,7 +45,10 @@ export {
 
 export { useSessionManager } from './lib/hooks/use-session-manager';
 
-export { createCrossTabSync } from './lib/sync/cross-tab-sync';
+export {
+  createCrossTabSync,
+  type VerifiedUserBroadcast,
+} from './lib/sync/cross-tab-sync';
 
 export { parseTokenExpiry } from './lib/utils/token-expiry';
 

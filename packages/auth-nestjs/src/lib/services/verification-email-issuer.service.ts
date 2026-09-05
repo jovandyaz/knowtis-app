@@ -1,5 +1,6 @@
 import {
   AuthErrors,
+  msUntilResendAllowed,
   VERIFICATION_CODE_EXPIRY_MS,
   VERIFICATION_TOKEN_EXPIRY_MS,
 } from '@jovandyaz/auth/server';
@@ -25,6 +26,11 @@ export interface VerificationEmailRecipient {
   readonly locale: string | null;
 }
 
+export interface IssueVerificationEmailOptions {
+  /** Refuse unless the user's current token is at least this old; the database decides, so concurrent resends cannot both pass. */
+  readonly cooldownMs: number;
+}
+
 /** Mints a verification link token and a code, stores their hashes, and emails both. */
 @Injectable()
 export class VerificationEmailIssuer {
@@ -38,21 +44,31 @@ export class VerificationEmailIssuer {
   ) {}
 
   async issue(
-    recipient: VerificationEmailRecipient
+    recipient: VerificationEmailRecipient,
+    options?: IssueVerificationEmailOptions
   ): Promise<Result<void, AuthDomainError>> {
     const { plainToken, tokenHash } = generateSecureToken(this.tokenHasher);
     const { plainCode, codeHash } = generateVerificationCode(this.tokenHasher);
 
-    const createResult = await this.verificationTokenRepository.create({
+    const data = {
       userId: recipient.id,
       tokenHash,
       expiresAt: new Date(Date.now() + VERIFICATION_TOKEN_EXPIRY_MS),
       codeHash,
       codeExpiresAt: new Date(Date.now() + VERIFICATION_CODE_EXPIRY_MS),
-    });
-    if (createResult.isErr()) {
+    };
+    const stored = options
+      ? await this.verificationTokenRepository.replaceIfOlderThan(
+          data,
+          options.cooldownMs
+        )
+      : await this.verificationTokenRepository.create(data);
+    if (stored.isErr()) {
       this.logger.error('Failed to create email verification token');
-      return err(createResult.error);
+      return err(stored.error);
+    }
+    if (stored.value === null && options) {
+      return err(await this.cooldownRefusal(recipient.id, options.cooldownMs));
     }
 
     const emailResult = await this.emailService.sendEmailVerification(
@@ -67,5 +83,16 @@ export class VerificationEmailIssuer {
     }
 
     return ok(undefined);
+  }
+
+  /** The refusing row may already be gone by the time it is re-read, so the whole cooldown is the honest fallback. */
+  private async cooldownRefusal(
+    userId: string,
+    cooldownMs: number
+  ): Promise<AuthDomainError> {
+    const current = await this.verificationTokenRepository.findByUserId(userId);
+    return AuthErrors.resendCooldown(
+      current ? msUntilResendAllowed(current.createdAt, cooldownMs) : cooldownMs
+    );
   }
 }

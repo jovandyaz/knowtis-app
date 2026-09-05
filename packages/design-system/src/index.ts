@@ -18,6 +18,7 @@ export {
   DialogTitle,
   DialogDescription,
 } from './components/Dialog';
+export { DIALOG_SIDE, type DialogSide } from './constants/dialog';
 export { ThemeToggle, type ThemeToggleProps } from './components/ThemeToggle';
 export {
   LoadingState,

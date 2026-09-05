@@ -9,6 +9,9 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { BYOK_PROVIDERS } from '@knowtis/shared-types';
+
+import { sqlLiteralList } from './sql-literal-list';
 import { users } from './users.schema';
 
 export const userProviderKeys = pgTable(
@@ -34,7 +37,7 @@ export const userProviderKeys = pgTable(
     primaryKey({ columns: [table.userId, table.provider] }),
     check(
       'user_provider_keys_provider_check',
-      sql`${table.provider} in ('anthropic', 'openai', 'google', 'openrouter')`
+      sql`${table.provider} in (${sqlLiteralList(BYOK_PROVIDERS)})`
     ),
   ]
 );

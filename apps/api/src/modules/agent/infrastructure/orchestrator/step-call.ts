@@ -31,6 +31,7 @@ import type {
   AgentTurnUsage,
 } from '../../domain/agent-event';
 import type { AgentRunInput } from '../../domain/ports/agent-orchestrator.port';
+import { ToolExecutionError } from '../tools/tool-execution.error';
 import {
   createHealth,
   openrouterUpstreamOf,
@@ -50,14 +51,23 @@ export function errorMessage(error: unknown, redact: boolean): string {
   return error instanceof Error ? error.message : 'Agent run failed';
 }
 
-function describeToolError(error: unknown): string {
+function describeToolError(error: unknown): { code: string; error: string } {
+  if (error instanceof ToolExecutionError) {
+    return {
+      code: error.code,
+      error: error.message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+    };
+  }
   const message =
     error instanceof Error
       ? error.message
       : typeof error === 'string'
         ? error
         : 'non-Error value thrown';
-  return message.slice(0, TOOL_ERROR_LOG_MAX_CHARS);
+  return {
+    code: 'UNCLASSIFIED',
+    error: message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+  };
 }
 
 export function toError(error: unknown, redact = false) {
@@ -239,6 +249,14 @@ export async function* runStepCall(
   try {
     armStallTimer();
     for await (const part of result.stream) {
+      // The SDK never throws from streamText for provider/API failures: a
+      // failed call (after its own maxRetries) arrives as this terminal part.
+      // Nothing reached the client, so it must not count as a received part
+      // or the "before anything streamed" retry gates could never fire.
+      if (part.type === 'error') {
+        streamError = part.error;
+        continue;
+      }
       if (STREAM_MARKER_PART_TYPES.has(part.type)) {
         continue;
       }
@@ -280,14 +298,11 @@ export async function* runStepCall(
             userId: input.userId,
             model,
             toolName: part.toolName,
-            error: describeToolError(part.error),
+            ...describeToolError(part.error),
           });
           break;
         case 'finish':
           health.finishReason = part.finishReason;
-          break;
-        case 'error':
-          streamError = part.error;
           break;
         default:
           break;

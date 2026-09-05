@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 import { validateEnv } from '../../../../config/env.config';
@@ -15,6 +15,18 @@ import { DB_AVAILABLE } from '../../../../test-support/database';
 import { DrizzleEmailVerificationTokenRepository } from './drizzle-email-verification-token.repository';
 
 const DB_USER_ID = '00000000-0000-4000-8000-000000000151';
+const OTHER_DB_USER_ID = '00000000-0000-4000-8000-000000000152';
+const DB_USER_IDS = [DB_USER_ID, OTHER_DB_USER_ID];
+
+function tokenData() {
+  return {
+    userId: DB_USER_ID,
+    tokenHash: 'link-hash',
+    expiresAt: new Date('2026-08-27T12:00:00.000Z'),
+    codeHash: 'code-hash',
+    codeExpiresAt: new Date('2026-08-26T12:05:00.000Z'),
+  };
+}
 
 describe.runIf(DB_AVAILABLE)(
   'DrizzleEmailVerificationTokenRepository (database)',
@@ -39,23 +51,25 @@ describe.runIf(DB_AVAILABLE)(
 
       await db
         .insert(users)
-        .values({
-          id: DB_USER_ID,
-          email: `e-${DB_USER_ID}@test.local`,
-          name: 'Verification Subject',
-          isAnonymous: false,
-        })
+        .values(
+          DB_USER_IDS.map((id) => ({
+            id,
+            email: `e-${id}@test.local`,
+            name: 'Verification Subject',
+            isAnonymous: false,
+          }))
+        )
         .onConflictDoNothing();
     });
 
     afterEach(async () => {
       await db
         .delete(emailVerificationTokens)
-        .where(eq(emailVerificationTokens.userId, DB_USER_ID));
+        .where(inArray(emailVerificationTokens.userId, DB_USER_IDS));
     });
 
     afterAll(async () => {
-      await db.delete(users).where(eq(users.id, DB_USER_ID));
+      await db.delete(users).where(inArray(users.id, DB_USER_IDS));
       await moduleRef.close();
     });
 
@@ -85,27 +99,18 @@ describe.runIf(DB_AVAILABLE)(
       expect(await repo.findByUserId(DB_USER_ID)).toBeNull();
     });
 
-    it('returns the newest row from findByUserId when multiple rows exist', async () => {
-      await db.insert(emailVerificationTokens).values({
-        userId: DB_USER_ID,
-        tokenHash: 'older-link-hash',
-        expiresAt: new Date('2026-08-27T12:00:00.000Z'),
-        codeHash: 'older-code-hash',
-        codeExpiresAt: new Date('2026-08-26T12:05:00.000Z'),
-        createdAt: new Date('2026-08-26T10:00:00.000Z'),
-      });
-      await db.insert(emailVerificationTokens).values({
-        userId: DB_USER_ID,
-        tokenHash: 'newer-link-hash',
-        expiresAt: new Date('2026-08-27T12:00:00.000Z'),
-        codeHash: 'newer-code-hash',
-        codeExpiresAt: new Date('2026-08-26T12:05:00.000Z'),
-        createdAt: new Date('2026-08-26T11:00:00.000Z'),
+    it('rejects a second row for the same user at the database', async () => {
+      await repo.create(tokenData());
+
+      const second = await repo.create({
+        ...tokenData(),
+        tokenHash: 'second-link-hash',
       });
 
-      const found = await repo.findByUserId(DB_USER_ID);
-
-      expect(found?.codeHash).toBe('newer-code-hash');
+      expect(second.isErr()).toBe(true);
+      expect(await repo.findByUserId(DB_USER_ID)).toMatchObject({
+        tokenHash: 'link-hash',
+      });
     });
 
     it('increments attempts across successive sequential calls and returns the new value', async () => {
@@ -150,6 +155,50 @@ describe.runIf(DB_AVAILABLE)(
       );
     });
 
+    it('refuses all ten concurrent replacements inside the cooldown', async () => {
+      const first = await repo.replaceIfOlderThan(tokenData(), 60_000);
+      expect(first._unsafeUnwrap()).not.toBeNull();
+
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () =>
+          repo.replaceIfOlderThan(tokenData(), 60_000)
+        )
+      );
+
+      expect(results.filter((r) => r.isOk() && r.value !== null)).toHaveLength(
+        0
+      );
+    });
+
+    it('lets exactly one of ten concurrent first issues through and leaves a single row', async () => {
+      const results = await Promise.all(
+        Array.from({ length: 10 }, () =>
+          repo.replaceIfOlderThan(tokenData(), 60_000)
+        )
+      );
+
+      const rows = await db
+        .select()
+        .from(emailVerificationTokens)
+        .where(eq(emailVerificationTokens.userId, DB_USER_ID));
+
+      expect(results.filter((r) => r.isOk() && r.value !== null)).toHaveLength(
+        1
+      );
+      expect(rows).toHaveLength(1);
+    });
+
+    it('replaces the row once the cooldown has elapsed', async () => {
+      await repo.replaceIfOlderThan(tokenData(), 0);
+
+      const replaced = await repo.replaceIfOlderThan(
+        { ...tokenData(), tokenHash: 'new' },
+        0
+      );
+
+      expect(replaced.isOk() && replaced.value?.tokenHash).toBe('new');
+    });
+
     it('returns null from incrementAttempts when the row is gone', async () => {
       expect(
         await repo.incrementAttempts('ffffffff-ffff-4fff-8fff-ffffffffffff')
@@ -165,7 +214,7 @@ describe.runIf(DB_AVAILABLE)(
         codeExpiresAt: new Date('2026-08-01T00:05:00.000Z'),
       });
       const fresh = await repo.create({
-        userId: DB_USER_ID,
+        userId: OTHER_DB_USER_ID,
         tokenHash: 'fresh-hash',
         expiresAt: new Date('2026-09-01T00:00:00.000Z'),
         codeHash: 'code-hash',

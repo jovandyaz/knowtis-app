@@ -42,6 +42,13 @@ describe('msUntilResendAllowed', () => {
     expect(msUntilResendAllowed(issuedAt)).toBe(0);
   });
 
+  it('measures against a caller-supplied cooldown instead of the default', () => {
+    const issuedAt = new Date();
+    vi.advanceTimersByTime(4_000);
+
+    expect(msUntilResendAllowed(issuedAt, 10_000)).toBe(6_000);
+  });
+
   it('never reports a negative wait for a long-expired row', () => {
     const issuedAt = new Date(
       NOW.getTime() - VERIFICATION_RESEND_COOLDOWN_MS * 10
