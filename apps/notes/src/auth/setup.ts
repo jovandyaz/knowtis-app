@@ -1,4 +1,5 @@
 import {
+  authQueryKeys,
   createAuthStore,
   createCrossTabSync,
   createTokenStorage,
@@ -16,6 +17,7 @@ import { setTokenStorage as setCollaborationTokenStorage } from '../collaboratio
 import { initAnonymousSession } from './anonymous-session';
 import { createAuthApiAdapter } from './auth-api-adapter';
 import { AUTH_STORAGE_KEY } from './constants';
+import { syncVerifiedUserFromOtherTab } from './cross-tab-profile-sync';
 import { runEnsureGuestSession } from './guest-session';
 import { runInitAuth } from './init-auth';
 import { performSessionLogout } from './perform-session-logout';
@@ -48,9 +50,23 @@ function handleSessionExpired(): void {
   });
 }
 
+// `@/lib/query-client` imports this module through `@/auth`, so the query
+// client is loaded lazily to avoid an import cycle.
+function invalidateProfileQuery(): void {
+  void import('@/lib/query-client').then(({ queryClient }) =>
+    queryClient.invalidateQueries({ queryKey: authQueryKeys.profile() })
+  );
+}
+
 createCrossTabSync({
   storageKey: AUTH_STORAGE_KEY,
   onLogoutDetected: handleSessionExpired,
+  onVerifiedUserDetected: (verified) => {
+    syncVerifiedUserFromOtherTab(verified, {
+      user: authStore.getState().user,
+      invalidateProfile: invalidateProfileQuery,
+    });
+  },
 });
 
 export { performSessionLogout } from './perform-session-logout';
