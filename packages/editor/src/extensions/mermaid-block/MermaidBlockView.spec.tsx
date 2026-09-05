@@ -196,7 +196,7 @@ describe('MermaidBlockView', () => {
     expect(screen.queryByRole('dialog')).not.toBeNull();
   });
 
-  it('reopens the viewer on the fitted view rather than the last one', async () => {
+  it('reopens the viewer with pan and zoom reset', async () => {
     const user = userEvent.setup();
     render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
     await findSvg();

@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MermaidDiagramViewer } from './MermaidDiagramViewer';
-import { ZOOM_STEP } from './usePanZoom';
+import { ZOOM_STEP, type Size } from './usePanZoom';
 
 const SVG = '<svg id="diagram" width="4000" height="400"></svg>';
 const VIEWPORT = { width: 1000, height: 600 };
@@ -11,33 +11,56 @@ const FIT_SCALE = VIEWPORT.width / 4000;
 
 // jsdom lays nothing out, so the surface reports its size the way a browser
 // would — without it every fit collapses to the identity transform
+const observers: ViewportResizeObserver[] = [];
+
 class ViewportResizeObserver implements ResizeObserver {
   private readonly callback: ResizeObserverCallback;
+  private target: Element | null = null;
 
   constructor(callback: ResizeObserverCallback) {
     this.callback = callback;
+    observers.push(this);
   }
 
   observe(target: Element) {
+    this.target = target;
+    this.report(VIEWPORT);
+  }
+
+  report(size: Size) {
+    if (!this.target) {
+      return;
+    }
     const entry = {
-      target,
+      target: this.target,
       contentRect: {
-        ...VIEWPORT,
+        ...size,
         top: 0,
         left: 0,
-        right: VIEWPORT.width,
-        bottom: VIEWPORT.height,
+        right: size.width,
+        bottom: size.height,
         x: 0,
         y: 0,
       },
     } as unknown as ResizeObserverEntry;
     this.callback([entry], this);
   }
-  unobserve() {}
-  disconnect() {}
+
+  unobserve() {
+    this.target = null;
+  }
+
+  disconnect() {
+    this.target = null;
+  }
+}
+
+function resizeSurfaceTo(size: Size) {
+  act(() => observers.forEach((observer) => observer.report(size)));
 }
 
 beforeEach(() => {
+  observers.length = 0;
   vi.stubGlobal('ResizeObserver', ViewportResizeObserver);
 });
 
@@ -47,10 +70,15 @@ afterEach(() => {
 
 function renderViewer(open = true) {
   const onOpenChange = vi.fn();
-  render(
+  const view = render(
     <MermaidDiagramViewer open={open} onOpenChange={onOpenChange} svg={SVG} />
   );
-  return onOpenChange;
+  return Object.assign(onOpenChange, {
+    redraw: (svg: string) =>
+      view.rerender(
+        <MermaidDiagramViewer open onOpenChange={onOpenChange} svg={svg} />
+      ),
+  });
 }
 
 function canvas() {
@@ -158,6 +186,25 @@ describe('MermaidDiagramViewer', () => {
     });
 
     expect(scaleOf(canvas()) ?? 0).toBeGreaterThan(before);
+  });
+
+  it('treats a line-mode wheel as a bigger step than the same pixel delta', async () => {
+    const user = userEvent.setup();
+    renderViewer();
+    const surface = canvas().parentElement as HTMLElement;
+    const fitToScreen = () =>
+      user.click(
+        screen.getByRole('button', { name: 'editor.mermaid.fitToScreen' })
+      );
+
+    fireEvent.wheel(surface, { deltaY: -3, deltaMode: 0 });
+    const afterPixels = scaleOf(canvas()) ?? 0;
+
+    await fitToScreen();
+    fireEvent.wheel(surface, { deltaY: -3, deltaMode: 1 });
+    const afterLines = scaleOf(canvas()) ?? 0;
+
+    expect(afterLines).toBeGreaterThan(afterPixels);
   });
 
   it('pans the diagram while dragging', () => {
@@ -312,10 +359,46 @@ describe('MermaidDiagramViewer', () => {
     renderViewer();
     const before = canvas().style.transform;
 
-    await user.click(screen.getByRole('application'));
+    await user.click(screen.getByRole('group'));
     await user.keyboard('{ArrowRight}');
 
     expect(canvas().style.transform).not.toBe(before);
+  });
+
+  it('keeps the zoom the reader chose when the surface is resized', async () => {
+    const user = userEvent.setup();
+    renderViewer();
+    await user.click(
+      screen.getByRole('button', { name: 'editor.mermaid.zoomIn' })
+    );
+    const chosen = canvas().style.transform;
+
+    resizeSurfaceTo({ width: 700, height: 500 });
+
+    expect(canvas().style.transform).toBe(chosen);
+  });
+
+  it('re-fits on a resize while the reader has not touched the view', () => {
+    renderViewer();
+    const openingFit = scaleOf(canvas());
+
+    resizeSurfaceTo({ width: 2000, height: 1200 });
+
+    expect(scaleOf(canvas())).not.toBeCloseTo(openingFit ?? 0);
+    expect(scaleOf(canvas())).toBeCloseTo(2000 / 4000);
+  });
+
+  it('keeps the zoom the reader chose when the diagram is redrawn', async () => {
+    const user = userEvent.setup();
+    const viewer = renderViewer();
+    await user.click(
+      screen.getByRole('button', { name: 'editor.mermaid.zoomIn' })
+    );
+    const chosen = canvas().style.transform;
+
+    viewer.redraw('<svg id="diagram" width="4000" height="400"><g /></svg>');
+
+    expect(canvas().style.transform).toBe(chosen);
   });
 
   it('restores the fitted view after zooming', async () => {

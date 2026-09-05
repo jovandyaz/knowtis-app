@@ -15,7 +15,7 @@ import {
 
 import { naturalSvgSize } from './naturalSvgSize';
 import { useDragZoomGestures } from './useDragZoomGestures';
-import { usePanZoom, ZOOM_STEP, type Size } from './usePanZoom';
+import { usePanZoom, ZOOM_STEP, type Point, type Size } from './usePanZoom';
 
 const PERCENT = 100;
 const KEYBOARD_PAN_PX = 60;
@@ -67,9 +67,29 @@ export function MermaidDiagramViewer({
   const [drawnSize, setDrawnSize] = useState<Size | null>(null);
 
   const { transform, zoomAtPoint, panBy, fit } = usePanZoom();
-  const gestures = useDragZoomGestures(surface, { panBy, zoomAtPoint });
   const viewport = useRef<Size>({ width: 0, height: 0 });
-  const fittedDiagram = useRef<string | null>(null);
+  const readerMovedView = useRef(false);
+
+  const zoomAtPointer = useCallback(
+    (factor: number, anchor: Point) => {
+      readerMovedView.current = true;
+      zoomAtPoint(factor, anchor);
+    },
+    [zoomAtPoint]
+  );
+
+  const panView = useCallback(
+    (delta: Point) => {
+      readerMovedView.current = true;
+      panBy(delta);
+    },
+    [panBy]
+  );
+
+  const gestures = useDragZoomGestures(surface, {
+    panBy: panView,
+    zoomAtPoint: zoomAtPointer,
+  });
 
   useEffect(() => {
     const diagram = layer?.querySelector('svg');
@@ -88,10 +108,14 @@ export function MermaidDiagramViewer({
       // else sizes — React owns this subtree, so the box is the layer, never
       // the svg's own style
       const size = naturalSvgSize(diagram);
-      setDrawnSize(size);
-      // a later resize must not throw away the zoom the reader chose
-      if (fittedDiagram.current !== svg) {
-        fittedDiagram.current = svg;
+      setDrawnSize((current) =>
+        current?.width === size.width && current.height === size.height
+          ? current
+          : size
+      );
+      // a resize, or a collaborator redrawing the diagram, must not throw away
+      // the zoom the reader chose
+      if (!readerMovedView.current) {
         fit(size, viewport.current);
       }
     });
@@ -103,16 +127,17 @@ export function MermaidDiagramViewer({
   // stays put — a pointer gesture anchors on the pointer instead
   const zoomFromCentre = useCallback(
     (factor: number) => {
-      zoomAtPoint(factor, {
+      zoomAtPointer(factor, {
         x: viewport.current.width / 2,
         y: viewport.current.height / 2,
       });
     },
-    [zoomAtPoint]
+    [zoomAtPointer]
   );
 
   const fitToViewport = useCallback(() => {
     if (drawnSize) {
+      readerMovedView.current = false;
       fit(drawnSize, viewport.current);
     }
   }, [drawnSize, fit]);
@@ -123,7 +148,7 @@ export function MermaidDiagramViewer({
       return;
     }
     event.preventDefault();
-    panBy(step);
+    panView(step);
   };
 
   const zoomPercent = Math.round(transform.scale * PERCENT);
@@ -132,6 +157,7 @@ export function MermaidDiagramViewer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         side={DIALOG_SIDE.FULL}
+        closeLabel={t('editor.mermaid.closeViewer')}
         className="bg-(--background) [&>button]:top-3.5"
       >
         <div className="flex items-center border-b border-border/50 px-4 py-3 pr-14">
@@ -145,7 +171,7 @@ export function MermaidDiagramViewer({
           ref={setSurface}
           {...gestures}
           onKeyDown={handleKeyDown}
-          role="application"
+          role="group"
           aria-label={t('editor.mermaid.canvasLabel')}
           tabIndex={0}
           className="relative touch-none cursor-grab overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-inset active:cursor-grabbing"
@@ -158,11 +184,11 @@ export function MermaidDiagramViewer({
               width: drawnSize ? `${drawnSize.width}px` : undefined,
               height: drawnSize ? `${drawnSize.height}px` : undefined,
             }}
-            className="w-fit select-none [&>svg]:h-full! [&>svg]:w-full! [&>svg]:max-w-none!"
+            className="select-none [&>svg]:h-full! [&>svg]:w-full! [&>svg]:max-w-none!"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
 
-          <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center px-4">
+          <div className="pointer-events-none absolute inset-x-0 bottom-[calc(1rem+env(safe-area-inset-bottom))] flex justify-center px-4">
             <div
               onPointerDown={(event) => event.stopPropagation()}
               className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-border/50 bg-background/80 p-1 shadow-lg shadow-black/5 backdrop-blur-md dark:bg-muted/30"

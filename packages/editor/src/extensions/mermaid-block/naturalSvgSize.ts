@@ -3,6 +3,7 @@ import type { Size } from './usePanZoom';
 const EMPTY_SIZE: Size = { width: 0, height: 0 };
 const VIEW_BOX_SEPARATOR = /[\s,]+/;
 const VIEW_BOX_WIDTH_INDEX = 2;
+const VIEW_BOX_HEIGHT_INDEX = 3;
 
 function positiveSize(width: number, height: number): Size | null {
   if (!Number.isFinite(width) || !Number.isFinite(height)) {
@@ -19,7 +20,7 @@ function sizeFromViewBox(svg: SVGSVGElement): Size | null {
   const parts = viewBox.trim().split(VIEW_BOX_SEPARATOR).map(Number);
   return positiveSize(
     parts[VIEW_BOX_WIDTH_INDEX] ?? NaN,
-    parts[VIEW_BOX_WIDTH_INDEX + 1] ?? NaN
+    parts[VIEW_BOX_HEIGHT_INDEX] ?? NaN
   );
 }
 

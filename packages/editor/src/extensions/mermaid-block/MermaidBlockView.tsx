@@ -218,6 +218,8 @@ export function MermaidBlockView({
             />
           </div>
         )}
+        {/* mermaid scopes its <style> and url(#marker) refs by the svg id, so a
+            second live copy while the viewer is open would collide with it */}
         {showPreview && !viewerOpen && (
           <div className="mermaid-preview-area p-3 flex items-center justify-center min-h-[120px] bg-background">
             {error && !svg ? (

@@ -508,7 +508,7 @@ describe('Dialog accessibility', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog.className).toContain('inset-0');
     expect(dialog.className).toContain('h-full');
-    expect(dialog.className).not.toContain('max-w-lg');
+    expect(dialog.className).toContain('max-w-none');
   });
 });
 

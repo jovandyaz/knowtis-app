@@ -170,15 +170,19 @@ function DialogOverlay({
   );
 }
 
+const DEFAULT_CLOSE_LABEL = 'Close dialog';
+
 interface DialogContentProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   side?: DialogSide;
+  closeLabel?: string;
 }
 
 function DialogContent({
   className,
   children,
   side = DIALOG_SIDE.CENTER,
+  closeLabel = DEFAULT_CLOSE_LABEL,
   ...props
 }: DialogContentProps) {
   const {
@@ -302,7 +306,7 @@ function DialogContent({
           type="button"
           className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
           onClick={() => onOpenChange(false)}
-          aria-label="Close dialog"
+          aria-label={closeLabel}
         >
           <X className="h-4 w-4" />
         </button>

@@ -205,7 +205,8 @@
       "zoomIn": "Acercar",
       "zoomOut": "Alejar",
       "fitToScreen": "Ajustar a la pantalla",
-      "canvasLabel": "Lienzo del diagrama, usa las flechas para moverlo"
+      "canvasLabel": "Lienzo del diagrama, usa las flechas para moverlo",
+      "closeViewer": "Cerrar el diagrama"
     }
   },
   "create": {

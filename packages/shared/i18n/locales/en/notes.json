@@ -205,7 +205,8 @@
       "zoomIn": "Zoom in",
       "zoomOut": "Zoom out",
       "fitToScreen": "Fit to screen",
-      "canvasLabel": "Diagram canvas, use the arrow keys to move"
+      "canvasLabel": "Diagram canvas, use the arrow keys to move",
+      "closeViewer": "Close the diagram"
     }
   },
   "create": {
