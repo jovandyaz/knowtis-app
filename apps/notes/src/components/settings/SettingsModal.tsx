@@ -54,7 +54,10 @@ export function SettingsModal() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && close()}>
-      <DialogContent className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 md:h-[80vh] md:max-w-3xl">
+      <DialogContent
+        className="flex h-full w-full flex-col gap-0 overflow-hidden p-0 md:h-[80vh] md:max-w-3xl"
+        closeLabel={t('labels.closeDialog')}
+      >
         <div className="flex shrink-0 items-center gap-2 border-b border-(--border) px-6 py-4">
           <Settings className="h-4 w-4 text-(--muted-foreground)" />
           <DialogTitle className="text-sm tracking-normal text-(--foreground)">

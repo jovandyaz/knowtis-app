@@ -14,15 +14,7 @@ import {
   waitFor,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import {
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ApiClientError } from '@knowtis/api-client';
 
@@ -49,11 +41,9 @@ vi.mock('sonner', () => ({
   },
 }));
 
-beforeAll(async () => {
+// A test that renders in another language must not leave it set for the next one.
+beforeEach(async () => {
   await i18n.changeLanguage('en');
-});
-
-beforeEach(() => {
   vi.clearAllMocks();
   useVerifyEmailStore.setState({ isOpen: false, source: 'inApp' });
 });
@@ -458,6 +448,18 @@ describe('VerifyEmailDialog', () => {
       await screen.findByText('This email has already been verified.')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeDisabled();
+  });
+
+  it('speaks the reader language on the close control', async () => {
+    await act(async () => {
+      await i18n.changeLanguage('es');
+    });
+    renderDialog();
+    openDialog();
+
+    expect(
+      screen.getByRole('button', { name: 'Cerrar diálogo' })
+    ).toBeInTheDocument();
   });
 
   it('forgets a half-typed code between openings', async () => {

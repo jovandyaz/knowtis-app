@@ -62,7 +62,7 @@ function TestDialog({
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel="Close dialog">
         <DialogTitle>Test dialog</DialogTitle>
       </DialogContent>
     </Dialog>

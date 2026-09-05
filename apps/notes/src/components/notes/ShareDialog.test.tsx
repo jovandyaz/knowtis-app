@@ -108,6 +108,14 @@ describe('ShareDialog', () => {
     useVerifyEmailStore.setState({ isOpen: false });
   });
 
+  it('passes the shared close-dialog key to the close control', () => {
+    renderDialog({ shareToken: null });
+
+    expect(
+      screen.getByRole('button', { name: 'common:labels.closeDialog' })
+    ).toBeInTheDocument();
+  });
+
   it('announces a first share as a created link', async () => {
     renderDialog({ shareToken: null });
 

@@ -92,7 +92,7 @@ interface ArtifactGeneratorDialogProps {
 export function ArtifactGeneratorDialog({
   noteId,
 }: ArtifactGeneratorDialogProps) {
-  const { t } = useTranslation('notes');
+  const { t } = useTranslation(['notes', 'common']);
   const open = useArtifactSidebarStore((s) => s.generatorOpen);
   const openGenerator = useArtifactSidebarStore((s) => s.openGenerator);
   const closeGenerator = useArtifactSidebarStore((s) => s.closeGenerator);
@@ -146,7 +146,10 @@ export function ArtifactGeneratorDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        className="sm:max-w-lg"
+        closeLabel={t('common:labels.closeDialog')}
+      >
         <DialogHeader>
           <DialogTitle>{t('ai.artifacts.generate.title')}</DialogTitle>
           <DialogDescription>

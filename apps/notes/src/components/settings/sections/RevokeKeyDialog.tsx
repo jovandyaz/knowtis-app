@@ -43,7 +43,7 @@ export function RevokeKeyDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel={t('labels.closeDialog')}>
         <DialogHeader>
           <DialogTitle>{t('integrations.revokeTitle')}</DialogTitle>
         </DialogHeader>

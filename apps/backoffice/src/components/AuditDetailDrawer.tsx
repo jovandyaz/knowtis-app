@@ -26,7 +26,7 @@ export function AuditDetailDrawer({ entry, onClose }: AuditDetailDrawerProps) {
   return (
     <Dialog open={entry !== null} onOpenChange={(open) => !open && onClose()}>
       {entry ? (
-        <DialogContent side={DIALOG_SIDE.RIGHT}>
+        <DialogContent side={DIALOG_SIDE.RIGHT} closeLabel="Close dialog">
           <DialogHeader>
             <DialogTitle>{entry.action}</DialogTitle>
             <DialogDescription>

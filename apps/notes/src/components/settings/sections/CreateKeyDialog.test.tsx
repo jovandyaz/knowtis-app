@@ -78,6 +78,14 @@ describe('CreateKeyDialog', () => {
     expect(useVerifyEmailStore.getState().isOpen).toBe(false);
   });
 
+  it('passes the shared close-dialog key to the close control', () => {
+    render(<CreateKeyDialog open onOpenChange={vi.fn()} />, { wrapper });
+
+    expect(
+      screen.getByRole('button', { name: 'labels.closeDialog' })
+    ).toBeInTheDocument();
+  });
+
   it('exposes the scope choice as a radio group with the default checked', () => {
     render(<CreateKeyDialog open onOpenChange={vi.fn()} />, { wrapper });
 

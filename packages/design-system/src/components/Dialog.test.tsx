@@ -21,7 +21,7 @@ import {
 function renderDialog(onOpenChange = vi.fn()) {
   render(
     <Dialog open onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent closeLabel="Close dialog">
         <DialogHeader>
           <DialogTitle>Delete note</DialogTitle>
           <DialogDescription>This action cannot be undone.</DialogDescription>
@@ -42,7 +42,7 @@ function ShareThenVerify({
   return (
     <>
       <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Share</DialogTitle>
           <button type="button" disabled={shareDisabled}>
             Anyone with the link
@@ -50,7 +50,7 @@ function ShareThenVerify({
         </DialogContent>
       </Dialog>
       <Dialog open={topOpen} onOpenChange={vi.fn()}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Verify</DialogTitle>
           <input aria-label="Code" />
         </DialogContent>
@@ -122,7 +122,7 @@ describe('Dialog accessibility', () => {
     const onOpenChange = vi.fn();
     render(
       <Dialog open onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Settings</DialogTitle>
           <DropdownMenu>
             <DropdownMenuTrigger>Model</DropdownMenuTrigger>
@@ -146,7 +146,7 @@ describe('Dialog accessibility', () => {
     const onOpenChange = vi.fn();
     render(
       <Dialog open={false} onOpenChange={onOpenChange}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Hidden</DialogTitle>
         </DialogContent>
       </Dialog>
@@ -160,7 +160,7 @@ describe('Dialog accessibility', () => {
   it('omits aria-labelledby and aria-describedby when no title or description is rendered', () => {
     render(
       <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent>Plain content</DialogContent>
+        <DialogContent closeLabel="Close dialog">Plain content</DialogContent>
       </Dialog>
     );
 
@@ -175,12 +175,12 @@ describe('Dialog accessibility', () => {
     render(
       <>
         <Dialog open onOpenChange={onOuterChange}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Outer</DialogTitle>
           </DialogContent>
         </Dialog>
         <Dialog open onOpenChange={onInnerChange}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Inner</DialogTitle>
           </DialogContent>
         </Dialog>
@@ -200,12 +200,12 @@ describe('Dialog accessibility', () => {
       return (
         <>
           <Dialog open onOpenChange={() => onOuterChange(tick)}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Outer</DialogTitle>
             </DialogContent>
           </Dialog>
           <Dialog open onOpenChange={onInnerChange}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Inner</DialogTitle>
             </DialogContent>
           </Dialog>
@@ -227,12 +227,12 @@ describe('Dialog accessibility', () => {
     render(
       <>
         <Dialog open onOpenChange={vi.fn()}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Outer</DialogTitle>
           </DialogContent>
         </Dialog>
         <Dialog open onOpenChange={vi.fn()}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Inner</DialogTitle>
           </DialogContent>
         </Dialog>
@@ -251,7 +251,7 @@ describe('Dialog accessibility', () => {
     function Sole({ open }: { open: boolean }) {
       return (
         <Dialog open={open} onOpenChange={vi.fn()}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Sole</DialogTitle>
           </DialogContent>
         </Dialog>
@@ -271,7 +271,7 @@ describe('Dialog accessibility', () => {
   it('moves focus into the content on open without waiting for a later frame', () => {
     render(
       <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Navigation</DialogTitle>
           <button type="button">Dashboard</button>
         </DialogContent>
@@ -294,7 +294,7 @@ describe('Dialog accessibility', () => {
 
     render(
       <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Navigation</DialogTitle>
           <button type="button">Dashboard</button>
           <SelfFocusingField />
@@ -310,7 +310,7 @@ describe('Dialog accessibility', () => {
   it('wraps focus at both ends so Tab never leaves the dialog', () => {
     render(
       <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogTitle>Navigation</DialogTitle>
           <button type="button">Dashboard</button>
         </DialogContent>
@@ -335,7 +335,7 @@ describe('Dialog accessibility', () => {
         <>
           <button type="button">Share</button>
           <Dialog open={open} onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Verify</DialogTitle>
               <input aria-label="Code" />
             </DialogContent>
@@ -359,13 +359,13 @@ describe('Dialog accessibility', () => {
       return (
         <>
           <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Share</DialogTitle>
               <button type="button">Anyone with the link</button>
             </DialogContent>
           </Dialog>
           <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Verify</DialogTitle>
               <input aria-label="Code" />
             </DialogContent>
@@ -395,7 +395,7 @@ describe('Dialog accessibility', () => {
       return (
         <>
           <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Share</DialogTitle>
               {showOpener && (
                 <button type="button">Anyone with the link</button>
@@ -403,7 +403,7 @@ describe('Dialog accessibility', () => {
             </DialogContent>
           </Dialog>
           <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Verify</DialogTitle>
               <input aria-label="Code" />
             </DialogContent>
@@ -452,17 +452,17 @@ describe('Dialog accessibility', () => {
       return (
         <>
           <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Bottom</DialogTitle>
             </DialogContent>
           </Dialog>
           <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Middle</DialogTitle>
             </DialogContent>
           </Dialog>
           <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogTitle>Top</DialogTitle>
               <input aria-label="Code" />
             </DialogContent>
@@ -485,7 +485,7 @@ describe('Dialog accessibility', () => {
   it('renders a right-side drawer when side="right"', () => {
     render(
       <Dialog open onOpenChange={() => undefined}>
-        <DialogContent side="right">
+        <DialogContent side="right" closeLabel="Close dialog">
           <DialogTitle>Entry details</DialogTitle>
         </DialogContent>
       </Dialog>
@@ -499,7 +499,7 @@ describe('Dialog accessibility', () => {
   it('fills the viewport when side="full"', () => {
     render(
       <Dialog open onOpenChange={() => undefined}>
-        <DialogContent side="full">
+        <DialogContent side="full" closeLabel="Close dialog">
           <DialogTitle>Diagram</DialogTitle>
         </DialogContent>
       </Dialog>
@@ -527,12 +527,12 @@ describe('Dialog body scroll lock', () => {
     return (
       <>
         <Dialog open={bottomOpen} onOpenChange={vi.fn()}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Settings</DialogTitle>
           </DialogContent>
         </Dialog>
         <Dialog open={topOpen} onOpenChange={vi.fn()}>
-          <DialogContent>
+          <DialogContent closeLabel="Close dialog">
             <DialogTitle>Create key</DialogTitle>
           </DialogContent>
         </Dialog>

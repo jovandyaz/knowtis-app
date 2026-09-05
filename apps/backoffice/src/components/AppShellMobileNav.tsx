@@ -38,7 +38,10 @@ export function AppShellMobileNav() {
         </Button>
       </header>
       <Dialog open={navOpen} onOpenChange={setNavOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogContent
+          className="max-h-[85vh] overflow-y-auto"
+          closeLabel="Close dialog"
+        >
           <DialogHeader>
             <DialogTitle className="text-base">Navigation</DialogTitle>
           </DialogHeader>
