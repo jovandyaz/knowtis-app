@@ -36,6 +36,7 @@ interface MakeOverrides {
   identity?: IdentityState;
   validate?: (provider: ByokProvider, key: string) => Promise<void>;
   repo?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
+  settings?: Partial<Record<string, ReturnType<typeof vi.fn>>>;
 }
 
 function makeService(overrides: MakeOverrides) {
@@ -62,16 +63,24 @@ function makeService(overrides: MakeOverrides) {
       k === 'BYOK_ENCRYPTION_KEY' ? masterKeyB64 : undefined,
   };
   const registry = { languageModel: vi.fn() };
+  const settings = {
+    getSettings: vi
+      .fn()
+      .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+    patchSettings: vi.fn().mockResolvedValue(undefined),
+    ...overrides.settings,
+  };
   const service = new ByokService(
     repo as never,
     flags as never,
     config as never,
     registry as never,
-    policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED)
+    policyFor(overrides.identity ?? IDENTITY_STATE.VERIFIED),
+    settings as never
   );
   const validateKey = vi.fn(overrides.validate ?? (async () => undefined));
   (service as never as { validateKey: unknown }).validateKey = validateKey;
-  return { service, repo, flags, store, validateKey };
+  return { service, repo, flags, store, validateKey, settings };
 }
 
 describe('ByokService', () => {
@@ -183,7 +192,13 @@ describe('ByokService', () => {
       flags as never,
       config as never,
       registry as never,
-      policyFor(IDENTITY_STATE.VERIFIED)
+      policyFor(IDENTITY_STATE.VERIFIED),
+      {
+        getSettings: vi
+          .fn()
+          .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+        patchSettings: vi.fn(),
+      } as never
     );
 
     await expect(
@@ -212,7 +227,13 @@ describe('ByokService', () => {
       flags as never,
       config as never,
       registry as never,
-      policyFor(IDENTITY_STATE.VERIFIED)
+      policyFor(IDENTITY_STATE.VERIFIED),
+      {
+        getSettings: vi
+          .fn()
+          .mockResolvedValue({ preferredModel: null, preferredIntent: null }),
+        patchSettings: vi.fn(),
+      } as never
     );
 
     await service.setKey('u1', 'openrouter', 'sk-or-v1-valid-key-000');
@@ -297,6 +318,41 @@ describe('ByokService', () => {
       await service.setKey('u1', 'anthropic', 'sk-ant-supersecret-12345');
 
       expectKeyStoredForU1(repo, store);
+    });
+  });
+
+  describe('deleteKey', () => {
+    it('drops a preferred model billed to the deleted key', async () => {
+      const { service, repo, settings } = makeService({
+        settings: {
+          getSettings: vi.fn().mockResolvedValue({
+            preferredModel: 'openai:gpt-6',
+            preferredIntent: 'fast',
+          }),
+        },
+      });
+
+      await service.deleteKey('u1', 'openai');
+
+      expect(repo.remove).toHaveBeenCalledWith('u1', 'openai');
+      expect(settings.patchSettings).toHaveBeenCalledWith('u1', {
+        preferredModel: null,
+      });
+    });
+
+    it('leaves a preferred model on another provider alone', async () => {
+      const { service, settings } = makeService({
+        settings: {
+          getSettings: vi.fn().mockResolvedValue({
+            preferredModel: 'anthropic:claude-sonnet-5',
+            preferredIntent: null,
+          }),
+        },
+      });
+
+      await service.deleteKey('u1', 'openai');
+
+      expect(settings.patchSettings).not.toHaveBeenCalled();
     });
   });
 });
