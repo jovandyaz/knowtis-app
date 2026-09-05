@@ -11,7 +11,7 @@ reviews:
   profile: assertive
   high_level_summary: true
   review_status: true
-  request_changes_workflow: true
+  request_changes_workflow: false
   collapse_walkthrough: false
 
   auto_review:
