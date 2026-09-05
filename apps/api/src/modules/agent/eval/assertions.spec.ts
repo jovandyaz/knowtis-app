@@ -21,6 +21,8 @@ function transcript(partial: Partial<EvalTranscript>): EvalTranscript {
     stopReason: null,
     servedModel: null,
     steps: [],
+    usage: null,
+    costUsd: null,
     ...partial,
   };
 }

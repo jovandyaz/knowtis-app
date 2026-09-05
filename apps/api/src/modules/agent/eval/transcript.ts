@@ -1,8 +1,15 @@
 import type { AgentStopReason } from '@knowtis/shared-types';
 
-import type { AgentEvent } from '../domain/agent-event';
+import type { AgentEvent, AgentTurnUsage } from '../domain/agent-event';
 import type { AgentMessage } from '../domain/agent-message';
 import type { MutationKind } from '../domain/proposed-mutation';
+
+export interface EvalTranscriptUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  readonly cacheReadTokens?: number;
+  readonly cacheWriteTokens?: number;
+}
 
 export interface EvalTranscript {
   readonly toolCalls: { readonly name: string; readonly args: unknown }[];
@@ -17,9 +24,26 @@ export interface EvalTranscript {
   /** Model that actually served the turn — differs from the requested one when the fallback chain took over. */
   readonly servedModel: string | null;
   readonly steps: readonly (readonly AgentMessage[])[];
+  /** Turn totals from the terminal event; the event stream carries no per-step usage. */
+  readonly usage: EvalTranscriptUsage | null;
+  /** Derived from the catalog pricing of `servedModel`; null when usage or pricing is missing. */
+  readonly costUsd: number | null;
 }
 
-export type EventTranscript = Omit<EvalTranscript, 'toolCalls'>;
+export type EventTranscript = Omit<EvalTranscript, 'toolCalls' | 'costUsd'>;
+
+function pickUsage(u: AgentTurnUsage): EvalTranscriptUsage {
+  return {
+    inputTokens: u.inputTokens,
+    outputTokens: u.outputTokens,
+    ...(u.cacheReadTokens !== undefined
+      ? { cacheReadTokens: u.cacheReadTokens }
+      : {}),
+    ...(u.cacheWriteTokens !== undefined
+      ? { cacheWriteTokens: u.cacheWriteTokens }
+      : {}),
+  };
+}
 
 export async function drainEvents(
   events: AsyncIterable<AgentEvent>
@@ -30,6 +54,7 @@ export async function drainEvents(
   let error: EventTranscript['error'] = null;
   let stopReason: AgentStopReason | null = null;
   let servedModel: string | null = null;
+  let usage: EvalTranscriptUsage | null = null;
   const steps: (readonly AgentMessage[])[] = [];
 
   for await (const event of events) {
@@ -43,6 +68,7 @@ export async function drainEvents(
         sources = event.sources.map((s) => ({ id: s.id, title: s.title }));
         stopReason = event.stopReason;
         servedModel = event.usage.model;
+        usage = pickUsage(event.usage);
         break;
       case 'proposal':
         proposal = {
@@ -50,16 +76,19 @@ export async function drainEvents(
           payload: event.proposal.payload,
         };
         servedModel = event.usage.model;
+        usage = pickUsage(event.usage);
         break;
       case 'step':
         steps.push(event.messages);
         break;
       case 'aborted':
         servedModel = event.usage.model;
+        usage = pickUsage(event.usage);
         break;
       case 'error':
         error = { code: event.error.code, message: event.error.message };
         servedModel = event.usage?.model ?? servedModel;
+        usage = event.usage ? pickUsage(event.usage) : usage;
         break;
       default: {
         const _exhaustive: never = event;
@@ -68,5 +97,14 @@ export async function drainEvents(
     }
   }
 
-  return { text, proposal, sources, error, stopReason, servedModel, steps };
+  return {
+    text,
+    proposal,
+    sources,
+    error,
+    stopReason,
+    servedModel,
+    steps,
+    usage,
+  };
 }
