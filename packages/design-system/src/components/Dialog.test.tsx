@@ -495,6 +495,21 @@ describe('Dialog accessibility', () => {
     expect(dialog.className).toContain('right-0');
     expect(dialog.className).toContain('inset-y-0');
   });
+
+  it('fills the viewport when side="full"', () => {
+    render(
+      <Dialog open onOpenChange={() => undefined}>
+        <DialogContent side="full">
+          <DialogTitle>Diagram</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.className).toContain('inset-0');
+    expect(dialog.className).toContain('h-full');
+    expect(dialog.className).not.toContain('max-w-lg');
+  });
 });
 
 describe('Dialog body scroll lock', () => {
