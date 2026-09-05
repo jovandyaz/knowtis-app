@@ -44,6 +44,7 @@ export function useDeleteProviderKey() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: providerKeysQueryKeys.list() });
       void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.list() });
+      void qc.invalidateQueries({ queryKey: aiModelsQueryKeys.preferences() });
     },
   });
 }
