@@ -5,6 +5,11 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { I18nModule } from 'nestjs-i18n';
 
+import {
+  computeTokenCostUsd,
+  MODEL_CATALOG,
+  type ModelCatalog,
+} from '@knowtis/ai-gateway';
 import { DEFAULT_LOCALE } from '@knowtis/shared-util';
 
 import { validateEnv, type EnvConfig } from '../../../config/env.config';
@@ -39,6 +44,7 @@ export class AgentEvalHarness {
     private readonly moduleRef: TestingModule,
     private readonly orchestrator: AgentOrchestrator,
     private readonly fallbackChain: FallbackChainService,
+    private readonly catalog: ModelCatalog,
     private readonly retrieval: RecordingFixtureRetrieval,
     private readonly maxSteps: number,
     private readonly maxTurnTokens: number
@@ -87,6 +93,9 @@ export class AgentEvalHarness {
       const fallbackChain = moduleRef.get(FallbackChainService, {
         strict: false,
       });
+      const catalog = moduleRef.get<ModelCatalog>(MODEL_CATALOG, {
+        strict: false,
+      });
       const config = moduleRef.get<ConfigService<EnvConfig, true>>(
         ConfigService,
         { strict: false }
@@ -98,6 +107,7 @@ export class AgentEvalHarness {
         moduleRef,
         orchestrator,
         fallbackChain,
+        catalog,
         retrieval,
         maxSteps,
         maxTurnTokens
@@ -125,7 +135,14 @@ export class AgentEvalHarness {
     });
     const drained = await drainEvents(events);
     assertPinnedModelServed(drained, model);
-    return { ...drained, toolCalls: this.retrieval.getCalls() };
+    const pricing = drained.servedModel
+      ? this.catalog.getPricing(drained.servedModel)
+      : undefined;
+    const costUsd =
+      drained.usage && pricing
+        ? computeTokenCostUsd(drained.usage, pricing)
+        : null;
+    return { ...drained, costUsd, toolCalls: this.retrieval.getCalls() };
   }
 
   async runCase(

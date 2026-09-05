@@ -108,6 +108,15 @@ export interface EvalCaseOutcome {
   readonly passes: number;
   readonly graderErrors: number;
   readonly trials: number;
+  readonly inputTokens: number;
+  readonly outputTokens: number;
+  /** Summed over trials; null when any trial ran without known pricing. */
+  readonly costUsd: number | null;
+}
+
+export interface EvalTrialUsage {
+  readonly inputTokens: number;
+  readonly outputTokens: number;
 }
 
 export interface EvalTrialResult {
@@ -115,12 +124,49 @@ export interface EvalTrialResult {
   readonly vars?: Record<string, unknown>;
   /** The rubric grader could not be reached, so the trial carries no verdict. */
   readonly errored?: boolean;
+  readonly usage?: EvalTrialUsage;
+  readonly costUsd?: number | null;
 }
 
 type PromptfooTrial = Pick<
   EvaluateResult,
-  'success' | 'vars' | 'gradingResult'
+  'success' | 'vars' | 'gradingResult' | 'response'
 >;
+
+// The provider returns the transcript object, but promptfoo persists results
+// and may hand the output back as its JSON string.
+function readTranscriptUsage(
+  output: unknown
+): Pick<EvalTrialResult, 'usage' | 'costUsd'> {
+  let parsed: unknown = output;
+  if (typeof output === 'string') {
+    try {
+      parsed = JSON.parse(output);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null) {
+    return {};
+  }
+  const { usage, costUsd } = parsed as {
+    usage?: unknown;
+    costUsd?: unknown;
+  };
+  if (
+    typeof usage !== 'object' ||
+    usage === null ||
+    typeof (usage as { inputTokens?: unknown }).inputTokens !== 'number' ||
+    typeof (usage as { outputTokens?: unknown }).outputTokens !== 'number'
+  ) {
+    return {};
+  }
+  const { inputTokens, outputTokens } = usage as EvalTrialUsage;
+  return {
+    usage: { inputTokens, outputTokens },
+    costUsd: typeof costUsd === 'number' ? costUsd : null,
+  };
+}
 
 /**
  * Grader transport errors (e.g. HTTP 529 from the rubric model) reach promptfoo
@@ -145,6 +191,7 @@ export function toTrialResult(result: PromptfooTrial): EvalTrialResult {
     success: result.success,
     vars: result.vars,
     errored: !result.success && onlyGraderErrors,
+    ...readTranscriptUsage(result.response?.output),
   };
 }
 
@@ -168,10 +215,7 @@ export function summarizeTrials(
   results: readonly EvalTrialResult[],
   minPassRate: number = EVAL_MIN_PASS_RATE
 ): EvalTrialSummary {
-  const byCase = new Map<
-    string,
-    { label: string; passes: number; graderErrors: number; trials: number }
-  >();
+  const byCase = new Map<string, Omit<EvalCaseOutcome, 'key'>>();
   for (const result of results) {
     const key = caseKeyOf(result.vars);
     const label = (result.vars?.['message'] as string | undefined) ?? '(case)';
@@ -180,14 +224,24 @@ export function summarizeTrials(
       passes: 0,
       graderErrors: 0,
       trials: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      costUsd: 0,
     };
-    entry.trials += 1;
-    if (result.success) {
-      entry.passes += 1;
-    } else if (result.errored) {
-      entry.graderErrors += 1;
-    }
-    byCase.set(key, entry);
+    const costUsd =
+      entry.costUsd === null || typeof result.costUsd !== 'number'
+        ? null
+        : entry.costUsd + result.costUsd;
+    byCase.set(key, {
+      ...entry,
+      trials: entry.trials + 1,
+      passes: entry.passes + (result.success ? 1 : 0),
+      graderErrors:
+        entry.graderErrors + (!result.success && result.errored ? 1 : 0),
+      inputTokens: entry.inputTokens + (result.usage?.inputTokens ?? 0),
+      outputTokens: entry.outputTokens + (result.usage?.outputTokens ?? 0),
+      costUsd,
+    });
   }
   const cases = [...byCase.entries()].map(([key, entry]) => ({
     key,
@@ -207,11 +261,14 @@ export function formatCaseOutcome(
   casesBelowThreshold: readonly EvalCaseOutcome[]
 ): string {
   const status = casesBelowThreshold.includes(outcome) ? 'FAIL' : 'PASS';
-  if (outcome.graderErrors === 0) {
-    return `${status} ${outcome.passes}/${outcome.trials}`;
-  }
   const gradedTrials = outcome.trials - outcome.graderErrors;
-  return `${status} ${outcome.passes}/${gradedTrials} graded, ${outcome.graderErrors} of ${outcome.trials} ungraded`;
+  const verdict =
+    outcome.graderErrors === 0
+      ? `${status} ${outcome.passes}/${outcome.trials}`
+      : `${status} ${outcome.passes}/${gradedTrials} graded, ${outcome.graderErrors} of ${outcome.trials} ungraded`;
+  const cost =
+    outcome.costUsd === null ? '' : ` · $${outcome.costUsd.toFixed(4)}`;
+  return `${verdict} · ${outcome.inputTokens}/${outcome.outputTokens} tok${cost}`;
 }
 
 export interface EvalRunStats {
