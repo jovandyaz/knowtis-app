@@ -92,7 +92,7 @@ export class VerificationEmailIssuer {
   ): Promise<AuthDomainError> {
     const current = await this.verificationTokenRepository.findByUserId(userId);
     return AuthErrors.resendCooldown(
-      current ? msUntilResendAllowed(current.createdAt) : cooldownMs
+      current ? msUntilResendAllowed(current.createdAt, cooldownMs) : cooldownMs
     );
   }
 }

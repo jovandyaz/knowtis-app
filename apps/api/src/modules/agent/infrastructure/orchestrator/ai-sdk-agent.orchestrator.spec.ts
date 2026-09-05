@@ -457,6 +457,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const { registry, chain } = createTestChain(config, FALLBACK);
     const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
     const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
     const orchestrator = new AiSdkAgentOrchestrator(
       config,
       makeToolRegistry(),
@@ -480,6 +481,11 @@ describe('AiSdkAgentOrchestrator', () => {
     ).toBe(true);
     expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
     expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(healthLogsFrom(logSpy).map((entry) => entry.outcome)).toEqual([
+      'error',
+      'done',
+    ]);
+    logSpy.mockRestore();
   });
 
   it('retries a transient BYOK failure the SDK surfaces as an error part before any payload', async () => {
@@ -499,6 +505,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const { registry, chain } = createTestChain(config, FALLBACK);
     const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
     const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const logSpy = vi.spyOn(Logger.prototype, 'log');
     const orchestrator = new AiSdkAgentOrchestrator(
       config,
       makeToolRegistry(),
@@ -518,6 +525,11 @@ describe('AiSdkAgentOrchestrator', () => {
     ).toBe(true);
     expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
     expect(events.at(-1)).toMatchObject({ type: 'done' });
+    expect(healthLogsFrom(logSpy).map((entry) => entry.outcome)).toEqual([
+      'error',
+      'done',
+    ]);
+    logSpy.mockRestore();
   });
 
   it('fails a non-transient BYOK error immediately', async () => {
@@ -3508,6 +3520,38 @@ describe('AiSdkAgentOrchestrator', () => {
       },
     ]);
     expect(JSON.stringify(toolErrorLogs)).not.toContain('sk-live-123');
+    warnSpy.mockRestore();
+  });
+
+  it('caps a typed tool error message at the same length as an untyped one', async () => {
+    const warnSpy = vi.spyOn(Logger.prototype, 'warn');
+    const longUrl = `https://example.test/${'a'.repeat(400)}`;
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield {
+          type: 'tool-error',
+          toolCallId: 'c1',
+          toolName: 'webFetch',
+          input: { url: longUrl },
+          error: new ToolExecutionError(
+            TOOL_ERROR_CODES.WEB_UPSTREAM_FAILED,
+            `Fetch failed for ${longUrl}`
+          ),
+        };
+        yield { type: 'text-delta', id: 't1', text: 'sin suerte' };
+      })(),
+      usage: Promise.resolve({ inputTokens: 3, outputTokens: 2 }),
+      response: Promise.resolve({ messages: [] }),
+    }));
+    const orchestrator = makeOrchestrator();
+
+    await collect(orchestrator.run(baseInput));
+
+    const toolErrorLog = warnSpy.mock.calls
+      .map(([payload]) => payload as Record<string, unknown>)
+      .find((p) => p?.event === 'agent.tool.error');
+    expect(toolErrorLog).toMatchObject({ code: 'WEB_UPSTREAM_FAILED' });
+    expect((toolErrorLog?.error as string).length).toBe(300);
     warnSpy.mockRestore();
   });
 

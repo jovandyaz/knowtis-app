@@ -155,7 +155,7 @@ describe.runIf(DB_AVAILABLE)(
       );
     });
 
-    it('lets exactly one of ten concurrent replacements through inside the cooldown', async () => {
+    it('refuses all ten concurrent replacements inside the cooldown', async () => {
       const first = await repo.replaceIfOlderThan(tokenData(), 60_000);
       expect(first._unsafeUnwrap()).not.toBeNull();
 

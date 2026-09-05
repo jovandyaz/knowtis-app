@@ -84,7 +84,8 @@ function canRetrySilentStep(health: StreamHealth, attempt: number): boolean {
 // A BYOK turn must never bill another key, so a 429/503 gets one more shot on
 // the same key and model instead of failing over. Only before anything reached
 // the client, so nothing streamed is duplicated. No backoff here: the retried
-// step re-enters streamText, whose maxRetries already backs off exponentially.
+// step re-enters streamText, whose maxRetries backs off exponentially within
+// each call.
 function canRetryTransientStep(
   health: StreamHealth,
   attempt: number,
@@ -305,6 +306,15 @@ export async function* runAgentStepLoop(
         case STEP_CALL_KIND.ERRORED: {
           const { cause, fromStream } = result;
           if (canRetryTransientStep(result.health, attempt, cause, byok)) {
+            emitTurnHealth(
+              logger,
+              input.userId,
+              currentModel,
+              result.health,
+              AGENT_TURN_OUTCOME.ERROR,
+              result.callStartedAt,
+              modelsUsed
+            );
             logRetry(
               logger,
               input.userId,

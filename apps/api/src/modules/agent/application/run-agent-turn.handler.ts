@@ -134,6 +134,12 @@ const AGENT_HISTORY_TOKEN_BUDGET = 12_000;
 const AGENT_HISTORY_TOOL_TURNS = 2;
 const MAX_USER_MESSAGE_CHARS = 50_000;
 
+function messageTooLongError() {
+  return AIErrors.invalidInput(
+    `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
+  );
+}
+
 @Injectable()
 export class RunAgentTurnHandler {
   private readonly logger = new Logger(RunAgentTurnHandler.name);
@@ -211,6 +217,12 @@ export class RunAgentTurnHandler {
   ): Promise<void> {
     const message = input.message;
     if (!message) {
+      return;
+    }
+    // Reject before resolveConversation so an oversized first message leaves
+    // no titled conversation row behind.
+    if (message.content.length > MAX_USER_MESSAGE_CHARS) {
+      callbacks.onError(messageTooLongError());
       return;
     }
     const conversation = await this.resolveConversation(input, message);
@@ -499,11 +511,7 @@ export class RunAgentTurnHandler {
     const lastUserMessage = inputMessages.findLast((m) => m.role === 'user');
     if (lastUserMessage) {
       if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
-        callbacks.onError(
-          AIErrors.invalidInput(
-            `Message exceeds the maximum length of ${MAX_USER_MESSAGE_CHARS} characters`
-          )
-        );
+        callbacks.onError(messageTooLongError());
         return;
       }
       const verdict = await this.injectionGuard.guard(
