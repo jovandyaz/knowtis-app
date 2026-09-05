@@ -412,24 +412,150 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(error.message).toContain('BYOK provider request failed');
   });
 
-  it('maps a transient overloaded provider error to a clear code instead of the redacted BYOK message', async () => {
-    const orchestrator = makeOrchestrator();
-    streamTextMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('Failed after 4 attempts'), {
-        lastError: { statusCode: 503 },
-      });
+  function overloaded503() {
+    return Object.assign(new Error('Failed after 4 attempts'), {
+      lastError: { statusCode: 503 },
     });
+  }
+
+  it('maps a transient overloaded provider error to a clear code instead of the redacted BYOK message', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+    streamTextMock
+      .mockImplementationOnce(() => {
+        throw overloaded503();
+      })
+      .mockImplementationOnce(() => {
+        throw overloaded503();
+      });
 
     const events = await collect(
       orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
     );
 
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
     expect(events).toHaveLength(1);
     const error = (events[0] as { error: { code: string; message: string } })
       .error;
     expect(error.code).toBe('AI_PROVIDER_OVERLOADED');
     expect(error.message).not.toContain('BYOK provider request failed');
     expect(error.message).toContain('overloaded');
+  });
+
+  it('retries a transient BYOK failure once on the same key without consulting the chain', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => {
+        throw overloaded503();
+      })
+      .mockImplementationOnce(happyStream);
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(languageModelSpy.mock.calls.map(([model]) => model)).toEqual([
+      MODEL,
+      MODEL,
+    ]);
+    expect(
+      languageModelSpy.mock.calls.every(([, key]) => key === 'user-key')
+    ).toBe(true);
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('retries a transient BYOK failure the SDK surfaces as an error part before any payload', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(() => ({
+        stream: (async function* () {
+          yield { type: 'start' };
+          yield { type: 'error', error: { statusCode: 429 } };
+        })(),
+        usage: rejectedUsage(
+          'No output generated. Check the stream for errors.'
+        ),
+      }))
+      .mockImplementationOnce(happyStream);
+    const config = makeConfig();
+    const { registry, chain } = createTestChain(config, FALLBACK);
+    const candidatesSpy = vi.spyOn(chain, 'candidatesFor');
+    const languageModelSpy = vi.spyOn(registry, 'languageModel');
+    const orchestrator = new AiSdkAgentOrchestrator(
+      config,
+      makeToolRegistry(),
+      registry,
+      chain,
+      makeFlags()
+    );
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(candidatesSpy).not.toHaveBeenCalled();
+    expect(
+      languageModelSpy.mock.calls.every(([, key]) => key === 'user-key')
+    ).toBe(true);
+    expect(events).toContainEqual({ type: 'chunk', text: 'Hello' });
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('fails a non-transient BYOK error immediately', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+    streamTextMock.mockImplementationOnce(() => {
+      throw new Error('invalid_api_key');
+    });
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_ERROR' },
+    });
+  });
+
+  it('does not retry a transient BYOK error after output already streamed', async () => {
+    streamTextMock.mockClear();
+    const orchestrator = makeOrchestrator();
+    streamTextMock.mockImplementationOnce(() => ({
+      stream: (async function* () {
+        yield { type: 'text-delta', id: 't1', text: 'partial ' };
+        throw overloaded503();
+      })(),
+      usage: new Promise(() => {}),
+    }));
+
+    const events = await collect(
+      orchestrator.run({ ...baseInput, byokApiKey: 'user-key' })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(events).toContainEqual({ type: 'chunk', text: 'partial ' });
+    expect(events.at(-1)).toMatchObject({
+      type: 'error',
+      error: { code: 'AI_PROVIDER_OVERLOADED' },
+    });
   });
 
   it('yields a chunk then a done event with correct usage and model on the happy path', async () => {
