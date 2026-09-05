@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
+import { providerOf } from '@knowtis/ai-gateway';
 import {
   FEATURE_FLAG_KEYS,
   type ByokProvider,
@@ -17,6 +18,10 @@ import {
 import type { EnvConfig } from '../../../../config/env.config';
 import { FeatureFlagsService } from '../../../feature-flags/feature-flags.service';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
+import {
+  USER_AI_SETTINGS_REPOSITORY,
+  type UserAiSettingsRepository,
+} from '../../domain/ports/user-ai-settings.repository';
 import {
   USER_PROVIDER_KEYS_REPOSITORY,
   type UserProviderKeysRepository,
@@ -42,7 +47,9 @@ export class ByokService {
     private readonly flags: FeatureFlagsService,
     private readonly configService: ConfigService<EnvConfig, true>,
     private readonly registry: ProviderRegistryFactory,
-    private readonly verifiedIdentity: VerifiedIdentityPolicy
+    private readonly verifiedIdentity: VerifiedIdentityPolicy,
+    @Inject(USER_AI_SETTINGS_REPOSITORY)
+    private readonly settings: UserAiSettingsRepository
   ) {
     const raw = this.configService.get('BYOK_ENCRYPTION_KEY');
     const decoded = raw ? Buffer.from(raw, 'base64') : null;
@@ -131,8 +138,14 @@ export class ByokService {
     );
   }
 
-  deleteKey(userId: string, provider: ByokProvider): Promise<void> {
-    return this.repo.remove(userId, provider);
+  async deleteKey(userId: string, provider: ByokProvider): Promise<void> {
+    await this.repo.remove(userId, provider);
+    const { preferredModel } = await this.settings.getSettings(userId);
+    // The override was only ever honoured on this key; keeping it would let it
+    // silently resurface the day the user adds the key back.
+    if (preferredModel && providerOf(preferredModel) === provider) {
+      await this.settings.patchSettings(userId, { preferredModel: null });
+    }
   }
 
   async markUsed(userId: string, provider: ByokProvider): Promise<void> {

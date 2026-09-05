@@ -146,4 +146,20 @@ describe('provider key mutations and the model list', () => {
       queryKey: aiModelsQueryKeys.list(),
     });
   });
+
+  // Deleting a key also clears a stored model override billed to it on the
+  // server, so the cached preferences would otherwise keep naming a dead pick.
+  it('refreshes the preferences after a key is removed', async () => {
+    vi.mocked(aiKeysApi.remove).mockResolvedValue(undefined);
+    const { wrapper, queryClient } = createWrapper();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { result } = renderHook(() => useDeleteProviderKey(), { wrapper });
+
+    result.current.mutate('anthropic');
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: aiModelsQueryKeys.preferences(),
+    });
+  });
 });
