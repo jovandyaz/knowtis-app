@@ -53,13 +53,12 @@ export function SharedNotePage() {
     data?.accessLevel === PERMISSION.EDITOR
       ? data.accessLevel
       : undefined;
-  const actorType = user?.isAnonymous === false ? 'registered' : 'anonymous';
+  const isAnonymousVisitor = user === null || user.isAnonymous === true;
+  const actorType = isAnonymousVisitor ? 'anonymous' : 'registered';
   const isResolved =
     !isLoading && !isError && data !== undefined && !isAuthLoading;
-  // A registered visitor gets nothing from the login page but a bounce back here;
-  // a profile stored straight from sign-in carries no isAnonymous flag at all.
-  const offerSignIn =
-    !isAuthLoading && (user === null || user.isAnonymous === true);
+  // A registered visitor gets nothing from the login page but a bounce back here.
+  const offerSignIn = !isAuthLoading && isAnonymousVisitor;
 
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {

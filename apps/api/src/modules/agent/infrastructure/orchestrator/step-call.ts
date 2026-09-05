@@ -53,7 +53,10 @@ export function errorMessage(error: unknown, redact: boolean): string {
 
 function describeToolError(error: unknown): { code: string; error: string } {
   if (error instanceof ToolExecutionError) {
-    return { code: error.code, error: error.message };
+    return {
+      code: error.code,
+      error: error.message.slice(0, TOOL_ERROR_LOG_MAX_CHARS),
+    };
   }
   const message =
     error instanceof Error
@@ -246,10 +249,10 @@ export async function* runStepCall(
   try {
     armStallTimer();
     for await (const part of result.stream) {
-      // The SDK never throws from streamText: a failed call (after its own
-      // maxRetries) arrives as this terminal part. Nothing reached the client,
-      // so it must not count as a received part or the "before anything
-      // streamed" retry gates could never fire.
+      // The SDK never throws from streamText for provider/API failures: a
+      // failed call (after its own maxRetries) arrives as this terminal part.
+      // Nothing reached the client, so it must not count as a received part
+      // or the "before anything streamed" retry gates could never fire.
       if (part.type === 'error') {
         streamError = part.error;
         continue;

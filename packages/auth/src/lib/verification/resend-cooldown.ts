@@ -5,7 +5,10 @@ import { VERIFICATION_RESEND_COOLDOWN_MS } from '../constants';
  * once the window has closed. Never negative, so callers can treat any positive
  * result as "still cooling down".
  */
-export function msUntilResendAllowed(issuedAt: Date): number {
+export function msUntilResendAllowed(
+  issuedAt: Date,
+  cooldownMs: number = VERIFICATION_RESEND_COOLDOWN_MS
+): number {
   const elapsed = Date.now() - issuedAt.getTime();
-  return Math.max(0, VERIFICATION_RESEND_COOLDOWN_MS - elapsed);
+  return Math.max(0, cooldownMs - elapsed);
 }

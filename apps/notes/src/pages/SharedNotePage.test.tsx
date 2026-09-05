@@ -193,6 +193,19 @@ describe('SharedNotePage editing as a visitor', () => {
     }
   );
 
+  it('attributes a profile without an isAnonymous flag as registered', async () => {
+    authUser.mockReturnValue({});
+    render(<SharedNotePage />, { wrapper });
+
+    await waitFor(() =>
+      expect(captureProductEvent).toHaveBeenCalledWith('shared note viewed', {
+        source: 'share_link',
+        permission: 'editor',
+        actor_type: 'registered',
+      })
+    );
+  });
+
   it('waits for the auth state before attributing the shared view', async () => {
     authLoading.mockReturnValue(true);
     authUser.mockReturnValue(null);

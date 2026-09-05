@@ -2713,13 +2713,14 @@ describe('RunAgentTurnHandler', () => {
 
   it('rejects a fresh user message that exceeds the length cap', async () => {
     const { rateLimit, config, orchestrator, pendingStore } = makeDeps({});
+    const conversations = makeConversations();
     const handler = new RunAgentTurnHandler(
       orchestrator,
       rateLimit,
       config,
       pendingStore,
       createTestCatalog(),
-      makeConversations(),
+      conversations,
       makeMemory(),
       makeEmbed(),
       makeFlags(),
@@ -2730,19 +2731,28 @@ describe('RunAgentTurnHandler', () => {
       makeTurnEffort()
     );
     const onError = vi.fn();
+    const onConversation = vi.fn();
 
     await handler.execute(
       {
         userId: USER,
         message: { content: 'x'.repeat(50_001) },
       },
-      { onChunk: vi.fn(), onDone: vi.fn(), onError, onProposal: vi.fn() }
+      {
+        onChunk: vi.fn(),
+        onDone: vi.fn(),
+        onError,
+        onProposal: vi.fn(),
+        onConversation,
+      }
     );
 
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ code: 'AI_INVALID_INPUT' })
     );
     expect(orchestrator.run).not.toHaveBeenCalled();
+    expect(conversations.create).not.toHaveBeenCalled();
+    expect(onConversation).not.toHaveBeenCalled();
   });
 
   it('drops an oversized older message instead of failing the turn', async () => {
