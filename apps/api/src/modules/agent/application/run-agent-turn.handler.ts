@@ -99,6 +99,8 @@ export interface RunAgentTurnCallbacks {
   }) => void;
   readonly onError: (error: { code: string; message: string }) => void;
   readonly onProposal: (proposal: ProposedMutation) => void;
+  /** Fires once, when this turn had to create the conversation; the id must not wait for `done`. */
+  readonly onConversation?: (conversationId: string) => void;
 }
 
 type TurnEventOutcome = 'continue' | 'stop';
@@ -220,6 +222,9 @@ export class RunAgentTurnHandler {
       return;
     }
     const conversationId = conversation.id;
+    if (conversation.created) {
+      callbacks.onConversation?.(conversationId);
+    }
     const { history, knownNotes } =
       await this.loadConversationContext(conversationId);
     const messages = coalesceMessages([
@@ -306,19 +311,20 @@ export class RunAgentTurnHandler {
   private async resolveConversation(
     input: RunAgentTurnInput,
     message: { content: string }
-  ): Promise<{ id: string; model: string | null } | null> {
+  ): Promise<{ id: string; model: string | null; created: boolean } | null> {
     if (input.conversationId) {
-      return this.conversations.findByIdForUser(
+      const existing = await this.conversations.findByIdForUser(
         input.conversationId,
         input.userId
       );
+      return existing ? { ...existing, created: false } : null;
     }
     const created = await this.conversations.create({
       userId: input.userId,
       ...(input.noteId ? { noteId: input.noteId } : {}),
       title: [...message.content].slice(0, CONVERSATION_TITLE_MAX).join(''),
     });
-    return { id: created.id, model: null };
+    return { id: created.id, model: null, created: true };
   }
 
   private async loadConversationContext(

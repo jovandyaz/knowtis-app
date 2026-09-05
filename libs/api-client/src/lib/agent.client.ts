@@ -36,6 +36,10 @@ interface AgentUsagePayload {
   costUsd: number;
 }
 
+export interface AgentConversationPayload {
+  conversationId: string;
+}
+
 export interface AgentDonePayload {
   usage: AgentUsagePayload;
   sources: AgentSource[];
@@ -395,6 +399,13 @@ export class AgentClient {
 
     socket.on('agent:thinking', (payload: AgentThinkingPayload) => {
       this.activeCallbacks?.onThinking?.(payload);
+    });
+
+    socket.on('agent:conversation', (payload: AgentConversationPayload) => {
+      // A late announcement after cancel + new conversation would re-attach the old thread.
+      if (this.activeCallbacks) {
+        this.conversationId = payload.conversationId;
+      }
     });
 
     socket.on('agent:done', (payload: AgentDonePayload) => {
