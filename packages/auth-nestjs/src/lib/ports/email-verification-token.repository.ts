@@ -24,6 +24,11 @@ export interface EmailVerificationTokenRepository {
   create(
     data: CreateEmailVerificationTokenData
   ): Promise<Result<EmailVerificationTokenEntity, AuthDomainError>>;
+  /** Replaces the user's token in one statement; null means the current one is younger than `minAgeMs` (cooldown), decided by the database. */
+  replaceIfOlderThan(
+    data: CreateEmailVerificationTokenData,
+    minAgeMs: number
+  ): Promise<Result<EmailVerificationTokenEntity | null, AuthDomainError>>;
   findByTokenHash(
     tokenHash: string
   ): Promise<EmailVerificationTokenEntity | null>;

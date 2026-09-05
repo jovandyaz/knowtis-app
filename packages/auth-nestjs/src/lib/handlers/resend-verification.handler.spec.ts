@@ -77,12 +77,12 @@ describe('ResendVerificationHandler', () => {
     tokenRepository = {
       findByUserId: vi.fn().mockResolvedValue(null),
       create: vi.fn().mockResolvedValue(ok({ id: 'verification-1' })),
+      replaceIfOlderThan: vi.fn().mockResolvedValue(ok(makeTokenRow())),
       deleteAllByUserId: vi.fn().mockResolvedValue(undefined),
     } as unknown as EmailVerificationTokenRepository;
 
     handler = new ResendVerificationHandler(
       userRepository,
-      tokenRepository,
       new VerificationEmailIssuer(tokenRepository, emailService, tokenHasher)
     );
   });
@@ -105,7 +105,8 @@ describe('ResendVerificationHandler', () => {
     const payload = sentPayload();
     expect(payload.code).toMatch(CODE_PATTERN);
 
-    const [stored] = vi.mocked(tokenRepository.create).mock.calls[0];
+    const [stored] = vi.mocked(tokenRepository.replaceIfOlderThan).mock
+      .calls[0];
     expect(stored.codeHash).toBe(tokenHasher.hash(payload.code));
     expect(stored.tokenHash).toBe(tokenHasher.hash(payload.token));
   });
@@ -146,70 +147,58 @@ describe('ResendVerificationHandler', () => {
       vi.setSystemTime(new Date('2026-08-26T12:00:00.000Z'));
     });
 
-    it('refuses a resend while the previous row is inside the cooldown', async () => {
-      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
-        makeTokenRow({ createdAt: new Date() })
-      );
-      vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS - 1);
-
+    it('lets the database decide with the cooldown as the minimum row age', async () => {
       const result = await handler.execute({ userId: USER_ID });
 
-      expect(result._unsafeUnwrapErr().code).toBe(
-        AuthErrorCodes.RESEND_COOLDOWN
-      );
+      expect(result.isOk()).toBe(true);
+      expect(tokenRepository.replaceIfOlderThan).toHaveBeenCalledTimes(1);
+      const [, minAgeMs] = vi.mocked(tokenRepository.replaceIfOlderThan).mock
+        .calls[0];
+      expect(minAgeMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS);
+      expect(emailService.sendEmailVerification).toHaveBeenCalledTimes(1);
       expect(tokenRepository.deleteAllByUserId).not.toHaveBeenCalled();
+      expect(tokenRepository.findByUserId).not.toHaveBeenCalled();
       expect(tokenRepository.create).not.toHaveBeenCalled();
-      expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
     });
 
-    it('reports the wait that is actually left, not the whole cooldown', async () => {
+    it('reports the wait that is actually left when the database refuses the replacement', async () => {
+      vi.mocked(tokenRepository.replaceIfOlderThan).mockResolvedValue(ok(null));
       vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
         makeTokenRow({ createdAt: new Date() })
       );
-      vi.advanceTimersByTime(45_000);
+      vi.advanceTimersByTime(15_000);
 
       const error = (
         await handler.execute({ userId: USER_ID })
       )._unsafeUnwrapErr();
 
       expect(error.code).toBe(AuthErrorCodes.RESEND_COOLDOWN);
-      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 45_000);
+      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 15_000);
+      expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
+      expect(tokenRepository.deleteAllByUserId).not.toHaveBeenCalled();
     });
 
-    it('reports a longer wait when less of the cooldown has been spent', async () => {
-      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
-        makeTokenRow({ createdAt: new Date() })
-      );
-      vi.advanceTimersByTime(5_000);
+    it('quotes the whole cooldown when the refusing row vanished before it could be read', async () => {
+      vi.mocked(tokenRepository.replaceIfOlderThan).mockResolvedValue(ok(null));
+      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(null);
 
       const error = (
         await handler.execute({ userId: USER_ID })
       )._unsafeUnwrapErr();
 
-      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS - 5_000);
-    });
-
-    it('allows the resend once the cooldown has elapsed', async () => {
-      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
-        makeTokenRow({ createdAt: new Date() })
-      );
-      vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
-
-      const result = await handler.execute({ userId: USER_ID });
-
-      expect(result.isOk()).toBe(true);
-      expect(tokenRepository.deleteAllByUserId).toHaveBeenCalledWith(USER_ID);
-      expect(emailService.sendEmailVerification).toHaveBeenCalledTimes(1);
+      expect(error.code).toBe(AuthErrorCodes.RESEND_COOLDOWN);
+      expect(error.retryAfterMs).toBe(VERIFICATION_RESEND_COOLDOWN_MS);
+      expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
     });
 
     it('regenerates both the code and the link token on an allowed resend', async () => {
       const previous = makeTokenRow({ createdAt: new Date() });
-      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(previous);
       vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
 
       await handler.execute({ userId: USER_ID });
 
-      const [stored] = vi.mocked(tokenRepository.create).mock.calls[0];
+      const [stored] = vi.mocked(tokenRepository.replaceIfOlderThan).mock
+        .calls[0];
       const payload = sentPayload();
       expect(stored.codeHash).toBe(tokenHasher.hash(payload.code));
       expect(stored.tokenHash).toBe(tokenHasher.hash(payload.token));
@@ -217,22 +206,30 @@ describe('ResendVerificationHandler', () => {
       expect(stored.tokenHash).not.toBe(previous.tokenHash);
     });
 
-    it('sends the first verification email when no row exists yet', async () => {
+    it('refuses an unknown user before touching the token store', async () => {
+      vi.mocked(userRepository.findById).mockResolvedValue(null);
+
       const result = await handler.execute({ userId: USER_ID });
 
-      expect(result.isOk()).toBe(true);
-      expect(emailService.sendEmailVerification).toHaveBeenCalledTimes(1);
+      expect(result._unsafeUnwrapErr().code).toBe(
+        AuthErrorCodes.USER_NOT_FOUND
+      );
+      expect(tokenRepository.replaceIfOlderThan).not.toHaveBeenCalled();
+      expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
     });
 
-    it('checks the cooldown before dropping the existing row', async () => {
-      vi.mocked(tokenRepository.findByUserId).mockResolvedValue(
-        makeTokenRow({ createdAt: new Date() })
+    it('refuses an already verified user before touching the token store', async () => {
+      vi.mocked(userRepository.findById).mockResolvedValue(
+        makeUser({ emailVerifiedAt: new Date() })
       );
 
-      await handler.execute({ userId: USER_ID });
+      const result = await handler.execute({ userId: USER_ID });
 
-      expect(tokenRepository.findByUserId).toHaveBeenCalledWith(USER_ID);
-      expect(tokenRepository.deleteAllByUserId).not.toHaveBeenCalled();
+      expect(result._unsafeUnwrapErr().code).toBe(
+        AuthErrorCodes.EMAIL_ALREADY_VERIFIED
+      );
+      expect(tokenRepository.replaceIfOlderThan).not.toHaveBeenCalled();
+      expect(emailService.sendEmailVerification).not.toHaveBeenCalled();
     });
   });
 
