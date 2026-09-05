@@ -140,6 +140,23 @@ describe('sanitizePostHogEvent', () => {
     expect(sanitizePostHogEvent(replayEvent)).toBeNull();
   });
 
+  it('drops heatmap events because their data is keyed by raw page URLs', () => {
+    const heatmap = {
+      uuid: 'event-heatmap',
+      event: '$$heatmap',
+      properties: {
+        $current_url: 'https://knowtis.app/notes/private-note-id',
+        $heatmap_data: {
+          'https://knowtis.app/notes/private-note-id?utm_source=private': [
+            { x: 200, y: 300, type: 'click' },
+          ],
+        },
+      },
+    } as unknown as CaptureResult;
+
+    expect(sanitizePostHogEvent(heatmap)).toBeNull();
+  });
+
   it('keeps only the origin of external referrers and removes malformed URLs', () => {
     const event: CaptureResult = {
       uuid: 'event-3',
@@ -236,6 +253,31 @@ describe('sanitizePostHogEvent', () => {
         $initial_current_url: 'https://knowtis.app/notes/:noteId',
         $initial_referrer: 'https://partner.example',
       },
+    });
+  });
+
+  it('keeps the SDK project token while stripping token-shaped first-party fields', () => {
+    const event: CaptureResult = {
+      uuid: 'event-6',
+      event: 'note created',
+      properties: {
+        token: 'phc_public_project_token',
+        share_token: 'private-share-token',
+        apiToken: 'private-api-token',
+        refresh_tokens: 'private-refresh-tokens',
+      },
+      $set_once: {
+        token: 'private-person-token',
+      },
+    };
+
+    expect(sanitizePostHogEvent(event)).toEqual({
+      uuid: 'event-6',
+      event: 'note created',
+      properties: {
+        token: 'phc_public_project_token',
+      },
+      $set_once: {},
     });
   });
 
