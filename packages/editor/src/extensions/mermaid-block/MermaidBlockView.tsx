@@ -3,7 +3,13 @@ import { useTranslation } from 'react-i18next';
 
 import type { NodeViewProps } from '@tiptap/react';
 import { NodeViewWrapper } from '@tiptap/react';
-import { AlertTriangle, Code, Eye, SplitSquareHorizontal } from 'lucide-react';
+import {
+  AlertTriangle,
+  Code,
+  Expand,
+  Eye,
+  SplitSquareHorizontal,
+} from 'lucide-react';
 import type mermaidType from 'mermaid';
 
 import { Button, cn } from '@knowtis/design-system';
@@ -12,16 +18,30 @@ import {
   type MermaidViewMode,
 } from '@knowtis/editor-schema';
 
+import { MermaidDiagramViewer } from './MermaidDiagramViewer';
+import { useDocumentDarkTheme } from './useDocumentDarkTheme';
+
 const DEFAULT_MERMAID_CODE = 'graph TD\n  A[Start] --> B[End]';
 const RENDER_DEBOUNCE_MS = 300;
 
-let mermaidInstance: typeof mermaidType | null = null;
+const MERMAID_THEME = {
+  LIGHT: 'neutral',
+  DARK: 'dark',
+} as const;
 
-async function getMermaid() {
+type MermaidTheme = (typeof MERMAID_THEME)[keyof typeof MERMAID_THEME];
+
+let mermaidInstance: typeof mermaidType | null = null;
+let appliedTheme: MermaidTheme | null = null;
+
+async function getMermaid(theme: MermaidTheme) {
   if (!mermaidInstance) {
     const { default: mermaid } = await import('mermaid');
-    mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
     mermaidInstance = mermaid;
+  }
+  if (appliedTheme !== theme) {
+    mermaidInstance.initialize({ startOnLoad: false, theme });
+    appliedTheme = theme;
   }
   return mermaidInstance;
 }
@@ -57,7 +77,11 @@ export function MermaidBlockView({
     ? viewMode
     : MERMAID_VIEW_MODE.PREVIEW;
 
+  const isDark = useDocumentDarkTheme();
+  const theme: MermaidTheme = isDark ? MERMAID_THEME.DARK : MERMAID_THEME.LIGHT;
+
   const [svg, setSvg] = useState<string>('');
+  const [viewerOpen, setViewerOpen] = useState(false);
   const [error, setError] = useState<string>('');
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const renderSeqRef = useRef(0);
@@ -77,7 +101,7 @@ export function MermaidBlockView({
       // mermaid.render deletes any DOM element with the target id — a reused id wipes the mounted svg
       const seq = ++renderSeqRef.current;
       try {
-        const mermaid = await getMermaid();
+        const mermaid = await getMermaid(theme);
         const { svg: rendered } = await mermaid.render(
           `${renderId}-${seq}`,
           source
@@ -94,7 +118,7 @@ export function MermaidBlockView({
         setError(err instanceof Error ? err.message : invalidSyntaxFallback);
       }
     },
-    [renderId, invalidSyntaxFallback]
+    [renderId, invalidSyntaxFallback, theme]
   );
 
   useEffect(() => {
@@ -120,13 +144,13 @@ export function MermaidBlockView({
         selected ? 'border-primary/50 shadow-md' : 'border-border/50'
       )}
     >
-      <div className="flex items-center justify-between bg-muted/30 px-3 py-1.5 border-b border-border/50">
-        <span className="text-xs font-medium text-muted-foreground">
+      <div className="flex items-center justify-between gap-2 bg-muted/30 px-3 py-1.5 border-b border-border/50">
+        <span className="min-w-0 truncate text-xs font-medium text-muted-foreground">
           {t('editor.mermaid.label')}
         </span>
-        {editor.isEditable && (
-          <div className="flex gap-0.5">
-            {VIEW_MODE_BUTTONS.map(({ mode, icon: Icon, labelKey }) => {
+        <div className="flex shrink-0 items-center gap-0.5">
+          {editor.isEditable &&
+            VIEW_MODE_BUTTONS.map(({ mode, icon: Icon, labelKey }) => {
               const label = t(labelKey);
               return (
                 <Button
@@ -143,13 +167,27 @@ export function MermaidBlockView({
                   onClick={() => updateAttributes({ viewMode: mode })}
                   aria-label={label}
                 >
-                  <Icon className="h-3 w-3 mr-1" />
-                  {label}
+                  <Icon className="h-3 w-3 sm:mr-1" />
+                  <span className="sr-only sm:not-sr-only">{label}</span>
                 </Button>
               );
             })}
-          </div>
-        )}
+          {showPreview && svg && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-xs text-muted-foreground"
+              onClick={() => setViewerOpen(true)}
+              aria-label={t('editor.mermaid.expand')}
+            >
+              <Expand className="h-3 w-3 sm:mr-1" />
+              <span className="sr-only sm:not-sr-only">
+                {t('editor.mermaid.expand')}
+              </span>
+            </Button>
+          )}
+        </div>
       </div>
 
       <div
@@ -179,9 +217,9 @@ export function MermaidBlockView({
                 <span>{error}</span>
               </div>
             ) : svg ? (
-              // Safe: mermaid.render() runs with default securityLevel: 'strict' which escapes HTML in labels and strips scripts
               <div
-                className="max-w-full overflow-auto [&_svg]:max-w-full [&_svg]:h-auto"
+                className="max-w-full cursor-zoom-in overflow-auto [&_svg]:max-w-full [&_svg]:h-auto"
+                onDoubleClick={() => setViewerOpen(true)}
                 dangerouslySetInnerHTML={{ __html: svg }}
               />
             ) : (
@@ -198,6 +236,14 @@ export function MermaidBlockView({
           <AlertTriangle className="h-3 w-3 shrink-0" />
           <span>{error}</span>
         </div>
+      )}
+
+      {svg && (
+        <MermaidDiagramViewer
+          open={viewerOpen}
+          onOpenChange={setViewerOpen}
+          svg={svg}
+        />
       )}
     </NodeViewWrapper>
   );

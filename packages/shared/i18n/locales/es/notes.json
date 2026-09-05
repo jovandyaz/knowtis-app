@@ -199,7 +199,12 @@
       "modeSplit": "Dividido",
       "modePreview": "Vista previa",
       "previewPlaceholder": "Vista previa del diagrama",
-      "invalidSyntax": "Sintaxis de Mermaid inválida"
+      "invalidSyntax": "Sintaxis de Mermaid inválida",
+      "expand": "Ampliar",
+      "viewerTitle": "Diagrama",
+      "zoomIn": "Acercar",
+      "zoomOut": "Alejar",
+      "fitToScreen": "Ajustar a la pantalla"
     }
   },
   "create": {

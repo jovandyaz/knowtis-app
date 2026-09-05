@@ -1,8 +1,8 @@
 import { useState } from 'react';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   MERMAID_VIEW_MODE,
@@ -11,14 +11,22 @@ import {
 
 import { MermaidBlockView } from './MermaidBlockView';
 
+let configuredTheme = '';
+
+const initializeMock = vi.fn((config: { theme: string }) => {
+  configuredTheme = config.theme;
+});
+
 // emulates mermaid v11: render() deletes any pre-existing element with the target id
 const renderMock = vi.fn(async (id: string, source: string) => {
   document.getElementById(id)?.remove();
-  return { svg: `<svg id="${id}" data-source-hash="${source.length}"></svg>` };
+  return {
+    svg: `<svg id="${id}" data-source-hash="${source.length}" data-theme="${configuredTheme}"></svg>`,
+  };
 });
 
 vi.mock('mermaid', () => ({
-  default: { initialize: vi.fn(), render: renderMock },
+  default: { initialize: initializeMock, render: renderMock },
 }));
 
 vi.mock('@tiptap/react', () => ({
@@ -38,7 +46,13 @@ vi.mock('@tiptap/react', () => ({
 const CODE = 'flowchart LR\n  A[Start] --> B[End]';
 const SETTLE_TIMEOUT_MS = 3000;
 
-function Harness({ initialViewMode }: { initialViewMode: MermaidViewMode }) {
+function Harness({
+  initialViewMode,
+  editable = true,
+}: {
+  initialViewMode: MermaidViewMode;
+  editable?: boolean;
+}) {
   const [attrs, setAttrs] = useState<{
     code: string;
     viewMode: MermaidViewMode;
@@ -48,7 +62,7 @@ function Harness({ initialViewMode }: { initialViewMode: MermaidViewMode }) {
     updateAttributes: (patch: Partial<typeof attrs>) =>
       setAttrs((a) => ({ ...a, ...patch })),
     selected: false,
-    editor: { isEditable: true },
+    editor: { isEditable: editable },
   } as unknown as Parameters<typeof MermaidBlockView>[0];
   return <MermaidBlockView {...props} />;
 }
@@ -71,7 +85,13 @@ function switchMode(user: ReturnType<typeof userEvent.setup>, key: string) {
 describe('MermaidBlockView', () => {
   beforeEach(() => {
     renderMock.mockClear();
+    initializeMock.mockClear();
     document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    cleanup();
+    document.documentElement.classList.remove('dark');
   });
 
   it('renders the diagram svg in split view', async () => {
@@ -108,5 +128,65 @@ describe('MermaidBlockView', () => {
 
     const laterIds = renderMock.mock.calls.slice(1).map(([id]) => id);
     expect(laterIds).not.toContain(mountedId);
+  });
+  it('draws the diagram with the dark mermaid theme while the app is dark', async () => {
+    document.documentElement.classList.add('dark');
+
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+
+    expect(previewArea()?.getAttribute('data-theme')).toBe('dark');
+  });
+
+  it('redraws the diagram when the app theme flips', async () => {
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+    expect(previewArea()?.getAttribute('data-theme')).toBe('neutral');
+
+    document.documentElement.classList.add('dark');
+
+    await waitFor(
+      () => expect(previewArea()?.getAttribute('data-theme')).toBe('dark'),
+      { timeout: SETTLE_TIMEOUT_MS }
+    );
+  });
+
+  it('offers the expand control to readers who cannot edit', async () => {
+    render(
+      <Harness initialViewMode={MERMAID_VIEW_MODE.SPLIT} editable={false} />
+    );
+    await findSvg();
+
+    expect(
+      screen.getByRole('button', { name: 'editor.mermaid.expand' })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'editor.mermaid.modeCode' })
+    ).toBeNull();
+  });
+
+  it('opens the diagram viewer on a double click over the preview', async () => {
+    const user = userEvent.setup();
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+
+    const preview = previewArea()?.parentElement as HTMLElement;
+    await user.dblClick(preview);
+
+    expect(screen.queryByRole('dialog')).not.toBeNull();
+  });
+
+  it('opens the diagram viewer from the expand control', async () => {
+    const user = userEvent.setup();
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+
+    await user.click(
+      screen.getByRole('button', { name: 'editor.mermaid.expand' })
+    );
+
+    expect(
+      screen.getByRole('dialog').querySelector('svg[data-source-hash]')
+    ).not.toBeNull();
   });
 });

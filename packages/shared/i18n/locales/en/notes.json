@@ -199,7 +199,12 @@
       "modeSplit": "Split",
       "modePreview": "Preview",
       "previewPlaceholder": "Diagram preview",
-      "invalidSyntax": "Invalid Mermaid syntax"
+      "invalidSyntax": "Invalid Mermaid syntax",
+      "expand": "Expand",
+      "viewerTitle": "Diagram",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fitToScreen": "Fit to screen"
     }
   },
   "create": {
