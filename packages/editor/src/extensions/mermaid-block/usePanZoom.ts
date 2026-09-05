@@ -70,16 +70,6 @@ export function usePanZoom() {
     setTransform((current) => scaleAround(current, factor, anchor));
   }, []);
 
-  const zoomBy = useCallback((factor: number) => {
-    setTransform((current) => ({
-      ...current,
-      scale: clampScale(current.scale * factor),
-    }));
-  }, []);
-
-  const zoomIn = useCallback(() => zoomBy(ZOOM_STEP), [zoomBy]);
-  const zoomOut = useCallback(() => zoomBy(1 / ZOOM_STEP), [zoomBy]);
-
   const panBy = useCallback((delta: Point) => {
     setTransform((current) => ({
       ...current,
@@ -92,5 +82,5 @@ export function usePanZoom() {
     setTransform(fitTransform(content, viewport));
   }, []);
 
-  return { transform, zoomIn, zoomOut, zoomAtPoint, panBy, fit };
+  return { transform, zoomAtPoint, panBy, fit };
 }

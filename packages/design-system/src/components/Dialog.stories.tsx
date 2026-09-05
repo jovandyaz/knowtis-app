@@ -2,6 +2,7 @@ import { useState } from 'react';
 
 import type { Meta, StoryObj } from '@storybook/react';
 
+import { DIALOG_SIDE } from '../constants/dialog';
 import { Button } from './Button';
 import {
   Dialog,
@@ -135,4 +136,33 @@ function ControlledDialogExample() {
 
 export const Controlled: Story = {
   render: () => <ControlledDialogExample />,
+};
+
+function FullscreenDialogExample() {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)}>
+        Open fullscreen
+      </Button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent side={DIALOG_SIDE.FULL}>
+          <div className="border-b border-(--border) px-4 py-3">
+            <DialogTitle className="text-sm">Diagram</DialogTitle>
+          </div>
+          <div className="grid place-items-center bg-(--muted)/30 p-6">
+            <p className="text-sm text-(--muted-foreground)">
+              The second row takes the remaining height, so a canvas can own the
+              viewport.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export const Fullscreen: Story = {
+  render: () => <FullscreenDialogExample />,
 };

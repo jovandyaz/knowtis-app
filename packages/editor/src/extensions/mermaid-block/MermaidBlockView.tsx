@@ -40,7 +40,13 @@ async function getMermaid(theme: MermaidTheme) {
     mermaidInstance = mermaid;
   }
   if (appliedTheme !== theme) {
-    mermaidInstance.initialize({ startOnLoad: false, theme });
+    // the rendered svg goes straight into innerHTML: strict is what makes
+    // mermaid DOMPurify its own output before we inject it
+    mermaidInstance.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme,
+    });
     appliedTheme = theme;
   }
   return mermaidInstance;
@@ -95,6 +101,9 @@ export function MermaidBlockView({
       if (!source.trim()) {
         setSvg('');
         setError('');
+        // a collaborator can empty the block while the viewer is open: without
+        // this it would pop back open on its own once they type again
+        setViewerOpen(false);
         return;
       }
 
@@ -209,7 +218,7 @@ export function MermaidBlockView({
             />
           </div>
         )}
-        {showPreview && (
+        {showPreview && !viewerOpen && (
           <div className="mermaid-preview-area p-3 flex items-center justify-center min-h-[120px] bg-background">
             {error && !svg ? (
               <div className="flex items-center gap-2 text-xs text-destructive">
@@ -238,12 +247,8 @@ export function MermaidBlockView({
         </div>
       )}
 
-      {svg && (
-        <MermaidDiagramViewer
-          open={viewerOpen}
-          onOpenChange={setViewerOpen}
-          svg={svg}
-        />
+      {svg && viewerOpen && (
+        <MermaidDiagramViewer open onOpenChange={setViewerOpen} svg={svg} />
       )}
     </NodeViewWrapper>
   );

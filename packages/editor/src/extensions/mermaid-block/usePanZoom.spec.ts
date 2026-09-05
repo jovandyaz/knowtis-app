@@ -6,6 +6,7 @@ import { MAX_SCALE, MIN_SCALE, usePanZoom, ZOOM_STEP } from './usePanZoom';
 const VIEWPORT = { width: 1000, height: 600 };
 const WIDE_CONTENT = { width: 4000, height: 400 };
 const SMALL_CONTENT = { width: 200, height: 100 };
+const ORIGIN = { x: 0, y: 0 };
 
 describe('usePanZoom', () => {
   it('starts at natural scale with no offset', () => {
@@ -14,10 +15,10 @@ describe('usePanZoom', () => {
     expect(result.current.transform).toEqual({ scale: 1, x: 0, y: 0 });
   });
 
-  it('zooms in by one step per call', () => {
+  it('zooms by the given factor', () => {
     const { result } = renderHook(() => usePanZoom());
 
-    act(() => result.current.zoomIn());
+    act(() => result.current.zoomAtPoint(ZOOM_STEP, ORIGIN));
 
     expect(result.current.transform.scale).toBeCloseTo(ZOOM_STEP);
   });
@@ -26,7 +27,7 @@ describe('usePanZoom', () => {
     const { result } = renderHook(() => usePanZoom());
 
     for (let i = 0; i < 50; i++) {
-      act(() => result.current.zoomIn());
+      act(() => result.current.zoomAtPoint(ZOOM_STEP, ORIGIN));
     }
 
     expect(result.current.transform.scale).toBe(MAX_SCALE);
@@ -36,7 +37,7 @@ describe('usePanZoom', () => {
     const { result } = renderHook(() => usePanZoom());
 
     for (let i = 0; i < 50; i++) {
-      act(() => result.current.zoomOut());
+      act(() => result.current.zoomAtPoint(1 / ZOOM_STEP, ORIGIN));
     }
 
     expect(result.current.transform.scale).toBe(MIN_SCALE);
@@ -104,7 +105,7 @@ describe('usePanZoom', () => {
     act(() => result.current.fit(WIDE_CONTENT, VIEWPORT));
     const fitted = result.current.transform;
 
-    act(() => result.current.zoomIn());
+    act(() => result.current.zoomAtPoint(ZOOM_STEP, ORIGIN));
     act(() => result.current.panBy({ x: 200, y: 200 }));
     act(() => result.current.fit(WIDE_CONTENT, VIEWPORT));
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { LucideIcon } from 'lucide-react';
@@ -14,9 +15,17 @@ import {
 
 import { naturalSvgSize } from './naturalSvgSize';
 import { useDragZoomGestures } from './useDragZoomGestures';
-import { usePanZoom, type Size } from './usePanZoom';
+import { usePanZoom, ZOOM_STEP, type Size } from './usePanZoom';
 
 const PERCENT = 100;
+const KEYBOARD_PAN_PX = 60;
+
+const ARROW_PAN = {
+  ArrowUp: { x: 0, y: KEYBOARD_PAN_PX },
+  ArrowDown: { x: 0, y: -KEYBOARD_PAN_PX },
+  ArrowLeft: { x: KEYBOARD_PAN_PX, y: 0 },
+  ArrowRight: { x: -KEYBOARD_PAN_PX, y: 0 },
+} as const;
 
 interface MermaidDiagramViewerProps {
   open: boolean;
@@ -57,7 +66,7 @@ export function MermaidDiagramViewer({
   const [layer, setLayer] = useState<HTMLDivElement | null>(null);
   const [drawnSize, setDrawnSize] = useState<Size | null>(null);
 
-  const { transform, zoomIn, zoomOut, zoomAtPoint, panBy, fit } = usePanZoom();
+  const { transform, zoomAtPoint, panBy, fit } = usePanZoom();
   const gestures = useDragZoomGestures(surface, { panBy, zoomAtPoint });
   const viewport = useRef<Size>({ width: 0, height: 0 });
   const fittedDiagram = useRef<string | null>(null);
@@ -90,11 +99,32 @@ export function MermaidDiagramViewer({
     return () => observer.disconnect();
   }, [surface, layer, svg, fit]);
 
+  // the controls zoom about the middle of the view, so the part being read
+  // stays put — a pointer gesture anchors on the pointer instead
+  const zoomFromCentre = useCallback(
+    (factor: number) => {
+      zoomAtPoint(factor, {
+        x: viewport.current.width / 2,
+        y: viewport.current.height / 2,
+      });
+    },
+    [zoomAtPoint]
+  );
+
   const fitToViewport = useCallback(() => {
     if (drawnSize) {
       fit(drawnSize, viewport.current);
     }
   }, [drawnSize, fit]);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step = ARROW_PAN[event.key as keyof typeof ARROW_PAN];
+    if (!step) {
+      return;
+    }
+    event.preventDefault();
+    panBy(step);
+  };
 
   const zoomPercent = Math.round(transform.scale * PERCENT);
 
@@ -110,10 +140,15 @@ export function MermaidDiagramViewer({
           </DialogTitle>
         </div>
 
+        {/* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- WCAG 2.1.1: a pannable canvas has to take focus and answer the arrow keys itself */}
         <div
           ref={setSurface}
           {...gestures}
-          className="relative touch-none cursor-grab overflow-hidden active:cursor-grabbing"
+          onKeyDown={handleKeyDown}
+          role="application"
+          aria-label={t('editor.mermaid.canvasLabel')}
+          tabIndex={0}
+          className="relative touch-none cursor-grab overflow-hidden outline-none focus-visible:ring-2 focus-visible:ring-(--ring) focus-visible:ring-inset active:cursor-grabbing"
         >
           <div
             ref={setLayer}
@@ -123,7 +158,7 @@ export function MermaidDiagramViewer({
               width: drawnSize ? `${drawnSize.width}px` : undefined,
               height: drawnSize ? `${drawnSize.height}px` : undefined,
             }}
-            className="w-fit select-none [&>svg]:h-full [&>svg]:w-full"
+            className="w-fit select-none [&>svg]:h-full! [&>svg]:w-full! [&>svg]:max-w-none!"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
 
@@ -135,15 +170,18 @@ export function MermaidDiagramViewer({
               <ZoomControl
                 icon={ZoomOut}
                 label={t('editor.mermaid.zoomOut')}
-                onClick={zoomOut}
+                onClick={() => zoomFromCentre(1 / ZOOM_STEP)}
               />
-              <span className="min-w-12 text-center text-xs tabular-nums text-muted-foreground">
+              <span
+                role="status"
+                className="min-w-12 text-center text-xs tabular-nums text-muted-foreground"
+              >
                 {zoomPercent}%
               </span>
               <ZoomControl
                 icon={ZoomIn}
                 label={t('editor.mermaid.zoomIn')}
-                onClick={zoomIn}
+                onClick={() => zoomFromCentre(ZOOM_STEP)}
               />
               <ZoomControl
                 icon={Scan}
@@ -153,6 +191,7 @@ export function MermaidDiagramViewer({
             </div>
           </div>
         </div>
+        {/* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
       </DialogContent>
     </Dialog>
   );

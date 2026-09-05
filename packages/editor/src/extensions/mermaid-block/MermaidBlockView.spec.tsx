@@ -129,6 +129,26 @@ describe('MermaidBlockView', () => {
     const laterIds = renderMock.mock.calls.slice(1).map(([id]) => id);
     expect(laterIds).not.toContain(mountedId);
   });
+  it('pins the sanitising security level mermaid renders under', async () => {
+    // mermaid is configured once per theme in module scope, so the assertion
+    // needs a theme change of its own to observe a fresh initialize call
+    document.documentElement.classList.add('dark');
+    const first = render(
+      <Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />
+    );
+    await findSvg();
+    first.unmount();
+    initializeMock.mockClear();
+
+    document.documentElement.classList.remove('dark');
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+
+    expect(initializeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ securityLevel: 'strict' })
+    );
+  });
+
   it('draws the diagram with the dark mermaid theme while the app is dark', async () => {
     document.documentElement.classList.add('dark');
 
@@ -174,6 +194,31 @@ describe('MermaidBlockView', () => {
     await user.dblClick(preview);
 
     expect(screen.queryByRole('dialog')).not.toBeNull();
+  });
+
+  it('reopens the viewer on the fitted view rather than the last one', async () => {
+    const user = userEvent.setup();
+    render(<Harness initialViewMode={MERMAID_VIEW_MODE.PREVIEW} />);
+    await findSvg();
+    const expand = () =>
+      user.click(screen.getByRole('button', { name: 'editor.mermaid.expand' }));
+    const diagramTransform = () =>
+      (
+        screen.getByRole('dialog').querySelector('svg[data-source-hash]')
+          ?.parentElement as HTMLElement
+      ).style.transform;
+
+    await expand();
+    const fitted = diagramTransform();
+    await user.click(
+      screen.getByRole('button', { name: 'editor.mermaid.zoomIn' })
+    );
+    expect(diagramTransform()).not.toBe(fitted);
+    await user.keyboard('{Escape}');
+
+    await expand();
+
+    expect(diagramTransform()).toBe(fitted);
   });
 
   it('opens the diagram viewer from the expand control', async () => {

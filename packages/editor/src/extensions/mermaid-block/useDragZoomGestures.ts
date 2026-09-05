@@ -6,6 +6,16 @@ import type { Point } from './usePanZoom';
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const LINE_HEIGHT_PX = 16;
 const PINCH_POINTER_COUNT = 2;
+const PRIMARY_BUTTON = 0;
+const NO_BUTTON_HELD = 0;
+const PAGE_HEIGHT_PX = 800;
+
+function wheelStepPx(deltaMode: number): number {
+  if (deltaMode === WheelEvent.DOM_DELTA_LINE) {
+    return LINE_HEIGHT_PX;
+  }
+  return deltaMode === WheelEvent.DOM_DELTA_PAGE ? PAGE_HEIGHT_PX : 1;
+}
 
 function distanceBetween(a: Point, b: Point): number {
   return Math.hypot(a.x - b.x, a.y - b.y);
@@ -16,7 +26,8 @@ function midpointOf(a: Point, b: Point): Point {
 }
 
 // capture keeps a drag alive past the surface edge, but it throws for a pointer
-// the browser no longer holds active, which would abandon the gesture mid-press
+// the browser no longer holds active, which would abandon the gesture mid-press.
+// The failure is expected and non-actionable, so it is swallowed rather than logged
 function tryCapturePointer(element: Element, pointerId: number): void {
   try {
     element.setPointerCapture?.(pointerId);
@@ -73,10 +84,7 @@ export function useDragZoomGestures(
     // from a native non-passive listener
     const onWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const delta =
-        event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? event.deltaY * LINE_HEIGHT_PX
-          : event.deltaY;
+      const delta = event.deltaY * wheelStepPx(event.deltaMode);
       zoomAtPoint(
         Math.exp(-delta * WHEEL_ZOOM_SENSITIVITY),
         anchorIn({ x: event.clientX, y: event.clientY })
@@ -87,6 +95,9 @@ export function useDragZoomGestures(
   }, [surface, zoomAtPoint, anchorIn]);
 
   const onPointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    if (event.button !== PRIMARY_BUTTON) {
+      return;
+    }
     tryCapturePointer(event.currentTarget, event.pointerId);
     activePointers.current.set(event.pointerId, {
       x: event.clientX,
@@ -99,6 +110,13 @@ export function useDragZoomGestures(
       const pointers = activePointers.current;
       const previous = pointers.get(event.pointerId);
       if (!previous) {
+        return;
+      }
+      // a release outside an uncaptured surface never reaches us, and without
+      // this the diagram would keep panning on plain hover
+      if (event.pointerType === 'mouse' && event.buttons === NO_BUTTON_HELD) {
+        pointers.delete(event.pointerId);
+        pinchDistance.current = null;
         return;
       }
       const current = { x: event.clientX, y: event.clientY };
