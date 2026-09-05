@@ -56,6 +56,8 @@ export function SharedNotePage() {
   const actorType = user?.isAnonymous === false ? 'registered' : 'anonymous';
   const isResolved =
     !isLoading && !isError && data !== undefined && !isAuthLoading;
+  // A registered visitor gets nothing from the login page but a bounce back here.
+  const offerSignIn = !isAuthLoading && user?.isAnonymous !== false;
 
   useEffect(() => {
     if (!isResolved || !permission || capturedTokenRef.current === token) {
@@ -129,9 +131,11 @@ export function SharedNotePage() {
               })}
         />
         <div className="flex flex-wrap items-center justify-center gap-2">
-          <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
-            <Button size="sm">{t('shared.signIn')}</Button>
-          </Link>
+          {offerSignIn ? (
+            <Link to={ROUTES.LOGIN} search={{ redirect: undefined }}>
+              <Button size="sm">{t('shared.signIn')}</Button>
+            </Link>
+          ) : null}
           <Link to={ROUTES.DASHBOARD}>
             <Button variant="outline" size="sm">
               {t('shared.goToKnowtis')}
@@ -201,11 +205,13 @@ export function SharedNotePage() {
                 <Eye className="h-4 w-4" />
               </button>
             )}
-            <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
-              <Button variant="outline" size="sm">
-                {t('shared.signIn')}
-              </Button>
-            </Link>
+            {offerSignIn ? (
+              <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
+                <Button variant="outline" size="sm">
+                  {t('shared.signIn')}
+                </Button>
+              </Link>
+            ) : null}
           </div>
         </div>
       </header>
@@ -280,11 +286,13 @@ export function SharedNotePage() {
                   </TooltipContent>
                 </Tooltip>
               )}
-              <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
-                <Button variant="outline" size="sm">
-                  {t('shared.signIn')}
-                </Button>
-              </Link>
+              {offerSignIn ? (
+                <Link to={ROUTES.LOGIN} search={{ redirect: sharedPath }}>
+                  <Button variant="outline" size="sm">
+                    {t('shared.signIn')}
+                  </Button>
+                </Link>
+              ) : null}
               {hasArtifacts && (
                 <button
                   type="button"

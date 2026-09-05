@@ -76,34 +76,92 @@ const wrapper = ({ children }: { children: ReactNode }) => (
   <TooltipProvider>{children}</TooltipProvider>
 );
 
+const renderPage = () => render(<SharedNotePage />, { wrapper });
+
 const clickEdit = () =>
   userEvent.click(
     screen.getAllByRole('button', { name: 'shared.editButton' })[0]
   );
 
-describe('SharedNotePage editing as a visitor', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    denyEdit = undefined;
-    token = 'tok';
+const signInLinks = () =>
+  screen.queryAllByRole('link', { name: 'shared.signIn' });
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  denyEdit = undefined;
+  token = 'tok';
+  authUser.mockReturnValue({ isAnonymous: true });
+  authLoading.mockReturnValue(false);
+  noteQuery = {
+    data: {
+      id: 'note-1',
+      title: 'Shared note',
+      content: '<p>body</p>',
+      owner: { name: 'Owner' },
+      updatedAt: '2026-08-14T00:00:00.000Z',
+      accessLevel: 'editor',
+    },
+    isLoading: false,
+    isError: false,
+    error: null,
+    refetch: vi.fn(),
+  };
+});
+
+describe('SharedNotePage sign-in call to action', () => {
+  it('offers sign-in to an anonymous visitor', () => {
     authUser.mockReturnValue({ isAnonymous: true });
-    authLoading.mockReturnValue(false);
-    noteQuery = {
-      data: {
-        id: 'note-1',
-        title: 'Shared note',
-        content: '<p>body</p>',
-        owner: { name: 'Owner' },
-        updatedAt: '2026-08-14T00:00:00.000Z',
-        accessLevel: 'editor',
-      },
-      isLoading: false,
-      isError: false,
-      error: null,
-      refetch: vi.fn(),
-    };
+    renderPage();
+    expect(signInLinks().length).toBeGreaterThan(0);
   });
 
+  it('offers sign-in to a visitor with no session at all', () => {
+    authUser.mockReturnValue(null);
+    renderPage();
+    expect(signInLinks().length).toBeGreaterThan(0);
+  });
+
+  it('hides sign-in from a signed-in account', () => {
+    authUser.mockReturnValue({ isAnonymous: false });
+    renderPage();
+    expect(signInLinks()).toHaveLength(0);
+  });
+
+  it('shows nothing until the session has settled', () => {
+    authUser.mockReturnValue({ isAnonymous: false });
+    authLoading.mockReturnValue(true);
+    renderPage();
+    expect(signInLinks()).toHaveLength(0);
+  });
+
+  it('offers sign-in on the error screen to an anonymous visitor', () => {
+    noteQuery = {
+      ...noteQuery,
+      data: undefined,
+      isError: true,
+      error: new Error(),
+    };
+    renderPage();
+    expect(signInLinks()).toHaveLength(1);
+  });
+
+  it('hides sign-in on the error screen from a signed-in account', () => {
+    authUser.mockReturnValue({ isAnonymous: false });
+    noteQuery = {
+      ...noteQuery,
+      data: undefined,
+      isError: true,
+      error: new Error(),
+    };
+    renderPage();
+    expect(signInLinks()).toHaveLength(0);
+    expect(
+      screen.getByRole('link', { name: 'shared.goToKnowtis' })
+    ).toBeInTheDocument();
+  });
+});
+
+describe('SharedNotePage editing as a visitor', () => {
   it.each([
     ['anonymous', true, 'editor'],
     ['registered', false, 'viewer'],
