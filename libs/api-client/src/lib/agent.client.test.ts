@@ -117,6 +117,48 @@ describe('AgentClient', () => {
     });
   });
 
+  it('adopts the conversation id announced mid-turn and sends it on the next message', () => {
+    const client = makeClient();
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    client.sendMessage('hi', callbacks);
+    handlers.get('agent:conversation')?.({ conversationId: 'conv-1' });
+    handlers.get('agent:done')?.({
+      usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
+      sources: [],
+    });
+    client.sendMessage('again', callbacks);
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({ conversationId: 'conv-1' })
+    );
+  });
+
+  it('keeps the id of a first turn the user cancelled', () => {
+    const client = makeClient();
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const handle = client.sendMessage('hi', callbacks);
+    handlers.get('agent:conversation')?.({ conversationId: 'conv-1' });
+    handle.cancel();
+    client.sendMessage('again', callbacks);
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.objectContaining({ conversationId: 'conv-1' })
+    );
+  });
+
+  it('ignores an announcement that arrives after the turn was cancelled', () => {
+    const client = makeClient();
+    const callbacks = { onChunk: vi.fn(), onDone: vi.fn(), onError: vi.fn() };
+    const handle = client.sendMessage('hi', callbacks);
+    handle.cancel();
+    handlers.get('agent:conversation')?.({ conversationId: 'conv-late' });
+    client.sendMessage('again', callbacks);
+    expect(emit).toHaveBeenLastCalledWith(
+      'agent:message',
+      expect.not.objectContaining({ conversationId: expect.anything() })
+    );
+  });
+
   it('resetConversation clears the remembered conversationId', () => {
     const client = makeClient();
     client.sendMessage('hi', {
