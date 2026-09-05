@@ -15,13 +15,13 @@
   schedule: ['* 0-5 * * 1'],
   labels: ['dependencies'],
   rangeStrategy: 'bump',
-  postUpdateOptions: ['pnpmDedupe'],
   prHourlyLimit: 0,
   prConcurrentLimit: 5,
   platformAutomerge: true,
   automergeStrategy: 'squash',
   lockFileMaintenance: { automerge: true },
-  vulnerabilityAlerts: { addLabels: ['security'] },
+  // Security PRs have their own budget; unbounded they exceed the hosted 30 min job.
+  vulnerabilityAlerts: { addLabels: ['security'], prConcurrentLimit: 5 },
   osvVulnerabilityAlerts: true,
   packageRules: [
     {
