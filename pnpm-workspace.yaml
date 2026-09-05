@@ -9,3 +9,5 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   # Renovate security update: pnpm@10.34.5
   - pnpm@10.34.5
+  # Renovate security update: protobufjs@8.8.0
+  - protobufjs@8.8.0
