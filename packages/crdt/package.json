@@ -6,7 +6,6 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "dependencies": {
-    "tslib": "^2.3.0",
     "unique-names-generator": "^4.7.1",
     "y-indexeddb": "^9.0.12",
     "y-protocols": "^1.0.7",
