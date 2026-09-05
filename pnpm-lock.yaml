@@ -22,7 +22,7 @@ overrides:
   path-to-regexp: '>=8.4.0'
   picomatch: '>=4.0.4'
   postcss: '>=8.5.26'
-  protobufjs: '>=8.6.0'
+  protobufjs: '>=8.8.0'
   qs: '>=6.16.0'
   rollup: '>=4.59.0'
   seroval: '>=1.6.4'
