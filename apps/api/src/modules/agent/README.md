@@ -15,6 +15,7 @@ Per-turn reasoning **effort** is plumbed here but resolved elsewhere: a turn car
 | client → server | `agent:message`                  | New user turn (`{ conversationId?, message, noteId?, model?, effort? }`)                             |
 | client → server | `agent:approve` / `agent:reject` | HITL decision on a pending proposal — `{ proposalId, noteId? }`, plus an optional `reason` on reject |
 | client → server | `agent:cancel`                   | Abort the in-flight turn                                                                             |
+| server → client | `agent:conversation`             | `{ conversationId }` — emitted once when the turn creates the conversation                           |
 | server → client | `agent:chunk`                    | Streamed assistant text                                                                              |
 | server → client | `agent:thinking`                 | Streamed reasoning summary (`{ text }`), rendered apart from the answer                              |
 | server → client | `agent:proposal`                 | A proposed mutation awaiting approval                                                                |

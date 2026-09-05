@@ -343,11 +343,13 @@ export class AgentGateway
     controller: AbortController
   ): Pick<
     RunAgentTurnCallbacks,
-    'onChunk' | 'onDone' | 'onError' | 'onThinking'
+    'onChunk' | 'onDone' | 'onError' | 'onThinking' | 'onConversation'
   > {
     return {
       onChunk: (text) => client.emit('agent:chunk', { text }),
       onThinking: (text) => client.emit('agent:thinking', { text }),
+      onConversation: (conversationId) =>
+        client.emit('agent:conversation', { conversationId }),
       onDone: (usage) =>
         client.emit('agent:done', {
           usage: {
