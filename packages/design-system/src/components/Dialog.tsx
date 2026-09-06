@@ -1,7 +1,9 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -15,9 +17,20 @@ import { X } from 'lucide-react';
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
 import { cn } from '../utils';
 
+const DIALOG_CONTENT_SELECTOR =
+  '[data-knowtis-dialog-content], [role="dialog"][data-state]';
+const FOCUSABLE_SELECTOR =
+  'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
+interface DialogFocusOrigin {
+  opener: HTMLElement | null;
+  parentDialog: HTMLElement | null;
+}
+
 interface DialogSemanticsContextValue {
   descriptionPresent: boolean;
   setDescriptionPresent: (present: boolean) => void;
+  takeFocusOrigin: () => DialogFocusOrigin | null;
 }
 
 const DialogSemanticsContext =
@@ -39,17 +52,56 @@ interface DialogProps {
 
 function Dialog({ children, open, onOpenChange }: DialogProps) {
   const [descriptionPresent, setDescriptionPresent] = useState(false);
+  const focusOriginRef = useRef<DialogFocusOrigin | null>(null);
+  const previouslyOpenRef = useRef(false);
+
+  const captureFocusOrigin = useCallback(() => {
+    if (focusOriginRef.current) {
+      return;
+    }
+
+    const opener =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    focusOriginRef.current = {
+      opener,
+      parentDialog:
+        opener?.closest<HTMLElement>(DIALOG_CONTENT_SELECTOR) ?? null,
+    };
+  }, []);
+
+  const takeFocusOrigin = useCallback(() => {
+    const origin = focusOriginRef.current;
+    focusOriginRef.current = null;
+    return origin;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (open === true && !previouslyOpenRef.current) {
+      captureFocusOrigin();
+    }
+    previouslyOpenRef.current = open === true;
+  }, [captureFocusOrigin, open]);
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      captureFocusOrigin();
+    }
+    onOpenChange?.(nextOpen);
+  };
 
   return (
     <DialogSemanticsContext.Provider
       value={{
         descriptionPresent,
         setDescriptionPresent,
+        takeFocusOrigin,
       }}
     >
       <DialogPrimitive.Root
         {...(open === undefined ? {} : { open })}
-        {...(onOpenChange === undefined ? {} : { onOpenChange })}
+        onOpenChange={handleOpenChange}
       >
         {children}
       </DialogPrimitive.Root>
@@ -57,17 +109,39 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
   );
 }
 
+function isDisabled(element: HTMLElement): boolean {
+  if (element.hasAttribute('disabled')) {
+    return true;
+  }
+  try {
+    return element.matches(':disabled');
+  } catch {
+    return false;
+  }
+}
+
 function canRestoreFocus(element: HTMLElement): boolean {
   if (
     element === document.body ||
     !element.isConnected ||
-    element.hasAttribute('disabled')
+    isDisabled(element)
   ) {
     return false;
   }
   return (
     typeof element.checkVisibility !== 'function' || element.checkVisibility()
   );
+}
+
+function focusParentDialog(parentDialog: HTMLElement | null) {
+  if (!parentDialog?.isConnected) {
+    return;
+  }
+
+  const target = Array.from(
+    parentDialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
+  ).find(canRestoreFocus);
+  (target ?? parentDialog).focus();
 }
 
 type RadixDialogContentProps = ComponentPropsWithoutRef<
@@ -79,7 +153,7 @@ type DialogAutoFocusEvent = Parameters<
 
 interface DialogContentProps extends Omit<
   RadixDialogContentProps,
-  'children' | 'className'
+  'asChild' | 'children' | 'className'
 > {
   children: ReactNode;
   className?: string;
@@ -97,29 +171,25 @@ function DialogContent({
   onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
-  const { descriptionPresent } = useDialogSemantics();
-  const openerRef = useRef<HTMLElement | null>(null);
+  const { descriptionPresent, takeFocusOrigin } = useDialogSemantics();
 
   const handleOpenAutoFocus = (event: DialogAutoFocusEvent) => {
-    openerRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
     onOpenAutoFocus?.(event);
   };
 
   const handleCloseAutoFocus = (event: DialogAutoFocusEvent) => {
     onCloseAutoFocus?.(event);
-    const opener = openerRef.current;
-    openerRef.current = null;
+    const origin = takeFocusOrigin();
     if (event.defaultPrevented) {
       return;
     }
 
-    if (opener && canRestoreFocus(opener)) {
-      event.preventDefault();
-      opener.focus();
+    event.preventDefault();
+    if (origin?.opener && canRestoreFocus(origin.opener)) {
+      origin.opener.focus();
+      return;
     }
+    focusParentDialog(origin?.parentDialog ?? null);
   };
 
   return (
@@ -133,6 +203,7 @@ function DialogContent({
       <DialogPrimitive.Content
         {...(!descriptionPresent ? { 'aria-describedby': undefined } : {})}
         {...props}
+        data-knowtis-dialog-content=""
         onOpenAutoFocus={handleOpenAutoFocus}
         onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(

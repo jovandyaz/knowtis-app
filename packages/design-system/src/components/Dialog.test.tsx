@@ -32,6 +32,54 @@ function renderDialog(onOpenChange = vi.fn()) {
   return onOpenChange;
 }
 
+type InvalidOpenerMode = 'removed' | 'disabled' | 'disabled-fieldset';
+
+function InvalidNestedOpener({ mode }: { mode: InvalidOpenerMode }) {
+  const [upperOpen, setUpperOpen] = useState(false);
+  const [invalid, setInvalid] = useState(false);
+  const opener = (
+    <button
+      type="button"
+      disabled={mode === 'disabled' && invalid}
+      onClick={() => setUpperOpen(true)}
+    >
+      Open upper
+    </button>
+  );
+
+  return (
+    <>
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent closeLabel="Close lower dialog">
+          <DialogTitle>Lower</DialogTitle>
+          {mode === 'removed' && invalid ? null : mode ===
+            'disabled-fieldset' ? (
+            <fieldset disabled={invalid}>{opener}</fieldset>
+          ) : (
+            opener
+          )}
+          <button type="button">Lower fallback</button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={upperOpen} onOpenChange={setUpperOpen}>
+        <DialogContent closeLabel="Close upper dialog">
+          <DialogTitle>Upper</DialogTitle>
+          <input aria-label="Upper field" />
+          <button
+            type="button"
+            onClick={() => {
+              setInvalid(true);
+              setUpperOpen(false);
+            }}
+          >
+            Finish
+          </button>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 describe('Dialog accessibility', () => {
   it('labels the dialog with the DialogTitle id', () => {
     renderDialog();
@@ -392,6 +440,49 @@ describe('Dialog accessibility', () => {
     await waitFor(() => expect(opener).toHaveFocus());
   });
 
+  it('restores the original opener when a child focuses itself before Radix autofocus', async () => {
+    function SelfFocusingField() {
+      const field = useRef<HTMLInputElement>(null);
+      useEffect(() => {
+        field.current?.focus();
+      }, []);
+      return <input ref={field} aria-label="Self-focused field" />;
+    }
+
+    function SelfFocusingDialog() {
+      const [open, setOpen] = useState(false);
+
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open dialog
+          </button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Self focus</DialogTitle>
+              <SelfFocusingField />
+              <button type="button" onClick={() => setOpen(false)}>
+                Finish
+              </button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<SelfFocusingDialog />);
+    const opener = screen.getByRole('button', { name: 'Open dialog' });
+
+    await user.click(opener);
+    expect(
+      screen.getByRole('textbox', { name: 'Self-focused field' })
+    ).toHaveFocus();
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
   it('uses a consumer close-autofocus target instead of the captured opener', async () => {
     function CloseTargetHarness({ open }: { open: boolean }) {
       const logicalTarget = useRef<HTMLButtonElement>(null);
@@ -427,43 +518,6 @@ describe('Dialog accessibility', () => {
         screen.getByRole('button', { name: 'Logical target' })
       ).toHaveFocus()
     );
-  });
-
-  it('does not restore a disabled opener', async () => {
-    function DisabledOpener({
-      open,
-      disabled,
-    }: {
-      open: boolean;
-      disabled: boolean;
-    }) {
-      return (
-        <>
-          <button type="button" disabled={disabled}>
-            Open dialog
-          </button>
-          <Dialog open={open} onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Disable opener</DialogTitle>
-              <input aria-label="Dialog field" />
-            </DialogContent>
-          </Dialog>
-        </>
-      );
-    }
-
-    const { rerender } = render(
-      <DisabledOpener open={false} disabled={false} />
-    );
-    const opener = screen.getByRole('button', { name: 'Open dialog' });
-    opener.focus();
-    rerender(<DisabledOpener open disabled={false} />);
-    const focus = vi.spyOn(opener, 'focus');
-    rerender(<DisabledOpener open disabled />);
-    rerender(<DisabledOpener open={false} disabled />);
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
-    expect(focus).not.toHaveBeenCalled();
   });
 
   it('does not restore an opener the platform reports as invisible', async () => {
@@ -552,43 +606,46 @@ describe('Dialog accessibility', () => {
     await waitFor(() => expect(upperField).toHaveFocus());
   });
 
-  it('resumes the lower scope when an invalid nested opener disappears', async () => {
-    function Stack({
-      upperOpen,
-      showOpener,
-    }: {
-      upperOpen: boolean;
-      showOpener: boolean;
-    }) {
-      return (
-        <>
-          <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close lower dialog">
-              <DialogTitle>Lower</DialogTitle>
-              {showOpener ? <button type="button">Open upper</button> : null}
-              <button type="button">Lower fallback</button>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={upperOpen} onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close upper dialog">
-              <DialogTitle>Upper</DialogTitle>
-              <input aria-label="Upper field" />
-            </DialogContent>
-          </Dialog>
-        </>
-      );
-    }
+  it('focuses the parent dialog when a nested opener is removed before close', async () => {
+    const user = userEvent.setup();
+    render(<InvalidNestedOpener mode="removed" />);
 
-    const { rerender } = render(<Stack upperOpen={false} showOpener />);
-    screen.getByRole('button', { name: 'Open upper' }).focus();
-    rerender(<Stack upperOpen showOpener />);
-    rerender(<Stack upperOpen showOpener={false} />);
-    rerender(<Stack upperOpen={false} showOpener={false} />);
+    await user.click(screen.getByRole('button', { name: 'Open upper' }));
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
 
-    await waitFor(() => {
-      const lower = screen.getByRole('dialog', { name: 'Lower' });
-      expect(lower).toContainElement(document.activeElement as HTMLElement);
-    });
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Lower fallback' })
+      ).toHaveFocus()
+    );
+  });
+
+  it('focuses the parent dialog when a nested opener is disabled before close', async () => {
+    const user = userEvent.setup();
+    render(<InvalidNestedOpener mode="disabled" />);
+
+    await user.click(screen.getByRole('button', { name: 'Open upper' }));
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Lower fallback' })
+      ).toHaveFocus()
+    );
+  });
+
+  it('focuses the parent dialog when a nested opener becomes fieldset-disabled', async () => {
+    const user = userEvent.setup();
+    render(<InvalidNestedOpener mode="disabled-fieldset" />);
+
+    await user.click(screen.getByRole('button', { name: 'Open upper' }));
+    await user.click(screen.getByRole('button', { name: 'Finish' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Lower fallback' })
+      ).toHaveFocus()
+    );
   });
 
   it('renders a right-side drawer when side="right"', () => {
