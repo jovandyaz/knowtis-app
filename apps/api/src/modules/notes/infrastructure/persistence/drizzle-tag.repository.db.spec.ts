@@ -203,7 +203,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleTagRepository', () => {
     );
     const record = await repo.findById(branch?.id as string);
 
-    await repo.renameBranch(record as never, path('job'));
+    const renamed = await repo.renameBranch(record as never, path('job'));
+    expect(renamed.isOk()).toBe(true);
 
     const rows = await db
       .select({ path: tags.path })
@@ -215,6 +216,100 @@ describe.runIf(DB_AVAILABLE)('DrizzleTagRepository', () => {
       'job/projects',
       'job/projects/alpha',
     ]);
+  });
+
+  it('should report the path a rename would claim from another branch', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('job')
+    );
+
+    expect(collision).toBe('job');
+  });
+
+  it('should not read the branch being renamed as its own collision', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    // The target lands inside the branch being moved, so the only rows it
+    // overlaps are rows the rename itself rewrites.
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('work/alpha')
+    );
+
+    expect(collision).toBeNull();
+  });
+
+  it('should not treat a same-prefixed sibling as a collision', async () => {
+    await repo.ensurePaths(ownerId, [path('work'), path('workshop')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('works')
+    );
+
+    expect(collision).toBeNull();
+  });
+
+  it('should round-trip a palette colour and drop one outside the palette', async () => {
+    const [tagId] = await repo.ensurePaths(ownerId, [path('work')]);
+
+    await repo.recolor(tagId as string, 'green');
+    const colored = await repo.findById(tagId as string);
+
+    await db
+      .update(tags)
+      .set({ color: '#f5f5f5' })
+      .where(eq(tags.id, tagId as string));
+    const legacy = await repo.findById(tagId as string);
+
+    expect(colored?.color).toBe('green');
+    expect(legacy?.color).toBeNull();
+  });
+
+  it('should answer with a conflict when the index refuses the new path', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    // Straight to the write: this is the path a rename takes when another
+    // writer claims the target between the collision check and the update.
+    const renamed = await repo.renameBranch(record as never, path('job'));
+
+    expect(renamed._unsafeUnwrapErr().code).toBe('TAG_CONFLICT');
+  });
+
+  it('should leave the branch untouched when the rename is refused', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    await repo.renameBranch(record as never, path('job'));
+
+    const rows = await db
+      .select({ path: tags.path })
+      .from(tags)
+      .where(eq(tags.ownerId, OWNER))
+      .orderBy(tags.path);
+    expect(rows.map((row) => row.path)).toEqual(['job', 'work', 'work/alpha']);
   });
 
   it('should keep the note when its tag branch is deleted', async () => {

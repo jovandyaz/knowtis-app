@@ -26,7 +26,12 @@ import {
 import { SUBJECTS } from '@knowtis/authorization';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
-import { ApiAuthErrors, ApiBadRequest, ApiNotFound } from '../../core/swagger';
+import {
+  ApiAuthErrors,
+  ApiBadRequest,
+  ApiConflict,
+  ApiNotFound,
+} from '../../core/swagger';
 import { RequireMcpScope } from '../mcp/decorators/require-mcp-scope.decorator';
 import { MCP_SCOPES } from '../mcp/mcp-token';
 import {
@@ -84,8 +89,9 @@ export class TagsController {
       'Renaming rewrites every descendant path by prefix; the notes carrying the tag are untouched.',
   })
   @ApiResponse({ status: 204, description: 'Tag updated' })
-  @ApiBadRequest('tag path is malformed')
+  @ApiBadRequest('tag path is malformed or the colour is not a palette token')
   @ApiNotFound('tag does not exist')
+  @ApiConflict('the caller already holds a tag at the target path')
   @Patch(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @RequirePermission('update', SUBJECTS.Note)

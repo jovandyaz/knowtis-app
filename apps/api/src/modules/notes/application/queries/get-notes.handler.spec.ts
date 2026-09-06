@@ -67,6 +67,7 @@ describe('GetNotesHandler', () => {
       ensurePaths: vi.fn(),
       replaceNoteTags: vi.fn(),
       findPathsByNotes: vi.fn().mockResolvedValue(new Map()),
+      findPathCollision: vi.fn(),
       renameBranch: vi.fn(),
       recolor: vi.fn(),
       deleteBranch: vi.fn(),

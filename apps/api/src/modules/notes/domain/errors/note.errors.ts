@@ -12,6 +12,7 @@ export const NoteErrorCodes = {
   INVALID_TAG: 'INVALID_TAG',
   INVALID_SUPERTAG: 'INVALID_SUPERTAG',
   TAG_NOT_FOUND: 'TAG_NOT_FOUND',
+  TAG_CONFLICT: 'TAG_CONFLICT',
   NOTE_NOT_FOUND: 'NOTE_NOT_FOUND',
   PERMISSION_DENIED: 'PERMISSION_DENIED',
   EMAIL_NOT_VERIFIED: EMAIL_NOT_VERIFIED_CODE,
@@ -57,6 +58,12 @@ export const NoteErrors = {
 
   tagNotFound: (id: string) =>
     createNoteError(NoteErrorCodes.TAG_NOT_FOUND, `Tag not found: ${id}`),
+
+  tagConflict: (path: string) =>
+    createNoteError(
+      NoteErrorCodes.TAG_CONFLICT,
+      `A tag already exists at: ${path}`
+    ),
 
   noteNotFound: (id: string) =>
     createNoteError(NoteErrorCodes.NOTE_NOT_FOUND, `Note not found: ${id}`),

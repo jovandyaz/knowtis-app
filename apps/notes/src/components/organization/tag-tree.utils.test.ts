@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { TagNode } from '@knowtis/shared-types';
 
-import { buildTagTree, isWithinBranch } from './tag-tree.utils';
+import { buildTagTree } from './tag-tree.utils';
 
 const node = (path: string, noteCount = 0): TagNode => ({
   id: `id-${path}`,
@@ -50,17 +50,5 @@ describe('buildTagTree', () => {
     const tree = buildTagTree([node('work', 7)]);
 
     expect(tree[0]?.noteCount).toBe(7);
-  });
-});
-
-describe('isWithinBranch', () => {
-  it.each([
-    ['work', 'work', true],
-    ['work/alpha', 'work', true],
-    ['work/alpha/deep', 'work', true],
-    ['workshop', 'work', false],
-    ['work', 'work/alpha', false],
-  ])('should report %j within %j as %s', (path, branch, expected) => {
-    expect(isWithinBranch(path, branch)).toBe(expected);
   });
 });

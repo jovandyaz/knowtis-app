@@ -27,7 +27,7 @@ import {
   PARA_BUCKETS,
   PERMISSION_LEVELS,
   SUPERTAGS,
-  TAG_COLOR_MAX_LENGTH,
+  TAG_COLORS,
   TAG_MAX_PER_NOTE,
   TAG_PATH_MAX_LENGTH,
   type BucketFilter,
@@ -36,6 +36,7 @@ import {
   type ParaBucket,
   type PermissionLevel,
   type Supertag,
+  type TagColor,
 } from '@knowtis/shared-types';
 
 import { MAX_LIMIT, MAX_PAGE } from '../../../core/pagination';
@@ -274,10 +275,12 @@ export class UpdateTagDto {
 
   @ApiPropertyOptional({
     description: 'Colour token for the branch; null clears it',
+    enum: TAG_COLORS,
     nullable: true,
   })
-  @IsString()
-  @MaxLength(TAG_COLOR_MAX_LENGTH)
+  @IsIn([...TAG_COLORS, null], {
+    message: `color must be one of: ${TAG_COLORS.join(', ')}, or null`,
+  })
   @IsOptional()
-  color?: string | null;
+  color?: TagColor | null;
 }

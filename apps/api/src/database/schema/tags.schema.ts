@@ -13,6 +13,8 @@ import { users } from './users.schema';
 
 const CASCADE_ON_DELETE = { onDelete: 'cascade' } as const;
 
+export const TAGS_OWNER_PATH_INDEX = 'tags_owner_path_idx';
+
 export const tags = pgTable(
   'tags',
   {
@@ -29,7 +31,7 @@ export const tags = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (table) => [uniqueIndex('tags_owner_path_idx').on(table.ownerId, table.path)]
+  (table) => [uniqueIndex(TAGS_OWNER_PATH_INDEX).on(table.ownerId, table.path)]
 );
 
 export type Tag = typeof tags.$inferSelect;

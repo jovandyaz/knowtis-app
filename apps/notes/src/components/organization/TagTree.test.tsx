@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -16,9 +16,13 @@ import type { TagNode } from '@knowtis/shared-types';
 import { TagTree } from './TagTree';
 
 const tagTree = vi.fn<() => TagNode[] | undefined>();
+const updateTag = vi.fn();
+const deleteTag = vi.fn();
 
 vi.mock('@knowtis/data-access-notes', () => ({
   useTags: () => ({ data: tagTree() }),
+  useUpdateTag: () => ({ mutate: updateTag, isPending: false }),
+  useDeleteTag: () => ({ mutate: deleteTag, isPending: false }),
 }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -56,13 +60,15 @@ async function renderAt(path: string) {
 
   const result = render(<RouterProvider router={router} />);
   await screen.findByText('organization.tagsTitle');
-  return result;
+  return { ...result, router };
 }
 
 const rowFor = (label: string) => screen.getByText(label).closest('a');
 
 describe('TagTree', () => {
   beforeEach(() => {
+    updateTag.mockReset();
+    deleteTag.mockReset();
     tagTree.mockReturnValue([
       node('work', 5),
       node('work/alpha', 2),
@@ -193,7 +199,7 @@ describe('TagTree', () => {
 
   it('should hand the collapse control the row colour rather than the tag colour', async () => {
     tagTree.mockReturnValue([
-      { id: 'id-pale', path: 'pale', color: '#f5f5f5', noteCount: 1 },
+      { id: 'id-pale', path: 'pale', color: 'yellow', noteCount: 1 },
       { id: 'id-pale-child', path: 'pale/child', color: null, noteCount: 1 },
     ]);
     await renderAt('/notes');
@@ -202,7 +208,30 @@ describe('TagTree', () => {
       name: /organization.tags.collapse/,
     });
 
-    expect(chevron.querySelector('svg')).not.toHaveAttribute('style');
+    expect(chevron.querySelector('svg')).not.toHaveClass('text-tag-yellow');
+  });
+
+  it('should still show a branch colour, which its chevron cannot carry', async () => {
+    tagTree.mockReturnValue([
+      { id: 'id-pale', path: 'pale', color: 'yellow', noteCount: 1 },
+      { id: 'id-pale-child', path: 'pale/child', color: null, noteCount: 1 },
+    ]);
+    await renderAt('/notes');
+
+    expect(
+      rowFor('pale')?.parentElement?.querySelector('.bg-tag-yellow')
+    ).toBeInTheDocument();
+  });
+
+  it('should tint a leaf hash with the tag palette token', async () => {
+    tagTree.mockReturnValue([
+      { id: 'id-pale', path: 'pale', color: 'yellow', noteCount: 1 },
+    ]);
+    await renderAt('/notes');
+
+    expect(rowFor('pale')?.parentElement?.querySelector('svg')).toHaveClass(
+      'text-tag-yellow'
+    );
   });
 
   it('should give a tag row a touch-sized height on mobile', async () => {
@@ -212,5 +241,259 @@ describe('TagTree', () => {
       'min-h-11',
       'md:min-h-8'
     );
+  });
+  const openMenuFor = async (
+    user: ReturnType<typeof userEvent.setup>,
+    path: string
+  ) => {
+    await user.click(
+      screen.getByRole('button', {
+        name: `organization.tags.actionsLabel:${path}`,
+      })
+    );
+  };
+
+  it('should open a rename field seeded with the tag last segment', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    expect(
+      screen.getByRole('textbox', {
+        name: 'organization.tags.renameLabel:alpha',
+      })
+    ).toHaveValue('alpha');
+  });
+
+  it('should rename a nested tag under its existing parent', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'beta{Enter}');
+
+    expect(updateTag).toHaveBeenCalledWith(
+      { id: 'id-work/alpha', input: { path: 'work/beta' } },
+      expect.anything()
+    );
+  });
+
+  it('should discard a rename cancelled with Escape', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'private{Escape}');
+
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  });
+
+  it('should refuse a rename that collides with a sibling', async () => {
+    tagTree.mockReturnValue([
+      node('work', 5),
+      node('work/alpha', 2),
+      node('work/beta', 1),
+    ]);
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'beta{Enter}');
+
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'organization.tags.conflict'
+    );
+  });
+
+  it('should refuse a segment the server path rules would reject', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'two words{Enter}');
+
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'organization.tags.invalidSegment'
+    );
+  });
+
+  it('should carry the active filter onto the renamed path', async () => {
+    updateTag.mockImplementation(
+      (_variables, options?: { onSuccess?: () => void }) =>
+        options?.onSuccess?.()
+    );
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes?tag=work%2Falpha&view=all');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'beta{Enter}');
+
+    expect(router.state.location.search).toMatchObject({ tag: 'work/beta' });
+  });
+
+  it('should recolor a tag with a palette token rather than a raw colour', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitemradio', {
+        name: 'organization.tags.colors.purple',
+      })
+    );
+
+    expect(updateTag).toHaveBeenCalledWith(
+      { id: 'id-personal', input: { color: 'purple' } },
+      expect.anything()
+    );
+  });
+
+  it('should clear a tag colour through the no-colour choice', async () => {
+    tagTree.mockReturnValue([
+      { id: 'id-personal', path: 'personal', color: 'purple', noteCount: 1 },
+    ]);
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitemradio', { name: 'organization.tags.noColor' })
+    );
+
+    expect(updateTag).toHaveBeenCalledWith(
+      { id: 'id-personal', input: { color: null } },
+      expect.anything()
+    );
+  });
+
+  it('should mark the tag current colour as the checked choice', async () => {
+    tagTree.mockReturnValue([
+      { id: 'id-personal', path: 'personal', color: 'green', noteCount: 1 },
+    ]);
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+
+    expect(
+      screen.getByRole('menuitemradio', {
+        name: 'organization.tags.colors.green',
+      })
+    ).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('should ask before deleting a branch and only then delete it', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'work');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.delete' })
+    );
+
+    expect(
+      await screen.findByText('organization.tags.deleteConfirm')
+    ).toBeInTheDocument();
+    expect(deleteTag).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'buttons.delete' }));
+
+    expect(deleteTag).toHaveBeenCalledWith('id-work', expect.anything());
+  });
+
+  it('should drop the active filter when its branch is deleted', async () => {
+    deleteTag.mockImplementation((_id, options?: { onSuccess?: () => void }) =>
+      options?.onSuccess?.()
+    );
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes?tag=work%2Falpha&view=all');
+
+    await openMenuFor(user, 'work');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.delete' })
+    );
+    await user.click(
+      await screen.findByRole('button', { name: 'buttons.delete' })
+    );
+
+    expect(router.state.location.search).not.toHaveProperty('tag');
+  });
+  it('should not commit a rename on the Enter that closes an IME composition', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'privado');
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('should leave a filter the reader changed while the rename was in flight', async () => {
+    let settle: (() => void) | undefined;
+    updateTag.mockImplementation(
+      (_variables, options?: { onSuccess?: () => void }) => {
+        settle = () => options?.onSuccess?.();
+      }
+    );
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes?tag=work%2Falpha&view=all');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'beta{Enter}');
+
+    await user.click(screen.getByRole('link', { name: /personal/ }));
+    settle?.();
+
+    expect(router.state.location.search).toMatchObject({ tag: 'personal' });
   });
 });

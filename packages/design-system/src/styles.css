@@ -48,6 +48,13 @@
   --color-bucket-areas: var(--bucket-areas);
   --color-bucket-resources: var(--bucket-resources);
   --color-bucket-archive: var(--bucket-archive);
+
+  --color-tag-purple: var(--tag-purple);
+  --color-tag-blue: var(--tag-blue);
+  --color-tag-green: var(--tag-green);
+  --color-tag-yellow: var(--tag-yellow);
+  --color-tag-red: var(--tag-red);
+  --color-tag-pink: var(--tag-pink);
 }
 
 :root {
@@ -80,6 +87,12 @@
   --bucket-areas: var(--color-semantic-light-bucket-areas);
   --bucket-resources: var(--color-semantic-light-bucket-resources);
   --bucket-archive: var(--color-semantic-light-bucket-archive);
+  --tag-purple: var(--color-semantic-light-tag-purple);
+  --tag-blue: var(--color-semantic-light-tag-blue);
+  --tag-green: var(--color-semantic-light-tag-green);
+  --tag-yellow: var(--color-semantic-light-tag-yellow);
+  --tag-red: var(--color-semantic-light-tag-red);
+  --tag-pink: var(--color-semantic-light-tag-pink);
 }
 
 .dark {
@@ -111,6 +124,12 @@
   --bucket-areas: var(--color-semantic-dark-bucket-areas);
   --bucket-resources: var(--color-semantic-dark-bucket-resources);
   --bucket-archive: var(--color-semantic-dark-bucket-archive);
+  --tag-purple: var(--color-semantic-dark-tag-purple);
+  --tag-blue: var(--color-semantic-dark-tag-blue);
+  --tag-green: var(--color-semantic-dark-tag-green);
+  --tag-yellow: var(--color-semantic-dark-tag-yellow);
+  --tag-red: var(--color-semantic-dark-tag-red);
+  --tag-pink: var(--color-semantic-dark-tag-pink);
 }
 
 @layer base {

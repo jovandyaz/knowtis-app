@@ -1,10 +1,10 @@
-import type { TagNode } from '@knowtis/shared-types';
+import type { TagColor, TagNode } from '@knowtis/shared-types';
 
 import { httpClient } from './http-client';
 
 export interface UpdateTagInput {
   path?: string;
-  color?: string | null;
+  color?: TagColor | null;
 }
 
 export const tagsApi = {

@@ -121,6 +121,30 @@
         "bucket-archive": {
           "value": "{color.primitive.neutral.500}",
           "type": "color"
+        },
+        "tag-purple": {
+          "value": "{color.primitive.purple.500}",
+          "type": "color"
+        },
+        "tag-blue": {
+          "value": "{color.primitive.blue.500}",
+          "type": "color"
+        },
+        "tag-green": {
+          "value": "{color.primitive.green.500}",
+          "type": "color"
+        },
+        "tag-yellow": {
+          "value": "{color.primitive.yellow.600}",
+          "type": "color"
+        },
+        "tag-red": {
+          "value": "{color.primitive.red.500}",
+          "type": "color"
+        },
+        "tag-pink": {
+          "value": "{color.primitive.pink.500}",
+          "type": "color"
         }
       },
       "dark": {
@@ -183,6 +207,30 @@
         },
         "bucket-archive": {
           "value": "{color.primitive.neutral.500}",
+          "type": "color"
+        },
+        "tag-purple": {
+          "value": "{color.primitive.purple.400}",
+          "type": "color"
+        },
+        "tag-blue": {
+          "value": "{color.primitive.blue.400}",
+          "type": "color"
+        },
+        "tag-green": {
+          "value": "{color.primitive.green.400}",
+          "type": "color"
+        },
+        "tag-yellow": {
+          "value": "{color.primitive.yellow.400}",
+          "type": "color"
+        },
+        "tag-red": {
+          "value": "{color.primitive.red.400}",
+          "type": "color"
+        },
+        "tag-pink": {
+          "value": "{color.primitive.pink.400}",
           "type": "color"
         }
       }
