@@ -1,13 +1,19 @@
+import { createJwtVerificationKeySelector } from '@jovandyaz/auth-nestjs';
 import { ForbiddenException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { exportJWK, generateKeyPair, SignJWT } from 'jose';
+import { exportJWK, exportSPKI, generateKeyPair, SignJWT } from 'jose';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { deriveOauthPublicKeys } from '../../../config/oauth-public-keys';
 import { MCP_SCOPE_KEY } from '../decorators/require-mcp-scope.decorator';
 import { McpScopeGuard } from '../guards/mcp-scope.guard';
 import { MCP_SCOPES } from '../mcp-token';
+
+const HS256_TOKEN = `${Buffer.from(JSON.stringify({ alg: 'HS256' })).toString(
+  'base64url'
+)}.payload.signature`;
 
 function createGuard(overrides: {
   scopeMetadata?: string;
@@ -30,15 +36,18 @@ function createGuard(overrides: {
   const jwtService = { verifyAsync } as unknown as JwtService;
 
   const configService = {
-    getOrThrow: vi.fn().mockReturnValue('test-secret'),
-    get: vi
-      .fn()
-      .mockImplementation((key: string) =>
-        key === 'OAUTH_JWKS' ? overrides.oauthJwks : undefined
-      ),
+    get: vi.fn().mockReturnValue(undefined),
   } as unknown as ConfigService;
 
-  const guard = new McpScopeGuard(reflector, jwtService, configService);
+  const guard = new McpScopeGuard(
+    reflector,
+    jwtService,
+    createJwtVerificationKeySelector(
+      'test-secret',
+      deriveOauthPublicKeys(overrides.oauthJwks)
+    ),
+    configService
+  );
 
   const context = {
     getType: vi.fn().mockReturnValue(overrides.contextType ?? 'http'),
@@ -64,7 +73,7 @@ async function guardAllows(
 ): Promise<boolean> {
   const { guard, context } = createGuard({
     scopeMetadata: requiredScope,
-    token: 'mcp-jwt',
+    token: HS256_TOKEN,
     payload: { sub: 'user-1', source: 'mcp', ...payload },
   });
 
@@ -97,7 +106,7 @@ describe('McpScopeGuard', () => {
 
   it('should pass when token verification fails', async () => {
     const { guard, context } = createGuard({
-      token: 'knk_raw-api-key-not-a-jwt',
+      token: HS256_TOKEN,
       verifyRejects: true,
     });
 
@@ -106,7 +115,7 @@ describe('McpScopeGuard', () => {
 
   it('should pass for regular user JWT without scope metadata', async () => {
     const { guard, context } = createGuard({
-      token: 'regular-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', email: 'user@test.com' },
     });
 
@@ -116,7 +125,7 @@ describe('McpScopeGuard', () => {
   it('should pass for regular user JWT regardless of scope metadata', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:write',
-      token: 'regular-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', email: 'user@test.com' },
     });
 
@@ -125,7 +134,7 @@ describe('McpScopeGuard', () => {
 
   it('should throw ForbiddenException for MCP JWT on a route without scope metadata', async () => {
     const { guard, context } = createGuard({
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: {
         sub: 'user-1',
         source: 'mcp',
@@ -141,7 +150,7 @@ describe('McpScopeGuard', () => {
   it('should pass for MCP JWT with sufficient scope', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:read',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: {
         sub: 'user-1',
         source: 'mcp',
@@ -155,7 +164,7 @@ describe('McpScopeGuard', () => {
   it('should throw ForbiddenException for MCP JWT without scopes claim', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:read',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp' },
     });
 
@@ -167,7 +176,7 @@ describe('McpScopeGuard', () => {
   it('should throw ForbiddenException for MCP JWT with insufficient scope', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:write',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
@@ -179,7 +188,7 @@ describe('McpScopeGuard', () => {
   it('should throw ForbiddenException for MCP JWT missing share scope', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:share',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: {
         sub: 'user-1',
         source: 'mcp',
@@ -195,7 +204,7 @@ describe('McpScopeGuard', () => {
   it('should include required scope in error message', async () => {
     const { guard, context } = createGuard({
       scopeMetadata: 'notes:write',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
@@ -207,13 +216,13 @@ describe('McpScopeGuard', () => {
   it('should verify the token signature with the configured secret pinned to HS256', async () => {
     const { guard, context, verifyAsync } = createGuard({
       scopeMetadata: 'notes:read',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
     await guard.canActivate(context as never);
 
-    expect(verifyAsync).toHaveBeenCalledWith('mcp-jwt', {
+    expect(verifyAsync).toHaveBeenCalledWith(HS256_TOKEN, {
       secret: 'test-secret',
       algorithms: ['HS256'],
     });
@@ -221,7 +230,7 @@ describe('McpScopeGuard', () => {
 
   it('should pass for non-HTTP execution contexts', async () => {
     const { guard, context, verifyAsync } = createGuard({
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
       contextType: 'ws',
     });
@@ -233,7 +242,7 @@ describe('McpScopeGuard', () => {
   it('should use reflector with correct metadata key', async () => {
     const { guard, reflector, context } = createGuard({
       scopeMetadata: 'notes:read',
-      token: 'mcp-jwt',
+      token: HS256_TOKEN,
       payload: { sub: 'user-1', source: 'mcp', scopes: 'notes:read' },
     });
 
@@ -265,7 +274,7 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
     jwks = JSON.stringify({ keys: [jwk] });
     signOauthToken = (scopes: string, aud: string | string[] = RESOURCE_URL) =>
       new SignJWT({ source: 'mcp', scopes, aud })
-        .setProtectedHeader({ alg: 'ES256' })
+        .setProtectedHeader({ alg: 'ES256', kid: 'test-key' })
         .setSubject('user-1')
         .setExpirationTime('15m')
         .sign(privateKey);
@@ -276,13 +285,11 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
       getAllAndOverride: vi.fn().mockReturnValue(scopeMetadata),
     } as unknown as Reflector;
     const configService = {
-      getOrThrow: vi.fn().mockReturnValue('unused-hs-secret'),
-      get: vi.fn().mockImplementation((key: string) => {
-        if (key === 'OAUTH_JWKS') {
-          return jwks;
-        }
-        return key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined;
-      }),
+      get: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined
+        ),
     } as unknown as ConfigService;
     // Same module options as McpModule's JwtModule.register — the guard's ES256
     // verify relies on per-call options taking precedence over these.
@@ -290,7 +297,15 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
       signOptions: { algorithm: 'HS256' },
       verifyOptions: { algorithms: ['HS256'] },
     });
-    return new McpScopeGuard(reflector, jwtService, configService);
+    return new McpScopeGuard(
+      reflector,
+      jwtService,
+      createJwtVerificationKeySelector(
+        'unused-hs-secret',
+        deriveOauthPublicKeys(jwks)
+      ),
+      configService
+    );
   }
 
   function contextWithToken(token: string) {
@@ -348,7 +363,7 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
   it('should reject an ES256 token without an aud claim', async () => {
     const guard = createRealGuard(MCP_SCOPES.READ);
     const token = await new SignJWT({ source: 'mcp', scopes: 'notes:read' })
-      .setProtectedHeader({ alg: 'ES256' })
+      .setProtectedHeader({ alg: 'ES256', kid: 'test-key' })
       .setSubject('user-1')
       .setExpirationTime('15m')
       .sign(
@@ -374,16 +389,44 @@ describe('McpScopeGuard with ES256 OAuth tokens', () => {
       guard.canActivate(contextWithToken(token) as never)
     ).resolves.toBe(true);
   });
+
+  it('does not recognize a token without kid when only one key is configured', async () => {
+    const token = await new SignJWT({
+      source: 'mcp',
+      scopes: 'notes:read',
+      aud: RESOURCE_URL,
+    })
+      .setProtectedHeader({ alg: 'ES256' })
+      .setSubject('user-1')
+      .setExpirationTime('15m')
+      .sign(
+        (await import('node:crypto')).createPrivateKey({
+          key: JSON.parse(jwks).keys[0],
+          format: 'jwk',
+        })
+      );
+
+    await expect(
+      createRealGuard(undefined).canActivate(contextWithToken(token) as never)
+    ).resolves.toBe(true);
+  });
 });
 
 describe('McpScopeGuard across a JWKS rotation', () => {
   const RESOURCE_URL = 'https://mcp.knowtis.app/mcp';
   let rotatedJwks: string;
-  let signWithRotatedKey: (scopes: string) => Promise<string>;
+  let currentPublicPem: string;
+  let signWithInvalidSignature: () => Promise<string>;
+  let signWithRotatedKey: (
+    scopes: string,
+    aud?: string | string[],
+    kid?: string | null
+  ) => Promise<string>;
 
   beforeAll(async () => {
     const retiring = await generateKeyPair('ES256', { extractable: true });
     const current = await generateKeyPair('ES256', { extractable: true });
+    currentPublicPem = await exportSPKI(current.publicKey);
 
     async function toJwk(key: CryptoKey, kid: string) {
       const jwk = await exportJWK(key);
@@ -402,12 +445,21 @@ describe('McpScopeGuard across a JWKS rotation', () => {
       ],
     });
 
-    signWithRotatedKey = (scopes: string) =>
-      new SignJWT({ source: 'mcp', scopes, aud: RESOURCE_URL })
-        .setProtectedHeader({ alg: 'ES256' })
+    signWithRotatedKey = (scopes, aud = RESOURCE_URL, kid = 'current-key') =>
+      new SignJWT({ source: 'mcp', scopes, aud })
+        .setProtectedHeader(
+          kid === null ? { alg: 'ES256' } : { alg: 'ES256', kid }
+        )
         .setSubject('user-1')
         .setExpirationTime('15m')
         .sign(current.privateKey);
+
+    signWithInvalidSignature = () =>
+      new SignJWT({ source: 'mcp', scopes: 'notes:read', aud: RESOURCE_URL })
+        .setProtectedHeader({ alg: 'ES256', kid: 'current-key' })
+        .setSubject('user-1')
+        .setExpirationTime('15m')
+        .sign(retiring.privateKey);
   });
 
   function createGuardOverRotatedJwks(scopeMetadata: string | undefined) {
@@ -415,13 +467,11 @@ describe('McpScopeGuard across a JWKS rotation', () => {
       getAllAndOverride: vi.fn().mockReturnValue(scopeMetadata),
     } as unknown as Reflector;
     const configService = {
-      getOrThrow: vi.fn().mockReturnValue('unused-hs-secret'),
-      get: vi.fn().mockImplementation((key: string) => {
-        if (key === 'OAUTH_JWKS') {
-          return rotatedJwks;
-        }
-        return key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined;
-      }),
+      get: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          key === 'MCP_RESOURCE_URL' ? RESOURCE_URL : undefined
+        ),
     } as unknown as ConfigService;
     return new McpScopeGuard(
       reflector,
@@ -429,6 +479,10 @@ describe('McpScopeGuard across a JWKS rotation', () => {
         signOptions: { algorithm: 'HS256' },
         verifyOptions: { algorithms: ['HS256'] },
       }),
+      createJwtVerificationKeySelector(
+        'unused-hs-secret',
+        deriveOauthPublicKeys(rotatedJwks)
+      ),
       configService
     );
   }
@@ -462,5 +516,102 @@ describe('McpScopeGuard across a JWKS rotation', () => {
     await expect(
       guard.canActivate(contextWithToken(token) as never)
     ).resolves.toBe(true);
+  });
+
+  it('returns 403 for a later-key token with the wrong audience', async () => {
+    const token = await signWithRotatedKey(
+      'notes:read',
+      'https://wrong-resource.example/mcp'
+    );
+
+    await expect(
+      createGuardOverRotatedJwks(MCP_SCOPES.READ).canActivate(
+        contextWithToken(token) as never
+      )
+    ).rejects.toThrow('MCP token audience mismatch');
+  });
+
+  it('does not recognize a configured signature carrying an unknown kid', async () => {
+    const token = await signWithRotatedKey(
+      'notes:read',
+      RESOURCE_URL,
+      'unknown'
+    );
+
+    await expect(
+      createGuardOverRotatedJwks(undefined).canActivate(
+        contextWithToken(token) as never
+      )
+    ).resolves.toBe(true);
+  });
+
+  it('does not recognize a token without kid', async () => {
+    const token = await signWithRotatedKey('notes:read', RESOURCE_URL, null);
+
+    await expect(
+      createGuardOverRotatedJwks(undefined).canActivate(
+        contextWithToken(token) as never
+      )
+    ).resolves.toBe(true);
+  });
+
+  it('does not recognize a token with an invalid signature', async () => {
+    const token = await signWithInvalidSignature();
+
+    await expect(
+      createGuardOverRotatedJwks(undefined).canActivate(
+        contextWithToken(token) as never
+      )
+    ).resolves.toBe(true);
+  });
+
+  it.each([
+    ['malformed header', 'not-json.payload.signature'],
+    [
+      'alg none',
+      `${Buffer.from(JSON.stringify({ alg: 'none' })).toString(
+        'base64url'
+      )}.${Buffer.from(JSON.stringify({ source: 'mcp' })).toString(
+        'base64url'
+      )}.`,
+    ],
+  ])('does not recognize %s', async (_name, token) => {
+    await expect(
+      createGuardOverRotatedJwks(undefined).canActivate(
+        contextWithToken(token) as never
+      )
+    ).resolves.toBe(true);
+  });
+
+  it('does not accept an OAuth public key as an HS256 secret', async () => {
+    const token = await new SignJWT({ source: 'mcp', scopes: 'notes:read' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .sign(new TextEncoder().encode(currentPublicPem));
+
+    await expect(
+      createGuardOverRotatedJwks(undefined).canActivate(
+        contextWithToken(token) as never
+      )
+    ).resolves.toBe(true);
+  });
+
+  it('verifies a token selected by a later kid exactly once', async () => {
+    const verifyAsync = vi.spyOn(JwtService.prototype, 'verifyAsync');
+    const token = await signWithRotatedKey('notes:read');
+
+    try {
+      await expect(
+        createGuardOverRotatedJwks(MCP_SCOPES.READ).canActivate(
+          contextWithToken(token) as never
+        )
+      ).resolves.toBe(true);
+      expect(verifyAsync).toHaveBeenCalledTimes(1);
+      expect(verifyAsync).toHaveBeenCalledWith(token, {
+        publicKey: expect.any(String),
+        algorithms: ['ES256'],
+      });
+    } finally {
+      verifyAsync.mockRestore();
+    }
   });
 });

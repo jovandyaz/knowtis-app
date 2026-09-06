@@ -3,6 +3,7 @@ import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { ThrottlerModule } from '@nestjs/throttler';
 
+import { AuthModule } from '../../modules/auth/auth.module';
 import { BearerIdentityResolver } from '../auth/bearer-identity.resolver';
 import { UserScopedThrottlerGuard } from './user-scoped-throttler.guard';
 
@@ -21,6 +22,7 @@ const REQUESTS_PER_WINDOW = 60;
   imports: [
     ThrottlerModule.forRoot([{ ttl: WINDOW_MS, limit: REQUESTS_PER_WINDOW }]),
     JwtModule.register({}),
+    AuthModule,
   ],
   providers: [
     BearerIdentityResolver,

@@ -1,9 +1,9 @@
-import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
-import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { JwtService, type JwtVerifyOptions } from '@nestjs/jwt';
-
-import { deriveOauthPublicKeys } from '../../config/oauth-public-keys';
+import {
+  JWT_VERIFICATION_KEY_SELECTOR,
+  type JwtVerificationKeySelector,
+} from '@jovandyaz/auth-nestjs';
+import { Inject, Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 
 const BEARER_PREFIX = 'Bearer ';
 
@@ -40,18 +40,11 @@ function readBearerToken(request: Record<string, unknown>): string | null {
  */
 @Injectable()
 export class BearerIdentityResolver {
-  private readonly accessTokenSecret: string;
-  private readonly oauthPublicKeys: readonly OauthPublicKey[];
-
   constructor(
     private readonly jwtService: JwtService,
-    configService: ConfigService
-  ) {
-    this.accessTokenSecret = configService.getOrThrow('JWT_SECRET');
-    this.oauthPublicKeys = deriveOauthPublicKeys(
-      configService.get('OAUTH_JWKS')
-    );
-  }
+    @Inject(JWT_VERIFICATION_KEY_SELECTOR)
+    private readonly selectVerificationKey: JwtVerificationKeySelector
+  ) {}
 
   async resolve(
     request: Record<string, unknown>
@@ -69,39 +62,21 @@ export class BearerIdentityResolver {
     return { userId, isAnonymous: claims?.isAnonymous === true };
   }
 
-  /**
-   * HS256 covers session and MCP-exchange tokens, ES256 the OAuth ones. Every
-   * configured OAuth key is tried: a JWKS carries several across a rotation,
-   * and stopping at the first would read a token signed by any of the others
-   * as anonymous — handing it the shared IP bucket this guard exists to avoid.
-   */
   private async verify(token: string): Promise<IdentityClaims | null> {
-    const sessionClaims = await this.verifyWith(token, {
-      secret: this.accessTokenSecret,
-      algorithms: ['HS256'],
-    });
-    if (sessionClaims !== null) {
-      return sessionClaims;
+    const selected = this.selectVerificationKey(token);
+    if (!selected) {
+      return null;
     }
-
-    for (const { publicKey } of this.oauthPublicKeys) {
-      const oauthClaims = await this.verifyWith(token, {
-        publicKey,
-        algorithms: ['ES256'],
-      });
-      if (oauthClaims !== null) {
-        return oauthClaims;
-      }
-    }
-    return null;
-  }
-
-  private async verifyWith(
-    token: string,
-    options: JwtVerifyOptions
-  ): Promise<IdentityClaims | null> {
     try {
-      return await this.jwtService.verifyAsync<IdentityClaims>(token, options);
+      return selected.algorithm === 'HS256'
+        ? await this.jwtService.verifyAsync<IdentityClaims>(token, {
+            secret: selected.secret,
+            algorithms: ['HS256'],
+          })
+        : await this.jwtService.verifyAsync<IdentityClaims>(token, {
+            publicKey: selected.publicKey,
+            algorithms: ['ES256'],
+          });
     } catch {
       return null;
     }

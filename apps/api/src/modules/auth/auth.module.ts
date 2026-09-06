@@ -63,6 +63,6 @@ const configService = new ConfigService();
     DrizzleAnonymousUserRepository,
     AuthCleanupTask,
   ],
-  exports: [AnonymousAuthService],
+  exports: [AnonymousAuthService, AuthNestjsModule],
 })
 export class AuthModule {}

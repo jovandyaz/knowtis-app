@@ -1,14 +1,19 @@
+import { TOKEN_SERVICE } from '@jovandyaz/auth-nestjs';
+import { AuthEmailService } from '@jovandyaz/email-nestjs';
 import { Controller, Get, Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { JwtService } from '@nestjs/jwt';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import { Throttle } from '@nestjs/throttler';
+import { I18nService } from 'nestjs-i18n';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
+import { DATABASE_CONNECTION } from '../../database';
 import { ThrottlingModule } from './throttling.module';
 
-const ACCESS_TOKEN_SECRET = 'a'.repeat(32) + '-access-secret';
+const ACCESS_TOKEN_SECRET = new ConfigService().getOrThrow('JWT_SECRET');
 const USER_A = '00000000-0000-4000-8000-0000000000a1';
 const USER_B = '00000000-0000-4000-8000-0000000000b2';
 const TTL_MS = 60_000;
@@ -32,17 +37,24 @@ class ProbeController {
   }
 }
 
-// ConfigModule.forRoot makes ConfigService global in the real app; the
-// resolver inside ThrottlingModule cannot see a locally scoped one.
 @Global()
 @Module({
-  providers: [{ provide: ConfigService, useValue: configService }],
-  exports: [ConfigService],
+  providers: [
+    { provide: ConfigService, useValue: configService },
+    { provide: DATABASE_CONNECTION, useValue: {} },
+    { provide: AuthEmailService, useValue: {} },
+    { provide: I18nService, useValue: { translate: (key: string) => key } },
+  ],
+  exports: [ConfigService, DATABASE_CONNECTION, AuthEmailService, I18nService],
 })
-class StubConfigModule {}
+class StubInfrastructureModule {}
 
 @Module({
-  imports: [StubConfigModule, ThrottlingModule],
+  imports: [
+    StubInfrastructureModule,
+    EventEmitterModule.forRoot(),
+    ThrottlingModule,
+  ],
   controllers: [ProbeController],
 })
 class ProbeModule {}
@@ -89,7 +101,10 @@ describe('ThrottlingModule', () => {
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
       imports: [ProbeModule],
-    }).compile();
+    })
+      .overrideProvider(TOKEN_SERVICE)
+      .useValue({})
+      .compile();
     app = moduleRef.createNestApplication<NestExpressApplication>();
     app.set('trust proxy', 1);
     await app.listen(0);
