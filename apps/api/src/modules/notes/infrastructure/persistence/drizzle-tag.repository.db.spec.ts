@@ -217,6 +217,69 @@ describe.runIf(DB_AVAILABLE)('DrizzleTagRepository', () => {
     ]);
   });
 
+  it('should report the path a rename would claim from another branch', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('job')
+    );
+
+    expect(collision).toBe('job');
+  });
+
+  it('should not read the branch being renamed as its own collision', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    // The target lands inside the branch being moved, so the only rows it
+    // overlaps are rows the rename itself rewrites.
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('work/alpha')
+    );
+
+    expect(collision).toBeNull();
+  });
+
+  it('should not treat a same-prefixed sibling as a collision', async () => {
+    await repo.ensurePaths(ownerId, [path('work'), path('workshop')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    const collision = await repo.findPathCollision(
+      record as never,
+      path('works')
+    );
+
+    expect(collision).toBeNull();
+  });
+
+  it('should round-trip a palette colour and drop one outside the palette', async () => {
+    const [tagId] = await repo.ensurePaths(ownerId, [path('work')]);
+
+    await repo.recolor(tagId as string, 'green');
+    const colored = await repo.findById(tagId as string);
+
+    await db
+      .update(tags)
+      .set({ color: '#f5f5f5' })
+      .where(eq(tags.id, tagId as string));
+    const legacy = await repo.findById(tagId as string);
+
+    expect(colored?.color).toBe('green');
+    expect(legacy?.color).toBeNull();
+  });
+
   it('should keep the note when its tag branch is deleted', async () => {
     const [alpha] = await repo.ensurePaths(ownerId, [path('work/alpha')]);
     await repo.replaceNoteTags(NOTE_A, [alpha as string]);

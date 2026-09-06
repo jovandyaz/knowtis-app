@@ -1,6 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
+import type { TagColor } from '@knowtis/shared-types';
+
 import {
   NoteErrors,
   TAG_REPOSITORY,
@@ -13,7 +15,7 @@ export interface UpdateTagInput {
   readonly tagId: string;
   readonly userId: string;
   readonly path?: string;
-  readonly color?: string | null;
+  readonly color?: TagColor | null;
 }
 
 @Injectable()
@@ -36,7 +38,19 @@ export class UpdateTagHandler {
       if (pathResult.isErr()) {
         return err(pathResult.error);
       }
-      await this.tagRepository.renameBranch(tag, pathResult.value);
+
+      if (pathResult.value.value !== tag.path) {
+        // The owner/path unique index would surface a collision as a 500, and a
+        // rename that merged two branches would be silent data loss either way.
+        const collision = await this.tagRepository.findPathCollision(
+          tag,
+          pathResult.value
+        );
+        if (collision) {
+          return err(NoteErrors.tagConflict(collision));
+        }
+        await this.tagRepository.renameBranch(tag, pathResult.value);
+      }
     }
 
     if (input.color !== undefined) {

@@ -14,6 +14,7 @@ export const NOTE_ERROR_STATUS_MAP: Record<string, HttpStatus> = {
   [NoteErrorCodes.INVALID_SUPERTAG]: HttpStatus.BAD_REQUEST,
   [NoteErrorCodes.NOTE_NOT_FOUND]: HttpStatus.NOT_FOUND,
   [NoteErrorCodes.TAG_NOT_FOUND]: HttpStatus.NOT_FOUND,
+  [NoteErrorCodes.TAG_CONFLICT]: HttpStatus.CONFLICT,
   [NoteErrorCodes.PERMISSION_DENIED]: HttpStatus.FORBIDDEN,
   [NoteErrorCodes.EMAIL_NOT_VERIFIED]: HttpStatus.FORBIDDEN,
   [NoteErrorCodes.SHARE_TOKEN_NOT_FOUND]: HttpStatus.NOT_FOUND,

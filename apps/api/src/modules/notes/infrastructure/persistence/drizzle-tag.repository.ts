@@ -1,8 +1,8 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, inArray, like, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, ne, notLike, or, sql } from 'drizzle-orm';
 
-import type { TagNode } from '@knowtis/shared-types';
+import { isTagColor, type TagColor, type TagNode } from '@knowtis/shared-types';
 
 import {
   DATABASE_CONNECTION,
@@ -41,7 +41,7 @@ export class DrizzleTagRepository implements TagRepository {
         )
     )`.mapWith(Number);
 
-    return this.db
+    const rows = await this.db
       .select({
         id: tags.id,
         path: tags.path,
@@ -51,6 +51,8 @@ export class DrizzleTagRepository implements TagRepository {
       .from(tags)
       .where(eq(tags.ownerId, userId.value))
       .orderBy(tags.path);
+
+    return rows.map((row) => ({ ...row, color: toTagColor(row.color) }));
   }
 
   async findById(tagId: string): Promise<TagRecord | null> {
@@ -65,7 +67,7 @@ export class DrizzleTagRepository implements TagRepository {
       .where(eq(tags.id, tagId))
       .limit(1);
 
-    return row ?? null;
+    return row ? { ...row, color: toTagColor(row.color) } : null;
   }
 
   async ensurePaths(userId: UserId, paths: TagPath[]): Promise<string[]> {
@@ -126,6 +128,29 @@ export class DrizzleTagRepository implements TagRepository {
     return byNote;
   }
 
+  async findPathCollision(
+    tag: TagRecord,
+    nextPath: TagPath
+  ): Promise<string | null> {
+    const withinTarget = or(
+      eq(tags.path, nextPath.value),
+      like(tags.path, `${escapeLike(nextPath.value)}/%`)
+    );
+    const outsideSource = and(
+      ne(tags.id, tag.id),
+      notLike(tags.path, `${escapeLike(tag.path)}/%`)
+    );
+
+    const [row] = await this.db
+      .select({ path: tags.path })
+      .from(tags)
+      .where(and(eq(tags.ownerId, tag.ownerId), withinTarget, outsideSource))
+      .orderBy(tags.path)
+      .limit(1);
+
+    return row?.path ?? null;
+  }
+
   async renameBranch(tag: TagRecord, nextPath: TagPath): Promise<void> {
     const descendantSuffixStart = tag.path.length + 1;
 
@@ -152,7 +177,7 @@ export class DrizzleTagRepository implements TagRepository {
     });
   }
 
-  async recolor(tagId: string, color: string | null): Promise<void> {
+  async recolor(tagId: string, color: TagColor | null): Promise<void> {
     await this.db
       .update(tags)
       .set({ color, updatedAt: new Date() })
@@ -169,4 +194,8 @@ export class DrizzleTagRepository implements TagRepository {
         )
       );
   }
+}
+
+function toTagColor(value: string | null): TagColor | null {
+  return isTagColor(value) ? value : null;
 }

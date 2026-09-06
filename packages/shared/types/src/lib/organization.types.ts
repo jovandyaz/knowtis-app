@@ -29,18 +29,38 @@ export const TAG_MAX_DEPTH = 4;
 export const TAG_SEGMENT_MAX_LENGTH = 32;
 export const TAG_PATH_MAX_LENGTH = 120;
 export const TAG_SEGMENT_PATTERN = /^[a-z0-9-]+$/;
-export const TAG_COLOR_MAX_LENGTH = 32;
 export const TAG_MAX_PER_NOTE = 20;
 
-/** A tag's depth-1 root, which is the only level that carries a colour. */
-export function tagRootOf(path: string): string {
-  return path.split(TAG_PATH_SEPARATOR)[0] ?? path;
+/**
+ * Tag colours are token names, not CSS values: the stored string indexes a
+ * design-system token so the same tag reads correctly in both themes.
+ */
+export const TAG_COLORS = [
+  'purple',
+  'blue',
+  'green',
+  'yellow',
+  'red',
+  'pink',
+] as const;
+export type TagColor = (typeof TAG_COLORS)[number];
+
+export function isTagColor(value: unknown): value is TagColor {
+  return (
+    typeof value === 'string' &&
+    (TAG_COLORS as readonly string[]).includes(value)
+  );
+}
+
+/** True when `path` is the branch itself or one of its descendants. */
+export function isWithinBranch(path: string, branch: string): boolean {
+  return path === branch || path.startsWith(`${branch}${TAG_PATH_SEPARATOR}`);
 }
 
 export interface TagNode {
   id: string;
   path: string;
-  color: string | null;
+  color: TagColor | null;
   noteCount: number;
 }
 
