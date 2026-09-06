@@ -36,8 +36,3 @@ export function buildTagTree(nodes: TagNode[]): TagTreeItem[] {
 
   return roots;
 }
-
-/** True when `path` is the branch itself or one of its descendants. */
-export function isWithinBranch(path: string, branch: string): boolean {
-  return path === branch || path.startsWith(`${branch}${TAG_PATH_SEPARATOR}`);
-}

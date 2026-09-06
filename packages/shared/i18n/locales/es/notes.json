@@ -53,7 +53,25 @@
       "delete": "Eliminar",
       "deleteConfirm": "¿Eliminar #{{path}} y todo lo anidado debajo? Tus notas se quedan.",
       "emptyTitle": "Nada etiquetado #{{tag}}",
-      "emptyDescription": "Escribe # en una nota, o etiquétala desde su fila de propiedades, para verla aquí."
+      "emptyDescription": "Escribe # en una nota, o etiquétala desde su fila de propiedades, para verla aquí.",
+      "actionsLabel": "Acciones de #{{tag}}",
+      "renameLabel": "Nuevo nombre para {{tag}}",
+      "renameError": "No se pudo renombrar la etiqueta",
+      "invalidSegment": "Usa minúsculas, dígitos y guiones, hasta {{length}} caracteres",
+      "conflict": "Ya hay una etiqueta llamada {{segment}} aquí",
+      "color": "Color",
+      "noColor": "Sin color",
+      "colors": {
+        "purple": "Morado",
+        "blue": "Azul",
+        "green": "Verde",
+        "yellow": "Amarillo",
+        "red": "Rojo",
+        "pink": "Rosa"
+      },
+      "deleteTitle": "Eliminar etiqueta",
+      "deleteError": "No se pudo eliminar la etiqueta",
+      "colorError": "No se pudo cambiar el color de la etiqueta"
     },
     "typesTitle": "Tipos",
     "supertags": {

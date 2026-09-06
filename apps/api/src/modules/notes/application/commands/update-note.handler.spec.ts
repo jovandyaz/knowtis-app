@@ -94,6 +94,7 @@ describe('UpdateNoteHandler', () => {
       ensurePaths: vi.fn().mockResolvedValue([]),
       replaceNoteTags: vi.fn(),
       findPathsByNotes: vi.fn(),
+      findPathCollision: vi.fn(),
       renameBranch: vi.fn(),
       recolor: vi.fn(),
       deleteBranch: vi.fn(),

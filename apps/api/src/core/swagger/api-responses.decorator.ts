@@ -39,6 +39,15 @@ export const ApiNotFound = (reason: string) =>
   });
 
 /**
+ * Common 409 Conflict response decorator with a customizable reason.
+ */
+export const ApiConflict = (reason: string) =>
+  ApiResponse({
+    status: 409,
+    description: `Conflict — ${reason}`,
+  });
+
+/**
  * Combines 401 + 403 responses for protected endpoints.
  */
 export const ApiAuthErrors = (forbiddenReason: string) =>

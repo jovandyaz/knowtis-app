@@ -1,14 +1,16 @@
 import type { UserId } from '@jovandyaz/auth/server';
+import type { Result } from 'neverthrow';
 
-import type { TagNode } from '@knowtis/shared-types';
+import type { TagColor, TagNode } from '@knowtis/shared-types';
 
+import type { NoteDomainError } from '../errors';
 import type { TagPath } from '../value-objects/tag-path.vo';
 
 export interface TagRecord {
   readonly id: string;
   readonly ownerId: string;
   readonly path: string;
-  readonly color: string | null;
+  readonly color: TagColor | null;
 }
 
 export interface TagRepository {
@@ -19,9 +21,20 @@ export interface TagRepository {
   ensurePaths(ownerId: UserId, paths: TagPath[]): Promise<string[]>;
   replaceNoteTags(noteId: string, tagIds: string[]): Promise<void>;
   findPathsByNotes(noteIds: string[]): Promise<Map<string, string[]>>;
-  /** Rewrites the branch's paths by prefix; `note_tags` rows are untouched. */
-  renameBranch(tag: TagRecord, nextPath: TagPath): Promise<void>;
-  recolor(tagId: string, color: string | null): Promise<void>;
+  /**
+   * The first path the owner already holds that a rename onto `nextPath` would
+   * claim, ignoring the branch being renamed. Null when the rename is free.
+   */
+  findPathCollision(tag: TagRecord, nextPath: TagPath): Promise<string | null>;
+  /**
+   * Rewrites the branch's paths by prefix; `note_tags` rows are untouched.
+   * Errors when a concurrent writer claimed the path between the check and here.
+   */
+  renameBranch(
+    tag: TagRecord,
+    nextPath: TagPath
+  ): Promise<Result<void, NoteDomainError>>;
+  recolor(tagId: string, color: TagColor | null): Promise<void>;
   deleteBranch(tag: TagRecord): Promise<void>;
 }
 
