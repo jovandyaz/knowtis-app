@@ -5,6 +5,7 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthModuleOptions } from '../../auth.module';
 import { JWT_AUDIENCE_ACCESS, JWT_ISSUER } from '../../constants';
+import type { OauthPublicKey } from '../../oauth-public-key';
 import type { SessionRepository } from '../../ports/session.repository';
 import type { UserEntity, UserRepository } from '../../ports/user.repository';
 import { JwtStrategy } from '../jwt.strategy';
@@ -34,7 +35,7 @@ interface AuthOutcome {
 }
 
 function buildStrategy(
-  additionalPublicKeys: string[],
+  additionalPublicKeys: OauthPublicKey[],
   sessionRepository?: SessionRepository
 ): JwtStrategy {
   const userRepository = {
@@ -134,7 +135,7 @@ describe('JwtStrategy', () => {
   });
 
   it('should validate ES256 tokens against additionalPublicKeys', async () => {
-    const strategy = buildStrategy([es256Pem]);
+    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
 
     const outcome = await runStrategy(strategy, es256Token);
 
@@ -143,7 +144,7 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject ES256 tokens from unknown keys', async () => {
-    const strategy = buildStrategy([es256Pem]);
+    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
 
     const outcome = await runStrategy(strategy, unknownKeyToken);
 
@@ -159,7 +160,7 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject HS256 tokens signed with the ES256 public key as HMAC secret', async () => {
-    const strategy = buildStrategy([es256Pem]);
+    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
     const confusedToken = await signHs256(es256Pem);
 
     const outcome = await runStrategy(strategy, confusedToken);
@@ -168,7 +169,7 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject unsigned tokens with alg none', async () => {
-    const strategy = buildStrategy([es256Pem]);
+    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
 
     const outcome = await runStrategy(strategy, unsignedToken());
 
@@ -176,7 +177,7 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject tokens with a malformed header segment', async () => {
-    const strategy = buildStrategy([es256Pem]);
+    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
 
     const outcome = await runStrategy(strategy, 'not-json-header.payload.sig');
 

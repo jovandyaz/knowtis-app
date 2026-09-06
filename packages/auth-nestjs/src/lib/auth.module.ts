@@ -30,6 +30,7 @@ import { ResetPasswordHandler } from './handlers/reset-password.handler';
 import { VerifyEmailCodeHandler } from './handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from './handlers/verify-email.handler';
 import { AuthAuditListener } from './logging/auth-audit.listener';
+import type { OauthPublicKey } from './oauth-public-key';
 import { TokenHasher } from './services/token-hasher.service';
 import { VerificationEmailIssuer } from './services/verification-email-issuer.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -40,8 +41,8 @@ export interface TokenConfig {
   readonly refreshTokenSecret: string;
   readonly accessTokenExpiresIn?: JwtSignOptions['expiresIn'];
   readonly refreshTokenExpiresIn?: string;
-  /** PEM-encoded public keys for asymmetric (ES256) verification. Empty = HS256-only. */
-  readonly additionalPublicKeys?: string[];
+  /** Public keys for asymmetric (ES256) verification. Empty = HS256-only. */
+  readonly additionalPublicKeys?: readonly OauthPublicKey[];
 }
 
 type InjectableClass = Type<any>;

@@ -1,6 +1,7 @@
 // Module
 export { AuthNestjsModule } from './lib/auth.module';
 export type { AuthModuleOptions, TokenConfig } from './lib/auth.module';
+export type { OauthPublicKey } from './lib/oauth-public-key';
 
 // Guards
 export { JwtAuthGuard } from './lib/guards/jwt-auth.guard';

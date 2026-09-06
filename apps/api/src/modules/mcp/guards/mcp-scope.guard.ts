@@ -1,3 +1,4 @@
+import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
 import {
   CanActivate,
   ExecutionContext,
@@ -16,7 +17,7 @@ import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp-token';
 @Injectable()
 export class McpScopeGuard implements CanActivate {
   private readonly jwtSecret: string;
-  private readonly es256PublicKeys: readonly string[];
+  private readonly es256PublicKeys: readonly OauthPublicKey[];
   private readonly resourceAudience: string | undefined;
 
   constructor(
@@ -110,7 +111,7 @@ export class McpScopeGuard implements CanActivate {
   private async verifyEs256(
     token: string
   ): Promise<(McpTokenClaims & { aud?: string | string[] }) | null> {
-    for (const publicKey of this.es256PublicKeys) {
+    for (const { publicKey } of this.es256PublicKeys) {
       try {
         return await this.jwtService.verifyAsync<
           McpTokenClaims & { aud?: string | string[] }
