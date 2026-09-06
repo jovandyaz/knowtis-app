@@ -11,6 +11,7 @@ import {
   AUTH_MODULE_OPTIONS,
   EMAIL_SERVICE,
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
+  JWT_VERIFICATION_KEY_SELECTOR,
   PASSWORD_HASHER,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   SESSION_REPOSITORY,
@@ -29,11 +30,12 @@ import { ResendVerificationHandler } from './handlers/resend-verification.handle
 import { ResetPasswordHandler } from './handlers/reset-password.handler';
 import { VerifyEmailCodeHandler } from './handlers/verify-email-code.handler';
 import { VerifyEmailHandler } from './handlers/verify-email.handler';
+import { createJwtVerificationKeySelector } from './jwt-verification-key-selector';
 import { AuthAuditListener } from './logging/auth-audit.listener';
 import type { OauthPublicKey } from './oauth-public-key';
 import { TokenHasher } from './services/token-hasher.service';
 import { VerificationEmailIssuer } from './services/verification-email-issuer.service';
-import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtStrategy, OauthJwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
 export interface TokenConfig {
@@ -103,8 +105,16 @@ export class AuthNestjsModule {
         provide: TOKEN_HASHER,
         useValue: new TokenHasher(options.tokenHashKey),
       },
+      {
+        provide: JWT_VERIFICATION_KEY_SELECTOR,
+        useValue: createJwtVerificationKeySelector(
+          options.tokenConfig.accessTokenSecret,
+          options.tokenConfig.additionalPublicKeys ?? []
+        ),
+      },
       VerificationEmailIssuer,
       JwtStrategy,
+      OauthJwtStrategy,
       LocalStrategy,
       JwtAuthGuard,
       LocalAuthGuard,
@@ -151,6 +161,7 @@ export class AuthNestjsModule {
       providers,
       exports: [
         AUTH_MODULE_OPTIONS,
+        JWT_VERIFICATION_KEY_SELECTOR,
         USER_REPOSITORY,
         SESSION_REPOSITORY,
         TOKEN_SERVICE,

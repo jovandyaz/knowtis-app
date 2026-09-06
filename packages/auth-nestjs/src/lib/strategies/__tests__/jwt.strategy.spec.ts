@@ -1,14 +1,19 @@
 import { USER_ROLE } from '@jovandyaz/auth/server';
+import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { exportSPKI, generateKeyPair, SignJWT } from 'jose';
+import { Strategy as PassportJwtStrategy } from 'passport-jwt';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthModuleOptions } from '../../auth.module';
 import { JWT_AUDIENCE_ACCESS, JWT_ISSUER } from '../../constants';
+import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
+import { createJwtVerificationKeySelector } from '../../jwt-verification-key-selector';
+import type { JwtVerificationKeySelector } from '../../jwt-verification-key-selector';
 import type { OauthPublicKey } from '../../oauth-public-key';
 import type { SessionRepository } from '../../ports/session.repository';
 import type { UserEntity, UserRepository } from '../../ports/user.repository';
-import { JwtStrategy } from '../jwt.strategy';
+import { JwtStrategy, OauthJwtStrategy } from '../jwt.strategy';
 
 const ACCESS_SECRET = 'test-access-token-secret';
 const USER_ID = 'user-1';
@@ -34,10 +39,14 @@ interface AuthOutcome {
   error?: unknown;
 }
 
-function buildStrategy(
+function buildStrategies(
   additionalPublicKeys: OauthPublicKey[],
   sessionRepository?: SessionRepository
-): JwtStrategy {
+): {
+  hs256: JwtStrategy;
+  oauth: OauthJwtStrategy;
+  selectKey: JwtVerificationKeySelector;
+} {
   const userRepository = {
     findById: vi.fn().mockResolvedValue(USER),
   } as unknown as UserRepository;
@@ -48,19 +57,27 @@ function buildStrategy(
       hasLiveSessionForFamily: vi.fn().mockResolvedValue(true),
     } as unknown as SessionRepository);
 
-  const options = {
-    tokenConfig: {
-      accessTokenSecret: ACCESS_SECRET,
-      refreshTokenSecret: 'test-refresh-secret',
-      additionalPublicKeys,
-    },
-  } as unknown as AuthModuleOptions;
+  const selectKey = vi.fn(
+    createJwtVerificationKeySelector(ACCESS_SECRET, additionalPublicKeys)
+  );
 
-  return new JwtStrategy(options, userRepository, resolvedSessionRepository);
+  return {
+    hs256: new JwtStrategy(
+      selectKey,
+      userRepository,
+      resolvedSessionRepository
+    ),
+    oauth: new OauthJwtStrategy(
+      selectKey,
+      userRepository,
+      resolvedSessionRepository
+    ),
+    selectKey,
+  };
 }
 
 function runStrategy(
-  strategy: JwtStrategy,
+  strategy: JwtStrategy | OauthJwtStrategy,
   token: string
 ): Promise<AuthOutcome> {
   return new Promise((resolve) => {
@@ -98,34 +115,69 @@ function unsignedToken(): string {
   return `${encode({ alg: 'none', typ: 'JWT' })}.${encode({ sub: USER_ID, exp })}.`;
 }
 
+function signOauth(privateKey: CryptoKey, kid: string | null): Promise<string> {
+  return new SignJWT({
+    email: USER.email,
+    source: 'mcp',
+    scopes: 'notes:read,notes:write',
+  })
+    .setProtectedHeader(kid === null ? { alg: 'ES256' } : { alg: 'ES256', kid })
+    .setSubject(USER_ID)
+    .setExpirationTime('15m')
+    .sign(privateKey);
+}
+
+function contextForToken(token: string): {
+  context: ExecutionContext;
+  request: { headers: { authorization: string }; user?: unknown };
+} {
+  const request = {
+    headers: { authorization: `Bearer ${token}` },
+  };
+  const context = {
+    getHandler: () => vi.fn(),
+    getClass: () => vi.fn(),
+    switchToHttp: () => ({
+      getRequest: () => request,
+      getResponse: () => ({}),
+      getNext: () => vi.fn(),
+    }),
+    getType: () => 'http',
+    getArgs: () => [],
+    getArgByIndex: () => ({}),
+    switchToRpc: () => ({}),
+    switchToWs: () => ({}),
+  } as unknown as ExecutionContext;
+  return { context, request };
+}
+
+const passportJwtVerifier = PassportJwtStrategy as unknown as {
+  JwtVerifier: (
+    token: string,
+    secretOrKey: string | Buffer,
+    options: Record<string, unknown>,
+    callback: (error: Error | null, payload?: unknown) => void
+  ) => void;
+};
+
 describe('JwtStrategy', () => {
-  let es256Pem: string;
-  let es256Token: string;
+  let currentPrivateKey: CryptoKey;
+  let retiringPem: string;
+  let currentPem: string;
   let unknownKeyToken: string;
 
   beforeAll(async () => {
-    const asKeyPair = await generateKeyPair('ES256', { extractable: true });
-    es256Pem = await exportSPKI(asKeyPair.publicKey);
-    es256Token = await new SignJWT({
-      email: USER.email,
-      source: 'mcp',
-      scopes: 'notes:read,notes:write',
-    })
-      .setProtectedHeader({ alg: 'ES256' })
-      .setSubject(USER_ID)
-      .setExpirationTime('15m')
-      .sign(asKeyPair.privateKey);
-
-    const otherKeyPair = await generateKeyPair('ES256', { extractable: true });
-    unknownKeyToken = await new SignJWT({ email: USER.email, source: 'mcp' })
-      .setProtectedHeader({ alg: 'ES256' })
-      .setSubject(USER_ID)
-      .setExpirationTime('15m')
-      .sign(otherKeyPair.privateKey);
+    const retiring = await generateKeyPair('ES256', { extractable: true });
+    const current = await generateKeyPair('ES256', { extractable: true });
+    const unknown = await generateKeyPair('ES256', { extractable: true });
+    currentPrivateKey = current.privateKey;
+    retiringPem = await exportSPKI(retiring.publicKey);
+    currentPem = await exportSPKI(current.publicKey);
+    unknownKeyToken = await signOauth(unknown.privateKey, 'current');
   });
 
   it('should validate HS256 session tokens (existing behavior)', async () => {
-    const strategy = buildStrategy([]);
+    const strategy = buildStrategies([]).hs256;
     const token = await signHs256();
 
     const outcome = await runStrategy(strategy, token);
@@ -134,17 +186,64 @@ describe('JwtStrategy', () => {
     expect(outcome.user).toMatchObject({ id: USER_ID, email: USER.email });
   });
 
-  it('should validate ES256 tokens against additionalPublicKeys', async () => {
-    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
+  it('validates an ES256 token selected by kid', async () => {
+    const strategy = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]).oauth;
 
-    const outcome = await runStrategy(strategy, es256Token);
+    const outcome = await runStrategy(
+      strategy,
+      await signOauth(currentPrivateKey, 'current')
+    );
 
     expect(outcome.type).toBe('success');
     expect(outcome.user).toMatchObject({ id: USER_ID, email: USER.email });
   });
 
-  it('should reject ES256 tokens from unknown keys', async () => {
-    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
+  it('validates an ES256 token signed by the second selected kid', async () => {
+    const strategies = buildStrategies([
+      { kid: 'retiring', publicKey: retiringPem },
+      { kid: 'current', publicKey: currentPem },
+    ]);
+
+    const outcome = await runStrategy(
+      strategies.oauth,
+      await signOauth(currentPrivateKey, 'current')
+    );
+
+    expect(outcome.type).toBe('success');
+    expect(outcome.user).toMatchObject({ id: USER_ID, email: USER.email });
+  });
+
+  it('rejects an unknown explicit kid even when another configured key signed it', async () => {
+    const outcome = await runStrategy(
+      buildStrategies([{ kid: 'current', publicKey: currentPem }]).oauth,
+      await signOauth(currentPrivateKey, 'unknown')
+    );
+
+    expect(outcome.type).toBe('fail');
+  });
+
+  it.each([
+    ['one configured key', 1],
+    ['two configured keys', 2],
+  ])('rejects a missing kid with %s', async (_name, keyCount) => {
+    const configured = [
+      { kid: 'current', publicKey: currentPem },
+      { kid: 'retiring', publicKey: retiringPem },
+    ].slice(0, keyCount);
+    const outcome = await runStrategy(
+      buildStrategies(configured).oauth,
+      await signOauth(currentPrivateKey, null)
+    );
+
+    expect(outcome.type).toBe('fail');
+  });
+
+  it('should reject ES256 tokens from unknown signing keys', async () => {
+    const strategy = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]).oauth;
 
     const outcome = await runStrategy(strategy, unknownKeyToken);
 
@@ -152,16 +251,21 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject ES256 tokens when no public keys are configured', async () => {
-    const strategy = buildStrategy([]);
+    const strategy = buildStrategies([]).oauth;
 
-    const outcome = await runStrategy(strategy, es256Token);
+    const outcome = await runStrategy(
+      strategy,
+      await signOauth(currentPrivateKey, 'current')
+    );
 
     expect(outcome.type).toBe('fail');
   });
 
   it('should reject HS256 tokens signed with the ES256 public key as HMAC secret', async () => {
-    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
-    const confusedToken = await signHs256(es256Pem);
+    const strategy = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]).hs256;
+    const confusedToken = await signHs256(currentPem);
 
     const outcome = await runStrategy(strategy, confusedToken);
 
@@ -169,7 +273,9 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject unsigned tokens with alg none', async () => {
-    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
+    const strategy = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]).oauth;
 
     const outcome = await runStrategy(strategy, unsignedToken());
 
@@ -177,24 +283,95 @@ describe('JwtStrategy', () => {
   });
 
   it('should reject tokens with a malformed header segment', async () => {
-    const strategy = buildStrategy([{ kid: 'test-key', publicKey: es256Pem }]);
+    const strategy = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]).oauth;
 
     const outcome = await runStrategy(strategy, 'not-json-header.payload.sig');
 
     expect(outcome.type).toBe('fail');
+  });
+
+  it('pins the Passport verification strategies to singleton algorithms', () => {
+    const { hs256, oauth } = buildStrategies([]);
+
+    expect(
+      (hs256 as unknown as { _verifOpts: { algorithms: string[] } })._verifOpts
+        .algorithms
+    ).toEqual(['HS256']);
+    expect(
+      (oauth as unknown as { _verifOpts: { algorithms: string[] } })._verifOpts
+        .algorithms
+    ).toEqual(['ES256']);
+  });
+
+  it('performs exactly one cryptographic verification in the selected strategy', async () => {
+    const verify = vi.spyOn(passportJwtVerifier, 'JwtVerifier');
+    try {
+      const outcome = await runStrategy(
+        buildStrategies([{ kid: 'current', publicKey: currentPem }]).oauth,
+        await signOauth(currentPrivateKey, 'current')
+      );
+
+      expect(outcome.type).toBe('success');
+      expect(verify).toHaveBeenCalledOnce();
+    } finally {
+      verify.mockRestore();
+    }
+  });
+
+  it('falls through from jwt-hs256 to jwt-es256 for an OAuth token', async () => {
+    const { selectKey } = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]);
+    const reflector = new Reflector();
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const { context, request } = contextForToken(
+      await signOauth(currentPrivateKey, 'current')
+    );
+
+    await expect(
+      new JwtAuthGuard(reflector).canActivate(context)
+    ).resolves.toBe(true);
+    expect(request.user).toMatchObject({ id: USER_ID, email: USER.email });
+    expect(selectKey).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns Unauthorized when both Passport strategies reject the token', async () => {
+    buildStrategies([]);
+    const reflector = new Reflector();
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const { context } = contextForToken('not-json.payload.signature');
+
+    const activation = new JwtAuthGuard(reflector).canActivate(context);
+    expect(activation).toBeInstanceOf(Promise);
+    const error: unknown = await (activation as Promise<boolean>).catch(
+      (reason: unknown) => reason
+    );
+
+    expect(error).toBeInstanceOf(UnauthorizedException);
+    expect((error as UnauthorizedException).getStatus()).toBe(401);
+  });
+
+  it('stops the Passport chain when session payload validation fails', async () => {
+    const sessions = {
+      hasLiveSessionForFamily: vi.fn().mockResolvedValue(false),
+    } as unknown as SessionRepository;
+    const { selectKey } = buildStrategies([], sessions);
+    const reflector = new Reflector();
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const { context } = contextForToken(await signHs256());
+
+    await expect(
+      new JwtAuthGuard(reflector).canActivate(context)
+    ).rejects.toThrow('Session revoked');
+    expect(selectKey).toHaveBeenCalledOnce();
   });
 });
 
 describe('JwtStrategy.validate', () => {
   const SESSION_USER_ID = '11111111-1111-1111-1111-111111111111';
   const VERIFIED_AT = new Date('2026-08-01T10:00:00.000Z');
-
-  const options = {
-    tokenConfig: {
-      accessTokenSecret: 'a'.repeat(48),
-      refreshTokenSecret: 'b'.repeat(48),
-    },
-  } as AuthModuleOptions;
 
   const sessionUser = {
     id: SESSION_USER_ID,
@@ -225,7 +402,11 @@ describe('JwtStrategy.validate', () => {
     sessionRepository = {
       hasLiveSessionForFamily: vi.fn().mockResolvedValue(true),
     } as unknown as SessionRepository;
-    strategy = new JwtStrategy(options, userRepository, sessionRepository);
+    strategy = new JwtStrategy(
+      createJwtVerificationKeySelector('a'.repeat(48), []),
+      userRepository,
+      sessionRepository
+    );
   });
 
   it('should accept a session token whose family is live', async () => {

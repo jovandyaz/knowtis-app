@@ -11,6 +11,9 @@ export const PASSWORD_RESET_TOKEN_REPOSITORY = Symbol(
   'PASSWORD_RESET_TOKEN_REPOSITORY'
 );
 export const AUTH_MODULE_OPTIONS = Symbol('AUTH_MODULE_OPTIONS');
+export const JWT_VERIFICATION_KEY_SELECTOR = Symbol(
+  'JWT_VERIFICATION_KEY_SELECTOR'
+);
 
 export const JWT_ISSUER = 'knowtis-api';
 export const JWT_AUDIENCE_ACCESS = 'knowtis:access';

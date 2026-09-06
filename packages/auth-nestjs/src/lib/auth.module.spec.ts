@@ -1,7 +1,8 @@
 import { createHmac } from 'node:crypto';
 
 import { AuthNestjsModule } from './auth.module';
-import { TOKEN_HASHER } from './constants';
+import { JWT_VERIFICATION_KEY_SELECTOR, TOKEN_HASHER } from './constants';
+import type { JwtVerificationKeySelector } from './jwt-verification-key-selector';
 import { TokenHasher } from './services/token-hasher.service';
 
 const TEST_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
@@ -75,6 +76,42 @@ describe('AuthNestjsModule', () => {
         .digest('hex')
     );
     expect(dynamicModule.exports).toContain(TOKEN_HASHER);
+  });
+
+  it('provides and exports exactly one selector built from token config', () => {
+    const dynamicModule = AuthNestjsModule.register({
+      tokenConfig: {
+        accessTokenSecret: 'test-access-secret',
+        refreshTokenSecret: 'test-refresh-secret',
+        additionalPublicKeys: [
+          { kid: 'current', publicKey: 'current-public-key' },
+        ],
+      },
+      tokenHashKey: TEST_KEY,
+      userRepository: MockUserRepository,
+      sessionRepository: MockSessionRepository,
+      tokenService: MockTokenService,
+      passwordHasher: MockPasswordHasher,
+    });
+    const selectorProviders = (dynamicModule.providers ?? []).filter(
+      (provider) =>
+        typeof provider === 'object' &&
+        'provide' in provider &&
+        provider.provide === JWT_VERIFICATION_KEY_SELECTOR
+    );
+
+    expect(selectorProviders).toHaveLength(1);
+    const select = (
+      selectorProviders[0] as { useValue: JwtVerificationKeySelector }
+    ).useValue;
+    const header = Buffer.from(
+      JSON.stringify({ alg: 'ES256', kid: 'current' })
+    ).toString('base64url');
+    expect(select(`${header}.payload.signature`)).toEqual({
+      algorithm: 'ES256',
+      publicKey: 'current-public-key',
+    });
+    expect(dynamicModule.exports).toContain(JWT_VERIFICATION_KEY_SELECTOR);
   });
 
   it('refuses to register with a malformed token hash key', () => {
