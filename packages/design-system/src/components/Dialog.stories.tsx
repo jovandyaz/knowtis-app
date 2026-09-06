@@ -32,7 +32,7 @@ function DefaultDialogExample() {
         Open Dialog
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogHeader>
             <DialogTitle>Dialog Title</DialogTitle>
             <DialogDescription>
@@ -66,7 +66,7 @@ function WithFormExample() {
     <>
       <Button onClick={() => setOpen(true)}>Edit Profile</Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogHeader>
             <DialogTitle>Edit Profile</DialogTitle>
             <DialogDescription>
@@ -112,7 +112,7 @@ function ControlledDialogExample() {
         Delete Item
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent closeLabel="Close dialog">
           <DialogHeader>
             <DialogTitle>Are you sure?</DialogTitle>
             <DialogDescription>
@@ -147,7 +147,7 @@ function FullscreenDialogExample() {
         Open fullscreen
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent side={DIALOG_SIDE.FULL}>
+        <DialogContent side={DIALOG_SIDE.FULL} closeLabel="Close dialog">
           <div className="border-b border-(--border) px-4 py-3">
             <DialogTitle className="text-sm">Diagram</DialogTitle>
           </div>

@@ -113,7 +113,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
   if (revealedKey) {
     return (
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent>
+        <DialogContent closeLabel={t('labels.closeDialog')}>
           <DialogHeader>
             <DialogTitle>{t('integrations.keyCreated')}</DialogTitle>
           </DialogHeader>
@@ -152,7 +152,7 @@ export function CreateKeyDialog({ open, onOpenChange }: CreateKeyDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent>
+      <DialogContent closeLabel={t('labels.closeDialog')}>
         <DialogHeader>
           <DialogTitle>{t('integrations.createKey')}</DialogTitle>
         </DialogHeader>

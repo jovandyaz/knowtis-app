@@ -170,19 +170,18 @@ function DialogOverlay({
   );
 }
 
-const DEFAULT_CLOSE_LABEL = 'Close dialog';
-
 interface DialogContentProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
   side?: DialogSide;
-  closeLabel?: string;
+  /** Accessible name of the close control; the caller owns its translation. */
+  closeLabel: string;
 }
 
 function DialogContent({
   className,
   children,
   side = DIALOG_SIDE.CENTER,
-  closeLabel = DEFAULT_CLOSE_LABEL,
+  closeLabel,
   ...props
 }: DialogContentProps) {
   const {

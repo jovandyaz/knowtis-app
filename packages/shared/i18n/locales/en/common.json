@@ -27,7 +27,8 @@
     "resizeSidebar": "Resize sidebar",
     "copilot": "Copilot",
     "explore": "Explore",
-    "close": "Close"
+    "close": "Close",
+    "closeDialog": "Close dialog"
   },
   "states": {
     "loading": "Loading...",

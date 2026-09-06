@@ -14,7 +14,7 @@ interface AIMenuPopoverProps {
 }
 
 export function AIMenuPopover({ editor }: AIMenuPopoverProps) {
-  const { t } = useTranslation('notes');
+  const { t } = useTranslation(['notes', 'common']);
   const isOpen = useAIMenuStore((state) => state.isOpen);
   const close = useAIMenuStore((state) => state.close);
 
@@ -35,7 +35,10 @@ export function AIMenuPopover({ editor }: AIMenuPopoverProps) {
         }
       }}
     >
-      <DialogContent className="gap-2 p-3 md:max-w-md">
+      <DialogContent
+        className="gap-2 p-3 md:max-w-md"
+        closeLabel={t('common:labels.closeDialog')}
+      >
         <DialogTitle className="flex items-center gap-2 px-2.5 pt-0.5 text-sm font-medium">
           <Sparkles className="h-4 w-4 text-primary" />
           {t('ai.menu.title')}

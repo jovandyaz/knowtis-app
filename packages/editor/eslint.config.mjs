@@ -12,6 +12,8 @@ export default [
       '@nx/dependency-checks': [
         'error',
         {
+          // source-only library: no build target, so the rule's default gate never opens
+          buildTargets: ['typecheck'],
           ignoredFiles: [
             '{projectRoot}/eslint.config.{js,cjs,mjs,ts,cts,mts}',
             '{projectRoot}/vite.config.{js,ts,mjs,mts}',

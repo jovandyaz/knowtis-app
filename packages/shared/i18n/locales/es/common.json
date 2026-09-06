@@ -27,7 +27,8 @@
     "resizeSidebar": "Redimensionar barra lateral",
     "copilot": "Copilot",
     "explore": "Explorar",
-    "close": "Cerrar"
+    "close": "Cerrar",
+    "closeDialog": "Cerrar diálogo"
   },
   "states": {
     "loading": "Cargando...",

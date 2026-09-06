@@ -147,7 +147,10 @@ export function ShareDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[520px] p-0 gap-0 overflow-hidden">
+      <DialogContent
+        className="max-w-[520px] p-0 gap-0 overflow-hidden"
+        closeLabel={t('common:labels.closeDialog')}
+      >
         <DialogHeader className="px-6 pt-6 pb-4 space-y-1">
           <DialogTitle className="text-xl font-semibold">
             {t('share.title', { noteTitle })}

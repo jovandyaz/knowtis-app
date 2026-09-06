@@ -59,7 +59,7 @@ function DockBody() {
 }
 
 export function RightDock() {
-  const { t } = useTranslation('notes');
+  const { t } = useTranslation(['notes', 'common']);
   const isOpen = useRightDockStore((s) => s.isOpen);
   const close = useRightDockStore((s) => s.close);
   const isDesktop = useMediaQuery('(min-width: 768px)');
@@ -88,7 +88,10 @@ export function RightDock() {
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && close()}>
-      <DialogContent className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]">
+      <DialogContent
+        className="flex h-[90vh] max-w-full flex-col gap-0 overflow-hidden p-0 pb-[env(safe-area-inset-bottom)]"
+        closeLabel={t('common:labels.closeDialog')}
+      >
         <DialogHeader className="sr-only">
           <DialogTitle>{t('ai.copilot.tab')}</DialogTitle>
         </DialogHeader>

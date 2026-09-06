@@ -53,7 +53,7 @@ export function SharedArtifactSidebar({
   open,
   onToggle,
 }: SharedArtifactSidebarProps) {
-  const { t } = useTranslation('notes');
+  const { t } = useTranslation(['notes', 'common']);
   const isDesktop = useMediaQuery('(min-width: 768px)');
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | null>(
     null
@@ -119,7 +119,10 @@ export function SharedArtifactSidebar({
           }
         }}
       >
-        <DialogContent className="max-w-full">
+        <DialogContent
+          className="max-w-full"
+          closeLabel={t('common:labels.closeDialog')}
+        >
           <DialogHeader className="sr-only">
             <DialogTitle>{t('ai.artifacts.studyTools')}</DialogTitle>
           </DialogHeader>
@@ -140,7 +143,10 @@ export function SharedArtifactSidebar({
             }
           }}
         >
-          <DialogContent className="max-h-[80vh] max-w-2xl overflow-y-auto max-md:max-h-[95vh] max-md:min-h-[80vh]">
+          <DialogContent
+            className="max-h-[80vh] max-w-2xl overflow-y-auto max-md:max-h-[95vh] max-md:min-h-[80vh]"
+            closeLabel={t('common:labels.closeDialog')}
+          >
             <button
               type="button"
               onClick={() => setSelectedArtifact(null)}

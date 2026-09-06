@@ -159,7 +159,7 @@ function PromotedModelRow({
             Retire
           </Button>
           <Dialog open={confirmingRetire} onOpenChange={setConfirmingRetire}>
-            <DialogContent>
+            <DialogContent closeLabel="Close dialog">
               <DialogHeader>
                 <DialogTitle>Retire {label}?</DialogTitle>
                 <DialogDescription>

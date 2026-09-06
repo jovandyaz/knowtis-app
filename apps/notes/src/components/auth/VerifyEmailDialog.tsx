@@ -71,6 +71,7 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
  * half-typed code or a spent resend never survives into the next opening.
  */
 export function VerifyEmailDialog() {
+  const { t } = useTranslation('common');
   const isOpen = useVerifyEmailStore((s) => s.isOpen);
   const close = useVerifyEmailStore((s) => s.close);
 
@@ -83,7 +84,7 @@ export function VerifyEmailDialog() {
         }
       }}
     >
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" closeLabel={t('labels.closeDialog')}>
         <VerifyEmailDialogForm onVerified={close} />
       </DialogContent>
     </Dialog>
