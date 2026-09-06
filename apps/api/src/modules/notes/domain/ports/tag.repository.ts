@@ -1,7 +1,9 @@
 import type { UserId } from '@jovandyaz/auth/server';
+import type { Result } from 'neverthrow';
 
 import type { TagColor, TagNode } from '@knowtis/shared-types';
 
+import type { NoteDomainError } from '../errors';
 import type { TagPath } from '../value-objects/tag-path.vo';
 
 export interface TagRecord {
@@ -24,8 +26,14 @@ export interface TagRepository {
    * claim, ignoring the branch being renamed. Null when the rename is free.
    */
   findPathCollision(tag: TagRecord, nextPath: TagPath): Promise<string | null>;
-  /** Rewrites the branch's paths by prefix; `note_tags` rows are untouched. */
-  renameBranch(tag: TagRecord, nextPath: TagPath): Promise<void>;
+  /**
+   * Rewrites the branch's paths by prefix; `note_tags` rows are untouched.
+   * Errors when a concurrent writer claimed the path between the check and here.
+   */
+  renameBranch(
+    tag: TagRecord,
+    nextPath: TagPath
+  ): Promise<Result<void, NoteDomainError>>;
   recolor(tagId: string, color: TagColor | null): Promise<void>;
   deleteBranch(tag: TagRecord): Promise<void>;
 }

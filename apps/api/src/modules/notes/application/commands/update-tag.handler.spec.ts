@@ -1,3 +1,4 @@
+import { err, ok } from 'neverthrow';
 import { describe, expect, it, vi } from 'vitest';
 
 import { NoteErrorCodes } from '../../domain/errors/note.errors';
@@ -9,7 +10,7 @@ function buildRepo(overrides: Record<string, unknown> = {}) {
   return {
     findById: vi.fn().mockResolvedValue(TAG),
     findPathCollision: vi.fn().mockResolvedValue(null),
-    renameBranch: vi.fn().mockResolvedValue(undefined),
+    renameBranch: vi.fn().mockResolvedValue(ok(undefined)),
     recolor: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -45,6 +46,37 @@ describe('UpdateTagHandler', () => {
 
     expect(result._unsafeUnwrapErr().code).toBe(NoteErrorCodes.TAG_CONFLICT);
     expect(repo.renameBranch).not.toHaveBeenCalled();
+  });
+
+  it('should refuse to nest a branch inside itself', async () => {
+    const repo = buildRepo();
+
+    const result = await new UpdateTagHandler(repo as never).execute({
+      tagId: 't1',
+      userId: 'owner',
+      path: 'work/alpha',
+    });
+
+    expect(result._unsafeUnwrapErr().code).toBe(NoteErrorCodes.INVALID_TAG);
+    expect(repo.renameBranch).not.toHaveBeenCalled();
+  });
+
+  it('should surface a path claimed after the collision check as a conflict', async () => {
+    const repo = buildRepo({
+      renameBranch: vi
+        .fn()
+        .mockResolvedValue(
+          err({ code: NoteErrorCodes.TAG_CONFLICT, message: 'x' })
+        ),
+    });
+
+    const result = await new UpdateTagHandler(repo as never).execute({
+      tagId: 't1',
+      userId: 'owner',
+      path: 'job',
+    });
+
+    expect(result._unsafeUnwrapErr().code).toBe(NoteErrorCodes.TAG_CONFLICT);
   });
 
   it('should leave the branch untouched when the path is unchanged', async () => {

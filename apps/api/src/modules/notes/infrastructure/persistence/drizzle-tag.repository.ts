@@ -1,6 +1,7 @@
 import { UserId } from '@jovandyaz/auth/server';
 import { Inject, Injectable } from '@nestjs/common';
 import { and, eq, inArray, like, ne, notLike, or, sql } from 'drizzle-orm';
+import { err, ok, type Result } from 'neverthrow';
 
 import { isTagColor, type TagColor, type TagNode } from '@knowtis/shared-types';
 
@@ -10,10 +11,17 @@ import {
   notes,
   noteTags,
   tags,
+  TAGS_OWNER_PATH_INDEX,
   type Database,
 } from '../../../../database';
 import { escapeLike } from '../../../../database/escape-like';
-import type { TagRecord, TagRepository } from '../../domain';
+import { isUniqueViolation } from '../../../../database/unique-violation';
+import {
+  NoteErrors,
+  type NoteDomainError,
+  type TagRecord,
+  type TagRepository,
+} from '../../domain';
 import type { TagPath } from '../../domain/value-objects/tag-path.vo';
 
 @Injectable()
@@ -151,7 +159,24 @@ export class DrizzleTagRepository implements TagRepository {
     return row?.path ?? null;
   }
 
-  async renameBranch(tag: TagRecord, nextPath: TagPath): Promise<void> {
+  async renameBranch(
+    tag: TagRecord,
+    nextPath: TagPath
+  ): Promise<Result<void, NoteDomainError>> {
+    try {
+      await this.rewritePaths(tag, nextPath);
+      return ok(undefined);
+    } catch (error) {
+      // `findPathCollision` cannot hold its answer: another writer can claim the
+      // path first, and the index is what actually decides.
+      if (isUniqueViolation(error, TAGS_OWNER_PATH_INDEX)) {
+        return err(NoteErrors.tagConflict(nextPath.value));
+      }
+      throw error;
+    }
+  }
+
+  private async rewritePaths(tag: TagRecord, nextPath: TagPath): Promise<void> {
     const descendantSuffixStart = tag.path.length + 1;
 
     await this.db.transaction(async (tx) => {

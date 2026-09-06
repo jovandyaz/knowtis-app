@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { err, ok, type Result } from 'neverthrow';
 
-import type { TagColor } from '@knowtis/shared-types';
+import { isWithinBranch, type TagColor } from '@knowtis/shared-types';
 
 import {
   NoteErrors,
@@ -39,17 +39,31 @@ export class UpdateTagHandler {
         return err(pathResult.error);
       }
 
-      if (pathResult.value.value !== tag.path) {
+      const nextPath = pathResult.value;
+
+      if (nextPath.value !== tag.path) {
+        // Moving a branch under itself leaves its own former path with no owner:
+        // no rewrite makes it coherent, so it is malformed rather than blocked.
+        if (isWithinBranch(nextPath.value, tag.path)) {
+          return err(
+            NoteErrors.invalidTag('a tag cannot be nested inside itself')
+          );
+        }
+
         // The owner/path unique index would surface a collision as a 500, and a
         // rename that merged two branches would be silent data loss either way.
         const collision = await this.tagRepository.findPathCollision(
           tag,
-          pathResult.value
+          nextPath
         );
         if (collision) {
           return err(NoteErrors.tagConflict(collision));
         }
-        await this.tagRepository.renameBranch(tag, pathResult.value);
+
+        const renamed = await this.tagRepository.renameBranch(tag, nextPath);
+        if (renamed.isErr()) {
+          return err(renamed.error);
+        }
       }
     }
 

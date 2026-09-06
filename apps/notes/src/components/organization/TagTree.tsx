@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -62,6 +62,14 @@ export function TagTree({ onNavigate }: TagTreeProps) {
   const [pendingDelete, setPendingDelete] = useState<TagTreeItem>();
   const updateTag = useUpdateTag();
 
+  const activeTag = pathname === ROUTES.NOTES ? search.tag : undefined;
+  // A mutation settles a round trip later, by which time the reader may have
+  // filtered by something else; the closure must not drag them back.
+  const activeTagRef = useRef(activeTag);
+  useEffect(() => {
+    activeTagRef.current = activeTag;
+  }, [activeTag]);
+
   if (!tags?.length) {
     return null;
   }
@@ -75,15 +83,14 @@ export function TagTree({ onNavigate }: TagTreeProps) {
       return next;
     });
 
-  const activeTag = pathname === ROUTES.NOTES ? search.tag : undefined;
-
   /** Keeps the list in step when the branch it is filtered by moves or goes. */
   const followFilter = (branch: string, nextPath?: string) => {
-    if (!activeTag || !isWithinBranch(activeTag, branch)) {
+    const filtered = activeTagRef.current;
+    if (!filtered || !isWithinBranch(filtered, branch)) {
       return;
     }
     const tag = nextPath
-      ? `${nextPath}${activeTag.slice(branch.length)}`
+      ? `${nextPath}${filtered.slice(branch.length)}`
       : undefined;
     navigate({
       to: ROUTES.NOTES,

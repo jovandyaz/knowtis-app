@@ -7,7 +7,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router';
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -454,5 +454,46 @@ describe('TagTree', () => {
     );
 
     expect(router.state.location.search).not.toHaveProperty('tag');
+  });
+  it('should not commit a rename on the Enter that closes an IME composition', async () => {
+    const user = userEvent.setup();
+    await renderAt('/notes');
+
+    await openMenuFor(user, 'personal');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'privado');
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+
+    expect(updateTag).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+  });
+
+  it('should leave a filter the reader changed while the rename was in flight', async () => {
+    let settle: (() => void) | undefined;
+    updateTag.mockImplementation(
+      (_variables, options?: { onSuccess?: () => void }) => {
+        settle = () => options?.onSuccess?.();
+      }
+    );
+    const user = userEvent.setup();
+    const { router } = await renderAt('/notes?tag=work%2Falpha&view=all');
+
+    await openMenuFor(user, 'work/alpha');
+    await user.click(
+      screen.getByRole('menuitem', { name: 'organization.tags.rename' })
+    );
+    const field = screen.getByRole('textbox');
+    await user.clear(field);
+    await user.type(field, 'beta{Enter}');
+
+    await user.click(screen.getByRole('link', { name: /personal/ }));
+    settle?.();
+
+    expect(router.state.location.search).toMatchObject({ tag: 'personal' });
   });
 });

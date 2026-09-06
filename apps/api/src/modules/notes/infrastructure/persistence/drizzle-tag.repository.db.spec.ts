@@ -203,7 +203,8 @@ describe.runIf(DB_AVAILABLE)('DrizzleTagRepository', () => {
     );
     const record = await repo.findById(branch?.id as string);
 
-    await repo.renameBranch(record as never, path('job'));
+    const renamed = await repo.renameBranch(record as never, path('job'));
+    expect(renamed.isOk()).toBe(true);
 
     const rows = await db
       .select({ path: tags.path })
@@ -278,6 +279,37 @@ describe.runIf(DB_AVAILABLE)('DrizzleTagRepository', () => {
 
     expect(colored?.color).toBe('green');
     expect(legacy?.color).toBeNull();
+  });
+
+  it('should answer with a conflict when the index refuses the new path', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    // Straight to the write: this is the path a rename takes when another
+    // writer claims the target between the collision check and the update.
+    const renamed = await repo.renameBranch(record as never, path('job'));
+
+    expect(renamed._unsafeUnwrapErr().code).toBe('TAG_CONFLICT');
+  });
+
+  it('should leave the branch untouched when the rename is refused', async () => {
+    await repo.ensurePaths(ownerId, [path('work/alpha'), path('job')]);
+    const record = await repo.findById(
+      (await repo.findTreeByOwner(ownerId)).find((node) => node.path === 'work')
+        ?.id as string
+    );
+
+    await repo.renameBranch(record as never, path('job'));
+
+    const rows = await db
+      .select({ path: tags.path })
+      .from(tags)
+      .where(eq(tags.ownerId, OWNER))
+      .orderBy(tags.path);
+    expect(rows.map((row) => row.path)).toEqual(['job', 'work', 'work/alpha']);
   });
 
   it('should keep the note when its tag branch is deleted', async () => {

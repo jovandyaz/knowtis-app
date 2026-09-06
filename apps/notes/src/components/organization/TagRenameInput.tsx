@@ -93,7 +93,7 @@ export function TagRenameInput({
         }}
         onBlur={handleBlur}
         onKeyDown={(event) => {
-          if (event.key === 'Enter') {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
             event.preventDefault();
             submit();
           }
