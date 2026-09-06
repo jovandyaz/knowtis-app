@@ -2,6 +2,11 @@
 export { AuthNestjsModule } from './lib/auth.module';
 export type { AuthModuleOptions, TokenConfig } from './lib/auth.module';
 export type { OauthPublicKey } from './lib/oauth-public-key';
+export { createJwtVerificationKeySelector } from './lib/jwt-verification-key-selector';
+export type {
+  JwtVerificationKey,
+  JwtVerificationKeySelector,
+} from './lib/jwt-verification-key-selector';
 
 // Guards
 export { JwtAuthGuard } from './lib/guards/jwt-auth.guard';
@@ -22,6 +27,7 @@ export {
   EMAIL_VERIFICATION_TOKEN_REPOSITORY,
   PASSWORD_RESET_TOKEN_REPOSITORY,
   AUTH_MODULE_OPTIONS,
+  JWT_VERIFICATION_KEY_SELECTOR,
   JWT_ISSUER,
   JWT_AUDIENCE_ACCESS,
   JWT_AUDIENCE_REFRESH,

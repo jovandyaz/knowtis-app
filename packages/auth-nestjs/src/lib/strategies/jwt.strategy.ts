@@ -3,74 +3,101 @@ import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, type SecretOrKeyProvider } from 'passport-jwt';
 
-import type { AuthModuleOptions } from '../auth.module';
 import {
-  AUTH_MODULE_OPTIONS,
   JWT_AUDIENCE_ACCESS,
   JWT_ISSUER,
+  JWT_VERIFICATION_KEY_SELECTOR,
   SESSION_REPOSITORY,
   USER_REPOSITORY,
 } from '../constants';
+import type { JwtVerificationKeySelector } from '../jwt-verification-key-selector';
 import type { SessionRepository } from '../ports/session.repository';
 import type { JwtPayload } from '../ports/token.service';
-import type { UserRepository } from '../ports/user.repository';
+import type { UserEntity, UserRepository } from '../ports/user.repository';
 
-function readAlg(rawJwtToken: string): string | null {
-  const encodedHeader = rawJwtToken.split('.')[0];
-  if (!encodedHeader) {
-    return null;
-  }
-  try {
-    const header: unknown = JSON.parse(
-      Buffer.from(encodedHeader, 'base64url').toString('utf8')
-    );
-    if (
-      header &&
-      typeof header === 'object' &&
-      typeof (header as { alg?: unknown }).alg === 'string'
-    ) {
-      return (header as { alg: string }).alg;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Dispatches signature verification by the JWT header `alg`: HS256 session
- * tokens verify against the shared access-token secret, ES256 MCP OAuth tokens
- * verify against the authorization server's public key. Any other algorithm is
- * rejected. Only the first ES256 key is used — kid selection is deferred until
- * key rotation lands.
- */
-function createSecretOrKeyProvider(
-  options: AuthModuleOptions
+function providerFor(
+  expected: 'HS256' | 'ES256',
+  selectKey: JwtVerificationKeySelector
 ): SecretOrKeyProvider {
-  const { accessTokenSecret, additionalPublicKeys } = options.tokenConfig;
-  const es256PublicKey = additionalPublicKeys?.[0]?.publicKey;
-
   return (_request, rawJwtToken, done) => {
-    const alg = readAlg(rawJwtToken);
-
-    if (alg === 'HS256') {
-      done(null, accessTokenSecret);
+    const selected = selectKey(rawJwtToken);
+    if (expected === 'HS256' && selected?.algorithm === 'HS256') {
+      done(null, selected.secret);
       return;
     }
-
-    if (alg === 'ES256' && es256PublicKey) {
-      done(null, es256PublicKey);
+    if (expected === 'ES256' && selected?.algorithm === 'ES256') {
+      done(null, selected.publicKey);
       return;
     }
-
-    done(new Error('Unsupported token signing algorithm'));
+    done(new Error('Unsupported token signing key'));
   };
 }
 
+interface AuthenticatedUser {
+  readonly id: string;
+  readonly email: string;
+  readonly name: string;
+  readonly avatarUrl: string | null;
+  readonly emailVerifiedAt: Date | null;
+  readonly locale: string | null;
+  readonly familyId: string | undefined;
+  readonly role: UserEntity['role'];
+  readonly isAnonymous?: true;
+}
+
+async function validatePayload(
+  payload: JwtPayload,
+  userRepository: UserRepository,
+  sessionRepository: SessionRepository
+): Promise<AuthenticatedUser> {
+  if (payload.source === undefined) {
+    await assertLiveSessionToken(payload, sessionRepository);
+  }
+
+  try {
+    const userId = UserId.fromTrusted(payload.sub);
+    const user = await userRepository.findById(userId);
+    if (!user) {
+      throw new UnauthorizedException('Invalid token');
+    }
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+      emailVerifiedAt: user.emailVerifiedAt,
+      locale: user.locale,
+      ...(payload.isAnonymous && { isAnonymous: true as const }),
+      familyId: payload.familyId,
+      role: user.role,
+    };
+  } catch {
+    throw new UnauthorizedException('Invalid token');
+  }
+}
+
+async function assertLiveSessionToken(
+  payload: JwtPayload,
+  sessionRepository: SessionRepository
+): Promise<void> {
+  const { familyId } = payload;
+  if (
+    payload.iss !== JWT_ISSUER ||
+    payload.aud !== JWT_AUDIENCE_ACCESS ||
+    typeof familyId !== 'string'
+  ) {
+    throw new UnauthorizedException('Invalid token');
+  }
+  if (!(await sessionRepository.hasLiveSessionForFamily(familyId))) {
+    throw new UnauthorizedException('Session revoked');
+  }
+}
+
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
+export class JwtStrategy extends PassportStrategy(Strategy, 'jwt-hs256') {
   constructor(
-    @Inject(AUTH_MODULE_OPTIONS) options: AuthModuleOptions,
+    @Inject(JWT_VERIFICATION_KEY_SELECTOR)
+    selectKey: JwtVerificationKeySelector,
     @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
     @Inject(SESSION_REPOSITORY)
     private readonly sessionRepository: SessionRepository
@@ -78,56 +105,42 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKeyProvider: createSecretOrKeyProvider(options),
-      algorithms: ['HS256', 'ES256'],
+      secretOrKeyProvider: providerFor('HS256', selectKey),
+      algorithms: ['HS256'],
     });
   }
 
-  async validate(payload: JwtPayload) {
-    // Tokens with a `source` claim (MCP exchange / OAuth) carry no session;
-    // the app-level scope guard is responsible for gating them.
-    if (payload.source === undefined) {
-      await this.assertLiveSessionToken(payload);
-    }
+  validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+    return validatePayload(
+      payload,
+      this.userRepository,
+      this.sessionRepository
+    );
+  }
+}
 
-    try {
-      const userId = UserId.fromTrusted(payload.sub);
-      const user = await this.userRepository.findById(userId);
-
-      if (!user) {
-        throw new UnauthorizedException('Invalid token');
-      }
-
-      return {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        emailVerifiedAt: user.emailVerifiedAt,
-        locale: user.locale,
-        ...(payload.isAnonymous && { isAnonymous: true }),
-        familyId: payload.familyId,
-        role: user.role,
-      };
-    } catch {
-      throw new UnauthorizedException('Invalid token');
-    }
+@Injectable()
+export class OauthJwtStrategy extends PassportStrategy(Strategy, 'jwt-es256') {
+  constructor(
+    @Inject(JWT_VERIFICATION_KEY_SELECTOR)
+    selectKey: JwtVerificationKeySelector,
+    @Inject(USER_REPOSITORY) private readonly userRepository: UserRepository,
+    @Inject(SESSION_REPOSITORY)
+    private readonly sessionRepository: SessionRepository
+  ) {
+    super({
+      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
+      secretOrKeyProvider: providerFor('ES256', selectKey),
+      algorithms: ['ES256'],
+    });
   }
 
-  private async assertLiveSessionToken(payload: JwtPayload): Promise<void> {
-    const { familyId } = payload;
-    const hasExpectedClaims =
-      payload.iss === JWT_ISSUER &&
-      payload.aud === JWT_AUDIENCE_ACCESS &&
-      typeof familyId === 'string';
-
-    if (!hasExpectedClaims || typeof familyId !== 'string') {
-      throw new UnauthorizedException('Invalid token');
-    }
-
-    const live = await this.sessionRepository.hasLiveSessionForFamily(familyId);
-    if (!live) {
-      throw new UnauthorizedException('Session revoked');
-    }
+  validate(payload: JwtPayload): Promise<AuthenticatedUser> {
+    return validatePayload(
+      payload,
+      this.userRepository,
+      this.sessionRepository
+    );
   }
 }

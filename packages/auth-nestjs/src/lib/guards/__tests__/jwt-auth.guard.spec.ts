@@ -63,7 +63,7 @@ describe('JwtAuthGuard', () => {
     const activateResult = guard.canActivate(context);
     expect(activateResult).toBeInstanceOf(Promise);
     await expect(activateResult).rejects.toThrow(
-      'Unknown authentication strategy "jwt"'
+      'Unknown authentication strategy "jwt-hs256"'
     );
   });
 });
