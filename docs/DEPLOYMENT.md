@@ -214,17 +214,18 @@ Seeded `false` by migration `0037`. While off, `VerifiedIdentityPolicy` allows e
 
 ## Troubleshooting
 
-| Problem                                          | Check                                                                                                                                                                                                                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Build fails                                      | Build logs in Railway, verify `pnpm-lock.yaml` committed                                                                                                                                                                                                      |
-| CORS errors                                      | `FRONTEND_URL` / `BACKOFFICE_URL` match the Vercel URLs exactly (`https://`, no trailing `/`)                                                                                                                                                                 |
-| WebSocket not connecting                         | Frontend `VITE_WS_URL` correct and `VITE_COLLABORATION_MODE=websocket`; `REDIS_URL` set if more than one API instance runs                                                                                                                                    |
-| Database connection                              | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                                                                                                                                                       |
-| Deploy job red before a deployment id is printed | `railway up` could not start: check the `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` / `RAILWAY_MCP_SERVICE_ID` variables in GitHub                                                                                                                        |
-| Deploy job red on `SKIPPED`                      | A service in `.railway/railway.ts` declares `watchPatterns`; remove them — CI already gates on Nx affected                                                                                                                                                    |
-| Deploy job red on `still BUILDING after 1500s`   | The build outlasted the poller; check the logs URL in the job output — Railway may have finished it. Raise `RAILWAY_DEPLOY_TIMEOUT_SECONDS` (default 1500 in `railway-deploy.sh`) and the jobs' `timeout-minutes` together if builds legitimately take longer |
-| API crashes on boot                              | `TOKEN_HASH_KEY` present and valid; `BACKOFFICE_URL` set when `NODE_ENV=production` (see [TOKEN_HASH_KEY](#token_hash_key))                                                                                                                                   |
-| OAuth tokens rejected                            | `deploy-mcp` parity check output: issuer/resource URL drift or trailing slash                                                                                                                                                                                 |
+| Problem                                                        | Check                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Build fails                                                    | Build logs in Railway, verify `pnpm-lock.yaml` committed                                                                                                                                                                                                                                                                                                             |
+| CORS errors                                                    | `FRONTEND_URL` / `BACKOFFICE_URL` match the Vercel URLs exactly (`https://`, no trailing `/`)                                                                                                                                                                                                                                                                        |
+| WebSocket not connecting                                       | Frontend `VITE_WS_URL` correct and `VITE_COLLABORATION_MODE=websocket`; `REDIS_URL` set if more than one API instance runs                                                                                                                                                                                                                                           |
+| Database connection                                            | `DATABASE_URL` uses `${{Postgres.DATABASE_URL}}` syntax                                                                                                                                                                                                                                                                                                              |
+| Deploy job red before a deployment id is printed               | `railway up` could not start: check the `RAILWAY_TOKEN` secret and `RAILWAY_SERVICE_ID` / `RAILWAY_MCP_SERVICE_ID` variables in GitHub                                                                                                                                                                                                                               |
+| Deploy job red on `SKIPPED`                                    | A service in `.railway/railway.ts` declares `watchPatterns`; remove them — CI already gates on Nx affected                                                                                                                                                                                                                                                           |
+| Deploy job red on `still BUILDING after 1500s`                 | The build outlasted the poller; check the logs URL in the job output — Railway may have finished it. Raise `RAILWAY_DEPLOY_TIMEOUT_SECONDS` (default 1500 in `railway-deploy.sh`) and the jobs' `timeout-minutes` together if builds legitimately take longer                                                                                                        |
+| API crashes on boot                                            | `TOKEN_HASH_KEY` present and valid; `BACKOFFICE_URL` set when `NODE_ENV=production` (see [TOKEN_HASH_KEY](#token_hash_key))                                                                                                                                                                                                                                          |
+| API deploy fails health check right after editing `OAUTH_JWKS` | The environment validation error names `OAUTH_JWKS`; the value is set but a member is not EC/P-256/ES256/sig, lacks a unique `kid`, or is not valid JSON. Fix the variable and redeploy; the previous deployment stays live. The public `jq` check below cannot catch this before deploy because the endpoint reflects only the currently running deployment's keys. |
+| OAuth tokens rejected                                          | `deploy-mcp` parity check output: issuer/resource URL drift or trailing slash                                                                                                                                                                                                                                                                                        |
 
 ---
 
@@ -259,6 +260,51 @@ curl -s -o /dev/null -w "%{http_code}\n" -H 'X-Real-IP: 203.0.113.8' -H 'content
 
 # Railway config matches .railway/railway.ts (needs the linked project and `pnpm install`)
 railway config plan
+```
+
+### OAuth signing-key rotation dry-run
+
+Run this only during the separately approved production procedure in [MCP.md](MCP.md#rotate-oauth-signing-keys). Before starting, disable shell tracing with `set +x` and use a private terminal. Never pass `OAUTH_JWKS` through CLI arguments, and do not paste the bearer token or command output into CI logs or PR comments. The `jq` result is safe to retain because `/oauth/jwks` is intentionally public and the check asserts that `d` is absent.
+
+```bash
+# Enter public key ids shown by the Railway secret editor; kid values are public.
+printf 'Retiring public kid: '; IFS= read -r OLD_KID
+printf 'New public kid: '; IFS= read -r NEW_KID
+
+# Overlap publication: exactly both expected public keys, eligible metadata, no private d.
+curl -fsS https://api.knowtis.app/oauth/jwks | jq -e \
+  --arg old "$OLD_KID" --arg new "$NEW_KID" '
+    ([.keys[].kid] | sort) == ([$old, $new] | sort) and
+    all(.keys[];
+      .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
+      .use == "sig" and (.kid | type) == "string" and (.kid | length) > 0 and
+      (has("d") | not)
+    )
+  '
+
+# After [new, old], paste a freshly issued OAuth token without echoing it.
+printf 'Fresh OAuth access token: '; IFS= read -rs OAUTH_ACCESS_TOKEN; printf '\n'
+TOKEN_KID=$(OAUTH_ACCESS_TOKEN="$OAUTH_ACCESS_TOKEN" node -e '
+  const token = process.env.OAUTH_ACCESS_TOKEN;
+  const header = JSON.parse(Buffer.from(token.split(".")[0], "base64url"));
+  process.stdout.write(typeof header.kid === "string" ? header.kid : "");
+')
+test "$TOKEN_KID" = "$NEW_KID"
+
+# JwtStrategy + McpScopeGuard: known new kid, valid notes:read scope and audience => 200.
+test "$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $OAUTH_ACCESS_TOKEN" \
+  'https://api.knowtis.app/api/v1/notes?page=1&limit=1')" = 200
+
+# Hosted MCP remote-JWKS verification: the same new-key token initializes => HTTP 200.
+test "$(curl -sS -o /dev/null -w '%{http_code}' \
+  -X POST https://mcp.knowtis.app/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "Authorization: Bearer $OAUTH_ACCESS_TOKEN" \
+  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rotation-dry-run","version":"1.0.0"}}}')" = 200
+
+unset OAUTH_ACCESS_TOKEN TOKEN_KID OLD_KID NEW_KID
 ```
 
 Locally the same health paths are exercised against the built API (`pnpm nx build api && node --env-file=apps/api/.env dist/apps/api/main.js`): `docker stop knowtis-postgres` turns `/api/v1/health` and `/api/v1/health/ready` into 503 with `Database unreachable` (the driver error stays in the log) while `/api/v1/health/ping` stays 200, and they recover once Postgres is back. Without an edge, `X-Real-IP` is client-supplied, so the local spoof check is "fixed `X-Real-IP` + rotating `X-Forwarded-For` stays 429".

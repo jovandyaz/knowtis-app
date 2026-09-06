@@ -113,7 +113,6 @@ export async function createOidcProvider(
 
   const configuration: OidcConfiguration = {
     adapter: createAdapterFactory(db),
-    // deps.jwks is Zod-validated at the config boundary; the lib wants its nominal JWK[] type.
     jwks: jwks as JWKS,
     cookies: { keys: cookieKeys },
     clients: [],
