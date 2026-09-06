@@ -20,9 +20,11 @@ function readProtectedHeader(rawJwtToken: string): ProtectedHeader | null {
   }
 
   try {
-    const value: unknown = JSON.parse(
-      Buffer.from(encoded, 'base64url').toString('utf8')
-    );
+    const bytes = Buffer.from(encoded, 'base64url');
+    if (bytes.toString('base64url') !== encoded) {
+      return null;
+    }
+    const value: unknown = JSON.parse(bytes.toString('utf8'));
     if (
       typeof value !== 'object' ||
       value === null ||

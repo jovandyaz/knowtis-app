@@ -68,6 +68,7 @@ describe('createJwtVerificationKeySelector', () => {
     ['illegal character', `${currentHeader}!`],
     ['padding', `${currentHeader}=`],
     ['whitespace', `${currentHeader} `],
+    ['non-canonical alternate encoding', 'eyJhbGciOiJIUzI1NiJ9A'],
     ['malformed segment', 'not-json'],
     ['empty segment', ''],
     ['object without algorithm', 'e30'],
