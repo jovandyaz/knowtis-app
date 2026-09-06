@@ -1,8 +1,12 @@
-import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
+import {
+  JWT_VERIFICATION_KEY_SELECTOR,
+  type JwtVerificationKeySelector,
+} from '@jovandyaz/auth-nestjs';
 import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
   Injectable,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -10,25 +14,20 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import type { Request } from 'express';
 
-import { deriveOauthPublicKeys } from '../../../config/oauth-public-keys';
 import { MCP_SCOPE_KEY } from '../decorators/require-mcp-scope.decorator';
 import { TOKEN_SOURCE_MCP, type McpTokenClaims } from '../mcp-token';
 
 @Injectable()
 export class McpScopeGuard implements CanActivate {
-  private readonly jwtSecret: string;
-  private readonly es256PublicKeys: readonly OauthPublicKey[];
   private readonly resourceAudience: string | undefined;
 
   constructor(
     private readonly reflector: Reflector,
     private readonly jwtService: JwtService,
+    @Inject(JWT_VERIFICATION_KEY_SELECTOR)
+    private readonly selectVerificationKey: JwtVerificationKeySelector,
     configService: ConfigService
   ) {
-    this.jwtSecret = configService.getOrThrow('JWT_SECRET');
-    this.es256PublicKeys = deriveOauthPublicKeys(
-      configService.get('OAUTH_JWKS')
-    );
     this.resourceAudience = configService.get('MCP_RESOURCE_URL');
   }
 
@@ -77,50 +76,37 @@ export class McpScopeGuard implements CanActivate {
    * final accept/reject decision on those.
    */
   private async verifyMcpToken(token: string): Promise<McpTokenClaims | null> {
-    try {
-      return await this.jwtService.verifyAsync<McpTokenClaims>(token, {
-        secret: this.jwtSecret,
-        algorithms: ['HS256'],
-      });
-    } catch {
-      // Swallowed on purpose: this endpoint accepts two signing families, so
-      // failing HS256 only rules the first one out.
+    const selected = this.selectVerificationKey(token);
+    if (!selected) {
+      return null;
     }
 
-    const claims = await this.verifyEs256(token);
-    if (claims === null) {
+    let claims: McpTokenClaims & { aud?: string | string[] };
+    try {
+      claims =
+        selected.algorithm === 'HS256'
+          ? await this.jwtService.verifyAsync(token, {
+              secret: selected.secret,
+              algorithms: ['HS256'],
+            })
+          : await this.jwtService.verifyAsync(token, {
+              publicKey: selected.publicKey,
+              algorithms: ['ES256'],
+            });
+    } catch {
       return null;
     }
 
     // Audience is enforced AFTER signature verification: folding it into
     // verifyAsync would turn a wrong-aud token into a verify failure, which
     // falls through to JwtAuthGuard as a full session — an escalation.
-    if (!this.hasResourceAudience(claims.aud)) {
+    if (
+      selected.algorithm === 'ES256' &&
+      !this.hasResourceAudience(claims.aud)
+    ) {
       throw new ForbiddenException('MCP token audience mismatch');
     }
     return claims;
-  }
-
-  /**
-   * Tries every configured OAuth key, because a JWKS carries several across a
-   * rotation. Stopping at the first would leave a token signed by any of the
-   * others unrecognised as MCP — and an unrecognised token skips the scope
-   * check entirely while JwtAuthGuard, which holds all the keys, still admits
-   * it.
-   */
-  private async verifyEs256(
-    token: string
-  ): Promise<(McpTokenClaims & { aud?: string | string[] }) | null> {
-    for (const { publicKey } of this.es256PublicKeys) {
-      try {
-        return await this.jwtService.verifyAsync<
-          McpTokenClaims & { aud?: string | string[] }
-        >(token, { publicKey, algorithms: ['ES256'] });
-      } catch {
-        continue;
-      }
-    }
-    return null;
   }
 
   private hasResourceAudience(aud: string | string[] | undefined): boolean {
