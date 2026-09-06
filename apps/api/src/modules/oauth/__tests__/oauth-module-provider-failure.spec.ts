@@ -40,10 +40,15 @@ it('fails configured OAuth boot without logging provider details', async () => {
     .spyOn(Logger.prototype, 'error')
     .mockImplementation(() => undefined);
   createOidcProvider.mockRejectedValue(new Error(rawFailure));
-  const { OauthModule } = await import('../oauth.module');
+  const {
+    OAUTH_INITIALIZATION_FAILED_MESSAGE,
+    OauthInitializationError,
+    OauthModule,
+  } = await import('../oauth.module');
+  let caught: unknown;
 
-  await expect(
-    Test.createTestingModule({
+  try {
+    await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
@@ -63,8 +68,18 @@ it('fails configured OAuth boot without logging provider details', async () => {
         StubDatabaseModule,
         OauthModule,
       ],
-    }).compile()
-  ).rejects.toThrow(rawFailure);
+    }).compile();
+  } catch (error) {
+    caught = error;
+  }
+
+  expect(caught).toBeInstanceOf(OauthInitializationError);
+  expect((caught as Error).name).toBe('OauthInitializationError');
+  expect((caught as Error).message).toBe(OAUTH_INITIALIZATION_FAILED_MESSAGE);
+  expect((caught as Error).cause).toBeUndefined();
+  const serialized = `${String(caught)} ${(caught as Error).stack ?? ''} ${JSON.stringify((caught as Error).cause ?? null)}`;
+  expect(serialized).not.toContain(rawFailure);
+  expect(serialized).not.toContain(privateKeyLabel);
   const logged = errorSpy.mock.calls.flat().join(' ');
   expect(logged).not.toContain(rawFailure);
   expect(logged).not.toContain(privateKeyLabel);

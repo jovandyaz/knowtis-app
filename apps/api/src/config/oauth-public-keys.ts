@@ -1,4 +1,5 @@
 import {
+  createECDH,
   createPrivateKey,
   createPublicKey,
   type JsonWebKey,
@@ -68,6 +69,25 @@ export function parseOauthJwks(
     let exported: string | Buffer;
     try {
       const privateKey = createPrivateKey({ key, format: 'jwk' });
+      const importedJwk = privateKey.export({ format: 'jwk' });
+      if (typeof importedJwk.d !== 'string') {
+        throw new InvalidOauthJwksError();
+      }
+      const ecdh = createECDH('prime256v1');
+      ecdh.setPrivateKey(Buffer.from(importedJwk.d, 'base64url'));
+      const derivedPoint = ecdh.getPublicKey(undefined, 'uncompressed');
+      const derivedPublicJwk = {
+        crv: importedJwk.crv,
+        x: derivedPoint.subarray(1, 33).toString('base64url'),
+        y: derivedPoint.subarray(33, 65).toString('base64url'),
+      };
+      if (
+        derivedPublicJwk.crv !== key.crv ||
+        derivedPublicJwk.x !== key.x ||
+        derivedPublicJwk.y !== key.y
+      ) {
+        throw new InvalidOauthJwksError();
+      }
       exported = createPublicKey(privateKey).export({
         type: 'spki',
         format: 'pem',

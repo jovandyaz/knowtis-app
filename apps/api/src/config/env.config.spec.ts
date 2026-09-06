@@ -301,6 +301,38 @@ describe('env.config oauth vars', () => {
     expect(message).not.toContain(String(publicJwk['y']));
   });
 
+  it('rejects OAuth material with a mismatched private scalar', () => {
+    const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicJwk = publicKey.export({ format: 'jwk' });
+    const privateJwk = privateKey.export({ format: 'jwk' });
+    const mismatchedJwk = {
+      ...publicJwk,
+      d: privateJwk.d,
+      kid: 'mismatched-env-private-key',
+      alg: 'ES256',
+      use: 'sig',
+    };
+    let caught: unknown;
+
+    try {
+      validateEnv({
+        ...baseEnv,
+        OAUTH_JWKS: JSON.stringify({ keys: [mismatchedJwk] }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const serialized = `${String(caught)} ${(caught as Error).stack ?? ''}`;
+    expect(serialized).toContain(INVALID_OAUTH_JWKS_MESSAGE);
+    expect(serialized).not.toContain(mismatchedJwk.kid);
+    expect(serialized).not.toContain(mismatchedJwk.x);
+    expect(serialized).not.toContain(mismatchedJwk.y);
+    expect(serialized).not.toContain(mismatchedJwk.d);
+  });
+
   it('rejects a non-URL OAUTH_ISSUER', () => {
     expect(() =>
       validateEnv({ ...baseEnv, OAUTH_ISSUER: 'not-a-url' })

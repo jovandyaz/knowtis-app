@@ -110,6 +110,36 @@ describe('deriveOauthPublicKeys', () => {
     expect(serialized).not.toContain(String(publicJwk['y']));
   });
 
+  it('rejects a private scalar that does not match the public point', () => {
+    const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicJwk = publicKey.export({ format: 'jwk' });
+    const privateJwk = privateKey.export({ format: 'jwk' });
+    const mismatchedJwk = {
+      ...publicJwk,
+      d: privateJwk.d,
+      kid: 'mismatched-private-key',
+      alg: 'ES256',
+      use: 'sig',
+    };
+    let caught: unknown;
+
+    try {
+      parseOauthJwks(JSON.stringify({ keys: [mismatchedJwk] }));
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(InvalidOauthJwksError);
+    expect((caught as Error).message).toBe(INVALID_OAUTH_JWKS_MESSAGE);
+    expect((caught as Error).cause).toBeUndefined();
+    const serialized = `${String(caught)} ${(caught as Error).stack ?? ''}`;
+    expect(serialized).not.toContain(mismatchedJwk.kid);
+    expect(serialized).not.toContain(mismatchedJwk.x);
+    expect(serialized).not.toContain(mismatchedJwk.y);
+    expect(serialized).not.toContain(mismatchedJwk.d);
+  });
+
   it('throws a content-free error for invalid key material', () => {
     let caught: unknown;
     try {
