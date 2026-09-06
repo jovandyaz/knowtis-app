@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { tagsApi, type UpdateTagInput } from '@knowtis/api-client';
-import type { TagNode } from '@knowtis/shared-types';
+import { isWithinBranch, type TagNode } from '@knowtis/shared-types';
 
 import { notesQueryKeys, tagsQueryKeys } from './query-keys';
 
@@ -15,12 +15,56 @@ export function useTags() {
   });
 }
 
+/** Swaps a branch's prefix so every descendant follows the rename, as the API does. */
+function rewriteBranch(
+  nodes: TagNode[],
+  branch: string,
+  nextPath: string
+): TagNode[] {
+  return nodes.map((node) =>
+    isWithinBranch(node.path, branch)
+      ? { ...node, path: `${nextPath}${node.path.slice(branch.length)}` }
+      : node
+  );
+}
+
 export function useUpdateTag() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: ({ id, input }: { id: string; input: UpdateTagInput }) =>
       tagsApi.update(id, input),
+    onMutate: async ({ id, input }) => {
+      await queryClient.cancelQueries({ queryKey: tagsQueryKeys.tree() });
+      const previous = queryClient.getQueryData<TagNode[]>(
+        tagsQueryKeys.tree()
+      );
+      const branch = previous?.find((node) => node.id === id);
+
+      if (branch) {
+        queryClient.setQueryData<TagNode[]>(tagsQueryKeys.tree(), (old) => {
+          if (!old) {
+            return old;
+          }
+          const renamed =
+            input.path === undefined
+              ? old
+              : rewriteBranch(old, branch.path, input.path);
+          return input.color === undefined
+            ? renamed
+            : renamed.map((node) =>
+                node.id === id ? { ...node, color: input.color ?? null } : node
+              );
+        });
+      }
+
+      return { previous };
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(tagsQueryKeys.tree(), context.previous);
+      }
+    },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: tagsQueryKeys.all });
       // A rename rewrites the paths the notes payload carries, so the lists are stale too.
@@ -43,11 +87,7 @@ export function useDeleteTag() {
 
       if (branch) {
         queryClient.setQueryData<TagNode[]>(tagsQueryKeys.tree(), (old) =>
-          old?.filter(
-            (node) =>
-              node.path !== branch.path &&
-              !node.path.startsWith(`${branch.path}/`)
-          )
+          old?.filter((node) => !isWithinBranch(node.path, branch.path))
         );
       }
 
