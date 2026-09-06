@@ -17,6 +17,16 @@ function signingJwk(kid: string): Record<string, unknown> {
   };
 }
 
+function publicSigningJwk(kid: string): Record<string, unknown> {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    ...publicKey.export({ format: 'jwk' }),
+    kid,
+    alg: 'ES256',
+    use: 'sig',
+  };
+}
+
 const baseEnv = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   JWT_SECRET: 'x'.repeat(32),
@@ -268,6 +278,27 @@ describe('env.config oauth vars', () => {
     expect(message).not.toContain(String(invalidJwk['kid']));
     expect(message).not.toContain(String(invalidJwk['x']));
     expect(message).not.toContain(String(invalidJwk['y']));
+  });
+
+  it('rejects public-only OAuth material with the content-free message', () => {
+    const publicJwk = publicSigningJwk('public-only-key-label');
+    let caught: unknown;
+
+    try {
+      validateEnv({
+        ...baseEnv,
+        OAUTH_JWKS: JSON.stringify({ keys: [publicJwk] }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = String(caught);
+    expect(message).toContain(INVALID_OAUTH_JWKS_MESSAGE);
+    expect(message).not.toContain(String(publicJwk['kid']));
+    expect(message).not.toContain(String(publicJwk['x']));
+    expect(message).not.toContain(String(publicJwk['y']));
   });
 
   it('rejects a non-URL OAUTH_ISSUER', () => {

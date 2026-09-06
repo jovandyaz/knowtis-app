@@ -1,4 +1,8 @@
-import { createPublicKey, type JsonWebKey } from 'node:crypto';
+import {
+  createPrivateKey,
+  createPublicKey,
+  type JsonWebKey,
+} from 'node:crypto';
 
 import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
 
@@ -63,7 +67,8 @@ export function parseOauthJwks(
 
     let exported: string | Buffer;
     try {
-      exported = createPublicKey({ key, format: 'jwk' }).export({
+      const privateKey = createPrivateKey({ key, format: 'jwk' });
+      exported = createPublicKey(privateKey).export({
         type: 'spki',
         format: 'pem',
       });

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   deriveOauthPublicKeys,
+  INVALID_OAUTH_JWKS_MESSAGE,
   InvalidOauthJwksError,
   parseOauthJwks,
 } from './oauth-public-keys';
@@ -12,6 +13,16 @@ function signingJwk(kid: string): Record<string, unknown> {
   const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   return {
     ...privateKey.export({ format: 'jwk' }),
+    kid,
+    alg: 'ES256',
+    use: 'sig',
+  };
+}
+
+function publicSigningJwk(kid: string): Record<string, unknown> {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    ...publicKey.export({ format: 'jwk' }),
     kid,
     alg: 'ES256',
     use: 'sig',
@@ -78,6 +89,25 @@ describe('deriveOauthPublicKeys', () => {
       ],
     });
     expect(() => deriveOauthPublicKeys(raw)).toThrow(InvalidOauthJwksError);
+  });
+
+  it('rejects otherwise eligible public-only signing material', () => {
+    const publicJwk = publicSigningJwk('public-only-key');
+    let caught: unknown;
+
+    try {
+      parseOauthJwks(JSON.stringify({ keys: [publicJwk] }));
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(InvalidOauthJwksError);
+    expect((caught as Error).message).toBe(INVALID_OAUTH_JWKS_MESSAGE);
+    expect((caught as Error).cause).toBeUndefined();
+    const serialized = `${String(caught)} ${(caught as Error).stack ?? ''}`;
+    expect(serialized).not.toContain(String(publicJwk['kid']));
+    expect(serialized).not.toContain(String(publicJwk['x']));
+    expect(serialized).not.toContain(String(publicJwk['y']));
   });
 
   it('throws a content-free error for invalid key material', () => {

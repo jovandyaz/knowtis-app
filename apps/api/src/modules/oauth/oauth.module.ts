@@ -32,23 +32,15 @@ import {
           return null;
         }
         const frontendUrl = config.get('FRONTEND_URL', { infer: true });
-        try {
-          const handle = await createOidcProvider({
-            db,
-            ...oauthConfig,
-            frontendUrl,
-          });
-          new Logger('OauthModule').log(
-            `OAuth AS initialized (issuer: ${oauthConfig.issuer})`
-          );
-          return handle;
-        } catch (error) {
-          new Logger('OauthModule').error(
-            'OAuth AS init failed; staying dark',
-            error instanceof Error ? error.stack : String(error)
-          );
-          return null;
-        }
+        const handle = await createOidcProvider({
+          db,
+          ...oauthConfig,
+          frontendUrl,
+        });
+        new Logger('OauthModule').log(
+          `OAuth AS initialized (issuer: ${oauthConfig.issuer})`
+        );
+        return handle;
       },
       inject: [ConfigService, DATABASE_CONNECTION],
     },

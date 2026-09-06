@@ -26,6 +26,16 @@ function signingJwk(kid: string): Record<string, unknown> {
   };
 }
 
+function publicSigningJwk(kid: string): Record<string, unknown> {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    ...publicKey.export({ format: 'jwk' }),
+    kid,
+    alg: 'ES256',
+    use: 'sig',
+  };
+}
+
 async function bootstrapWith(rawJwks: string): Promise<void> {
   const { OauthModule } = await import('../oauth.module');
   const moduleRef = await Test.createTestingModule({
@@ -76,6 +86,14 @@ describe('OauthModule bootstrap', () => {
     await expect(
       bootstrapWith(JSON.stringify({ keys: [signingJwk('boot-key')] }))
     ).resolves.toBeUndefined();
+  });
+
+  it('fails boot for otherwise eligible public-only signing material', async () => {
+    await expect(
+      bootstrapWith(
+        JSON.stringify({ keys: [publicSigningJwk('public-only-key')] })
+      )
+    ).rejects.toThrow(InvalidOauthJwksError);
   });
 
   it.each([
