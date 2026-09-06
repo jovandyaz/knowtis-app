@@ -264,47 +264,155 @@ railway config plan
 
 ### OAuth signing-key rotation dry-run
 
-Run this only during the separately approved production procedure in [MCP.md](MCP.md#rotate-oauth-signing-keys). Before starting, disable shell tracing with `set +x` and use a private terminal. Never pass `OAUTH_JWKS` through CLI arguments, and do not paste the bearer token or command output into CI logs or PR comments. The `jq` result is safe to retain because `/oauth/jwks` is intentionally public and the check asserts that `d` is absent.
+Run these blocks only during the separately approved production procedure in [MCP.md](MCP.md#rotate-oauth-signing-keys). Use a private Bash terminal. Each block disables shell tracing before reading input, enables `set -euo pipefail`, reports which check failed without printing a token, and preserves its exit status while clearing shell variables. Never pass `OAUTH_JWKS` through CLI arguments, and do not paste the bearer token or command output into CI logs or PR comments. The public JWKS results are safe to retain because `/oauth/jwks` is intentionally public and both checks assert that `d` is absent.
+
+#### Phase 3: confirm overlap publication
 
 ```bash
+set +x
+(
+set -euo pipefail
+
+rotation_probe_cleanup() {
+  local probe_status="$1"
+  unset OLD_KID NEW_KID
+  trap - EXIT
+  exit "$probe_status"
+}
+trap 'rotation_probe_cleanup "$?"' EXIT
+
 # Enter public key ids shown by the Railway secret editor; kid values are public.
 printf 'Retiring public kid: '; IFS= read -r OLD_KID
 printf 'New public kid: '; IFS= read -r NEW_KID
 
 # Overlap publication: exactly both expected public keys, eligible metadata, no private d.
-curl -fsS https://api.knowtis.app/oauth/jwks | jq -e \
-  --arg old "$OLD_KID" --arg new "$NEW_KID" '
-    ([.keys[].kid] | sort) == ([$old, $new] | sort) and
-    all(.keys[];
-      .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
-      .use == "sig" and (.kid | type) == "string" and (.kid | length) > 0 and
-      (has("d") | not)
-    )
-  '
+if ! curl -fsS https://api.knowtis.app/oauth/jwks | jq -e \
+    --arg old "$OLD_KID" --arg new "$NEW_KID" '
+      ([.keys[].kid] | sort) == ([$old, $new] | sort) and
+      (.keys | length) == 2 and
+      all(.keys[];
+        .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
+        .use == "sig" and (.kid | type) == "string" and (.kid | length) > 0 and
+        (has("d") | not)
+      )
+    ' >/dev/null; then
+  printf 'Overlap JWKS check failed.\n' >&2
+  exit 1
+fi
+printf 'Overlap JWKS check passed.\n'
+)
+```
+
+#### Phases 4 and 6: confirm authenticated access
+
+Run this block after switching to `[new, old]`, and again after retiring the old key with `[new]`.
+
+```bash
+set +x
+(
+set -euo pipefail
+
+rotation_probe_cleanup() {
+  local probe_status="$1"
+  unset OAUTH_ACCESS_TOKEN TOKEN_KID NEW_KID API_STATUS MCP_STATUS
+  trap - EXIT
+  exit "$probe_status"
+}
+trap 'rotation_probe_cleanup "$?"' EXIT
+
+# Drop inherited and automatic exports before reading the token.
+set +a
+unset OAUTH_ACCESS_TOKEN
+printf 'New public kid: '; IFS= read -r NEW_KID
 
 # After [new, old], paste a freshly issued OAuth token without echoing it.
 printf 'Fresh OAuth access token: '; IFS= read -rs OAUTH_ACCESS_TOKEN; printf '\n'
-TOKEN_KID=$(OAUTH_ACCESS_TOKEN="$OAUTH_ACCESS_TOKEN" node -e '
-  const token = process.env.OAUTH_ACCESS_TOKEN;
-  const header = JSON.parse(Buffer.from(token.split(".")[0], "base64url"));
-  process.stdout.write(typeof header.kid === "string" ? header.kid : "");
-')
-test "$TOKEN_KID" = "$NEW_KID"
+if ! TOKEN_KID=$(printf '%s' "$OAUTH_ACCESS_TOKEN" | node -e '
+  const token = require("node:fs").readFileSync(0, "utf8");
+  if (!/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token)) process.exit(1);
+  try {
+    const header = JSON.parse(Buffer.from(token.split(".")[0], "base64url"));
+    if (typeof header.kid !== "string") process.exit(1);
+    process.stdout.write(header.kid);
+  } catch {
+    process.exit(1);
+  }
+'); then
+  printf 'Fresh token protected-header parsing failed.\n' >&2
+  exit 1
+fi
+if [[ "$TOKEN_KID" != "$NEW_KID" ]]; then
+  printf 'Fresh token kid is not the expected new public kid.\n' >&2
+  exit 1
+fi
 
 # JwtStrategy + McpScopeGuard: known new kid, valid notes:read scope and audience => 200.
-test "$(curl -sS -o /dev/null -w '%{http_code}' \
-  -H "Authorization: Bearer $OAUTH_ACCESS_TOKEN" \
-  'https://api.knowtis.app/api/v1/notes?page=1&limit=1')" = 200
+if ! API_STATUS=$(printf 'header = "Authorization: Bearer %s"\n' "$OAUTH_ACCESS_TOKEN" | \
+    curl --disable --config - --silent --show-error --output /dev/null \
+      --write-out '%{http_code}' \
+      'https://api.knowtis.app/api/v1/notes?page=1&limit=1'); then
+  printf 'Authenticated API probe request failed.\n' >&2
+  exit 1
+fi
+if [[ "$API_STATUS" != 200 ]]; then
+  printf 'Authenticated API probe failed with HTTP %s.\n' "$API_STATUS" >&2
+  exit 1
+fi
 
 # Hosted MCP remote-JWKS verification: the same new-key token initializes => HTTP 200.
-test "$(curl -sS -o /dev/null -w '%{http_code}' \
-  -X POST https://mcp.knowtis.app/mcp \
-  -H 'Content-Type: application/json' \
-  -H 'Accept: application/json, text/event-stream' \
-  -H "Authorization: Bearer $OAUTH_ACCESS_TOKEN" \
-  --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rotation-dry-run","version":"1.0.0"}}}')" = 200
+if ! MCP_STATUS=$(printf 'header = "Authorization: Bearer %s"\n' "$OAUTH_ACCESS_TOKEN" | \
+    curl --disable --config - --silent --show-error --output /dev/null \
+      --write-out '%{http_code}' --request POST \
+      --header 'Content-Type: application/json' \
+      --header 'Accept: application/json, text/event-stream' \
+      --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"rotation-dry-run","version":"1.0.0"}}}' \
+      https://mcp.knowtis.app/mcp); then
+  printf 'Authenticated MCP probe request failed.\n' >&2
+  exit 1
+fi
+if [[ "$MCP_STATUS" != 200 ]]; then
+  printf 'Authenticated MCP probe failed with HTTP %s.\n' "$MCP_STATUS" >&2
+  exit 1
+fi
+printf 'Fresh token kid, API, and MCP checks passed.\n'
+)
+```
 
-unset OAUTH_ACCESS_TOKEN TOKEN_KID OLD_KID NEW_KID
+#### Phase 6: confirm single-key publication
+
+Run this only after deploying `[new]`; unlike the phase 3 check, it requires exactly one published key.
+
+```bash
+set +x
+(
+set -euo pipefail
+
+rotation_probe_cleanup() {
+  local probe_status="$1"
+  unset NEW_KID
+  trap - EXIT
+  exit "$probe_status"
+}
+trap 'rotation_probe_cleanup "$?"' EXIT
+
+printf 'New public kid: '; IFS= read -r NEW_KID
+
+# Retired-key removal: exactly the new public key, eligible metadata, no private d.
+if ! curl -fsS https://api.knowtis.app/oauth/jwks | jq -e \
+    --arg new "$NEW_KID" '
+      [.keys[].kid] == [$new] and
+      (.keys | length) == 1 and
+      all(.keys[];
+        .kty == "EC" and .crv == "P-256" and .alg == "ES256" and
+        .use == "sig" and (.kid | type) == "string" and (.kid | length) > 0 and
+        (has("d") | not)
+      )
+    ' >/dev/null; then
+  printf 'Single-new-key JWKS check failed.\n' >&2
+  exit 1
+fi
+printf 'Single-new-key JWKS check passed.\n'
+)
 ```
 
 Locally the same health paths are exercised against the built API (`pnpm nx build api && node --env-file=apps/api/.env dist/apps/api/main.js`): `docker stop knowtis-postgres` turns `/api/v1/health` and `/api/v1/health/ready` into 503 with `Database unreachable` (the driver error stays in the log) while `/api/v1/health/ping` stays 200, and they recover once Postgres is back. Without an edge, `X-Real-IP` is client-supplied, so the local spoof check is "fixed `X-Real-IP` + rotating `X-Forwarded-For` stays 429".
