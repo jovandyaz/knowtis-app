@@ -48,7 +48,7 @@ function createSecretOrKeyProvider(
   options: AuthModuleOptions
 ): SecretOrKeyProvider {
   const { accessTokenSecret, additionalPublicKeys } = options.tokenConfig;
-  const es256PublicKey = additionalPublicKeys?.[0];
+  const es256PublicKey = additionalPublicKeys?.[0]?.publicKey;
 
   return (_request, rawJwtToken, done) => {
     const alg = readAlg(rawJwtToken);

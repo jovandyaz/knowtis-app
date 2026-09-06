@@ -1,3 +1,4 @@
+import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService, type JwtVerifyOptions } from '@nestjs/jwt';
@@ -40,7 +41,7 @@ function readBearerToken(request: Record<string, unknown>): string | null {
 @Injectable()
 export class BearerIdentityResolver {
   private readonly accessTokenSecret: string;
-  private readonly oauthPublicKeys: readonly string[];
+  private readonly oauthPublicKeys: readonly OauthPublicKey[];
 
   constructor(
     private readonly jwtService: JwtService,
@@ -83,7 +84,7 @@ export class BearerIdentityResolver {
       return sessionClaims;
     }
 
-    for (const publicKey of this.oauthPublicKeys) {
+    for (const { publicKey } of this.oauthPublicKeys) {
       const oauthClaims = await this.verifyWith(token, {
         publicKey,
         algorithms: ['ES256'],

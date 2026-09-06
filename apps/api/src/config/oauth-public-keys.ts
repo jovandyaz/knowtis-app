@@ -1,61 +1,90 @@
 import { createPublicKey, type JsonWebKey } from 'node:crypto';
 
-import { Logger } from '@nestjs/common';
+import type { OauthPublicKey } from '@jovandyaz/auth-nestjs';
 
-const logger = new Logger('OauthPublicKeys');
+export const INVALID_OAUTH_JWKS_MESSAGE =
+  'OAUTH_JWKS is set but ineligible: every key must be EC/P-256, alg ES256, use sig, with a unique non-blank kid';
 
-function isEcJwk(value: unknown): value is JsonWebKey {
+export class InvalidOauthJwksError extends Error {
+  constructor() {
+    super(INVALID_OAUTH_JWKS_MESSAGE);
+    this.name = 'InvalidOauthJwksError';
+  }
+}
+
+export interface ParsedOauthJwks {
+  readonly jwks: { keys: Record<string, unknown>[] };
+  readonly publicKeys: OauthPublicKey[];
+}
+
+function isEligibleSigningJwk(
+  value: unknown
+): value is JsonWebKey & Record<string, unknown> & { kid: string } {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const key = value as Record<string, unknown>;
   return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { kty?: unknown }).kty === 'EC'
+    key['kty'] === 'EC' &&
+    key['crv'] === 'P-256' &&
+    key['alg'] === 'ES256' &&
+    key['use'] === 'sig' &&
+    typeof key['kid'] === 'string' &&
+    key['kid'].trim().length > 0
   );
 }
 
-/**
- * Derives PEM-encoded (SPKI) public keys from the raw `OAUTH_JWKS` env value so
- * the api can verify ES256 MCP OAuth tokens minted by the authorization server.
- * Accepts the private JWKS (the AS signing keys) and extracts each public half
- * synchronously. Returns an empty array when the env is absent or malformed,
- * which keeps the api on HS256-only verification (dormant OAuth).
- */
-export function deriveOauthPublicKeys(rawJwks: string | undefined): string[] {
-  if (!rawJwks) {
-    return [];
+export function parseOauthJwks(
+  rawJwks: string | undefined
+): ParsedOauthJwks | null {
+  if (rawJwks === undefined || rawJwks.trim().length === 0) {
+    return null;
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(rawJwks);
   } catch {
-    logger.warn('OAUTH_JWKS is not valid JSON; ES256 verification disabled');
-    return [];
+    throw new InvalidOauthJwksError();
   }
 
   const keys = (parsed as { keys?: unknown })?.keys;
-  if (!Array.isArray(keys)) {
-    logger.warn('OAUTH_JWKS has no keys array; ES256 verification disabled');
-    return [];
+  if (!Array.isArray(keys) || keys.length === 0) {
+    throw new InvalidOauthJwksError();
   }
 
-  const pems: string[] = [];
+  const seenKids = new Set<string>();
+  const publicKeys: OauthPublicKey[] = [];
   for (const key of keys) {
-    if (!isEcJwk(key)) {
-      continue;
+    if (!isEligibleSigningJwk(key) || seenKids.has(key.kid)) {
+      throw new InvalidOauthJwksError();
     }
+    seenKids.add(key.kid);
+
+    let exported: string | Buffer;
     try {
-      const pem = createPublicKey({ key, format: 'jwk' }).export({
+      exported = createPublicKey({ key, format: 'jwk' }).export({
         type: 'spki',
         format: 'pem',
       });
-      pems.push(typeof pem === 'string' ? pem : pem.toString('utf8'));
-    } catch (error) {
-      logger.warn(
-        `Skipping underivable JWK (kid: ${String((key as { kid?: unknown }).kid ?? 'unknown')}): ${error instanceof Error ? error.message : String(error)}`
-      );
-      continue;
+    } catch {
+      throw new InvalidOauthJwksError();
     }
+    publicKeys.push({
+      kid: key.kid,
+      publicKey:
+        typeof exported === 'string' ? exported : exported.toString('utf8'),
+    });
   }
 
-  return pems;
+  return {
+    jwks: { keys: keys as Record<string, unknown>[] },
+    publicKeys,
+  };
+}
+
+export function deriveOauthPublicKeys(
+  rawJwks: string | undefined
+): readonly OauthPublicKey[] {
+  return parseOauthJwks(rawJwks)?.publicKeys ?? [];
 }

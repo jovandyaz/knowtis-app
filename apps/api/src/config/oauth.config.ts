@@ -1,18 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { z } from 'zod';
 
 import type { EnvConfig } from './env.config';
-
-const jwksSchema = z.object({
-  keys: z.array(z.record(z.string(), z.unknown())).min(1),
-});
-
-type Jwks = z.infer<typeof jwksSchema>;
+import { parseOauthJwks } from './oauth-public-keys';
 
 export interface OauthConfig {
   issuer: string;
-  jwks: Jwks;
+  jwks: { keys: Record<string, unknown>[] };
   cookieKeys: string[];
   resourceUrl: string;
 }
@@ -30,21 +24,10 @@ function warnDormantOnce(reason: string): void {
   );
 }
 
-function parseJwks(raw: string): Jwks | null {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return null;
-  }
-  const result = jwksSchema.safeParse(parsed);
-  return result.success ? result.data : null;
-}
-
 /**
  * Resolves the OAuth authorization-server config from validated env, or null
- * when any piece is missing/malformed. A null return keeps the mcp_oauth
- * module dormant even when the feature flag is on; the reason is warned once.
+ * when any piece is missing. A null return keeps the mcp_oauth module dormant
+ * even when the feature flag is on; the reason is warned once.
  */
 export function getOauthConfig(
   config: ConfigService<EnvConfig, true>
@@ -61,9 +44,9 @@ export function getOauthConfig(
     return null;
   }
 
-  const jwks = parseJwks(rawJwks);
-  if (!jwks) {
-    warnDormantOnce('OAUTH_JWKS is not valid JSON of shape { keys: [...] }');
+  const parsedJwks = parseOauthJwks(rawJwks);
+  if (!parsedJwks) {
+    warnDormantOnce('OAUTH_JWKS is unset');
     return null;
   }
 
@@ -77,5 +60,5 @@ export function getOauthConfig(
     return null;
   }
 
-  return { issuer, jwks, cookieKeys, resourceUrl };
+  return { issuer, jwks: parsedJwks.jwks, cookieKeys, resourceUrl };
 }

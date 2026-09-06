@@ -1,6 +1,11 @@
 import { DEFAULT_FROM_ADDRESS } from '@jovandyaz/email-nestjs';
 import { z } from 'zod';
 
+import {
+  INVALID_OAUTH_JWKS_MESSAGE,
+  parseOauthJwks,
+} from './oauth-public-keys';
+
 const envSchemaBase = z.object({
   NODE_ENV: z
     .enum(['development', 'production', 'test'])
@@ -150,6 +155,18 @@ const envSchema = envSchemaBase.superRefine((data, ctx) => {
       path: ['JWT_REFRESH_SECRET'],
       input: data.JWT_REFRESH_SECRET,
     });
+  }
+
+  if (data.OAUTH_JWKS !== undefined) {
+    try {
+      parseOauthJwks(data.OAUTH_JWKS);
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        message: INVALID_OAUTH_JWKS_MESSAGE,
+        path: ['OAUTH_JWKS'],
+      });
+    }
   }
 
   if (data.AI_AGENT_STALL_MS >= data.AI_AGENT_MAX_MS) {

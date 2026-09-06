@@ -12,14 +12,31 @@ const USER_ID = '00000000-0000-4000-8000-0000000000a1';
 const oauthKeyPair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
 const rotatedKeyPair = generateKeyPairSync('ec', { namedCurve: 'P-256' });
 const OAUTH_JWKS = JSON.stringify({
-  keys: [oauthKeyPair.privateKey.export({ format: 'jwk' })],
+  keys: [
+    {
+      ...oauthKeyPair.privateKey.export({ format: 'jwk' }),
+      kid: 'oauth-key',
+      alg: 'ES256',
+      use: 'sig',
+    },
+  ],
 });
 // The shape a rotation leaves behind: the retiring key still first, the one
 // now being signed with second.
 const ROTATED_JWKS = JSON.stringify({
   keys: [
-    oauthKeyPair.privateKey.export({ format: 'jwk' }),
-    rotatedKeyPair.privateKey.export({ format: 'jwk' }),
+    {
+      ...oauthKeyPair.privateKey.export({ format: 'jwk' }),
+      kid: 'retiring-key',
+      alg: 'ES256',
+      use: 'sig',
+    },
+    {
+      ...rotatedKeyPair.privateKey.export({ format: 'jwk' }),
+      kid: 'current-key',
+      alg: 'ES256',
+      use: 'sig',
+    },
   ],
 });
 const OAUTH_PRIVATE_KEY = oauthKeyPair.privateKey

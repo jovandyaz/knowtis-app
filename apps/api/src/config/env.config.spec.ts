@@ -1,8 +1,21 @@
+import { generateKeyPairSync } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 import { validateEnv } from './env.config';
+import { INVALID_OAUTH_JWKS_MESSAGE } from './oauth-public-keys';
 
 const TOKEN_HASH_KEY = 'PQV5tRVJdT2jlfeIfLDEUYt4RREaWnkTZuwZ1qGf5pI=';
+
+function signingJwk(kid: string): Record<string, unknown> {
+  const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    ...privateKey.export({ format: 'jwk' }),
+    kid,
+    alg: 'ES256',
+    use: 'sig',
+  };
+}
 
 const baseEnv = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
@@ -220,16 +233,41 @@ describe('env.config oauth vars', () => {
     expect(env.MCP_RESOURCE_URL).toBeUndefined();
   });
 
-  it('accepts OAuth vars when provided', () => {
+  it('accepts an eligible OAuth JWKS when provided', () => {
     const env = validateEnv({
       ...baseEnv,
       OAUTH_ISSUER: 'https://api.knowtis.app',
-      OAUTH_JWKS: '{"keys":[]}',
+      OAUTH_JWKS: JSON.stringify({ keys: [signingJwk('valid-key')] }),
       OAUTH_COOKIE_KEYS: 'a,b',
       MCP_RESOURCE_URL: 'https://mcp.knowtis.app/mcp',
     });
     expect(env.OAUTH_ISSUER).toBe('https://api.knowtis.app');
     expect(env.MCP_RESOURCE_URL).toBe('https://mcp.knowtis.app/mcp');
+  });
+
+  it('rejects an ineligible OAuth JWKS without exposing key material', () => {
+    const invalidJwk: Record<string, unknown> = {
+      ...signingJwk('private-key-label'),
+      use: 'enc',
+    };
+    let caught: unknown;
+
+    try {
+      validateEnv({
+        ...baseEnv,
+        OAUTH_JWKS: JSON.stringify({ keys: [invalidJwk] }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = String(caught);
+    expect(message).toContain('OAUTH_JWKS');
+    expect(message).toContain(INVALID_OAUTH_JWKS_MESSAGE);
+    expect(message).not.toContain(String(invalidJwk['kid']));
+    expect(message).not.toContain(String(invalidJwk['x']));
+    expect(message).not.toContain(String(invalidJwk['y']));
   });
 
   it('rejects a non-URL OAUTH_ISSUER', () => {
