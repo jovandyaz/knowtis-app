@@ -434,7 +434,7 @@ To exercise the full OAuth flow (e.g. with the [MCP Inspector](https://github.co
 1. **API** (`apps/api/.env`): generate a dev keypair and wire the AS envs.
 
    ```bash
-   npx tsx apps/api/src/scripts/generate-oauth-jwks.ts   # paste output into OAUTH_JWKS
+   pnpm exec tsx apps/api/src/scripts/generate-oauth-jwks.ts   # paste output into OAUTH_JWKS
    ```
 
    ```env
@@ -539,6 +539,25 @@ Tests sit in `__tests__/` directories next to the code they cover (`src/__tests_
 The MCP server runs as its own Railway service (`knowtis-mcp`), declared next to the API in [`.railway/railway.ts`](../.railway/railway.ts): nixpacks build `NODE_ENV=development pnpm install --frozen-lockfile && pnpm nx build mcp`, start `node dist/apps/mcp/index.js`, healthcheck `/health`, restart on failure with 3 retries. `NODE_ENV=production`, `PORT=3334` and `MCP_ALLOWED_HOSTS=mcp.knowtis.app` are declared in that file; `API_INTERNAL_URL`, the OAuth pair below and the rest are `preserve()`: managed in Railway and referenced from the file, never written to source. `API_INTERNAL_URL` is a Railway service variable pointing at the API's private-network endpoint (`knowtisapp` in `.railway/railway.ts`, e.g. `http://knowtisapp.railway.internal:3333`).
 
 To enable OAuth in production, set on the **MCP** service `MCP_OAUTH_ISSUER=https://api.knowtis.app` and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`, and on the **API** service `OAUTH_ISSUER=https://api.knowtis.app`, `OAUTH_JWKS` (a **prod-generated** keypair — never the dev one), `OAUTH_COOKIE_KEYS`, and `MCP_RESOURCE_URL=https://mcp.knowtis.app/mcp`. The resource server can be deployed with its env set while `mcp_oauth` stays off (it is env-gated); flip the flag to turn on the authorization server.
+
+### Rotate OAuth signing keys
+
+Production rotation is a separate security-sensitive operation. Do not begin it without explicit operator confirmation after the supporting code and documentation are deployed.
+
+The generator emits a complete single-key wrapper, `{"keys":[NEW_JWK_OBJECT]}`. API `OAUTH_JWKS` must always be exactly one JSON object with one `keys` array; `[old, new]` is shorthand for `{"keys":[OLD_JWK_OBJECT,NEW_JWK_OBJECT]}`, not a literal top-level array. In the Railway Dashboard secret editor, conceptually copy only the sole object at `.keys[0]` from each single-key wrapper into the target wrapper, then order those objects for the current phase. Keep the old and new wrappers visible only in the Dashboard secret editor and private terminal. Never put private JWK content in CLI arguments, shell history, temporary files, chat, CI output, or a PR.
+
+1. Generate a new private ES256 JWK with `pnpm exec tsx apps/api/src/scripts/generate-oauth-jwks.ts` in a private terminal. It writes the single-key wrapper to stdout; send that output directly to the Railway Dashboard secret editor without redirecting it or copying it anywhere else.
+2. In the Railway Dashboard, set API `OAUTH_JWKS` to exactly `{"keys":[OLD_JWK_OBJECT,NEW_JWK_OBJECT]}` (`[old, new]`) and deploy the API. The old first key continues signing while `/oauth/jwks` publishes both public keys.
+3. Verify both public `kid` values with the [phase 3 public-only check](DEPLOYMENT.md#phase-3-confirm-overlap-publication). Then either wait the full 10-minute `jose.createRemoteJWKSet` cache maximum age or restart the MCP service before switching signers. This is a required gate, not an optional buffer: after the wait, the first token signed by the new key triggers a stale-cache refresh; after a restart, MCP starts with an empty in-memory JWKS cache.
+4. In the Railway Dashboard, set API `OAUTH_JWKS` to exactly `{"keys":[NEW_JWK_OBJECT,OLD_JWK_OBJECT]}` (`[new, old]`) and deploy the API. Complete a normal MCP Inspector or client OAuth authorization-code + PKCE flow to mint a fresh token, then run the [phase 4 authenticated checks](DEPLOYMENT.md#phases-4-and-6-confirm-authenticated-access). If any phase 4 check fails, stop and restore `[old, new]`; do not continue to the one-hour overlap period. A protected-header `kid` that is still the old one means the authorization server did not pick the first key, which means a key's `alg` or `use` metadata differs, and the deployment should have failed validation.
+5. Wait at least one hour after the last token signed by the old key. Keep both public keys deployed throughout this access-token TTL.
+6. In the Railway Dashboard, set API `OAUTH_JWKS` to exactly `{"keys":[NEW_JWK_OBJECT]}` (`[new]`) and deploy. Run the [exact single-new-key public check](DEPLOYMENT.md#phase-6-confirm-single-key-publication), then rerun the [authenticated checks](DEPLOYMENT.md#phases-4-and-6-confirm-authenticated-access). Destroy the retired private key only after both pass: after step 5 no unexpired old-signed token remains valid, and a retained signing key is only a liability.
+
+**Why the first key signs:** The installed `oidc-provider` 9.8.6 implementation selects the signing key with `selectForSign` (`lib/models/formats/jwt.js:46`). It filters eligible keys and stable-sorts them with `keyscore` (`lib/helpers/keystore.js:84-96,260-264`), which awards one point each for declared `alg` and `use`. Every eligible `OAUTH_JWKS` key declares both, so the keys tie and retain their configured order; position 0 signs. A key missing `alg` or `use` would sort last regardless of its position, which is why the API refuses to start on such a set instead of guessing.
+
+If `OAUTH_JWKS` is set but ineligible, the API now fails startup with `OAUTH_JWKS is set but ineligible ...` in the environment validation error, and Railway keeps the previous deployment live. Only an unset value makes OAuth dormant.
+
+**Rollback:** Before phase 6, restore `[old, new]` and deploy to make the old key the signer while both token generations remain verifiable. After removing the old key, restoring it requires another API deploy and does not repair tokens whose key was destroyed.
 
 Deploys are CI-driven via `railway up`, gated on the `mcp` project being affected on `main`. The service declares no `watchPatterns`: Railway would check them against the uploaded snapshot and **skip the build** when none matched — silently deploying nothing while the CI job reports success. Since [config.ts](../apps/mcp/src/config.ts) fails closed, a deployment missing both allowlist variables refuses to boot and the previous deployment stays live.
 

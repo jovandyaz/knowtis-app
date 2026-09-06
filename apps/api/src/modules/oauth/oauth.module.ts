@@ -17,6 +17,16 @@ import {
   type OidcProviderHandle,
 } from './oidc-provider.factory';
 
+export const OAUTH_INITIALIZATION_FAILED_MESSAGE =
+  'OAuth provider initialization failed';
+
+export class OauthInitializationError extends Error {
+  constructor() {
+    super(OAUTH_INITIALIZATION_FAILED_MESSAGE);
+    this.name = 'OauthInitializationError';
+  }
+}
+
 @Module({
   imports: [FeatureFlagsModule],
   controllers: [OauthInteractionController, OauthGrantsController],
@@ -32,23 +42,20 @@ import {
           return null;
         }
         const frontendUrl = config.get('FRONTEND_URL', { infer: true });
+        let handle: OidcProviderHandle;
         try {
-          const handle = await createOidcProvider({
+          handle = await createOidcProvider({
             db,
             ...oauthConfig,
             frontendUrl,
           });
-          new Logger('OauthModule').log(
-            `OAuth AS initialized (issuer: ${oauthConfig.issuer})`
-          );
-          return handle;
-        } catch (error) {
-          new Logger('OauthModule').error(
-            'OAuth AS init failed; staying dark',
-            error instanceof Error ? error.stack : String(error)
-          );
-          return null;
+        } catch {
+          throw new OauthInitializationError();
         }
+        new Logger('OauthModule').log(
+          `OAuth AS initialized (issuer: ${oauthConfig.issuer})`
+        );
+        return handle;
       },
       inject: [ConfigService, DATABASE_CONNECTION],
     },

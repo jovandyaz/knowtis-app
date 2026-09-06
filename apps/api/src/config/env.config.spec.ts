@@ -17,6 +17,16 @@ function signingJwk(kid: string): Record<string, unknown> {
   };
 }
 
+function publicSigningJwk(kid: string): Record<string, unknown> {
+  const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  return {
+    ...publicKey.export({ format: 'jwk' }),
+    kid,
+    alg: 'ES256',
+    use: 'sig',
+  };
+}
+
 const baseEnv = {
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   JWT_SECRET: 'x'.repeat(32),
@@ -268,6 +278,59 @@ describe('env.config oauth vars', () => {
     expect(message).not.toContain(String(invalidJwk['kid']));
     expect(message).not.toContain(String(invalidJwk['x']));
     expect(message).not.toContain(String(invalidJwk['y']));
+  });
+
+  it('rejects public-only OAuth material with the content-free message', () => {
+    const publicJwk = publicSigningJwk('public-only-key-label');
+    let caught: unknown;
+
+    try {
+      validateEnv({
+        ...baseEnv,
+        OAUTH_JWKS: JSON.stringify({ keys: [publicJwk] }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const message = String(caught);
+    expect(message).toContain(INVALID_OAUTH_JWKS_MESSAGE);
+    expect(message).not.toContain(String(publicJwk['kid']));
+    expect(message).not.toContain(String(publicJwk['x']));
+    expect(message).not.toContain(String(publicJwk['y']));
+  });
+
+  it('rejects OAuth material with a mismatched private scalar', () => {
+    const { publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    const publicJwk = publicKey.export({ format: 'jwk' });
+    const privateJwk = privateKey.export({ format: 'jwk' });
+    const mismatchedJwk = {
+      ...publicJwk,
+      d: privateJwk.d,
+      kid: 'mismatched-env-private-key',
+      alg: 'ES256',
+      use: 'sig',
+    };
+    let caught: unknown;
+
+    try {
+      validateEnv({
+        ...baseEnv,
+        OAUTH_JWKS: JSON.stringify({ keys: [mismatchedJwk] }),
+      });
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const serialized = `${String(caught)} ${(caught as Error).stack ?? ''}`;
+    expect(serialized).toContain(INVALID_OAUTH_JWKS_MESSAGE);
+    expect(serialized).not.toContain(mismatchedJwk.kid);
+    expect(serialized).not.toContain(mismatchedJwk.x);
+    expect(serialized).not.toContain(mismatchedJwk.y);
+    expect(serialized).not.toContain(mismatchedJwk.d);
   });
 
   it('rejects a non-URL OAUTH_ISSUER', () => {

@@ -43,12 +43,15 @@ class EchoController {
 async function generateTestJwks(): Promise<{
   keys: Record<string, unknown>[];
 }> {
-  const { privateKey } = await generateKeyPair('ES256', { extractable: true });
-  const jwk = await exportJWK(privateKey);
-  jwk.kid = 'mount-test';
-  jwk.alg = 'ES256';
-  jwk.use = 'sig';
-  return { keys: [jwk as Record<string, unknown>] };
+  const keys: Record<string, unknown>[] = [];
+  for (const kid of ['retiring-key', 'current-key']) {
+    const { privateKey } = await generateKeyPair('ES256', {
+      extractable: true,
+    });
+    const jwk = await exportJWK(privateKey);
+    keys.push({ ...jwk, kid, alg: 'ES256', use: 'sig' });
+  }
+  return { keys };
 }
 
 interface Harness {
@@ -170,16 +173,32 @@ describe('OIDC mount (provider available)', () => {
     );
   });
 
-  it('should serve the JWKS document under /oauth when the flag is on', async () => {
+  it('publishes both rotation keys without private parameters', async () => {
     harness.flags.isEnabled.mockResolvedValue(true);
 
     const res = await fetch(`${harness.base}/oauth/jwks`, {
       headers: PROXY_HEADERS,
     });
-    const body = (await res.json()) as { keys?: unknown[] };
+    const body = (await res.json()) as {
+      keys?: Array<Record<string, unknown>>;
+    };
 
     expect(res.status).toBe(200);
-    expect(body.keys?.length).toBeGreaterThan(0);
+    expect(body.keys?.map((key) => key['kid'])).toEqual([
+      'retiring-key',
+      'current-key',
+    ]);
+    expect(body.keys).toHaveLength(2);
+    expect(
+      body.keys?.every(
+        (key) =>
+          key['kty'] === 'EC' &&
+          key['crv'] === 'P-256' &&
+          key['alg'] === 'ES256' &&
+          key['use'] === 'sig' &&
+          !('d' in key)
+      )
+    ).toBe(true);
   });
 
   it('should honour the flag per request without a restart', async () => {
