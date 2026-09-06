@@ -15,7 +15,7 @@ interface ProtectedHeader {
 
 function readProtectedHeader(rawJwtToken: string): ProtectedHeader | null {
   const encoded = rawJwtToken.split('.')[0];
-  if (!encoded) {
+  if (!encoded || !/^[A-Za-z0-9_-]+$/.test(encoded)) {
     return null;
   }
 

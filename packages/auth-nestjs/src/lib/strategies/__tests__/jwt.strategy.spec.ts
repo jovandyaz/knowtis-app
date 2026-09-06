@@ -3,11 +3,13 @@ import type { ExecutionContext } from '@nestjs/common';
 import { UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { exportSPKI, generateKeyPair, SignJWT } from 'jose';
+import { Strategy as PassportJwtStrategy } from 'passport-jwt';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JWT_AUDIENCE_ACCESS, JWT_ISSUER } from '../../constants';
 import { JwtAuthGuard } from '../../guards/jwt-auth.guard';
 import { createJwtVerificationKeySelector } from '../../jwt-verification-key-selector';
+import type { JwtVerificationKeySelector } from '../../jwt-verification-key-selector';
 import type { OauthPublicKey } from '../../oauth-public-key';
 import type { SessionRepository } from '../../ports/session.repository';
 import type { UserEntity, UserRepository } from '../../ports/user.repository';
@@ -40,7 +42,11 @@ interface AuthOutcome {
 function buildStrategies(
   additionalPublicKeys: OauthPublicKey[],
   sessionRepository?: SessionRepository
-): { hs256: JwtStrategy; oauth: OauthJwtStrategy } {
+): {
+  hs256: JwtStrategy;
+  oauth: OauthJwtStrategy;
+  selectKey: JwtVerificationKeySelector;
+} {
   const userRepository = {
     findById: vi.fn().mockResolvedValue(USER),
   } as unknown as UserRepository;
@@ -51,9 +57,8 @@ function buildStrategies(
       hasLiveSessionForFamily: vi.fn().mockResolvedValue(true),
     } as unknown as SessionRepository);
 
-  const selectKey = createJwtVerificationKeySelector(
-    ACCESS_SECRET,
-    additionalPublicKeys
+  const selectKey = vi.fn(
+    createJwtVerificationKeySelector(ACCESS_SECRET, additionalPublicKeys)
   );
 
   return {
@@ -67,6 +72,7 @@ function buildStrategies(
       userRepository,
       resolvedSessionRepository
     ),
+    selectKey,
   };
 }
 
@@ -120,6 +126,39 @@ function signOauth(privateKey: CryptoKey, kid: string | null): Promise<string> {
     .setExpirationTime('15m')
     .sign(privateKey);
 }
+
+function contextForToken(token: string): {
+  context: ExecutionContext;
+  request: { headers: { authorization: string }; user?: unknown };
+} {
+  const request = {
+    headers: { authorization: `Bearer ${token}` },
+  };
+  const context = {
+    getHandler: () => vi.fn(),
+    getClass: () => vi.fn(),
+    switchToHttp: () => ({
+      getRequest: () => request,
+      getResponse: () => ({}),
+      getNext: () => vi.fn(),
+    }),
+    getType: () => 'http',
+    getArgs: () => [],
+    getArgByIndex: () => ({}),
+    switchToRpc: () => ({}),
+    switchToWs: () => ({}),
+  } as unknown as ExecutionContext;
+  return { context, request };
+}
+
+const passportJwtVerifier = PassportJwtStrategy as unknown as {
+  JwtVerifier: (
+    token: string,
+    secretOrKey: string | Buffer,
+    options: Record<string, unknown>,
+    callback: (error: Error | null, payload?: unknown) => void
+  ) => void;
+};
 
 describe('JwtStrategy', () => {
   let currentPrivateKey: CryptoKey;
@@ -266,37 +305,67 @@ describe('JwtStrategy', () => {
     ).toEqual(['ES256']);
   });
 
+  it('performs exactly one cryptographic verification in the selected strategy', async () => {
+    const verify = vi.spyOn(passportJwtVerifier, 'JwtVerifier');
+    try {
+      const outcome = await runStrategy(
+        buildStrategies([{ kid: 'current', publicKey: currentPem }]).oauth,
+        await signOauth(currentPrivateKey, 'current')
+      );
+
+      expect(outcome.type).toBe('success');
+      expect(verify).toHaveBeenCalledOnce();
+    } finally {
+      verify.mockRestore();
+    }
+  });
+
   it('falls through from jwt-hs256 to jwt-es256 for an OAuth token', async () => {
-    buildStrategies([{ kid: 'current', publicKey: currentPem }]);
+    const { selectKey } = buildStrategies([
+      { kid: 'current', publicKey: currentPem },
+    ]);
     const reflector = new Reflector();
     vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
-    const request: { headers: { authorization: string }; user?: unknown } = {
-      headers: {
-        authorization: `Bearer ${await signOauth(
-          currentPrivateKey,
-          'current'
-        )}`,
-      },
-    };
-    const context = {
-      getHandler: () => vi.fn(),
-      getClass: () => vi.fn(),
-      switchToHttp: () => ({
-        getRequest: () => request,
-        getResponse: () => ({}),
-        getNext: () => vi.fn(),
-      }),
-      getType: () => 'http',
-      getArgs: () => [],
-      getArgByIndex: () => ({}),
-      switchToRpc: () => ({}),
-      switchToWs: () => ({}),
-    } as unknown as ExecutionContext;
+    const { context, request } = contextForToken(
+      await signOauth(currentPrivateKey, 'current')
+    );
 
     await expect(
       new JwtAuthGuard(reflector).canActivate(context)
     ).resolves.toBe(true);
     expect(request.user).toMatchObject({ id: USER_ID, email: USER.email });
+    expect(selectKey).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns Unauthorized when both Passport strategies reject the token', async () => {
+    buildStrategies([]);
+    const reflector = new Reflector();
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const { context } = contextForToken('not-json.payload.signature');
+
+    const activation = new JwtAuthGuard(reflector).canActivate(context);
+    expect(activation).toBeInstanceOf(Promise);
+    const error: unknown = await (activation as Promise<boolean>).catch(
+      (reason: unknown) => reason
+    );
+
+    expect(error).toBeInstanceOf(UnauthorizedException);
+    expect((error as UnauthorizedException).getStatus()).toBe(401);
+  });
+
+  it('stops the Passport chain when session payload validation fails', async () => {
+    const sessions = {
+      hasLiveSessionForFamily: vi.fn().mockResolvedValue(false),
+    } as unknown as SessionRepository;
+    const { selectKey } = buildStrategies([], sessions);
+    const reflector = new Reflector();
+    vi.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+    const { context } = contextForToken(await signHs256());
+
+    await expect(
+      new JwtAuthGuard(reflector).canActivate(context)
+    ).rejects.toThrow('Session revoked');
+    expect(selectKey).toHaveBeenCalledOnce();
   });
 });
 

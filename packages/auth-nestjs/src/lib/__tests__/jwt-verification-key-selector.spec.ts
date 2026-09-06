@@ -7,6 +7,9 @@ const keys: OauthPublicKey[] = [
   { kid: 'retiring', publicKey: 'retiring-pem' },
   { kid: 'current', publicKey: 'current-pem' },
 ];
+const currentHeader = Buffer.from(
+  JSON.stringify({ alg: 'ES256', kid: 'current' })
+).toString('base64url');
 
 function token(header: unknown): string {
   return `${Buffer.from(JSON.stringify(header)).toString(
@@ -62,12 +65,15 @@ describe('createJwtVerificationKeySelector', () => {
   });
 
   it.each([
-    'not-json.payload.signature',
-    '.payload.signature',
-    'e30.payload.signature',
-  ])('returns null for malformed protected header %s', (rawToken) => {
+    ['illegal character', `${currentHeader}!`],
+    ['padding', `${currentHeader}=`],
+    ['whitespace', `${currentHeader} `],
+    ['malformed segment', 'not-json'],
+    ['empty segment', ''],
+    ['object without algorithm', 'e30'],
+  ])('returns null for %s in the protected segment', (_name, segment) => {
     const select = createJwtVerificationKeySelector('session-secret', keys);
 
-    expect(select(rawToken)).toBeNull();
+    expect(select(`${segment}.payload.signature`)).toBeNull();
   });
 });
