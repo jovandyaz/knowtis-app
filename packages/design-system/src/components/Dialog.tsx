@@ -1,85 +1,30 @@
 import {
   createContext,
-  useCallback,
   useContext,
   useEffect,
-  useId,
   useRef,
   useState,
+  type ComponentPropsWithoutRef,
   type HTMLAttributes,
-  type KeyboardEvent,
   type ReactNode,
 } from 'react';
-import { createPortal } from 'react-dom';
 
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
-import { useEscapeDismiss } from '../hooks/useEscapeDismiss';
 import { cn } from '../utils';
 
-interface DialogContextValue {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  titleId: string;
-  descriptionId: string;
-  titlePresent: boolean;
+interface DialogSemanticsContextValue {
   descriptionPresent: boolean;
-  setTitlePresent: (present: boolean) => void;
   setDescriptionPresent: (present: boolean) => void;
 }
 
-// Stacked dialogs share one lock: a per-dialog capture reads 'hidden' off the
-// dialog underneath, so closing bottom-first would restore 'hidden' for good.
-let scrollLockCount = 0;
-let overflowBeforeLock = '';
+const DialogSemanticsContext =
+  createContext<DialogSemanticsContextValue | null>(null);
 
-function lockBodyScroll() {
-  if (scrollLockCount === 0) {
-    overflowBeforeLock = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-  }
-  scrollLockCount += 1;
-}
-
-function releaseBodyScroll() {
-  scrollLockCount -= 1;
-  if (scrollLockCount === 0) {
-    document.body.style.overflow = overflowBeforeLock;
-  }
-}
-
-const DIALOG_ROLE_SELECTOR = '[role="dialog"]';
-
-// A control that disables itself mid-action blurs to <body>, and a re-render can
-// detach or hide it, so what held focus at open time may be unable to take it
-// back — and `.focus()` on such a control silently strands focus on <body>.
-function canTakeFocusBack(element: HTMLElement): boolean {
-  if (!element.isConnected || element.hasAttribute('disabled')) {
-    return false;
-  }
-  return (
-    typeof element.checkVisibility !== 'function' || element.checkVisibility()
-  );
-}
-
-function focusTargetAfterClose(previous: Element | null): HTMLElement | null {
-  if (
-    previous instanceof HTMLElement &&
-    previous !== document.body &&
-    canTakeFocusBack(previous)
-  ) {
-    return previous;
-  }
-  const stillOpen =
-    document.querySelectorAll<HTMLElement>(DIALOG_ROLE_SELECTOR);
-  return stillOpen[stillOpen.length - 1] ?? null;
-}
-
-const DialogContext = createContext<DialogContextValue | null>(null);
-
-function useDialogContext() {
-  const context = useContext(DialogContext);
+function useDialogSemantics() {
+  const context = useContext(DialogSemanticsContext);
   if (!context) {
     throw new Error('Dialog components must be used within a Dialog');
   }
@@ -92,86 +37,52 @@ interface DialogProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-function Dialog({ children, open: controlledOpen, onOpenChange }: DialogProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
-  const [titlePresent, setTitlePresent] = useState(false);
+function Dialog({ children, open, onOpenChange }: DialogProps) {
   const [descriptionPresent, setDescriptionPresent] = useState(false);
-  const titleId = useId();
-  const descriptionId = useId();
-
-  const isControlled = controlledOpen !== undefined;
-  const open = isControlled ? controlledOpen : uncontrolledOpen;
-
-  const handleOpenChange = useCallback(
-    (newOpen: boolean) => {
-      if (!isControlled) {
-        setUncontrolledOpen(newOpen);
-      }
-      onOpenChange?.(newOpen);
-    },
-    [isControlled, onOpenChange]
-  );
 
   return (
-    <DialogContext.Provider
+    <DialogSemanticsContext.Provider
       value={{
-        open,
-        onOpenChange: handleOpenChange,
-        titleId,
-        descriptionId,
-        titlePresent,
         descriptionPresent,
-        setTitlePresent,
         setDescriptionPresent,
       }}
     >
-      {children}
-    </DialogContext.Provider>
+      <DialogPrimitive.Root
+        {...(open === undefined ? {} : { open })}
+        {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      >
+        {children}
+      </DialogPrimitive.Root>
+    </DialogSemanticsContext.Provider>
   );
 }
 
-function DialogPortal({ children }: { children: ReactNode }) {
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMounted(true);
-    return () => setMounted(false);
-  }, []);
-
-  if (!mounted) {
-    return null;
+function canRestoreFocus(element: HTMLElement): boolean {
+  if (
+    element === document.body ||
+    !element.isConnected ||
+    element.hasAttribute('disabled')
+  ) {
+    return false;
   }
-
-  return createPortal(children, document.body);
-}
-
-function DialogOverlay({
-  className,
-  ...props
-}: HTMLAttributes<HTMLDivElement>) {
-  const { open, onOpenChange } = useDialogContext();
-
-  if (!open) {
-    return null;
-  }
-
   return (
-    <div
-      className={cn(
-        'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
-        'animate-in fade-in-0',
-        className
-      )}
-      onClick={() => onOpenChange(false)}
-      aria-hidden="true"
-      {...props}
-    />
+    typeof element.checkVisibility !== 'function' || element.checkVisibility()
   );
 }
 
-interface DialogContentProps extends HTMLAttributes<HTMLDivElement> {
+type RadixDialogContentProps = ComponentPropsWithoutRef<
+  typeof DialogPrimitive.Content
+>;
+type DialogAutoFocusEvent = Parameters<
+  NonNullable<RadixDialogContentProps['onOpenAutoFocus']>
+>[0];
+
+interface DialogContentProps extends Omit<
+  RadixDialogContentProps,
+  'children' | 'className'
+> {
   children: ReactNode;
+  className?: string;
   side?: DialogSide;
   /** Accessible name of the close control; the caller owns its translation. */
   closeLabel: string;
@@ -182,98 +93,48 @@ function DialogContent({
   children,
   side = DIALOG_SIDE.CENTER,
   closeLabel,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
-  const {
-    open,
-    onOpenChange,
-    titleId,
-    descriptionId,
-    titlePresent,
-    descriptionPresent,
-  } = useDialogContext();
-  const [contentNode, setContentNode] = useState<HTMLDivElement | null>(null);
-  const previousActiveElement = useRef<Element | null>(null);
+  const { descriptionPresent } = useDialogSemantics();
+  const openerRef = useRef<HTMLElement | null>(null);
 
-  useEscapeDismiss(open, () => onOpenChange(false));
+  const handleOpenAutoFocus = (event: DialogAutoFocusEvent) => {
+    openerRef.current =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    onOpenAutoFocus?.(event);
+  };
 
-  const getFocusableElements = useCallback(() => {
-    if (!contentNode) {
-      return [];
-    }
-    return Array.from(
-      contentNode.querySelectorAll<HTMLElement>(
-        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-      )
-    ).filter((el) => !el.hasAttribute('disabled') && el.offsetParent !== null);
-  }, [contentNode]);
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent<HTMLDivElement>) => {
-      if (e.key === 'Tab') {
-        const focusableElements = getFocusableElements();
-        if (focusableElements.length === 0) {
-          e.preventDefault();
-          return;
-        }
-
-        const firstElement = focusableElements[0];
-        const lastElement = focusableElements[focusableElements.length - 1];
-
-        if (e.shiftKey && document.activeElement === firstElement) {
-          e.preventDefault();
-          lastElement.focus();
-        } else if (!e.shiftKey && document.activeElement === lastElement) {
-          e.preventDefault();
-          firstElement.focus();
-        }
-      }
-    },
-    [getFocusableElements]
-  );
-
-  useEffect(() => {
-    if (open) {
-      previousActiveElement.current = document.activeElement;
-
-      lockBodyScroll();
-
-      return () => {
-        releaseBodyScroll();
-        focusTargetAfterClose(previousActiveElement.current)?.focus();
-      };
-    }
-    return;
-  }, [open]);
-
-  // DialogPortal renders null until its own mount effect runs, so the content node
-  // does not exist yet on the commit that opens the dialog — hence keying off the node.
-  // That extra commit lands after the content's own effects, so content that focused a
-  // field of its own already holds focus here and must keep it.
-  useEffect(() => {
-    if (!open || !contentNode || contentNode.contains(document.activeElement)) {
+  const handleCloseAutoFocus = (event: DialogAutoFocusEvent) => {
+    onCloseAutoFocus?.(event);
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (event.defaultPrevented) {
       return;
     }
-    const [firstFocusable] = getFocusableElements();
-    (firstFocusable ?? contentNode).focus();
-  }, [open, contentNode, getFocusableElements]);
 
-  if (!open) {
-    return null;
-  }
+    if (opener && canRestoreFocus(opener)) {
+      event.preventDefault();
+      opener.focus();
+    }
+  };
 
   return (
-    <DialogPortal>
-      <DialogOverlay />
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- the APG dialog pattern traps Tab on the dialog container itself */}
-      <div
-        ref={setContentNode}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titlePresent ? titleId : undefined}
-        aria-describedby={descriptionPresent ? descriptionId : undefined}
-        tabIndex={-1}
-        onKeyDown={handleKeyDown}
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay
+        className={cn(
+          'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
+          'animate-in fade-in-0'
+        )}
+      />
+      <DialogPrimitive.Content
+        {...(!descriptionPresent ? { 'aria-describedby': undefined } : {})}
+        {...props}
+        onOpenAutoFocus={handleOpenAutoFocus}
+        onCloseAutoFocus={handleCloseAutoFocus}
         className={cn(
           'fixed z-50 grid w-full gap-4 border border-(--border) bg-(--card) shadow-lg duration-200',
           side === DIALOG_SIDE.CENTER && [
@@ -292,8 +153,6 @@ function DialogContent({
           ],
           className
         )}
-        onClick={(e) => e.stopPropagation()}
-        {...props}
       >
         {side === DIALOG_SIDE.CENTER ? (
           <div className="mb-1 flex justify-center md:hidden">
@@ -301,16 +160,15 @@ function DialogContent({
           </div>
         ) : null}
         {children}
-        <button
+        <DialogPrimitive.Close
           type="button"
           className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"
-          onClick={() => onOpenChange(false)}
           aria-label={closeLabel}
         >
           <X className="h-4 w-4" />
-        </button>
-      </div>
-    </DialogPortal>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
   );
 }
 
@@ -338,43 +196,38 @@ function DialogFooter({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
   );
 }
 
-function DialogTitle({
-  className,
-  children,
-  ...props
-}: Omit<HTMLAttributes<HTMLHeadingElement>, 'id'>) {
-  const { titleId, setTitlePresent } = useDialogContext();
-  useEffect(() => {
-    setTitlePresent(true);
-    return () => setTitlePresent(false);
-  }, [setTitlePresent]);
+type DialogTitleProps = Omit<
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Title>,
+  'id'
+>;
+
+function DialogTitle({ className, ...props }: DialogTitleProps) {
   return (
-    <h2
+    <DialogPrimitive.Title
       {...props}
-      id={titleId}
       className={cn(
         'text-lg font-semibold leading-none tracking-tight',
         className
       )}
-    >
-      {children}
-    </h2>
+    />
   );
 }
 
-function DialogDescription({
-  className,
-  ...props
-}: Omit<HTMLAttributes<HTMLParagraphElement>, 'id'>) {
-  const { descriptionId, setDescriptionPresent } = useDialogContext();
+type DialogDescriptionProps = Omit<
+  ComponentPropsWithoutRef<typeof DialogPrimitive.Description>,
+  'id'
+>;
+
+function DialogDescription({ className, ...props }: DialogDescriptionProps) {
+  const { setDescriptionPresent } = useDialogSemantics();
   useEffect(() => {
     setDescriptionPresent(true);
     return () => setDescriptionPresent(false);
   }, [setDescriptionPresent]);
+
   return (
-    <p
+    <DialogPrimitive.Description
       {...props}
-      id={descriptionId}
       className={cn('text-sm text-(--muted-foreground)', className)}
     />
   );

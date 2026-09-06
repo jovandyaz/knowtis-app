@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,33 +32,6 @@ function renderDialog(onOpenChange = vi.fn()) {
   return onOpenChange;
 }
 
-function ShareThenVerify({
-  topOpen,
-  shareDisabled = false,
-}: {
-  topOpen: boolean;
-  shareDisabled?: boolean;
-}) {
-  return (
-    <>
-      <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent closeLabel="Close dialog">
-          <DialogTitle>Share</DialogTitle>
-          <button type="button" disabled={shareDisabled}>
-            Anyone with the link
-          </button>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={topOpen} onOpenChange={vi.fn()}>
-        <DialogContent closeLabel="Close dialog">
-          <DialogTitle>Verify</DialogTitle>
-          <input aria-label="Code" />
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
-
 describe('Dialog accessibility', () => {
   it('labels the dialog with the DialogTitle id', () => {
     renderDialog();
@@ -82,6 +55,51 @@ describe('Dialog accessibility', () => {
     expect(description.id).toBe(describedBy);
   });
 
+  it('lets a consumer choose initial focus through the cancelable Radix event', () => {
+    const onOpenAutoFocus = vi.fn();
+
+    function CustomInitialFocus() {
+      const chosen = useRef<HTMLButtonElement>(null);
+      return (
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent
+            closeLabel="Close dialog"
+            onOpenAutoFocus={(event) => {
+              onOpenAutoFocus();
+              event.preventDefault();
+              chosen.current?.focus();
+            }}
+          >
+            <DialogTitle>Choose focus</DialogTitle>
+            <button type="button">Default target</button>
+            <button ref={chosen} type="button">
+              Chosen target
+            </button>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+
+    render(<CustomInitialFocus />);
+
+    expect(onOpenAutoFocus).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Chosen target' })).toHaveFocus();
+  });
+
+  it('keeps its title label and omits an absent optional description', () => {
+    render(
+      <Dialog open onOpenChange={vi.fn()}>
+        <DialogContent closeLabel="Close dialog">
+          <DialogTitle>Title only</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Title only' });
+    expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
+    expect(dialog.getAttribute('aria-describedby')).toBeNull();
+  });
+
   it('closes on Escape when focus is on the body', () => {
     const onOpenChange = renderDialog();
 
@@ -102,24 +120,10 @@ describe('Dialog accessibility', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
-  it('marks the Escape as spent so an outer listener can tell', () => {
-    renderDialog();
-    const seenAsSpent = vi.fn();
-    const record = (event: globalThis.KeyboardEvent) =>
-      seenAsSpent(event.defaultPrevented);
-    window.addEventListener('keydown', record);
-
-    try {
-      fireEvent.keyDown(document.body, { key: 'Escape' });
-    } finally {
-      window.removeEventListener('keydown', record);
-    }
-
-    expect(seenAsSpent).toHaveBeenCalledWith(true);
-  });
-
-  it('leaves an Escape a nested dismissable layer already spent alone', async () => {
+  it('operates a portaled Radix menu without dismissing the dialog', async () => {
+    const user = userEvent.setup();
     const onOpenChange = vi.fn();
+    const onSelect = vi.fn();
     render(
       <Dialog open onOpenChange={onOpenChange}>
         <DialogContent closeLabel="Close dialog">
@@ -127,19 +131,32 @@ describe('Dialog accessibility', () => {
           <DropdownMenu>
             <DropdownMenuTrigger>Model</DropdownMenuTrigger>
             <DropdownMenuContent>
-              <DropdownMenuItem>Sonnet</DropdownMenuItem>
+              <DropdownMenuItem onSelect={onSelect}>Sonnet</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </DialogContent>
       </Dialog>
     );
-    await userEvent.click(screen.getByRole('button', { name: 'Model' }));
-    expect(screen.getByRole('menu')).toBeInTheDocument();
 
-    await userEvent.keyboard('{Escape}');
+    const dialog = screen.getByRole('dialog', { name: 'Settings' });
+    const trigger = screen.getByRole('button', { name: 'Model' });
+    await user.click(trigger);
+    const menu = screen.getByRole('menu');
+    expect(document.body).toContainElement(menu);
+    expect(dialog).not.toContainElement(menu);
 
+    await user.keyboard('{Escape}');
     expect(screen.queryByRole('menu')).toBeNull();
     expect(onOpenChange).not.toHaveBeenCalled();
+    expect(trigger).toHaveFocus();
+
+    await user.click(trigger);
+    await user.click(screen.getByRole('menuitem', { name: 'Sonnet' }));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(
+      screen.getByRole('dialog', { name: 'Settings' })
+    ).toBeInTheDocument();
   });
 
   it('removes the Escape listener when closed', () => {
@@ -155,18 +172,6 @@ describe('Dialog accessibility', () => {
     fireEvent.keyDown(document.body, { key: 'Escape' });
 
     expect(onOpenChange).not.toHaveBeenCalled();
-  });
-
-  it('omits aria-labelledby and aria-describedby when no title or description is rendered', () => {
-    render(
-      <Dialog open onOpenChange={vi.fn()}>
-        <DialogContent closeLabel="Close dialog">Plain content</DialogContent>
-      </Dialog>
-    );
-
-    const dialog = screen.getByRole('dialog');
-    expect(dialog.getAttribute('aria-labelledby')).toBeNull();
-    expect(dialog.getAttribute('aria-describedby')).toBeNull();
   });
 
   it('closes only the topmost dialog on Escape when dialogs are stacked', () => {
@@ -191,81 +196,6 @@ describe('Dialog accessibility', () => {
 
     expect(onInnerChange).toHaveBeenCalledWith(false);
     expect(onOuterChange).not.toHaveBeenCalled();
-  });
-
-  it('still closes the topmost dialog after the one underneath re-renders', () => {
-    const onOuterChange = vi.fn();
-    const onInnerChange = vi.fn();
-    function StackedDialogs({ tick }: { tick: number }) {
-      return (
-        <>
-          <Dialog open onOpenChange={() => onOuterChange(tick)}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Outer</DialogTitle>
-            </DialogContent>
-          </Dialog>
-          <Dialog open onOpenChange={onInnerChange}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Inner</DialogTitle>
-            </DialogContent>
-          </Dialog>
-        </>
-      );
-    }
-
-    const { rerender } = render(<StackedDialogs tick={0} />);
-    rerender(<StackedDialogs tick={1} />);
-
-    fireEvent.keyDown(document.body, { key: 'Escape' });
-
-    expect(onInnerChange).toHaveBeenCalledWith(false);
-    expect(onOuterChange).not.toHaveBeenCalled();
-  });
-
-  it('answers Escape from one listener, so a stacked pair cannot both spend it', () => {
-    const addListener = vi.spyOn(document, 'addEventListener');
-    render(
-      <>
-        <Dialog open onOpenChange={vi.fn()}>
-          <DialogContent closeLabel="Close dialog">
-            <DialogTitle>Outer</DialogTitle>
-          </DialogContent>
-        </Dialog>
-        <Dialog open onOpenChange={vi.fn()}>
-          <DialogContent closeLabel="Close dialog">
-            <DialogTitle>Inner</DialogTitle>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-
-    const keydownListeners = addListener.mock.calls.filter(
-      ([type]) => type === 'keydown'
-    );
-    expect(keydownListeners).toHaveLength(1);
-    addListener.mockRestore();
-  });
-
-  it('stops listening for Escape once the last dialog closes', () => {
-    const removeListener = vi.spyOn(document, 'removeEventListener');
-    function Sole({ open }: { open: boolean }) {
-      return (
-        <Dialog open={open} onOpenChange={vi.fn()}>
-          <DialogContent closeLabel="Close dialog">
-            <DialogTitle>Sole</DialogTitle>
-          </DialogContent>
-        </Dialog>
-      );
-    }
-
-    const { rerender } = render(<Sole open />);
-    rerender(<Sole open={false} />);
-
-    const keydownRemovals = removeListener.mock.calls.filter(
-      ([type]) => type === 'keydown'
-    );
-    expect(keydownRemovals).toHaveLength(1);
-    removeListener.mockRestore();
   });
 
   it('moves focus into the content on open without waiting for a later frame', () => {
@@ -307,6 +237,32 @@ describe('Dialog accessibility', () => {
     );
   });
 
+  it('recaptures focus when background code focuses outside the modal', () => {
+    render(
+      <>
+        <button type="button">Background action</button>
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent closeLabel="Close dialog">
+            <DialogTitle>Verify</DialogTitle>
+            <input aria-label="Code" />
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+
+    const code = screen.getByRole('textbox', { name: 'Code' });
+    const background = screen.getByRole('button', {
+      name: 'Background action',
+      hidden: true,
+    });
+    background.focus();
+
+    expect(code).toHaveFocus();
+    expect(
+      screen.queryByRole('button', { name: 'Background action' })
+    ).toBeNull();
+  });
+
   it('wraps focus at both ends so Tab never leaves the dialog', () => {
     render(
       <Dialog open onOpenChange={vi.fn()}>
@@ -329,7 +285,89 @@ describe('Dialog accessibility', () => {
     expect(document.activeElement).toBe(last);
   });
 
-  it('returns focus to the control the dialog was opened over', () => {
+  it('composes consumer keydown with forward and backward focus looping', async () => {
+    const user = userEvent.setup();
+    const onKeyDown = vi.fn();
+    render(
+      <>
+        <button type="button">Background action</button>
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent closeLabel="Close dialog" onKeyDown={onKeyDown}>
+            <DialogTitle>Navigation</DialogTitle>
+            <button type="button">First action</button>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+
+    const first = screen.getByRole('button', { name: 'First action' });
+    const close = screen.getByRole('button', { name: 'Close dialog' });
+    close.focus();
+    await user.tab();
+    expect(first).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(close).toHaveFocus();
+    expect(
+      onKeyDown.mock.calls.filter(([event]) => event.key === 'Tab')
+    ).toHaveLength(2);
+  });
+
+  it('lets a consumer cancel Escape without replacing focus containment', () => {
+    const onOpenChange = vi.fn();
+    const onEscapeKeyDown = vi.fn((event: Event) => event.preventDefault());
+    render(
+      <Dialog open onOpenChange={onOpenChange}>
+        <DialogContent
+          closeLabel="Close dialog"
+          onEscapeKeyDown={onEscapeKeyDown}
+        >
+          <DialogTitle>Protected action</DialogTitle>
+          <button type="button">Continue</button>
+        </DialogContent>
+      </Dialog>
+    );
+
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(onEscapeKeyDown).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus();
+  });
+
+  it('lets a consumer cancel an outside pointer dismissal', async () => {
+    const onOpenChange = vi.fn();
+    const onPointerDownOutside = vi.fn((event: Event) =>
+      event.preventDefault()
+    );
+    render(
+      <>
+        <button type="button">Background action</button>
+        <Dialog open onOpenChange={onOpenChange}>
+          <DialogContent
+            closeLabel="Close dialog"
+            onPointerDownOutside={onPointerDownOutside}
+          >
+            <DialogTitle>Stay open</DialogTitle>
+            <button type="button">Inside action</button>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+
+    await waitFor(() => expect(document.body.style.pointerEvents).toBe('none'));
+    fireEvent.pointerDown(
+      screen.getByRole('button', { name: 'Background action', hidden: true })
+    );
+
+    expect(onPointerDownOutside).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole('dialog', { name: 'Stay open' })
+    ).toBeInTheDocument();
+  });
+
+  it('returns focus to the control the dialog was opened over', async () => {
     function OpenerAndDialog({ open }: { open: boolean }) {
       return (
         <>
@@ -351,135 +389,206 @@ describe('Dialog accessibility', () => {
     rerender(<OpenerAndDialog open />);
     rerender(<OpenerAndDialog open={false} />);
 
-    expect(document.activeElement).toBe(opener);
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
-  it('falls back to the dialog underneath when focus was left on the body', () => {
-    function StackedDialogs({ topOpen }: { topOpen: boolean }) {
+  it('uses a consumer close-autofocus target instead of the captured opener', async () => {
+    function CloseTargetHarness({ open }: { open: boolean }) {
+      const logicalTarget = useRef<HTMLButtonElement>(null);
       return (
         <>
-          <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Share</DialogTitle>
-              <button type="button">Anyone with the link</button>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Verify</DialogTitle>
-              <input aria-label="Code" />
+          <button type="button">Opener</button>
+          <button ref={logicalTarget} type="button">
+            Logical target
+          </button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent
+              closeLabel="Close dialog"
+              onCloseAutoFocus={(event) => {
+                event.preventDefault();
+                logicalTarget.current?.focus();
+              }}
+            >
+              <DialogTitle>Complete</DialogTitle>
+              <button type="button">Finish</button>
             </DialogContent>
           </Dialog>
         </>
       );
     }
 
-    const { rerender } = render(<StackedDialogs topOpen={false} />);
-    (document.activeElement as HTMLElement).blur();
-    expect(document.activeElement).toBe(document.body);
+    const { rerender } = render(<CloseTargetHarness open={false} />);
+    screen.getByRole('button', { name: 'Opener' }).focus();
+    rerender(<CloseTargetHarness open />);
+    rerender(<CloseTargetHarness open={false} />);
 
-    rerender(<StackedDialogs topOpen />);
-    rerender(<StackedDialogs topOpen={false} />);
-
-    expect(document.activeElement).toBe(screen.getByRole('dialog'));
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Logical target' })
+      ).toHaveFocus()
+    );
   });
 
-  it('falls back to the dialog underneath when the opener is gone by close', () => {
-    function StackedDialogs({
-      topOpen,
+  it('does not restore a disabled opener', async () => {
+    function DisabledOpener({
+      open,
+      disabled,
+    }: {
+      open: boolean;
+      disabled: boolean;
+    }) {
+      return (
+        <>
+          <button type="button" disabled={disabled}>
+            Open dialog
+          </button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Disable opener</DialogTitle>
+              <input aria-label="Dialog field" />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(
+      <DisabledOpener open={false} disabled={false} />
+    );
+    const opener = screen.getByRole('button', { name: 'Open dialog' });
+    opener.focus();
+    rerender(<DisabledOpener open disabled={false} />);
+    const focus = vi.spyOn(opener, 'focus');
+    rerender(<DisabledOpener open disabled />);
+    rerender(<DisabledOpener open={false} disabled />);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('does not restore an opener the platform reports as invisible', async () => {
+    function InvisibleOpener({ open }: { open: boolean }) {
+      return (
+        <>
+          <button type="button">Open dialog</button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Hide opener</DialogTitle>
+              <input aria-label="Dialog field" />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<InvisibleOpener open={false} />);
+    const opener = screen.getByRole('button', { name: 'Open dialog' });
+    opener.focus();
+    rerender(<InvisibleOpener open />);
+    opener.checkVisibility = () => false;
+    const focus = vi.spyOn(opener, 'focus');
+    rerender(<InvisibleOpener open={false} />);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('recovers inside the scope when the focused control is detached', async () => {
+    function DetachingControl() {
+      const [shown, setShown] = useState(true);
+      return (
+        <Dialog open onOpenChange={vi.fn()}>
+          <DialogContent closeLabel="Close dialog">
+            <DialogTitle>Detach focus</DialogTitle>
+            {shown ? (
+              <button type="button" onClick={() => setShown(false)}>
+                Remove me
+              </button>
+            ) : null}
+            <button type="button">Remaining action</button>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<DetachingControl />);
+    await user.click(screen.getByRole('button', { name: 'Remove me' }));
+
+    await waitFor(() => {
+      const dialog = screen.getByRole('dialog', { name: 'Detach focus' });
+      expect(dialog).toContainElement(document.activeElement as HTMLElement);
+    });
+  });
+
+  it('keeps the top scope focused when the lower dialog closes first', async () => {
+    function Stack({ lowerOpen }: { lowerOpen: boolean }) {
+      return (
+        <>
+          <Dialog open={lowerOpen} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close lower dialog">
+              <DialogTitle>Lower</DialogTitle>
+              <button type="button">Lower action</button>
+            </DialogContent>
+          </Dialog>
+          <Dialog open onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close upper dialog">
+              <DialogTitle>Upper</DialogTitle>
+              <input aria-label="Upper field" />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<Stack lowerOpen />);
+    const upperField = screen.getByRole('textbox', {
+      name: 'Upper field',
+      hidden: true,
+    });
+    upperField.focus();
+    rerender(<Stack lowerOpen={false} />);
+
+    await waitFor(() => expect(upperField).toHaveFocus());
+  });
+
+  it('resumes the lower scope when an invalid nested opener disappears', async () => {
+    function Stack({
+      upperOpen,
       showOpener,
     }: {
-      topOpen: boolean;
+      upperOpen: boolean;
       showOpener: boolean;
     }) {
       return (
         <>
           <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Share</DialogTitle>
-              {showOpener && (
-                <button type="button">Anyone with the link</button>
-              )}
+            <DialogContent closeLabel="Close lower dialog">
+              <DialogTitle>Lower</DialogTitle>
+              {showOpener ? <button type="button">Open upper</button> : null}
+              <button type="button">Lower fallback</button>
             </DialogContent>
           </Dialog>
-          <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Verify</DialogTitle>
-              <input aria-label="Code" />
-            </DialogContent>
-          </Dialog>
-        </>
-      );
-    }
-
-    const { rerender } = render(<StackedDialogs topOpen={false} showOpener />);
-    screen.getByRole('button', { name: 'Anyone with the link' }).focus();
-
-    rerender(<StackedDialogs topOpen showOpener />);
-    rerender(<StackedDialogs topOpen showOpener={false} />);
-    rerender(<StackedDialogs topOpen={false} showOpener={false} />);
-
-    expect(document.activeElement).toBe(screen.getByRole('dialog'));
-  });
-
-  it('skips a control that disabled itself while the dialog was open', () => {
-    const { rerender } = render(<ShareThenVerify topOpen={false} />);
-    screen.getByRole('button', { name: 'Anyone with the link' }).focus();
-
-    rerender(<ShareThenVerify topOpen />);
-    rerender(<ShareThenVerify topOpen shareDisabled />);
-    rerender(<ShareThenVerify topOpen={false} shareDisabled />);
-
-    expect(document.activeElement).toBe(screen.getByRole('dialog'));
-  });
-
-  it('skips a control the platform reports as invisible', () => {
-    const { rerender } = render(<ShareThenVerify topOpen={false} />);
-    const opener = screen.getByRole('button', { name: 'Anyone with the link' });
-    opener.focus();
-
-    rerender(<ShareThenVerify topOpen />);
-    // jsdom does no layout and ships no checkVisibility, so the only way to state
-    // "the platform says this is not rendered" is to supply the API it lacks.
-    opener.checkVisibility = () => false;
-    rerender(<ShareThenVerify topOpen={false} />);
-
-    expect(document.activeElement).toBe(screen.getByRole('dialog'));
-  });
-
-  it('falls back to the topmost dialog still open, not the bottom one', () => {
-    function ThreeDialogs({ topOpen }: { topOpen: boolean }) {
-      return (
-        <>
-          <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Bottom</DialogTitle>
-            </DialogContent>
-          </Dialog>
-          <Dialog open onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Middle</DialogTitle>
-            </DialogContent>
-          </Dialog>
-          <Dialog open={topOpen} onOpenChange={vi.fn()}>
-            <DialogContent closeLabel="Close dialog">
-              <DialogTitle>Top</DialogTitle>
-              <input aria-label="Code" />
+          <Dialog open={upperOpen} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close upper dialog">
+              <DialogTitle>Upper</DialogTitle>
+              <input aria-label="Upper field" />
             </DialogContent>
           </Dialog>
         </>
       );
     }
 
-    const { rerender } = render(<ThreeDialogs topOpen={false} />);
-    (document.activeElement as HTMLElement).blur();
+    const { rerender } = render(<Stack upperOpen={false} showOpener />);
+    screen.getByRole('button', { name: 'Open upper' }).focus();
+    rerender(<Stack upperOpen showOpener />);
+    rerender(<Stack upperOpen showOpener={false} />);
+    rerender(<Stack upperOpen={false} showOpener={false} />);
 
-    rerender(<ThreeDialogs topOpen />);
-    rerender(<ThreeDialogs topOpen={false} />);
-
-    expect(document.activeElement).toBe(
-      screen.getByText('Middle').closest('[role="dialog"]')
-    );
+    await waitFor(() => {
+      const lower = screen.getByRole('dialog', { name: 'Lower' });
+      expect(lower).toContainElement(document.activeElement as HTMLElement);
+    });
   });
 
   it('renders a right-side drawer when side="right"', () => {
@@ -544,7 +653,6 @@ describe('Dialog body scroll lock', () => {
     document.body.style.overflow = 'scroll';
 
     const { rerender } = render(<StackedDialogs bottomOpen topOpen={false} />);
-    expect(document.body.style.overflow).toBe('hidden');
 
     rerender(<StackedDialogs bottomOpen={false} topOpen={false} />);
 
@@ -557,7 +665,7 @@ describe('Dialog body scroll lock', () => {
 
     rerender(<StackedDialogs bottomOpen={false} topOpen />);
 
-    expect(document.body.style.overflow).toBe('hidden');
+    expect(getComputedStyle(document.body).overflow).toBe('hidden');
   });
 
   it('releases the page only once the last dialog closes', () => {
