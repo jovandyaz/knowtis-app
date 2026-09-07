@@ -1,6 +1,6 @@
 import { io, type Socket } from 'socket.io-client';
 
-import type { ReasoningEffort } from '@knowtis/shared-types';
+import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
 import { logger } from '@knowtis/shared-util';
 
 import type { TokenProvider } from './http-client';
@@ -45,6 +45,7 @@ export interface AgentDonePayload {
   sources: AgentSource[];
   knownNotes: AgentSource[];
   webSources: WebSource[];
+  stopReason: AgentStopReason;
   conversationId?: string;
 }
 

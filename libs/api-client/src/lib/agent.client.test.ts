@@ -103,6 +103,7 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
       conversationId: 'c1',
     });
     emit.mockClear();
@@ -125,6 +126,7 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
     });
     client.sendMessage('again', callbacks);
     expect(emit).toHaveBeenLastCalledWith(
@@ -169,6 +171,7 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
       conversationId: 'c1',
     });
     client.resetConversation();
@@ -183,7 +186,7 @@ describe('AgentClient', () => {
     });
   });
 
-  it('routes usage and sources to onDone', () => {
+  it('routes sources and the stop reason to onDone', () => {
     const client = makeClient();
     const onDone = vi.fn();
     client.sendMessage('hi', {
@@ -195,11 +198,13 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 2, model: 'm', costUsd: 0 },
       sources: [{ id: 'n1', title: 'Productividad' }],
+      stopReason: 'token_budget',
     });
 
     expect(onDone).toHaveBeenCalledWith(
       expect.objectContaining({
         sources: [{ id: 'n1', title: 'Productividad' }],
+        stopReason: 'token_budget',
       })
     );
   });
@@ -253,6 +258,7 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
     });
     emit.mockClear();
     client.sendMessage('plain', {
@@ -289,6 +295,7 @@ describe('AgentClient', () => {
     handlers.get('agent:done')?.({
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
     });
     emit.mockClear();
     expect(client.canResume()).toBe(false);
@@ -788,6 +795,7 @@ describe('AgentClient – auth/transport failure paths', () => {
     fake.trigger('agent:done', {
       usage: { inputTokens: 1, outputTokens: 1, model: 'm', costUsd: 0 },
       sources: [],
+      stopReason: 'completed',
     });
     fake.socket.emit.mockClear();
 

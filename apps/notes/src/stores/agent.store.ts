@@ -10,7 +10,7 @@ import {
   type WebSource,
 } from '@knowtis/api-client';
 import { notesQueryKeys } from '@knowtis/data-access-notes';
-import type { ReasoningEffort } from '@knowtis/shared-types';
+import type { AgentStopReason, ReasoningEffort } from '@knowtis/shared-types';
 
 import { createChunkBuffer } from './chunk-buffer';
 
@@ -38,6 +38,7 @@ export interface AgentChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  stopReason?: AgentStopReason;
   sources?: AgentSource[];
   webSources?: WebSource[];
   proposal?: { kind: PendingProposal['kind']; summary: string };
@@ -166,7 +167,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
           buffer.armInactivityTimer();
           thinkingBuffer.push(text);
         },
-        onDone: ({ sources, webSources }) => {
+        onDone: ({ sources, webSources, stopReason }) => {
           if (version !== streamVersion || get().status !== 'streaming') {
             return;
           }
@@ -179,7 +180,7 @@ export const useAgentStore = create<AgentState>((set, get) => {
             _streamHandle: null,
             thinkingText: '',
             messages: s.messages.map((m) =>
-              m.id === id ? { ...m, sources, webSources } : m
+              m.id === id ? { ...m, sources, webSources, stopReason } : m
             ),
           }));
           captureProductEvent('ai response completed', {
