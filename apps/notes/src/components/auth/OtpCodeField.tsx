@@ -10,10 +10,11 @@ export interface OtpCodeFieldProps {
   /** Also the stem of the error element's id, which `FormField` derives. */
   id: string;
   form: VerifyEmailCodeForm;
+  autoFocus?: boolean;
 }
 
 export const OtpCodeField = forwardRef<HTMLInputElement, OtpCodeFieldProps>(
-  ({ id, form }, ref) => {
+  ({ id, form, autoFocus }, ref) => {
     const { t } = useTranslation('auth');
 
     return (
@@ -27,7 +28,7 @@ export const OtpCodeField = forwardRef<HTMLInputElement, OtpCodeFieldProps>(
           id={id}
           value={form.code}
           onChange={form.onCodeChange}
-          autoFocus
+          autoFocus={autoFocus}
           aria-invalid={!!form.errorMessage}
           aria-describedby={form.errorMessage ? `${id}-error` : undefined}
         />

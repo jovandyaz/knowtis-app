@@ -37,6 +37,7 @@ export function VerifyCodeStep({
   const form = useVerifyEmailCodeForm({
     onVerified,
     onCodeCleared: () => codeInputRef.current?.focus(),
+    onCodeInvalid: () => codeInputRef.current?.focus(),
   });
 
   return (
@@ -56,7 +57,12 @@ export function VerifyCodeStep({
 
       <form onSubmit={form.onSubmit} noValidate>
         <CardContent className="space-y-4">
-          <OtpCodeField ref={codeInputRef} id={CODE_FIELD_ID} form={form} />
+          <OtpCodeField
+            ref={codeInputRef}
+            id={CODE_FIELD_ID}
+            form={form}
+            autoFocus
+          />
           <ResendNoticeAlert notice={form.resendNotice} />
         </CardContent>
 

@@ -74,11 +74,13 @@ describe('useVerifyEmailCodeForm', () => {
     const api = createAuthApiMock();
     const onVerified = vi.fn();
     const onCodeCleared = vi.fn();
+    const onCodeInvalid = vi.fn();
     const { result } = renderHook(
       () =>
         useVerifyEmailCodeForm({
           onVerified,
           onCodeCleared,
+          onCodeInvalid,
           startHeld: false,
         }),
       { wrapper: createAuthWrapper(api) }
@@ -89,5 +91,33 @@ describe('useVerifyEmailCodeForm', () => {
 
     await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1));
     expect(onCodeCleared).not.toHaveBeenCalled();
+    expect(onCodeInvalid).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    new ApiClientError('Too many requests', 429),
+    new ApiClientError('Server error', 500, 'INTERNAL'),
+    new ApiClientError('Attempts spent', 429, 'TOO_MANY_VERIFICATION_ATTEMPTS'),
+  ])('does not request code refocus for $message', async (error) => {
+    const api = createAuthApiMock({
+      verifyEmailCode: vi.fn().mockRejectedValue(error),
+    });
+    const onCodeInvalid = vi.fn();
+    const { result } = renderHook(
+      () =>
+        useVerifyEmailCodeForm({
+          onVerified: vi.fn(),
+          onCodeInvalid,
+          startHeld: false,
+        }),
+      { wrapper: createAuthWrapper(api) }
+    );
+
+    act(() => result.current.onCodeChange(CODE));
+    act(() => result.current.onSubmit(submitEvent()));
+
+    await waitFor(() => expect(result.current.errorMessage).toBeDefined());
+    expect(result.current.isVerifying).toBe(false);
+    expect(onCodeInvalid).not.toHaveBeenCalled();
   });
 });

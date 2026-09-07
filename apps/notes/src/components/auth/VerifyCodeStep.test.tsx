@@ -54,6 +54,12 @@ async function flushPromises() {
 }
 
 describe('VerifyCodeStep', () => {
+  it('focuses the code on mount without a dialog', () => {
+    renderStep();
+
+    expect(screen.getByLabelText(CODE_LABEL)).toHaveFocus();
+  });
+
   it('verifies the emailed code without leaving the screen', async () => {
     const { api, onVerified } = renderStep();
 

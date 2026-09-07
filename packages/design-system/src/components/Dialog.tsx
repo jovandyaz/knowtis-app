@@ -26,21 +26,11 @@ interface DialogFocusOrigin {
   parentDialog: HTMLElement | null;
 }
 
-interface DialogMountGuard {
-  cycleId: number;
-  content: HTMLElement | null;
-  lastInside: HTMLElement | null;
-  focusedOutsideBeforeContent: boolean;
-  handleFocusIn: (event: FocusEvent) => void;
-}
-
 interface DialogSemanticsContextValue {
   descriptionPresent: boolean;
   setDescriptionPresent: (present: boolean) => void;
-  prepareContentCycle: (overlay: HTMLElement) => number;
-  registerContent: (content: HTMLElement) => number;
-  finishContentCycle: (cycleId: number) => void;
-  releaseContentCycle: (cycleId: number) => void;
+  prepareContentCycle: (overlay: HTMLElement) => void;
+  registerContent: (content: HTMLElement) => void;
   takeFocusOrigin: (content: HTMLElement | null) => DialogFocusOrigin | null;
 }
 
@@ -72,104 +62,8 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
   const pendingCycleIdRef = useRef<number | null>(null);
   const focusOriginsRef = useRef(new Map<number, DialogFocusOrigin>());
   const closingCyclesRef = useRef(new Set<number>());
-  const preparedOverlaysRef = useRef(new WeakMap<HTMLElement, number>());
+  const preparedOverlaysRef = useRef(new WeakSet<HTMLElement>());
   const contentCyclesRef = useRef(new WeakMap<HTMLElement, number>());
-  const mountGuardRef = useRef<DialogMountGuard | null>(null);
-  const mountGuardsRef = useRef(new Map<number, DialogMountGuard>());
-
-  const removeMountGuard = useCallback((cycleId: number) => {
-    const guard = mountGuardRef.current;
-    if (!guard || guard.cycleId !== cycleId) {
-      return;
-    }
-    document.removeEventListener('focusin', guard.handleFocusIn, true);
-    mountGuardRef.current = null;
-  }, []);
-
-  const discardMountGuard = useCallback(
-    (cycleId: number) => {
-      removeMountGuard(cycleId);
-      mountGuardsRef.current.delete(cycleId);
-    },
-    [removeMountGuard]
-  );
-
-  const installMountGuard = useCallback(
-    (cycleId: number) => {
-      const currentGuard = mountGuardRef.current;
-      if (currentGuard?.cycleId === cycleId) {
-        return;
-      }
-      if (currentGuard) {
-        discardMountGuard(currentGuard.cycleId);
-      }
-
-      const guard: DialogMountGuard = {
-        cycleId,
-        content: null,
-        lastInside: null,
-        focusedOutsideBeforeContent: false,
-        handleFocusIn: () => undefined,
-      };
-      guard.handleFocusIn = (event) => {
-        if (mountGuardRef.current !== guard) {
-          return;
-        }
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) {
-          return;
-        }
-        if (!guard.content) {
-          guard.focusedOutsideBeforeContent = true;
-          return;
-        }
-        if (guard.content.contains(target)) {
-          guard.lastInside = target;
-          return;
-        }
-        const targetDialog = target.closest<HTMLElement>(
-          DIALOG_CONTENT_SELECTOR
-        );
-        if (
-          targetDialog &&
-          targetDialog !== guard.content &&
-          (guard.content.compareDocumentPosition(targetDialog) &
-            Node.DOCUMENT_POSITION_FOLLOWING) !==
-            0
-        ) {
-          return;
-        }
-
-        focusInsideMountGuard(guard);
-      };
-
-      mountGuardRef.current = guard;
-      mountGuardsRef.current.set(cycleId, guard);
-      document.addEventListener('focusin', guard.handleFocusIn, true);
-    },
-    [discardMountGuard]
-  );
-
-  const finishContentCycle = useCallback(
-    (cycleId: number) => {
-      const guard = mountGuardsRef.current.get(cycleId);
-      if (!guard) {
-        return;
-      }
-      const activeElement = document.activeElement;
-      if (
-        activeElement instanceof HTMLElement &&
-        guard.content?.contains(activeElement)
-      ) {
-        // Radix cannot record native autofocus before its passive listener exists.
-        activeElement.dispatchEvent(
-          new FocusEvent('focusin', { bubbles: true })
-        );
-      }
-      discardMountGuard(cycleId);
-    },
-    [discardMountGuard]
-  );
 
   const captureFocusOrigin = useCallback(
     (cycleId: number, content: HTMLElement | null) => {
@@ -218,75 +112,43 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     }
     closingCyclesRef.current.add(cycleId);
     activeCycleIdRef.current = null;
-    discardMountGuard(cycleId);
 
     if (pendingCycleIdRef.current === cycleId) {
       focusOriginsRef.current.delete(cycleId);
       closingCyclesRef.current.delete(cycleId);
       pendingCycleIdRef.current = null;
     }
-  }, [discardMountGuard]);
+  }, []);
 
   const prepareContentCycle = useCallback(
     (overlay: HTMLElement) => {
-      const preparedCycleId = preparedOverlaysRef.current.get(overlay);
-      if (preparedCycleId !== undefined) {
-        installMountGuard(preparedCycleId);
-        return preparedCycleId;
+      if (preparedOverlaysRef.current.has(overlay)) {
+        return;
       }
+      preparedOverlaysRef.current.add(overlay);
       if (pendingCycleIdRef.current === null) {
         const cycleId = activeCycleIdRef.current ?? startOpeningCycle();
         pendingCycleIdRef.current = cycleId;
         captureFocusOrigin(cycleId, null);
       }
-      const cycleId = pendingCycleIdRef.current;
-      preparedOverlaysRef.current.set(overlay, cycleId);
-      installMountGuard(cycleId);
-      return cycleId;
-    },
-    [captureFocusOrigin, installMountGuard, startOpeningCycle]
-  );
-
-  const registerContent = useCallback(
-    (content: HTMLElement) => {
-      const registeredCycleId = contentCyclesRef.current.get(content);
-      let cycleId = registeredCycleId;
-      if (cycleId === undefined) {
-        cycleId =
-          pendingCycleIdRef.current ??
-          activeCycleIdRef.current ??
-          startOpeningCycle();
-        pendingCycleIdRef.current = null;
-        captureFocusOrigin(cycleId, content);
-        contentCyclesRef.current.set(content, cycleId);
-      }
-      const guard = mountGuardsRef.current.get(cycleId);
-      if (guard?.cycleId === cycleId) {
-        guard.content = content;
-        const activeElement = document.activeElement;
-        if (
-          activeElement instanceof HTMLElement &&
-          content.contains(activeElement)
-        ) {
-          guard.lastInside = activeElement;
-        } else if (guard.focusedOutsideBeforeContent) {
-          focusInsideMountGuard(guard);
-        }
-      }
-      return cycleId;
     },
     [captureFocusOrigin, startOpeningCycle]
   );
 
-  useEffect(
-    () => () => {
-      const guard = mountGuardRef.current;
-      if (guard) {
-        discardMountGuard(guard.cycleId);
+  const registerContent = useCallback(
+    (content: HTMLElement) => {
+      if (contentCyclesRef.current.has(content)) {
+        return;
       }
-      mountGuardsRef.current.clear();
+      const cycleId =
+        pendingCycleIdRef.current ??
+        activeCycleIdRef.current ??
+        startOpeningCycle();
+      pendingCycleIdRef.current = null;
+      captureFocusOrigin(cycleId, content);
+      contentCyclesRef.current.set(content, cycleId);
     },
-    [discardMountGuard]
+    [captureFocusOrigin, startOpeningCycle]
   );
 
   const takeFocusOrigin = useCallback((content: HTMLElement | null) => {
@@ -343,8 +205,6 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
         setDescriptionPresent,
         prepareContentCycle,
         registerContent,
-        finishContentCycle,
-        releaseContentCycle: removeMountGuard,
         takeFocusOrigin,
       }}
     >
@@ -377,43 +237,6 @@ function canRestoreFocus(element: HTMLElement): boolean {
   return (
     typeof element.checkVisibility !== 'function' || element.checkVisibility()
   );
-}
-
-function focusInsideMountGuard(guard: DialogMountGuard) {
-  const content = guard.content;
-  if (!content) {
-    return;
-  }
-  const lastInside = guard.lastInside;
-  if (
-    lastInside &&
-    content.contains(lastInside) &&
-    canRestoreFocus(lastInside)
-  ) {
-    lastInside.focus();
-    return;
-  }
-
-  const target = Array.from(
-    content.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)
-  ).find(canRestoreFocus);
-  (target ?? content).focus();
-}
-
-function DialogFocusHandoff({ onReady }: { onReady: () => void }) {
-  useEffect(() => {
-    let handoffTimeout: ReturnType<typeof setTimeout> | undefined;
-    const settleTimeout = setTimeout(() => {
-      handoffTimeout = setTimeout(onReady, 0);
-    }, 0);
-    return () => {
-      clearTimeout(settleTimeout);
-      if (handoffTimeout !== undefined) {
-        clearTimeout(handoffTimeout);
-      }
-    };
-  }, [onReady]);
-  return null;
 }
 
 function focusParentDialog(parentDialog: HTMLElement | null) {
@@ -458,47 +281,27 @@ function DialogContent({
     descriptionPresent,
     prepareContentCycle,
     registerContent,
-    finishContentCycle,
-    releaseContentCycle,
     takeFocusOrigin,
   } = useDialogSemantics();
-  const overlayCycleIdRef = useRef<number | null>(null);
-  const contentCycleIdRef = useRef<number | null>(null);
 
   // Overlay commits before Content descendants can move focus in layout effects.
   const handleOverlayRef = useCallback(
     (overlay: HTMLDivElement | null) => {
       if (overlay) {
-        overlayCycleIdRef.current = prepareContentCycle(overlay);
-      } else {
-        const cycleId = overlayCycleIdRef.current;
-        if (cycleId !== null) {
-          releaseContentCycle(cycleId);
-        }
-        overlayCycleIdRef.current = null;
+        prepareContentCycle(overlay);
       }
     },
-    [prepareContentCycle, releaseContentCycle]
+    [prepareContentCycle]
   );
 
   const handleContentRef = useCallback(
     (content: HTMLDivElement | null) => {
       if (content) {
-        const cycleId = registerContent(content);
-        contentCycleIdRef.current = cycleId;
-      } else {
-        contentCycleIdRef.current = null;
+        registerContent(content);
       }
     },
     [registerContent]
   );
-
-  const handleFocusHandoff = useCallback(() => {
-    const cycleId = contentCycleIdRef.current;
-    if (cycleId !== null) {
-      finishContentCycle(cycleId);
-    }
-  }, [finishContentCycle]);
 
   const handleOpenAutoFocus = (event: DialogAutoFocusEvent) => {
     onOpenAutoFocus?.(event);
@@ -561,7 +364,6 @@ function DialogContent({
           </div>
         ) : null}
         {children}
-        <DialogFocusHandoff onReady={handleFocusHandoff} />
         <DialogPrimitive.Close
           type="button"
           className="absolute right-4 top-4 max-md:top-5 rounded-sm opacity-70 ring-offset-(--background) transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-(--ring) focus:ring-offset-2"

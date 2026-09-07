@@ -37,6 +37,7 @@ function VerifyEmailDialogForm({ onVerified }: { onVerified: () => void }) {
     },
     startHeld: false,
     onCodeCleared: () => codeInputRef.current?.focus(),
+    onCodeInvalid: () => codeInputRef.current?.focus(),
   });
 
   return (
