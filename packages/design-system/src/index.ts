@@ -132,6 +132,7 @@ export { DataTable, type DataTableProps } from './components/DataTable';
 export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { Kbd } from './components/Kbd';
+export { Progress, type ProgressProps } from './components/Progress';
 
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
 export { MOTION_DURATION_S, MOTION_EASING } from './motion/tokens';
