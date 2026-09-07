@@ -33,4 +33,28 @@ describe('GetStudyStatsHandler', () => {
     expect(stats.reviewedToday).toBe(2);
     expect(stats.currentStreak).toBe(1);
   });
+
+  it('reports a zeroed streak for a user who has never studied', async () => {
+    const getStudyActivity = vi.fn().mockResolvedValue({
+      dueCount: 0,
+      newCount: 0,
+      totalCardsStudied: 0,
+      nextDueAt: null,
+      activeDays: [],
+    });
+    const handler = new GetStudyStatsHandler({
+      getStudyActivity,
+    } as unknown as FlashcardProgressRepository);
+
+    const stats = await handler.execute({ userId: 'user-1', timeZone: 'UTC' });
+
+    expect(stats).toEqual({
+      dueCount: 0,
+      newCount: 0,
+      reviewedToday: 0,
+      currentStreak: 0,
+      totalCardsStudied: 0,
+      nextDueAt: null,
+    });
+  });
 });
