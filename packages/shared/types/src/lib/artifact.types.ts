@@ -186,9 +186,11 @@ export type ArtifactStudyState =
   | QuizStudyState
   | null;
 
-export type ArtifactWithStudyState = Artifact & {
-  studyState: ArtifactStudyState;
-};
+export type ArtifactWithStudyState =
+  | (FlashcardArtifact & { studyState: FlashcardDeckStudyState })
+  | (QuizArtifact & { studyState: QuizStudyState | null })
+  | (SummaryArtifact & { studyState: null })
+  | (MindMapArtifact & { studyState: null });
 
 export const CARD_SESSION_STATUSES = [
   'pending',
