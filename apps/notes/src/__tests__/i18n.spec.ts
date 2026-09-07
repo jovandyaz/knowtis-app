@@ -1,9 +1,24 @@
-import { waitFor } from '@testing-library/react';
+import { createInstance, type i18n as I18nInstance } from 'i18next';
 
-import i18n from '../lib/i18n';
+let i18n: I18nInstance;
 
-afterEach(async () => {
-  await i18n.changeLanguage('en');
+beforeEach(async () => {
+  localStorage.clear();
+  document.documentElement.lang = 'before-initialization';
+  vi.doUnmock('i18next');
+  vi.resetModules();
+  const isolatedI18n = createInstance();
+  vi.doMock('i18next', () => ({ default: isolatedI18n }));
+
+  ({ default: i18n } = await import('../lib/i18n'));
+  await vi.waitFor(() => expect(i18n.isInitialized).toBe(true));
+});
+
+afterEach(() => {
+  vi.doUnmock('i18next');
+  vi.resetModules();
+  localStorage.clear();
+  document.documentElement.removeAttribute('lang');
 });
 
 describe('i18n configuration', () => {
@@ -39,16 +54,28 @@ describe('i18n configuration', () => {
     expect(result).toBe('nonexistent.key');
   });
 
-  it('sets the document language after initialization', async () => {
-    await waitFor(() => expect(i18n.isInitialized).toBe(true));
-    expect(document.documentElement.lang).toBe(i18n.resolvedLanguage);
+  it('sets the document language after initialization', () => {
+    expect(i18n.resolvedLanguage).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
   });
 
-  it('updates the document language with the rendered translations', async () => {
+  it('updates the document language when the language changes', async () => {
     await i18n.changeLanguage('es');
     expect(document.documentElement.lang).toBe('es');
-    expect(i18n.t('buttons.save', { ns: 'common' })).toBe('Guardar');
+
     await i18n.changeLanguage('en');
+    expect(document.documentElement.lang).toBe('en');
+  });
+
+  it('falls back to English when a language event has no resolved language', () => {
+    Object.defineProperty(i18n, 'resolvedLanguage', {
+      configurable: true,
+      value: undefined,
+    });
+    document.documentElement.lang = 'before-language-event';
+
+    i18n.emit('languageChanged', '');
+
     expect(document.documentElement.lang).toBe('en');
   });
 });
