@@ -3,7 +3,6 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useLayoutEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -30,7 +29,9 @@ interface DialogFocusOrigin {
 interface DialogSemanticsContextValue {
   descriptionPresent: boolean;
   setDescriptionPresent: (present: boolean) => void;
-  takeFocusOrigin: () => DialogFocusOrigin | null;
+  prepareContentCycle: (overlay: HTMLElement) => void;
+  registerContent: (content: HTMLElement) => void;
+  takeFocusOrigin: (content: HTMLElement | null) => DialogFocusOrigin | null;
 }
 
 const DialogSemanticsContext =
@@ -52,43 +53,106 @@ interface DialogProps {
 
 function Dialog({ children, open, onOpenChange }: DialogProps) {
   const [descriptionPresent, setDescriptionPresent] = useState(false);
-  const focusOriginRef = useRef<DialogFocusOrigin | null>(null);
-  const previouslyOpenRef = useRef(false);
+  const nextCycleIdRef = useRef(0);
+  const latestCycleIdRef = useRef(0);
+  const pendingCycleIdRef = useRef<number | null>(null);
+  const focusOriginsRef = useRef(new Map<number, DialogFocusOrigin>());
+  const preparedOverlaysRef = useRef(new WeakSet<HTMLElement>());
+  const contentCyclesRef = useRef(new WeakMap<HTMLElement, number>());
 
-  const captureFocusOrigin = useCallback(() => {
-    if (focusOriginRef.current) {
-      return;
-    }
+  const captureFocusOrigin = useCallback(
+    (cycleId: number, content: HTMLElement | null) => {
+      if (focusOriginsRef.current.has(cycleId)) {
+        return;
+      }
 
-    const opener =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
-    focusOriginRef.current = {
-      opener,
-      parentDialog:
-        opener?.closest<HTMLElement>(DIALOG_CONTENT_SELECTOR) ?? null,
-    };
+      const opener =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      if (content?.contains(opener)) {
+        return;
+      }
+      focusOriginsRef.current.set(cycleId, {
+        opener,
+        parentDialog:
+          opener?.closest<HTMLElement>(DIALOG_CONTENT_SELECTOR) ?? null,
+      });
+    },
+    []
+  );
+
+  const createCycle = useCallback(() => {
+    const cycleId = ++nextCycleIdRef.current;
+    latestCycleIdRef.current = cycleId;
+    return cycleId;
   }, []);
 
-  const takeFocusOrigin = useCallback(() => {
-    const origin = focusOriginRef.current;
-    focusOriginRef.current = null;
+  const prepareContentCycle = useCallback(
+    (overlay: HTMLElement) => {
+      if (preparedOverlaysRef.current.has(overlay)) {
+        return;
+      }
+      preparedOverlaysRef.current.add(overlay);
+      if (pendingCycleIdRef.current === null) {
+        const cycleId = createCycle();
+        pendingCycleIdRef.current = cycleId;
+        captureFocusOrigin(cycleId, null);
+      }
+    },
+    [captureFocusOrigin, createCycle]
+  );
+
+  const registerContent = useCallback(
+    (content: HTMLElement) => {
+      if (contentCyclesRef.current.has(content)) {
+        return;
+      }
+      const cycleId = pendingCycleIdRef.current ?? createCycle();
+      pendingCycleIdRef.current = null;
+      captureFocusOrigin(cycleId, content);
+      contentCyclesRef.current.set(content, cycleId);
+    },
+    [captureFocusOrigin, createCycle]
+  );
+
+  const takeFocusOrigin = useCallback((content: HTMLElement | null) => {
+    if (!content) {
+      return null;
+    }
+
+    const cycleId = contentCyclesRef.current.get(content);
+    if (cycleId === undefined) {
+      return null;
+    }
+    contentCyclesRef.current.delete(content);
+    const origin = focusOriginsRef.current.get(cycleId) ?? null;
+    focusOriginsRef.current.delete(cycleId);
+    if (cycleId !== latestCycleIdRef.current) {
+      return null;
+    }
     return origin;
   }, []);
 
-  useLayoutEffect(() => {
-    if (open === true && !previouslyOpenRef.current) {
-      captureFocusOrigin();
-    }
-    previouslyOpenRef.current = open === true;
-  }, [captureFocusOrigin, open]);
-
   const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) {
-      captureFocusOrigin();
+    if (!nextOpen) {
+      const pendingCycleId = pendingCycleIdRef.current;
+      if (pendingCycleId !== null) {
+        focusOriginsRef.current.delete(pendingCycleId);
+        pendingCycleIdRef.current = null;
+      }
+      onOpenChange?.(false);
+      return;
     }
-    onOpenChange?.(nextOpen);
+
+    const previousPendingCycleId = pendingCycleIdRef.current;
+    if (previousPendingCycleId !== null) {
+      focusOriginsRef.current.delete(previousPendingCycleId);
+    }
+    const cycleId = createCycle();
+    pendingCycleIdRef.current = cycleId;
+    captureFocusOrigin(cycleId, null);
+    onOpenChange?.(true);
   };
 
   return (
@@ -96,6 +160,8 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
       value={{
         descriptionPresent,
         setDescriptionPresent,
+        prepareContentCycle,
+        registerContent,
         takeFocusOrigin,
       }}
     >
@@ -171,7 +237,31 @@ function DialogContent({
   onCloseAutoFocus,
   ...props
 }: DialogContentProps) {
-  const { descriptionPresent, takeFocusOrigin } = useDialogSemantics();
+  const {
+    descriptionPresent,
+    prepareContentCycle,
+    registerContent,
+    takeFocusOrigin,
+  } = useDialogSemantics();
+
+  // Overlay commits before Content descendants can move focus in layout effects.
+  const handleOverlayRef = useCallback(
+    (overlay: HTMLDivElement | null) => {
+      if (overlay) {
+        prepareContentCycle(overlay);
+      }
+    },
+    [prepareContentCycle]
+  );
+
+  const handleContentRef = useCallback(
+    (content: HTMLDivElement | null) => {
+      if (content) {
+        registerContent(content);
+      }
+    },
+    [registerContent]
+  );
 
   const handleOpenAutoFocus = (event: DialogAutoFocusEvent) => {
     onOpenAutoFocus?.(event);
@@ -179,7 +269,8 @@ function DialogContent({
 
   const handleCloseAutoFocus = (event: DialogAutoFocusEvent) => {
     onCloseAutoFocus?.(event);
-    const origin = takeFocusOrigin();
+    const content = event.target instanceof HTMLElement ? event.target : null;
+    const origin = takeFocusOrigin(content);
     if (event.defaultPrevented) {
       return;
     }
@@ -195,12 +286,14 @@ function DialogContent({
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay
+        ref={handleOverlayRef}
         className={cn(
           'fixed inset-0 z-50 bg-black/50 backdrop-blur-sm',
           'animate-in fade-in-0'
         )}
       />
       <DialogPrimitive.Content
+        ref={handleContentRef}
         {...(!descriptionPresent ? { 'aria-describedby': undefined } : {})}
         {...props}
         data-knowtis-dialog-content=""

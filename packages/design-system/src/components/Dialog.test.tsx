@@ -1,6 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -481,6 +487,85 @@ describe('Dialog accessibility', () => {
     await user.click(screen.getByRole('button', { name: 'Finish' }));
 
     await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('restores the original opener when a child focuses itself in a layout effect', async () => {
+    function LayoutFocusingField() {
+      const field = useRef<HTMLInputElement>(null);
+      useLayoutEffect(() => {
+        field.current?.focus();
+      }, []);
+      return <input ref={field} aria-label="Layout-focused field" />;
+    }
+
+    function LayoutFocusingDialog() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open layout dialog
+          </button>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Layout focus</DialogTitle>
+              <LayoutFocusingField />
+              <button type="button" onClick={() => setOpen(false)}>
+                Finish layout dialog
+              </button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<LayoutFocusingDialog />);
+    const opener = screen.getByRole('button', { name: 'Open layout dialog' });
+
+    await user.click(opener);
+    expect(
+      screen.getByRole('textbox', { name: 'Layout-focused field' })
+    ).toHaveFocus();
+    await user.click(
+      screen.getByRole('button', { name: 'Finish layout dialog' })
+    );
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('keeps a reopened cycle origin after the prior close autofocus runs', async () => {
+    function RapidReopenDialog({ open }: { open: boolean }) {
+      return (
+        <>
+          <button type="button">First opener</button>
+          <button type="button">Second opener</button>
+          <Dialog open={open} onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Rapid reopen</DialogTitle>
+              <input aria-label="Dialog field" />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const { rerender } = render(<RapidReopenDialog open={false} />);
+    const firstOpener = screen.getByRole('button', { name: 'First opener' });
+    const secondOpener = screen.getByRole('button', { name: 'Second opener' });
+
+    firstOpener.focus();
+    rerender(<RapidReopenDialog open />);
+    rerender(<RapidReopenDialog open={false} />);
+    secondOpener.focus();
+    rerender(<RapidReopenDialog open />);
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(screen.getByRole('textbox', { name: 'Dialog field' })).toHaveFocus();
+
+    rerender(<RapidReopenDialog open={false} />);
+    await waitFor(() => expect(secondOpener).toHaveFocus());
   });
 
   it('uses a consumer close-autofocus target instead of the captured opener', async () => {
