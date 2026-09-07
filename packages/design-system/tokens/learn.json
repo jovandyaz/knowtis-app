@@ -12,7 +12,7 @@
         },
         "learn-new": { "value": "{color.primitive.blue.500}", "type": "color" },
         "learn-difficulty-easy": {
-          "value": "{color.primitive.green.500}",
+          "value": "{color.primitive.neutral.500}",
           "type": "color"
         },
         "learn-difficulty-medium": {
@@ -20,7 +20,7 @@
           "type": "color"
         },
         "learn-difficulty-hard": {
-          "value": "{color.primitive.red.500}",
+          "value": "{color.primitive.pink.500}",
           "type": "color"
         }
       },
@@ -35,7 +35,7 @@
         },
         "learn-new": { "value": "{color.primitive.blue.400}", "type": "color" },
         "learn-difficulty-easy": {
-          "value": "{color.primitive.green.400}",
+          "value": "{color.primitive.neutral.400}",
           "type": "color"
         },
         "learn-difficulty-medium": {
@@ -43,7 +43,7 @@
           "type": "color"
         },
         "learn-difficulty-hard": {
-          "value": "{color.primitive.red.400}",
+          "value": "{color.primitive.pink.400}",
           "type": "color"
         }
       }
