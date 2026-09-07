@@ -1,0 +1,52 @@
+{
+  "color": {
+    "semantic": {
+      "light": {
+        "learn-correct": {
+          "value": "{color.primitive.green.500}",
+          "type": "color"
+        },
+        "learn-incorrect": {
+          "value": "{color.primitive.red.500}",
+          "type": "color"
+        },
+        "learn-new": { "value": "{color.primitive.blue.500}", "type": "color" },
+        "learn-difficulty-easy": {
+          "value": "{color.primitive.green.500}",
+          "type": "color"
+        },
+        "learn-difficulty-medium": {
+          "value": "{color.primitive.yellow.600}",
+          "type": "color"
+        },
+        "learn-difficulty-hard": {
+          "value": "{color.primitive.red.500}",
+          "type": "color"
+        }
+      },
+      "dark": {
+        "learn-correct": {
+          "value": "{color.primitive.green.400}",
+          "type": "color"
+        },
+        "learn-incorrect": {
+          "value": "{color.primitive.red.400}",
+          "type": "color"
+        },
+        "learn-new": { "value": "{color.primitive.blue.400}", "type": "color" },
+        "learn-difficulty-easy": {
+          "value": "{color.primitive.green.400}",
+          "type": "color"
+        },
+        "learn-difficulty-medium": {
+          "value": "{color.primitive.yellow.400}",
+          "type": "color"
+        },
+        "learn-difficulty-hard": {
+          "value": "{color.primitive.red.400}",
+          "type": "color"
+        }
+      }
+    }
+  }
+}

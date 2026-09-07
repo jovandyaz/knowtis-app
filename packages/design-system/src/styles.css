@@ -40,6 +40,13 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
 
+  --color-learn-correct: var(--learn-correct);
+  --color-learn-incorrect: var(--learn-incorrect);
+  --color-learn-new: var(--learn-new);
+  --color-learn-difficulty-easy: var(--learn-difficulty-easy);
+  --color-learn-difficulty-medium: var(--learn-difficulty-medium);
+  --color-learn-difficulty-hard: var(--learn-difficulty-hard);
+
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -74,6 +81,12 @@
   --accent-foreground: var(--color-semantic-light-accent-foreground);
   --destructive: var(--color-semantic-light-destructive);
   --destructive-foreground: var(--color-semantic-light-destructive-foreground);
+  --learn-correct: var(--color-semantic-light-learn-correct);
+  --learn-incorrect: var(--color-semantic-light-learn-incorrect);
+  --learn-new: var(--color-semantic-light-learn-new);
+  --learn-difficulty-easy: var(--color-semantic-light-learn-difficulty-easy);
+  --learn-difficulty-medium: var(--color-semantic-light-learn-difficulty-medium);
+  --learn-difficulty-hard: var(--color-semantic-light-learn-difficulty-hard);
   --border: var(--color-semantic-light-border);
   --input: var(--color-semantic-light-input);
   --ring: var(--color-semantic-light-ring);
@@ -112,6 +125,12 @@
   --accent-foreground: var(--color-semantic-dark-accent-foreground);
   --destructive: var(--color-semantic-dark-destructive);
   --destructive-foreground: var(--color-semantic-dark-destructive-foreground);
+  --learn-correct: var(--color-semantic-dark-learn-correct);
+  --learn-incorrect: var(--color-semantic-dark-learn-incorrect);
+  --learn-new: var(--color-semantic-dark-learn-new);
+  --learn-difficulty-easy: var(--color-semantic-dark-learn-difficulty-easy);
+  --learn-difficulty-medium: var(--color-semantic-dark-learn-difficulty-medium);
+  --learn-difficulty-hard: var(--color-semantic-dark-learn-difficulty-hard);
   --border: var(--color-semantic-dark-border);
   --input: var(--color-semantic-dark-input);
   --ring: var(--color-semantic-dark-ring);
