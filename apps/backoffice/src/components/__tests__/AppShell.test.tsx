@@ -119,9 +119,8 @@ describe('AppShell', () => {
       stubPhoneViewport();
       await renderShell();
 
-      await userEvent.click(
-        screen.getByRole('button', { name: OPEN_NAV_LABEL })
-      );
+      const trigger = screen.getByRole('button', { name: OPEN_NAV_LABEL });
+      await userEvent.click(trigger);
 
       expect(
         await screen.findByRole('dialog', { name: NAV_SHEET_TITLE })
@@ -132,9 +131,7 @@ describe('AppShell', () => {
       expect(
         screen.getByRole('button', { name: 'Sign out' })
       ).toBeInTheDocument();
-      expect(
-        screen.getByRole('button', { name: OPEN_NAV_LABEL })
-      ).toHaveAttribute('aria-expanded', 'true');
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
     });
 
     it('closes the sheet once a destination is chosen', async () => {
