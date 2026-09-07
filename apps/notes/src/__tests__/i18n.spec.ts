@@ -1,4 +1,10 @@
+import { waitFor } from '@testing-library/react';
+
 import i18n from '../lib/i18n';
+
+afterEach(async () => {
+  await i18n.changeLanguage('en');
+});
 
 describe('i18n configuration', () => {
   it('should initialize with supported languages', () => {
@@ -31,5 +37,18 @@ describe('i18n configuration', () => {
     await i18n.changeLanguage('es');
     const result = i18n.t('nonexistent.key' as never, { ns: 'common' });
     expect(result).toBe('nonexistent.key');
+  });
+
+  it('sets the document language after initialization', async () => {
+    await waitFor(() => expect(i18n.isInitialized).toBe(true));
+    expect(document.documentElement.lang).toBe(i18n.resolvedLanguage);
+  });
+
+  it('updates the document language with the rendered translations', async () => {
+    await i18n.changeLanguage('es');
+    expect(document.documentElement.lang).toBe('es');
+    expect(i18n.t('buttons.save', { ns: 'common' })).toBe('Guardar');
+    await i18n.changeLanguage('en');
+    expect(document.documentElement.lang).toBe('en');
   });
 });
