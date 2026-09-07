@@ -9,6 +9,12 @@ const motion = JSON.parse(
   readFileSync(resolve(import.meta.dirname, '../../tokens/motion.json'), 'utf8')
 ).motion;
 
+// Prettier wraps long custom-property declarations, so compare without whitespace.
+const compact = (css: string) => css.replace(/\s+/g, '');
+const styles = compact(
+  readFileSync(resolve(import.meta.dirname, '../styles.css'), 'utf8')
+);
+
 const MS_PER_SECOND = 1000;
 
 describe('motion tokens', () => {
@@ -38,6 +44,15 @@ describe('motion tokens', () => {
     (name) => {
       expect(motion.easing[name].value).toBe(
         `cubic-bezier(${MOTION_EASING[name].join(', ')})`
+      );
+    }
+  );
+
+  it.each(Object.keys(MOTION_EASING) as (keyof typeof MOTION_EASING)[])(
+    'aliases the %s easing into the Tailwind theme',
+    (name) => {
+      expect(styles).toContain(
+        compact(`--ease-${name}: var(--motion-easing-${name});`)
       );
     }
   );
