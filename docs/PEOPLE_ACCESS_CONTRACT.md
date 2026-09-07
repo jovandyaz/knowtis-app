@@ -2,11 +2,11 @@
 
 People management uses exact normalized email (`trim().toLowerCase()`) for existing, non-anonymous accounts. The owner is projected first with permission `owner`; direct collaborators follow by name, email and ID. Owner entries are never stored as direct grants. No invitation emails or pending-account records are created.
 
-| Request                                  | Body                           | Response           |
-| ---------------------------------------- | ------------------------------ | ------------------ | ---------------- |
-| `GET /api/v1/notes/:id/collaborators`    | —                              | `200 NotePerson[]` |
-| `POST /api/v1/notes/:id/share`           | `{ email, permission: 'viewer' | 'editor' }`        | `201 NotePerson` |
-| `DELETE /api/v1/notes/:id/share/:userId` | —                              | `204`, no body     |
+| Request                                  | Body                              | Response           |
+| ---------------------------------------- | --------------------------------- | ------------------ |
+| `GET /api/v1/notes/:id/collaborators`    | —                                 | `200 NotePerson[]` |
+| `POST /api/v1/notes/:id/share`           | `{ email, permission: 'viewer' }` | `201 NotePerson`   |
+| `DELETE /api/v1/notes/:id/share/:userId` | —                                 | `204`, no body     |
 
 `NotePerson` is `{ user: { id, name, email, avatarUrl: string | null }, permission: 'owner' | 'viewer' | 'editor' }`. The TypeScript client methods are `getPeople`, `upsertPerson` and `revokePerson` (`Promise<void>`). MCP `share-note` accepts `email`; `get-collaborators` returns the same People projection inside its `collaborators` envelope.
 
