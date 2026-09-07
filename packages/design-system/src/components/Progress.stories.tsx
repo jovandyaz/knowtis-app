@@ -23,6 +23,10 @@ export const Incorrect: Story = {
   args: { value: 3, max: 10, label: '3 of 10 incorrect', tone: 'incorrect' },
 };
 
+export const Danger: Story = {
+  args: { value: 9, max: 10, label: '9 of 10 seconds used', tone: 'danger' },
+};
+
 export const Empty: Story = {
   args: { value: 0, max: 10, label: '0 of 10 questions' },
 };

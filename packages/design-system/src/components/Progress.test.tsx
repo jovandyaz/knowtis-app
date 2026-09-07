@@ -25,12 +25,32 @@ describe('Progress', () => {
     expect(indicator.className).toContain('bg-learn-correct');
   });
 
+  it('paints the danger tone with the destructive token', () => {
+    render(<Progress value={9} max={10} label="Almost out" tone="danger" />);
+    const indicator = screen.getByRole('progressbar')
+      .firstElementChild as HTMLElement;
+    expect(indicator.className).toContain('bg-(--destructive)');
+  });
+
   it('floors a non-positive max without Radix logging a console error', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     render(<Progress value={0} max={0} label="Empty deck" />);
     const bar = screen.getByRole('progressbar');
     const indicator = bar.firstElementChild as HTMLElement;
     expect(bar).toHaveAttribute('aria-valuenow', '0');
+    expect(bar).toHaveAttribute('aria-valuemax', '1');
+    expect(indicator.style.transform).toBe('translateX(-100%)');
+    expect(errorSpy).not.toHaveBeenCalled();
+    errorSpy.mockRestore();
+  });
+
+  it('floors a negative max without Radix logging a console error', () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<Progress value={0} max={-3} label="Negative deck" />);
+    const bar = screen.getByRole('progressbar');
+    const indicator = bar.firstElementChild as HTMLElement;
+    expect(bar).toHaveAttribute('aria-valuenow', '0');
+    expect(bar).toHaveAttribute('aria-valuemax', '1');
     expect(indicator.style.transform).toBe('translateX(-100%)');
     expect(errorSpy).not.toHaveBeenCalled();
     errorSpy.mockRestore();
@@ -44,10 +64,17 @@ describe('Progress', () => {
     expect(indicator.style.transform).toBe('translateX(-0%)');
   });
 
-  it('disables the transition under prefers-reduced-motion', () => {
+  it('carries the reduced-motion transition escape hatch', () => {
     render(<Progress value={5} max={10} label="Half" />);
     const indicator = screen.getByRole('progressbar')
       .firstElementChild as HTMLElement;
     expect(indicator.className).toContain('motion-reduce:transition-none');
+  });
+
+  it('eases the indicator with the tokenised enter curve', () => {
+    render(<Progress value={5} max={10} label="Half" />);
+    const indicator = screen.getByRole('progressbar')
+      .firstElementChild as HTMLElement;
+    expect(indicator.className).toContain('ease-enter');
   });
 });
