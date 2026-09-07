@@ -23,6 +23,7 @@ import {
 } from '../domain/ports/agent-orchestrator.port';
 import { PENDING_MUTATION_STORE } from '../domain/ports/pending-mutation.store';
 import { RETRIEVAL_PORT } from '../domain/ports/retrieval.port';
+import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import type { NoteFixtureSetName } from './fixtures/note-sets';
 import { resolveFixtureSet } from './fixtures/note-sets';
 import {
@@ -143,6 +144,34 @@ export class AgentEvalHarness {
         ? computeTokenCostUsd(drained.usage, pricing)
         : null;
     return { ...drained, costUsd, toolCalls: this.retrieval.getCalls() };
+  }
+
+  /** Enforces replay protection for evals while retaining a separately supplied fresh request. */
+  async runReplayConversation(
+    history: readonly AgentMessage[],
+    latestUserContent: string,
+    fixtureSet: NoteFixtureSetName,
+    model: string
+  ): Promise<
+    EvalTranscript & { replay: { detected: number; dropped: number } }
+  > {
+    const sanitized = sanitizeReplayHistory(history, {
+      enforceAssistantAndTool: true,
+    });
+    const transcript = await this.runConversation(
+      [...sanitized.messages, { role: 'user', content: latestUserContent }],
+      fixtureSet,
+      model
+    );
+    return {
+      ...transcript,
+      replay: {
+        detected: sanitized.detections.length,
+        dropped: sanitized.detections.filter(
+          (entry) => entry.disposition === 'block'
+        ).length,
+      },
+    };
   }
 
   async runCase(

@@ -90,9 +90,7 @@ function textOnly(row: ConversationMessageRow): AgentMessage | null {
   if (row.role === TOOL_ROLE) {
     return null;
   }
-  const content = row.parts
-    ? textOfParts(row.parts) || row.content
-    : row.content;
+  const content = row.parts?.length ? textOfParts(row.parts) : row.content;
   return content.length > 0 || row.role === 'user'
     ? { role: row.role, content }
     : null;
@@ -104,7 +102,10 @@ function withParts(row: ConversationMessageRow): AgentMessage {
     : { role: row.role, content: row.content };
 }
 
-function stripOrphans(messages: AgentMessage[]): AgentMessage[] {
+/** Removes both sides of orphaned tool pairs without reviving hidden content. */
+export function repairTranscriptOrphans(
+  messages: readonly AgentMessage[]
+): AgentMessage[] {
   const calls = new Set<string>();
   const results = new Set<string>();
   for (const m of messages) {
@@ -119,8 +120,10 @@ function stripOrphans(messages: AgentMessage[]): AgentMessage[] {
   }
   const out: AgentMessage[] = [];
   for (const m of messages) {
-    if (!m.parts) {
-      out.push(m);
+    if (!m.parts?.length) {
+      if (m.role !== 'assistant' || m.content.length > 0) {
+        out.push(m);
+      }
       continue;
     }
     const parts: AgentMessagePart[] = m.parts.filter((p) =>
@@ -130,6 +133,7 @@ function stripOrphans(messages: AgentMessage[]): AgentMessage[] {
           ? results.has(p.toolCallId)
           : calls.has(p.toolCallId)
     );
+    const content = textOfParts(parts);
     const hasToolActivity = parts.some((p) => p.type !== 'text');
     if (m.role === TOOL_ROLE) {
       if (hasToolActivity) {
@@ -139,8 +143,8 @@ function stripOrphans(messages: AgentMessage[]): AgentMessage[] {
     }
     if (hasToolActivity) {
       out.push({ role: m.role, content: m.content, parts });
-    } else if (m.content.length > 0) {
-      out.push({ role: m.role, content: m.content });
+    } else if (content.length > 0 || m.role === 'user') {
+      out.push({ role: m.role, content });
     }
   }
   return out;
@@ -166,5 +170,5 @@ export function pruneTranscript(
         : kept
     );
   }
-  return stripOrphans(messages);
+  return repairTranscriptOrphans(messages);
 }

@@ -21,6 +21,10 @@ import {
 
 import type { EnvConfig } from '../../../config/env.config';
 import { AIConfigService } from '../../ai/application/services/ai-config.service';
+import {
+  logInputDetection,
+  resolveInputEnforcement,
+} from '../../ai/application/services/ai-input-guard.policy';
 import { AIRateLimitService } from '../../ai/application/services/ai-rate-limit.service';
 import { ByokService } from '../../ai/application/services/byok.service';
 import { ModelPreferenceService } from '../../ai/application/services/model-preference.service';
@@ -65,6 +69,7 @@ import type {
   ProposedMutation,
 } from '../domain/proposed-mutation';
 import { pruneTranscript } from '../domain/prune-transcript';
+import { sanitizeReplayHistory } from '../domain/replay-input-sanitizer';
 import { buildTurnRows } from '../domain/turn-transcript';
 import { InjectionGuardService } from './injection-guard.service';
 
@@ -239,10 +244,7 @@ export class RunAgentTurnHandler {
     }
     const { history, knownNotes } =
       await this.loadConversationContext(conversationId);
-    const messages = coalesceMessages([
-      ...history,
-      { role: 'user', content: message.content },
-    ]);
+    const messages = history;
     const userMemories = await this.loadUserMemories(
       input.userId,
       input.isAnonymous,
@@ -251,6 +253,7 @@ export class RunAgentTurnHandler {
     const synthInput: RunAgentTurnInput = {
       userId: input.userId,
       messages,
+      message,
       ...(input.isAnonymous ? { isAnonymous: true } : {}),
       ...(input.clientIp ? { clientIp: input.clientIp } : {}),
       ...(input.noteId ? { noteId: input.noteId } : {}),
@@ -472,7 +475,7 @@ export class RunAgentTurnHandler {
         resume: { toolName: string; outcome: string };
       } = {
         userId: input.userId,
-        messages: coalesceMessages(history),
+        messages: history,
         knownNotes,
         ...(input.isAnonymous ? { isAnonymous: true } : {}),
         ...(input.clientIp ? { clientIp: input.clientIp } : {}),
@@ -508,14 +511,17 @@ export class RunAgentTurnHandler {
       return;
     }
     const inputMessages = input.messages ?? [];
-    const lastUserMessage = inputMessages.findLast((m) => m.role === 'user');
-    if (lastUserMessage) {
-      if (lastUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
+    const freshUserMessage: AgentMessage | undefined =
+      resume === undefined && input.message
+        ? { role: 'user', content: input.message.content }
+        : undefined;
+    if (freshUserMessage) {
+      if (freshUserMessage.content.length > MAX_USER_MESSAGE_CHARS) {
         callbacks.onError(messageTooLongError());
         return;
       }
       const verdict = await this.injectionGuard.guard(
-        lastUserMessage.content,
+        freshUserMessage.content,
         input.userId
       );
       if (!verdict.safe) {
@@ -523,15 +529,27 @@ export class RunAgentTurnHandler {
         return;
       }
     }
-    // Unsafe older messages are dropped instead of failing the turn: the
-    // client keeps rejected messages in its history, so a hard error here
-    // would permanently block the rest of the conversation.
+    const enforced = await resolveInputEnforcement(
+      this.featureFlags,
+      FEATURE_FLAG_KEYS.AGENT_HISTORY_INJECTION_ENFORCEMENT,
+      this.logger
+    );
+    const sanitized = sanitizeReplayHistory(inputMessages, {
+      enforceAssistantAndTool: enforced,
+    });
+    for (const { index, detection, disposition } of sanitized.detections) {
+      logInputDetection(this.logger, detection, {
+        surface: 'history',
+        disposition,
+        role: inputMessages[index].role,
+        ...(persistence ? { conversationId: persistence.conversationId } : {}),
+      });
+    }
     const messages = this.trimHistory(
-      inputMessages.filter(
-        (m) =>
-          m.role !== 'user' ||
-          m === lastUserMessage ||
-          this.isSafeHistoryMessage(m, input.userId)
+      coalesceMessages(
+        freshUserMessage
+          ? [...sanitized.messages, freshUserMessage]
+          : sanitized.messages
       )
     );
     const estimatedTokens = this.estimateTokens(messages);
@@ -946,20 +964,6 @@ export class RunAgentTurnHandler {
         : {}),
     });
     return tokenUsage.costUsd;
-  }
-
-  private isSafeHistoryMessage(message: AgentMessage, userId: string): boolean {
-    const safe =
-      message.content.length <= MAX_USER_MESSAGE_CHARS &&
-      detectPromptInjection(message.content).safe;
-    if (!safe) {
-      this.logger.warn({
-        event: 'agent.history.message_dropped',
-        userId,
-        contentLength: message.content.length,
-      });
-    }
-    return safe;
   }
 
   private toolNameForKind(kind: MutationKind): string {

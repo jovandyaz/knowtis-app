@@ -50,3 +50,8 @@ export type {
   WebSearchProvider,
   WebSearchResult,
 } from './web-search/web-search.types';
+
+export {
+  detectAiInput,
+  type AiInputDetection,
+} from './guard/ai-input-detection';
