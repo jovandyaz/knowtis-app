@@ -47,6 +47,14 @@ describe('RevokeAccessHandler', () => {
       'PERMISSION_DENIED'
     );
   });
+  it('returns missing note before permission lookup or revocation', async () => {
+    repo.findById.mockResolvedValue(null);
+    expect((await revoke('owner'))._unsafeUnwrapErr().code).toBe(
+      'NOTE_NOT_FOUND'
+    );
+    expect(repo.findPermission).not.toHaveBeenCalled();
+    expect(repo.deletePermission).not.toHaveBeenCalled();
+  });
   it('honors editorsCanShare', async () => {
     repo.findById.mockResolvedValue({
       ownerId: 'owner',

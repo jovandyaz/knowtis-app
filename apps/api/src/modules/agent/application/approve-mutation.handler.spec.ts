@@ -332,7 +332,7 @@ describe('ApproveMutationHandler', () => {
       },
     });
     const result = await make(d).execute({ proposalId: 'p3', userId: 'u1' });
-    expect(result.isErr()).toBe(true);
+    expect(result._unsafeUnwrapErr().code).toBe('AGENT_PERMISSION_DENIED');
     expect(d.noteRepo.findById).not.toHaveBeenCalled();
   });
 

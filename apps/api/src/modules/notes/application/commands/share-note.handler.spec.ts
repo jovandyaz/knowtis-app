@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserReadRepository } from '../../../users/domain/ports/user-read.repository';
 import type { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import { NoteErrors } from '../../domain/errors/note.errors';
+import { NoteSharedEvent } from '../../domain/events/note-shared.event';
 import type { NoteRepository } from '../../domain/ports';
 import { PermissionLevel } from '../../domain/value-objects/permission-level.vo';
 import { ShareNoteHandler } from './share-note.handler';
@@ -142,11 +143,14 @@ describe('ShareNoteHandler People contract', () => {
   );
   it('does not emit private recipient data', async () => {
     await share();
-    expect(Object.keys(events.emit.mock.calls[0][1])).toEqual([
-      'actorId',
-      'shareType',
-      'permission',
-    ]);
+    expect(events.emit).toHaveBeenCalledExactlyOnceWith(
+      NoteSharedEvent.EVENT_NAME,
+      {
+        actorId: 'owner',
+        shareType: 'collaborator',
+        permission: 'viewer',
+      }
+    );
   });
   it('does not emit success on persistence failure', async () => {
     repo.upsertPermission.mockResolvedValue(

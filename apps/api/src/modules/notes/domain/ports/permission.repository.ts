@@ -10,7 +10,7 @@ export interface UpsertPermissionData {
   readonly noteId: string;
   readonly userId: UserId;
   readonly permission: string;
-  readonly allowAmplification?: boolean;
+  readonly allowAmplification: boolean;
 }
 
 export interface PermissionRepository {

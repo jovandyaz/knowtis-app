@@ -47,6 +47,14 @@ describe('GetCollaboratorsHandler', () => {
     );
     expect(repo.findPeopleByNote).not.toHaveBeenCalled();
   });
+  it('returns missing note before permission or personal-details lookup', async () => {
+    repo.findById.mockResolvedValue(null);
+    expect((await list('owner'))._unsafeUnwrapErr().code).toBe(
+      'NOTE_NOT_FOUND'
+    );
+    expect(repo.findPermission).not.toHaveBeenCalled();
+    expect(repo.findPeopleByNote).not.toHaveBeenCalled();
+  });
   it('does not allow a direct editor when sharing is disabled', async () => {
     repo.findById.mockResolvedValue({
       ownerId: 'owner',

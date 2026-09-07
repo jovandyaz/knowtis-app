@@ -70,6 +70,7 @@ describe.runIf(DB_AVAILABLE)(
         noteId: f.ids.note,
         userId,
         permission: 'editor',
+        allowAmplification: true,
       });
       await repo.deletePermission(f.ids.note, userId);
       const narrowed = await repo.upsertPermission({
@@ -87,6 +88,7 @@ describe.runIf(DB_AVAILABLE)(
         noteId: f.ids.note,
         userId,
         permission: 'viewer',
+        allowAmplification: true,
       });
       const result = await repo.upsertPermission({
         noteId: f.ids.note,
@@ -103,7 +105,12 @@ describe.runIf(DB_AVAILABLE)(
       const userId = UserId.fromTrusted(f.ids.target);
       const results = await Promise.all(
         ['viewer', 'editor', 'viewer', 'editor'].map((permission) =>
-          repo.upsertPermission({ noteId: f.ids.note, userId, permission })
+          repo.upsertPermission({
+            noteId: f.ids.note,
+            userId,
+            permission,
+            allowAmplification: true,
+          })
         )
       );
       expect(results.every((result) => result.isOk())).toBe(true);

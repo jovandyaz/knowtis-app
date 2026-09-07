@@ -19,6 +19,12 @@ describe('notesApi', () => {
     expect(await notesApi.revokePerson('note', 'person')).toBeUndefined();
   });
 
+  it('propagates a rejected revoke request unchanged', async () => {
+    const error = new Error('Transport failed');
+    vi.mocked(httpClient.delete).mockRejectedValueOnce(error);
+    await expect(notesApi.revokePerson('note', 'person')).rejects.toBe(error);
+  });
+
   describe('update', () => {
     it('sends the CRDT state in the body when provided', async () => {
       vi.mocked(httpClient.patch).mockResolvedValue({});
