@@ -151,6 +151,8 @@ export {
   type StatTileProps,
   type StatDelta,
 } from './components/StatTile';
+export { RatingBar, type RatingBarProps } from './components/RatingBar';
+export { RATING_ORDER, type RatingKey } from './constants/rating';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
