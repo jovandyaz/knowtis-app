@@ -6,6 +6,7 @@ import {
   useState,
 } from 'react';
 
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   act,
   fireEvent,
@@ -448,6 +449,83 @@ describe('Dialog accessibility', () => {
 
     rerender(<OpenerAndDialog open />);
     rerender(<OpenerAndDialog open={false} />);
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('restores the opener after an uncontrolled open and close', async () => {
+    const user = userEvent.setup();
+    const onOpenChange = vi.fn();
+    render(
+      <Dialog onOpenChange={onOpenChange}>
+        <DialogPrimitive.Trigger>
+          Open uncontrolled dialog
+        </DialogPrimitive.Trigger>
+        <DialogContent closeLabel="Close dialog">
+          <DialogTitle>Uncontrolled dialog</DialogTitle>
+          <input aria-label="Uncontrolled field" />
+        </DialogContent>
+      </Dialog>
+    );
+    const opener = screen.getByRole('button', {
+      name: 'Open uncontrolled dialog',
+    });
+
+    await user.click(opener);
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(true));
+    await user.click(screen.getByRole('button', { name: 'Close dialog' }));
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('retains the opener when a controlled close request is rejected', async () => {
+    function RejectingDialog() {
+      const [open, setOpen] = useState(false);
+      const [rejectClose, setRejectClose] = useState(true);
+      const [contentGeneration, setContentGeneration] = useState(0);
+
+      const handleOpenChange = (nextOpen: boolean) => {
+        if (!nextOpen && rejectClose) {
+          setContentGeneration((generation) => generation + 1);
+          return;
+        }
+        setOpen(nextOpen);
+      };
+
+      return (
+        <>
+          <button type="button" onClick={() => setOpen(true)}>
+            Open controlled dialog
+          </button>
+          <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent key={contentGeneration} closeLabel="Close dialog">
+              <DialogTitle>Controlled dialog</DialogTitle>
+              <button type="button" onClick={() => setRejectClose(false)}>
+                Allow close
+              </button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<RejectingDialog />);
+    const opener = screen.getByRole('button', {
+      name: 'Open controlled dialog',
+    });
+
+    await user.click(opener);
+    await user.click(screen.getByRole('button', { name: 'Close dialog' }));
+    expect(
+      screen.getByRole('dialog', { name: 'Controlled dialog' })
+    ).toBeInTheDocument();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Allow close' }));
+    await user.click(screen.getByRole('button', { name: 'Close dialog' }));
 
     await waitFor(() => expect(opener).toHaveFocus());
   });

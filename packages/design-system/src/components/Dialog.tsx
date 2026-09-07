@@ -53,8 +53,12 @@ interface DialogProps {
 
 function Dialog({ children, open, onOpenChange }: DialogProps) {
   const [descriptionPresent, setDescriptionPresent] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const resolvedOpen = isControlled ? open : uncontrolledOpen;
   const nextCycleIdRef = useRef(0);
   const latestCycleIdRef = useRef(0);
+  const activeCycleIdRef = useRef<number | null>(null);
   const pendingCycleIdRef = useRef<number | null>(null);
   const focusOriginsRef = useRef(new Map<number, DialogFocusOrigin>());
   const closingCyclesRef = useRef(new Set<number>());
@@ -89,10 +93,30 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     return cycleId;
   }, []);
 
-  const markLatestCycleClosing = useCallback(() => {
-    const cycleId = latestCycleIdRef.current;
-    if (cycleId > 0) {
-      closingCyclesRef.current.add(cycleId);
+  const startOpeningCycle = useCallback(() => {
+    if (activeCycleIdRef.current !== null) {
+      return activeCycleIdRef.current;
+    }
+
+    const cycleId = createCycle();
+    activeCycleIdRef.current = cycleId;
+    pendingCycleIdRef.current = cycleId;
+    captureFocusOrigin(cycleId, null);
+    return cycleId;
+  }, [captureFocusOrigin, createCycle]);
+
+  const markActiveCycleClosing = useCallback(() => {
+    const cycleId = activeCycleIdRef.current;
+    if (cycleId === null) {
+      return;
+    }
+    closingCyclesRef.current.add(cycleId);
+    activeCycleIdRef.current = null;
+
+    if (pendingCycleIdRef.current === cycleId) {
+      focusOriginsRef.current.delete(cycleId);
+      closingCyclesRef.current.delete(cycleId);
+      pendingCycleIdRef.current = null;
     }
   }, []);
 
@@ -103,12 +127,12 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
       }
       preparedOverlaysRef.current.add(overlay);
       if (pendingCycleIdRef.current === null) {
-        const cycleId = createCycle();
+        const cycleId = activeCycleIdRef.current ?? startOpeningCycle();
         pendingCycleIdRef.current = cycleId;
         captureFocusOrigin(cycleId, null);
       }
     },
-    [captureFocusOrigin, createCycle]
+    [captureFocusOrigin, startOpeningCycle]
   );
 
   const registerContent = useCallback(
@@ -116,12 +140,15 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
       if (contentCyclesRef.current.has(content)) {
         return;
       }
-      const cycleId = pendingCycleIdRef.current ?? createCycle();
+      const cycleId =
+        pendingCycleIdRef.current ??
+        activeCycleIdRef.current ??
+        startOpeningCycle();
       pendingCycleIdRef.current = null;
       captureFocusOrigin(cycleId, content);
       contentCyclesRef.current.set(content, cycleId);
     },
-    [captureFocusOrigin, createCycle]
+    [captureFocusOrigin, startOpeningCycle]
   );
 
   const takeFocusOrigin = useCallback((content: HTMLElement | null) => {
@@ -146,35 +173,29 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     return origin;
   }, []);
 
-  const previouslyOpenRef = useRef(open === true);
+  const previouslyOpenRef = useRef(false);
   useLayoutEffect(() => {
-    if (previouslyOpenRef.current && open === false) {
-      markLatestCycleClosing();
+    if (!previouslyOpenRef.current && resolvedOpen) {
+      startOpeningCycle();
+    } else if (previouslyOpenRef.current && !resolvedOpen) {
+      markActiveCycleClosing();
     }
-    previouslyOpenRef.current = open === true;
-  }, [markLatestCycleClosing, open]);
+    previouslyOpenRef.current = resolvedOpen;
+  }, [markActiveCycleClosing, resolvedOpen, startOpeningCycle]);
 
   const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) {
-      markLatestCycleClosing();
-      const pendingCycleId = pendingCycleIdRef.current;
-      if (pendingCycleId !== null) {
-        focusOriginsRef.current.delete(pendingCycleId);
-        closingCyclesRef.current.delete(pendingCycleId);
-        pendingCycleIdRef.current = null;
-      }
-      onOpenChange?.(false);
+    if (isControlled) {
+      onOpenChange?.(nextOpen);
       return;
     }
 
-    const previousPendingCycleId = pendingCycleIdRef.current;
-    if (previousPendingCycleId !== null) {
-      focusOriginsRef.current.delete(previousPendingCycleId);
+    if (nextOpen) {
+      startOpeningCycle();
+    } else {
+      markActiveCycleClosing();
     }
-    const cycleId = createCycle();
-    pendingCycleIdRef.current = cycleId;
-    captureFocusOrigin(cycleId, null);
-    onOpenChange?.(true);
+    setUncontrolledOpen(nextOpen);
+    onOpenChange?.(nextOpen);
   };
 
   return (
@@ -187,10 +208,7 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
         takeFocusOrigin,
       }}
     >
-      <DialogPrimitive.Root
-        {...(open === undefined ? {} : { open })}
-        onOpenChange={handleOpenChange}
-      >
+      <DialogPrimitive.Root open={resolvedOpen} onOpenChange={handleOpenChange}>
         {children}
       </DialogPrimitive.Root>
     </DialogSemanticsContext.Provider>
