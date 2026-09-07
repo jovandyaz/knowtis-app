@@ -10,6 +10,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
+import { err, ok, type Result } from 'neverthrow';
 
 import {
   ARTIFACT_TYPE,
@@ -25,6 +26,10 @@ import {
   flashcardReviews,
   notes,
 } from '../../../../database/schema';
+import {
+  ArtifactErrors,
+  type ArtifactDomainError,
+} from '../../domain/errors/artifact.errors';
 import type {
   DeckStudyStateRow,
   DueCardRow,
@@ -268,47 +273,59 @@ export class DrizzleFlashcardProgressRepository implements FlashcardProgressRepo
     };
   }
 
-  async recordReview(input: RecordReviewInput): Promise<void> {
+  async recordReview(
+    input: RecordReviewInput
+  ): Promise<Result<void, ArtifactDomainError>> {
     const reviewedAt = new Date();
 
-    await this.db.transaction(async (tx) => {
-      await tx
-        .insert(flashcardProgress)
-        .values({
-          artifactId: input.artifactId,
-          userId: input.userId,
-          cardIndex: input.cardIndex,
-          easeFactor: input.next.easeFactor.toFixed(2),
-          intervalDays: input.next.intervalDays,
-          repetitions: input.next.repetitions,
-          nextReview: input.next.nextReview,
-          lastReviewed: reviewedAt,
-        })
-        .onConflictDoUpdate({
-          target: [
-            flashcardProgress.artifactId,
-            flashcardProgress.userId,
-            flashcardProgress.cardIndex,
-          ],
-          set: {
+    try {
+      await this.db.transaction(async (tx) => {
+        await tx
+          .insert(flashcardProgress)
+          .values({
+            artifactId: input.artifactId,
+            userId: input.userId,
+            cardIndex: input.cardIndex,
             easeFactor: input.next.easeFactor.toFixed(2),
             intervalDays: input.next.intervalDays,
             repetitions: input.next.repetitions,
             nextReview: input.next.nextReview,
             lastReviewed: reviewedAt,
-          },
-        });
+          })
+          .onConflictDoUpdate({
+            target: [
+              flashcardProgress.artifactId,
+              flashcardProgress.userId,
+              flashcardProgress.cardIndex,
+            ],
+            set: {
+              easeFactor: input.next.easeFactor.toFixed(2),
+              intervalDays: input.next.intervalDays,
+              repetitions: input.next.repetitions,
+              nextReview: input.next.nextReview,
+              lastReviewed: reviewedAt,
+            },
+          });
 
-      await tx.insert(flashcardReviews).values({
-        artifactId: input.artifactId,
-        userId: input.userId,
-        cardIndex: input.cardIndex,
-        quality: input.quality,
-        intervalBeforeDays: input.intervalBeforeDays,
-        intervalAfterDays: input.next.intervalDays,
-        easeAfter: input.next.easeFactor.toFixed(2),
-        reviewedAt,
+        await tx.insert(flashcardReviews).values({
+          artifactId: input.artifactId,
+          userId: input.userId,
+          cardIndex: input.cardIndex,
+          quality: input.quality,
+          intervalBeforeDays: input.intervalBeforeDays,
+          intervalAfterDays: input.next.intervalDays,
+          easeAfter: input.next.easeFactor.toFixed(2),
+          reviewedAt,
+        });
       });
-    });
+    } catch (error) {
+      return err(
+        ArtifactErrors.internalError(
+          error instanceof Error ? error.message : 'Failed to record the review'
+        )
+      );
+    }
+
+    return ok(undefined);
   }
 }

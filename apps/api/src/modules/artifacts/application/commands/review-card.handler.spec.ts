@@ -1,4 +1,5 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { SM2_QUALITY } from '@knowtis/shared-types';
@@ -37,7 +38,7 @@ describe('ReviewCardHandler', () => {
   beforeEach(() => {
     findById = vi.fn().mockResolvedValue(deck);
     getProgress = vi.fn().mockResolvedValue([]);
-    recordReview = vi.fn().mockResolvedValue(undefined);
+    recordReview = vi.fn().mockResolvedValue(ok(undefined));
     emit = vi.fn();
     handler = new ReviewCardHandler(
       { findById } as unknown as ArtifactReadRepository,
@@ -154,6 +155,28 @@ describe('ReviewCardHandler', () => {
       ArtifactErrorCodes.ARTIFACT_NOT_FOUND
     );
     expect(recordReview).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed review write without emitting', async () => {
+    recordReview.mockResolvedValue(
+      err({
+        code: ArtifactErrorCodes.INTERNAL_ERROR,
+        message: 'Internal error: review log insert failed',
+      })
+    );
+
+    const result = await handler.execute({
+      artifactId: ARTIFACT_ID,
+      userId: USER_ID,
+      cardIndex: 0,
+      quality: SM2_QUALITY.GOOD,
+    });
+
+    expect(result._unsafeUnwrapErr()).toEqual({
+      code: ArtifactErrorCodes.INTERNAL_ERROR,
+      message: 'Internal error: review log insert failed',
+    });
     expect(emit).not.toHaveBeenCalled();
   });
 });

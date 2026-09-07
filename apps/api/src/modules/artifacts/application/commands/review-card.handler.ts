@@ -80,7 +80,7 @@ export class ReviewCardHandler {
         intervalDays: current.intervalDays,
       });
 
-      await this.progressRepo.recordReview({
+      const recorded = await this.progressRepo.recordReview({
         artifactId: input.artifactId,
         userId: input.userId,
         cardIndex: input.cardIndex,
@@ -88,6 +88,10 @@ export class ReviewCardHandler {
         intervalBeforeDays: current.intervalDays,
         next,
       });
+
+      if (recorded.isErr()) {
+        return err(recorded.error);
+      }
 
       const kind = classifyReviewKind(cardProgress ?? null, new Date());
 

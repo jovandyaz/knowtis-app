@@ -110,7 +110,9 @@ export interface FlashcardProgressRepository {
     userId: string
   ): Promise<DeckStudyStateRow[]>;
   getStudyActivity(userId: string, timeZone: string): Promise<StudyActivity>;
-  recordReview(input: RecordReviewInput): Promise<void>;
+  recordReview(
+    input: RecordReviewInput
+  ): Promise<Result<void, ArtifactDomainError>>;
 }
 
 export interface QuizAttemptRepository {
