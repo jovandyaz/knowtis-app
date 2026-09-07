@@ -142,15 +142,15 @@ knowtis/
 
 The `libs/data-access/*` libraries wrap `@knowtis/api-client` in React Query hooks so components never call the API directly. Client-side Zustand stores are **not** here: they live in `apps/notes/src/stores/` and `packages/auth-react`. Each library follows the same shape: `useXxx` hooks (`useQuery` for reads, `useMutation` for writes), a hierarchical `xxxQueryKeys` factory, and co-located Zod schemas where a domain needs input validation. Exports below are read from each `src/index.ts`.
 
-| Library                          | Alias                                | Scope              | Key exports                                                                                                   |
-| -------------------------------- | ------------------------------------ | ------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `libs/data-access/admin`         | `@knowtis/data-access-admin`         | `scope:backoffice` | `useAdminUsers`, `useAuditLog`, `useAiConfig`, `useSystemProviders`, `useUpsertFeatureFlag`, `adminQueryKeys` |
-| `libs/data-access/artifacts`     | `@knowtis/data-access-artifacts`     | `scope:notes`      | `useArtifacts`, `useGenerateArtifact`, `useDueCards`, `useReviewCard`, `useSubmitQuiz`, `artifactsQueryKeys`  |
-| `libs/data-access/feature-flags` | `@knowtis/data-access-feature-flags` | `scope:shared`     | `useFeatureFlags`, `useFeatureFlag`, `featureFlagsQueryKeys`                                                  |
-| `libs/data-access/mcp-keys`      | `@knowtis/data-access-mcp-keys`      | `scope:shared`     | `useMcpKeys`, `useCreateMcpKey`, `useRevokeMcpKey`, `createMcpKeySchema`, `mcpKeysQueryKeys`                  |
-| `libs/data-access/notes`         | `@knowtis/data-access-notes`         | `scope:notes`      | `useNotes`, `useNote`, `useCreateNote`, `useRestoreNote`, `useTags`, `useUploadImage`, `notesQueryKeys`       |
-| `libs/data-access/oauth`         | `@knowtis/data-access-oauth`         | `scope:notes`      | `useOauthInteraction`, `useConsentDecision`, `useOauthGrants`, `useRevokeGrant`, `classifyConsentError`       |
-| `libs/data-access/users`         | `@knowtis/data-access-users`         | `scope:shared`     | `useUpdateProfile`, `usersQueryKeys`, `UpdateProfileSchema`                                                   |
+| Library                          | Alias                                | Scope              | Key exports                                                                                                                                               |
+| -------------------------------- | ------------------------------------ | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `libs/data-access/admin`         | `@knowtis/data-access-admin`         | `scope:backoffice` | `useAdminUsers`, `useAuditLog`, `useAiConfig`, `useSystemProviders`, `useUpsertFeatureFlag`, `adminQueryKeys`                                             |
+| `libs/data-access/artifacts`     | `@knowtis/data-access-artifacts`     | `scope:notes`      | `useArtifacts`, `useGenerateArtifact`, `useStudySession`, `useStudyStats`, `useLatestQuizAttempt`, `useReviewCard`, `useSubmitQuiz`, `artifactsQueryKeys` |
+| `libs/data-access/feature-flags` | `@knowtis/data-access-feature-flags` | `scope:shared`     | `useFeatureFlags`, `useFeatureFlag`, `featureFlagsQueryKeys`                                                                                              |
+| `libs/data-access/mcp-keys`      | `@knowtis/data-access-mcp-keys`      | `scope:shared`     | `useMcpKeys`, `useCreateMcpKey`, `useRevokeMcpKey`, `createMcpKeySchema`, `mcpKeysQueryKeys`                                                              |
+| `libs/data-access/notes`         | `@knowtis/data-access-notes`         | `scope:notes`      | `useNotes`, `useNote`, `useCreateNote`, `useRestoreNote`, `useTags`, `useUploadImage`, `notesQueryKeys`                                                   |
+| `libs/data-access/oauth`         | `@knowtis/data-access-oauth`         | `scope:notes`      | `useOauthInteraction`, `useConsentDecision`, `useOauthGrants`, `useRevokeGrant`, `classifyConsentError`                                                   |
+| `libs/data-access/users`         | `@knowtis/data-access-users`         | `scope:shared`     | `useUpdateProfile`, `usersQueryKeys`, `UpdateProfileSchema`                                                                                               |
 
 Run `nx test data-access-<name>` for a single library.
 
