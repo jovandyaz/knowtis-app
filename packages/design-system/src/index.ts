@@ -145,6 +145,11 @@ export {
   DONUT_TONES,
   type DonutTone,
 } from './components/DonutChart';
+export {
+  StatTile,
+  type StatTileProps,
+  type StatDelta,
+} from './components/StatTile';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
