@@ -2,11 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 
-import {
-  ARTIFACT_TYPE,
-  FLASHCARD_REVIEW_KIND,
-  type FlashcardContent,
-} from '@knowtis/shared-types';
+import { ARTIFACT_TYPE, type FlashcardContent } from '@knowtis/shared-types';
 
 import {
   ArtifactErrors,
@@ -21,6 +17,7 @@ import {
   ARTIFACT_READ_REPOSITORY,
   FLASHCARD_PROGRESS_REPOSITORY,
 } from '../../domain/ports/artifact.repository';
+import { classifyReviewKind } from '../../domain/services/review-kind';
 import { loadOwnedArtifact } from '../services/load-owned-artifact';
 import {
   calculateNextReview,
@@ -92,12 +89,7 @@ export class ReviewCardHandler {
         next,
       });
 
-      const now = new Date();
-      const kind = !cardProgress
-        ? FLASHCARD_REVIEW_KIND.NEW
-        : new Date(cardProgress.nextReview) <= now
-          ? FLASHCARD_REVIEW_KIND.DUE
-          : FLASHCARD_REVIEW_KIND.EARLY;
+      const kind = classifyReviewKind(cardProgress ?? null, new Date());
 
       this.eventEmitter.emit(
         FlashcardReviewedEvent.EVENT_NAME,
