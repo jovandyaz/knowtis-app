@@ -1,4 +1,4 @@
-import { forwardRef } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import { motion } from 'motion/react';
 
@@ -23,23 +23,37 @@ export interface DonutSegment {
   label: string;
 }
 
-export interface DonutChartProps {
+export interface DonutChartProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  'children'
+> {
   segments: DonutSegment[];
+  /**
+   * The whole chart in one finished sentence — centre reading plus every
+   * segment and its value, punctuation included. It is the chart's only
+   * accessible name, and the package writes no copy of its own.
+   */
+  description: string;
   centerLabel: string;
   centerSublabel?: string;
   /** Pixel diameter of the ring; the centre text is sized for `DONUT_SIZE_DEFAULT` and above. */
   size?: number;
-  className?: string;
+  /** Third centre line, under the sublabel; decorative, like the rest of the overlay. */
+  children?: ReactNode;
 }
 
 const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
   (
     {
       segments,
+      description,
       centerLabel,
       centerSublabel,
       size = DONUT_SIZE_DEFAULT,
       className,
+      style,
+      children,
+      ...rest
     },
     ref
   ) => {
@@ -48,10 +62,6 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
     const circumference = 2 * Math.PI * radius;
     const total = segments.reduce((sum, s) => sum + Math.max(s.value, 0), 0);
     const centre = size / 2;
-    const summary = segments.map((s) => `${s.label} ${s.value}`).join(', ');
-    const description = centerSublabel
-      ? `${centerLabel} (${centerSublabel}): ${summary}`
-      : `${centerLabel}: ${summary}`;
 
     const drawn = segments.filter((s) => s.value > 0 && total > 0);
     const arcs = drawn.map((segment, index) => {
@@ -67,11 +77,12 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
     return (
       <div
         ref={ref}
+        {...rest}
         className={cn(
           'relative inline-flex items-center justify-center',
           className
         )}
-        style={{ width: size, height: size }}
+        style={{ ...style, width: size, height: size }}
       >
         <svg role="img" aria-label={description} width={size} height={size}>
           <circle
@@ -114,6 +125,11 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
           {centerSublabel ? (
             <span className="text-xs text-(--muted-foreground)">
               {centerSublabel}
+            </span>
+          ) : null}
+          {children ? (
+            <span className="text-xs text-(--muted-foreground)">
+              {children}
             </span>
           ) : null}
         </div>

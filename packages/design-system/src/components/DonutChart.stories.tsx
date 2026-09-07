@@ -20,6 +20,7 @@ export const Default: Story = {
     ],
     centerLabel: '60%',
     centerSublabel: '6 of 10',
+    description: '60%, 6 of 10: got it 6, missed 3, skipped 1.',
   },
 };
 
@@ -28,6 +29,7 @@ export const AllCorrect: Story = {
     segments: [{ value: 10, tone: 'correct', label: 'Got it' }],
     centerLabel: '100%',
     centerSublabel: '10 of 10',
+    description: '100%, 10 of 10: got it 10.',
   },
 };
 
@@ -36,5 +38,19 @@ export const Empty: Story = {
     segments: [{ value: 0, tone: 'correct', label: 'Got it' }],
     centerLabel: '0%',
     centerSublabel: '0 of 0',
+    description: '0%, 0 of 0: nothing answered yet.',
+  },
+};
+
+export const WithExtraLine: Story = {
+  args: {
+    segments: [
+      { value: 6, tone: 'correct', label: 'Got it' },
+      { value: 4, tone: 'incorrect', label: 'Missed' },
+    ],
+    centerLabel: '60%',
+    centerSublabel: '6 of 10',
+    description: '60%, 6 of 10: got it 6, missed 4. Took 4 minutes 20 seconds.',
+    children: '4m 20s',
   },
 };

@@ -19,29 +19,21 @@ const SEGMENTS: DonutSegment[] = [
   { value: 1, tone: 'muted', label: 'Skipped' },
 ];
 
+const DESCRIPTION = '60% correct: got it 6, missed 3, skipped 1.';
+
 describe('DonutChart', () => {
-  it('describes the whole chart to assistive tech, sublabel included', () => {
+  it('names the chart with the description its consumer wrote', () => {
     render(
       <DonutChart
         segments={[...SEGMENTS]}
         centerLabel="60%"
         centerSublabel="6 of 10"
+        description={DESCRIPTION}
       />
     );
-    expect(
-      screen.getByRole('img', {
-        name: '60% (6 of 10): Got it 6, Missed 3, Skipped 1',
-      })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: DESCRIPTION })).toBeInTheDocument();
     expect(screen.getByText('60%')).toBeInTheDocument();
     expect(screen.getByText('6 of 10')).toBeInTheDocument();
-  });
-
-  it('describes the chart without a sublabel when none is given', () => {
-    render(<DonutChart segments={[...SEGMENTS]} centerLabel="60%" />);
-    expect(
-      screen.getByRole('img', { name: '60%: Got it 6, Missed 3, Skipped 1' })
-    ).toBeInTheDocument();
   });
 
   it('sizes each arc by its share of the total, drawing the rest of the ring hidden', () => {
@@ -49,6 +41,7 @@ describe('DonutChart', () => {
       <DonutChart
         segments={[...SEGMENTS]}
         centerLabel="60%"
+        description={DESCRIPTION}
         size={DONUT_SIZE_DEFAULT}
       />
     );
@@ -65,7 +58,11 @@ describe('DonutChart', () => {
 
   it('rotates each arc to start where the previous one ended', () => {
     const { container } = render(
-      <DonutChart segments={[...SEGMENTS]} centerLabel="60%" />
+      <DonutChart
+        segments={[...SEGMENTS]}
+        centerLabel="60%"
+        description={DESCRIPTION}
+      />
     );
     const arcs = Array.from(
       container.querySelectorAll('circle[data-segment]')
@@ -78,6 +75,7 @@ describe('DonutChart', () => {
       <DonutChart
         segments={[{ value: 0, tone: 'correct', label: 'Got it' }]}
         centerLabel="0"
+        description="Nothing answered yet."
       />
     );
     expect(container.querySelectorAll('circle[data-segment]')).toHaveLength(0);
@@ -91,6 +89,7 @@ describe('DonutChart', () => {
           { value: -5, tone: 'incorrect', label: 'Missed' },
         ]}
         centerLabel="100%"
+        description="100% correct: got it 10."
       />
     );
     const arcs = container.querySelectorAll('circle[data-segment]');
@@ -103,15 +102,20 @@ describe('DonutChart', () => {
     expect(length).toBeCloseTo(rest, 3);
   });
 
-  it('renders every arc immediately under reduced motion, with no zero-opacity inline style', () => {
+  it('paints every arc opaque on the first frame under reduced motion', () => {
     reducedMotion.value = true;
     const { container } = render(
-      <DonutChart segments={[...SEGMENTS]} centerLabel="60%" />
+      <DonutChart
+        segments={[...SEGMENTS]}
+        centerLabel="60%"
+        description={DESCRIPTION}
+      />
     );
     const arcs = Array.from(container.querySelectorAll('circle[data-segment]'));
     expect(arcs).toHaveLength(3);
     for (const arc of arcs) {
-      expect((arc as SVGCircleElement).style.opacity).not.toBe('0');
+      expect(arc.getAttribute('opacity')).toBe('1');
+      expect(arc.getAttribute('stroke-dashoffset')).toBe('0');
     }
   });
 
@@ -121,9 +125,39 @@ describe('DonutChart', () => {
         segments={[...SEGMENTS]}
         centerLabel="60%"
         centerSublabel="6 of 10"
+        description={DESCRIPTION}
       />
     );
     const centre = screen.getByText('60%').closest('div');
     expect(centre).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('renders extra centre content as a third line, still hidden from assistive tech', () => {
+    render(
+      <DonutChart
+        segments={[...SEGMENTS]}
+        centerLabel="60%"
+        centerSublabel="6 of 10"
+        description={DESCRIPTION}
+      >
+        4m 20s
+      </DonutChart>
+    );
+    const extra = screen.getByText('4m 20s');
+    expect(extra.closest('[aria-hidden="true"]')).not.toBeNull();
+  });
+
+  it('forwards rest props like id and data attributes to the root div', () => {
+    render(
+      <DonutChart
+        segments={[...SEGMENTS]}
+        centerLabel="60%"
+        description={DESCRIPTION}
+        id="quiz-donut"
+        data-testid="donut-root"
+      />
+    );
+    const root = screen.getByTestId('donut-root');
+    expect(root).toHaveAttribute('id', 'quiz-donut');
   });
 });
