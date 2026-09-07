@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   calculateNextReview,
   initializeProgress,
+  predictIntervals,
 } from './spaced-repetition.service';
 
 describe('SpacedRepetitionService', () => {
@@ -89,6 +90,37 @@ describe('SpacedRepetitionService', () => {
         intervalDays: 6,
       });
       expect(result.nextReview.getTime()).toBeGreaterThan(Date.now());
+    });
+  });
+
+  describe('predictIntervals', () => {
+    it('predicts 1 day for both failing ratings and the SM-2 ladder for passing ones on a new card', () => {
+      const result = predictIntervals({
+        repetitions: 0,
+        easeFactor: 2.5,
+        intervalDays: 0,
+      });
+      expect(result).toEqual({ again: 1, hard: 1, good: 1, easy: 1 });
+    });
+
+    it('predicts the second step for a card reviewed once', () => {
+      const result = predictIntervals({
+        repetitions: 1,
+        easeFactor: 2.5,
+        intervalDays: 1,
+      });
+      expect(result).toEqual({ again: 1, hard: 1, good: 6, easy: 6 });
+    });
+
+    it('scales by ease for a seasoned card', () => {
+      const result = predictIntervals({
+        repetitions: 3,
+        easeFactor: 2.5,
+        intervalDays: 6,
+      });
+      expect(result.again).toBe(1);
+      expect(result.good).toBe(15);
+      expect(result.easy).toBe(15);
     });
   });
 });

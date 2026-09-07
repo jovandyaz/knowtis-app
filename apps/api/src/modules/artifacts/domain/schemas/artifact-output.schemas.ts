@@ -68,12 +68,3 @@ export const mindMapOutputSchema = z.object({
     .array(mindMapNodeSchema)
     .describe('First-level branches from the root'),
 });
-
-export const learnTopicOutputSchema = z.object({
-  title: z.string().max(50).describe('Concise title for the note, 3-8 words'),
-  content: z
-    .string()
-    .describe(
-      'Educational HTML content with h2 sections, p explanations, ul key points, and code for examples when relevant'
-    ),
-});

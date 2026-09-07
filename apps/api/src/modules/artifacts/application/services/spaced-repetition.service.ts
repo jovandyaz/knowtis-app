@@ -1,3 +1,5 @@
+import { SM2_QUALITY, type PredictedIntervals } from '@knowtis/shared-types';
+
 interface SM2Input {
   quality: number;
   repetitions: number;
@@ -65,4 +67,21 @@ function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+export type SM2Progress = Pick<
+  SM2Input,
+  'repetitions' | 'easeFactor' | 'intervalDays'
+>;
+
+export function predictIntervals(progress: SM2Progress): PredictedIntervals {
+  const daysFor = (quality: number) =>
+    calculateNextReview({ quality, ...progress }).intervalDays;
+
+  return {
+    again: daysFor(SM2_QUALITY.AGAIN),
+    hard: daysFor(SM2_QUALITY.HARD),
+    good: daysFor(SM2_QUALITY.GOOD),
+    easy: daysFor(SM2_QUALITY.EASY),
+  };
 }

@@ -1,3 +1,4 @@
+import type { EventEmitter2 } from '@nestjs/event-emitter';
 import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -8,11 +9,11 @@ import type { AIRateLimitService } from '../../../ai/application/services/ai-rat
 import type { AIStructuredOutputProvider } from '../../../ai/domain/ports/ai-structured-output.port';
 import { AIModel } from '../../../ai/domain/value-objects/ai-model.vo';
 import { createTestCatalog } from '../../../ai/testing/create-test-catalog';
-import { ArtifactErrorCodes } from '../../domain/errors';
+import { ArtifactErrorCodes } from '../../domain/errors/artifact.errors';
 import type {
   ArtifactEntity,
   ArtifactWriteRepository,
-} from '../../domain/ports';
+} from '../../domain/ports/artifact.repository';
 import { AIGenerationPipeline } from '../services/ai-generation.pipeline';
 import { GenerateArtifactHandler } from './generate-artifact.handler';
 
@@ -88,7 +89,8 @@ describe('GenerateArtifactHandler', () => {
 
     handler = new GenerateArtifactHandler(
       repository as unknown as ArtifactWriteRepository,
-      pipeline
+      pipeline,
+      { emit: vi.fn() } as unknown as EventEmitter2
     );
   });
 
@@ -257,6 +259,47 @@ describe('GenerateArtifactHandler', () => {
           model: MOCK_MODEL,
           inputTokens: 50,
           outputTokens: 100,
+        })
+      );
+    });
+
+    it('emits artifact.generated with the artifact type after a successful generation', async () => {
+      const emit = vi.fn();
+      const emitting = new GenerateArtifactHandler(
+        repository as unknown as ArtifactWriteRepository,
+        pipeline,
+        { emit } as unknown as EventEmitter2
+      );
+
+      rateLimitService.checkLimit.mockResolvedValue({ allowed: true });
+      orchestrator.selectModel.mockResolvedValue(
+        AIModel.create(MOCK_MODEL, createTestCatalog())
+      );
+      orchestrator.getSystemPrompt.mockReturnValue('system');
+      structuredOutput.generateStructuredOutput.mockResolvedValue({
+        object: { cards: [] },
+        inputTokens: 10,
+        outputTokens: 5,
+        model: MOCK_MODEL,
+      });
+      rateLimitService.recordUsage.mockResolvedValue(undefined);
+      const created = createMockArtifactEntity();
+      repository.create.mockResolvedValue(ok(created));
+
+      await emitting.execute({
+        userId: MOCK_USER_ID,
+        noteId: MOCK_NOTE_ID,
+        noteContent: 'Enough content to generate from.',
+        noteTitle: 'Test Note',
+        type: 'flashcard_deck',
+      });
+
+      expect(emit).toHaveBeenCalledWith(
+        'artifact.generated',
+        expect.objectContaining({
+          aggregateId: created.id,
+          userId: MOCK_USER_ID,
+          artifactType: 'flashcard_deck',
         })
       );
     });

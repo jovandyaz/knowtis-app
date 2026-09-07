@@ -11,6 +11,9 @@ export const ArtifactErrorCodes = {
   EMPTY_CONTENT: 'EMPTY_CONTENT',
   CONTENT_TOO_LARGE: 'CONTENT_TOO_LARGE',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  INVALID_QUIZ_SCOPE: 'INVALID_QUIZ_SCOPE',
+  INVALID_QUIZ_ANSWER: 'INVALID_QUIZ_ANSWER',
+  INVALID_CARD_INDEX: 'INVALID_CARD_INDEX',
 } as const;
 
 export type ArtifactErrorCode =
@@ -61,5 +64,23 @@ export const ArtifactErrors = {
     createArtifactError(
       ArtifactErrorCodes.INTERNAL_ERROR,
       `Internal error: ${message}`
+    ),
+
+  invalidQuizScope: (reason: string) =>
+    createArtifactError(
+      ArtifactErrorCodes.INVALID_QUIZ_SCOPE,
+      `Invalid quiz attempt scope: ${reason}`
+    ),
+
+  invalidQuizAnswer: (reason: string) =>
+    createArtifactError(
+      ArtifactErrorCodes.INVALID_QUIZ_ANSWER,
+      `Invalid quiz answer: ${reason}`
+    ),
+
+  invalidCardIndex: (cardIndex: number) =>
+    createArtifactError(
+      ArtifactErrorCodes.INVALID_CARD_INDEX,
+      `Card ${cardIndex} is not part of this deck`
     ),
 } as const;

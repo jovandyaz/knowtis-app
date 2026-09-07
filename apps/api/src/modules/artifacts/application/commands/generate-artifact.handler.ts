@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok, type Result } from 'neverthrow';
 import type { ZodType } from 'zod';
 
@@ -10,12 +11,16 @@ import {
 } from '@knowtis/shared-types';
 
 import type { SupportedAIAction } from '../../../ai/domain/value-objects/ai-action.vo';
-import { ArtifactErrors, type ArtifactDomainError } from '../../domain/errors';
+import {
+  ArtifactErrors,
+  type ArtifactDomainError,
+} from '../../domain/errors/artifact.errors';
+import { ArtifactGeneratedEvent } from '../../domain/events/artifact-generated.event';
 import {
   ARTIFACT_WRITE_REPOSITORY,
   type ArtifactEntity,
   type ArtifactWriteRepository,
-} from '../../domain/ports';
+} from '../../domain/ports/artifact.repository';
 import {
   flashcardDeckOutputSchema,
   mindMapOutputSchema,
@@ -60,7 +65,8 @@ export class GenerateArtifactHandler {
   constructor(
     @Inject(ARTIFACT_WRITE_REPOSITORY)
     private readonly repository: ArtifactWriteRepository,
-    private readonly pipeline: AIGenerationPipeline
+    private readonly pipeline: AIGenerationPipeline,
+    private readonly eventEmitter: EventEmitter2
   ) {}
 
   async execute(
@@ -105,6 +111,15 @@ export class GenerateArtifactHandler {
     if (createResult.isErr()) {
       return err(createResult.error);
     }
+
+    this.eventEmitter.emit(
+      ArtifactGeneratedEvent.EVENT_NAME,
+      new ArtifactGeneratedEvent(
+        createResult.value.id,
+        input.userId,
+        input.type
+      )
+    );
 
     return ok(createResult.value);
   }
