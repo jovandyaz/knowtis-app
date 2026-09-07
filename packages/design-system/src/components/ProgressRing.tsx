@@ -1,9 +1,10 @@
-import { forwardRef, type ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import { motion } from 'motion/react';
 
 import { useMotionPreset } from '../motion/useMotionPreset';
 import { cn } from '../utils';
+import { clampProgress } from '../utils/progress';
 
 export const RING_SIZE_DEFAULT = 40;
 export const RING_STROKE_DEFAULT = 3;
@@ -13,7 +14,10 @@ const TONE_CLASS = {
   correct: 'text-learn-correct',
 } as const;
 
-export interface ProgressRingProps {
+export interface ProgressRingProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  'className' | 'children'
+> {
   value: number;
   max: number;
   label: string;
@@ -35,20 +39,21 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
       tone = 'primary',
       className,
       children,
+      ...rest
     },
     ref
   ) => {
     const preset = useMotionPreset();
     const radius = (size - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
-    const clamped = Math.min(Math.max(value, 0), max);
-    const ratio = max > 0 ? clamped / max : 0;
+    const { safeMax, clamped, ratio } = clampProgress(value, max);
     const offset = circumference * (1 - ratio);
     const centre = size / 2;
 
     return (
       <div
         ref={ref}
+        {...rest}
         className={cn(
           'relative inline-flex items-center justify-center',
           className
@@ -59,7 +64,7 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
           role="progressbar"
           aria-label={label}
           aria-valuemin={0}
-          aria-valuemax={max}
+          aria-valuemax={safeMax}
           aria-valuenow={clamped}
           width={size}
           height={size}
@@ -90,7 +95,10 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
           />
         </svg>
         {children ? (
-          <div className="absolute inset-0 flex items-center justify-center text-xs font-medium tabular-nums">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 flex items-center justify-center text-xs font-medium tabular-nums"
+          >
             {children}
           </div>
         ) : null}
