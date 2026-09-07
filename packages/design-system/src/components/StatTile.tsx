@@ -2,6 +2,7 @@ import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
 import type { LearnTone } from '../constants/learn-tone';
 import { cn } from '../utils';
+import { CARD_SURFACE } from './Card';
 
 export interface StatDelta {
   value: number;
@@ -10,13 +11,12 @@ export interface StatDelta {
 
 export interface StatTileProps extends Omit<
   HTMLAttributes<HTMLDivElement>,
-  'className' | 'children'
+  'children'
 > {
   value: ReactNode;
   label: string;
   delta?: StatDelta;
   icon?: ReactNode;
-  className?: string;
 }
 
 type DeltaTone = Extract<LearnTone, 'correct' | 'muted' | 'incorrect'>;
@@ -51,10 +51,7 @@ const StatTile = forwardRef<HTMLDivElement, StatTileProps>(
     <div
       ref={ref}
       {...rest}
-      className={cn(
-        'flex flex-col gap-1 rounded-xl border border-(--border) bg-(--card) p-4 text-(--card-foreground)',
-        className
-      )}
+      className={cn(CARD_SURFACE, 'flex flex-col gap-1 p-4', className)}
     >
       <div className="flex items-center justify-between text-xs text-(--muted-foreground)">
         <span>{label}</span>
