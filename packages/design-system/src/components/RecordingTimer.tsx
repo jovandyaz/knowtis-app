@@ -1,6 +1,8 @@
-import * as ProgressPrimitive from '@radix-ui/react-progress';
-
 import { cn } from '../utils';
+import { Progress } from './Progress';
+
+const SECONDS_PER_MINUTE = 60;
+const NEAR_LIMIT_SECONDS = 30;
 
 export interface RecordingTimerProps {
   elapsed: number;
@@ -10,8 +12,8 @@ export interface RecordingTimerProps {
 }
 
 function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const mins = Math.floor(seconds / SECONDS_PER_MINUTE);
+  const secs = seconds % SECONDS_PER_MINUTE;
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
@@ -21,48 +23,38 @@ export function RecordingTimer({
   isRecording,
   className,
 }: RecordingTimerProps) {
-  const percentage = Math.min((elapsed / maxDuration) * 100, 100);
-  const remaining = maxDuration - elapsed;
-  const isNearLimit = remaining <= 30;
+  const isNearLimit = maxDuration - elapsed <= NEAR_LIMIT_SECONDS;
+  const elapsedLabel = formatTime(elapsed);
+  const totalLabel = formatTime(maxDuration);
 
   return (
     <div className={cn('flex flex-col gap-2', className)}>
       <div className="flex items-center justify-center gap-2">
         {isRecording && (
           <span
-            className="inline-block h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse"
+            className="inline-block h-2.5 w-2.5 rounded-full bg-(--destructive) animate-pulse"
             aria-hidden="true"
           />
         )}
         <span
           className={cn(
             'font-mono text-lg tabular-nums tracking-wider',
-            isNearLimit ? 'text-red-500' : 'text-(--foreground)'
+            isNearLimit ? 'text-(--destructive)' : 'text-(--foreground)'
           )}
         >
-          {formatTime(elapsed)}
+          {elapsedLabel}
         </span>
         <span className="text-(--muted-foreground) font-mono text-sm tabular-nums">
-          / {formatTime(maxDuration)}
+          / {totalLabel}
         </span>
       </div>
 
-      <ProgressPrimitive.Root
-        value={percentage}
-        max={100}
-        className="relative h-1.5 w-full overflow-hidden rounded-full bg-(--muted)"
-        getValueLabel={(value) =>
-          `${Math.round(value)}% of recording time used`
-        }
-      >
-        <ProgressPrimitive.Indicator
-          className={cn(
-            'h-full rounded-full transition-all duration-300 ease-out',
-            isNearLimit ? 'bg-red-500' : 'bg-(--primary)'
-          )}
-          style={{ width: `${percentage}%` }}
-        />
-      </ProgressPrimitive.Root>
+      <Progress
+        value={elapsed}
+        max={maxDuration}
+        label={`${elapsedLabel} / ${totalLabel}`}
+        tone={isNearLimit ? 'danger' : 'primary'}
+      />
     </div>
   );
 }
