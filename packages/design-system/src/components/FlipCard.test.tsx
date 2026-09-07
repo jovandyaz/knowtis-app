@@ -1,14 +1,12 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import type * as MotionReact from 'motion/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { reducedMotion } from '../test-utils/motion-react';
 import { FlipCard } from './FlipCard';
 
-const reducedMotion = vi.hoisted(() => ({ value: false }));
-vi.mock('motion/react', async () => {
-  const actual = await vi.importActual<typeof MotionReact>('motion/react');
-  return { ...actual, useReducedMotion: () => reducedMotion.value };
-});
+vi.mock('motion/react', async () =>
+  (await import('../test-utils/motion-react')).mockMotionReact()
+);
 
 function renderCard(flipped: boolean, onFlip = vi.fn()) {
   render(
