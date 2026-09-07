@@ -1,0 +1,14 @@
+{
+  "motion": {
+    "duration": {
+      "fast": { "value": "150ms", "type": "duration" },
+      "base": { "value": "250ms", "type": "duration" },
+      "slow": { "value": "400ms", "type": "duration" }
+    },
+    "easing": {
+      "standard": { "value": "cubic-bezier(0.2, 0, 0, 1)", "type": "easing" },
+      "enter": { "value": "cubic-bezier(0, 0, 0.2, 1)", "type": "easing" },
+      "exit": { "value": "cubic-bezier(0.4, 0, 1, 1)", "type": "easing" }
+    }
+  }
+}
