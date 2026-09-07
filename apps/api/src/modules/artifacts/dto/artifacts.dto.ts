@@ -1,20 +1,25 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
   IsArray,
   IsIn,
   IsInt,
   IsOptional,
-  IsString,
   IsUUID,
   Max,
-  MaxLength,
   Min,
-  MinLength,
   ValidateNested,
 } from 'class-validator';
 
-import { ARTIFACT_TYPES, type ArtifactType } from '@knowtis/shared-types';
+import {
+  ARTIFACT_TYPES,
+  QUIZ_ATTEMPT_SCOPES,
+  type ArtifactType,
+  type QuizAttemptScope,
+} from '@knowtis/shared-types';
+
+import { IsIanaTimeZone } from './is-iana-time-zone.validator';
 
 export class GenerateArtifactDto {
   @ApiProperty({ description: 'Note ID to generate artifact from' })
@@ -59,19 +64,21 @@ export class QuizAnswerDto {
 }
 
 export class SubmitQuizDto {
+  @ApiPropertyOptional({
+    enum: QUIZ_ATTEMPT_SCOPES,
+    description:
+      'full grades the whole quiz; missed grades exactly the questions failed in the latest full attempt',
+  })
+  @IsOptional()
+  @IsIn(QUIZ_ATTEMPT_SCOPES)
+  scope?: QuizAttemptScope;
+
   @ApiProperty({ description: 'Array of answers', type: [QuizAnswerDto] })
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => QuizAnswerDto)
   answers!: QuizAnswerDto[];
-}
-
-export class LearnTopicDto {
-  @ApiProperty({ description: 'Topic to learn about' })
-  @IsString()
-  @MinLength(2)
-  @MaxLength(200)
-  topic!: string;
 }
 
 export class ArtifactsQueryDto {
@@ -79,4 +86,15 @@ export class ArtifactsQueryDto {
   @IsOptional()
   @IsUUID()
   noteId?: string;
+}
+
+export class StudyQueryDto {
+  @ApiPropertyOptional({
+    description:
+      'IANA time zone used for "today" and the streak (defaults to UTC)',
+    example: 'America/Mexico_City',
+  })
+  @IsOptional()
+  @IsIanaTimeZone()
+  tz?: string;
 }

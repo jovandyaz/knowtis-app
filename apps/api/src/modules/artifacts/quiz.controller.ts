@@ -15,12 +15,11 @@ import { FEATURE_FLAG_KEYS } from '@knowtis/shared-types';
 
 import { unwrapOrThrow } from '../../core/http/unwrap-or-throw';
 import { FeatureFlagGuard, RequireFeatureFlag } from '../feature-flags';
-import {
-  GetQuizAttemptsHandler,
-  SubmitQuizAttemptHandler,
-} from './application';
+import { SubmitQuizAttemptHandler } from './application/commands/submit-quiz-attempt.handler';
+import { GetLatestQuizAttemptHandler } from './application/queries/get-latest-quiz-attempt.handler';
+import { GetQuizAttemptsHandler } from './application/queries/get-quiz-attempts.handler';
 import { ARTIFACT_ERROR_STATUS_MAP } from './artifact-error-status.map';
-import { SubmitQuizDto } from './dto';
+import { SubmitQuizDto } from './dto/artifacts.dto';
 
 @ApiTags('Artifacts - Quiz')
 @ApiBearerAuth()
@@ -30,7 +29,8 @@ import { SubmitQuizDto } from './dto';
 export class QuizController {
   constructor(
     private readonly submitQuizAttemptHandler: SubmitQuizAttemptHandler,
-    private readonly getQuizAttemptsHandler: GetQuizAttemptsHandler
+    private readonly getQuizAttemptsHandler: GetQuizAttemptsHandler,
+    private readonly getLatestQuizAttemptHandler: GetLatestQuizAttemptHandler
   ) {}
 
   @ApiOperation({ summary: 'Submit a quiz attempt' })
@@ -43,7 +43,23 @@ export class QuizController {
     const result = await this.submitQuizAttemptHandler.execute({
       artifactId: id,
       userId: user.id,
+      ...(dto.scope ? { scope: dto.scope } : {}),
       answers: dto.answers,
+    });
+    return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
+  }
+
+  @ApiOperation({
+    summary: 'Get the latest full quiz attempt expanded for review',
+  })
+  @Get(':id/quiz-attempts/latest')
+  async getLatestQuizAttempt(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: RequestUser
+  ) {
+    const result = await this.getLatestQuizAttemptHandler.execute({
+      artifactId: id,
+      userId: user.id,
     });
     return unwrapOrThrow(result, ARTIFACT_ERROR_STATUS_MAP);
   }
