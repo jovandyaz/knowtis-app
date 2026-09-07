@@ -1,4 +1,4 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 
 import { motion } from 'motion/react';
 
@@ -14,18 +14,13 @@ const TONE_CLASS = {
   correct: 'text-learn-correct',
 } as const;
 
-export interface ProgressRingProps extends Omit<
-  HTMLAttributes<HTMLDivElement>,
-  'className' | 'children'
-> {
+export interface ProgressRingProps extends HTMLAttributes<HTMLDivElement> {
   value: number;
   max: number;
   label: string;
   size?: number;
   strokeWidth?: number;
   tone?: keyof typeof TONE_CLASS;
-  className?: string;
-  children?: ReactNode;
 }
 
 const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
@@ -38,6 +33,7 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
       strokeWidth = RING_STROKE_DEFAULT,
       tone = 'primary',
       className,
+      style,
       children,
       ...rest
     },
@@ -54,18 +50,19 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
       <div
         ref={ref}
         {...rest}
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={safeMax}
+        aria-valuenow={clamped}
         className={cn(
           'relative inline-flex items-center justify-center',
           className
         )}
-        style={{ width: size, height: size }}
+        style={{ ...style, width: size, height: size }}
       >
         <svg
-          role="progressbar"
-          aria-label={label}
-          aria-valuemin={0}
-          aria-valuemax={safeMax}
-          aria-valuenow={clamped}
+          aria-hidden="true"
           width={size}
           height={size}
           className="-rotate-90"
