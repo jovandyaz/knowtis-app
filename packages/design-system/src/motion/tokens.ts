@@ -10,6 +10,7 @@ export const MOTION_EASING = {
   exit: [0.4, 0, 1, 1],
 } as const satisfies Record<string, readonly [number, number, number, number]>;
 
+// Springs have no CSS equivalent, so they live only here and never in motion.json.
 export const SPRING = {
   flip: { type: 'spring', stiffness: 300, damping: 25 },
   slide: { type: 'spring', stiffness: 400, damping: 30 },
