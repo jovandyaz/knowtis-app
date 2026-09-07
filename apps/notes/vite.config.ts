@@ -8,6 +8,7 @@ import { defineConfig } from 'vite';
 // https://vite.dev/config/
 export default defineConfig({
   root: __dirname,
+  cacheDir: '../../node_modules/.vite/apps/notes',
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(
       process.env.VERCEL_GIT_COMMIT_SHA ?? '0.1.0'

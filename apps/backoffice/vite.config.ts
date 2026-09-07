@@ -9,6 +9,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: __dirname,
+  cacheDir: '../../node_modules/.vite/apps/backoffice',
   plugins: [
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),
     react(),
