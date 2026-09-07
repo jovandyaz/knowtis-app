@@ -183,11 +183,13 @@ function makeTurnEffort(effort: ReasoningEffort = 'medium') {
 
 function makeAIConfig(
   effort: ReasoningEffort = 'medium',
-  providerOrder: readonly string[] = []
+  providerOrder: readonly string[] = [],
+  ignoredProviders: readonly string[] = []
 ) {
   return {
     getReasoningEffort: vi.fn().mockResolvedValue(effort),
     getOpenRouterProviderOrder: vi.fn().mockResolvedValue(providerOrder),
+    getOpenRouterIgnoredProviders: vi.fn().mockResolvedValue(ignoredProviders),
   } as unknown as AIConfigService;
 }
 
@@ -2502,7 +2504,7 @@ describe('RunAgentTurnHandler', () => {
       makeModelPreference(),
       makeByok(),
       makeGuard(),
-      makeAIConfig('medium', ['fireworks', 'together']),
+      makeAIConfig('medium', ['fireworks', 'together'], ['parasail']),
       makeTurnEffort()
     );
 
@@ -2519,6 +2521,7 @@ describe('RunAgentTurnHandler', () => {
     expect(orchestrator.run).toHaveBeenCalledWith(
       expect.objectContaining({
         openrouterProviderOrder: ['fireworks', 'together'],
+        openrouterIgnoredProviders: ['parasail'],
       })
     );
   });

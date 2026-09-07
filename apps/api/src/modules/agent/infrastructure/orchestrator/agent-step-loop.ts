@@ -186,6 +186,7 @@ export async function* runAgentStepLoop(
       model,
       reasoningEffort: await input.effortFor?.(model),
       providerOrder: input.openrouterProviderOrder,
+      ignoredProviders: input.openrouterIgnoredProviders,
     });
 
   let currentModel = params.model;

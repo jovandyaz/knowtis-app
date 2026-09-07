@@ -11,6 +11,67 @@ describe('turnProviderOptions', () => {
     ).toEqual({});
   });
 
+  it('excludes upstreams without requiring a preference list', () => {
+    expect(
+      turnProviderOptions({
+        model: OPENROUTER_MODEL,
+        ignoredProviders: ['parasail'],
+      })
+    ).toEqual({
+      providerOptions: { openrouter: { provider: { ignore: ['parasail'] } } },
+    });
+  });
+
+  it('removes ignored upstreams from the effective preference while preserving other controls', () => {
+    const providerOrder = ['parasail', 'fireworks'];
+    expect(
+      turnProviderOptions({
+        model: OPENROUTER_MODEL,
+        providerOrder,
+        ignoredProviders: ['parasail'],
+        reasoningEffort: 'low',
+        requireParameters: true,
+      })
+    ).toEqual({
+      providerOptions: {
+        openrouter: {
+          reasoning: { effort: 'low' },
+          provider: {
+            order: ['fireworks'],
+            allow_fallbacks: true,
+            ignore: ['parasail'],
+            require_parameters: true,
+          },
+        },
+      },
+    });
+    expect(providerOrder).toEqual(['parasail', 'fireworks']);
+  });
+
+  it('retains exclusions when all preferred upstreams are excluded', () => {
+    expect(
+      turnProviderOptions({
+        model: OPENROUTER_MODEL,
+        providerOrder: ['parasail'],
+        ignoredProviders: ['parasail'],
+      })
+    ).toEqual({
+      providerOptions: { openrouter: { provider: { ignore: ['parasail'] } } },
+    });
+  });
+
+  it('omits empty exclusions and leaves direct providers untouched', () => {
+    expect(
+      turnProviderOptions({ model: OPENROUTER_MODEL, ignoredProviders: [] })
+    ).toEqual({});
+    expect(
+      turnProviderOptions({
+        model: 'anthropic:claude-sonnet-5',
+        ignoredProviders: ['parasail'],
+      })
+    ).toEqual({});
+  });
+
   it('should let the vetted upstreams be preferred without cutting off the rest', () => {
     expect(
       turnProviderOptions({
