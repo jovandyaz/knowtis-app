@@ -3,6 +3,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ComponentPropsWithoutRef,
@@ -16,8 +17,7 @@ import { X } from 'lucide-react';
 import { DIALOG_SIDE, type DialogSide } from '../constants/dialog';
 import { cn } from '../utils';
 
-const DIALOG_CONTENT_SELECTOR =
-  '[data-knowtis-dialog-content], [role="dialog"][data-state]';
+const DIALOG_CONTENT_SELECTOR = '[data-knowtis-dialog-content]';
 const FOCUSABLE_SELECTOR =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
 
@@ -57,6 +57,7 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
   const latestCycleIdRef = useRef(0);
   const pendingCycleIdRef = useRef<number | null>(null);
   const focusOriginsRef = useRef(new Map<number, DialogFocusOrigin>());
+  const closingCyclesRef = useRef(new Set<number>());
   const preparedOverlaysRef = useRef(new WeakSet<HTMLElement>());
   const contentCyclesRef = useRef(new WeakMap<HTMLElement, number>());
 
@@ -86,6 +87,13 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     const cycleId = ++nextCycleIdRef.current;
     latestCycleIdRef.current = cycleId;
     return cycleId;
+  }, []);
+
+  const markLatestCycleClosing = useCallback(() => {
+    const cycleId = latestCycleIdRef.current;
+    if (cycleId > 0) {
+      closingCyclesRef.current.add(cycleId);
+    }
   }, []);
 
   const prepareContentCycle = useCallback(
@@ -125,6 +133,10 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     if (cycleId === undefined) {
       return null;
     }
+    if (!closingCyclesRef.current.has(cycleId)) {
+      return null;
+    }
+    closingCyclesRef.current.delete(cycleId);
     contentCyclesRef.current.delete(content);
     const origin = focusOriginsRef.current.get(cycleId) ?? null;
     focusOriginsRef.current.delete(cycleId);
@@ -134,11 +146,21 @@ function Dialog({ children, open, onOpenChange }: DialogProps) {
     return origin;
   }, []);
 
+  const previouslyOpenRef = useRef(open === true);
+  useLayoutEffect(() => {
+    if (previouslyOpenRef.current && open === false) {
+      markLatestCycleClosing();
+    }
+    previouslyOpenRef.current = open === true;
+  }, [markLatestCycleClosing, open]);
+
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen) {
+      markLatestCycleClosing();
       const pendingCycleId = pendingCycleIdRef.current;
       if (pendingCycleId !== null) {
         focusOriginsRef.current.delete(pendingCycleId);
+        closingCyclesRef.current.delete(pendingCycleId);
         pendingCycleIdRef.current = null;
       }
       onOpenChange?.(false);

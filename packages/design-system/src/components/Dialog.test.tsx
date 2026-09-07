@@ -1,4 +1,10 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  StrictMode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   act,
@@ -566,6 +572,106 @@ describe('Dialog accessibility', () => {
 
     rerender(<RapidReopenDialog open={false} />);
     await waitFor(() => expect(secondOpener).toHaveFocus());
+  });
+
+  it('keeps the live origin through StrictMode synthetic cleanup', async () => {
+    const strictCleanup = vi.fn();
+
+    function StrictLifecycleProbe() {
+      useEffect(() => () => strictCleanup(), []);
+      return null;
+    }
+
+    function StrictDialog() {
+      const [open, setOpen] = useState(true);
+      return (
+        <>
+          <StrictLifecycleProbe />
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Strict lifecycle</DialogTitle>
+              <input aria-label="Strict field" />
+              <button type="button" onClick={() => setOpen(false)}>
+                Finish strict dialog
+              </button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<button type="button">Strict opener</button>);
+    const opener = screen.getByRole('button', { name: 'Strict opener' });
+    opener.focus();
+    render(
+      <StrictMode>
+        <StrictDialog />
+      </StrictMode>
+    );
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(strictCleanup).toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Strict field' })).toHaveFocus();
+
+    await user.click(
+      screen.getByRole('button', { name: 'Finish strict dialog' })
+    );
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('never uses an unrelated role dialog as a parent fallback', async () => {
+    function UnrelatedDialogHarness() {
+      const [open, setOpen] = useState(false);
+      const [showOpener, setShowOpener] = useState(true);
+      return (
+        <>
+          <div role="dialog" aria-label="Unrelated dialog" data-state="open">
+            {showOpener ? (
+              <button type="button" onClick={() => setOpen(true)}>
+                Open owned dialog
+              </button>
+            ) : null}
+            <button type="button">Unrelated fallback</button>
+          </div>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Owned dialog</DialogTitle>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOpener(false);
+                  setOpen(false);
+                }}
+              >
+                Finish owned dialog
+              </button>
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    const user = userEvent.setup();
+    render(<UnrelatedDialogHarness />);
+    const fallback = screen.getByRole('button', {
+      name: 'Unrelated fallback',
+    });
+    const focus = vi.spyOn(fallback, 'focus');
+
+    await user.click(screen.getByRole('button', { name: 'Open owned dialog' }));
+    await user.click(
+      screen.getByRole('button', { name: 'Finish owned dialog' })
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(focus).not.toHaveBeenCalled();
+    expect(fallback).not.toHaveFocus();
   });
 
   it('uses a consumer close-autofocus target instead of the captured opener', async () => {
