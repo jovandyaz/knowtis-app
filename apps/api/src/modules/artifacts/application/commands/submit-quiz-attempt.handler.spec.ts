@@ -1,5 +1,5 @@
 import type { EventEmitter2 } from '@nestjs/event-emitter';
-import { ok } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { QuizAttempt } from '@knowtis/shared-types';
@@ -84,7 +84,7 @@ describe('SubmitQuizAttemptHandler', () => {
     );
   });
 
-  it('grades a full attempt over every question and emits quiz completed', async () => {
+  it('persists the graded full attempt and emits quiz completed after it', async () => {
     const result = await handler.execute({
       artifactId: ARTIFACT_ID,
       userId: USER_ID,
@@ -96,16 +96,27 @@ describe('SubmitQuizAttemptHandler', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: 'full', score: 2 / 3 })
-    );
+    expect(create).toHaveBeenCalledWith({
+      artifactId: ARTIFACT_ID,
+      userId: USER_ID,
+      scope: 'full',
+      score: 2 / 3,
+      answers: [
+        { questionIndex: 0, selectedIndex: 0, correct: true },
+        { questionIndex: 1, selectedIndex: 1, correct: true },
+        { questionIndex: 2, selectedIndex: 0, correct: false },
+      ],
+    });
     const [name, event] = emit.mock.calls[0] as [string, QuizCompletedEvent];
     expect(name).toBe(QuizCompletedEvent.EVENT_NAME);
     expect(event.scope).toBe('full');
     expect(event.score).toBeCloseTo(2 / 3);
+    expect(create.mock.invocationCallOrder[0]).toBeLessThan(
+      emit.mock.invocationCallOrder[0] as number
+    );
   });
 
-  it('grades a missed attempt over exactly the missed questions of the latest full attempt', async () => {
+  it('resolves the missed scope against the latest full attempt before persisting', async () => {
     const result = await handler.execute({
       artifactId: ARTIFACT_ID,
       userId: USER_ID,
@@ -117,97 +128,20 @@ describe('SubmitQuizAttemptHandler', () => {
     });
 
     expect(result.isOk()).toBe(true);
+    expect(findLatestFull).toHaveBeenCalledWith(ARTIFACT_ID, USER_ID);
     expect(create).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'missed', score: 0.5 })
     );
   });
 
-  it('accepts a missed attempt matching a legacy full attempt that duplicated a question index', async () => {
-    findLatestFull.mockResolvedValue({
-      ...fullAttempt,
-      answers: [
-        { questionIndex: 1, selectedIndex: 0, correct: false },
-        { questionIndex: 1, selectedIndex: 0, correct: false },
-        { questionIndex: 0, selectedIndex: 0, correct: true },
-      ],
-    });
-
+  it('returns the answer policy error without reading or writing attempts', async () => {
     const result = await handler.execute({
       artifactId: ARTIFACT_ID,
       userId: USER_ID,
       scope: 'missed',
-      answers: [{ questionIndex: 1, selectedIndex: 1 }],
+      answers: [{ questionIndex: 5, selectedIndex: 0 }],
     });
 
-    expect(result.isOk()).toBe(true);
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: 'missed', score: 1 })
-    );
-  });
-
-  it('rejects a missed attempt whose questions differ from the missed set', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      scope: 'missed',
-      answers: [{ questionIndex: 1, selectedIndex: 1 }],
-    });
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_SCOPE
-    );
-    expect(create).not.toHaveBeenCalled();
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('rejects a missed attempt when there is no full attempt to remediate', async () => {
-    findLatestFull.mockResolvedValue(null);
-
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      scope: 'missed',
-      answers: [{ questionIndex: 1, selectedIndex: 1 }],
-    });
-
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_SCOPE
-    );
-  });
-
-  it('rejects a missed attempt that duplicates a question instead of covering the missed set once each', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      scope: 'missed',
-      answers: [
-        { questionIndex: 1, selectedIndex: 1 },
-        { questionIndex: 1, selectedIndex: 1 },
-        { questionIndex: 2, selectedIndex: 0 },
-      ],
-    });
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_ANSWER
-    );
-    expect(create).not.toHaveBeenCalled();
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('rejects a missed attempt carrying a question index beyond the quiz', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      scope: 'missed',
-      answers: [
-        { questionIndex: 1, selectedIndex: 1 },
-        { questionIndex: 5, selectedIndex: 0 },
-      ],
-    });
-
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe(
       ArtifactErrorCodes.INVALID_QUIZ_ANSWER
     );
@@ -216,78 +150,63 @@ describe('SubmitQuizAttemptHandler', () => {
     expect(emit).not.toHaveBeenCalled();
   });
 
-  it('rejects a full attempt that answers the same question twice', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      answers: [
-        { questionIndex: 0, selectedIndex: 0 },
-        { questionIndex: 0, selectedIndex: 0 },
-      ],
-    });
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_ANSWER
-    );
-    expect(create).not.toHaveBeenCalled();
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('rejects a question index beyond the quiz', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      answers: [
-        { questionIndex: 0, selectedIndex: 0 },
-        { questionIndex: 3, selectedIndex: 0 },
-      ],
-    });
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_ANSWER
-    );
-    expect(create).not.toHaveBeenCalled();
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('rejects a selected option the question does not offer', async () => {
-    const result = await handler.execute({
-      artifactId: ARTIFACT_ID,
-      userId: USER_ID,
-      answers: [{ questionIndex: 0, selectedIndex: 3 }],
-    });
-
-    expect(result.isErr()).toBe(true);
-    expect(result._unsafeUnwrapErr().code).toBe(
-      ArtifactErrorCodes.INVALID_QUIZ_ANSWER
-    );
-    expect(create).not.toHaveBeenCalled();
-    expect(emit).not.toHaveBeenCalled();
-  });
-
-  it('rejects a missed attempt when the latest full attempt has nothing to remediate', async () => {
-    findLatestFull.mockResolvedValue({
-      ...fullAttempt,
-      answers: fullAttempt.answers.map((answer) => ({
-        ...answer,
-        correct: true,
-      })),
-    });
-
+  it('returns the scope policy error without writing or emitting', async () => {
     const result = await handler.execute({
       artifactId: ARTIFACT_ID,
       userId: USER_ID,
       scope: 'missed',
-      answers: [],
+      answers: [{ questionIndex: 1, selectedIndex: 1 }],
     });
 
-    expect(result.isErr()).toBe(true);
     expect(result._unsafeUnwrapErr().code).toBe(
       ArtifactErrorCodes.INVALID_QUIZ_SCOPE
     );
     expect(create).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('rejects an artifact that is not a quiz without writing or emitting', async () => {
+    const deckHandler = new SubmitQuizAttemptHandler(
+      {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ ...quiz, type: 'flashcard_deck' }),
+      } as unknown as ArtifactReadRepository,
+      { create, findLatestFull } as unknown as QuizAttemptRepository,
+      { emit } as unknown as EventEmitter2
+    );
+
+    const result = await deckHandler.execute({
+      artifactId: ARTIFACT_ID,
+      userId: USER_ID,
+      answers: [{ questionIndex: 0, selectedIndex: 0 }],
+    });
+
+    expect(result._unsafeUnwrapErr().code).toBe(
+      ArtifactErrorCodes.INVALID_ARTIFACT_TYPE
+    );
+    expect(create).not.toHaveBeenCalled();
+    expect(emit).not.toHaveBeenCalled();
+  });
+
+  it('does not emit when the attempt cannot be persisted', async () => {
+    create.mockResolvedValue(
+      err({ code: ArtifactErrorCodes.INTERNAL_ERROR, message: 'db down' })
+    );
+
+    const result = await handler.execute({
+      artifactId: ARTIFACT_ID,
+      userId: USER_ID,
+      answers: [
+        { questionIndex: 0, selectedIndex: 0 },
+        { questionIndex: 1, selectedIndex: 1 },
+        { questionIndex: 2, selectedIndex: 2 },
+      ],
+    });
+
+    expect(result._unsafeUnwrapErr().code).toBe(
+      ArtifactErrorCodes.INTERNAL_ERROR
+    );
     expect(emit).not.toHaveBeenCalled();
   });
 });

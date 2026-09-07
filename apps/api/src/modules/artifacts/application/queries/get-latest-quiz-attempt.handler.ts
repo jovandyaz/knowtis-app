@@ -15,8 +15,8 @@ import {
   type ArtifactReadRepository,
   type QuizAttemptRepository,
 } from '../../domain/ports/artifact.repository';
+import { missedQuestionIndexes } from '../../domain/services/missed-question-indexes';
 import { loadOwnedArtifact } from '../services/load-owned-artifact';
-import { missedQuestionIndexes } from '../services/missed-question-indexes';
 
 interface GetLatestQuizAttemptInput {
   artifactId: string;

@@ -10,10 +10,7 @@ import {
   type QuizContent,
 } from '@knowtis/shared-types';
 
-import {
-  ArtifactErrors,
-  type ArtifactDomainError,
-} from '../../domain/errors/artifact.errors';
+import type { ArtifactDomainError } from '../../domain/errors/artifact.errors';
 import { QuizCompletedEvent } from '../../domain/events/quiz-completed.event';
 import {
   ARTIFACT_READ_REPOSITORY,
@@ -21,13 +18,13 @@ import {
   type ArtifactReadRepository,
   type QuizAttemptRepository,
 } from '../../domain/ports/artifact.repository';
+import {
+  gradeQuizAttempt,
+  resolveMissedScope,
+  validateQuizAnswers,
+  type QuizAnswer,
+} from '../../domain/services/quiz-attempt.policy';
 import { loadOwnedArtifact } from '../services/load-owned-artifact';
-import { missedQuestionIndexes } from '../services/missed-question-indexes';
-
-interface QuizAnswer {
-  questionIndex: number;
-  selectedIndex: number;
-}
 
 interface SubmitQuizAttemptInput {
   artifactId: string;
@@ -37,35 +34,6 @@ interface SubmitQuizAttemptInput {
 }
 
 const DEFAULT_SCOPE: QuizAttemptScope = QUIZ_ATTEMPT_SCOPE.FULL;
-
-function sameIndexSet(a: readonly number[], b: readonly number[]): boolean {
-  const left = new Set(a);
-  const right = new Set(b);
-  return (
-    left.size === right.size && [...left].every((index) => right.has(index))
-  );
-}
-
-function firstInvalidAnswer(
-  answers: readonly QuizAnswer[],
-  questions: QuizContent['questions']
-): string | null {
-  const answered = new Set<number>();
-  for (const answer of answers) {
-    const question = questions[answer.questionIndex];
-    if (!question) {
-      return `question ${answer.questionIndex} is not part of this quiz`;
-    }
-    if (answered.has(answer.questionIndex)) {
-      return `question ${answer.questionIndex} is answered more than once`;
-    }
-    answered.add(answer.questionIndex);
-    if (answer.selectedIndex >= question.options.length) {
-      return `option ${answer.selectedIndex} is not offered for question ${answer.questionIndex}`;
-    }
-  }
-  return null;
-}
 
 @Injectable()
 export class SubmitQuizAttemptHandler {
@@ -92,14 +60,11 @@ export class SubmitQuizAttemptHandler {
     }
 
     const scope = input.scope ?? DEFAULT_SCOPE;
-    const quizContent = owned.value.content as QuizContent;
+    const { questions } = owned.value.content as QuizContent;
 
-    const invalidAnswer = firstInvalidAnswer(
-      input.answers,
-      quizContent.questions
-    );
-    if (invalidAnswer) {
-      return err(ArtifactErrors.invalidQuizAnswer(invalidAnswer));
+    const validated = validateQuizAnswers(questions, input.answers, scope);
+    if (validated.isErr()) {
+      return err(validated.error);
     }
 
     if (scope === QUIZ_ATTEMPT_SCOPE.MISSED) {
@@ -107,42 +72,17 @@ export class SubmitQuizAttemptHandler {
         input.artifactId,
         input.userId
       );
-      if (!latestFull) {
-        return err(
-          ArtifactErrors.invalidQuizScope('no full attempt to remediate')
-        );
-      }
-      const missed = missedQuestionIndexes(latestFull.answers);
-      if (missed.length === 0) {
-        return err(ArtifactErrors.invalidQuizScope('nothing to remediate'));
-      }
-      const answered = input.answers.map((answer) => answer.questionIndex);
-      if (!sameIndexSet(answered, missed)) {
-        return err(
-          ArtifactErrors.invalidQuizScope(
-            'answers must cover exactly the missed questions of the latest full attempt'
-          )
-        );
+      const missedScope = resolveMissedScope(latestFull, input.answers);
+      if (missedScope.isErr()) {
+        return err(missedScope.error);
       }
     }
 
-    const gradedAnswers = input.answers.map((answer) => {
-      const question = quizContent.questions[answer.questionIndex];
-      return {
-        questionIndex: answer.questionIndex,
-        selectedIndex: answer.selectedIndex,
-        correct: question
-          ? answer.selectedIndex === question.correctIndex
-          : false,
-      };
-    });
-
-    const correctCount = gradedAnswers.filter((a) => a.correct).length;
-    const denominator =
-      scope === QUIZ_ATTEMPT_SCOPE.FULL
-        ? quizContent.questions.length
-        : gradedAnswers.length;
-    const score = denominator > 0 ? correctCount / denominator : 0;
+    const { gradedAnswers, score } = gradeQuizAttempt(
+      questions,
+      input.answers,
+      scope
+    );
 
     const createResult = await this.quizAttemptRepo.create({
       artifactId: input.artifactId,
