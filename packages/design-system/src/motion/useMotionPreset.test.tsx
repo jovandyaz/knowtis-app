@@ -33,6 +33,7 @@ describe('useMotionPreset', () => {
       duration: MOTION_DURATION_S.slow,
       ease: [0, 0, 0.2, 1],
     });
+    expect(result.current.stagger).toBe(MOTION_DURATION_S.fast);
   });
 
   it('collapses every transition to zero duration under reduced motion', () => {
@@ -42,6 +43,7 @@ describe('useMotionPreset', () => {
     for (const key of ['fade', 'slide', 'flip', 'grow'] as const) {
       expect(result.current[key]).toEqual({ duration: 0 });
     }
+    expect(result.current.stagger).toBe(0);
   });
 
   it('treats an unknown OS preference as motion allowed', () => {

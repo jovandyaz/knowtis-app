@@ -9,7 +9,6 @@ const DONUT_TONES = ['correct', 'incorrect', 'muted'] as const;
 export type DonutTone = (typeof DONUT_TONES)[number];
 export const DONUT_SIZE_DEFAULT = 140;
 const DONUT_STROKE = 12;
-const DONUT_STAGGER_S = 0.15;
 const FULL_TURN_DEGREES = 360;
 const START_ANGLE_DEGREES = -90;
 
@@ -101,10 +100,7 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
                   : { strokeDashoffset: length, opacity: 0 }
               }
               animate={{ strokeDashoffset: 0, opacity: 1 }}
-              transition={{
-                ...preset.grow,
-                delay: preset.reduced ? 0 : index * DONUT_STAGGER_S,
-              }}
+              transition={{ ...preset.grow, delay: index * preset.stagger }}
               className={TONE_CLASS[segment.tone]}
             />
           ))}

@@ -11,6 +11,8 @@ export interface MotionPreset {
   slide: Transition;
   flip: Transition;
   grow: Transition;
+  /** Per-item delay, in seconds, for a staggered entrance. */
+  stagger: number;
 }
 
 const INSTANT: Transition = Object.freeze({ duration: 0 });
@@ -30,6 +32,7 @@ export function useMotionPreset(): MotionPreset {
         slide: INSTANT,
         flip: INSTANT,
         grow: INSTANT,
+        stagger: 0,
       };
     }
     return {
@@ -38,6 +41,7 @@ export function useMotionPreset(): MotionPreset {
       slide: { ...SPRING.slide },
       flip: { ...SPRING.flip },
       grow: { duration: MOTION_DURATION_S.slow, ease: MOTION_EASING.enter },
+      stagger: MOTION_DURATION_S.fast,
     };
   }, [reduced]);
 }
