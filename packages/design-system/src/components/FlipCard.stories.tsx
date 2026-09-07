@@ -27,8 +27,8 @@ function InteractiveFlipCard() {
       back={BACK}
       flipped={flipped}
       onFlip={() => setFlipped((current) => !current)}
-      frontLabel="Show answer"
-      backLabel="Show question"
+      frontHint="Show answer"
+      backHint="Show question"
     />
   );
 }
@@ -38,8 +38,8 @@ export const Front: Story = {
     front: FRONT,
     back: BACK,
     flipped: false,
-    frontLabel: 'Show answer',
-    backLabel: 'Show question',
+    frontHint: 'Show answer',
+    backHint: 'Show question',
     onFlip: fn(),
   },
 };
@@ -49,8 +49,8 @@ export const Back: Story = {
     front: FRONT,
     back: BACK,
     flipped: true,
-    frontLabel: 'Show answer',
-    backLabel: 'Show question',
+    frontHint: 'Show answer',
+    backHint: 'Show question',
     onFlip: fn(),
   },
 };

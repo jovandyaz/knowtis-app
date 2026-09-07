@@ -15,8 +15,8 @@ function renderCard(flipped: boolean, onFlip = vi.fn()) {
       back={<p>Answer</p>}
       flipped={flipped}
       onFlip={onFlip}
-      frontLabel="Show answer"
-      backLabel="Show question"
+      frontHint="Show answer"
+      backHint="Show question"
     />
   );
   return onFlip;
@@ -43,6 +43,13 @@ describe('FlipCard', () => {
     expect(control).toHaveAttribute('aria-pressed', 'true');
   });
 
+  it('announces the hint politely, so a flip is heard even without a name change', () => {
+    renderCard(false);
+    const hint = screen.getByText('Show answer');
+    expect(hint).toHaveClass('sr-only');
+    expect(hint).toHaveAttribute('aria-live', 'polite');
+  });
+
   it('hides the front face from assistive tech and reveals the back when flipped', () => {
     renderCard(true);
     const front = screen
@@ -50,7 +57,17 @@ describe('FlipCard', () => {
       .closest('[data-face-side="front"]');
     const back = screen.getByText('Answer').closest('[data-face-side="back"]');
     expect(front).toHaveAttribute('aria-hidden', 'true');
-    expect(back).toHaveAttribute('aria-hidden', 'false');
+    expect(back).not.toHaveAttribute('aria-hidden');
+  });
+
+  it('leaves the front face exposed while it is the visible one', () => {
+    renderCard(false);
+    const front = screen
+      .getByText('Question')
+      .closest('[data-face-side="front"]');
+    const back = screen.getByText('Answer').closest('[data-face-side="back"]');
+    expect(front).not.toHaveAttribute('aria-hidden');
+    expect(back).toHaveAttribute('aria-hidden', 'true');
   });
 
   it('renders the full-motion flip face by default, not the reduced-motion stack', () => {
@@ -76,5 +93,40 @@ describe('FlipCard', () => {
     faces.forEach((face) => {
       expect(face.className).not.toMatch(/\babsolute\b/);
     });
+  });
+
+  it('forwards rest props like id and data attributes to the button', () => {
+    render(
+      <FlipCard
+        front={<p>Question</p>}
+        back={<p>Answer</p>}
+        flipped={false}
+        onFlip={vi.fn()}
+        frontHint="Show answer"
+        backHint="Show question"
+        id="card-1"
+        data-testid="flip-card"
+      />
+    );
+    const control = screen.getByTestId('flip-card');
+    expect(control.tagName).toBe('BUTTON');
+    expect(control).toHaveAttribute('id', 'card-1');
+  });
+
+  it('puts a caller className on the wrapper so it can stretch the button', () => {
+    render(
+      <FlipCard
+        front={<p>Question</p>}
+        back={<p>Answer</p>}
+        flipped={false}
+        onFlip={vi.fn()}
+        frontHint="Show answer"
+        backHint="Show question"
+        className="min-h-96"
+      />
+    );
+    const wrapper = screen.getByRole('button').parentElement;
+    expect(wrapper).toHaveClass('min-h-96');
+    expect(wrapper).toHaveClass('grid');
   });
 });
