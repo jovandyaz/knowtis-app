@@ -32,7 +32,7 @@ export function RecordingTimer({
       <div className="flex items-center justify-center gap-2">
         {isRecording && (
           <span
-            className="inline-block h-2.5 w-2.5 rounded-full bg-(--destructive) animate-pulse"
+            className="inline-block h-2.5 w-2.5 rounded-full bg-(--destructive) motion-safe:animate-pulse"
             aria-hidden="true"
           />
         )}

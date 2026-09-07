@@ -38,4 +38,13 @@ describe('RecordingTimer', () => {
     );
     expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
   });
+
+  it('only animates the recording dot when motion is safe', () => {
+    const { container } = render(
+      <RecordingTimer elapsed={120} maxDuration={300} isRecording />
+    );
+    expect(
+      container.querySelector('[aria-hidden="true"]')?.className
+    ).toContain('motion-safe:animate-pulse');
+  });
 });

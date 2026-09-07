@@ -30,7 +30,7 @@ paths:
 
 ## Motion
 
-- CSS-driven primitives animate with the token utilities — `duration-(--motion-duration-fast|base|slow)` and `ease-standard`/`ease-enter`/`ease-exit` — plus a `motion-reduce:` escape hatch (`motion-reduce:transition-none`).
+- CSS-driven primitives animate with the token utilities — `duration-(--motion-duration-fast)`, `duration-(--motion-duration-base)`, `duration-(--motion-duration-slow)` and `ease-standard`/`ease-enter`/`ease-exit` — plus a `motion-reduce:` escape hatch (`motion-reduce:transition-none`).
 - Components animating through `motion/react` take every transition from `useMotionPreset()` — never a hand-written duration, easing or spring.
 - Never branch on `prefers-reduced-motion` by hand: `motion-reduce:` covers CSS and `useMotionPreset()` covers JS.
 
