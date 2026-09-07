@@ -133,6 +133,11 @@ export { Tabs, TabsContent, TabsList, TabsTrigger } from './components/Tabs';
 export { Kbd, type KbdProps } from './components/Kbd';
 export { Progress, type ProgressProps } from './components/Progress';
 export { FlipCard, type FlipCardProps } from './components/FlipCard';
+export {
+  ProgressRing,
+  type ProgressRingProps,
+  RING_SIZE_DEFAULT,
+} from './components/ProgressRing';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
