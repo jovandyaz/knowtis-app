@@ -56,20 +56,23 @@ export class GetLatestQuizAttemptHandler {
     }
 
     const questions = (owned.value.content as QuizContent).questions;
+    const reviewed = new Set<number>();
     const review = latest.answers.flatMap((answer): QuizQuestionReview[] => {
       const question = questions[answer.questionIndex];
-      return question
-        ? [
-            {
-              questionIndex: answer.questionIndex,
-              question: question.question,
-              options: question.options,
-              selectedIndex: answer.selectedIndex,
-              correctIndex: question.correctIndex,
-              explanation: question.explanation,
-            },
-          ]
-        : [];
+      if (!question || reviewed.has(answer.questionIndex)) {
+        return [];
+      }
+      reviewed.add(answer.questionIndex);
+      return [
+        {
+          questionIndex: answer.questionIndex,
+          question: question.question,
+          options: question.options,
+          selectedIndex: answer.selectedIndex,
+          correctIndex: question.correctIndex,
+          explanation: question.explanation,
+        },
+      ];
     });
 
     return ok({

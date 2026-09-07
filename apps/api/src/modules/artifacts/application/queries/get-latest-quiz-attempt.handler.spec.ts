@@ -110,6 +110,24 @@ describe('GetLatestQuizAttemptHandler', () => {
       userId: 'user-1',
     });
 
+    expect(result._unsafeUnwrap().latest?.review).toEqual([
+      {
+        questionIndex: 1,
+        question: 'Q1',
+        options: ['a', 'b'],
+        selectedIndex: 0,
+        correctIndex: 1,
+        explanation: 'e1',
+      },
+      {
+        questionIndex: 0,
+        question: 'Q0',
+        options: ['a', 'b'],
+        selectedIndex: 0,
+        correctIndex: 0,
+        explanation: 'e0',
+      },
+    ]);
     expect(result._unsafeUnwrap().latest?.missedQuestionIndexes).toEqual([1]);
   });
 
