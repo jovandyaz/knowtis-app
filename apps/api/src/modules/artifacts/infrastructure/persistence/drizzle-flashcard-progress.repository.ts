@@ -100,7 +100,11 @@ export class DrizzleFlashcardProgressRepository implements FlashcardProgressRepo
           isNull(notes.deletedAt)
         )
       )
-      .orderBy(flashcardProgress.nextReview)
+      .orderBy(
+        flashcardProgress.nextReview,
+        flashcardProgress.artifactId,
+        flashcardProgress.cardIndex
+      )
       .limit(limit);
 
     return rows.flatMap((row) =>
