@@ -722,6 +722,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('emits a proposal event when a propose-tool captures into the collector', async () => {
+    streamTextMock.mockClear();
     const m = ProposedMutation.create({
       id: 'p1',
       kind: 'create',
@@ -739,6 +740,7 @@ describe('AiSdkAgentOrchestrator', () => {
     const events = await collect(
       orchestrator.run({
         ...baseInput,
+        maxSteps: 2,
         messages: [{ role: 'user', content: 'create a note' }],
       })
     );
@@ -748,6 +750,8 @@ describe('AiSdkAgentOrchestrator', () => {
         (e as { type: string }).type === 'proposal'
     );
     expect(proposal?.proposal.id).toBe('p1');
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(streamTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
     expect(
       events.find((e) => (e as { type: string }).type === 'done')
     ).toBeUndefined();
@@ -1022,6 +1026,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('yields an aborted event with accumulated step usage when the caller aborts mid-stream', async () => {
+    streamTextMock.mockClear();
     const controller = new AbortController();
     streamTextMock.mockImplementationOnce(
       (opts: {
@@ -1049,6 +1054,7 @@ describe('AiSdkAgentOrchestrator', () => {
     );
 
     expect(events).toContainEqual({ type: 'chunk', text: 'partial' });
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
     expect(events.at(-1)).toEqual({
       type: 'aborted',
       usage: { inputTokens: 5, outputTokens: 2, model: MODEL },
@@ -1091,6 +1097,7 @@ describe('AiSdkAgentOrchestrator', () => {
   });
 
   it('yields an error event carrying best-effort usage when the stream fails mid-turn', async () => {
+    streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
         onStepEnd?: (s: {
@@ -1118,9 +1125,11 @@ describe('AiSdkAgentOrchestrator', () => {
       error: { code: 'AI_PROVIDER_ERROR' },
       usage: { inputTokens: 5, outputTokens: 2, model: MODEL },
     });
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
   });
 
   it('converts a turn-timeout abort into an error event with usage', async () => {
+    streamTextMock.mockClear();
     streamTextMock.mockImplementationOnce(
       (opts: {
         onStepEnd?: (s: {
@@ -1153,6 +1162,7 @@ describe('AiSdkAgentOrchestrator', () => {
     expect(last.error.code).toBe('AI_TIMEOUT');
     expect(last.error.message).toContain('timed out');
     expect(last.usage).toMatchObject({ inputTokens: 3, outputTokens: 1 });
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
   });
 
   // The hang must reject on abort: a promise that never settles would keep the
@@ -2589,7 +2599,7 @@ describe('AiSdkAgentOrchestrator', () => {
       .mockImplementationOnce(failoverAnswer(usage));
   }
 
-  it('fails a twice-silent continuation over to the next candidate, threading history without re-running tools', async () => {
+  it('retains text-only choice across final-step retries and failover without re-running tools', async () => {
     vi.useFakeTimers();
     streamTextMock.mockClear();
     stalledContinuationThenAnswer();
@@ -2600,12 +2610,15 @@ describe('AiSdkAgentOrchestrator', () => {
       FALLBACK
     );
 
-    const consumed = collect(orchestrator.run(baseInput));
+    const consumed = collect(orchestrator.run({ ...baseInput, maxSteps: 2 }));
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     await vi.advanceTimersByTimeAsync(TTFT_MS);
     const events = await consumed;
 
     expect(streamTextMock).toHaveBeenCalledTimes(4);
+    expect(
+      streamTextMock.mock.calls.map(([options]) => options.toolChoice)
+    ).toEqual([undefined, 'none', 'none', 'none']);
     const models = streamTextMock.mock.calls.map(
       (call) => (call[0].model as { modelId: string }).modelId
     );
@@ -3151,6 +3164,42 @@ describe('AiSdkAgentOrchestrator', () => {
     });
     warnSpy.mockRestore();
     logSpy.mockRestore();
+  });
+
+  it('reserves a one-step turn for text without increasing the output cap', async () => {
+    streamTextMock.mockClear();
+
+    const events = await collect(
+      makeOrchestrator().run({ ...baseInput, maxSteps: 1 })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(1);
+    expect(streamTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({ toolChoice: 'none', maxOutputTokens: 4096 })
+    );
+    expect(events.at(-1)).toMatchObject({ type: 'done' });
+  });
+
+  it('allows a tool step before reserving the final existing step for text', async () => {
+    streamTextMock.mockClear();
+    streamTextMock
+      .mockImplementationOnce(toolCallStep({ inputTokens: 5, outputTokens: 1 }))
+      .mockImplementationOnce(failoverAnswer());
+
+    const events = await collect(
+      makeOrchestrator().run({ ...baseInput, maxSteps: 2 })
+    );
+
+    expect(streamTextMock).toHaveBeenCalledTimes(2);
+    expect(streamTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
+    expect(streamTextMock.mock.calls[1][0].toolChoice).toBe('none');
+    expect(streamTextMock.mock.calls[1][0].messages).toEqual(
+      expect.arrayContaining(TOOL_CALL_MESSAGES)
+    );
+    expect(events.at(-1)).toMatchObject({
+      type: 'done',
+      stopReason: 'completed',
+    });
   });
 
   it('stops at the maxSteps cap even when the final call still requests tools', async () => {

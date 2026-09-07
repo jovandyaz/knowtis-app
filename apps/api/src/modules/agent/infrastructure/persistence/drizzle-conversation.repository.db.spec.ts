@@ -28,6 +28,8 @@ import {
   AGENT_MESSAGE_PARTS_VERSION,
   type PersistedParts,
 } from '../../domain/agent-message';
+import { pruneTranscript } from '../../domain/prune-transcript';
+import { buildTurnRows } from '../../domain/turn-transcript';
 import { DrizzleConversationRepository } from './drizzle-conversation.repository';
 
 // Own ids: specs sharing fixture users delete each other's rows in afterAll when
@@ -283,6 +285,111 @@ describe.runIf(DB_AVAILABLE)('DrizzleConversationRepository', () => {
     ]);
     expect(rows[3].sources).toEqual([{ id: 'n1', title: 'GTD' }]);
   });
+
+  it.each(['max_steps', 'token_budget'] as const)(
+    'reloads a %s tool-ending turn with its terminal notice and intact replay pairs',
+    async (stopReason) => {
+      const { id } = await repo.create({ userId: USER, title: 'capped turn' });
+      const turnId = randomUUID();
+      await repo.appendTurn({
+        conversationId: id,
+        turnId,
+        messages: buildTurnRows({
+          userContent: 'read n1',
+          assistantText: '',
+          sources: [{ id: 'n1', title: 'N1' }],
+          stopReason,
+          turnMessages: [
+            {
+              role: 'assistant',
+              content: '',
+              parts: [
+                {
+                  type: 'tool-call',
+                  toolCallId: 'c1',
+                  toolName: 'getNote',
+                  input: { id: 'n1' },
+                },
+              ],
+            },
+            {
+              role: 'tool',
+              content: '',
+              parts: [
+                {
+                  type: 'tool-result',
+                  toolCallId: 'c1',
+                  toolName: 'getNote',
+                  output: 'body',
+                  outputType: 'text',
+                },
+              ],
+            },
+          ],
+        }),
+      });
+
+      const rows = await repo.loadMessages(id, 40);
+
+      expect(rows.map((row) => row.role)).toEqual([
+        'user',
+        'assistant',
+        'tool',
+        'assistant',
+      ]);
+      expect(rows.every((row) => row.turnId === turnId)).toBe(true);
+      expect(rows[2]).toMatchObject({
+        role: 'tool',
+        stopReason: null,
+        parts: [
+          {
+            type: 'tool-result',
+            toolCallId: 'c1',
+            output: 'body',
+            outputType: 'text',
+          },
+        ],
+      });
+      expect(rows[3]).toMatchObject({
+        role: 'assistant',
+        content: '',
+        stopReason,
+        sources: [{ id: 'n1', title: 'N1' }],
+      });
+      const replay = pruneTranscript(rows, { keepToolTurns: 2 });
+      expect(replay).toEqual([
+        { role: 'user', content: 'read n1' },
+        {
+          role: 'assistant',
+          content: '',
+          parts: [
+            {
+              type: 'tool-call',
+              toolCallId: 'c1',
+              toolName: 'getNote',
+              input: { id: 'n1' },
+            },
+          ],
+        },
+        {
+          role: 'tool',
+          content: '',
+          parts: [
+            {
+              type: 'tool-result',
+              toolCallId: 'c1',
+              toolName: 'getNote',
+              output: 'body',
+              outputType: 'text',
+            },
+          ],
+        },
+      ]);
+      expect(await repo.loadMessages(id, 40, { textOnly: true })).toHaveLength(
+        1
+      );
+    }
+  );
 
   it('returns parts: null for a row persisted under an unknown parts version', async () => {
     const { id } = await repo.create({ userId: USER, title: 't' });
