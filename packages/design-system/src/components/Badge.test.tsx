@@ -1,3 +1,5 @@
+import { createRef } from 'react';
+
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
@@ -14,5 +16,11 @@ describe('Badge', () => {
   it('keeps the default variant unchanged', () => {
     render(<Badge>New</Badge>);
     expect(screen.getByText('New').className).toContain('bg-(--foreground)');
+  });
+
+  it('forwards a ref to the rendered element', () => {
+    const ref = createRef<HTMLDivElement>();
+    render(<Badge ref={ref}>Ref</Badge>);
+    expect(ref.current).toBe(screen.getByText('Ref'));
   });
 });

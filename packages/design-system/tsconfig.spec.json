@@ -4,12 +4,7 @@
     "outDir": "../../dist/out-tsc",
     "module": "esnext",
     "moduleResolution": "bundler",
-    "types": [
-      "vitest/globals",
-      "vite/client",
-      "node",
-      "@testing-library/jest-dom"
-    ]
+    "types": ["vitest/globals", "vite/client", "node"]
   },
   "include": [
     "vitest.config.ts",

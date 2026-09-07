@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from 'react';
+import { forwardRef, type HTMLAttributes } from 'react';
 
 import { cva, type VariantProps } from 'class-variance-authority';
 
@@ -18,7 +18,7 @@ const badgeVariants = cva(
         success: 'border-transparent bg-emerald-500/15 text-emerald-600',
         warning: 'border-transparent bg-amber-500/15 text-amber-600',
         count:
-          'h-5 min-w-5 justify-center border-transparent bg-(--primary) px-1.5 text-[11px] tabular-nums text-(--primary-foreground)',
+          'h-5 min-w-5 justify-center border-transparent bg-(--primary) px-1.5 text-2xs tabular-nums text-(--primary-foreground)',
       },
     },
     defaultVariants: {
@@ -30,11 +30,16 @@ const badgeVariants = cva(
 export interface BadgeProps
   extends HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return (
-    <div className={cn(badgeVariants({ variant }), className)} {...props} />
-  );
-}
+const Badge = forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
+  )
+);
+Badge.displayName = 'Badge';
 
 // eslint-disable-next-line react-refresh/only-export-components
 export { Badge, badgeVariants };
