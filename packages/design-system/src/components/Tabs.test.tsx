@@ -287,7 +287,7 @@ describe('TabsList overflow affordance', () => {
   });
 
   it('still forwards the ref to the list element', () => {
-    const ref = { current: null as HTMLElement | null };
+    const ref = { current: null as HTMLDivElement | null };
     render(
       <Tabs defaultValue="one">
         <TabsList ref={ref}>
@@ -300,7 +300,7 @@ describe('TabsList overflow affordance', () => {
   });
 
   it('releases the forwarded ref when the list unmounts', () => {
-    const ref = { current: null as HTMLElement | null };
+    const ref = { current: null as HTMLDivElement | null };
     const { unmount } = render(
       <Tabs defaultValue="one">
         <TabsList ref={ref}>
