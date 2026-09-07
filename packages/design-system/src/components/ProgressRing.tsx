@@ -2,6 +2,7 @@ import { forwardRef, type HTMLAttributes } from 'react';
 
 import { motion } from 'motion/react';
 
+import type { ProgressRingTone } from '../constants/learn-tone';
 import { useMotionPreset } from '../motion/useMotionPreset';
 import { cn } from '../utils';
 import { clampProgress } from '../utils/progress';
@@ -9,10 +10,10 @@ import { clampProgress } from '../utils/progress';
 export const RING_SIZE_DEFAULT = 40;
 export const RING_STROKE_DEFAULT = 3;
 
-const TONE_CLASS = {
-  primary: 'text-(--primary)',
-  correct: 'text-learn-correct',
-} as const;
+const TONE_CLASS: Record<ProgressRingTone, string> = {
+  primary: 'stroke-(--primary)',
+  correct: 'stroke-learn-correct',
+};
 
 export interface ProgressRingProps extends HTMLAttributes<HTMLDivElement> {
   value: number;
@@ -20,7 +21,7 @@ export interface ProgressRingProps extends HTMLAttributes<HTMLDivElement> {
   label: string;
   size?: number;
   strokeWidth?: number;
-  tone?: keyof typeof TONE_CLASS;
+  tone?: ProgressRingTone;
 }
 
 const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
@@ -83,7 +84,6 @@ const ProgressRing = forwardRef<HTMLDivElement, ProgressRingProps>(
             fill="none"
             strokeWidth={strokeWidth}
             strokeLinecap="round"
-            stroke="currentColor"
             strokeDasharray={circumference}
             initial={false}
             animate={{ strokeDashoffset: offset }}

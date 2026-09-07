@@ -45,6 +45,30 @@ describe('StatTile', () => {
     expect(sign.className).toContain('text-(--muted-foreground)');
   });
 
+  it('renders a negative zero delta as an unsigned zero, muted', () => {
+    render(
+      <StatTile
+        value={5}
+        label="Streak"
+        delta={{ value: -0, label: 'No change since yesterday' }}
+      />
+    );
+    const sign = screen.getByText('0');
+    expect(sign.className).toContain('text-(--muted-foreground)');
+  });
+
+  it('renders a NaN delta as zero instead of leaking NaN to the screen', () => {
+    render(
+      <StatTile
+        value={5}
+        label="Streak"
+        delta={{ value: NaN, label: 'No change since yesterday' }}
+      />
+    );
+    const sign = screen.getByText('0');
+    expect(sign.className).toContain('text-(--muted-foreground)');
+  });
+
   it('renders an icon hidden from assistive tech', () => {
     render(<StatTile value={7} label="Day streak" icon={<span>🔥</span>} />);
     expect(

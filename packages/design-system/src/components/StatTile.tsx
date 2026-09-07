@@ -1,5 +1,6 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from 'react';
 
+import type { LearnTone } from '../constants/learn-tone';
 import { cn } from '../utils';
 
 export interface StatDelta {
@@ -18,18 +19,31 @@ export interface StatTileProps extends Omit<
   className?: string;
 }
 
+type DeltaTone = Extract<LearnTone, 'correct' | 'muted' | 'incorrect'>;
+
+const SIGN_TONE: Record<number, DeltaTone> = {
+  1: 'correct',
+  0: 'muted',
+  '-1': 'incorrect',
+};
+
+const TONE_CLASS: Record<DeltaTone, string> = {
+  correct: 'text-learn-correct',
+  muted: 'text-(--muted-foreground)',
+  incorrect: 'text-learn-incorrect',
+};
+
+function safeDelta(value: number): number {
+  return Number.isFinite(value) ? value : 0;
+}
+
 function deltaClass(value: number): string {
-  if (value > 0) {
-    return 'text-learn-correct';
-  }
-  if (value < 0) {
-    return 'text-learn-incorrect';
-  }
-  return 'text-(--muted-foreground)';
+  return TONE_CLASS[SIGN_TONE[Math.sign(safeDelta(value))]];
 }
 
 function formatDelta(value: number): string {
-  return value > 0 ? `+${value}` : String(value);
+  const safe = safeDelta(value);
+  return safe > 0 ? `+${safe}` : String(safe);
 }
 
 const StatTile = forwardRef<HTMLDivElement, StatTileProps>(

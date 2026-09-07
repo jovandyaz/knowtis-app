@@ -2,13 +2,12 @@ import { forwardRef } from 'react';
 
 import { motion } from 'motion/react';
 
+import type { DonutTone } from '../constants/learn-tone';
 import { useMotionPreset } from '../motion/useMotionPreset';
 import { cn } from '../utils';
 
-const DONUT_TONES = ['correct', 'incorrect', 'muted'] as const;
-export type DonutTone = (typeof DONUT_TONES)[number];
 export const DONUT_SIZE_DEFAULT = 140;
-const DONUT_STROKE = 12;
+export const DONUT_STROKE = 12;
 const FULL_TURN_DEGREES = 360;
 const START_ANGLE_DEGREES = -90;
 
@@ -85,7 +84,7 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
           />
           {arcs.map(({ segment, index, length, rotation }) => (
             <motion.circle
-              key={`${segment.tone}-${index}`}
+              key={index}
               data-segment
               cx={centre}
               cy={centre}
@@ -93,7 +92,7 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
               fill="none"
               strokeWidth={DONUT_STROKE}
               strokeDasharray={`${length} ${circumference}`}
-              style={{ transformOrigin: 'center', rotate: `${rotation}deg` }}
+              style={{ rotate: `${rotation}deg` }}
               initial={
                 preset.reduced
                   ? false
@@ -124,5 +123,4 @@ const DonutChart = forwardRef<HTMLDivElement, DonutChartProps>(
 );
 DonutChart.displayName = 'DonutChart';
 
-// eslint-disable-next-line react-refresh/only-export-components
-export { DonutChart, DONUT_TONES, DONUT_STROKE };
+export { DonutChart };

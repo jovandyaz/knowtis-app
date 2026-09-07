@@ -137,13 +137,14 @@ export {
   ProgressRing,
   type ProgressRingProps,
   RING_SIZE_DEFAULT,
+  RING_STROKE_DEFAULT,
 } from './components/ProgressRing';
 export {
   DonutChart,
   type DonutChartProps,
   type DonutSegment,
-  DONUT_TONES,
-  type DonutTone,
+  DONUT_SIZE_DEFAULT,
+  DONUT_STROKE,
 } from './components/DonutChart';
 export {
   StatTile,
@@ -154,6 +155,12 @@ export {
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
 
+export {
+  LEARN_TONES,
+  type LearnTone,
+  type ProgressRingTone,
+  type DonutTone,
+} from './constants/learn-tone';
 export { THEMES, type Theme } from './constants/theme';
 
 export { cn } from './utils';
