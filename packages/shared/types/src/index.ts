@@ -22,6 +22,7 @@ export {
   type NoteAccessLevel,
   type GeneralAccessLevel,
   type NotePermission,
+  type NotePerson,
   type ShareNoteInput,
 } from './lib/note.types';
 

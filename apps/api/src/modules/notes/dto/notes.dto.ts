@@ -1,10 +1,11 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
   IsBase64,
   IsBoolean,
+  IsEmail,
   IsEnum,
   IsIn,
   IsInt,
@@ -180,13 +181,16 @@ export class UpdateNoteDto {
 
 export class ShareNoteDto {
   @ApiProperty({
-    description: 'UUID of the user to share with',
-    format: 'uuid',
-    example: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
+    description: 'Exact email address of the person to add',
+    format: 'email',
+    example: 'person@example.com',
   })
-  @IsUUID('4', { message: 'Invalid user ID format' })
-  @IsNotEmpty({ message: 'User ID is required' })
-  userId!: string;
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toLowerCase() : value
+  )
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
 
   @ApiProperty({
     description: 'Permission level to grant',

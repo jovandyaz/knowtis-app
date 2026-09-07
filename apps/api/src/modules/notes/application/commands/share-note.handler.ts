@@ -3,87 +3,94 @@ import { Inject, Injectable } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, type Result } from 'neverthrow';
 
-import { PERMISSION, type PermissionLevel } from '@knowtis/shared-types';
+import type {
+  NotePerson,
+  ShareNoteInput as PersonInput,
+} from '@knowtis/shared-types';
 
+import {
+  USER_READ_REPOSITORY,
+  type UserReadRepository,
+} from '../../../users/domain/ports/user-read.repository';
 import { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
 import {
-  NOTE_REPOSITORY,
+  isEligibleRecipient,
+  isPermissionWidening,
+} from '../../domain/access-policy';
+import {
   NoteErrors,
   type NoteDomainError,
-  type NotePermissionEntity,
-  type NoteRepository,
-} from '../../domain';
+} from '../../domain/errors/note.errors';
 import { NoteSharedEvent } from '../../domain/events/note-shared.event';
+import { NOTE_REPOSITORY, type NoteRepository } from '../../domain/ports';
+import { authorizePeople } from '../authorize-people';
 
-export interface ShareNoteInput {
+export interface ShareNoteInput extends PersonInput {
   readonly noteId: string;
   readonly userId: string;
-  readonly targetUserId: string;
-  readonly permission: PermissionLevel;
 }
-
 @Injectable()
 export class ShareNoteHandler {
   constructor(
     @Inject(NOTE_REPOSITORY) private readonly noteRepository: NoteRepository,
     private readonly verifiedIdentity: VerifiedIdentityPolicy,
-    private readonly eventEmitter: EventEmitter2
+    private readonly eventEmitter: EventEmitter2,
+    @Inject(USER_READ_REPOSITORY)
+    private readonly usersRepository: UserReadRepository
   ) {}
-
   async execute(
     input: ShareNoteInput
-  ): Promise<Result<NotePermissionEntity, NoteDomainError>> {
-    if (!(await this.verifiedIdentity.isVerified(input.userId))) {
+  ): Promise<Result<NotePerson, NoteDomainError>> {
+    const access = await authorizePeople(
+      this.noteRepository,
+      input.noteId,
+      input.userId
+    );
+    if (access.isErr()) {
+      return err(access.error);
+    }
+    const target = await this.usersRepository.findByEmail(
+      input.email.trim().toLowerCase()
+    );
+    if (!isEligibleRecipient(target, access.value.ownerId, input.userId)) {
+      return err(NoteErrors.personNotAddable());
+    }
+    const targetId = UserId.create(target.id);
+    if (targetId.isErr()) {
+      return err(NoteErrors.personNotAddable());
+    }
+    const existing = await this.noteRepository.findPermission(
+      input.noteId,
+      targetId.value
+    );
+    const widening = isPermissionWidening(
+      existing?.permission.value ?? null,
+      input.permission
+    );
+    if (widening && !(await this.verifiedIdentity.isVerified(input.userId))) {
       return err(NoteErrors.verificationRequired());
     }
-
-    const targetUserIdResult = UserId.create(input.targetUserId);
-    if (targetUserIdResult.isErr()) {
-      return err(targetUserIdResult.error as NoteDomainError);
-    }
-
-    const userIdResult = UserId.create(input.userId);
-    if (userIdResult.isErr()) {
-      return err(userIdResult.error as NoteDomainError);
-    }
-
-    const note = await this.noteRepository.findById(input.noteId);
-    if (!note) {
-      return err(NoteErrors.noteNotFound(input.noteId));
-    }
-
-    const isOwner = note.ownerId === input.userId;
-    if (!isOwner) {
-      if (!note.editorsCanShare) {
-        return err(NoteErrors.ownerOnly('share note'));
-      }
-
-      const callerPermission = await this.noteRepository.findPermission(
-        input.noteId,
-        userIdResult.value
-      );
-
-      if (
-        !callerPermission ||
-        callerPermission.permission.value !== PERMISSION.EDITOR
-      ) {
-        return err(NoteErrors.permissionDenied());
-      }
-    }
-
     const result = await this.noteRepository.upsertPermission({
       noteId: input.noteId,
-      userId: targetUserIdResult.value,
+      userId: targetId.value,
       permission: input.permission,
+      allowAmplification: widening,
     });
-
-    if (result.isOk()) {
-      this.eventEmitter.emit(
-        NoteSharedEvent.EVENT_NAME,
-        new NoteSharedEvent(input.userId, 'collaborator', input.permission)
-      );
+    if (result.isErr()) {
+      return err(result.error);
     }
-
-    return result;
+    this.eventEmitter.emit(
+      NoteSharedEvent.EVENT_NAME,
+      new NoteSharedEvent(input.userId, 'collaborator', input.permission)
+    );
+    return result.map(() => ({
+      user: {
+        id: target.id,
+        name: target.name,
+        email: target.email,
+        avatarUrl: target.avatarUrl,
+      },
+      permission: input.permission,
+    }));
   }
 }

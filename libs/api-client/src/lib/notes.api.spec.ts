@@ -6,12 +6,17 @@ import { httpClient } from './http-client';
 import { notesApi } from './notes.api';
 
 vi.mock('./http-client', () => ({
-  httpClient: { get: vi.fn(), patch: vi.fn() },
+  httpClient: { get: vi.fn(), patch: vi.fn(), post: vi.fn(), delete: vi.fn() },
 }));
 
 describe('notesApi', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('does not expose a synthetic JSON acknowledgement after a 204 revoke', async () => {
+    vi.mocked(httpClient.delete).mockResolvedValue({});
+    expect(await notesApi.revokePerson('note', 'person')).toBeUndefined();
   });
 
   describe('update', () => {

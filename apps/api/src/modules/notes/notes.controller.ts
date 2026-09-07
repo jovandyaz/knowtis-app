@@ -81,6 +81,27 @@ import { AnonymousNoteLimitGuard } from './guards/anonymous-note-limit.guard';
 import { sanitizeFilename } from './infrastructure/filename.util';
 import { NOTE_ERROR_STATUS_MAP, NOTE_UPDATE_THROTTLE } from './notes.constants';
 
+const notePersonSchema = {
+  type: 'object' as const,
+  required: ['user', 'permission'],
+  properties: {
+    permission: {
+      type: 'string' as const,
+      enum: ['owner', 'viewer', 'editor'],
+    },
+    user: {
+      type: 'object' as const,
+      required: ['id', 'name', 'email', 'avatarUrl'],
+      properties: {
+        id: { type: 'string' as const, format: 'uuid' },
+        name: { type: 'string' as const },
+        email: { type: 'string' as const, format: 'email' },
+        avatarUrl: { type: 'string' as const, nullable: true },
+      },
+    },
+  },
+};
+
 const noteProperties = {
   id: { type: 'string', format: 'uuid' },
   title: { type: 'string', example: 'Meeting Notes' },
@@ -444,31 +465,25 @@ export class NotesController {
   }
 
   @ApiOperation({
-    summary: 'Share a note with a user',
+    summary: 'Add or update a person by exact email',
     description:
-      'Grants a user access to the note with the specified permission level. If the user already has access, their permission is updated.',
+      'Owner or direct editors with sharing enabled can manage people. Widening access requires verified identity when the verification gate is enabled.',
   })
-  @ApiParam({
-    name: 'id',
-    type: 'string',
-    format: 'uuid',
-    description: 'The UUID of the note to share',
-  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiBody({ type: ShareNoteDto })
   @ApiResponse({
-    status: 200,
-    description: 'Permission granted or updated',
-    schema: {
-      type: 'object',
-      properties: {
-        noteId: { type: 'string', format: 'uuid' },
-        userId: { type: 'string', format: 'uuid' },
-        permission: { type: 'string', enum: ['viewer', 'editor'] },
-      },
-    },
+    status: 201,
+    description: 'Person added or updated',
+    schema: notePersonSchema,
+  })
+  @ApiResponse({
+    status: 422,
+    description: 'PERSON_NOT_ADDABLE: this person cannot be added or changed',
   })
   @ApiBadRequest()
-  @ApiAuthErrors('only the owner can share a note')
+  @ApiAuthErrors(
+    'only the owner or a direct editor with sharing enabled can manage people'
+  )
   @ApiNotFound('note does not exist')
   @Post(':id/share')
   @RequirePermission('share', SUBJECTS.Note)
@@ -481,7 +496,7 @@ export class NotesController {
     const result = await this.shareNoteHandler.execute({
       noteId: id,
       userId: user.id,
-      targetUserId: dto.userId,
+      email: dto.email,
       permission: dto.permission,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
@@ -490,7 +505,7 @@ export class NotesController {
   @ApiOperation({
     summary: 'Revoke user access to a note',
     description:
-      "Removes a specific user's access to the note. Only the note owner can revoke access.",
+      "Removes a specific user's access to the note. The owner or a direct editor with sharing enabled can revoke non-owner access.",
   })
   @ApiParam({
     name: 'id',
@@ -505,7 +520,9 @@ export class NotesController {
     description: 'The UUID of the user whose access will be revoked',
   })
   @ApiResponse({ status: 204, description: 'Access revoked successfully' })
-  @ApiAuthErrors('only the owner can revoke access')
+  @ApiAuthErrors(
+    'only the owner or a direct editor with sharing enabled can revoke access'
+  )
   @ApiNotFound('note does not exist')
   @Delete(':id/share/:userId')
   @RequirePermission('share', SUBJECTS.Note)
@@ -518,7 +535,7 @@ export class NotesController {
   ) {
     const result = await this.revokeAccessHandler.execute({
       noteId: id,
-      ownerId: user.id,
+      userId: user.id,
       targetUserId: userId,
     });
     return unwrapOrThrow(result, NOTE_ERROR_STATUS_MAP);
@@ -593,44 +610,14 @@ export class NotesController {
   }
 
   @ApiOperation({
-    summary: 'List note collaborators',
+    summary: 'List people with direct note access',
     description:
-      'Returns all users who have been granted access to the note, along with their permissions.',
+      'Owner first, followed by direct collaborators. Available to the owner or direct editors with sharing enabled.',
   })
-  @ApiParam({
-    name: 'id',
-    type: 'string',
-    format: 'uuid',
-    description: 'The UUID of the note',
-  })
+  @ApiParam({ name: 'id', type: 'string', format: 'uuid' })
   @ApiResponse({
     status: 200,
-    description: 'List of collaborators with permissions',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          permission: {
-            type: 'object',
-            properties: {
-              noteId: { type: 'string', format: 'uuid' },
-              userId: { type: 'string', format: 'uuid' },
-              permission: { type: 'string', enum: ['viewer', 'editor'] },
-            },
-          },
-          user: {
-            type: 'object',
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              name: { type: 'string', example: 'Jane Doe' },
-              email: { type: 'string', format: 'email' },
-              avatarUrl: { type: 'string', nullable: true },
-            },
-          },
-        },
-      },
-    },
+    schema: { type: 'array', items: notePersonSchema },
   })
   @ApiAuthErrors('insufficient permissions')
   @ApiNotFound('note does not exist')

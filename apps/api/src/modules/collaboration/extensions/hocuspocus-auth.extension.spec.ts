@@ -1,395 +1,159 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  GENERAL_ACCESS,
-  HANDSHAKE_FAILURE,
-  PERMISSION,
-} from '@knowtis/shared-types';
+import { HANDSHAKE_FAILURE } from '@knowtis/shared-types';
 
-import type { NoteRepository } from '../../notes/domain';
+import type { AccessSnapshot } from '../../notes/domain/access-policy';
+import { shareTokenFingerprint } from '../../notes/domain/share-token-fingerprint';
 import { HocuspocusAuthExtension } from './hocuspocus-auth.extension';
 
-interface CallPayload {
-  token: string;
-  documentName: string;
-  connectionConfig: { readOnly: boolean; isAuthenticated: boolean };
-  requestParameters: URLSearchParams;
+const snapshot: AccessSnapshot = {
+  ownerId: 'owner',
+  generalAccess: 'anyone_with_link',
+  generalAccessPermission: 'editor',
+  shareTokenFingerprint: shareTokenFingerprint('current'),
+  directPermissions: [
+    { userId: 'reader', permission: 'viewer' },
+    { userId: 'editor', permission: 'editor' },
+  ],
+};
+function setup(userId = 'guest', role = 'user', isAnonymous = false) {
+  const verify = vi.fn().mockReturnValue({ sub: userId, exp: 123456 });
+  const users = {
+    findById: vi.fn().mockResolvedValue({ id: userId, role, isAnonymous }),
+  };
+  const repository = {
+    findAccessSnapshot: vi.fn().mockResolvedValue(snapshot),
+  };
+  const payload = {
+    token: 'jwt',
+    documentName: 'note',
+    connectionConfig: { readOnly: false, isAuthenticated: false },
+    requestParameters: new URLSearchParams(),
+  };
+  const extension = new HocuspocusAuthExtension(
+    { verify } as never,
+    users as never,
+    repository
+  ).toExtension();
+  return {
+    verify,
+    users,
+    repository,
+    payload,
+    authenticate: () => extension.onAuthenticate?.(payload as never),
+  };
 }
-
-const buildPayload = (
-  token: string,
-  options: { readOnly?: boolean; shareToken?: string } = {}
-): CallPayload => ({
-  token,
-  documentName: 'note-1',
-  connectionConfig: {
-    readOnly: options.readOnly ?? false,
-    isAuthenticated: false,
-  },
-  requestParameters: new URLSearchParams(
-    options.shareToken ? { shareToken: options.shareToken } : {}
-  ),
-});
-
-describe('HocuspocusAuthExtension', () => {
-  it('should reject with errors that carry the reason where hocuspocus reads it', async () => {
-    const ext = new HocuspocusAuthExtension(
-      { verify: vi.fn() } as never,
-      { findById: vi.fn() } as never,
-      { findById: vi.fn() } as unknown as NoteRepository
-    );
-
-    const extension = ext.toExtension();
-    const thrown = await extension
-      .onAuthenticate?.(buildPayload('') as never)
-      .then(() => null)
-      .catch((error: unknown) => error);
-
-    // @hocuspocus/server transmits `error.reason ?? 'permission-denied'` to the
-    // client; an error without the property collapses every rejection into one.
-    expect(thrown).toMatchObject({ reason: HANDSHAKE_FAILURE.AUTH_REQUIRED });
+describe('HocuspocusAuthExtension access snapshots', () => {
+  it.each(['owner', 'editor', 'reader'])(
+    'retains direct %s access without a token',
+    async (userId) => {
+      const fixture = setup(userId);
+      await fixture.authenticate();
+      expect(fixture.payload.connectionConfig.readOnly).toBe(
+        userId === 'reader'
+      );
+      expect(fixture.repository.findAccessSnapshot).toHaveBeenCalledWith(
+        'note'
+      );
+    }
+  );
+  it.each([false, true])(
+    'accepts a valid link for anonymous=%s',
+    async (anonymous) => {
+      const f = setup('guest', 'user', anonymous);
+      f.payload.requestParameters.set('shareToken', 'current');
+      await f.authenticate();
+      expect(f.payload.connectionConfig.readOnly).toBe(false);
+    }
+  );
+  it.each([undefined, 'stale'])(
+    'rejects missing or stale token %s before public CASL read rule',
+    async (token) => {
+      const f = setup();
+      if (token) {
+        f.payload.requestParameters.set('shareToken', token);
+      }
+      await expect(f.authenticate()).rejects.toMatchObject({
+        reason: HANDSHAKE_FAILURE.FORBIDDEN,
+      });
+    }
+  );
+  it('keeps a direct viewer after invalidating its link editing', async () => {
+    const f = setup('reader');
+    f.payload.requestParameters.set('shareToken', 'stale');
+    await f.authenticate();
+    expect(f.payload.connectionConfig.readOnly).toBe(true);
   });
-
-  it('should reject connection without token', async () => {
-    const ext = new HocuspocusAuthExtension(
-      { verify: vi.fn() } as never,
-      { findById: vi.fn() } as never,
-      { findById: vi.fn() } as unknown as NoteRepository
-    );
-
-    const extension = ext.toExtension();
-    await expect(
-      extension.onAuthenticate?.(buildPayload('') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.AUTH_REQUIRED);
+  it('ignores tokens on a restricted note', async () => {
+    const f = setup();
+    f.repository.findAccessSnapshot.mockResolvedValue({
+      ...snapshot,
+      generalAccess: 'restricted',
+    });
+    f.payload.requestParameters.set('shareToken', 'current');
+    await expect(f.authenticate()).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
   });
-
-  it('should set readOnly when user can read but not update', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.RESTRICTED,
-    };
-    const noteRepository = {
-      findById: vi.fn().mockResolvedValue(note),
-      findPermissionsByNote: vi.fn().mockResolvedValue([
-        {
-          permission: {
-            noteId: 'note-1',
-            userId: 'user-1',
-            permission: { value: PERMISSION.VIEWER },
-          },
-        },
-      ]),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
-    );
-
-    const payload = buildPayload('valid-token');
-    await ext.toExtension().onAuthenticate?.(payload as never);
-
-    expect(payload.connectionConfig.readOnly).toBe(true);
+  it('preserves administrator read and edit without treating it as ownership', async () => {
+    const f = setup('admin-id', 'admin');
+    await f.authenticate();
+    expect(f.payload.connectionConfig.readOnly).toBe(false);
   });
-
-  it('should reject when user has no read permission', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.RESTRICTED,
-    };
-    const noteRepository = {
-      findById: vi.fn().mockResolvedValue(note),
-      findPermissionsByNote: vi.fn().mockResolvedValue([]),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
-    );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
+  it('requires an authentication token with a wire-readable reason', async () => {
+    const f = setup();
+    f.payload.token = '';
+    await expect(f.authenticate()).rejects.toMatchObject({
+      reason: HANDSHAKE_FAILURE.AUTH_REQUIRED,
+    });
   });
-
-  it('should reject MCP-source tokens', async () => {
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi.fn().mockReturnValue({
-          sub: 'user-1',
-          email: 'u@example.com',
-          source: 'mcp',
-        }),
-      } as never,
-      { findById: vi.fn() } as never,
-      { findById: vi.fn() } as unknown as NoteRepository
-    );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('mcp-token') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
+  it('pins HS256 and propagates expiry', async () => {
+    const f = setup('owner');
+    expect(await f.authenticate()).toMatchObject({
+      tokenExpiresAtMs: 123456000,
+    });
+    expect(f.verify).toHaveBeenCalledWith('jwt', { algorithms: ['HS256'] });
   });
-
-  it('should reject when token is invalid', async () => {
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi.fn().mockImplementation(() => {
-          throw new Error('jwt malformed');
-        }),
-      } as never,
-      { findById: vi.fn() } as never,
-      { findById: vi.fn() } as unknown as NoteRepository
-    );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('bad-token') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.INVALID_TOKEN);
+  it('rejects MCP issued tokens before reading access', async () => {
+    const f = setup();
+    f.verify.mockReturnValue({ sub: 'guest', source: 'mcp' });
+    await expect(f.authenticate()).rejects.toThrow(HANDSHAKE_FAILURE.FORBIDDEN);
+    expect(f.repository.findAccessSnapshot).not.toHaveBeenCalled();
   });
-
-  it('should reject with Invalid token when JWT is valid but user no longer exists', async () => {
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-deleted', email: 'u@example.com' }),
-      } as never,
-      { findById: vi.fn().mockResolvedValue(null) } as never,
-      {
-        findById: vi.fn(),
-        findPermissionsByNote: vi.fn(),
-      } as unknown as NoteRepository
+  it('rejects invalid JWT', async () => {
+    const f = setup();
+    f.verify.mockImplementation(() => {
+      throw new Error('invalid JWT');
+    });
+    await expect(f.authenticate()).rejects.toThrow(
+      HANDSHAKE_FAILURE.INVALID_TOKEN
     );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.INVALID_TOKEN);
   });
-
-  it('should mask raw repository errors as Internal server error', async () => {
-    const noteRepository = {
-      findById: vi.fn().mockRejectedValue(new Error('DB connection refused')),
-      findPermissionsByNote: vi
-        .fn()
-        .mockRejectedValue(new Error('DB connection refused')),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
+  it.each(['absent', 'failure'])('rejects a %s user', async (mode) => {
+    const f = setup();
+    if (mode === 'absent') {
+      f.users.findById.mockResolvedValue(null);
+    } else {
+      f.users.findById.mockRejectedValue(new Error('database details'));
+    }
+    await expect(f.authenticate()).rejects.toThrow(
+      HANDSHAKE_FAILURE.INVALID_TOKEN
     );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow('Internal server error');
   });
-
-  it('should reject when note is not found', async () => {
-    const noteRepository = {
-      findById: vi.fn().mockResolvedValue(null),
-      findPermissionsByNote: vi.fn(),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
+  it('reports a missing note', async () => {
+    const f = setup();
+    f.repository.findAccessSnapshot.mockResolvedValue(null);
+    await expect(f.authenticate()).rejects.toThrow(
+      HANDSHAKE_FAILURE.NOTE_NOT_FOUND
     );
-
-    await expect(
-      ext.toExtension().onAuthenticate?.(buildPayload('valid-token') as never)
-    ).rejects.toThrow(HANDSHAKE_FAILURE.NOTE_NOT_FOUND);
   });
-
-  it('should grant editor access via valid share token on a public note', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      generalAccessPermission: PERMISSION.EDITOR,
-      shareToken: 'share-secret',
-    };
-    const noteRepository = {
-      findById: vi.fn().mockResolvedValue(note),
-      findPermissionsByNote: vi.fn().mockResolvedValue([]),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
+  it('masks database errors', async () => {
+    const f = setup();
+    f.repository.findAccessSnapshot.mockRejectedValue(
+      new Error('private connection details')
     );
-
-    const payload = buildPayload('valid-token', { shareToken: 'share-secret' });
-    await ext.toExtension().onAuthenticate?.(payload as never);
-
-    expect(payload.connectionConfig.readOnly).toBe(false);
-  });
-
-  it('should grant a guest editor access via a valid share token', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      generalAccessPermission: PERMISSION.EDITOR,
-      shareToken: 'share-secret',
-    };
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'guest-1', email: '', isAnonymous: true }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'guest-1', isAnonymous: true }),
-      } as never,
-      {
-        findById: vi.fn().mockResolvedValue(note),
-        findPermissionsByNote: vi.fn().mockResolvedValue([]),
-      } as unknown as NoteRepository
+    await expect(f.authenticate()).rejects.toThrow(
+      HANDSHAKE_FAILURE.INTERNAL_ERROR
     );
-
-    const payload = buildPayload('guest-token', { shareToken: 'share-secret' });
-    await ext.toExtension().onAuthenticate?.(payload as never);
-
-    expect(payload.connectionConfig.readOnly).toBe(false);
   });
-
-  it('should keep a guest read-only when the share token is stale', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      generalAccessPermission: PERMISSION.EDITOR,
-      shareToken: 'share-secret',
-    };
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'guest-1', email: '', isAnonymous: true }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'guest-1', isAnonymous: true }),
-      } as never,
-      {
-        findById: vi.fn().mockResolvedValue(note),
-        findPermissionsByNote: vi.fn().mockResolvedValue([]),
-      } as unknown as NoteRepository
-    );
-
-    const payload = buildPayload('guest-token', { shareToken: 'wrong-secret' });
-    await ext.toExtension().onAuthenticate?.(payload as never);
-
-    expect(payload.connectionConfig.readOnly).toBe(true);
-  });
-
-  it('should verify tokens pinned to the HS256 algorithm', async () => {
-    const verify = vi
-      .fn()
-      .mockReturnValue({ sub: 'user-1', email: 'u@example.com' });
-    const note = {
-      id: 'note-1',
-      ownerId: 'user-1',
-      generalAccess: GENERAL_ACCESS.RESTRICTED,
-    };
-    const ext = new HocuspocusAuthExtension(
-      { verify } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      {
-        findById: vi.fn().mockResolvedValue(note),
-        findPermissionsByNote: vi.fn().mockResolvedValue([]),
-      } as unknown as NoteRepository
-    );
-
-    await ext.toExtension().onAuthenticate?.(buildPayload('token') as never);
-
-    expect(verify).toHaveBeenCalledWith('token', { algorithms: ['HS256'] });
-  });
-
-  it('should expose the token expiry in the connection context', async () => {
-    const exp = Math.floor((Date.now() + 60_000) / 1000);
-    const note = {
-      id: 'note-1',
-      ownerId: 'user-1',
-      generalAccess: GENERAL_ACCESS.RESTRICTED,
-    };
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com', exp }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      {
-        findById: vi.fn().mockResolvedValue(note),
-        findPermissionsByNote: vi.fn().mockResolvedValue([]),
-      } as unknown as NoteRepository
-    );
-
-    const context = await ext
-      .toExtension()
-      .onAuthenticate?.(buildPayload('token') as never);
-
-    expect(context).toMatchObject({ tokenExpiresAtMs: exp * 1000 });
-  });
-
   describe('connected hook token expiry', () => {
     function makeConnection() {
       const closeCallbacks: Array<() => void> = [];
@@ -409,7 +173,7 @@ describe('HocuspocusAuthExtension', () => {
       return new HocuspocusAuthExtension(
         { verify: vi.fn() } as never,
         { findById: vi.fn() } as never,
-        { findById: vi.fn() } as unknown as NoteRepository
+        { findAccessSnapshot: vi.fn() }
       );
     }
 
@@ -481,41 +245,5 @@ describe('HocuspocusAuthExtension', () => {
         vi.useRealTimers();
       }
     });
-  });
-
-  it('should ignore share token when it does not match the note', async () => {
-    const note = {
-      id: 'note-1',
-      ownerId: 'other-user',
-      generalAccess: GENERAL_ACCESS.ANYONE_WITH_LINK,
-      generalAccessPermission: PERMISSION.EDITOR,
-      shareToken: 'share-secret',
-    };
-    const noteRepository = {
-      findById: vi.fn().mockResolvedValue(note),
-      findPermissionsByNote: vi.fn().mockResolvedValue([]),
-    } as unknown as NoteRepository;
-
-    const ext = new HocuspocusAuthExtension(
-      {
-        verify: vi
-          .fn()
-          .mockReturnValue({ sub: 'user-1', email: 'u@example.com' }),
-      } as never,
-      {
-        findById: vi
-          .fn()
-          .mockResolvedValue({ id: 'user-1', isAnonymous: false }),
-      } as never,
-      noteRepository
-    );
-
-    const payload = buildPayload('valid-token', {
-      shareToken: 'wrong-token',
-    });
-    await ext.toExtension().onAuthenticate?.(payload as never);
-
-    // Falls back to ANYONE_WITH_LINK ability, which is read-only.
-    expect(payload.connectionConfig.readOnly).toBe(true);
   });
 });

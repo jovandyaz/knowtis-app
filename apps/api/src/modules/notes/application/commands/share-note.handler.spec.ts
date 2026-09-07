@@ -2,429 +2,162 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { err, ok } from 'neverthrow';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { EMAIL_NOT_VERIFIED_CODE, PERMISSION } from '@knowtis/shared-types';
+import type { UserReadRepository } from '../../../users/domain/ports/user-read.repository';
+import type { VerifiedIdentityPolicy } from '../../../users/verified-identity.policy';
+import { NoteErrors } from '../../domain/errors/note.errors';
+import type { NoteRepository } from '../../domain/ports';
+import { PermissionLevel } from '../../domain/value-objects/permission-level.vo';
+import { ShareNoteHandler } from './share-note.handler';
 
-import {
-  IDENTITY_STATE,
-  policyFor,
-  type IdentityState,
-} from '../../../../test-support/verified-identity';
-import {
-  NoteErrorCodes,
-  NoteErrors,
-  PermissionLevel,
-  type NoteEntity,
-  type NotePermissionEntity,
-  type NoteRepository,
-} from '../../domain';
-import { ShareNoteHandler, type ShareNoteInput } from './share-note.handler';
-
-const mockNote: NoteEntity = {
-  id: 'note-1',
-  title: 'Test Note',
-  content: 'content',
-  ownerId: 'owner-1',
-  generalAccess: 'restricted',
-  generalAccessPermission: 'viewer',
-  shareToken: null,
-  editorsCanShare: false,
-  bucket: null,
-  supertag: null,
-  supertagFields: null,
-  yjsState: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+const person = {
+  id: 'recipient',
+  name: 'Recipient',
+  email: 'recipient@example.test',
+  avatarUrl: null,
+  isAnonymous: false,
 };
-
-const mockEditorPermissionVO = {
-  value: PERMISSION.EDITOR,
-  isEditor: () => true,
-  toJSON: () => PERMISSION.EDITOR,
-};
-
-const mockViewerPermissionVO = {
-  value: PERMISSION.VIEWER,
-  isEditor: () => false,
-  toJSON: () => PERMISSION.VIEWER,
-};
-
-const mockPermission: NotePermissionEntity = {
-  noteId: 'note-1',
-  userId: 'editor-1',
-  permission: mockEditorPermissionVO as PermissionLevel,
-};
-
-describe('ShareNoteHandler', () => {
+const grant = (permission: 'viewer' | 'editor', userId = 'recipient') => ({
+  noteId: 'note',
+  userId,
+  permission: PermissionLevel.create(permission)._unsafeUnwrap(),
+});
+describe('ShareNoteHandler People contract', () => {
+  const repo = {
+    findById: vi.fn(),
+    findPermission: vi.fn(),
+    upsertPermission: vi.fn(),
+  };
+  const users = { findByEmail: vi.fn() };
+  const verified = { isVerified: vi.fn() };
+  const events = { emit: vi.fn() };
   let handler: ShareNoteHandler;
-  let noteRepo: NoteRepository;
-  let eventEmitter: EventEmitter2;
-
   beforeEach(() => {
-    noteRepo = {
-      findById: vi.fn(),
-      findByIdWithOwner: vi.fn(),
-      findByOwner: vi.fn(),
-      findOwnedSummariesByIds: vi.fn(),
-      findAccessibleByUser: vi.fn(),
-      findByShareToken: vi.fn(),
-      findByIdForUser: vi.fn(),
-      findAccessibleSummariesByUser: vi.fn(),
-      findAccessibleNotesByLexicalRank: vi.fn(),
-      findAccessibleNotesByEmbedding: vi.fn(),
-      countAccessibleByUser: vi.fn(),
-      countAccessibleByBucket: vi.fn(),
-      countAccessibleBySupertag: vi.fn(),
-      create: vi.fn(),
-      createWithYjsState: vi.fn(),
-      update: vi.fn(),
-      updateYjsState: vi.fn(),
-      updateContentWithYjsState: vi.fn(),
-      delete: vi.fn(),
-      restore: vi.fn(),
-      findPermission: vi.fn(),
-      findPermissionsByNote: vi.fn(),
-      upsertPermission: vi.fn(),
-      deletePermission: vi.fn(),
-      hasAccess: vi.fn(),
-    };
-    eventEmitter = { emit: vi.fn() } as unknown as EventEmitter2;
+    vi.resetAllMocks();
+    repo.findById.mockResolvedValue({
+      id: 'note',
+      ownerId: 'owner',
+      editorsCanShare: true,
+    });
+    repo.findPermission.mockResolvedValue(null);
+    repo.upsertPermission.mockResolvedValue(ok(grant('viewer')));
+    users.findByEmail.mockResolvedValue(person);
+    verified.isVerified.mockResolvedValue(true);
     handler = new ShareNoteHandler(
-      noteRepo,
-      policyFor(IDENTITY_STATE.VERIFIED),
-      eventEmitter
+      repo as unknown as NoteRepository,
+      verified as unknown as VerifiedIdentityPolicy,
+      events as unknown as EventEmitter2,
+      users as unknown as UserReadRepository
     );
   });
-
-  describe('Product analytics event', () => {
-    it('emits a safe collaborator-share event after permission persistence succeeds', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok(mockPermission)
-      );
-
-      await handler.execute({
-        noteId: 'private-note-id',
-        userId: 'owner-1',
-        targetUserId: 'private-collaborator-id',
-        permission: PERMISSION.VIEWER,
-      });
-
-      expect(eventEmitter.emit).toHaveBeenCalledOnce();
-      expect(eventEmitter.emit).toHaveBeenCalledWith(
-        'note.shared',
-        expect.objectContaining({
-          actorId: 'owner-1',
-          shareType: 'collaborator',
-          permission: PERMISSION.VIEWER,
-        })
-      );
-      expect(
-        Object.keys(vi.mocked(eventEmitter.emit).mock.calls[0][1])
-      ).toEqual(['actorId', 'shareType', 'permission']);
+  const share = (
+    userId = 'owner',
+    permission: 'viewer' | 'editor' = 'viewer',
+    email = 'recipient@example.test'
+  ) => handler.execute({ noteId: 'note', userId, email, permission });
+  it('normalizes exact email and returns the public person projection', async () => {
+    expect(
+      (
+        await share('owner', 'viewer', '  RECIPIENT@EXAMPLE.TEST  ')
+      )._unsafeUnwrap()
+    ).toEqual({
+      user: {
+        id: person.id,
+        name: person.name,
+        email: person.email,
+        avatarUrl: null,
+      },
+      permission: 'viewer',
     });
-
-    it('does not emit when permission persistence fails', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        err(NoteErrors.permissionDenied())
-      );
-
-      await handler.execute({
-        noteId: 'note-1',
-        userId: 'owner-1',
-        targetUserId: 'user-2',
-        permission: PERMISSION.EDITOR,
-      });
-
-      expect(eventEmitter.emit).not.toHaveBeenCalled();
-    });
+    expect(users.findByEmail).toHaveBeenCalledWith(person.email);
   });
-
-  describe('Owner sharing', () => {
-    it('should allow owner to share note', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok(mockPermission)
+  it.each(['viewer', 'stranger', 'link-editor'])(
+    'denies %s before recipient lookup',
+    async (actor) => {
+      repo.findPermission.mockResolvedValue(
+        actor === 'viewer' ? grant('viewer', actor) : null
       );
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'owner-1',
-        targetUserId: 'user-2',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
-        noteId: 'note-1',
-        userId: expect.any(Object),
-        permission: PERMISSION.VIEWER,
-      });
-    });
-
-    it('should re-grant an existing permission at the new level', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok({
-          ...mockPermission,
-          permission: mockViewerPermissionVO as PermissionLevel,
-        })
+      expect((await share(actor))._unsafeUnwrapErr().code).toBe(
+        'PERMISSION_DENIED'
       );
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'owner-1',
-        targetUserId: 'editor-1',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
-        noteId: 'note-1',
-        userId: expect.any(Object),
-        permission: PERMISSION.VIEWER,
-      });
-    });
-
-    it('should not read the target permission before writing it', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok(mockPermission)
-      );
-
-      await handler.execute({
-        noteId: 'note-1',
-        userId: 'owner-1',
-        targetUserId: 'user-2',
-        permission: PERMISSION.VIEWER,
-      });
-
-      expect(noteRepo.findPermission).not.toHaveBeenCalled();
-    });
+      expect(users.findByEmail).not.toHaveBeenCalled();
+    }
+  );
+  it('allows a direct editor when editorsCanShare is enabled', async () => {
+    repo.findPermission.mockImplementation((_note, id) =>
+      Promise.resolve(id.value === 'editor' ? grant('editor', 'editor') : null)
+    );
+    expect((await share('editor')).isOk()).toBe(true);
   });
-
-  describe('Editor sharing when editorsCanShare is true', () => {
-    it('should allow editor to share note when editorsCanShare is true', async () => {
-      const noteWithEditorsCanShare: NoteEntity = {
-        ...mockNote,
-        editorsCanShare: true,
-      };
-
-      vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(mockPermission);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok({
-          ...mockPermission,
-          userId: 'user-3',
-        })
+  it('denies a direct editor when editorsCanShare is disabled', async () => {
+    repo.findById.mockResolvedValue({
+      id: 'note',
+      ownerId: 'owner',
+      editorsCanShare: false,
+    });
+    repo.findPermission.mockResolvedValue(grant('editor', 'editor'));
+    expect((await share('editor'))._unsafeUnwrapErr().code).toBe(
+      'PERMISSION_DENIED'
+    );
+    expect(users.findByEmail).not.toHaveBeenCalled();
+  });
+  it.each([null, { ...person, isAnonymous: true }, { ...person, id: 'owner' }])(
+    'uses the same error for an unaddable target',
+    async (target) => {
+      users.findByEmail.mockResolvedValue(target);
+      expect((await share())._unsafeUnwrapErr()).toEqual(
+        NoteErrors.personNotAddable()
       );
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'editor-1',
-        targetUserId: 'user-3',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalled();
-      expect(noteRepo.findPermission).toHaveBeenCalledTimes(1);
-    });
-
-    it('should allow editor to raise an existing permission when editorsCanShare is true', async () => {
-      const noteWithEditorsCanShare: NoteEntity = {
-        ...mockNote,
-        editorsCanShare: true,
-      };
-
-      vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(mockPermission);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok({
-          ...mockPermission,
-          userId: 'user-3',
-          permission: mockEditorPermissionVO as PermissionLevel,
-        })
+      expect(repo.upsertPermission).not.toHaveBeenCalled();
+    }
+  );
+  it('protects the actor from self-modification', async () => {
+    repo.findPermission.mockResolvedValue(grant('editor', 'editor'));
+    users.findByEmail.mockResolvedValue({ ...person, id: 'editor' });
+    expect((await share('editor'))._unsafeUnwrapErr().code).toBe(
+      'PERSON_NOT_ADDABLE'
+    );
+  });
+  it.each([null, grant('viewer')])(
+    'requires verification for a new or wider grant',
+    async (existing) => {
+      repo.findPermission.mockResolvedValue(existing);
+      verified.isVerified.mockResolvedValue(false);
+      expect((await share('owner', 'editor'))._unsafeUnwrapErr().code).toBe(
+        'EMAIL_NOT_VERIFIED'
       );
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'editor-1',
-        targetUserId: 'user-3',
-        permission: PERMISSION.EDITOR,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalledWith({
-        noteId: 'note-1',
-        userId: expect.any(Object),
-        permission: PERMISSION.EDITOR,
-      });
-    });
-  });
-
-  describe('Editor sharing when editorsCanShare is false', () => {
-    it('should deny editor sharing when editorsCanShare is false', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'editor-1',
-        targetUserId: 'user-3',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
-        expect(result.error.message).toContain('Only owner');
-      }
-    });
-  });
-
-  describe('Viewer cannot share', () => {
-    it('should deny viewer sharing even when editorsCanShare is true', async () => {
-      const noteWithEditorsCanShare: NoteEntity = {
-        ...mockNote,
-        editorsCanShare: true,
-      };
-
-      const viewerPermission: NotePermissionEntity = {
-        ...mockPermission,
-        permission: mockViewerPermissionVO as PermissionLevel,
-      };
-
-      vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(viewerPermission);
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'viewer-1',
-        targetUserId: 'user-3',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
-      }
-    });
-  });
-
-  describe('User without permission cannot share', () => {
-    it('should deny sharing when user has no permission', async () => {
-      const noteWithEditorsCanShare: NoteEntity = {
-        ...mockNote,
-        editorsCanShare: true,
-      };
-
-      vi.mocked(noteRepo.findById).mockResolvedValue(noteWithEditorsCanShare);
-      vi.mocked(noteRepo.findPermission).mockResolvedValue(null);
-
-      const input: ShareNoteInput = {
-        noteId: 'note-1',
-        userId: 'random-user',
-        targetUserId: 'user-3',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(NoteErrorCodes.PERMISSION_DENIED);
-      }
-    });
-  });
-
-  describe('Verified email gate', () => {
-    const shareAs = (state: IdentityState) => {
-      const gated = new ShareNoteHandler(
-        noteRepo,
-        policyFor(state),
-        eventEmitter
+      expect(repo.upsertPermission).not.toHaveBeenCalled();
+    }
+  );
+  it.each(['viewer', 'editor'] as const)(
+    'allows an unverified owner to narrow or retain %s',
+    async (current) => {
+      repo.findPermission.mockResolvedValue(grant(current));
+      verified.isVerified.mockResolvedValue(false);
+      expect((await share()).isOk()).toBe(true);
+      expect(verified.isVerified).not.toHaveBeenCalled();
+      expect(repo.upsertPermission).toHaveBeenCalledWith(
+        expect.objectContaining({ allowAmplification: false })
       );
-      return gated.execute({
-        noteId: 'note-1',
-        userId: 'owner-1',
-        targetUserId: 'user-2',
-        permission: PERMISSION.VIEWER,
-      });
-    };
-
-    beforeEach(() => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(mockNote);
-      vi.mocked(noteRepo.upsertPermission).mockResolvedValue(
-        ok(mockPermission)
-      );
-    });
-
-    it('lets an unverified owner share while the gate flag is off', async () => {
-      const result = await shareAs(IDENTITY_STATE.GATE_OFF);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalled();
-    });
-
-    it('rejects an unverified owner without reading or writing anything', async () => {
-      const result = await shareAs(IDENTITY_STATE.UNVERIFIED);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
-      }
-      expect(noteRepo.findById).not.toHaveBeenCalled();
-      expect(noteRepo.upsertPermission).not.toHaveBeenCalled();
-    });
-
-    it('rejects an anonymous owner without reading or writing anything', async () => {
-      const result = await shareAs(IDENTITY_STATE.ANONYMOUS);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(EMAIL_NOT_VERIFIED_CODE);
-      }
-      expect(noteRepo.findById).not.toHaveBeenCalled();
-      expect(noteRepo.upsertPermission).not.toHaveBeenCalled();
-    });
-
-    it('lets a verified owner share', async () => {
-      const result = await shareAs(IDENTITY_STATE.VERIFIED);
-
-      expect(result.isOk()).toBe(true);
-      expect(noteRepo.upsertPermission).toHaveBeenCalled();
-    });
+    }
+  );
+  it('does not emit private recipient data', async () => {
+    await share();
+    expect(Object.keys(events.emit.mock.calls[0][1])).toEqual([
+      'actorId',
+      'shareType',
+      'permission',
+    ]);
   });
-
-  describe('Validation errors', () => {
-    it('should fail when note not found', async () => {
-      vi.mocked(noteRepo.findById).mockResolvedValue(null);
-
-      const input: ShareNoteInput = {
-        noteId: 'non-existent',
-        userId: 'owner-1',
-        targetUserId: 'user-2',
-        permission: PERMISSION.VIEWER,
-      };
-
-      const result = await handler.execute(input);
-
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error.code).toBe(NoteErrorCodes.NOTE_NOT_FOUND);
-      }
-    });
+  it('does not emit success on persistence failure', async () => {
+    repo.upsertPermission.mockResolvedValue(
+      err(NoteErrors.persistenceError('share', 'note'))
+    );
+    expect((await share()).isErr()).toBe(true);
+    expect(events.emit).not.toHaveBeenCalled();
+  });
+  it('returns missing note before recipient lookup', async () => {
+    repo.findById.mockResolvedValue(null);
+    expect((await share())._unsafeUnwrapErr().code).toBe('NOTE_NOT_FOUND');
+    expect(users.findByEmail).not.toHaveBeenCalled();
   });
 });
