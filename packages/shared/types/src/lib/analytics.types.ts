@@ -11,6 +11,11 @@ export const PRODUCT_EVENT_NAMES = [
   'shared note viewed',
   'ai response completed',
   'mcp key created',
+  'study artifact generated',
+  'study session started',
+  'study session completed',
+  'flashcard reviewed',
+  'quiz completed',
 ] as const;
 export type ProductEventName = (typeof PRODUCT_EVENT_NAMES)[number];
 
@@ -28,6 +33,24 @@ export type McpScopeLevel = (typeof MCP_SCOPE_LEVELS)[number];
 
 export const AI_ASSISTANT_TYPES = ['selection', 'agent', 'ghost_text'] as const;
 export type AIAssistantType = (typeof AI_ASSISTANT_TYPES)[number];
+
+export const STUDY_SESSION_SOURCES = ['note', 'queue'] as const;
+export type StudySessionSource = (typeof STUDY_SESSION_SOURCES)[number];
+
+export const STUDY_DURATION_BUCKETS = ['<2m', '2-5m', '5-15m', '>15m'] as const;
+export type StudyDurationBucket = (typeof STUDY_DURATION_BUCKETS)[number];
+
+export const QUIZ_SCORE_BUCKETS = ['<50', '50-79', '80-99', '100'] as const;
+export type QuizScoreBucket = (typeof QUIZ_SCORE_BUCKETS)[number];
+
+export const FLASHCARD_REVIEW_KINDS = ['due', 'new', 'early'] as const;
+export type FlashcardReviewKind = (typeof FLASHCARD_REVIEW_KINDS)[number];
+
+export const FLASHCARD_REVIEW_KIND = {
+  DUE: 'due',
+  NEW: 'new',
+  EARLY: 'early',
+} as const satisfies Record<string, FlashcardReviewKind>;
 
 /** Common properties every product event carries about the acting user. */
 export interface ProductActorContext {
