@@ -138,6 +138,13 @@ export {
   type ProgressRingProps,
   RING_SIZE_DEFAULT,
 } from './components/ProgressRing';
+export {
+  DonutChart,
+  type DonutChartProps,
+  type DonutSegment,
+  DONUT_TONES,
+  type DonutTone,
+} from './components/DonutChart';
 
 export { useEscapeDismiss } from './hooks/useEscapeDismiss';
 export { useMotionPreset, type MotionPreset } from './motion/useMotionPreset';
