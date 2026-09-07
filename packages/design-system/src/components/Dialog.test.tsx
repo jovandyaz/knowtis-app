@@ -298,14 +298,47 @@ describe('Dialog accessibility', () => {
     );
   });
 
-  it('recaptures focus when background code focuses outside the modal', () => {
+  it('recaptures background layout focus before it returns to the caller', () => {
+    let focusObservedAfterCall: Element | null = null;
+
+    function BackgroundAutoFocus() {
+      const [background, setBackground] = useState<HTMLButtonElement | null>(
+        null
+      );
+      useLayoutEffect(() => {
+        if (!background) {
+          return;
+        }
+        background.focus();
+        focusObservedAfterCall = document.activeElement;
+      }, [background]);
+      return (
+        <>
+          <button ref={setBackground}>Background action</button>
+          <Dialog open onOpenChange={vi.fn()}>
+            <DialogContent closeLabel="Close dialog">
+              <DialogTitle>Verify</DialogTitle>
+              <input aria-label="Code" autoFocus />
+            </DialogContent>
+          </Dialog>
+        </>
+      );
+    }
+
+    render(<BackgroundAutoFocus />);
+
+    const dialog = screen.getByRole('dialog', { name: 'Verify' });
+    expect(dialog).toContainElement(focusObservedAfterCall as HTMLElement);
+  });
+
+  it('recaptures focus when background code focuses outside the modal', async () => {
     render(
       <>
         <button type="button">Background action</button>
         <Dialog open onOpenChange={vi.fn()}>
           <DialogContent closeLabel="Close dialog">
             <DialogTitle>Verify</DialogTitle>
-            <input aria-label="Code" />
+            <input aria-label="Code" autoFocus />
           </DialogContent>
         </Dialog>
       </>
@@ -315,6 +348,10 @@ describe('Dialog accessibility', () => {
     const background = screen.getByRole('button', {
       name: 'Background action',
       hidden: true,
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
     });
     background.focus();
 
