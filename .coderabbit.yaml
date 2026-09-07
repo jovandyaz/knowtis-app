@@ -14,6 +14,12 @@ reviews:
   request_changes_workflow: false
   collapse_walkthrough: false
 
+  pre_merge_checks:
+    docstrings:
+      # This repo's minimal-comments policy forbids the docstrings the coverage
+      # gate demands, so the check can only ever contradict it.
+      mode: 'off'
+
   auto_review:
     enabled: true
     drafts: false
@@ -120,6 +126,7 @@ reviews:
     - '!**/*.config.ts'
     - '!**/tsconfig*.json'
     - '!packages/design-system/storybook-static/**'
+    - '!apps/api/drizzle/meta/**'
 
 chat:
   auto_reply: true
