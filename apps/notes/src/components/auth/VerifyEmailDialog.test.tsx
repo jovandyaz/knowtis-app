@@ -150,6 +150,22 @@ describe('VerifyEmailDialog', () => {
     expect(screen.getByRole('button', { name: RESEND_BUTTON })).toBeEnabled();
   });
 
+  it('returns focus to the cleared dialog code after a successful resend', async () => {
+    const { api } = renderDialog();
+    openDialog();
+
+    const code = screen.getByLabelText(CODE_LABEL);
+    fireEvent.change(code, { target: { value: '123' } });
+    const resend = screen.getByRole('button', { name: RESEND_BUTTON });
+    resend.focus();
+    fireEvent.click(resend);
+    await flushPromises();
+
+    expect(api.resendVerification).toHaveBeenCalledTimes(1);
+    expect(code).toHaveValue('');
+    expect(code).toHaveFocus();
+  });
+
   it('arms the cooldown hold when the server says the last code is too recent', async () => {
     vi.useFakeTimers();
     const api = createAuthApiMock({

@@ -287,6 +287,25 @@ describe('VerifyCodeStep', () => {
     ).toBeDisabled();
   });
 
+  it('returns focus to the cleared code after a successful resend', async () => {
+    vi.useFakeTimers();
+    const { api } = renderStep();
+    act(() => {
+      vi.advanceTimersByTime(VERIFICATION_RESEND_COOLDOWN_MS);
+    });
+
+    const code = screen.getByLabelText(CODE_LABEL);
+    fireEvent.change(code, { target: { value: '123' } });
+    const resend = screen.getByRole('button', { name: RESEND_BUTTON });
+    resend.focus();
+    fireEvent.click(resend);
+    await flushPromises();
+
+    expect(api.resendVerification).toHaveBeenCalledTimes(1);
+    expect(code).toHaveValue('');
+    expect(code).toHaveFocus();
+  });
+
   it('lets the user into the app without verifying', async () => {
     const { api, onSkip } = renderStep();
 

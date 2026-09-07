@@ -27,6 +27,8 @@ export interface VerifyEmailCodeFormOptions {
   onVerified: () => void;
   /** False where no code was just sent, so the first send is one click away. */
   startHeld?: boolean;
+  /** Moves the workflow to its intended target after resend resets stale input. */
+  onCodeCleared?: () => void;
 }
 
 export interface VerifyEmailCodeForm extends ResendControls {
@@ -65,6 +67,7 @@ function verifyErrorKey(error: Error | null): VerifyErrorKey | undefined {
 export function useVerifyEmailCodeForm({
   onVerified,
   startHeld = true,
+  onCodeCleared,
 }: VerifyEmailCodeFormOptions): VerifyEmailCodeForm {
   const { t } = useTranslation('auth');
   const verifyCode = useVerifyEmailCode();
@@ -77,6 +80,7 @@ export function useVerifyEmailCodeForm({
       setCode('');
       setAttemptsSpent(false);
       verifyCode.reset();
+      onCodeCleared?.();
     },
   });
 

@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormField } from '@knowtis/design-system';
@@ -11,23 +12,28 @@ export interface OtpCodeFieldProps {
   form: VerifyEmailCodeForm;
 }
 
-export function OtpCodeField({ id, form }: OtpCodeFieldProps) {
-  const { t } = useTranslation('auth');
+export const OtpCodeField = forwardRef<HTMLInputElement, OtpCodeFieldProps>(
+  ({ id, form }, ref) => {
+    const { t } = useTranslation('auth');
 
-  return (
-    <FormField
-      id={id}
-      label={t('verifyEmail.codeLabel')}
-      error={form.errorMessage}
-    >
-      <OtpCodeInput
+    return (
+      <FormField
         id={id}
-        value={form.code}
-        onChange={form.onCodeChange}
-        autoFocus
-        aria-invalid={!!form.errorMessage}
-        aria-describedby={form.errorMessage ? `${id}-error` : undefined}
-      />
-    </FormField>
-  );
-}
+        label={t('verifyEmail.codeLabel')}
+        error={form.errorMessage}
+      >
+        <OtpCodeInput
+          ref={ref}
+          id={id}
+          value={form.code}
+          onChange={form.onCodeChange}
+          autoFocus
+          aria-invalid={!!form.errorMessage}
+          aria-describedby={form.errorMessage ? `${id}-error` : undefined}
+        />
+      </FormField>
+    );
+  }
+);
+
+OtpCodeField.displayName = 'OtpCodeField';
